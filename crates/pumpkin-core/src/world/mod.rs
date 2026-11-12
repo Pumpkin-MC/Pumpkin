@@ -28,6 +28,7 @@ pub mod brightness;
 pub mod chunker;
 mod entity_index;
 pub(crate) use entity_index::EntityIndex;
+pub mod cat_spawner;
 pub mod entity_islands;
 pub mod explosion;
 pub mod game_event;
@@ -35,12 +36,14 @@ pub mod generation_cache;
 pub mod loot;
 pub mod map;
 mod neighbor_updater;
+pub mod phantom_spawner;
 pub mod poi_scan;
 pub mod portal;
 pub mod raid;
 pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
+pub mod village_siege;
 pub mod wandering_trader_spawner;
 
 use crate::block::RandomTickArgs;
@@ -170,7 +173,7 @@ use pumpkin_world::{
     tick::{TickPriority, order},
 };
 pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
-use rand::seq::SliceRandom;
+use rand::seq::{IndexedRandom, SliceRandom};
 use rand::{RngExt, rng};
 use scoreboard::Scoreboard;
 use time::LevelTime;
@@ -269,11 +272,15 @@ pub struct World {
     poi_chunk_receiver: std::sync::Mutex<Receiver<(ChunkPos, Weak<ChunkData>)>>,
     /// Villager job sites and their current owners.
     pub wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner,
+    pub phantom_spawner: phantom_spawner::PhantomSpawner,
+    pub cat_spawner: cat_spawner::CatSpawner,
+    pub village_siege: village_siege::VillageSiege,
     /// Active raids in this world.
     pub raids: std::sync::Mutex<raid::Raids>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<std::sync::Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
+    natural_spawn_chunk_cache: std::sync::Mutex<NaturalSpawnChunkCache>,
     pub active_chunks: RwLock<Arc<FxHashSet<Vector2<i32>>>>,
     pub(crate) navigation_change_sequence: std::sync::atomic::AtomicU64,
     /// Entities spawned by ticking entities, with their sequential order.
@@ -430,9 +437,13 @@ impl World {
             portal_poi: std::sync::Mutex::new(portal_poi),
             poi_chunk_receiver: std::sync::Mutex::new(poi_chunk_receiver),
             wandering_trader_spawner: wandering_trader_spawner::WanderingTraderSpawner::default(),
+            phantom_spawner: phantom_spawner::PhantomSpawner::default(),
+            cat_spawner: cat_spawner::CatSpawner::default(),
+            village_siege: village_siege::VillageSiege::default(),
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
+            natural_spawn_chunk_cache: std::sync::Mutex::new(NaturalSpawnChunkCache::default()),
             active_chunks: RwLock::new(Arc::default()),
             navigation_change_sequence: std::sync::atomic::AtomicU64::new(0),
             tick_spawns: std::sync::Mutex::new(Vec::new()),
@@ -534,9 +545,14 @@ impl World {
                 migrations.push(pos);
             }
         }
-        let spawnable_chunks = tracker.loaded_active_chunks.len() as i32;
         drop(active_chunks);
         drop(tracker);
+        let spawnable_chunks = self.count_natural_spawn_chunks(
+            players
+                .iter()
+                .filter(|player| spectators_generate_chunks || !player.is_spectator())
+                .map(|player| player.get_entity().chunk_pos.load()),
+        );
         for pos in migrations {
             self.migrate_pending_block_entities(pos);
         }
@@ -570,6 +586,13 @@ impl World {
         for chunk in chunks {
             poi_scan::scan_chunk(&mut storage, &chunk);
         }
+    }
+
+    fn count_natural_spawn_chunks(&self, player_chunks: impl Iterator<Item = Vector2<i32>>) -> i32 {
+        self.natural_spawn_chunk_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .count(player_chunks.collect())
     }
 
     pub fn get_lighting_config(&self) -> LightingEngineConfig {
@@ -1353,6 +1376,61 @@ impl World {
         for player in self.players.load().iter() {
             player.spawn_particle(position, offset, max_speed, particle_count, particle);
         }
+    }
+
+    /// Spawns `minecraft:block` particles textured like the given block state.
+    pub fn spawn_block_particle(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        state_id: u16,
+    ) {
+        let mut data = Vec::new();
+        if VarInt(i32::from(state_id)).encode(&mut data).is_err() {
+            return;
+        }
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            (pumpkin_data::particle::Particle::Block.to_id() as i32).into(),
+            &data,
+        );
+        self.broadcast_packet_all(&packet);
+    }
+
+    /// Spawns `minecraft:item` particles textured like `stack`.
+    pub fn spawn_item_particle(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        stack: &ItemStack,
+    ) {
+        let mut data = Vec::new();
+        if ItemStackSerializer::from(stack.clone())
+            .write(&mut data)
+            .is_err()
+        {
+            return;
+        }
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            (pumpkin_data::particle::Particle::Item.to_id() as i32).into(),
+            &data,
+        );
+        self.broadcast_packet_all(&packet);
     }
 
     pub fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
@@ -2226,18 +2304,10 @@ impl World {
                 lock.difficulty == Difficulty::Peaceful,
             )
         };
-        let spawn_passives = self.get_time_of_day() % 400 == 0;
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
-        let spawn_passives = spawn_passives && spawn_mobs;
+        let spawn_list = spawn_list_for_tick(self, &spawn_state, spawn_mobs, spawn_enemies);
 
-        let spawn_list = Arc::new(natural_spawner::get_filtered_spawning_categories(
-            &spawn_state,
-            spawn_mobs,
-            spawn_enemies,
-            spawn_passives,
-        ));
-
-        // 5. Parallel Chunk Spawners via Rayon
+        // 5. Sequential Chunk Spawners (vanilla `tickSpawningChunks`)
         if !spawn_list.is_empty() {
             let mut spawning_chunks = Vec::new();
             for pos in active_chunks.iter() {
@@ -2248,18 +2318,15 @@ impl World {
 
             spawning_chunks.shuffle(&mut rng());
 
-            let world = self.clone();
-            spawning_chunks.par_chunks(8).for_each(|batch| {
-                let world = world.clone();
-                let s_list = spawn_list.clone();
-                let s_state = spawn_state.clone();
-                for (pos, chunk) in batch {
-                    world.tick_spawning_chunk(*pos, chunk, &s_list, &s_state);
-                }
-            });
+            for (pos, chunk) in spawning_chunks {
+                self.tick_spawning_chunk(pos, &chunk, &spawn_list, &spawn_state);
+            }
         }
 
         if spawn_mobs && self.dimension == Dimension::OVERWORLD {
+            self.phantom_spawner.tick(self, spawn_enemies);
+            self.cat_spawner.tick(self);
+            self.village_siege.tick(self, spawn_enemies);
             self.wandering_trader_spawner.tick(self);
         }
 
@@ -2572,6 +2639,33 @@ impl World {
         true
     }
 
+    /// No other entity that blocks building overlaps `entity`, ignoring its own vehicle group.
+    pub fn is_unobstructed(&self, entity: &Entity) -> bool {
+        let bounds = entity.bounding_box.load();
+        let root_vehicle = entity.root_vehicle_id();
+        let unobstructed = |other: &dyn EntityBase| {
+            let other = other.get_entity();
+            !other.is_alive() || !other.blocks_building || other.root_vehicle_id() == root_vehicle
+        };
+        self.get_entities_at_box(&bounds)
+            .iter()
+            .all(|other| unobstructed(other.as_ref()))
+            && self
+                .get_players_at_box(&bounds)
+                .iter()
+                .all(|player| player.is_spectator() || unobstructed(player.as_ref()))
+    }
+
+    /// A living, non-spectator player is within `range` of `pos`; a negative range matches any.
+    pub fn has_nearby_alive_player(&self, pos: Vector3<f64>, range: f64) -> bool {
+        self.players.load().iter().any(|player| {
+            !player.is_spectator()
+                && player.get_entity().is_alive()
+                && (range < 0.0
+                    || player.get_entity().pos.load().squared_distance_to_vec(&pos) < range * range)
+        })
+    }
+
     pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
         self.is_space_empty(bounding_box)
             && self.no_entity_collision(source, bounding_box)
@@ -2651,7 +2745,7 @@ impl World {
             return;
         }
         // TODO this.level.canSpawnEntitiesInChunk(chunkPos)
-        let entities = spawn_for_chunk(
+        spawn_for_chunk(
             self,
             chunk_pos,
             chunk,
@@ -2659,9 +2753,6 @@ impl World {
             spawn_list,
             is_thundering,
         );
-        for entity in entities {
-            self.spawn_entity_non_save(entity);
-        }
     }
 
     fn tick_thunder(self: &Arc<Self>, chunk_pos: Vector2<i32>) {
@@ -4146,7 +4237,12 @@ impl World {
         }
     }
 
-    fn run_explosion(self: &Arc<Self>, explosion: &Explosion, position: Vector3<f64>, power: f32) {
+    pub fn run_explosion(
+        self: &Arc<Self>,
+        explosion: &Explosion,
+        position: Vector3<f64>,
+        power: f32,
+    ) {
         let mut event = crate::plugin::api::events::entity::entity_explode::EntityExplodeEvent::new(
             0, position, power,
         );
@@ -4158,12 +4254,8 @@ impl World {
         }
 
         let block_count = explosion.explode(self);
-        let particle = if power < 2.0 {
-            Particle::Explosion
-        } else {
-            Particle::ExplosionEmitter
-        };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
+        let particle = explosion.particle();
+        let sound = IdOr::<SoundEvent>::Id(explosion.sound() as u16);
         for player in self.players.load().iter() {
             if player.position().squared_distance_to_vec(&position) > 4096.0 {
                 continue;
@@ -4716,6 +4808,18 @@ impl World {
             .collect()
     }
 
+    /// Non-player entities at a box whose type passes `matches`, in list order.
+    pub fn get_entities_of_type_at_box(
+        &self,
+        aabb: &BoundingBox,
+        matches: impl Fn(&'static EntityType) -> bool,
+    ) -> Vec<Arc<dyn EntityBase>> {
+        self.entity_index
+            .query_types(self.entities.load_full(), *aabb, matches)
+            .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
+            .collect()
+    }
+
     // Gets all Player entities at a Box
     pub fn get_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<Player>> {
         let players_guard = self.players.load();
@@ -5251,8 +5355,14 @@ impl World {
                 .get_mob()
                 .map(|vehicle| vehicle.get_mob_entity().take_pending_riders())
                 .unwrap_or_default();
-            own_vehicle.init_data_tracker();
-            self.add_entity_silent(own_vehicle.clone());
+            // A jockey can mount a mob that is already in the world.
+            if self
+                .get_entity_by_id(own_vehicle.get_entity().entity_id)
+                .is_none()
+            {
+                own_vehicle.init_data_tracker();
+                self.add_entity_silent(own_vehicle.clone());
+            }
             own_vehicle
                 .get_entity()
                 .add_passenger(own_vehicle.clone(), vehicle.clone());
@@ -6335,6 +6445,46 @@ impl World {
     #[must_use]
     pub fn is_loaded(&self, position: &BlockPos) -> bool {
         self.get_block_state_id_if_loaded(position).is_some()
+    }
+
+    /// Whether every chunk touching the block rectangle is loaded.
+    #[must_use]
+    pub fn has_chunks_at(&self, x0: i32, z0: i32, x1: i32, z1: i32) -> bool {
+        (x0 >> 4..=x1 >> 4).all(|chunk_x| {
+            (z0 >> 4..=z1 >> 4)
+                .all(|chunk_z| self.level.is_chunk_loaded(&Vector2::new(chunk_x, chunk_z)))
+        })
+    }
+
+    /// Whether `pos` lies in a piece of a generated structure from the `structures` tag.
+    #[must_use]
+    pub fn has_structure_piece_at(
+        &self,
+        pos: BlockPos,
+        structures: &pumpkin_data::tag::Tag,
+    ) -> bool {
+        let wanted: Vec<_> = structures
+            .0
+            .iter()
+            .filter_map(|name| pumpkin_data::structures::StructureKeys::from_name(name))
+            .collect();
+        self.level
+            .world_gen
+            .load()
+            .has_structure_piece_at(pos, &wanted)
+    }
+
+    /// A random living player in this world.
+    #[must_use]
+    pub fn get_random_player(&self) -> Option<Arc<Player>> {
+        let players: Vec<_> = self
+            .players
+            .load()
+            .iter()
+            .filter(|player| player.living_entity.entity.is_alive())
+            .cloned()
+            .collect();
+        players.choose(&mut rng()).cloned()
     }
 
     pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
@@ -7781,6 +7931,58 @@ fn bedrock_block_breaking_rate(speed: f32) -> i32 {
     (speed.clamp(0.0, 1.0) * f32::from(u16::MAX)) as i32
 }
 
+/// Fixed radius-8 spawning footprint around every player that loads chunks,
+/// independent of simulation distance.
+fn natural_spawn_chunk_count(player_chunks: impl Iterator<Item = Vector2<i32>>) -> i32 {
+    let offsets =
+        pumpkin_data::chunk_view_lut::get_chebyshev_square(natural_spawner::SPAWN_DISTANCE_CHUNK);
+    let mut chunks = FxHashSet::default();
+    for center in player_chunks {
+        for &(dx, dz) in offsets {
+            chunks.insert(center.add_raw(i32::from(dx), i32::from(dz)));
+        }
+    }
+    chunks.len() as i32
+}
+
+#[derive(Default)]
+struct NaturalSpawnChunkCache {
+    player_chunks: Vec<Vector2<i32>>,
+    count: i32,
+}
+
+impl NaturalSpawnChunkCache {
+    fn count(&mut self, mut player_chunks: Vec<Vector2<i32>>) -> i32 {
+        player_chunks.sort_unstable_by_key(|pos| (pos.x, pos.y));
+        if self.player_chunks != player_chunks {
+            self.count = natural_spawn_chunk_count(player_chunks.iter().copied());
+            self.player_chunks = player_chunks;
+        }
+        self.count
+    }
+}
+
+/// Vanilla `ServerChunkCache.tickChunks` gates persistent categories on game
+/// time, so daylight changes do not shift the 400-tick schedule.
+fn spawn_persistent(world: &World) -> bool {
+    world.get_world_age() % 400 == 0
+}
+
+fn spawn_list_for_tick(
+    world: &World,
+    spawn_state: &SpawnState,
+    spawn_mobs: bool,
+    spawn_enemies: bool,
+) -> Vec<&'static MobCategory> {
+    let spawn_passives = spawn_persistent(world) && spawn_mobs;
+    natural_spawner::get_filtered_spawning_categories(
+        spawn_state,
+        spawn_mobs,
+        spawn_enemies,
+        spawn_passives,
+    )
+}
+
 pub struct WorldPortal(pub Arc<World>);
 
 // Pure Beauty :cap:
@@ -7966,10 +8168,12 @@ mod tests {
     };
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector2::Vector2;
     use uuid::Uuid;
 
     use super::{
-        World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
+        NaturalSpawnChunkCache, World, bedrock_block_breaking_rate, bedrock_chest_block_actor,
+        merge_entity_records, natural_spawn_chunk_count, spawn_list_for_tick,
     };
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
@@ -8400,6 +8604,68 @@ mod tests {
         world.level.shutdown().await;
         assert!(empty);
         assert!(no_entities);
+        Ok(())
+    }
+
+    #[test]
+    fn natural_spawn_cap_uses_fixed_eight_chunk_radius() {
+        assert_eq!(
+            natural_spawn_chunk_count([Vector2::new(0, 0)].into_iter()),
+            289
+        );
+        assert_eq!(
+            natural_spawn_chunk_count([Vector2::new(0, 0), Vector2::new(1, 0)].into_iter()),
+            306
+        );
+    }
+
+    #[test]
+    fn natural_spawn_chunk_cache_invalidates_when_players_move() {
+        let mut cache = NaturalSpawnChunkCache::default();
+        assert_eq!(cache.count(vec![Vector2::new(0, 0)]), 289);
+        assert_eq!(
+            cache.count(vec![Vector2::new(0, 0), Vector2::new(1, 0)]),
+            306
+        );
+        assert_eq!(cache.count(vec![Vector2::new(1, 0)]), 289);
+    }
+
+    #[tokio::test]
+    async fn passive_cadence_selects_persistent_categories_by_world_age()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::world::natural_spawner::SpawnState;
+        use pumpkin_data::entity::MobCategory;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let mut state = SpawnState::empty();
+        state.set_spawnable_chunk_count(289);
+
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .load_from(400, 1);
+        let categories = spawn_list_for_tick(&world, &state, true, false);
+        assert!(
+            !categories
+                .iter()
+                .any(|category| category.id == MobCategory::CREATURE.id)
+        );
+
+        world
+            .level_time
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .load_from(1, 400);
+        let categories = spawn_list_for_tick(&world, &state, true, false);
+        assert!(
+            categories
+                .iter()
+                .any(|category| category.id == MobCategory::CREATURE.id)
+        );
+
+        world.level.shutdown().await;
         Ok(())
     }
 }

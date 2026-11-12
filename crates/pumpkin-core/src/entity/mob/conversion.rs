@@ -1,11 +1,14 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
+use std::sync::atomic::{AtomicBool, AtomicI32};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_nbt::compound::NbtCompound;
 
-use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::r#type::from_type;
+use crate::entity::{Entity, EntityBase};
 
 #[derive(Clone, Copy)]
 pub struct ConversionParams {
@@ -210,4 +213,105 @@ fn convert_common(from: &dyn Mob, to: &dyn Mob, params: ConversionParams) {
         .custom_data
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = custom_data;
+}
+
+const NOT_CONVERTING: i32 = -1;
+
+/// Counts how long a mob stays afflicted, then how long it takes to convert.
+pub struct ConversionTracker {
+    converting_data: TrackedData,
+    affliction_time_tag: &'static str,
+    total_affliction_time: i32,
+    conversion_time_tag: &'static str,
+    total_conversion_time: i32,
+    affliction_time: AtomicI32,
+    conversion_time: AtomicI32,
+    converting: AtomicBool,
+}
+
+impl ConversionTracker {
+    #[must_use]
+    pub const fn new(
+        converting_data: TrackedData,
+        affliction_time_tag: &'static str,
+        total_affliction_time: i32,
+        conversion_time_tag: &'static str,
+        total_conversion_time: i32,
+    ) -> Self {
+        Self {
+            converting_data,
+            affliction_time_tag,
+            total_affliction_time,
+            conversion_time_tag,
+            total_conversion_time,
+            affliction_time: AtomicI32::new(0),
+            conversion_time: AtomicI32::new(0),
+            converting: AtomicBool::new(false),
+        }
+    }
+
+    /// Runs `convert` once the conversion time runs out.
+    pub fn tick(&self, mob: &dyn Mob, afflicted: bool, convert: impl FnOnce()) {
+        let entity = mob.get_entity();
+        if !entity.is_alive() || mob.get_mob_entity().is_no_ai() {
+            return;
+        }
+        if !afflicted {
+            self.affliction_time.store(NOT_CONVERTING, Relaxed);
+            self.set_converting(entity, false);
+        } else if self.is_converting() {
+            if self.conversion_time.fetch_sub(1, Relaxed) - 1 < 0 {
+                convert();
+            }
+        } else if self.affliction_time.fetch_add(1, Relaxed) + 1 >= self.total_affliction_time {
+            self.start_conversion(entity, self.total_conversion_time);
+        }
+    }
+
+    #[must_use]
+    pub fn is_converting(&self) -> bool {
+        self.converting.load(Relaxed)
+    }
+
+    fn set_converting(&self, entity: &Entity, converting: bool) {
+        if self.converting.swap(converting, Relaxed) != converting {
+            entity.set_synced_data(self.converting_data, converting);
+        }
+    }
+
+    pub fn start_conversion(&self, entity: &Entity, time: i32) {
+        self.conversion_time.store(time, Relaxed);
+        self.set_converting(entity, true);
+    }
+
+    pub fn write_nbt(&self, nbt: &mut NbtCompound, afflicted: bool) {
+        nbt.put_int(
+            self.conversion_time_tag,
+            if self.is_converting() {
+                self.conversion_time.load(Relaxed)
+            } else {
+                NOT_CONVERTING
+            },
+        );
+        nbt.put_int(
+            self.affliction_time_tag,
+            if afflicted {
+                self.affliction_time.load(Relaxed)
+            } else {
+                NOT_CONVERTING
+            },
+        );
+    }
+
+    pub fn read_nbt(&self, entity: &Entity, nbt: &NbtCompound) {
+        self.affliction_time
+            .store(nbt.get_int(self.affliction_time_tag).unwrap_or(0), Relaxed);
+        match nbt
+            .get_int(self.conversion_time_tag)
+            .unwrap_or(NOT_CONVERTING)
+        {
+            NOT_CONVERTING => self.set_converting(entity, false),
+            time => self.start_conversion(entity, time),
+        }
+    }
 }

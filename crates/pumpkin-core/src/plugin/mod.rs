@@ -1055,6 +1055,27 @@ impl PluginManager {
             .collect()
     }
 
+    /// Get telemetry information for all active plugins.
+    #[must_use]
+    pub fn active_plugins_telemetry(&self) -> Vec<crate::telemetry::PluginInfo> {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        plugins
+            .iter()
+            .filter(|p| p.is_active && p.instance.is_some())
+            .map(|p| crate::telemetry::PluginInfo {
+                name: p.metadata.name.clone(),
+                version: p.metadata.version.clone(),
+                language: p
+                    .loader_data
+                    .as_deref()
+                    .and_then(|data| p.loader.binding_language(data)),
+            })
+            .collect()
+    }
+
     /// Checks if plugin loaded
     #[must_use]
     pub fn is_plugin_loaded(&self, name: &str) -> bool {

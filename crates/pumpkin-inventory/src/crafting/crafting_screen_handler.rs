@@ -686,3 +686,30 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::item::Item;
+
+    fn mace_result(grid_size: u8, top_slot: usize) -> Option<String> {
+        let inventory = CraftingInventory::new(grid_size, grid_size);
+        inventory.set_stack(top_slot, ItemStack::new(1, &Item::HEAVY_CORE));
+        inventory.set_stack(
+            top_slot + usize::from(grid_size),
+            ItemStack::new(1, &Item::BREEZE_ROD),
+        );
+        match_crafting_recipe(&inventory, None).map(|result| result.item_id)
+    }
+
+    #[test]
+    fn padded_shaped_recipe_matches_in_any_column() {
+        for (grid_size, top_slot) in [(2, 0), (2, 1), (3, 0), (3, 1), (3, 5)] {
+            assert_eq!(
+                mace_result(grid_size, top_slot).as_deref(),
+                Some("minecraft:mace"),
+                "grid {grid_size}x{grid_size}, top slot {top_slot}"
+            );
+        }
+    }
+}

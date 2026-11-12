@@ -40,7 +40,7 @@ use crate::entity::{
     ai::pathfinder::NavigatorGoal,
     ai::target_match::TargetMatch,
     mob::{
-        Mob, MobEntity,
+        Mob, MobEntity, drop_from_gift_loot_table,
         spawn::{EntitySpawnReason, SpawnGroupData},
     },
     passive::{
@@ -49,9 +49,7 @@ use crate::entity::{
     },
     player::Player,
 };
-use crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent;
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, LootTableHandle, generate_loot_from_handle};
 
 const CAT_FLEES: &[Flee] = &[feline::flee_players(4, is_untamed)];
 
@@ -192,6 +190,13 @@ impl CatEntity {
         );
     }
 
+    pub fn hiss(&self) {
+        self.make_sound(
+            self.get_sound_variant()
+                .hiss_sound(self.mob_entity.living_entity.is_baby()),
+        );
+    }
+
     fn get_sound_variant(&self) -> CatSoundVariant {
         CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed)).unwrap_or_default()
     }
@@ -250,8 +255,9 @@ impl CatEntity {
             }
             let matches = match selector.condition {
                 None => true,
-                // TODO: witch huts give all black cats; needs a structure lookup outside proto chunks.
-                Some(CatSpawnCondition::Structure(_)) => false,
+                Some(CatSpawnCondition::Structure(structures)) => {
+                    world.has_structure_piece_at(pos, structures)
+                }
                 Some(CatSpawnCondition::MoonBrightness { min, max }) => {
                     let brightness = f64::from(world.get_moon_brightness(&pos));
                     min.is_none_or(|min| brightness >= min)
@@ -663,6 +669,7 @@ impl Mob for CatEntity {
     }
 }
 
+const CAT_MORNING_GIFT_LOOT_TABLE: &str = "minecraft:gameplay/cat_morning_gift";
 const RELAX_MAX_OWNER_DISTANCE_SQ: f64 = 100.0;
 const RELAX_ON_BED_DISTANCE_SQ: f64 = 2.5;
 const RELAX_SPEED: f64 = 1.1;
@@ -735,39 +742,10 @@ impl CatRelaxOnOwnerGoal {
             .random_teleport(cat, target, false, |block| {
                 block.has_tag(&tag::Block::MINECRAFT_CAT_DOES_NOT_TELEPORT_TO)
             });
+        drop(rng);
         let cat_pos = entity.block_pos.load();
-        let params = LootContextParameters {
-            world: Some(&world),
-            this_entity: Some(cat),
-            position: Some(entity.pos.load()),
-            ..Default::default()
-        };
-        let handle = world
-            .server
-            .upgrade()
-            .and_then(|server| {
-                server
-                    .datapack_manager
-                    .get_loot_table("minecraft:gameplay/cat_morning_gift")
-            })
-            .unwrap_or(LootTableHandle::Static(
-                &pumpkin_data::loot_table::GAMEPLAY_CAT_MORNING_GIFT,
-            ));
         let body_yaw = entity.body_yaw.load().to_radians();
-        for item_stack in generate_loot_from_handle(&handle, rng.random(), &params) {
-            let mut drop_event = EntityDropItemEvent::new(
-                entity.entity_id,
-                format!("minecraft:{}", item_stack.item.registry_key),
-                item_stack.item_count,
-            );
-            if let Some(server) = world.server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut drop_event);
-            }
-            if drop_event.cancelled {
-                continue;
-            }
+        drop_from_gift_loot_table(cat, CAT_MORNING_GIFT_LOOT_TABLE, |item_stack| {
             let drop_pos = Vector3::new(
                 f64::from(cat_pos.0.x) - f64::from(body_yaw.sin()),
                 f64::from(cat_pos.0.y),
@@ -778,7 +756,7 @@ impl CatRelaxOnOwnerGoal {
                 item_stack,
             );
             world.spawn_entity(Arc::new(item_entity));
-        }
+        });
     }
 }
 
