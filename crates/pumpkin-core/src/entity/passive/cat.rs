@@ -190,6 +190,13 @@ impl CatEntity {
         );
     }
 
+    pub fn hiss(&self) {
+        self.make_sound(
+            self.get_sound_variant()
+                .hiss_sound(self.mob_entity.living_entity.is_baby()),
+        );
+    }
+
     fn get_sound_variant(&self) -> CatSoundVariant {
         CatSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed)).unwrap_or_default()
     }
@@ -248,8 +255,9 @@ impl CatEntity {
             }
             let matches = match selector.condition {
                 None => true,
-                // TODO: witch huts give all black cats; needs a structure lookup outside proto chunks.
-                Some(CatSpawnCondition::Structure(_)) => false,
+                Some(CatSpawnCondition::Structure(structures)) => {
+                    world.has_structure_piece_at(pos, structures)
+                }
                 Some(CatSpawnCondition::MoonBrightness { min, max }) => {
                     let brightness = f64::from(world.get_moon_brightness(&pos));
                     min.is_none_or(|min| brightness >= min)

@@ -2008,7 +2008,7 @@ impl Entity {
             .collect()
     }
 
-    /// Vanilla `Entity.nextStep`: one block of walking past the current distance.
+    /// One block of walking past the current distance.
     #[must_use]
     pub fn default_next_step(&self) -> f32 {
         (self.move_dist.load() as i32 + 1) as f32
@@ -3157,6 +3157,11 @@ impl Entity {
             input.y,
             input.z.mul_add(cos, input.x * sin),
         )
+    }
+
+    #[must_use]
+    pub fn get_on_pos(&self) -> BlockPos {
+        self.get_pos_with_y_offset(1.0e-5).0
     }
 
     #[must_use]

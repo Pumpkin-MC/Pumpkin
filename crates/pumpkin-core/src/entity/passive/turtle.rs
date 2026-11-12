@@ -80,7 +80,6 @@ fn as_turtle(mob: &dyn Mob) -> Option<&TurtleEntity> {
     mob.cast_any().downcast_ref::<TurtleEntity>()
 }
 
-/// Vanilla `BlockPos.closerToCenterThan`.
 fn closer_to_center_than(pos: BlockPos, entity_pos: Vector3<f64>, distance: f64) -> bool {
     pos.to_centered_f64().squared_distance_to_vec(&entity_pos) < distance * distance
 }
@@ -91,14 +90,6 @@ fn bottom_center(pos: BlockPos) -> Vector3<f64> {
         f64::from(pos.0.y),
         f64::from(pos.0.z) + 0.5,
     )
-}
-
-/// Vanilla `LevelReader.hasChunksAt` over a block rectangle.
-fn has_chunks_at(world: &World, y: i32, x0: i32, z0: i32, x1: i32, z1: i32) -> bool {
-    (x0 >> 4..=x1 >> 4).all(|chunk_x| {
-        (z0 >> 4..=z1 >> 4)
-            .all(|chunk_z| world.is_loaded(&BlockPos::new(chunk_x << 4, y, chunk_z << 4)))
-    })
 }
 
 pub struct TurtleEntity {
@@ -229,7 +220,6 @@ impl TurtleEntity {
         closer_to_center_than(self.get_home_pos(), self.get_entity().pos.load(), distance)
     }
 
-    /// Vanilla `TurtleRandomStrollGoal.canUse`.
     fn can_random_stroll(mob: &dyn Mob) -> bool {
         as_turtle(mob).is_some_and(|turtle| {
             !turtle.get_entity().is_in_water() && !turtle.is_going_home() && !turtle.has_egg()
@@ -353,7 +343,6 @@ impl Mob for TurtleEntity {
         }
     }
 
-    /// Vanilla `TurtlePathNavigation.isStableDestination`.
     fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
         if self.travel_pos.load().is_some() {
             world.get_block(pos) == &Block::WATER
@@ -697,7 +686,9 @@ impl TurtleLayEggGoal {
         );
         let egg_pos = self.move_to_target_pos_goal.target_pos.up();
         let mut properties = TurtleEggLikeProperties::default(&Block::TURTLE_EGG);
-        properties.eggs = turtle.get_random().random_range(1..=4);
+        properties.eggs = turtle
+            .get_random()
+            .random_range(TurtleEggBlock::MIN_EGGS..=TurtleEggBlock::MAX_EGGS);
         let egg_state = properties.to_state_id(&Block::TURTLE_EGG);
         world.set_block_state(&egg_pos, egg_state, BlockFlags::NOTIFY_ALL);
         let source: &dyn EntityBase = turtle;
@@ -936,9 +927,7 @@ impl Goal for TurtleTravelGoal {
             .filter(|pos| {
                 let x = pos.x.floor() as i32;
                 let z = pos.z.floor() as i32;
-                has_chunks_at(
-                    &world,
-                    pos.y.floor() as i32,
+                world.has_chunks_at(
                     x - TRAVEL_LOADED_RADIUS,
                     z - TRAVEL_LOADED_RADIUS,
                     x + TRAVEL_LOADED_RADIUS,

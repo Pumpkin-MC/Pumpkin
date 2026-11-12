@@ -37,16 +37,28 @@ impl crate::block::BlockBehaviour for PumpkinBlock {
             props.to_state_id(&Block::CARVED_PUMPKIN),
             BlockFlags::NOTIFY_ALL,
         );
-        let entity = Entity::new(
-            args.world.clone(),
-            args.position.to_centered_f64(),
-            &EntityType::ITEM,
-        );
-        let item_entity = Arc::new(ItemEntity::new(
-            entity,
-            ItemStack::new(4, &Item::PUMPKIN_SEEDS),
-        ));
-        args.world.spawn_entity(item_entity);
+        let drop_pos = args.position.to_centered_f64();
+        let drops = args
+            .world
+            .get_loot_table("minecraft:carve/pumpkin")
+            .map_or_else(
+                || vec![ItemStack::new(4, &Item::PUMPKIN_SEEDS)],
+                |handle| {
+                    let params = crate::world::loot::LootContextParameters {
+                        world: Some(args.world),
+                        position: Some(drop_pos),
+                        this_entity: Some(args.player.as_ref() as &dyn crate::entity::EntityBase),
+                        tool: Some(args.item_stack.clone()),
+                        ..Default::default()
+                    };
+                    crate::world::loot::generate_loot_from_handle(&handle, rand::random(), &params)
+                },
+            );
+        for drop_stack in drops {
+            let entity = Entity::new(args.world.clone(), drop_pos, &EntityType::ITEM);
+            let item_entity = Arc::new(ItemEntity::new(entity, drop_stack));
+            args.world.spawn_entity(item_entity);
+        }
         args.player.damage_item_in_slot(args.equipment_slot, 1);
         args.world.emit_game_event(
             pumpkin_data::game_event::GameEvent::Shear.name(),

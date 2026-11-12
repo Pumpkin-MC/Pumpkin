@@ -39,7 +39,6 @@ pub trait Animal: Mob {
     fn on_bred_without_offspring(&self, _brain: Option<&mut crate::entity::ai::brain::BrainState>) {
     }
 
-    /// Vanilla `Animal.canFallInLove`.
     fn can_fall_in_love(&self) -> bool {
         !self.get_mob_entity().is_in_love()
     }
