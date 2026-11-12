@@ -6,7 +6,7 @@ interface server {
     use uuid.{uuid};
     use recipe.{recipe-manager};
     use enchantments.{enchantment-manager, custom-enchantment};
-    use permission.{permission-level};
+    use permission.{permission, permission-level};
     use advancement.{advancement-info};
     use datapack.{datapack-manager, datapack-info};
 
@@ -282,5 +282,8 @@ interface server {
 
         /// Broadcasts custom server links to all connected players (displayed in the client Esc pause menu in 1.21+).
         set-server-links: func(links: list<server-link>);
+
+        /// Returns every permission node registered on the server, by Pumpkin and by plugins.
+        get-all-permissions: func() -> list<permission>;
     }
 }
