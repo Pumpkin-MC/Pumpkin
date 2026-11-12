@@ -59,7 +59,7 @@ impl DataComponentImpl for AttributeModifiersImpl {
 }
 
 /// Vanilla `ItemEnchantments.LEVEL_CODEC` bounds encoded levels to 1..=255.
-const MAX_ENCHANTMENT_LEVEL: i32 = 255;
+pub const MAX_ENCHANTMENT_LEVEL: i32 = 255;
 
 /// Reads the `ItemEnchantments` map shared by `enchantments` and
 /// `stored_enchantments`, rejecting levels the client refuses to decode.
