@@ -53,6 +53,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:lever_toggles_power",
     "pumpkin:pressure_plate_entity_activation",
     "pumpkin:target_block_projectile_hit",
+    "pumpkin:arrow_falls_onto_block_below",
     "pumpkin:copper_bulb_toggles_and_comparator",
     "pumpkin:redstone_lamp_delayed_off",
     "pumpkin:piston_and_sticky_piston",
@@ -339,6 +340,13 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             target_and_projectiles::test_target_block_projectile_hit,
+        );
+        register_function_test(
+            "pumpkin:arrow_falls_onto_block_below",
+            "pumpkin:empty_5x4x5",
+            100,
+            0,
+            target_and_projectiles::test_arrow_falls_onto_block_below,
         );
         register_function_test(
             "pumpkin:copper_bulb_toggles_and_comparator",
