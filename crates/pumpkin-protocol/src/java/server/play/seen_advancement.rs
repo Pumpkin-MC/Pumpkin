@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::play::SEEN_ADVANCEMENTS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::identifier::Identifier;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[derive(Debug)]
 #[java_packet(SEEN_ADVANCEMENTS)]
@@ -15,7 +14,7 @@ pub enum SSeenAdvancement {
 }
 
 impl<'a> ServerPacket<'a> for SSeenAdvancement {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let action = bytebuf.get_var_int()?;
         match action.0 {
             0 => {
@@ -37,7 +36,6 @@ impl crate::ClientPacket for SSeenAdvancement {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::{VarInt, ser::NetworkWriteExt};
         match self {

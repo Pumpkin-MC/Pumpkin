@@ -85,6 +85,65 @@ pub enum JavaMinecraftVersion {
 }
 
 impl JavaMinecraftVersion {
+    /// Every known version, oldest first.
+    pub const KNOWN: &'static [Self] = &[
+        Self::V_1_7_2,
+        Self::V_1_7_6,
+        Self::V_1_8,
+        Self::V_1_9,
+        Self::V_1_9_1,
+        Self::V_1_9_2,
+        Self::V_1_9_3,
+        Self::V_1_10,
+        Self::V_1_11,
+        Self::V_1_11_1,
+        Self::V_1_12,
+        Self::V_1_12_1,
+        Self::V_1_12_2,
+        Self::V_1_13,
+        Self::V_1_13_1,
+        Self::V_1_13_2,
+        Self::V_1_14,
+        Self::V_1_14_1,
+        Self::V_1_14_2,
+        Self::V_1_14_3,
+        Self::V_1_14_4,
+        Self::V_1_15,
+        Self::V_1_15_1,
+        Self::V_1_15_2,
+        Self::V_1_16,
+        Self::V_1_16_1,
+        Self::V_1_16_2,
+        Self::V_1_16_3,
+        Self::V_1_16_4,
+        Self::V_1_17,
+        Self::V_1_17_1,
+        Self::V_1_18,
+        Self::V_1_18_2,
+        Self::V_1_19,
+        Self::V_1_19_1,
+        Self::V_1_19_3,
+        Self::V_1_19_4,
+        Self::V_1_20,
+        Self::V_1_20_2,
+        Self::V_1_20_3,
+        Self::V_1_20_5,
+        Self::V_1_21,
+        Self::V_1_21_2,
+        Self::V_1_21_4,
+        Self::V_1_21_5,
+        Self::V_1_21_6,
+        Self::V_1_21_7,
+        Self::V_1_21_9,
+        Self::V_1_21_11,
+        Self::V_26_1,
+        Self::V_26_2,
+        Self::V_26_3,
+    ];
+
+    /// The oldest known version.
+    pub const OLDEST: Self = Self::KNOWN[0];
+
     /// Returns the network protocol number for this version.
     ///
     /// Returns `-1` for [`JavaMinecraftVersion::Unknown`].
@@ -207,24 +266,6 @@ impl JavaMinecraftVersion {
             777 => Self::V_26_3,
             _ => Self::Unknown,
         }
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn supports_configuration_state(&self) -> bool {
-        self.protocol_version() >= Self::V_1_20_2.protocol_version()
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn is_modern(&self) -> bool {
-        self.protocol_version() >= Self::V_1_13.protocol_version()
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn has_registries(&self) -> bool {
-        self.protocol_version() >= Self::V_1_16.protocol_version()
     }
 }
 

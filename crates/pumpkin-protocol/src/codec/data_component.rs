@@ -14,7 +14,6 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::trim_material::TrimMaterial;
 use pumpkin_data::trim_pattern::TrimPattern;
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
-use pumpkin_util::version::JavaMinecraftVersion;
 
 const MAX_STATUS_EFFECTS: usize = 128;
 const MAX_INITIAL_COLLECTION_SIZE: usize = 65536;
@@ -340,7 +339,7 @@ impl DataComponentCodec<Self> for CustomNameImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let tag = seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
+        let tag = seq.get_nbt_owned()?;
         let name = tag.as_ref().map_or_else(
             pumpkin_util::text::TextComponent::empty,
             pumpkin_util::text::TextComponent::from_nbt,
@@ -353,9 +352,7 @@ impl DataComponentCodec<Self> for LoreImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt(self.lines.len() as i32))?;
         for line in &self.lines {
-            seq.write_slice(
-                &line.encode_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2),
-            )?;
+            seq.write_slice(&line.encode())?;
         }
         Ok(())
     }
@@ -373,8 +370,7 @@ impl DataComponentCodec<Self> for LoreImpl {
 
         let mut lines = Vec::with_capacity(count as usize);
         for _ in 0..count {
-            let tag =
-                seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
+            let tag = seq.get_nbt_owned()?;
             let text = tag.as_ref().map_or_else(
                 pumpkin_util::text::TextComponent::empty,
                 pumpkin_util::text::TextComponent::from_nbt,
@@ -397,7 +393,7 @@ impl DataComponentCodec<Self> for ItemNameImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let tag = seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
+        let tag = seq.get_nbt_owned()?;
         let name = match tag {
             Some(NbtTag::Compound(c)) => c
                 .get_string("translate")
@@ -484,7 +480,7 @@ impl DataComponentCodec<Self> for CustomDataImpl {
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let data = seq
-            .get_compound_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?
+            .get_compound_nbt_owned()?
             .unwrap_or_else(pumpkin_nbt::compound::NbtCompound::new);
         Ok(Self { data })
     }
@@ -1712,7 +1708,7 @@ fn deserialize_adventure_predicate(seq: &mut impl NetworkReadExt) -> Result<NbtT
         }
         let has_nbt = seq.get_bool()?;
         if has_nbt {
-            let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            let _ = seq.get_nbt_owned()?;
         }
         let exact_len = seq.get_var_int()?.0;
         for _ in 0..exact_len {
@@ -1791,7 +1787,7 @@ impl DataComponentCodec<Self> for AttributeModifiersImpl {
             let _slot = seq.get_var_int()?;
             let display_type = seq.get_var_int()?.0;
             if display_type == 2 {
-                let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+                let _ = seq.get_nbt_owned()?;
             }
         }
         Ok(Self {
@@ -2459,7 +2455,7 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
         seq.write_var_int(&VarInt(0))?;
         seq.write_var_int(&VarInt::from(self.pages.len() as i32))?;
         for page in &self.pages {
-            seq.write_slice(&page.encode_for_version(&JavaMinecraftVersion::V_26_2))?;
+            seq.write_slice(&page.encode())?;
             seq.write_bool(false)?;
         }
         seq.write_bool(true)
@@ -2475,13 +2471,13 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
         let pages_len = read_count(seq, usize::MAX)?;
         let mut pages = Vec::with_capacity(pages_len.min(MAX_INITIAL_COLLECTION_SIZE));
         for _ in 0..pages_len {
-            let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            let tag = seq.get_nbt_owned()?;
             let comp = tag.as_ref().map_or_else(
                 pumpkin_util::text::TextComponent::empty,
                 pumpkin_util::text::TextComponent::from_nbt,
             );
             if seq.get_bool()? {
-                let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+                let _ = seq.get_nbt_owned()?;
             }
             pages.push(comp);
         }
@@ -2557,12 +2553,12 @@ impl DataComponentCodec<Self> for EntityDataImpl {
             .ok_or_else(|| WritingError::Message(format!("Unknown entity type {id}")))?;
         nbt.child_tags.remove("id");
         seq.write_var_int(&VarInt(type_id))?;
-        seq.write_nbt(NbtTag::Compound(nbt))
+        seq.write_compound_nbt(&nbt)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let type_id = seq.get_var_int()?.0;
-        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        let tag = seq.get_nbt_owned()?;
         // Vanilla's TypedEntityData keeps the type apart from the tag.
         //Pumpkin keeps it as "id" in the NBT.
         let entity_type = u16::try_from(type_id)
@@ -2580,11 +2576,11 @@ impl DataComponentCodec<Self> for EntityDataImpl {
 
 impl DataComponentCodec<Self> for BucketEntityDataImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_nbt(NbtTag::Compound(self.nbt.clone().unwrap_or_default()))
+        seq.write_nbt(&NbtTag::Compound(self.nbt.clone().unwrap_or_default()))
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        let tag = seq.get_nbt_owned()?;
         let nbt = match tag {
             Some(NbtTag::Compound(c)) => Some(c),
             _ => None,
@@ -2596,12 +2592,12 @@ impl DataComponentCodec<Self> for BucketEntityDataImpl {
 impl DataComponentCodec<Self> for BlockEntityDataImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt(0))?;
-        seq.write_nbt(NbtTag::Compound(self.nbt.clone()))
+        seq.write_compound_nbt(&self.nbt)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _type_id = seq.get_var_int()?;
-        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        let tag = seq.get_nbt_owned()?;
         let nbt = if let Some(NbtTag::Compound(c)) = tag {
             c
         } else {
@@ -2629,7 +2625,7 @@ impl DataComponentCodec<Self> for InstrumentImpl {
             .map_err(|e| ReadingError::Message(format!("No sound: {e}")))?;
             let _use_duration = seq.get_f32()?;
             let _range = seq.get_f32()?;
-            let _description = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            let _description = seq.get_nbt_owned()?;
             Cow::Borrowed("minecraft:ponder_goat_horn")
         } else {
             let idx = (raw_id - 1) as usize;
@@ -2659,7 +2655,7 @@ impl DataComponentCodec<Self> for ProvidesTrimMaterialImpl {
                 let _key = seq.get_str()?;
                 let _val = seq.get_str()?;
             }
-            let _description = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            let _description = seq.get_nbt_owned()?;
             Cow::Borrowed("minecraft:quartz")
         } else {
             let idx = (raw_id - 1) as usize;
@@ -2730,7 +2726,7 @@ impl DataComponentCodec<Self> for LodestoneTrackerImpl {
             seq.write_bool(true)?;
             seq.write_string(&target.dimension)?;
             let pos = pumpkin_util::math::position::BlockPos::new(target.x, target.y, target.z);
-            seq.write_block_pos(&pos, &JavaMinecraftVersion::V_26_2)?;
+            seq.write_block_pos(&pos)?;
         } else {
             seq.write_bool(false)?;
         }
@@ -2740,7 +2736,7 @@ impl DataComponentCodec<Self> for LodestoneTrackerImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let target = if seq.get_bool()? {
             let dimension = seq.get_str()?.to_string();
-            let pos = seq.get_block_pos(&JavaMinecraftVersion::V_26_2)?;
+            let pos = seq.get_block_pos()?;
             Some(pumpkin_data::data_component_impl::LodestoneTarget {
                 dimension,
                 x: pos.0.x,
@@ -3039,7 +3035,7 @@ impl DataComponentCodec<Self> for BeesImpl {
                 .and_then(|c| c.get_int("min_ticks_in_hive"))
                 .unwrap_or(0);
             seq.write_var_int(&VarInt(i32::from(EntityType::BEE.id)))?;
-            seq.write_nbt(NbtTag::Compound(entity_data))?;
+            seq.write_nbt(&NbtTag::Compound(entity_data))?;
             seq.write_var_int(&VarInt(ticks))?;
             seq.write_var_int(&VarInt(min_ticks))?;
         }
@@ -3051,7 +3047,7 @@ impl DataComponentCodec<Self> for BeesImpl {
         let mut bees = Vec::with_capacity(len.min(64));
         for _ in 0..len {
             let _entity_type = seq.get_var_int()?;
-            let nbt = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            let nbt = seq.get_nbt_owned()?;
             let ticks = seq.get_var_int()?.0;
             let min_ticks = seq.get_var_int()?.0;
             let mut bee_comp = pumpkin_nbt::compound::NbtCompound::new();
@@ -3231,12 +3227,12 @@ fn serialize_sign_messages(
     seq: &mut impl NetworkWriteExt,
 ) -> Result<(), WritingError> {
     for msg in messages {
-        seq.write_nbt(NbtTag::String(msg.to_string().into()))?;
+        seq.write_nbt(&NbtTag::String(msg.to_string().into()))?;
     }
     if let Some(filtered) = filtered_messages {
         seq.write_bool(true)?;
         for msg in filtered {
-            seq.write_nbt(NbtTag::String(msg.to_string().into()))?;
+            seq.write_nbt(&NbtTag::String(msg.to_string().into()))?;
         }
     } else {
         seq.write_bool(false)?;
@@ -3262,7 +3258,7 @@ fn deserialize_sign_messages(
         Cow::Borrowed(""),
     ];
     for slot in &mut messages {
-        let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        let tag = seq.get_nbt_owned()?;
         if let Some(t) = tag {
             *slot = Cow::Owned(pumpkin_util::text::TextComponent::from_nbt(&t).get_text());
         }
@@ -3275,7 +3271,7 @@ fn deserialize_sign_messages(
             Cow::Borrowed(""),
         ];
         for slot in &mut filtered {
-            let tag = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+            let tag = seq.get_nbt_owned()?;
             if let Some(t) = tag {
                 *slot = Cow::Owned(pumpkin_util::text::TextComponent::from_nbt(&t).get_text());
             }

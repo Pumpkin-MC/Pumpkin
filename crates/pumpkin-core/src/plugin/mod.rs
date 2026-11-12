@@ -1,3 +1,4 @@
+use crate::net::java::versions::JavaVersions;
 use arc_swap::ArcSwap;
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
@@ -198,6 +199,8 @@ pub struct PluginManager {
     // Thread ID of the thread that created the plugin manager.
     // Permission prompts use rustyline, which is only safe on this thread.
     main_thread_id: ThreadId,
+    /// Java versions plugins translate, next to the server's own.
+    pub java_versions: JavaVersions,
 }
 
 /// Represents a successfully loaded plugin
@@ -250,6 +253,7 @@ impl PluginManager {
             hot_reload_task: RwLock::new(None),
             hot_reload_enabled: AtomicBool::new(false),
             main_thread_id: std::thread::current().id(),
+            java_versions: JavaVersions::default(),
         }
     }
 
@@ -409,6 +413,14 @@ impl PluginManager {
                 loader.on_tick(server);
             }
         }
+    }
+
+    /// Whether the caller runs inside a plugin call. Assumes so while the loaders are being changed.
+    #[must_use]
+    pub fn in_plugin_call(&self) -> bool {
+        self.loaders.try_read().map_or(true, |loaders| {
+            loaders.iter().any(|loader| loader.in_plugin_call())
+        })
     }
 
     /// Get a clone of the loaders for context use
@@ -635,6 +647,7 @@ impl PluginManager {
                 Err(e) => {
                     // Handle initialization failure
                     let error_msg = format!("Initialization failed: {e}");
+                    self_ref_clone.release_registrations(&plugin_name, &context);
                     let _ = instance.on_unload(context).await;
 
                     // Get the loader data before removing the plugin
@@ -1089,8 +1102,7 @@ impl PluginManager {
             plugins.remove(index)
         };
 
-        self.unregister_handlers(name);
-        plugin.context.unregister_commands();
+        self.release_registrations(name, &plugin.context);
 
         if let Some(instance) = plugin.instance.take() {
             instance.on_unload(plugin.context.clone()).await.ok();
@@ -1112,6 +1124,13 @@ impl PluginManager {
         self.plugin_states.write().await.remove(name);
 
         Ok(())
+    }
+
+    /// Drops everything a plugin registered: handlers, Java versions and commands.
+    fn release_registrations(&self, name: &str, context: &Context) {
+        self.unregister_handlers(name);
+        self.java_versions.unregister(name);
+        context.unregister_commands();
     }
 
     fn unregister_handlers(&self, source: &str) {

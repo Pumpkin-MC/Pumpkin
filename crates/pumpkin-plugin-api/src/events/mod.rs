@@ -14,7 +14,10 @@ pub use crate::wit::pumpkin::plugin::event::{
     BedrockClientboundPacket, BedrockServerboundPacket, ClientboundPacket, Event, EventPriority,
     InteractAction, JavaClientboundPacket, JavaServerboundPacket, ServerboundPacket,
 };
-use crate::{Context, Result, Server, wit::pumpkin::plugin::event::EventType};
+use crate::{
+    Context, Result, Server,
+    wit::pumpkin::plugin::event::{EventType, PacketReceivedEventData, PacketSentEventData},
+};
 
 /// Block events.
 pub mod block;
@@ -58,6 +61,15 @@ pub(crate) static NEXT_HANDLER_ID: AtomicU32 = AtomicU32::new(0);
 pub(crate) static EVENT_HANDLERS: Mutex<BTreeMap<u32, Arc<dyn ErasedEventHandler>>> =
     Mutex::new(BTreeMap::new());
 
+/// The handler registered under `event_id`.
+pub(crate) fn event_handler(event_id: u32) -> Option<Arc<dyn ErasedEventHandler>> {
+    EVENT_HANDLERS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&event_id)
+        .cloned()
+}
+
 /// Connects an event marker type to its WIT-generated data type and [`EventType`] discriminant.
 ///
 /// Implement this trait for a unit struct to define a new event. The [`EventType`] constant
@@ -80,8 +92,55 @@ pub trait FromIntoEvent: Sized {
     fn data_into_event(data: Self::Data) -> Event;
 }
 
+/// Any event a plugin can register a handler for.
+///
+/// Every [`FromIntoEvent`] is one. Packet events are delivered through their
+/// own exports instead of [`Event`], so they implement this trait directly.
+pub trait PluginEvent: Sized {
+    /// The discriminant used by the host to identify this event.
+    const EVENT_TYPE: EventType;
+
+    /// The WIT-generated data record carried by this event.
+    type Data;
+
+    /// Runs `handler` on an event from `handle-event`; other events pass through.
+    #[doc(hidden)]
+    fn route_event<H: EventHandler<Self>>(_handler: &H, _server: Server, event: Event) -> Event {
+        event
+    }
+
+    /// Runs `handler` on an event from `handle-packet-received`; other events pass through.
+    #[doc(hidden)]
+    fn route_packet_received<H: EventHandler<Self>>(
+        _handler: &H,
+        _server: Server,
+        event: PacketReceivedEventData,
+    ) -> PacketReceivedEventData {
+        event
+    }
+
+    /// Runs `handler` on an event from `handle-packet-sent`; other events pass through.
+    #[doc(hidden)]
+    fn route_packet_sent<H: EventHandler<Self>>(
+        _handler: &H,
+        _server: Server,
+        event: PacketSentEventData,
+    ) -> PacketSentEventData {
+        event
+    }
+}
+
+impl<T: FromIntoEvent> PluginEvent for T {
+    const EVENT_TYPE: EventType = T::EVENT_TYPE;
+    type Data = T::Data;
+
+    fn route_event<H: EventHandler<Self>>(handler: &H, server: Server, event: Event) -> Event {
+        T::data_into_event(handler.handle(server, T::data_from_event(event)))
+    }
+}
+
 /// A convenience alias for the data type associated with an event.
-pub type EventData<E> = <E as FromIntoEvent>::Data;
+pub type EventData<E> = <E as PluginEvent>::Data;
 
 /// A type alias for a pinned, boxed, dynamically-dispatched future.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -90,27 +149,50 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 ///
 /// Implement this trait to process an event. The `handle` method receives the server
 /// handle and the event data, and returns the (potentially modified) event data.
-pub trait EventHandler<E: FromIntoEvent> {
+pub trait EventHandler<E: PluginEvent> {
     /// Processes the event and returns the (potentially modified) data.
     fn handle(&self, server: Server, event: E::Data) -> E::Data;
 }
 
 pub(crate) trait ErasedEventHandler: Send + Sync {
-    fn handle_erased(&self, server: Server, event: Event) -> Event;
+    fn handle_event(&self, server: Server, event: Event) -> Event;
+
+    fn handle_packet_received(
+        &self,
+        server: Server,
+        event: PacketReceivedEventData,
+    ) -> PacketReceivedEventData;
+
+    fn handle_packet_sent(&self, server: Server, event: PacketSentEventData)
+    -> PacketSentEventData;
 }
 
-struct HandlerWrapper<E: FromIntoEvent, H> {
+struct HandlerWrapper<E: PluginEvent, H> {
     handler: H,
     _phantom: PhantomData<E>,
 }
 
-impl<E: FromIntoEvent + Send + Sync, H: EventHandler<E> + Send + Sync> ErasedEventHandler
+impl<E: PluginEvent + Send + Sync, H: EventHandler<E> + Send + Sync> ErasedEventHandler
     for HandlerWrapper<E, H>
 {
-    fn handle_erased(&self, server: Server, event: Event) -> Event {
-        let data = E::data_from_event(event);
-        let result = self.handler.handle(server, data);
-        E::data_into_event(result)
+    fn handle_event(&self, server: Server, event: Event) -> Event {
+        E::route_event(&self.handler, server, event)
+    }
+
+    fn handle_packet_received(
+        &self,
+        server: Server,
+        event: PacketReceivedEventData,
+    ) -> PacketReceivedEventData {
+        E::route_packet_received(&self.handler, server, event)
+    }
+
+    fn handle_packet_sent(
+        &self,
+        server: Server,
+        event: PacketSentEventData,
+    ) -> PacketSentEventData {
+        E::route_packet_sent(&self.handler, server, event)
     }
 }
 
@@ -120,7 +202,7 @@ impl Context {
     /// The handler must implement the [`EventHandler`] trait.
     /// If the event is blocking, returning an event from the handler will modify the event.
     pub fn register_event_handler<
-        E: FromIntoEvent + Send + Sync + 'static,
+        E: PluginEvent + Send + Sync + 'static,
         H: EventHandler<E> + Send + Sync + 'static,
     >(
         &self,

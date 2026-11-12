@@ -3,7 +3,6 @@ use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(RESET_SCORE)]
 pub struct CResetScore {
@@ -25,7 +24,6 @@ impl ClientPacket for CResetScore {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(&self.entity_name)?;
         write.write_option(&self.objective_name, |w, obj| w.write_string(obj))?;

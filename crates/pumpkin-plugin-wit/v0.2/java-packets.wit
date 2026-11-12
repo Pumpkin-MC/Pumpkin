@@ -1788,8 +1788,8 @@ interface java-packets {
   record c-player-info-update {
     /// The bitmask (`PlayerInfoFlags`) determining which data follows.
     actions: u8,
-    /// The list of players being updated. Each player entry contains
-    /// data fields in the order they appear in the bitmask.
+    /// The list of players being updated. Their actions are written in bitmask order, whatever
+    /// order they are listed in.
     players: list<player>,
   }
   record player {

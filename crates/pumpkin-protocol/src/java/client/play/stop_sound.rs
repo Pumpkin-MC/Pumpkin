@@ -6,7 +6,6 @@ use crate::{ClientPacket, WritingError};
 use pumpkin_data::{packet::clientbound::play::STOP_SOUND, sound::SoundCategory};
 use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(STOP_SOUND)]
 pub struct CStopSound {
@@ -22,11 +21,7 @@ impl CStopSound {
 }
 
 impl ClientPacket for CStopSound {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
         const NO_CATEGORY_NO_SOUND: u8 = 0;
         const CATEGORY_ONLY: u8 = 1;
         const SOUND_ONLY: u8 = 2;

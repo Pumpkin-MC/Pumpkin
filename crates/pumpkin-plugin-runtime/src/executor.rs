@@ -20,7 +20,7 @@ use wasmtime::{
 
 use crate::{
     RuntimeSpawner,
-    chain::{ReentryContext, RootAdmissionGuard, scope, sync_scope},
+    chain::{ActiveChain, ReentryContext, RootAdmissionGuard, driver_scope, scope, sync_scope},
     lifecycle::{DriverError, DriverJoin, DriverState, Lifecycle},
     policy::{LegacySyncReentry, StorePolicy},
 };
@@ -519,6 +519,12 @@ impl<T> ReentryState<T> {
     }
 }
 
+impl<T: Send + 'static> ActiveChain for ReentryState<T> {
+    fn active_context(&self) -> Option<ReentryContext> {
+        self.current_context()
+    }
+}
+
 struct ActiveContextRegistration<T> {
     state: Arc<ReentryState<T>>,
     id: u64,
@@ -935,6 +941,7 @@ where
         });
         let (ready_sender, ready) = oneshot::channel();
         let policy_name = P::NAME;
+        let active_chain: Arc<dyn ActiveChain> = shared.reentry.clone();
         let task_guard = DriverTaskGuard::new(Arc::clone(&lifecycle), accepting);
 
         tracing::debug!(
@@ -943,7 +950,7 @@ where
         );
 
         spawner
-            .spawn(Box::pin(async move {
+            .spawn(Box::pin(driver_scope(active_chain, async move {
                 let mut task_guard = task_guard;
                 run_driver(
                     store,
@@ -956,7 +963,7 @@ where
                 )
                 .await;
                 task_guard.disarm();
-            }))
+            })))
             .map_err(|error| {
                 let error = Arc::new(DriverError::new(format!(
                     "Failed to spawn Wasm plugin store driver: {error}"

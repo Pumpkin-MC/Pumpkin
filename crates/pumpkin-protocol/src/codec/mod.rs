@@ -5,6 +5,7 @@ pub mod item_stack_seralizer;
 pub mod little_endian;
 pub mod lp_vector_3d;
 pub mod optional_int;
+pub mod particle;
 pub mod recipe;
 mod u24_type;
 pub mod uuid;

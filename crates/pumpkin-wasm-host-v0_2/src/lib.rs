@@ -558,7 +558,6 @@ mod tests {
     use pumpkin_protocol::VarInt;
     use pumpkin_protocol::java::client::play::CSetBlockDestroyStage as ProtocolCSetBlockDestroyStage;
     use pumpkin_util::math::position::BlockPos;
-    use pumpkin_util::version::JavaMinecraftVersion;
 
     #[test]
     fn serializes_destroy_stage() {
@@ -569,7 +568,7 @@ mod tests {
                 destroy_stage,
             });
 
-            let bytes = serialize_java_packet(&packet, JavaMinecraftVersion::V_26_3);
+            let bytes = serialize_java_packet(&packet);
             assert_eq!(
                 bytes.as_ref().and_then(|bytes| bytes.last()),
                 Some(&(destroy_stage as u8))

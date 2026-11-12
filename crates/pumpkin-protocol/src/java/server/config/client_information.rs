@@ -7,7 +7,6 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the client to inform the server about its local settings
 #[java_packet(CLIENT_INFORMATION)]
@@ -31,27 +30,15 @@ pub struct SClientInformationConfig<'a> {
 }
 
 impl<'a> ServerPacket<'a> for SClientInformationConfig<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let locale = bytebuf.get_str_borrowed()?;
         let view_distance = bytebuf.get_i8()?;
         let chat_mode = bytebuf.get_var_int()?;
         let chat_colors = bytebuf.get_bool()?;
         let skin_parts = bytebuf.get_u8()?;
-        let main_hand = if version >= &JavaMinecraftVersion::V_1_9 {
-            bytebuf.get_var_int()?
-        } else {
-            VarInt(1)
-        };
-        let text_filtering = if version >= &JavaMinecraftVersion::V_1_17 {
-            bytebuf.get_bool()?
-        } else {
-            false
-        };
-        let server_listing = if version >= &JavaMinecraftVersion::V_1_18 {
-            bytebuf.get_bool()?
-        } else {
-            true
-        };
+        let main_hand = bytebuf.get_var_int()?;
+        let text_filtering = bytebuf.get_bool()?;
+        let server_listing = bytebuf.get_bool()?;
 
         Ok(Self {
             locale,
@@ -70,7 +57,6 @@ impl crate::ClientPacket for SClientInformationConfig<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_string(self.locale)?;
@@ -78,15 +64,9 @@ impl crate::ClientPacket for SClientInformationConfig<'_> {
         write.write_var_int(&self.chat_mode)?;
         write.write_bool(self.chat_colors)?;
         write.write_u8(self.skin_parts)?;
-        if version >= &JavaMinecraftVersion::V_1_9 {
-            write.write_var_int(&self.main_hand)?;
-        }
-        if version >= &JavaMinecraftVersion::V_1_17 {
-            write.write_bool(self.text_filtering)?;
-        }
-        if version >= &JavaMinecraftVersion::V_1_18 {
-            write.write_bool(self.server_listing)?;
-        }
+        write.write_var_int(&self.main_hand)?;
+        write.write_bool(self.text_filtering)?;
+        write.write_bool(self.server_listing)?;
         Ok(())
     }
 }

@@ -4,7 +4,7 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::DEBUG_BLOCK_VALUE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+use pumpkin_util::math::position::BlockPos;
 
 #[java_packet(DEBUG_BLOCK_VALUE)]
 pub struct CDebugBlockValue<'a> {
@@ -21,12 +21,8 @@ impl<'a> CDebugBlockValue<'a> {
 }
 
 impl ClientPacket for CDebugBlockValue<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        write.write_block_pos(&self.pos, version)?;
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
+        write.write_block_pos(&self.pos)?;
         write.write_string(self.name)?;
         write.write_string(self.value)?;
         Ok(())
@@ -34,9 +30,9 @@ impl ClientPacket for CDebugBlockValue<'_> {
 }
 
 impl<'a> ServerPacket<'a> for CDebugBlockValue<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
+            pos: bytebuf.get_block_pos()?,
             name: bytebuf.get_str_borrowed()?,
             value: bytebuf.get_str_borrowed()?,
         })

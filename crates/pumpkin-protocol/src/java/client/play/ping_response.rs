@@ -3,7 +3,6 @@ use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Responds to a client-initiated ping request to synchronize game state.
 #[java_packet(PONG_RESPONSE)]
@@ -24,7 +23,6 @@ impl ClientPacket for CPingResponse {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_i64_be(self.payload)?;
         Ok(())

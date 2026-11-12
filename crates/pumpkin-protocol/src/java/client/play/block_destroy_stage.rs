@@ -5,7 +5,6 @@ use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the visual "breaking" progress of a block for all clients.
 ///
@@ -38,10 +37,9 @@ impl ClientPacket for CSetBlockDestroyStage {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
         write.write_i8(self.destroy_stage)?;
         Ok(())
     }

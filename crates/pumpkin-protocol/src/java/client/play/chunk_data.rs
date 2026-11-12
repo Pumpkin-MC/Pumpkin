@@ -2,12 +2,10 @@ use std::io::Write;
 
 use crate::ClientPacket;
 use crate::codec::var_int::VarInt;
-use crate::packet::MultiVersionJavaPacket;
+use crate::packet::JavaPacket;
 use crate::ser::{NetworkWriteExt, WritingError};
 use pumpkin_data::packet::clientbound::play::LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::tag::NbtTag;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use super::light_update::LightData;
 
@@ -20,12 +18,8 @@ pub struct ChunkHeightmaps {
 }
 
 impl ChunkHeightmaps {
-    pub fn write_to(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_21_5 {
+    pub fn write_to(&self, mut write: impl Write) -> Result<(), WritingError> {
+        {
             write.write_var_int(&VarInt(3))?; // Map size
 
             let mut write_heightmap = |index: i32, data: &[i64]| -> Result<(), WritingError> {
@@ -45,19 +39,7 @@ impl ChunkHeightmaps {
                     .as_deref()
                     .unwrap_or(&[0; 37]),
             )?;
-        } else {
-            let mut comp = NbtCompound::new();
-            if let Some(ref ws) = self.world_surface {
-                comp.put("WORLD_SURFACE", NbtTag::LongArray(ws.clone()));
-            }
-            if let Some(ref mb) = self.motion_blocking {
-                comp.put("MOTION_BLOCKING", NbtTag::LongArray(mb.clone()));
-            }
-            if let Some(ref mbnl) = self.motion_blocking_no_leaves {
-                comp.put("MOTION_BLOCKING_NO_LEAVES", NbtTag::LongArray(mbnl.clone()));
-            }
-            write.write_compound_nbt_with_version(Some(&comp), version)?;
-        }
+        };
         Ok(())
     }
 }
@@ -97,10 +79,8 @@ pub struct CChunkData<'a> {
     pub light_data: LightData,
 }
 
-impl MultiVersionJavaPacket for CChunkData<'_> {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        LEVEL_CHUNK_WITH_LIGHT.to_id(version)
-    }
+impl JavaPacket for CChunkData<'_> {
+    const PACKET_ID: i32 = LEVEL_CHUNK_WITH_LIGHT.to_id();
 }
 
 impl<'a> CChunkData<'a> {
@@ -125,15 +105,11 @@ impl<'a> CChunkData<'a> {
 }
 
 impl ClientPacket for CChunkData<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_i32_be(self.chunk_x)?;
         write.write_i32_be(self.chunk_z)?;
 
-        self.heightmaps.write_to(&mut write, version)?;
+        self.heightmaps.write_to(&mut write)?;
 
         write.write_var_int(&VarInt(self.data.len() as i32))?;
         write.write_slice(self.data)?;
@@ -143,10 +119,10 @@ impl ClientPacket for CChunkData<'_> {
             write.write_u8(be.packed_xz)?;
             write.write_i16_be(be.y)?;
             write.write_var_int(&be.type_id)?;
-            write.write_compound_nbt_with_version(Some(&be.data), version)?;
+            write.write_compound_nbt(&be.data)?;
         }
 
-        self.light_data.write(&mut write, version)?;
+        self.light_data.write(&mut write)?;
 
         Ok(())
     }

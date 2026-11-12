@@ -1,9 +1,12 @@
 use std::{
+    cell::RefCell,
     future::Future,
+    pin::Pin,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
+    task::{Context, Poll},
     time::Instant,
 };
 
@@ -111,7 +114,10 @@ pub struct ReentryContext {
 
 impl ReentryContext {
     pub fn current() -> Option<Self> {
-        REENTRY_CONTEXT.try_with(|context| *context).ok()
+        REENTRY_CONTEXT
+            .try_with(|context| *context)
+            .ok()
+            .or_else(driver_context)
     }
 
     pub fn child(self) -> wasmtime::Result<Self> {
@@ -131,6 +137,58 @@ impl ReentryContext {
 
 tokio::task_local! {
     static REENTRY_CONTEXT: ReentryContext;
+}
+
+/// Reports the chain a Store is currently running a guest call for.
+pub trait ActiveChain: Send + Sync {
+    fn active_context(&self) -> Option<ReentryContext>;
+}
+
+thread_local! {
+    /// The Store whose driver is being polled on this thread.
+    static DRIVER_CHAIN: RefCell<Option<Arc<dyn ActiveChain>>> = const { RefCell::new(None) };
+}
+
+/// Synchronous host imports run inside the driver poll but outside the guest
+/// call's task-local scope, so they take the chain from the driver instead.
+fn driver_context() -> Option<ReentryContext> {
+    let source = DRIVER_CHAIN.with_borrow(Clone::clone)?;
+    let context = source.active_context()?;
+    Some(context.child().unwrap_or(context))
+}
+
+/// Marks every poll of `future` as running inside `source`'s Store driver.
+pub fn driver_scope<F: Future + Send>(source: Arc<dyn ActiveChain>, future: F) -> DriverScope<F> {
+    DriverScope {
+        source,
+        future: Box::pin(future),
+    }
+}
+
+pub struct DriverScope<F> {
+    source: Arc<dyn ActiveChain>,
+    future: Pin<Box<F>>,
+}
+
+struct RestoreDriverChain(Option<Arc<dyn ActiveChain>>);
+
+impl Drop for RestoreDriverChain {
+    fn drop(&mut self) {
+        let previous = self.0.take();
+        DRIVER_CHAIN.with_borrow_mut(|current| *current = previous);
+    }
+}
+
+impl<F: Future> Future for DriverScope<F> {
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<F::Output> {
+        let this = self.get_mut();
+        let previous =
+            DRIVER_CHAIN.with_borrow_mut(|current| current.replace(Arc::clone(&this.source)));
+        let _restore = RestoreDriverChain(previous);
+        this.future.as_mut().poll(cx)
+    }
 }
 
 pub async fn scope<T>(context: ReentryContext, future: impl Future<Output = T>) -> T {
