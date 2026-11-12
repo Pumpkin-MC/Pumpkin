@@ -35,10 +35,13 @@ fn prepare_from(assets: &Path, version: &str, local_jar: Option<&Path>) -> Resul
         || !fs::read_to_string(&marker).is_ok_and(|prepared| prepared.trim() == version)
     {
         let bytes = if let Some(path) = local_jar {
-            info!(path = %path.display(), "Reading local Minecraft server jar");
+            info!(
+                "Reading local Minecraft server bundle from {}",
+                path.display()
+            );
             let file = File::open(path)?;
             let length = file.metadata()?.len();
-            read_jar(file, Some(length))?
+            read_jar(file, Some(length), "local Minecraft server bundle")?
         } else {
             download_server_jar(version)?
         };
@@ -56,10 +59,10 @@ fn prepare_from(assets: &Path, version: &str, local_jar: Option<&Path>) -> Resul
         }
         fs::rename(staging.path(), &datapack)?;
     } else {
-        info!(version, "Reusing vanilla datapack");
+        info!("Reusing vanilla datapack for Minecraft {version}");
         copy_conventional_tags(assets, &datapack)?;
     }
-    info!(version, "Vanilla datapack ready");
+    info!("Vanilla datapack for Minecraft {version} is ready");
     Ok(())
 }
 
@@ -86,7 +89,11 @@ fn copy_dir_all(source: &Path, destination: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn read_jar(mut source: impl Read, total: Option<u64>) -> Result<Vec<u8>> {
+fn megabytes(bytes: u64) -> f64 {
+    bytes as f64 / 1_000_000.0
+}
+
+fn read_jar(mut source: impl Read, total: Option<u64>, label: &str) -> Result<Vec<u8>> {
     if total.is_some_and(|length| length > MAX_ARCHIVE_BYTES) {
         return Err("Minecraft server jar is too large".into());
     }
@@ -103,11 +110,19 @@ fn read_jar(mut source: impl Read, total: Option<u64>) -> Result<Vec<u8>> {
         }
         data.extend_from_slice(&buffer[..count]);
         if reported.elapsed() >= PROGRESS_INTERVAL {
-            info!(bytes = data.len(), ?total, "Reading Minecraft server jar");
+            if let Some(total) = total {
+                info!(
+                    "Read {:.1} of {:.1} MB from {label}",
+                    megabytes(data.len() as u64),
+                    megabytes(total)
+                );
+            } else {
+                info!("Read {:.1} MB from {label}", megabytes(data.len() as u64));
+            }
             reported = Instant::now();
         }
     }
-    info!(bytes = data.len(), "Minecraft server jar read complete");
+    info!("Read {:.1} MB from {label}", megabytes(data.len() as u64));
     Ok(data)
 }
 
@@ -116,7 +131,7 @@ fn download_server_jar(version: &str) -> Result<Vec<u8>> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("Pumpkin-Data-Prepare/0.1")
         .build()?;
-    info!(version, "Fetching Minecraft version manifest");
+    info!("Fetching version manifest for Minecraft {version}");
     let manifest = read_metadata(client.get(MANIFEST_URL).send()?.error_for_status()?)?;
     let package_url = manifest["versions"]
         .as_array()
@@ -133,10 +148,10 @@ fn download_server_jar(version: &str) -> Result<Vec<u8>> {
     let checksum = server["sha1"]
         .as_str()
         .ok_or("Missing server jar checksum")?;
-    info!(version, "Downloading Minecraft server jar");
+    info!("Downloading Minecraft {version} server bundle");
     let response = client.get(url).send()?.error_for_status()?;
     let length = response.content_length();
-    let bytes = read_jar(response, length)?;
+    let bytes = read_jar(response, length, "Minecraft server bundle")?;
     if hex::encode(Sha1::digest(&bytes)) != checksum {
         return Err("Minecraft server jar checksum does not match its manifest".into());
     }
@@ -161,14 +176,14 @@ fn extract_datapack(bytes: &[u8], version: &str, destination: &Path) -> Result<(
         let entry =
             bundler.by_name(&format!("META-INF/versions/{version}/server-{version}.jar"))?;
         let length = entry.size();
-        read_jar(entry, Some(length))?
+        read_jar(entry, Some(length), "bundled Minecraft server jar")?
     };
     let mut archive = zip::ZipArchive::new(Cursor::new(inner))?;
     let mut extracted_bytes = 0;
     let mut extracted_files = 0;
     let mut reported = Instant::now();
     let entries = archive.len();
-    info!(entries, "Extracting vanilla datapack");
+    info!("Extracting vanilla datapack");
     for index in 0..entries {
         let mut file = archive.by_index(index)?;
         if !file.name()?.starts_with("data/") {
@@ -193,8 +208,8 @@ fn extract_datapack(bytes: &[u8], version: &str, destination: &Path) -> Result<(
         }
         if reported.elapsed() >= PROGRESS_INTERVAL {
             info!(
-                extracted_files,
-                index, entries, "Extracting vanilla datapack"
+                "Extracted {extracted_files} files ({:.1} MB) from vanilla datapack so far",
+                megabytes(extracted_bytes)
             );
             reported = Instant::now();
         }
@@ -203,8 +218,8 @@ fn extract_datapack(bytes: &[u8], version: &str, destination: &Path) -> Result<(
         return Err("Server jar does not contain a vanilla datapack".into());
     }
     info!(
-        extracted_files,
-        extracted_bytes, "Vanilla datapack extraction complete"
+        "Extracted {extracted_files} files ({:.1} MB) from vanilla datapack",
+        megabytes(extracted_bytes)
     );
     Ok(())
 }

@@ -9,7 +9,7 @@ fn main() -> ExitCode {
     match pumpkin_data_prepare::prepare(&assets) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            tracing::error!(%error, "Failed to prepare vanilla datapack");
+            tracing::error!("Failed to prepare vanilla datapack: {error}");
             ExitCode::FAILURE
         }
     }
