@@ -108,6 +108,10 @@ thread_local! {
     static FUNCTION_CHAIN_DEPTH: Cell<usize> = const { Cell::new(0) };
     /// How many command lines the current chain has dispatched so far.
     static FUNCTION_CHAIN_COMMANDS: Cell<usize> = const { Cell::new(0) };
+    /// Depth limit tripped somewhere in the chain; tells every level to stop.
+    static FUNCTION_CHAIN_HIT_DEPTH_LIMIT: Cell<bool> = const { Cell::new(false) };
+    /// Command budget tripped somewhere in the chain; tells every level to stop.
+    static FUNCTION_CHAIN_HIT_COMMAND_LIMIT: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Why a function could not be executed.
@@ -117,6 +121,8 @@ pub enum FunctionRunError {
     Unknown(String),
     /// The command chain already nested [`MAX_FUNCTION_CHAIN_DEPTH`] functions.
     ChainLimitExceeded,
+    /// The command chain dispatched [`MAX_FUNCTION_CHAIN_COMMANDS`] commands.
+    CommandChainLimitExceeded,
 }
 
 impl fmt::Display for FunctionRunError {
@@ -126,6 +132,10 @@ impl fmt::Display for FunctionRunError {
             Self::ChainLimitExceeded => write!(
                 f,
                 "Maximum number of nested function calls reached ({MAX_FUNCTION_CHAIN_DEPTH})"
+            ),
+            Self::CommandChainLimitExceeded => write!(
+                f,
+                "Maximum number of commands in a function chain reached ({MAX_FUNCTION_CHAIN_COMMANDS})"
             ),
         }
     }
@@ -138,6 +148,7 @@ impl FunctionChainGuard {
     fn enter() -> Result<Self, FunctionRunError> {
         FUNCTION_CHAIN_DEPTH.with(|depth| {
             if depth.get() >= MAX_FUNCTION_CHAIN_DEPTH {
+                FUNCTION_CHAIN_HIT_DEPTH_LIMIT.with(|hit| hit.set(true));
                 return Err(FunctionRunError::ChainLimitExceeded);
             }
             depth.set(depth.get() + 1);
@@ -150,7 +161,11 @@ impl FunctionChainGuard {
         FUNCTION_CHAIN_COMMANDS.with(|commands| {
             let count = commands.get() + 1;
             commands.set(count);
-            count <= MAX_FUNCTION_CHAIN_COMMANDS
+            if count > MAX_FUNCTION_CHAIN_COMMANDS {
+                FUNCTION_CHAIN_HIT_COMMAND_LIMIT.with(|hit| hit.set(true));
+                return false;
+            }
+            true
         })
     }
 }
@@ -164,8 +179,10 @@ impl Drop for FunctionChainGuard {
             outer
         });
         if outermost == 0 {
-            // Outermost chain ended; reset the budget for the next chain.
+            // Outermost chain ended; reset the budget and fail flags for the next chain.
             FUNCTION_CHAIN_COMMANDS.with(|commands| commands.set(0));
+            FUNCTION_CHAIN_HIT_DEPTH_LIMIT.with(|hit| hit.set(false));
+            FUNCTION_CHAIN_HIT_COMMAND_LIMIT.with(|hit| hit.set(false));
         }
     }
 }
@@ -833,21 +850,22 @@ impl DatapackManager {
                 .load()
                 .handle_command(source, line);
         })
-        .map_err(FunctionRunError::Unknown)
     }
 
     fn visit_function_lines(
         &self,
         name: &str,
         mut visit: impl FnMut(&str),
-    ) -> Result<usize, String> {
+    ) -> Result<usize, FunctionRunError> {
         let (functions_to_run, is_tag) = if let Some(tag_name) = name.strip_prefix('#') {
             let tags = self
                 .function_tags
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let Some(fns) = tags.get(tag_name) else {
-                return Err(format!("Unknown function tag: #{tag_name}"));
+                return Err(FunctionRunError::Unknown(format!(
+                    "Unknown function tag: #{tag_name}"
+                )));
             };
             (fns.clone(), true)
         } else {
@@ -863,7 +881,9 @@ impl DatapackManager {
             for fn_id in functions_to_run {
                 let Some(lines) = all_fns.get(&fn_id) else {
                     if !is_tag {
-                        return Err(format!("Unknown function: {fn_id}"));
+                        return Err(FunctionRunError::Unknown(format!(
+                            "Unknown function: {fn_id}"
+                        )));
                     }
                     continue;
                 };
@@ -873,17 +893,36 @@ impl DatapackManager {
         };
 
         let mut total_executed = 0;
-        'functions: for lines in functions {
+        for lines in functions {
+            if let Some(error) = Self::boundary_limit() {
+                return Err(error);
+            }
             for line in lines.iter() {
+                if let Some(error) = Self::boundary_limit() {
+                    return Err(error);
+                }
                 if !FunctionChainGuard::count_command() {
-                    break 'functions;
+                    return Err(FunctionRunError::CommandChainLimitExceeded);
                 }
                 visit(line);
                 total_executed += 1;
+                if let Some(error) = Self::boundary_limit() {
+                    return Err(error);
+                }
             }
         }
 
         Ok(total_executed)
+    }
+
+    fn boundary_limit() -> Option<FunctionRunError> {
+        if FUNCTION_CHAIN_HIT_COMMAND_LIMIT.with(Cell::get) {
+            return Some(FunctionRunError::CommandChainLimitExceeded);
+        }
+        if FUNCTION_CHAIN_HIT_DEPTH_LIMIT.with(Cell::get) {
+            return Some(FunctionRunError::ChainLimitExceeded);
+        }
+        None
     }
 
     #[must_use]
@@ -1819,19 +1858,20 @@ mod tests {
         {
             let _guard = FunctionChainGuard::enter().expect("chain must start");
             let mut visited = 0;
-            let executed = manager
+            let error = manager
                 .visit_function_lines("test:wide", |_| visited += 1)
-                .expect("wide function must resolve");
+                .expect_err("the budget must stop the chain with an error, not ok");
+            assert_eq!(error, FunctionRunError::CommandChainLimitExceeded);
             assert_eq!(visited, MAX_FUNCTION_CHAIN_COMMANDS);
-            assert_eq!(executed, MAX_FUNCTION_CHAIN_COMMANDS);
         };
         // Guard dropped above, so the budget was reset.
         {
             let _guard = FunctionChainGuard::enter().expect("next chain must start");
             let mut visited = 0;
-            manager
+            let error = manager
                 .visit_function_lines("test:wide", |_| visited += 1)
-                .expect("wide function must resolve");
+                .expect_err("the budget must stop the chain with an error, not ok");
+            assert_eq!(error, FunctionRunError::CommandChainLimitExceeded);
             assert_eq!(visited, MAX_FUNCTION_CHAIN_COMMANDS);
         };
     }
@@ -1895,14 +1935,105 @@ mod tests {
             manager
                 .visit_function_lines("test:missing", |_| {})
                 .expect_err("unknown function must fail"),
-            "Unknown function: test:missing"
+            FunctionRunError::Unknown("Unknown function: test:missing".to_string())
         );
         assert_eq!(
             manager
                 .visit_function_lines("#test:missing", |_| {})
                 .expect_err("unknown function tag must fail"),
-            "Unknown function tag: #test:missing"
+            FunctionRunError::Unknown("Unknown function tag: #test:missing".to_string())
         );
+    }
+
+    async fn test_server(world_dir: &std::path::Path) -> std::sync::Arc<crate::server::Server> {
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use pumpkin_util::world_seed::Seed;
+
+        let basic_config = BasicConfiguration {
+            seed: Seed(123),
+            default_level_name: world_dir.to_string_lossy().into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..BasicConfiguration::default()
+        };
+        let advanced_config = {
+            let mut advanced_config = AdvancedConfiguration::default();
+            // Keep the test offline; the defaults would fetch keys and telemetry.
+            advanced_config.networking.bedrock.online_mode = false;
+            advanced_config.networking.bedrock.authentication.enabled = false;
+            advanced_config
+        };
+        let vanilla_data = crate::data::VanillaData {
+            banned_ip_list: std::sync::RwLock::new(crate::data::banned_ip::BannedIpList::default()),
+            banned_player_list: std::sync::RwLock::new(
+                crate::data::banned_player::BannedPlayerList::default(),
+            ),
+            operator_config: std::sync::RwLock::new(crate::data::op::OperatorConfig::default()),
+            user_cache: std::sync::RwLock::new(crate::data::usercache::UserCache::default()),
+            whitelist_config: std::sync::RwLock::new(
+                crate::data::whitelist::WhitelistConfig::default(),
+            ),
+        };
+        let telemetry_config = TelemetryConfig {
+            enabled: false,
+            ..TelemetryConfig::default()
+        };
+        crate::server::Server::new(
+            basic_config,
+            advanced_config,
+            telemetry_config,
+            vanilla_data,
+            Vec::new(),
+        )
+        .await
+        .expect("the test server must start")
+    }
+
+    #[tokio::test]
+    async fn fans_out_through_dispatcher_and_hits_the_command_chain_limit() {
+        let world_dir = tempfile::tempdir().expect("tempdir");
+        let server = test_server(world_dir.path()).await;
+
+        // Fan-out under the depth cap: each level spends its budget on leaf lines
+        // before the recursive call, so the command budget trips first.
+        let mut lines = vec!["say leaf".to_string(); 1024];
+        lines.push("function test:fanout".to_string());
+        server
+            .datapack_manager
+            .functions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert("test:fanout".to_string(), lines.into());
+
+        let source = crate::command::CommandSender::Console.into_source(&server);
+        let error = server
+            .datapack_manager
+            .execute_function(&server, &source, "test:fanout")
+            .expect_err("a chain this wide must be stopped by the command budget");
+        assert_eq!(error, FunctionRunError::CommandChainLimitExceeded);
+    }
+
+    #[tokio::test]
+    async fn recurse_through_dispatcher_and_hit_the_depth_limit() {
+        let world_dir = tempfile::tempdir().expect("tempdir");
+        let server = test_server(world_dir.path()).await;
+
+        server
+            .datapack_manager
+            .functions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                "test:self".to_string(),
+                vec!["function test:self".to_string()].into(),
+            );
+
+        let source = crate::command::CommandSender::Console.into_source(&server);
+        let error = server
+            .datapack_manager
+            .execute_function(&server, &source, "test:self")
+            .expect_err("self-recursion must be stopped by the depth limit");
+        assert_eq!(error, FunctionRunError::ChainLimitExceeded);
     }
 
     #[test]

@@ -24,6 +24,9 @@ static ERROR_UNKNOWN_FUNCTION: CommandErrorType<1> = CommandErrorType::new(
 static ERROR_CHAIN_LIMIT_EXCEEDED: LiteralCommandErrorType =
     LiteralCommandErrorType::new("Maximum number of nested function calls reached");
 
+static ERROR_COMMAND_CHAIN_LIMIT_EXCEEDED: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("Maximum number of commands in a function chain reached");
+
 struct FunctionSuggestionProvider;
 
 impl SuggestionProvider for FunctionSuggestionProvider {
@@ -56,6 +59,9 @@ impl CommandExecutor for FunctionExecutor {
                 Ok(executed_count) => executed_count,
                 Err(FunctionRunError::ChainLimitExceeded) => {
                     return Err(ERROR_CHAIN_LIMIT_EXCEEDED.create_without_context());
+                }
+                Err(FunctionRunError::CommandChainLimitExceeded) => {
+                    return Err(ERROR_COMMAND_CHAIN_LIMIT_EXCEEDED.create_without_context());
                 }
                 Err(FunctionRunError::Unknown(_)) => {
                     return Err(ERROR_UNKNOWN_FUNCTION
