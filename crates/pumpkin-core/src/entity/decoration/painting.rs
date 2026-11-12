@@ -1,6 +1,11 @@
 use core::f32;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crossbeam::atomic::AtomicCell;
+use pumpkin_nbt::tag::NbtTag;
+
+use crate::server::Server;
+
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use pumpkin_data::BlockDirection;
@@ -45,9 +50,15 @@ const fn facing_to_horizontal(direction: BlockDirection) -> u8 {
     }
 }
 
+/// Vanilla `BlockAttachedEntity.CHECK_INTERVAL`: support is re-validated every 100 ticks.
+const SUPPORT_CHECK_INTERVAL: u32 = 100;
+
 pub struct PaintingEntity {
     pub entity: Entity,
     variant_id: AtomicU32,
+    /// The block the painting hangs on; `None` until set or loaded from NBT.
+    attached_pos: AtomicCell<Option<BlockPos>>,
+    ticks_since_last_check: AtomicU32,
 }
 
 impl PaintingEntity {
@@ -61,7 +72,13 @@ impl PaintingEntity {
         Self {
             entity,
             variant_id: AtomicU32::new(variant.id()),
+            attached_pos: AtomicCell::new(None),
+            ticks_since_last_check: AtomicU32::new(0),
         }
+    }
+
+    pub fn set_attached_pos(&self, pos: BlockPos) {
+        self.attached_pos.store(Some(pos));
     }
 
     #[must_use]
@@ -212,6 +229,12 @@ impl PaintingEntity {
 
 impl EntityBase for PaintingEntity {
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        if let Some(pos) = self.attached_pos.load() {
+            nbt.put(
+                "block_pos",
+                NbtTag::IntArray(vec![pos.0.x, pos.0.y, pos.0.z]),
+            );
+        }
         let index = self.entity.data.load(Ordering::Relaxed) as u8;
         let direction = BlockDirection::from_index(index).unwrap_or(BlockDirection::South);
         nbt.put_byte("facing", facing_to_horizontal(direction) as i8);
@@ -229,6 +252,25 @@ impl EntityBase for PaintingEntity {
         self.entity
             .data
             .store(i32::from(facing.to_index()), Ordering::Relaxed);
+        match nbt.get_int_array("block_pos") {
+            Some(a) if a.len() >= 3 => {
+                self.attached_pos
+                    .store(Some(BlockPos(Vector3::new(a[0], a[1], a[2]))));
+            }
+            _ => {
+                // Paintings saved before `block_pos` was written have no stored
+                // attached position; derive the wall block from the entity
+                // position and facing the same way placement does, or the
+                // support tick would never run for them.
+                let air_block = self.entity.block_pos.load();
+                let off = facing.to_offset();
+                self.attached_pos.store(Some(BlockPos(Vector3::new(
+                    air_block.0.x - off.x,
+                    air_block.0.y - off.y,
+                    air_block.0.z - off.z,
+                ))));
+            }
+        }
         if let Some(variant_str) = nbt
             .get_string("variant")
             .or_else(|| nbt.get_string("Motive"))
@@ -253,6 +295,23 @@ impl EntityBase for PaintingEntity {
 
     fn init_data_tracker(&self) {
         self.sync_variant();
+    }
+
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
+        if self.ticks_since_last_check.fetch_add(1, Ordering::Relaxed) < SUPPORT_CHECK_INTERVAL {
+            return;
+        }
+        self.ticks_since_last_check.store(0, Ordering::Relaxed);
+
+        let Some(location) = self.attached_pos.load() else {
+            return;
+        };
+        let facing = BlockDirection::from_index(self.entity.data.load(Ordering::Relaxed) as u8)
+            .unwrap_or(BlockDirection::South);
+        let world = self.entity.world.load();
+        if !Self::painting_fits(&world, location, facing, self.variant()) {
+            self.drop_and_remove(None);
+        }
     }
 
     fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {

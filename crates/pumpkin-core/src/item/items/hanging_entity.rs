@@ -89,6 +89,7 @@ impl ItemBehaviour for HangingEntityItem {
                 painting.as_ref(),
                 Some(player),
             );
+            painting.set_attached_pos(location);
             world.play_sound(
                 Sound::EntityPaintingPlace,
                 SoundCategory::Blocks,
