@@ -3109,15 +3109,27 @@ version = "0.2.2+26.3-26.60"
 dependencies = [
  "crc32c",
  "criterion",
- "flate2",
  "phf",
+ "pumpkin-data-prepare",
  "pumpkin-nbt",
  "pumpkin-util",
  "rand 0.10.3",
+ "serde",
+]
+
+[[package]]
+name = "pumpkin-data-prepare"
+version = "0.2.2+26.3-26.60"
+dependencies = [
+ "flate2",
+ "hex",
  "reqwest",
  "rustls",
- "serde",
  "serde_json",
+ "sha1 0.11.0",
+ "tempfile",
+ "tracing",
+ "tracing-subscriber",
  "zip",
 ]
 

@@ -180,11 +180,7 @@ crc32c.workspace = true
 rand.workspace = true
 
 [build-dependencies]
-reqwest = { workspace = true, features = ["blocking", "json"] }
-rustls = { workspace = true }
-serde_json = { workspace = true }
-zip = { workspace = true }
-flate2.workspace = true
+pumpkin-data-prepare = { path = "../../tools/pumpkin-data-prepare" }
 
 [dev-dependencies]
 criterion.workspace = true

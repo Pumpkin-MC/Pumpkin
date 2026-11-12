@@ -1,0 +1,25 @@
+[package]
+name = "pumpkin-data-prepare"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+reqwest = { workspace = true, features = ["blocking", "json"] }
+rustls.workspace = true
+serde_json.workspace = true
+sha1.workspace = true
+hex.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+zip.workspace = true
+flate2.workspace = true
+tempfile.workspace = true
+
+[package.metadata.cargo-machete]
+# Select zip's Rust decompression backend through feature unification.
+ignored = ["flate2"]
+
+[lints]
+workspace = true
