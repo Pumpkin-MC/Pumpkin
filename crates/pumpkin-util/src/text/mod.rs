@@ -149,20 +149,14 @@ impl TextComponentBase {
                     compound.put_list("with", list);
                 }
             }
-            TextContent::PlayerSprite {
-                type_name,
-                profile,
-                hat,
-            } => {
+            TextContent::PlayerSprite { profile, hat } => {
                 if *version >= JavaMinecraftVersion::V_26_1 {
-                    let full_type = if type_name.contains(':') {
-                        type_name.to_string()
-                    } else {
-                        format!("minecraft:{type_name}")
-                    };
-                    compound.put_string("type", full_type);
+                    // Like vanilla: no `type`, the client finds the object by its
+                    // `player` key, and `hat` only when it is off.
                     compound.put_compound("player", profile.0.clone());
-                    compound.put_byte("hat", i8::from(*hat));
+                    if !hat {
+                        compound.put_bool("hat", false);
+                    }
                 } else {
                     let name = profile.0.get_string("name").unwrap_or("player_sprite");
                     compound.put_string("text", name.to_string());
@@ -523,20 +517,12 @@ impl TextComponentBase {
                     map.insert("with".to_string(), serde_json::Value::Array(list));
                 }
             }
-            TextContent::PlayerSprite {
-                type_name,
-                profile,
-                hat,
-            } => {
+            TextContent::PlayerSprite { profile, hat } => {
                 if *version >= JavaMinecraftVersion::V_26_1 {
-                    let full_type = if type_name.contains(':') {
-                        type_name.to_string()
-                    } else {
-                        format!("minecraft:{type_name}")
-                    };
-                    map.insert("type".to_string(), serde_json::Value::String(full_type));
                     map.insert("player".to_string(), nbt_compound_to_json(&profile.0));
-                    map.insert("hat".to_string(), serde_json::Value::Bool(*hat));
+                    if !hat {
+                        map.insert("hat".to_string(), serde_json::Value::Bool(false));
+                    }
                 } else {
                     let name = profile.0.get_string("name").unwrap_or("player_sprite");
                     map.insert(
@@ -1634,7 +1620,6 @@ impl TextComponent {
     pub fn player_sprite(profile: pumpkin_nbt::NbtCompound, hat: bool) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::PlayerSprite {
-                type_name: Cow::Borrowed("minecraft:player_sprite"),
                 profile: ProfileNbt(profile),
                 hat,
             }),
@@ -2068,6 +2053,39 @@ impl std::hash::Hash for ProfileNbt {
     }
 }
 
+impl Serialize for ProfileNbt {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        nbt_compound_to_json(&self.0).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ProfileNbt {
+    /// Reads what vanilla's `ResolvableProfile` codec reads: a player name, or a
+    /// compound with `name`, `id`, `properties` or skin overrides.
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut profile = pumpkin_nbt::NbtCompound::new();
+        match serde_json::Value::deserialize(deserializer)? {
+            serde_json::Value::String(name) => profile.put_string("name", name),
+            serde_json::Value::Object(fields) => {
+                for (key, value) in fields {
+                    let tag = if key == "id" {
+                        // A UUID is four ints, sent as an int array.
+                        let Ok(id) = serde_json::from_value::<[i32; 4]>(value) else {
+                            return Err(serde::de::Error::custom("a profile id is four ints"));
+                        };
+                        pumpkin_nbt::tag::NbtTag::IntArray(id.to_vec())
+                    } else {
+                        hover::json_to_nbt(&value)
+                    };
+                    profile.put(&key, tag);
+                }
+            }
+            _ => return Err(serde::de::Error::custom("expected a name or a compound")),
+        }
+        Ok(Self(profile))
+    }
+}
+
 /// The content type of the text component.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
@@ -2113,13 +2131,20 @@ pub enum TextContent {
         /// Substitution parameters for the translation.
         with: Vec<TextComponentBase>,
     },
-    /// A player sprite object component.
-    #[serde(skip)]
+    /// A player's head: vanilla's `object` component with `object: "player"`.
+    /// Clients before 26.1 get the player's name as text instead.
     PlayerSprite {
-        type_name: Cow<'static, str>,
+        #[serde(rename = "player")]
         profile: ProfileNbt,
+        /// Whether the hat layer is drawn over the head.
+        #[serde(default = "default_hat")]
         hat: bool,
     },
+}
+
+/// Vanilla draws the hat layer unless `hat` turns it off.
+const fn default_hat() -> bool {
+    true
 }
 
 /// Tests for the text component implementations.
@@ -2301,6 +2326,60 @@ mod test {
         let component = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(styled));
         assert_eq!(component.0.style.color, Some(Color::Named(NamedColor::Red)));
         assert_eq!(component.get_text(), "hi");
+    }
+
+    /// Each form of a player head that vanilla 26.3 reads goes out to a 26.3
+    /// client as the bytes vanilla writes for it, and to older ones as the name.
+    #[test]
+    fn player_sprite_reads_vanilla_json_and_writes_vanilla_nbt() {
+        // `{player:{name:"Steve"}}`, as vanilla 26.3 encodes all three.
+        let vanilla = b"\x0a\x0a\x00\x06player\x08\x00\x04name\x00\x05Steve\x00\x00";
+        for json in [
+            r#"{"type":"object","object":"player","player":{"name":"Steve"},"hat":true}"#,
+            r#"{"player":{"name":"Steve"}}"#,
+            r#"{"player":"Steve"}"#,
+        ] {
+            let head: TextComponent = serde_json::from_str(json).unwrap();
+            assert_eq!(
+                &*head.encode_for_version(&JavaMinecraftVersion::V_26_3),
+                vanilla,
+                "{json}"
+            );
+            let old = head.to_nbt_compound_for_version(&JavaMinecraftVersion::V_1_21_11);
+            assert_eq!(old.get_string("text"), Some("Steve"));
+        }
+    }
+
+    /// A head keeps its whole profile and `hat` through a plugin's `to-json` and
+    /// `from-json`, and the profile's `id` goes out as an int array.
+    #[test]
+    fn player_sprite_keeps_its_profile_and_hat() {
+        let json = r#"{"type":"object","object":"player","player":{"name":"Steve","id":[1,2,3,4],"properties":[{"name":"textures","value":"e30="}]},"hat":false}"#;
+        let head: TextComponent = serde_json::from_str(json).unwrap();
+        let back: TextComponent =
+            serde_json::from_str(&serde_json::to_string(&head).unwrap()).unwrap();
+        assert_eq!(back, head);
+
+        let nbt = head.to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+        assert_eq!(nbt.get_bool("hat"), Some(false));
+        let profile = nbt.get_compound("player").unwrap();
+        assert_eq!(profile.get_int_array("id"), Some(&[1, 2, 3, 4][..]));
+        assert_eq!(profile.get_list("properties").map(<[_]>::len), Some(1));
+    }
+
+    /// Vanilla rejects these profiles too, so they never reach a client.
+    #[test]
+    fn malformed_player_profiles_are_rejected() {
+        for json in [
+            r#"{"player":5}"#,
+            r#"{"player":{"id":[1,2,3]}}"#,
+            r#"{"player":{"id":"00000001-0000-0002-0000-000300000004"}}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<TextComponent>(json).is_err(),
+                "{json}"
+            );
+        }
     }
 }
 
