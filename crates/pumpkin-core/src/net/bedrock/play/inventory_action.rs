@@ -230,13 +230,19 @@ impl BedrockClient {
 
                     let mut stack = held_item;
                     if !stack.is_empty() {
-                        let item_id = stack.item.id;
-                        let before = stack.clone();
                         player.increment_stat(
                             pumpkin_data::statistic::StatisticCategory::Used,
-                            item_id as i32,
+                            stack.item.id as i32,
                             1,
                         );
+                    }
+                    // A statistic handler may have moved the player to another world.
+                    if !stack.is_empty() && Arc::ptr_eq(&world, &player.world()) {
+                        let item_id = stack.item.id;
+                        let before = stack.clone();
+                        // TODO: reject unloaded target (get_block_state_id_if_loaded), teleport may unload it
+                        // block handlers may change it
+                        let block = world.get_block(&data.block_position);
                         let item_result = server.item_registry.use_on_block(
                             &mut stack,
                             player,

@@ -5751,7 +5751,8 @@ impl World {
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
-        if event.cancelled {
+        // handler may replace it
+        if event.cancelled || self.get_block_state_id(position) != broken_block_state.id {
             return None;
         }
 
@@ -6473,6 +6474,21 @@ impl World {
     pub fn get_block_and_state_id(&self, position: &BlockPos) -> (&'static Block, BlockStateId) {
         let id = self.get_block_state_id(position);
         (Block::from_state_id(id), id)
+    }
+
+    /// Fires `event`, false if it was cancelled, `block` is not at `position`, or a handler
+    /// changed the state there.
+    pub fn fire_block_event<E>(&self, position: &BlockPos, block: &Block, event: &mut E) -> bool
+    where
+        E: crate::plugin::api::events::Payload + crate::plugin::api::events::Cancellable + 'static,
+    {
+        let state_id = self.get_block_state_id(position);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, event);
+        }
+        !event.cancelled()
+            && Block::from_state_id(state_id) == block
+            && self.get_block_state_id(position) == state_id
     }
 
     /// Updates neighboring blocks of a block with a specified source block

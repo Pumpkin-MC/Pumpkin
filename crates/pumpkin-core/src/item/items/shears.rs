@@ -120,10 +120,10 @@ fn handle_beehive(
         return false;
     }
 
+    // handlers may move the player
+    let world = player.world();
     let mut drops = vec![ItemStack::new(3, &Item::HONEYCOMB)];
-    if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
-        && let Some(server) = player.world().server.upgrade()
-    {
+    if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) {
         let mut event =
             crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
                 player: player_arc,
@@ -131,8 +131,9 @@ fn handle_beehive(
                 harvested_items: drops.clone(),
                 cancelled: false,
             };
-        server.plugin_manager.fire_blocking(&server, &mut event);
-        if event.cancelled {
+        if !world.fire_block_event(location, block, &mut event)
+            || !Arc::ptr_eq(&player.world(), &world)
+        {
             return false;
         }
         drops = event.harvested_items;
@@ -141,7 +142,6 @@ fn handle_beehive(
     props.honey_level = 0;
     let new_state_id = props.to_state_id(block);
 
-    let world = player.world();
     world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
     world.play_sound(
         Sound::BlockBeehiveShear,
