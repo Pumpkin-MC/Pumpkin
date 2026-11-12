@@ -204,6 +204,8 @@ use weather::Weather;
 
 const MAX_LIGHT_LEVEL: u8 = 15;
 const LIGHTNING_ROD_SEARCH_RADIUS: i32 = 128;
+/// Join resends of the stonecutter list while the recipes keep changing.
+const MAX_STONECUTTER_SENDS: usize = 3;
 pub const MOON_BRIGHTNESS_PER_PHASE: [f32; 8] = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
@@ -4073,17 +4075,31 @@ impl World {
             .send_current_equipment_attribute_modifiers();
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
-            && server.advanced_config.recipe.send_recipes
             && java_client.version.load() >= JavaMinecraftVersion::V_1_21_2
         {
-            let settings_packet = CRecipeBookSettings::default_closed();
-            if let Ok(data) = java_client.serialize_packet(&settings_packet) {
-                java_client.send_packet_now(data).await;
+            if server.advanced_config.recipe.send_recipes {
+                let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
+                let settings_packet = CRecipeBookSettings::default_closed();
+                if let Ok(data) = java_client.serialize_packet(&settings_packet) {
+                    java_client.send_packet_now(data).await;
+                }
+                let add_packet = CRecipeBookAdd::new(true, &dynamic_recipes);
+                if let Ok(data) = java_client.serialize_packet(&add_packet) {
+                    java_client.send_packet_now(data).await;
+                }
             }
-            let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
-            let add_packet = CRecipeBookAdd::new(true, &dynamic_recipes);
-            if let Ok(data) = java_client.serialize_packet(&add_packet) {
-                java_client.send_packet_now(data).await;
+            // The stonecutter list is not part of the recipe book, so it is always sent. A reload
+            // during the sends broadcasts its own list, which an older snapshot must not replace.
+            // Capped so recipes that keep changing cannot hold the join; a later reload covers them.
+            for _ in 0..MAX_STONECUTTER_SENDS {
+                let generation = server.recipe_manager.generation();
+                let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
+                if let Some(data) = java_client.stonecutter_recipes_packet(&dynamic_recipes) {
+                    java_client.send_packet_now(data).await;
+                }
+                if generation == server.recipe_manager.generation() {
+                    break;
+                }
             }
         }
         let msg_comp = TextComponent::translate_cross(

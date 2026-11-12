@@ -600,6 +600,8 @@ impl Server {
             .execute_function(server, &source, "#minecraft:load");
 
         let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal();
+        // The stonecutter list only depends on the client version, so build it once per version.
+        let mut stonecutter_packets = std::collections::BTreeMap::new();
         for player in self.get_all_players() {
             if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
                 let add_packet = pumpkin_protocol::java::client::play::CRecipeBookAdd::new(
@@ -607,6 +609,13 @@ impl Server {
                     &dynamic_recipes,
                 );
                 if let Ok(data) = java_client.serialize_packet(&add_packet) {
+                    java_client.try_enqueue_packet(data);
+                }
+                if let Some(data) = stonecutter_packets
+                    .entry(java_client.version.load())
+                    .or_insert_with(|| java_client.stonecutter_recipes_packet(&dynamic_recipes))
+                    .clone()
+                {
                     java_client.try_enqueue_packet(data);
                 }
             }

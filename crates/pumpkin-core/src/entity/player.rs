@@ -11,7 +11,9 @@ use std::collections::{HashMap, VecDeque};
 use std::f64::consts::TAU;
 use std::num::NonZero;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicI8, AtomicI32, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{
+    AtomicBool, AtomicI8, AtomicI32, AtomicU8, AtomicU32, AtomicUsize, Ordering,
+};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
@@ -535,6 +537,13 @@ const fn bedrock_mount_slot(
     }
 }
 
+/// Screens closed in a row before another one is opened, see `close_open_screen_handler`.
+const MAX_SCREEN_CLOSES: usize = 4;
+
+fn screen_handler_addr(handler: &Arc<std::sync::Mutex<dyn ScreenHandler>>) -> usize {
+    Arc::as_ptr(handler).cast::<()>().addr()
+}
+
 fn bedrock_container_type(window_type: Option<WindowType>, block: Option<&'static Block>) -> u8 {
     match window_type {
         Some(WindowType::Crafting) => 1,
@@ -701,6 +710,8 @@ pub struct Player {
     pub held_chunk_tickets: Mutex<Option<HeldChunkTickets>>,
     pub chunk_send_epoch: AtomicU32,
     pub has_played_before: AtomicBool,
+    /// Address of the screen handler being closed, 0 when none.
+    closing_screen: AtomicUsize,
     root_vehicle_uuid: AtomicCell<Option<Uuid>>,
     pub chat_session: Arc<Mutex<ChatSession>>,
     pub signature_cache: Mutex<MessageCache>,
@@ -1044,6 +1055,7 @@ impl Player {
             last_food_saturation: AtomicBool::new(true),
             subscribed_debug_sample: AtomicBool::new(false),
             has_played_before: AtomicBool::new(false),
+            closing_screen: AtomicUsize::new(0),
             root_vehicle_uuid: AtomicCell::new(None),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
@@ -6347,6 +6359,32 @@ impl Player {
             .store(current_id % 100 + 1, Ordering::Relaxed);
     }
 
+    /// Vanilla `ServerPlayer.openMenu`: a screen other than the player's own is closed before
+    /// another one replaces it, so its `on_closed` returns the items inside.
+    ///
+    /// Returns false when a screen is still open after the bounded closes, in which case the
+    /// caller must not open another one over it.
+    fn close_open_screen_handler(&self) -> bool {
+        let own: Arc<std::sync::Mutex<dyn ScreenHandler>> = self.player_screen_handler.clone();
+        // A close event can open another screen, which is closed as well. Bounded so a plugin
+        // that reopens a screen on every close cannot loop forever.
+        for _ in 0..MAX_SCREEN_CLOSES {
+            let current: Arc<std::sync::Mutex<dyn ScreenHandler>> = self
+                .current_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            // The screen whose `InventoryCloseEvent` is running must not be closed again.
+            if Arc::ptr_eq(&current, &own)
+                || screen_handler_addr(&current) == self.closing_screen.load(Ordering::Relaxed)
+            {
+                return true;
+            }
+            self.close_handled_screen();
+        }
+        false
+    }
+
     pub fn close_handled_screen(&self) {
         let (sync_id, bedrock_window_type) = {
             let current_handler_guard = self
@@ -6383,11 +6421,23 @@ impl Player {
     }
 
     pub fn on_handled_screen_closed(&self) {
+        // Restored on every exit, including a panic in a plugin handler, so nested closes unwind.
+        struct ClosingGuard<'a>(&'a AtomicUsize, usize);
+        impl Drop for ClosingGuard<'_> {
+            fn drop(&mut self) {
+                self.0.store(self.1, Ordering::Relaxed);
+            }
+        }
         let current_screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>> = self
             .current_screen_handler
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
+        let previous = self.closing_screen.swap(
+            screen_handler_addr(&current_screen_handler),
+            Ordering::Relaxed,
+        );
+        let _closing = ClosingGuard(&self.closing_screen, previous);
 
         let window_type = {
             let mut handler = current_screen_handler
@@ -6409,6 +6459,17 @@ impl Player {
                     window_type,
                 );
             server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+
+        // An `InventoryCloseEvent` handler may have opened another screen, which stays open.
+        if !Arc::ptr_eq(
+            &*self
+                .current_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            &current_screen_handler,
+        ) {
+            return;
         }
 
         let player_screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>> =
@@ -6479,16 +6540,8 @@ impl Player {
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
-        if !self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_any()
-            .is::<PlayerScreenHandler>()
-        {
-            self.close_handled_screen();
+        if !self.close_open_screen_handler() {
+            return None;
         }
 
         let server = self.world().server.upgrade();
@@ -6512,6 +6565,11 @@ impl Player {
             &self.inventory,
             self,
         ) {
+            // The event above or a plugin factory can open another screen (a stonecutter, a chest,
+            // ...) in the meantime, and it must not be replaced without being closed.
+            if !self.close_open_screen_handler() {
+                return None;
+            }
             let screen_handler_temp = screen_handler
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -6541,7 +6599,7 @@ impl Player {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = screen_handler;
             self.open_container_pos.store(block_pos);
-            Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
+            Some(sync_id)
         } else {
             if self.is_spectator() {
                 self.send_system_message_raw(
@@ -6601,16 +6659,8 @@ impl Player {
         bedrock_slots: NbtCompound,
         create_handler: impl FnOnce(u8, &Arc<PlayerInventory>) -> SharedScreenHandler,
     ) -> bool {
-        if !self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_any()
-            .is::<PlayerScreenHandler>()
-        {
-            self.close_handled_screen();
+        if !self.close_open_screen_handler() {
+            return false;
         }
 
         let world = self.world();
@@ -6627,6 +6677,10 @@ impl Player {
             }
         }
 
+        // Same as `open_handled_screen`: a screen opened by the event handler must be closed too.
+        if !self.close_open_screen_handler() {
+            return false;
+        }
         self.increment_screen_handler_sync_id();
         let sync_id = self.screen_handler_sync_id.load(Ordering::Relaxed);
         let screen_handler = create_handler(sync_id, &self.inventory);
@@ -6664,16 +6718,8 @@ impl Player {
         screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>>,
         title: &TextComponent,
     ) {
-        if !self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_any()
-            .is::<PlayerScreenHandler>()
-        {
-            self.close_handled_screen();
+        if !self.close_open_screen_handler() {
+            return;
         }
 
         let screen_handler_temp = screen_handler

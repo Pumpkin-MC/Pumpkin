@@ -165,9 +165,15 @@ impl ScreenHandler for StonecutterScreenHandler {
         player: &dyn InventoryPlayer,
     ) {
         self.internal_on_slot_click(slot_index, button, action_type, player);
-        if slot_index == 0 {
-            self.update_output();
-        }
+        // Vanilla recomputes the result whenever the input container changes, which any click can do
+        // (taking the result, a double click gathering the input).
+        self.update_output();
+    }
+
+    fn on_closed(&mut self, player: &dyn InventoryPlayer) {
+        self.default_on_closed(player);
+        self.output_inventory.remove_stack(0);
+        self.drop_inventory(player, self.input_inventory.clone());
     }
 
     fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
@@ -202,6 +208,12 @@ impl ScreenHandler for StonecutterScreenHandler {
                     let mut taken_stack = stack.clone();
                     taken_stack.set_count(stack.item_count - slot_stack.item_count);
                     slot.on_take_item(player, &taken_stack);
+                    // Vanilla drops what did not fit, so a paid result is not left in the slot.
+                    if !slot_stack.is_empty() {
+                        player.drop_item(slot_stack.clone(), false);
+                        slot.set_stack(ItemStack::EMPTY.clone());
+                    }
+                    self.update_output();
                 }
             }
         }

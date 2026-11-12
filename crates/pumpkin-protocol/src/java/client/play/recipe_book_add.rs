@@ -2,8 +2,8 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::packet::clientbound::play::RECIPE_BOOK_ADD;
 use pumpkin_data::recipes::{
-    CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING, RecipeCategoryTypes,
-    RecipeIngredientTypes, RecipeResultStruct,
+    CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING,
+    RECIPES_STONECUTTING, RecipeCategoryTypes, RecipeIngredientTypes, RecipeResultStruct,
 };
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -24,6 +24,23 @@ const SLOT_DISPLAY_ANY_FUEL: u32 = 1;
 const SLOT_DISPLAY_ITEM: u32 = 4;
 const SLOT_DISPLAY_ITEM_STACK: u32 = 5;
 const SLOT_DISPLAY_COMPOSITE: u32 = 10;
+
+/// Slot display type ids of clients up to 1.21.11, indexed by the ids above. The newer types
+/// (potion, component, dyed) were added later and shifted the rest.
+const SLOT_DISPLAY_LEGACY_IDS: [u32; 11] = [0, 1, 0, 0, 2, 3, 4, 0, 5, 6, 7];
+
+fn write_slot_display_id(
+    write: &mut impl Write,
+    id: u32,
+    version: JavaMinecraftVersion,
+) -> Result<(), WritingError> {
+    let id = if version <= JavaMinecraftVersion::V_1_21_11 {
+        SLOT_DISPLAY_LEGACY_IDS[id as usize]
+    } else {
+        id
+    };
+    write.write_var_int(&VarInt(id as i32))
+}
 
 const ENTRY_FLAG_NOTIFICATION: u8 = 0x01;
 const ENTRY_FLAG_HIGHLIGHT: u8 = 0x02;
@@ -64,9 +81,9 @@ impl<'a> CRecipeBookAdd<'a> {
 fn write_item_slot_display(
     write: &mut impl Write,
     item: &Item,
-    _version: JavaMinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM as i32))?;
+    write_slot_display_id(write, SLOT_DISPLAY_ITEM, version)?;
     write.write_var_int(&VarInt(item.id as i32))?;
     Ok(())
 }
@@ -84,23 +101,23 @@ fn write_item_stack_slot_display(
     if stack.is_empty() {
         return write_empty_slot_display(write, version);
     }
-    write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM_STACK as i32))?;
+    write_slot_display_id(write, SLOT_DISPLAY_ITEM_STACK, version)?;
     ItemStackTemplateSerializer::from(stack).write_with_version(write, &version)
 }
 
 fn write_empty_slot_display(
     write: &mut impl Write,
-    _version: JavaMinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_EMPTY as i32))?;
+    write_slot_display_id(write, SLOT_DISPLAY_EMPTY, version)?;
     Ok(())
 }
 
 fn write_any_fuel_slot_display(
     write: &mut impl Write,
-    _version: JavaMinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_ANY_FUEL as i32))?;
+    write_slot_display_id(write, SLOT_DISPLAY_ANY_FUEL, version)?;
     Ok(())
 }
 
@@ -152,7 +169,7 @@ fn write_ingredient_slot_display(
                 if items.len() == 1 {
                     write_item_slot_display(write, items[0], version)?;
                 } else {
-                    write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
+                    write_slot_display_id(write, SLOT_DISPLAY_COMPOSITE, version)?;
                     write.write_var_int(&VarInt(items.len() as i32))?;
                     for item in &items {
                         write_item_slot_display(write, item, version)?;
@@ -175,7 +192,7 @@ fn write_ingredient_slot_display(
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
-                write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
+                write_slot_display_id(write, SLOT_DISPLAY_COMPOSITE, version)?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
                     write_item_slot_display(write, item, version)?;
@@ -734,7 +751,7 @@ fn write_dynamic_ingredient_slot_display(
                 if items.len() == 1 {
                     write_item_slot_display(write, items[0], version)?;
                 } else {
-                    write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
+                    write_slot_display_id(write, SLOT_DISPLAY_COMPOSITE, version)?;
                     write.write_var_int(&VarInt(items.len() as i32))?;
                     for item in &items {
                         write_item_slot_display(write, item, version)?;
@@ -758,7 +775,7 @@ fn write_dynamic_ingredient_slot_display(
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
-                write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE as i32))?;
+                write_slot_display_id(write, SLOT_DISPLAY_COMPOSITE, version)?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
                     write_item_slot_display(write, item, version)?;
@@ -954,6 +971,45 @@ fn write_dynamic_cooking_entry(
     Ok(())
 }
 
+/// Builds the `UPDATE_RECIPES` payload: no item property sets, then the stonecutter recipe list.
+///
+/// Entry order must match `StonecutterScreenHandler::get_available_recipes`, since the client
+/// sends the chosen option as an index into its filtered list.
+pub fn stonecutter_update_recipes_data(
+    dynamic_recipes: &[DynamicRecipe],
+    version: JavaMinecraftVersion,
+) -> Result<Vec<u8>, WritingError> {
+    let mut write = Vec::new();
+    write.write_var_int(&VarInt(0))?;
+    let dynamic: Vec<_> = dynamic_recipes
+        .iter()
+        .filter_map(|r| match r {
+            // A tag the server cannot resolve never matches on the server, so listing it would
+            // shift the option indices the client sends back.
+            DynamicRecipe::Stonecutting(r)
+                if !matches!(
+                    &r.ingredient,
+                    crate::codec::recipe::OwnedRecipeIngredient::Tagged(tag)
+                        if resolve_item_tag(tag, version).is_none()
+                ) =>
+            {
+                Some(r)
+            }
+            _ => None,
+        })
+        .collect();
+    write.write_var_int(&VarInt((RECIPES_STONECUTTING.len() + dynamic.len()) as i32))?;
+    for r in RECIPES_STONECUTTING {
+        write_ingredient_holderset(&mut write, &r.ingredient, version)?;
+        write_result_slot_display(&mut write, &r.result, version)?;
+    }
+    for r in dynamic {
+        write_dynamic_ingredient_holderset(&mut write, &r.ingredient, version)?;
+        write_dynamic_result_slot_display(&mut write, &r.result, version)?;
+    }
+    Ok(write)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -973,10 +1029,112 @@ mod tests {
     }
 
     #[test]
+    fn slot_display_types_follow_the_client_version() {
+        let result = RecipeResultStruct {
+            id: "minecraft:stone",
+            count: 2,
+            components: &[],
+        };
+        // item_stack is 3 for 1.21.2 and 5 for 26.3
+        for (version, id) in [
+            (JavaMinecraftVersion::V_1_21_2, 3),
+            (JavaMinecraftVersion::V_26_3, 5),
+        ] {
+            let mut bytes = Vec::new();
+            write_result_slot_display(&mut bytes, &result, version).unwrap();
+            assert_eq!(bytes[0], id);
+        }
+    }
+
+    #[test]
     fn vanilla_recipes_serialize_for_every_recipe_book_version() {
         let packet = CRecipeBookAdd::new(true, &[]);
         for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
             packet.write_packet_data(Vec::new(), &version).unwrap();
+        }
+    }
+
+    #[test]
+    fn stonecutter_recipes_list_dynamic_entries_after_vanilla_ones_in_order() {
+        use crate::codec::recipe::{
+            OwnedRecipeIngredient, OwnedRecipeResult, OwnedStonecutterRecipe,
+        };
+
+        let recipe = |ingredient: &str, result: &str, count: u8| {
+            DynamicRecipe::Stonecutting(OwnedStonecutterRecipe {
+                recipe_id: format!("test:{result}"),
+                group: None,
+                ingredient: OwnedRecipeIngredient::Simple(ingredient.to_string()),
+                result: OwnedRecipeResult {
+                    item_id: result.to_string(),
+                    count,
+                },
+            })
+        };
+        let recipes = [
+            recipe("minecraft:stone", "minecraft:dirt", 2),
+            recipe("dirt", "minecraft:stone", 3),
+        ];
+        let var = |value: i32| {
+            let mut bytes = Vec::new();
+            VarInt(value).encode(&mut bytes).unwrap();
+            bytes
+        };
+        // ingredient: a single item id (set size + 1 = 2), result: item stack display with
+        // item id, count and no component changes
+        let entry = |ingredient: &Item, result: &Item, count: i32| {
+            [
+                var(2),
+                var(ingredient.id as i32),
+                var(5),
+                var(result.id as i32),
+                var(count),
+                var(0),
+                var(0),
+            ]
+            .concat()
+        };
+        let expected = [
+            entry(&Item::STONE, &Item::DIRT, 2),
+            entry(&Item::DIRT, &Item::STONE, 3),
+        ]
+        .concat();
+
+        let version = JavaMinecraftVersion::V_26_3;
+        let data = stonecutter_update_recipes_data(&recipes, version).unwrap();
+        let vanilla = stonecutter_update_recipes_data(&[], version).unwrap();
+        let mut count_prefix = vec![0u8];
+        count_prefix.extend(var(RECIPES_STONECUTTING.len() as i32 + 2));
+        assert!(data.starts_with(&count_prefix));
+        assert!(data.ends_with(&expected));
+        assert_eq!(
+            data.len() - expected.len(),
+            vanilla.len(),
+            "the vanilla entries are written unchanged before the dynamic ones"
+        );
+    }
+
+    #[test]
+    fn stonecutter_recipes_skip_tags_the_server_cannot_resolve() {
+        use crate::codec::recipe::{
+            OwnedRecipeIngredient, OwnedRecipeResult, OwnedStonecutterRecipe,
+        };
+
+        let unknown_tag = DynamicRecipe::Stonecutting(OwnedStonecutterRecipe {
+            recipe_id: "test:unknown_tag".to_string(),
+            group: None,
+            ingredient: OwnedRecipeIngredient::Tagged("test:does_not_exist".to_string()),
+            result: OwnedRecipeResult {
+                item_id: "minecraft:stone".to_string(),
+                count: 1,
+            },
+        });
+        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
+            assert_eq!(
+                stonecutter_update_recipes_data(std::slice::from_ref(&unknown_tag), version)
+                    .unwrap(),
+                stonecutter_update_recipes_data(&[], version).unwrap(),
+            );
         }
     }
 }

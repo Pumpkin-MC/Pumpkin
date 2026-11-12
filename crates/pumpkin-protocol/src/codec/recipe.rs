@@ -14,15 +14,12 @@ impl OwnedRecipeIngredient {
     #[must_use]
     pub fn match_item(&self, item: &Item) -> bool {
         match self {
-            Self::Simple(id) => {
-                let name = format!("minecraft:{}", item.registry_key);
-                name == *id
-            }
+            // Unqualified ids are sent to clients as minecraft ids, so they have to match the same way.
+            Self::Simple(id) => id.strip_prefix("minecraft:").unwrap_or(id) == item.registry_key,
             Self::Tagged(tag) => item.is_tagged_with(tag).unwrap_or(false),
-            Self::OneOf(ids) => {
-                let name = format!("minecraft:{}", item.registry_key);
-                ids.contains(&name)
-            }
+            Self::OneOf(ids) => ids
+                .iter()
+                .any(|id| id.strip_prefix("minecraft:").unwrap_or(id) == item.registry_key),
         }
     }
 }
@@ -146,5 +143,19 @@ impl DynamicRecipe {
             Self::SmithingTrim(r) => Some(&r.recipe_id),
             Self::SpecialCrafting(r) => Some(&r.recipe_id),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ingredient_ids_match_with_or_without_the_namespace() {
+        for id in ["stone", "minecraft:stone"] {
+            assert!(OwnedRecipeIngredient::Simple(id.to_string()).match_item(&Item::STONE));
+            assert!(OwnedRecipeIngredient::OneOf(vec![id.to_string()]).match_item(&Item::STONE));
+        }
+        assert!(!OwnedRecipeIngredient::Simple("stone".to_string()).match_item(&Item::DIRT));
     }
 }
