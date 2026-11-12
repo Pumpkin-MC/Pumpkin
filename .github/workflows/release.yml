@@ -20,7 +20,11 @@ env:
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
+  prepare_data:
+    uses: ./.github/workflows/prepare-data.yml
+
   build_release:
+    needs: prepare_data
     name: Build & Sign Release
     runs-on: ${{ matrix.os }}
     strategy:
@@ -48,6 +52,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
 
       - run: rustup update stable && rustup default stable
       - uses: Swatinem/rust-cache@v2
@@ -130,12 +135,14 @@ jobs:
           path: dist/pumpkin-*
 
   build_android_release:
+    needs: prepare_data
     name: Build project in release for Android (AArch64)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android

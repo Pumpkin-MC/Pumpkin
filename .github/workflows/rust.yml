@@ -66,6 +66,12 @@ jobs:
           --head "$CI_HEAD_SHA"
           --output "$GITHUB_OUTPUT"
 
+  prepare_data:
+    name: Prepare vanilla datapack
+    needs: prepare
+    if: needs.prepare.outputs.has_code == 'true'
+    uses: ./.github/workflows/prepare-data.yml
+
   format:
     name: Check formatting
     needs: prepare
@@ -93,7 +99,7 @@ jobs:
 
   clippy:
     name: Run lints
-    needs: prepare
+    needs: [prepare, prepare_data]
     if: needs.prepare.outputs.has_code == 'true'
     runs-on: ubuntu-latest
     env:
@@ -102,6 +108,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
@@ -117,13 +124,14 @@ jobs:
 
   clippy_release:
     name: Run release lints
-    needs: prepare
+    needs: [prepare, prepare_data]
     if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
@@ -150,9 +158,10 @@ jobs:
 
   test:
     name: Test (${{ matrix.name }})
-    needs: [prepare, format, machete, clippy, check_wit]
+    needs: [prepare, format, machete, clippy, check_wit, prepare_data]
     if: >-
       !cancelled() &&
+      needs.prepare_data.result == 'success' &&
       needs.prepare.outputs.has_code == 'true' &&
       needs.format.result == 'success' &&
       needs.machete.result == 'success' &&
@@ -168,6 +177,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
@@ -187,9 +197,10 @@ jobs:
 
   gametest:
     name: GameTest and Bot Harness
-    needs: [prepare, format, machete, clippy, check_wit]
+    needs: [prepare, format, machete, clippy, check_wit, prepare_data]
     if: >-
       !cancelled() &&
+      needs.prepare_data.result == 'success' &&
       needs.prepare.outputs.has_code == 'true' &&
       needs.format.result == 'success' &&
       needs.machete.result == 'success' &&
@@ -200,6 +211,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: Swatinem/rust-cache@v2
         with:
@@ -209,9 +221,10 @@ jobs:
 
   test_android:
     name: Test on Android AArch64
-    needs: [prepare, format, machete, clippy, check_wit]
+    needs: [prepare, format, machete, clippy, check_wit, prepare_data]
     if: >-
       !cancelled() &&
+      needs.prepare_data.result == 'success' &&
       needs.prepare.outputs.run_full == 'true' &&
       needs.format.result == 'success' &&
       needs.machete.result == 'success' &&
@@ -225,6 +238,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
@@ -234,7 +248,6 @@ jobs:
         with:
           shared-key: android-debug-${{ runner.os }}-${{ runner.arch }}
       - run: cargo install cargo-ndk
-      # Keep workspace features consistent so the test step reuses these binaries.
       - name: Build Android test binaries before starting the emulator
         run: cargo ndk -t arm64-v8a test --workspace --no-run
       - name: Enable KVM
@@ -255,9 +268,10 @@ jobs:
 
   build_pull_request:
     name: Build affected packages
-    needs: [prepare, test]
+    needs: [prepare, test, prepare_data]
     if: >-
       !cancelled() &&
+      needs.prepare_data.result == 'success' &&
       github.event_name == 'pull_request' &&
       needs.prepare.outputs.has_code == 'true' &&
       needs.test.result == 'success'
@@ -282,6 +296,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
@@ -296,9 +311,10 @@ jobs:
 
   build_android_pull_request:
     name: Build affected packages for Android AArch64
-    needs: [prepare, test, test_android]
+    needs: [prepare, test, test_android, prepare_data]
     if: >-
       !cancelled() &&
+      needs.prepare_data.result == 'success' &&
       github.event_name == 'pull_request' &&
       needs.prepare.outputs.has_code == 'true' &&
       needs.test.result == 'success' &&
@@ -311,6 +327,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
@@ -332,7 +349,7 @@ jobs:
 
   build_release:
     name: Build project in release
-    needs: [prepare, clippy_release, test, test_android]
+    needs: [prepare, clippy_release, test, test_android, prepare_data]
     if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
     runs-on: ${{ matrix.os }}
     strategy:
@@ -364,6 +381,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: Swatinem/rust-cache@v2
       - name: Build release
@@ -383,7 +401,7 @@ jobs:
 
   build_android_release:
     name: Build project in release for Android AArch64
-    needs: [prepare, clippy_release, test, test_android]
+    needs: [prepare, clippy_release, test, test_android, prepare_data]
     if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
@@ -393,6 +411,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1

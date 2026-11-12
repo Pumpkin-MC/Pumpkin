@@ -1,0 +1,11 @@
+name: Restore vanilla datapack
+description: Restore the prepared data before Cargo starts compiling.
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v8
+      with:
+        name: vanilla-datapack
+        path: ${{ runner.temp }}/vanilla-datapack
+    - shell: bash
+      run: tar -xf "$RUNNER_TEMP/vanilla-datapack/vanilla-datapack.tar" -C assets

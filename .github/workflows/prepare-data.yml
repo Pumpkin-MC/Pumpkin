@@ -1,0 +1,34 @@
+name: Prepare vanilla datapack
+
+on:
+  workflow_call:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v5
+        id: datapack
+        with:
+          path: assets/datapack
+          key: vanilla-datapack-${{ hashFiles('assets/minecraft-version.txt', 'assets/conventional_tags/**', 'tools/pumpkin-data-prepare/**') }}
+      - if: steps.datapack.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@stable
+      - if: steps.datapack.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: data-prepare
+      - name: Prepare vanilla datapack
+        if: steps.datapack.outputs.cache-hit != 'true'
+        run: cargo run --locked -p pumpkin-data-prepare
+      # Preserve input timestamps when the same data is restored into build jobs.
+      - name: Archive prepared data
+        run: tar -cf "$RUNNER_TEMP/vanilla-datapack.tar" -C assets datapack
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vanilla-datapack
+          path: ${{ runner.temp }}/vanilla-datapack.tar
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14

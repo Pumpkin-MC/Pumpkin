@@ -31,9 +31,14 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+  prepare_data:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    uses: ./.github/workflows/prepare-data.yml
+
   build:
     name: Build release
-    needs: check
+    needs: [check, prepare_data]
     if: needs.check.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
@@ -63,6 +68,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - run: rustup update stable && rustup default stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -85,7 +91,7 @@ jobs:
 
   build_android:
     name: Build pumpkin-aarch64-android
-    needs: check
+    needs: [check, prepare_data]
     if: needs.check.outputs.changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 240
@@ -93,6 +99,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: ./.github/actions/restore-data
       - run: rustup update stable && rustup default stable
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
