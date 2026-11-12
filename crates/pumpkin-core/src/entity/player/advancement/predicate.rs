@@ -421,10 +421,7 @@ impl LocationPredicate {
         {
             return false;
         }
-        if self.structure.is_some() {
-            return false;
-        }
-        true
+        self.structure.is_none()
     }
 
     #[must_use]
