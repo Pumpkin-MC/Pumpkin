@@ -3,9 +3,11 @@ description: Restore the prepared data before Cargo starts compiling.
 runs:
   using: composite
   steps:
-    - uses: actions/download-artifact@v8
+    - name: Download vanilla datapack
+      uses: actions/download-artifact@v8
       with:
         name: vanilla-datapack
         path: ${{ runner.temp }}/vanilla-datapack
-    - shell: bash
-      run: tar -xf "$RUNNER_TEMP/vanilla-datapack/vanilla-datapack.tar" -C assets
+    - name: Extract vanilla datapack
+      shell: bash
+      run: tar -xf - -C assets < "$RUNNER_TEMP/vanilla-datapack/vanilla-datapack.tar"

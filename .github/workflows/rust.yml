@@ -108,7 +108,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ./.github/actions/restore-data
+      - name: Restore vanilla datapack
+        uses: ./.github/actions/restore-data
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
@@ -131,7 +132,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ./.github/actions/restore-data
+      - name: Restore vanilla datapack
+        uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
@@ -177,7 +179,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ./.github/actions/restore-data
+      - name: Restore vanilla datapack
+        uses: ./.github/actions/restore-data
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
@@ -211,7 +214,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ./.github/actions/restore-data
+      - name: Restore vanilla datapack
+        uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: Swatinem/rust-cache@v2
         with:
@@ -238,7 +242,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ./.github/actions/restore-data
+      - name: Restore vanilla datapack
+        uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
@@ -296,7 +301,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ./.github/actions/restore-data
+      - name: Restore vanilla datapack
+        uses: ./.github/actions/restore-data
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
@@ -327,7 +333,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ./.github/actions/restore-data
+      - name: Restore vanilla datapack
+        uses: ./.github/actions/restore-data
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
@@ -381,7 +388,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ./.github/actions/restore-data
+      - name: Restore vanilla datapack
+        uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: Swatinem/rust-cache@v2
       - name: Build release
@@ -411,7 +419,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: ./.github/actions/restore-data
+      - name: Restore vanilla datapack
+        uses: ./.github/actions/restore-data
       - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
