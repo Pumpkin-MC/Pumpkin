@@ -1856,7 +1856,7 @@ impl ProtoChunk {
                                 .get_adjusted_bounding_box(&entry.structure)
                                 .intersects_raw_xz(start_x, start_z, end_x, end_z)
                         {
-                            references.push((entry.structure, start_data.collector.clone()));
+                            references.push((entry.structure, start_data.collector));
                         }
                         break;
                     }
