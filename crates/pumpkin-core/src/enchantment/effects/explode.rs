@@ -71,20 +71,47 @@ impl super::EnchantmentEntityEffectExt for ExplodeEffect {
         &self,
         world: &std::sync::Arc<crate::world::World>,
         enchantment_level: i32,
-        _owner: Option<&std::sync::Arc<crate::entity::player::Player>>,
-        _entity: Option<&crate::entity::Entity>,
+        owner: Option<&std::sync::Arc<crate::entity::player::Player>>,
+        entity: Option<&crate::entity::Entity>,
         position: Vector3<f64>,
     ) {
         let r = self.calculate_radius(enchantment_level);
         let center = position + self.offset;
-        world.explode(
-            center,
+        let immune_blocks = self.immune_blocks.and_then(|tag| {
+            pumpkin_data::tag::get_latest_map(pumpkin_data::tag::RegistryKey::Block)
+                .get(tag.strip_prefix('#').unwrap_or(tag))
+                .copied()
+        });
+        let calculator = std::sync::Arc::new(crate::world::SimpleExplosionDamageCalculator::new(
+            self.block_interaction != ExplosionInteraction::None,
+            self.damage_type.is_some(),
+            self.calculate_knockback(enchantment_level),
+            immune_blocks,
+        ));
+        let source_entity_id = if self.attribute_to_user {
+            entity
+                .map(|e| e.entity_id)
+                .or_else(|| owner.map(|o| o.entity_id()))
+        } else {
+            None
+        };
+        let mut explosion = crate::world::Explosion::new(
             r,
-            if self.create_fire {
-                self.block_interaction
-            } else {
-                ExplosionInteraction::None
-            },
+            center,
+            world.get_block_interaction(self.block_interaction),
+        )
+        .with_damage_calculator(calculator)
+        .with_particles_and_sound(
+            self.small_particle.unwrap_or(Particle::Explosion),
+            self.large_particle.unwrap_or(Particle::ExplosionEmitter),
+            self.sound.unwrap_or(Sound::EntityGenericExplode),
         );
+        if let Some(damage_type) = self.damage_type {
+            explosion = explosion.with_damage_type(*damage_type);
+        }
+        if let Some(source_id) = source_entity_id {
+            explosion = explosion.with_source_entity_id(source_id);
+        }
+        world.run_explosion(&explosion, center, r);
     }
 }

@@ -92,4 +92,8 @@ impl PluginLoader for NativePluginLoader {
     fn can_unload(&self) -> bool {
         !cfg!(target_os = "windows")
     }
+
+    fn binding_language(&self, _data: &(dyn Any + Send + Sync)) -> Option<String> {
+        Some("native".to_string())
+    }
 }

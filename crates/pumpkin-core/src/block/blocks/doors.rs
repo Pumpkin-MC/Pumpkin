@@ -76,11 +76,7 @@ fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
 }
 
 fn can_open_door(block: &Block) -> bool {
-    if block == &Block::IRON_DOOR {
-        return false;
-    }
-
-    true
+    block != &Block::IRON_DOOR
 }
 
 // Todo: The sounds should be from BlockSetType

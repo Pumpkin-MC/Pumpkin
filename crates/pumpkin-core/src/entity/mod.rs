@@ -696,7 +696,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     /// Vanilla `nextStep`: the `move_dist` at which the next step sound and event happen.
     fn next_step(&self) -> f32 {
-        (self.get_entity().move_dist.load() as i32 + 1) as f32
+        self.get_entity().default_next_step()
     }
 
     /// Vanilla `playStepSound`.
@@ -1420,6 +1420,9 @@ pub fn ride_tick(entity: &dyn EntityBase) {
         living.fall_distance.store(0.0);
     }
     position_rider(vehicle.as_ref(), entity);
+    if let Some(mob) = entity.get_mob() {
+        mob.mob_ride_tick();
+    }
 }
 
 /// Vanilla `rideTick` for every rider of a root vehicle, top-down once all entities have
@@ -2034,6 +2037,12 @@ impl Entity {
                 },
             )
             .collect()
+    }
+
+    /// One block of walking past the current distance.
+    #[must_use]
+    pub fn default_next_step(&self) -> f32 {
+        (self.move_dist.load() as i32 + 1) as f32
     }
 
     /// The type's baby size for babies, its adult size otherwise.
@@ -3179,6 +3188,11 @@ impl Entity {
             input.y,
             input.z.mul_add(cos, input.x * sin),
         )
+    }
+
+    #[must_use]
+    pub fn get_on_pos(&self) -> BlockPos {
+        self.get_pos_with_y_offset(1.0e-5).0
     }
 
     #[must_use]
@@ -4810,7 +4824,8 @@ impl Entity {
     pub fn has_line_of_sight(&self, other: &Self) -> bool {
         let from = self.get_eye_pos();
         let to = other.get_eye_pos();
-        if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+        let distance_sq = from.squared_distance_to_vec(&to);
+        if distance_sq.is_nan() || distance_sq > 128.0 * 128.0 {
             return false;
         }
         self.world

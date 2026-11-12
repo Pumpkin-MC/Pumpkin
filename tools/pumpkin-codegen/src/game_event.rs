@@ -8,6 +8,7 @@ use quote::{format_ident, quote};
 pub(crate) struct GameEvent {
     pub(crate) name: String,
     notification_radius: i32,
+    vibration_frequency: u8,
 }
 
 /// Generates game events and their listener position source types.
@@ -25,10 +26,12 @@ pub fn build() -> TokenStream {
     let mut from_name_match = TokenStream::new();
     let mut to_name_match = TokenStream::new();
     let mut radius_match = TokenStream::new();
+    let mut frequency_match = TokenStream::new();
 
     for definition in &game_events {
         let event = &definition.name;
         let radius = definition.notification_radius;
+        let frequency = definition.vibration_frequency;
         let ident = format_ident!("{}", event.to_pascal_case());
         let namespaced = format!("minecraft:{event}");
         variants.extend(quote! {
@@ -41,6 +44,7 @@ pub fn build() -> TokenStream {
             Self::#ident => #event,
         });
         radius_match.extend(quote! { Self::#ident => #radius, });
+        frequency_match.extend(quote! { Self::#ident => #frequency, });
     }
 
     quote! {
@@ -66,6 +70,11 @@ pub fn build() -> TokenStream {
             #[must_use]
             pub const fn notification_radius(self) -> i32 {
                 match self { #radius_match }
+            }
+
+            #[must_use]
+            pub const fn vibration_frequency(self) -> u8 {
+                match self { #frequency_match }
             }
 
             #[must_use]

@@ -194,6 +194,48 @@ impl HostLivingEntity for PluginHostState {
         ))
     }
 
+    fn get_no_damage_ticks(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<i32> {
+        let entity = self.get(&this)?;
+        Ok(entity.get_living_entity().map_or(0, |living| {
+            living
+                .hurt_cooldown
+                .load(std::sync::atomic::Ordering::Relaxed)
+        }))
+    }
+
+    fn set_no_damage_ticks(
+        &mut self,
+        this: Resource<WitLivingEntity>,
+        ticks: i32,
+    ) -> wasmtime::Result<()> {
+        let entity = self.get(&this)?;
+        if let Some(living) = entity.get_living_entity() {
+            living
+                .hurt_cooldown
+                .store(ticks, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(())
+    }
+
+    fn get_last_damage(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
+        let entity = self.get(&this)?;
+        Ok(entity
+            .get_living_entity()
+            .map_or(0.0, |living| living.last_damage_taken.load()))
+    }
+
+    fn set_last_damage(
+        &mut self,
+        this: Resource<WitLivingEntity>,
+        damage: f32,
+    ) -> wasmtime::Result<()> {
+        let entity = self.get(&this)?;
+        if let Some(living) = entity.get_living_entity() {
+            living.last_damage_taken.store(damage);
+        }
+        Ok(())
+    }
+
     fn get_absorption(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<f32> {
         let entity = self.get(&this)?;
         Ok(entity
@@ -452,6 +494,78 @@ impl HostLivingEntity for PluginHostState {
             .is_some_and(|living| living.has_effect(status_effect)))
     }
 
+    fn get_effect(
+        &mut self,
+        this: Resource<WitLivingEntity>,
+        effect: WitStatusEffectType,
+    ) -> wasmtime::Result<Option<WitStatusEffectInstance>> {
+        let entity = self.get(&this)?;
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+        let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        else {
+            return Ok(None);
+        };
+        if let Some(living) = entity.get_living_entity()
+            && let Some(eff) = living.get_effect(status_effect)
+        {
+            return Ok(super::status_effect::to_wasm_status_effect_instance(&eff));
+        }
+        Ok(None)
+    }
+
+    fn get_active_effects(
+        &mut self,
+        this: Resource<WitLivingEntity>,
+    ) -> wasmtime::Result<Vec<WitStatusEffectInstance>> {
+        let entity = self.get(&this)?;
+        let Some(living) = entity.get_living_entity() else {
+            return Ok(Vec::new());
+        };
+        let effects = living.active_effects.lock_ignore_poison();
+        let mut list = Vec::with_capacity(effects.len());
+        for eff in effects.values() {
+            if let Some(instance) = super::status_effect::to_wasm_status_effect_instance(eff) {
+                list.push(instance);
+            }
+        }
+        Ok(list)
+    }
+
+    fn is_climbing(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&this)?;
+        Ok(entity
+            .get_living_entity()
+            .is_some_and(|living| living.climbing.load(std::sync::atomic::Ordering::Relaxed)))
+    }
+
+    fn is_gliding(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&this)?;
+        Ok(entity
+            .get_entity()
+            .fall_flying
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    fn is_riptiding(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&this)?;
+        Ok(entity
+            .get_living_entity()
+            .is_some_and(pumpkin_core::entity::living::LivingEntity::is_auto_spin_attack))
+    }
+
+    fn is_sleeping(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&this)?;
+        Ok(entity.get_entity().pose.load() == pumpkin_data::entity::EntityPose::Sleeping)
+    }
+
+    fn is_blocking(&mut self, this: Resource<WitLivingEntity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&this)?;
+        Ok(entity
+            .get_living_entity()
+            .is_some_and(pumpkin_core::entity::living::LivingEntity::is_blocking))
+    }
+
     fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
@@ -481,6 +595,22 @@ impl HostLivingEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             living.send_equipment_changes(&[(slot, item_stack)]);
         }
         Ok(())
+    }
+
+    async fn heal(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+        amount: f32,
+    ) -> wasmtime::Result<()> {
+        let entity = accessor.get_res(&this)?;
+        run_blocking(accessor, move || {
+            if let Some(player) = entity.get_player() {
+                player.heal(amount);
+            } else if let Some(living) = entity.get_living_entity() {
+                living.heal(amount);
+            }
+        })
+        .await
     }
 
     async fn damage(
@@ -533,5 +663,28 @@ impl HostLivingEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             living.reset_effects_and_attributes();
         }
         Ok(())
+    }
+
+    async fn swing_hand(
+        accessor: &Accessor<PluginHostState, Self>,
+        this: Resource<WitLivingEntity>,
+        hand: crate::pumpkin::plugin::common::Hand,
+    ) -> wasmtime::Result<()> {
+        let entity = accessor.get_res(&this)?;
+        run_blocking(accessor, move || {
+            if let Some(player) = entity.get_player() {
+                let internal_hand = match hand {
+                    crate::pumpkin::plugin::common::Hand::Left => pumpkin_util::Hand::Left,
+                    crate::pumpkin::plugin::common::Hand::Right => pumpkin_util::Hand::Right,
+                };
+                player.swing_hand(internal_hand, true);
+            } else if let Some(living) = entity.get_living_entity() {
+                match hand {
+                    crate::pumpkin::plugin::common::Hand::Left => living.swing_off_hand(),
+                    crate::pumpkin::plugin::common::Hand::Right => living.swing_hand(),
+                }
+            }
+        })
+        .await
     }
 }
