@@ -946,7 +946,7 @@ impl DispenserBlock {
     }
 
     fn dispense_shears(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        if Self::shear_beehive(ctx) || Self::shear_entity_in_front(ctx, item) {
+        if Self::shear_beehive(ctx, item) || Self::shear_entity_in_front(ctx, item) {
             // `damage_item` already consumes the tool from the stack when it breaks.
             let _ = item.damage_item(1);
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
@@ -955,9 +955,8 @@ impl DispenserBlock {
         }
     }
 
-    fn shear_beehive(ctx: &DispenseContext<'_>) -> bool {
+    fn shear_beehive(ctx: &DispenseContext<'_>, tool: &ItemStack) -> bool {
         const FULL_HONEY_LEVEL: u8 = 5;
-        const HARVESTED_HONEYCOMBS: u8 = 3;
 
         let target = Self::target_position(ctx);
         let (block, state_id) = ctx.world.get_block_and_state_id(&target);
@@ -972,11 +971,20 @@ impl DispenserBlock {
 
         ctx.world
             .play_block_sound(Sound::BlockBeehiveShear, SoundCategory::Blocks, target);
-        Self::drop_at(
-            ctx.world,
-            target.to_centered_f64(),
-            ItemStack::new(HARVESTED_HONEYCOMBS, &Item::HONEYCOMB),
-        );
+        if let Some(table) = ctx.world.get_loot_table("minecraft:harvest/beehive") {
+            let params = crate::world::loot::LootContextParameters {
+                world: Some(ctx.world),
+                position: Some(target.to_f64()),
+                block_state: Some(pumpkin_data::BlockState::from_id(state_id)),
+                tool: Some(tool.clone()),
+                ..Default::default()
+            };
+            for stack in
+                crate::world::loot::generate_loot_from_handle(&table, rand::random(), &params)
+            {
+                Self::drop_at(ctx.world, target.to_centered_f64(), stack);
+            }
+        }
 
         props.honey_level = 0;
         ctx.world

@@ -3,7 +3,7 @@
 use std::sync::Weak;
 
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
+use pumpkin_data::tag;
 
 use crate::entity::ai::behavior::fleeing::Flee;
 use crate::entity::ai::goal::breed::BreedGoal;
@@ -17,14 +17,17 @@ use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::mob::Mob;
 
-pub const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
 pub const TEMPT_SPEED: f64 = 0.6;
 pub const SPRINT_SPEED: f64 = 1.33;
 const STROLL_PROBABILITY: f32 = 1.000_000_1E-5;
 
 #[must_use]
 pub fn tempt_goal() -> Box<TemptGoal> {
-    Box::new(TemptGoal::new(TEMPT_SPEED, TEMPT_ITEMS, true))
+    Box::new(TemptGoal::with_tag(
+        TEMPT_SPEED,
+        &tag::Item::MINECRAFT_OCELOT_FOOD,
+        true,
+    ))
 }
 
 /// Shy of players while `gate` holds: untamed cats, wary ocelots.
