@@ -5,6 +5,7 @@ use crate::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::borrow::Cow;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -112,14 +113,21 @@ pub struct CustomNameImpl {
 }
 impl CustomNameImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        data.extract_string().map(|name| Self {
-            name: TextComponent::text(name.to_string()),
-        })
+        match data {
+            NbtTag::String(name) => Some(Self {
+                name: TextComponent::text(name.to_string()),
+            }),
+            NbtTag::Compound(_) | NbtTag::List(_) => Some(Self {
+                name: TextComponent::from_nbt(data),
+            }),
+            _ => None,
+        }
     }
 }
 impl DataComponentImpl for CustomNameImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.name.clone().get_text().into())
+        self.name
+            .to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_2)
     }
     fn get_hash(&self) -> i32 {
         get_str_hash(self.name.clone().get_text().as_str()) as i32
@@ -190,11 +198,7 @@ impl LoreImpl {
         };
 
         Some(Self {
-            lines: lines
-                .iter()
-                .filter_map(NbtTag::extract_string)
-                .map(|line| TextComponent::text(line.to_owned()))
-                .collect(),
+            lines: lines.iter().map(TextComponent::from_nbt).collect(),
         })
     }
 }
@@ -203,7 +207,7 @@ impl DataComponentImpl for LoreImpl {
         NbtTag::List(
             self.lines
                 .iter()
-                .map(|line| NbtTag::String(line.clone().get_text().into_boxed_str()))
+                .map(|line| line.to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_2))
                 .collect(),
         )
     }

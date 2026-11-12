@@ -59,8 +59,18 @@ fn read_components(reader: &mut StringReader) -> Result<ComponentPatch, CommandS
             reader.expect('=')?;
             reader.skip_whitespace();
             let start = reader.cursor();
-            let tag = SnbtParser::parse_for_commands(reader)?;
+            let mut tag = SnbtParser::parse_for_commands(reader)?;
             let end = reader.cursor();
+            // Like vanilla, `custom_data` also accepts its compound written as an SNBT string.
+            if component == DataComponent::CustomData
+                && let pumpkin_nbt::tag::NbtTag::String(snbt) = &tag
+            {
+                let snbt = snbt.to_string();
+                let mut inner = StringReader::new(&snbt);
+                if let Ok(parsed) = SnbtParser::parse_for_commands(&mut inner) {
+                    tag = parsed;
+                }
+            }
             let value = read_data(component, &tag).ok_or_else(|| {
                 reader.set_cursor(start);
                 ERROR_MALFORMED_COMPONENT.create(
@@ -176,5 +186,20 @@ mod test {
         assert!(parse("salmon_spawn_egg[not/a_component=1]").is_err());
         assert!(parse("salmon_spawn_egg[salmon/size=\"large\",").is_err());
         assert!(parse("salmon_spawn_egg[%]").is_err());
+    }
+
+    #[test]
+    fn styled_name_and_lore_parse() {
+        let stack = parse(
+            "paper[lore=[{text:\"red line\",color:\"red\"}],custom_name={text:\"Named\",italic:false}]",
+        )
+        .unwrap();
+        assert_eq!(stack.patch.len(), 2);
+        assert!(stack.patch.iter().all(|(_, value)| value.is_some()));
+        let name = stack
+            .get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
+            .unwrap();
+        assert_eq!(name.name.clone().get_text(), "Named");
+        assert_eq!(name.name.0.style.italic, Some(false));
     }
 }
