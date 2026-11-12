@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::entities::bed::BedBlockEntity;
+use crate::entity::passive::villager::VillagerEntity;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::{Block as BlockTag, Taggable};
@@ -8,6 +9,7 @@ use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -262,15 +264,20 @@ impl BedBlock {
 
         // Make sure the bed is not occupied
         if bed_props.occupied {
-            // TODO: Wake up villager
-
-            player.send_system_message_raw(
-                &pumpkin_macros::translate_cross!(
-                    translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
-                    translation::bedrock::TILE_BED_OCCUPIED
-                ),
-                true,
-            );
+            if let Some(villager) = villager_to_wake(world, &bed_head_pos) {
+                villager
+                    .cast_any()
+                    .downcast_ref::<VillagerEntity>()
+                    .map(VillagerEntity::wake_up);
+            } else {
+                player.send_system_message_raw(
+                    &pumpkin_macros::translate_cross!(
+                        translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
+                        translation::bedrock::TILE_BED_OCCUPIED
+                    ),
+                    true,
+                );
+            }
             return BlockActionResult::SuccessServer;
         }
 
@@ -536,6 +543,20 @@ fn step(direction: BlockDirection) -> (i32, i32) {
 
 fn entity_prevents_sleep(entity: &Entity) -> bool {
     NO_SLEEP_IDS.contains(&entity.entity_type.id)
+}
+
+pub fn villager_to_wake(world: &World, pos: &BlockPos) -> Option<Arc<dyn EntityBase>> {
+    world
+        .get_entities_of_type_at_box(&BoundingBox::from_block(pos), |entity_type| {
+            entity_type == &EntityType::VILLAGER
+        })
+        .into_iter()
+        .find(|entity| {
+            entity
+                .cast_any()
+                .downcast_ref::<VillagerEntity>()
+                .is_some_and(VillagerEntity::is_sleeping)
+        })
 }
 
 #[cfg(test)]
