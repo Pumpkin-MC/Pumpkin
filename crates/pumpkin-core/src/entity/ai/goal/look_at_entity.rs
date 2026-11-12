@@ -8,7 +8,39 @@ use crate::entity::predicate::EntityPredicate;
 use pumpkin_data::data_component_impl::MobVisibilityImpl;
 use pumpkin_data::entity::EntityType;
 use rand::RngExt;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
+
+/// A hand on a [`LookAtEntityGoal`] that is already registered: the owner of the mob sets the
+/// entity the goal looks at, as vanilla `PandaLookAtPlayerGoal.setTarget` does.
+#[derive(Default)]
+pub struct LookTargetSlot {
+    pending: Mutex<PendingTarget>,
+}
+
+/// A `set_target` that the goal has not picked up yet; `Set(None)` is `setTarget(null)`.
+#[derive(Default)]
+enum PendingTarget {
+    #[default]
+    Idle,
+    Set(Option<Arc<dyn EntityBase>>),
+}
+
+impl LookTargetSlot {
+    pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
+        *self.pending.lock().unwrap_or_else(PoisonError::into_inner) = PendingTarget::Set(target);
+    }
+
+    fn take(&self) -> PendingTarget {
+        std::mem::take(&mut *self.pending.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+
+    fn pending_id(&self) -> Option<i32> {
+        match &*self.pending.lock().unwrap_or_else(PoisonError::into_inner) {
+            PendingTarget::Set(Some(target)) => Some(target.get_entity().entity_id),
+            _ => None,
+        }
+    }
+}
 
 pub struct LookAtEntityGoal {
     goal_control: Controls,
@@ -19,6 +51,7 @@ pub struct LookAtEntityGoal {
     look_forward: bool,
     target_match: TargetMatch,
     target_predicate: TargetPredicate,
+    target_slot: Option<Arc<LookTargetSlot>>,
 }
 
 impl LookAtEntityGoal {
@@ -57,6 +90,23 @@ impl LookAtEntityGoal {
             look_forward,
             target_match,
             target_predicate,
+            target_slot: None,
+        }
+    }
+
+    /// The target can be set through `slot`, and a target that is set is kept instead of being
+    /// replaced by the nearest entity: vanilla `PandaLookAtPlayerGoal.canUse` only searches while
+    /// it has no target, and it ignores the mob's attack target.
+    #[must_use]
+    pub fn with_target_slot(mut self, slot: Arc<LookTargetSlot>) -> Self {
+        self.target_slot = Some(slot);
+        self
+    }
+
+    fn take_slot_target(&mut self) {
+        if let Some(PendingTarget::Set(target)) = self.target_slot.as_ref().map(|slot| slot.take())
+        {
+            self.target = target;
         }
     }
 
@@ -105,15 +155,19 @@ impl Goal for LookAtEntityGoal {
                 .as_ref()
                 .and_then(Weak::upgrade)
                 .map(|target| target.get_entity().entity_id)
-                .into_iter()
+                .chain(self.target_slot.as_ref().and_then(|slot| slot.pending_id()))
                 .collect(),
             ..GoalReach::default()
         })
     }
 
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.take_slot_target();
         if mob.get_random().random::<f32>() >= self.chance {
             return false;
+        }
+        if self.target_slot.is_some() && self.target.is_some() {
+            return true;
         }
 
         let mob_entity = mob.get_mob_entity();
@@ -147,6 +201,7 @@ impl Goal for LookAtEntityGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.take_slot_target();
         let mob_entity = mob.get_mob_entity();
         if let Some(target) = self.target.as_ref().and_then(Weak::upgrade) {
             if !target.get_entity().is_alive() {
@@ -171,6 +226,7 @@ impl Goal for LookAtEntityGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
+        self.take_slot_target();
         let mob_entity = mob.get_mob_entity();
         if let Some(target) = self.target.as_ref().and_then(Weak::upgrade)
             && target.get_entity().is_alive()
@@ -193,5 +249,64 @@ impl Goal for LookAtEntityGoal {
 
     fn controls(&self) -> Controls {
         self.goal_control
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::math::vector3::Vector3;
+
+    use super::*;
+    use crate::entity::Entity;
+    use crate::entity::ai::test_support::world;
+    use crate::entity::passive::cow::CowEntity;
+
+    #[tokio::test]
+    async fn a_target_set_through_the_slot_is_looked_at_and_cleared_again()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let spawn = |x: f64| {
+            CowEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(x, 64.0, 0.5),
+                &EntityType::COW,
+            ))
+        };
+        let looker = spawn(0.5);
+        let target = spawn(4.5);
+        let mob: Arc<dyn Mob> = looker.clone();
+        let slot = Arc::new(LookTargetSlot::default());
+        let mut goal =
+            LookAtEntityGoal::new(Arc::downgrade(&mob), &EntityType::PLAYER, 6.0, 1.0, false)
+                .with_target_slot(slot.clone());
+
+        assert!(
+            !goal.can_start(looker.as_ref()),
+            "no player and nothing set"
+        );
+
+        slot.set_target(Some(target));
+        assert!(
+            goal.can_start(looker.as_ref()),
+            "the slot target was not used"
+        );
+        goal.start(looker.as_ref());
+        goal.tick(looker.as_ref());
+        let looked_at = looker
+            .get_mob_entity()
+            .look_control
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .wanted_position();
+        assert!(looked_at.is_some_and(|pos| (pos.x - 4.5).abs() < 1e-9));
+
+        slot.set_target(None);
+        assert!(
+            !goal.should_continue(looker.as_ref()),
+            "the cleared target was kept"
+        );
+        world.level.shutdown().await;
+        Ok(())
     }
 }
