@@ -685,6 +685,30 @@ impl Level {
         f(&chunk)
     }
 
+    /// Returns whether the chunk at `pos` is currently loaded in memory or exists on disk.
+    pub async fn is_chunk_generated(&self, pos: Vector2<i32>) -> bool {
+        if self.is_chunk_loaded(&pos) {
+            return true;
+        }
+        self.chunk_saver
+            .is_chunk_generated(&self.level_folder, pos)
+            .await
+    }
+
+    /// Deletes an unloaded chunk (and its entity chunk) from disk storage.
+    /// Returns `false` if the chunk is currently loaded or did not exist on disk.
+    pub async fn delete_chunk(&self, pos: Vector2<i32>) -> bool {
+        if self.is_chunk_loaded(&pos) {
+            return false;
+        }
+        let chunk_deleted = self.chunk_saver.delete_chunk(&self.level_folder, pos).await;
+        let entity_deleted = self
+            .entity_saver
+            .delete_chunk(&self.level_folder, pos)
+            .await;
+        chunk_deleted || entity_deleted
+    }
+
     pub fn loaded_chunk_changes(&self) -> impl Iterator<Item = LoadedChunkChange> + '_ {
         std::iter::from_fn(|| self.loaded_chunk_changes.pop())
     }

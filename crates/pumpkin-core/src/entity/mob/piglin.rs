@@ -716,7 +716,7 @@ impl PiglinEntity {
         if self.is_adult() {
             let is_barter = PiglinAi::is_barter_currency(&item);
             if bartering_enabled && is_barter {
-                let outcomes = PiglinAi::get_barter_response_items();
+                let outcomes = PiglinAi::get_barter_response_items(self);
                 let entity = &self.mob_entity.living_entity.entity;
 
                 let mut event =

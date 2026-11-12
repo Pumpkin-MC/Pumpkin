@@ -34,10 +34,12 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "json"], optional = true }
 rustls = { workspace = true, optional = true }
-webpki-root-certs = { workspace = true, optional = true }
 ed25519-dalek = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+webpki-root-certs = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
