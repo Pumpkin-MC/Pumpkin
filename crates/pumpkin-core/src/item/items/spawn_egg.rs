@@ -392,7 +392,9 @@ impl ItemBehaviour for SpawnEggItem {
                 .get_mob()
                 .and_then(crate::entity::mob::Mob::as_animal)
             {
-                Some(animal) if !animal.spawns_offspring() => return,
+                // Vanilla `Frog.getBreedOffspring` returns null. Turtles lay eggs when bred but do
+                // have a baby form, so `spawns_offspring` is not the check here.
+                Some(_) if entity_type.id == EntityType::FROG.id => return,
                 Some(animal) => animal.get_breed_offspring(entity.as_ref()),
                 None => from_type(entity_type, pos, &world, Uuid::new_v4()),
             };
