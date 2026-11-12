@@ -322,12 +322,16 @@ use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::plugin::server::packet::PacketSentEvent;
+use crate::plugin::world::chunk_send::ChunkSend;
 use crate::server::Server;
 use crate::world::{BlockBreakingProgress, World};
 use bytes::Bytes;
 
 use super::breath::BreathManager;
-use super::combat::{self, AttackType, player_attack_sound};
+use super::combat::{
+    self, AttackType, can_smash_attack, mace_smash_damage_bonus, mace_smash_knockback,
+    player_attack_sound,
+};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
@@ -817,6 +821,9 @@ fn decode_skin_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
 }
 
 impl Player {
+    pub const FULL_SLEEP_TICKS: u8 = 100;
+    pub const SLEEP_TIMER_RESET_TICKS: u8 = 110;
+
     pub async fn fetch_skin(
         properties: &[Property],
     ) -> Option<pumpkin_protocol::bedrock::client::Skin> {
@@ -1420,13 +1427,7 @@ impl Player {
             self.on_handled_screen_closed();
         }
 
-        let vehicle = self
-            .living_entity
-            .entity
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let vehicle = self.living_entity.entity.get_vehicle();
         if let Some(vehicle) = vehicle {
             self.root_vehicle_uuid
                 .store(Some(vehicle.get_entity().entity_uuid));
@@ -1537,9 +1538,13 @@ impl Player {
             *listener = new_world.level.chunk_listener.add_global_chunk_listener();
         }
         self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
-        if let Ok(mut sender) = self.chunk_sender.lock() {
-            sender.reset();
-        }
+        let mut sender = self
+            .chunk_sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        sender.reset();
+        // A Bedrock spawn of the old world may have marked the player loaded meanwhile
+        self.set_client_loaded(false);
     }
 
     #[expect(clippy::too_many_lines)]
@@ -1655,20 +1660,23 @@ impl Player {
         let pos = victim_entity.pos.load();
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32);
 
-        if matches!(attack_type, AttackType::Critical) {
-            damage *= 1.5;
-        }
-
-        let is_mace_smash = matches!(attack_type, AttackType::MaceSmash);
+        let is_mace_smash = item_stack.item.id == pumpkin_data::item::Item::MACE.id
+            && can_smash_attack(&self.living_entity);
+        // Vanilla adds the weapon's damage bonus before the critical hit multiplier.
         if is_mace_smash {
-            let fall_distance = self.living_entity.fall_distance.load();
+            let fall_distance = f64::from(self.living_entity.fall_distance.load());
             let mut smash_bonus_per_block = 0.0f64;
             if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
                     enchantment.modify_fall_based_damage(*level, &mut smash_bonus_per_block);
                 }
             }
-            damage += (1.5 + smash_bonus_per_block) * f64::from(fall_distance);
+            damage += smash_bonus_per_block
+                .mul_add(fall_distance, mace_smash_damage_bonus(fall_distance));
+        }
+
+        if matches!(attack_type, AttackType::Critical) {
+            damage *= 1.5;
         }
 
         let old_movement = victim_entity.velocity.load();
@@ -1698,32 +1706,35 @@ impl Player {
             self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::DealtOverkillDamage);
         }
 
-        crate::enchantment::EnchantmentHelper::on_post_attack(victim_entity, &item_stack);
+        let is_mace_smash_living = is_mace_smash && victim.get_living_entity().is_some();
+        if is_mace_smash_living {
+            let attacker = &self.living_entity.entity;
+            let velocity = attacker.velocity.load();
+            self.set_velocity(Vector3::new(velocity.x, f64::from(0.01f32), velocity.z));
+            let impact_pos = self.living_entity.calculate_impact_position();
+            self.living_entity
+                .set_ignore_fall_damage_from_current_impulse(true, impact_pos);
 
-        if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
-            self.living_entity.fall_distance.store(0.0);
-            if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
-                for (enchantment, level) in enchantments.enchantment.iter() {
-                    if **enchantment == Enchantment::WIND_BURST {
-                        let boost_y = 0.5 + 0.25 * (*level as f64);
-                        let vel = self.living_entity.entity.velocity.load();
-                        self.living_entity
-                            .entity
-                            .velocity
-                            .store(Vector3::new(vel.x, boost_y, vel.z));
-                    }
-                }
-            }
-            world.play_sound(
+            let sound = if victim_entity.on_ground.load(Ordering::Relaxed) {
+                self.spawn_extra_particles_on_fall
+                    .store(true, Ordering::Relaxed);
                 if fall_distance > 5.0 {
                     Sound::ItemMaceSmashGroundHeavy
                 } else {
                     Sound::ItemMaceSmashGround
-                },
-                SoundCategory::Players,
-                &pos,
-            );
+                }
+            } else {
+                Sound::ItemMaceSmashAir
+            };
+            world.play_sound(sound, SoundCategory::Players, &attacker.pos.load());
+            mace_smash_knockback(&world, self, victim.as_ref());
+        }
+
+        crate::enchantment::EnchantmentHelper::on_post_attack(self, victim_entity, &item_stack);
+
+        if is_mace_smash_living {
+            self.living_entity.fall_distance.store(0.0);
         }
 
         player_attack_sound(&pos, &world, attack_type);
@@ -2631,8 +2642,13 @@ impl Player {
             &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
         );
 
-        self.sleeping_since.store(None);
+        self.sleeping_since.store(Some(Self::FULL_SLEEP_TICKS));
         self.sleeping_bed_pos.store(None);
+    }
+
+    #[must_use]
+    pub fn get_sleep_timer(&self) -> u8 {
+        self.sleeping_since.load().unwrap_or(0)
     }
 
     pub fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
@@ -2845,6 +2861,15 @@ impl Player {
             if event.cancelled {
                 return;
             }
+        }
+        if let Some(block_entity) = self.world().get_block_entity(&location)
+            && let Some(sign) =
+                crate::block::entities::sign::SignEntityRef::from_block_entity(&*block_entity)
+        {
+            *sign
+                .currently_editing_player()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(self.gameprofile.id);
         }
         self.try_enqueue_packet_editioned(
             &COpenSignEditor::new(location, is_front_text),
@@ -3164,41 +3189,37 @@ impl Player {
             sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
         });
 
-        let total_sent_chunks = prepared_batch.map_or_else(
-            || {
-                self.chunk_sender
-                    .try_lock()
-                    .map_or(0, |s| s.sent_chunks_count())
-            },
-            |batch| match self.client.as_ref() {
+        if let Some(batch) = prepared_batch {
+            match self.client.as_ref() {
                 ClientPlatform::Java(_) => {
+                    let mut batch = batch;
+                    let cancelled = match world.server.upgrade() {
+                        Some(server) if server.plugin_manager.has_handlers::<ChunkSend>() => {
+                            ChunkSend::retain_blocking(&server, &world, &mut batch.chunks)
+                        }
+                        _ => Vec::new(),
+                    };
                     let mut per_player_cache = rustc_hash::FxHashMap::default();
                     let encoded =
                         crate::net::ChunkSender::encode_batch(&batch, &mut per_player_cache);
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-                    let (sent, total_sent_chunks) = self.chunk_sender.try_lock().map_or_else(
-                        |_| (Vec::new(), 0),
+                    let sent = self.chunk_sender.try_lock().map_or_else(
+                        |_| Vec::new(),
                         |mut sender| {
-                            let sent =
-                                sender.commit_batch(&batch, &encoded, &self.client, current_epoch);
-                            (sent, sender.sent_chunks_count())
+                            sender.cancel_pending(&batch, current_epoch, &cancelled);
+                            sender.commit_batch(&batch, &encoded, &self.client, current_epoch)
                         },
                     );
                     self.pair_entities_in_chunks(&world, &sent);
-                    total_sent_chunks
                 }
-                ClientPlatform::Bedrock(_) => {
+                ClientPlatform::Bedrock(bedrock) => {
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-                    let (chunks, total_sent_chunks) = self.chunk_sender.try_lock().map_or_else(
-                        |_| (Vec::new(), 0),
-                        |mut sender| {
-                            let chunks = sender.commit_bedrock_batch(&batch, current_epoch);
-                            let total_sent_chunks = sender.sent_chunks_count();
-                            (chunks, total_sent_chunks)
-                        },
+                    let chunks = self.chunk_sender.try_lock().map_or_else(
+                        |_| Vec::new(),
+                        |mut sender| sender.commit_bedrock_batch(&batch, current_epoch),
                     );
                     if !chunks.is_empty() {
-                        let client = self.client.clone();
+                        let bedrock = bedrock.clone();
                         let world = world.clone();
                         let uuid = self.gameprofile.id;
                         self.spawn_task(async move {
@@ -3206,46 +3227,51 @@ impl Player {
                                 .into_iter()
                                 .map(|c| ((c.position, c.delivery_token), c.chunk))
                                 .unzip();
-                            client.send_chunks(&chunks).await;
+                            let outcome = bedrock.send_chunks(&chunks, Some(current_epoch)).await;
+                            let (deliveries, dropped): (Vec<_>, Vec<_>) = deliveries
+                                .into_iter()
+                                .partition(|(pos, _)| outcome.sent.contains(pos));
+                            let dropped: Vec<_> = dropped
+                                .into_iter()
+                                .map(|(pos, token)| (pos, token, outcome.failure(pos)))
+                                .collect();
                             if let Some(player) = world.get_player_by_uuid(uuid) {
                                 // dispatcher sets a reset or a re-enqueue since then holds a newer token.
-                                let delivered = player
+                                let mut sender = player
                                     .chunk_sender
                                     .lock()
-                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                    .mark_delivered(&deliveries);
-                                player.pair_entities_in_chunks(&world, &delivered);
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                let mut ready = sender.fail_delivery(&dropped);
+                                ready.extend(sender.mark_delivered(&deliveries));
+                                drop(sender);
+                                player.pair_entities_in_chunks(&world, &ready);
+                                player.try_bedrock_spawn();
                             }
                         });
                     }
-                    total_sent_chunks
                 }
-            },
-        );
-
-        if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
-            && !self.bedrock_spawned.load(Ordering::Relaxed)
-            && total_sent_chunks > 4
-        {
-            if let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) {
-                bedrock_client.try_enqueue_packet(data);
-            }
-            self.bedrock_spawned.store(true, Ordering::Relaxed);
-            self.set_client_loaded(true);
-            self.send_health();
-            if self.living_entity.health.load() <= 0.0 {
-                self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
             }
         }
+
+        self.try_bedrock_spawn();
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
         self.living_entity
             .entity
             .tick_count
             .fetch_add(1, Ordering::Relaxed);
-        if let Some(sleeping_since) = self.sleeping_since.load()
-            && sleeping_since < 101
-        {
-            self.sleeping_since.store(Some(sleeping_since + 1));
+        if let Some(sleeping_since) = self.sleeping_since.load() {
+            if self.is_sleeping() {
+                self.sleeping_since.store(Some(
+                    sleeping_since.saturating_add(1).min(Self::FULL_SLEEP_TICKS),
+                ));
+            } else if sleeping_since > 0
+                && sleeping_since.saturating_add(1) < Self::SLEEP_TIMER_RESET_TICKS
+            {
+                self.sleeping_since
+                    .store(Some(sleeping_since.saturating_add(1)));
+            } else {
+                self.sleeping_since.store(None);
+            }
         }
 
         if self.mining.load(Ordering::Relaxed)
@@ -3566,6 +3592,29 @@ impl Player {
         {
             return;
         }
+        let fall_distance = self.living_entity.fall_distance.load();
+        if self.spawn_extra_particles_on_fall.load(Ordering::Relaxed)
+            && on_ground
+            && fall_distance > 0.0
+        {
+            let pos = self.living_entity.entity.get_pos_with_y_offset(0.2).0;
+            let on_state = self.world().get_block_state(&pos);
+            let centered = Vector3::new(
+                f64::from(pos.0.x) + 0.5,
+                f64::from(pos.0.y) + 1.0,
+                f64::from(pos.0.z) + 0.5,
+            );
+            let particles = (50.0 * f64::from(fall_distance)).clamp(0.0, 200.0) as i32;
+            self.world().spawn_block_particle(
+                centered,
+                Vector3::new(0.3, 0.3, 0.3),
+                0.15,
+                particles,
+                on_state.id.as_u16(),
+            );
+            self.spawn_extra_particles_on_fall
+                .store(false, Ordering::Relaxed);
+        }
         // Fall damage comes with the move packet, the glide wall damage with the tick after it
         self.living_entity.fall(self, movement.y, on_ground);
         if horizontal_collision && self.living_entity.entity.is_fall_flying() {
@@ -3640,6 +3689,42 @@ impl Player {
             self.client_loaded_timeout.store(60, Ordering::Relaxed);
         }
         self.client_loaded.store(loaded, Ordering::Relaxed);
+    }
+
+    /// Spawns a Bedrock player once five chunks are queued ahead of `PlayerSpawn`.
+    fn try_bedrock_spawn(&self) {
+        let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref() else {
+            return;
+        };
+        if self.bedrock_spawned.load(Ordering::Relaxed) {
+            return;
+        }
+        // Check, claim and enqueue under the sender lock: a world change resets the sender
+        // under it, so a task of the old world can neither claim the new latch nor queue its spawn.
+        // Chunk tasks finish concurrently, so only one may spawn
+        let Ok(sender) = self.chunk_sender.try_lock() else {
+            return;
+        };
+        if sender.ready_chunks_count() <= 4 || self.bedrock_spawned.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) else {
+            // Encoder busy -> a later tick tries again
+            self.bedrock_spawned.store(false, Ordering::Relaxed);
+            return;
+        };
+        if !bedrock_client.try_enqueue_packet_data(data) {
+            // Dropped -> a later tick tries again
+            self.bedrock_spawned.store(false, Ordering::Relaxed);
+            return;
+        }
+        // Under the lock, so a world change resetting the sender also undoes this
+        self.set_client_loaded(true);
+        drop(sender);
+        self.send_health();
+        if self.living_entity.health.load() <= 0.0 {
+            self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
+        }
     }
 
     pub fn get_attack_cooldown_progress(&self, tps: f64, base_time: f64, attack_speed: f64) -> f64 {
@@ -3936,74 +4021,66 @@ impl Player {
     #[allow(clippy::too_many_lines)]
     pub fn get_movement_statistic(&self) -> statistics::CustomStatistic {
         let entity = self.get_entity();
-        if entity.has_vehicle() {
-            let vehicle = entity
-                .vehicle
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(vehicle) = vehicle.as_ref() {
-                let entity_type = vehicle.get_entity().entity_type;
-                if entity_type.has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_BOAT)
-                    || entity_type.has_tag(&pumpkin_data::tag::EntityType::C_BOATS)
-                    || entity_type == &EntityType::OAK_BOAT
-                    || entity_type == &EntityType::SPRUCE_BOAT
-                    || entity_type == &EntityType::BIRCH_BOAT
-                    || entity_type == &EntityType::JUNGLE_BOAT
-                    || entity_type == &EntityType::ACACIA_BOAT
-                    || entity_type == &EntityType::DARK_OAK_BOAT
-                    || entity_type == &EntityType::MANGROVE_BOAT
-                    || entity_type == &EntityType::CHERRY_BOAT
-                    || entity_type == &EntityType::PALE_OAK_BOAT
-                    || entity_type == &EntityType::BAMBOO_RAFT
-                    || entity_type == &EntityType::OAK_CHEST_BOAT
-                    || entity_type == &EntityType::SPRUCE_CHEST_BOAT
-                    || entity_type == &EntityType::BIRCH_CHEST_BOAT
-                    || entity_type == &EntityType::JUNGLE_CHEST_BOAT
-                    || entity_type == &EntityType::ACACIA_CHEST_BOAT
-                    || entity_type == &EntityType::DARK_OAK_CHEST_BOAT
-                    || entity_type == &EntityType::MANGROVE_CHEST_BOAT
-                    || entity_type == &EntityType::CHERRY_CHEST_BOAT
-                    || entity_type == &EntityType::PALE_OAK_CHEST_BOAT
-                    || entity_type == &EntityType::BAMBOO_CHEST_RAFT
-                {
-                    return statistics::CustomStatistic::BoatOneCm;
-                }
-                if entity_type.has_tag(&pumpkin_data::tag::EntityType::C_MINECARTS)
-                    || entity_type == &EntityType::MINECART
-                    || entity_type == &EntityType::CHEST_MINECART
-                    || entity_type == &EntityType::FURNACE_MINECART
-                    || entity_type == &EntityType::TNT_MINECART
-                    || entity_type == &EntityType::HOPPER_MINECART
-                    || entity_type == &EntityType::COMMAND_BLOCK_MINECART
-                    || entity_type == &EntityType::SPAWNER_MINECART
-                {
-                    return statistics::CustomStatistic::MinecartOneCm;
-                }
-                if entity_type == &EntityType::HORSE
-                    || entity_type == &EntityType::DONKEY
-                    || entity_type == &EntityType::MULE
-                    || entity_type == &EntityType::SKELETON_HORSE
-                    || entity_type == &EntityType::ZOMBIE_HORSE
-                    || entity_type == &EntityType::CAMEL
-                    || entity_type == &EntityType::LLAMA
-                    || entity_type == &EntityType::TRADER_LLAMA
-                {
-                    return statistics::CustomStatistic::HorseOneCm;
-                }
-                if entity_type == &EntityType::PIG {
-                    return statistics::CustomStatistic::PigOneCm;
-                }
-                if entity_type == &EntityType::STRIDER {
-                    return statistics::CustomStatistic::StriderOneCm;
-                }
-                if entity_type == &EntityType::HAPPY_GHAST {
-                    return statistics::CustomStatistic::HappyGhastOneCm;
-                }
-                if entity_type == &EntityType::NAUTILUS
-                    || entity_type == &EntityType::ZOMBIE_NAUTILUS
-                {
-                    return statistics::CustomStatistic::NautilusOneCm;
-                }
+        if let Some(vehicle) = entity.get_vehicle() {
+            let entity_type = vehicle.get_entity().entity_type;
+            if entity_type.has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_BOAT)
+                || entity_type.has_tag(&pumpkin_data::tag::EntityType::C_BOATS)
+                || entity_type == &EntityType::OAK_BOAT
+                || entity_type == &EntityType::SPRUCE_BOAT
+                || entity_type == &EntityType::BIRCH_BOAT
+                || entity_type == &EntityType::JUNGLE_BOAT
+                || entity_type == &EntityType::ACACIA_BOAT
+                || entity_type == &EntityType::DARK_OAK_BOAT
+                || entity_type == &EntityType::MANGROVE_BOAT
+                || entity_type == &EntityType::CHERRY_BOAT
+                || entity_type == &EntityType::PALE_OAK_BOAT
+                || entity_type == &EntityType::BAMBOO_RAFT
+                || entity_type == &EntityType::OAK_CHEST_BOAT
+                || entity_type == &EntityType::SPRUCE_CHEST_BOAT
+                || entity_type == &EntityType::BIRCH_CHEST_BOAT
+                || entity_type == &EntityType::JUNGLE_CHEST_BOAT
+                || entity_type == &EntityType::ACACIA_CHEST_BOAT
+                || entity_type == &EntityType::DARK_OAK_CHEST_BOAT
+                || entity_type == &EntityType::MANGROVE_CHEST_BOAT
+                || entity_type == &EntityType::CHERRY_CHEST_BOAT
+                || entity_type == &EntityType::PALE_OAK_CHEST_BOAT
+                || entity_type == &EntityType::BAMBOO_CHEST_RAFT
+            {
+                return statistics::CustomStatistic::BoatOneCm;
+            }
+            if entity_type.has_tag(&pumpkin_data::tag::EntityType::C_MINECARTS)
+                || entity_type == &EntityType::MINECART
+                || entity_type == &EntityType::CHEST_MINECART
+                || entity_type == &EntityType::FURNACE_MINECART
+                || entity_type == &EntityType::TNT_MINECART
+                || entity_type == &EntityType::HOPPER_MINECART
+                || entity_type == &EntityType::COMMAND_BLOCK_MINECART
+                || entity_type == &EntityType::SPAWNER_MINECART
+            {
+                return statistics::CustomStatistic::MinecartOneCm;
+            }
+            if entity_type == &EntityType::HORSE
+                || entity_type == &EntityType::DONKEY
+                || entity_type == &EntityType::MULE
+                || entity_type == &EntityType::SKELETON_HORSE
+                || entity_type == &EntityType::ZOMBIE_HORSE
+                || entity_type == &EntityType::CAMEL
+                || entity_type == &EntityType::LLAMA
+                || entity_type == &EntityType::TRADER_LLAMA
+            {
+                return statistics::CustomStatistic::HorseOneCm;
+            }
+            if entity_type == &EntityType::PIG {
+                return statistics::CustomStatistic::PigOneCm;
+            }
+            if entity_type == &EntityType::STRIDER {
+                return statistics::CustomStatistic::StriderOneCm;
+            }
+            if entity_type == &EntityType::HAPPY_GHAST {
+                return statistics::CustomStatistic::HappyGhastOneCm;
+            }
+            if entity_type == &EntityType::NAUTILUS || entity_type == &EntityType::ZOMBIE_NAUTILUS {
+                return statistics::CustomStatistic::NautilusOneCm;
             }
         }
 
@@ -5553,6 +5630,7 @@ impl Player {
         if gamemode == GameMode::Creative {
             self.get_entity().extinguish();
             self.get_entity().set_on_fire(false);
+            self.living_entity.reset_current_impulse_context();
         }
 
         // Stop elytra flight and reset sneaking when switching to spectator mode
@@ -5627,6 +5705,82 @@ impl Player {
 
     pub fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {
         !state.tool_required() || self.inventory().held_item().is_correct_for_drops(block)
+    }
+
+    pub fn break_block(self: &Arc<Self>, position: &BlockPos) -> bool {
+        let world = self.world();
+        let (block, state) = world.get_block_and_state(position);
+        if state.is_air() {
+            return false;
+        }
+
+        let held = self.inventory().held_item();
+        let gamemode = self.gamemode.load();
+        let server = world.server.upgrade();
+        let can_mine_item = server
+            .as_ref()
+            .is_none_or(|s| s.item_registry.can_mine(held.item, self));
+        let cannot_mine = !can_mine_item
+            || gamemode == GameMode::Spectator
+            || (gamemode == GameMode::Creative
+                && held
+                    .get_data_component::<ToolImpl>()
+                    .is_some_and(|t| !t.can_destroy_blocks_in_creative))
+            || (gamemode == GameMode::Adventure
+                && !held
+                    .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
+                    .is_some_and(|c| c.matches_block(block)));
+        if cannot_mine {
+            return false;
+        }
+
+        if gamemode == GameMode::Creative {
+            let new_state = world.break_block(
+                position,
+                Some(self),
+                pumpkin_world::world::BlockFlags::NOTIFY_ALL
+                    | pumpkin_world::world::BlockFlags::SKIP_DROPS,
+            );
+            if new_state.is_some() {
+                if let Some(server) = &server {
+                    server
+                        .block_registry
+                        .broken(&world, block, self, position, server, state);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        let block_drop = self.can_harvest(state, block);
+        let flags = if block_drop {
+            pumpkin_world::world::BlockFlags::NOTIFY_ALL
+        } else {
+            pumpkin_world::world::BlockFlags::SKIP_DROPS
+                | pumpkin_world::world::BlockFlags::NOTIFY_ALL
+        };
+
+        let new_state = world.break_block(position, Some(self), flags);
+        if new_state.is_some() {
+            if let Some(server) = &server {
+                server
+                    .block_registry
+                    .broken(&world, block, self, position, server, state);
+            }
+            self.apply_tool_damage_for_block_break(state);
+            if block_drop {
+                self.add_exhaustion(MINE_BLOCK_EXHAUSTION);
+            }
+            let item_id = held.item.id;
+            self.increment_stat(statistics::StatisticCategory::Used, item_id as i32, 1);
+            self.increment_stat(
+                statistics::StatisticCategory::Mined,
+                block.id.as_u16() as i32,
+                1,
+            );
+            return true;
+        }
+        false
     }
 
     /// The id under which Pumpkin will store it's `mining_efficiency` modifier value
@@ -7887,10 +8041,7 @@ impl EntityBase for Player {
         let vehicle_uuid = self
             .living_entity
             .entity
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
+            .get_vehicle()
             .map(|vehicle| vehicle.get_entity().entity_uuid)
             .or_else(|| self.root_vehicle_uuid.load());
         if let Some(vehicle_uuid) = vehicle_uuid {

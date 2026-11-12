@@ -123,6 +123,13 @@ impl PacketWrite for String {
     }
 }
 
+impl PacketWrite for bytes::Bytes {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarUInt(self.len() as u32).write(writer)?;
+        writer.write_all(self)
+    }
+}
+
 impl PacketWrite for str {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarUInt(self.len() as u32).write(writer)?;

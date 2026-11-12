@@ -35,7 +35,7 @@ pub struct TemptGoal {
     tempt_items: TemptItems,
     can_scare: bool,
     stop_distance: f64,
-    target_player: Option<Arc<Player>>,
+    target_player: Option<Weak<Player>>,
     watched_pos: Vector3<f64>,
     watched_yaw: f32,
     watched_pitch: f32,
@@ -52,9 +52,19 @@ impl TemptGoal {
 
     #[must_use]
     pub fn with_tag(speed: f64, tag: &'static Tag, can_scare: bool) -> Self {
+        Self::with_tag_and_stop_distance(speed, tag, can_scare, DEFAULT_STOP_DISTANCE)
+    }
+
+    #[must_use]
+    pub fn with_tag_and_stop_distance(
+        speed: f64,
+        tag: &'static Tag,
+        can_scare: bool,
+        stop_distance: f64,
+    ) -> Self {
         Self {
             tempt_items: TemptItems::Tag(tag),
-            ..Self::new(speed, &[], can_scare)
+            ..Self::with_stop_distance(speed, &[], can_scare, stop_distance)
         }
     }
 
@@ -100,6 +110,15 @@ impl TemptGoal {
     #[must_use]
     pub const fn is_running(&self) -> bool {
         self.running
+    }
+
+    #[must_use]
+    pub fn target_player(&self) -> Option<Arc<Player>> {
+        self.target_player.as_ref().and_then(Weak::upgrade)
+    }
+
+    pub const fn set_can_scare(&mut self, can_scare: bool) {
+        self.can_scare = can_scare;
     }
 
     fn is_tempt_item(&self, mob: &dyn Mob, stack: &pumpkin_data::item_stack::ItemStack) -> bool {
@@ -197,8 +216,10 @@ impl Goal for TemptGoal {
             speed: if tempted { self.speed } else { 0.0 },
             links: self
                 .target_player
-                .iter()
+                .as_ref()
+                .and_then(Weak::upgrade)
                 .map(|player| player.entity_id())
+                .into_iter()
                 .collect(),
             ..GoalReach::default()
         })
@@ -209,13 +230,13 @@ impl Goal for TemptGoal {
             self.cooldown -= 1;
             return false;
         }
-        self.target_player = self.find_tempting_player(mob);
+        self.target_player = self.find_tempting_player(mob).as_ref().map(Arc::downgrade);
         self.target_player.is_some()
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         if self.can_scare {
-            let Some(player) = self.target_player.clone() else {
+            let Some(player) = self.target_player.as_ref().and_then(Weak::upgrade) else {
                 return false;
             };
             let entity = player.get_entity();
@@ -243,14 +264,14 @@ impl Goal for TemptGoal {
     }
 
     fn start(&mut self, _mob: &dyn Mob) {
-        if let Some(player) = self.target_player.clone() {
+        if let Some(player) = self.target_player.as_ref().and_then(Weak::upgrade) {
             self.watch(&player);
         }
         self.running = true;
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(player) = &self.target_player else {
+        let Some(player) = self.target_player.as_ref().and_then(Weak::upgrade) else {
             return;
         };
         let mob_entity = mob.get_mob_entity();
@@ -272,7 +293,7 @@ impl Goal for TemptGoal {
         if mob_pos.squared_distance_to_vec(&player_pos) < self.stop_distance * self.stop_distance {
             self.stop_navigation(mob);
         } else {
-            self.navigate_towards(mob, player);
+            self.navigate_towards(mob, &player);
         }
     }
 

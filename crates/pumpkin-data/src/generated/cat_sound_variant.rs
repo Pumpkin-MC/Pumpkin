@@ -191,10 +191,22 @@ impl CatSoundVariant {
         }
     }
     #[must_use]
-    pub const fn stray_ambient_sound(&self) -> crate::sound::Sound {
+    pub const fn stray_ambient_sound(&self, is_baby: bool) -> crate::sound::Sound {
         match self {
-            Self::Classic => crate::sound::Sound::EntityCatStrayAmbient,
-            Self::Royal => crate::sound::Sound::EntityCatRoyalStrayAmbient,
+            Self::Classic => {
+                if is_baby {
+                    crate::sound::Sound::EntityBabyCatStrayAmbient
+                } else {
+                    crate::sound::Sound::EntityCatStrayAmbient
+                }
+            }
+            Self::Royal => {
+                if is_baby {
+                    crate::sound::Sound::EntityBabyCatStrayAmbient
+                } else {
+                    crate::sound::Sound::EntityCatRoyalStrayAmbient
+                }
+            }
         }
     }
     #[must_use]

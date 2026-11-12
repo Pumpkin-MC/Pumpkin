@@ -72,7 +72,7 @@ impl AttributeInstance {
             modifiers: Vec::new(),
             permanent_modifiers: Vec::new(),
             cached_value: AtomicU64::new(base_value.to_bits()),
-            dirty: AtomicBool::new(false),
+            dirty: AtomicBool::new(true),
             updated: AtomicBool::new(false),
         }
     }
@@ -83,11 +83,7 @@ impl AttributeInstance {
         self.updated.store(true, Ordering::Relaxed);
     }
 
-    pub fn value(&self) -> f64 {
-        if !self.dirty.load(Ordering::Relaxed) {
-            return f64::from_bits(self.cached_value.load(Ordering::Relaxed));
-        }
-
+    fn calculate_raw_value(&self) -> f64 {
         let mut value = self.base_value;
 
         let mut add_sum = 0.0;
@@ -104,7 +100,29 @@ impl AttributeInstance {
         value += add_sum;
         value *= 1.0 + mul_base;
         value *= mul_total;
+        value
+    }
 
+    /// Computes and caches the attribute value clamped to `attribute.min_value..=attribute.max_value`
+    /// (`AttributeInstance::calculateValue` -> `Attribute::sanitizeValue`).
+    pub fn sanitized_value(&self, attribute: &Attributes) -> f64 {
+        if !self.dirty.load(Ordering::Relaxed) {
+            return f64::from_bits(self.cached_value.load(Ordering::Relaxed));
+        }
+
+        let value = attribute.sanitize_value(self.calculate_raw_value());
+        self.cached_value.store(value.to_bits(), Ordering::Relaxed);
+        self.dirty.store(false, Ordering::Relaxed);
+
+        value
+    }
+
+    pub fn value(&self) -> f64 {
+        if !self.dirty.load(Ordering::Relaxed) {
+            return f64::from_bits(self.cached_value.load(Ordering::Relaxed));
+        }
+
+        let mut value = self.calculate_raw_value();
         if value.is_nan() || value.is_infinite() {
             value = self.base_value;
         }
@@ -227,11 +245,12 @@ pub fn apply_attributes(living: &LivingEntity, packed: &[NbtTag]) {
     }
 }
 
-/// Builds the Java packet and, when any attribute has a Bedrock name, the Bedrock packet.
+/// Builds the Java packet when any attribute is client-syncable and the Bedrock packet when
+/// any has a Bedrock name.
 fn build_attribute_packets(
     living: &LivingEntity,
     attributes: Vec<Attributes>,
-) -> (JePacket, Option<BePacket>) {
+) -> (Option<JePacket>, Option<BePacket>) {
     let mut je_properties: Vec<JeProperty> = Vec::with_capacity(attributes.len());
     let mut be_attributes: Vec<BeAttribute> = Vec::with_capacity(attributes.len());
 
@@ -239,29 +258,31 @@ fn build_attribute_packets(
         let base_value = living.get_attribute_base(&attribute);
         let effective_value = living.get_attribute_value(&attribute);
 
-        // Pull modifiers for this attribute
-        let mut modifiers = Vec::new();
-        if let Some(inst) = living
-            .attributes
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&attribute.id)
-        {
-            for mod_inst in &inst.modifiers {
-                modifiers.push(JeAttrMod::new(
-                    mod_inst.id.clone(),
-                    mod_inst.amount,
-                    mod_inst.operation as i8,
-                ));
+        if attribute.client_syncable {
+            // Pull modifiers for this attribute
+            let mut modifiers = Vec::new();
+            if let Some(inst) = living
+                .attributes
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&attribute.id)
+            {
+                for mod_inst in &inst.modifiers {
+                    modifiers.push(JeAttrMod::new(
+                        mod_inst.id.clone(),
+                        mod_inst.amount,
+                        mod_inst.operation as i8,
+                    ));
+                }
             }
-        }
 
-        // Move modifiers into the property
-        je_properties.push(JeProperty::new(
-            VarInt(i32::from(attribute.id)),
-            base_value,
-            modifiers,
-        ));
+            // Move modifiers into the property
+            je_properties.push(JeProperty::new(
+                VarInt(i32::from(attribute.id)),
+                base_value,
+                modifiers,
+            ));
+        }
 
         let name = match attribute.id {
             id if id == Attributes::MOVEMENT_SPEED.id => "minecraft:movement".to_string(),
@@ -279,11 +300,11 @@ fn build_attribute_packets(
         };
 
         let be_attribute = BeAttribute {
-            min_value: 0.0,
-            max_value: 3.402_823_5E38,
+            min_value: attribute.min_value as f32,
+            max_value: attribute.max_value as f32,
             current_value: effective_value as f32,
-            default_min_value: 0.0,
-            default_max_value: 3.402_823_5E38,
+            default_min_value: attribute.min_value as f32,
+            default_max_value: attribute.max_value as f32,
             default_value: base_value as f32,
             name,
             // Bedrock receives the already-computed effective value above. Do not advertise
@@ -294,26 +315,24 @@ fn build_attribute_packets(
         be_attributes.push(be_attribute);
     }
 
-    let je_packet = JePacket::new(living.entity.entity_id.into(), je_properties);
-    if be_attributes.is_empty() {
-        return (je_packet, None);
-    }
-
-    let be_packet = BePacket {
+    let je_packet = (!je_properties.is_empty())
+        .then(|| JePacket::new(living.entity.entity_id.into(), je_properties));
+    let be_packet = (!be_attributes.is_empty()).then(|| BePacket {
         target_runtime_id: VarULong(living.entity.entity_id as u64),
         attribute_list: be_attributes,
         tick: VarULong(0),
-    };
-    (je_packet, Some(be_packet))
+    });
+    (je_packet, be_packet)
 }
 
 /// Send updates for multiple attributes in a single packet for the given living entity.
 pub fn send_attribute_updates_for_living(living: &LivingEntity, attributes: Vec<Attributes>) {
-    let (je_packet, be_packet) = build_attribute_packets(living, attributes);
     let world = living.entity.world.load();
-    match be_packet {
-        Some(be_packet) => world.broadcast_editioned(&je_packet, &be_packet),
-        None => world.broadcast_packet_all(&je_packet),
+    match build_attribute_packets(living, attributes) {
+        (None, None) => {}
+        (Some(je_packet), None) => world.broadcast_packet_all(&je_packet),
+        (None, Some(be_packet)) => world.broadcast_bedrock_all(&be_packet),
+        (Some(je_packet), Some(be_packet)) => world.broadcast_editioned(&je_packet, &be_packet),
     }
 }
 
@@ -334,7 +353,9 @@ pub fn send_attributes_to_pairing_player(living: &LivingEntity, player: &Player)
     let (je_packet, be_packet) = build_attribute_packets(living, attributes);
     match player.client.as_ref() {
         ClientPlatform::Java(client) => {
-            if let Ok(data) = client.serialize_packet(&je_packet) {
+            if let Some(je_packet) = je_packet
+                && let Ok(data) = client.serialize_packet(&je_packet)
+            {
                 client.try_enqueue_packet(data);
             }
         }
@@ -512,5 +533,28 @@ mod tests {
             operation: ModifierOperation::MultiplyTotal,
         });
         assert!((instance.value() - 33.66).abs() < 1e-9);
+    }
+
+    #[test]
+    fn sanitized_value_clamps_to_ranged_attribute_bounds() {
+        // ARMOR has bounds 0.0..=30.0
+        let mut armor = AttributeInstance::new(10.0);
+        armor.add_or_replace_modifier(Modifier {
+            id: "overflow".to_string(),
+            amount: 50.0,
+            operation: ModifierOperation::Add,
+        });
+        assert!((armor.sanitized_value(&Attributes::ARMOR) - 30.0).abs() < f64::EPSILON);
+
+        armor.add_or_replace_modifier(Modifier {
+            id: "underflow".to_string(),
+            amount: -100.0,
+            operation: ModifierOperation::Add,
+        });
+        assert!((armor.sanitized_value(&Attributes::ARMOR) - 0.0).abs() < f64::EPSILON);
+
+        // NaN sanitizes to min_value (RangedAttribute::sanitizeValue)
+        let nan_instance = AttributeInstance::new(f64::NAN);
+        assert!((nan_instance.sanitized_value(&Attributes::MAX_HEALTH) - 1.0).abs() < f64::EPSILON);
     }
 }

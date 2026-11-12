@@ -14,7 +14,7 @@ use pumpkin_data::{
     damage::DamageType,
     data_component_impl::EquipmentSlot,
     enchantment_provider::EnchantmentProvider,
-    entity::{EntityStatus, EntityType},
+    entity::EntityType,
     game_event::GameEvent,
     item::Item,
     sound::{Sound, SoundCategory},
@@ -23,9 +23,8 @@ use pumpkin_data::{
     world::WorldEvent,
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::block::BlockStateCodec;
 use rand::RngExt;
 
@@ -116,7 +115,7 @@ impl EndermanEntity {
             let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(Arc::downgrade(&mob_arc))));
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(
                 7,
@@ -127,10 +126,10 @@ impl EndermanEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
-            goal_selector.add_goal(10, Box::new(PlaceBlockGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(11, Box::new(PickUpBlockGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(10, Box::new(PlaceBlockGoal::new(Arc::downgrade(&mob_arc))));
+            goal_selector.add_goal(11, Box::new(PickUpBlockGoal::new(Arc::downgrade(&mob_arc))));
 
-            target_selector.add_goal(1, Box::new(TeleportTowardsPlayerGoal::new(mob_arc.clone())));
+            target_selector.add_goal(1, Box::new(TeleportTowardsPlayerGoal::new(&mob_arc)));
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
             hunting::apply(target_selector, &mob_arc.mob_entity, ENDERMAN_HUNTS);
             target_selector.add_goal(4, ResetUniversalAngerGoal::new(false));
@@ -194,82 +193,15 @@ impl EndermanEntity {
         let origin_block_pos = entity.block_pos.load();
         let world = entity.world.load();
 
-        let (x, z) = world
-            .worldborder
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clamp_to_bound(x, z);
-        let block_x = x.floor() as i32;
-        let block_z = z.floor() as i32;
-        let min_y = world.dimension.min_y;
-        let mut block_y = y.floor() as i32;
-        let column_pos = BlockPos::new(
-            block_x,
-            block_y.clamp(min_y, min_y + world.dimension.height - 1),
-            block_z,
-        );
-        if !world.is_loaded(&column_pos) {
+        if !self.mob_entity.living_entity.random_teleport(
+            self,
+            Vector3::new(x, y, z),
+            true,
+            |block| block.has_tag(&tag::Block::MINECRAFT_ENDERMAN_DOES_NOT_TELEPORT_TO),
+        ) {
             return false;
         }
-
-        // Walks down to the first block an entity can stand on, keeping the fractional Y.
-        let mut target_y = y;
-        let ground_pos = loop {
-            if block_y <= min_y {
-                return false;
-            }
-            block_y -= 1;
-            let pos = BlockPos::new(block_x, block_y, block_z);
-            if world
-                .get_block(&pos)
-                .has_tag(&tag::Block::MINECRAFT_ENTITIES_CAN_TELEPORT_TO)
-            {
-                break pos;
-            }
-            target_y -= 1.0;
-        };
-
-        let is_invalid = |pos: &BlockPos| {
-            world
-                .get_block(pos)
-                .has_tag(&tag::Block::MINECRAFT_ENDERMAN_DOES_NOT_TELEPORT_TO)
-        };
-        if is_invalid(&ground_pos) {
-            return false;
-        }
-        let bb = BoundingBox::new_from_pos(x, target_y, z, &entity.entity_dimension.load());
-        if !world.is_space_empty(bb)
-            || world.contains_any_liquid(bb)
-            || BlockPos::iterate(bb.min_block_pos(), bb.max_block_pos()).any(|pos| is_invalid(&pos))
-        {
-            return false;
-        }
-        if world
-            .get_fluid(&ground_pos)
-            .has_tag(&tag::Fluid::MINECRAFT_WATER)
-        {
-            return false;
-        }
-
-        let new_pos = Vector3::new(x, target_y, z);
-
-        if let Some(server) = world.server.upgrade() {
-            let mut event =
-                crate::plugin::api::events::entity::entity_teleport::EntityTeleportEvent::new(
-                    entity.entity_id,
-                    origin,
-                    new_pos,
-                );
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return false;
-            }
-        }
-
-        entity.teleport(new_pos, None, None, &world);
-        world.send_entity_status(entity, EntityStatus::Teleport, ActorEventID::None);
-        self.mob_entity.steered().navigator().stop();
-
+        let new_pos = entity.pos.load();
         self.play_teleport_effects(&world, origin, origin_block_pos, new_pos);
         true
     }
@@ -318,6 +250,10 @@ impl EndermanEntity {
         }
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "matches Mob::apply_mob_target signature"
+    )]
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let is_some = target.is_some();
         let mut mob_target = self
@@ -328,6 +264,7 @@ impl EndermanEntity {
         let target_id = target.as_ref().map(|target| target.get_entity().entity_id);
         let current_target_id = mob_target
             .as_ref()
+            .and_then(Weak::upgrade)
             .map(|target| target.get_entity().entity_id);
         // `set_mob_target` refreshes an unchanged target, which must not restart the timer.
         if current_target_id != target_id {
@@ -343,7 +280,7 @@ impl EndermanEntity {
             self.target_change_time
                 .store(target_change_time, Ordering::Relaxed);
         }
-        *mob_target = target;
+        *mob_target = target.as_ref().map(Arc::downgrade);
         drop(mob_target);
 
         if is_some {
@@ -595,6 +532,16 @@ impl Mob for EndermanEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn can_randomly_teleport_to(&self, x: f64, y: f64, z: f64) -> bool {
+        let below = BlockPos::floored(x, y, z).down();
+        !self
+            .get_entity()
+            .world
+            .load()
+            .get_fluid(&below)
+            .has_tag(&tag::Fluid::MINECRAFT_WATER)
     }
 
     fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
