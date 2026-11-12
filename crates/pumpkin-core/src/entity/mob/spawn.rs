@@ -13,7 +13,7 @@ use crate::entity::mob::MobEntity;
 use crate::entity::passive::fox::FoxVariant;
 use crate::world::World;
 
-const RANDOM_SPAWN_BONUS_ID: &str = "minecraft:random_spawn_bonus";
+pub(crate) const RANDOM_SPAWN_BONUS_ID: &str = "minecraft:random_spawn_bonus";
 
 /// State shared by every mob of one spawn group (vanilla `SpawnGroupData`).
 pub enum SpawnGroupData {
@@ -47,6 +47,10 @@ pub enum SpawnGroupData {
     Rabbit {
         variant: RabbitVariant,
         group_size: u32,
+    },
+    Zombie {
+        is_baby: bool,
+        can_spawn_jockey: bool,
     },
 }
 
@@ -160,8 +164,8 @@ pub fn finalize_spawn(
 }
 
 impl MobEntity {
-    /// Baby state kept only as a negative age and the shared baby flag (hoglins, zoglins and
-    /// zombified piglins, which are not `AgeableMob`s here).
+    /// Baby state kept only as a negative age and the shared baby flag (zombified piglins,
+    /// which never grow up).
     pub fn set_baby_by_age(&self) {
         let entity = &self.living_entity.entity;
         entity

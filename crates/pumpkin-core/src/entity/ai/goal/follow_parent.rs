@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
+use std::sync::{Arc, Weak};
 
 use super::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::ai::target_match::{SearchArea, TargetMatch};
@@ -13,7 +13,7 @@ const SEARCH_Y_RANGE: f64 = 4.0;
 
 pub struct FollowParentGoal {
     speed: f64,
-    parent: Option<Arc<dyn EntityBase>>,
+    parent: Option<Weak<dyn EntityBase>>,
     delay: i32,
 }
 
@@ -55,8 +55,10 @@ impl Goal for FollowParentGoal {
             speed: if baby { self.speed } else { 0.0 },
             links: self
                 .parent
-                .iter()
+                .as_ref()
+                .and_then(Weak::upgrade)
                 .map(|parent| parent.get_entity().entity_id)
+                .into_iter()
                 .collect(),
             ..GoalReach::default()
         })
@@ -67,7 +69,7 @@ impl Goal for FollowParentGoal {
         if age >= 0 {
             return false;
         }
-        self.parent = Self::find_parent(mob);
+        self.parent = Self::find_parent(mob).as_ref().map(Arc::downgrade);
         self.parent.is_some()
     }
 
@@ -76,7 +78,7 @@ impl Goal for FollowParentGoal {
         if age >= 0 {
             return false;
         }
-        let Some(parent) = &self.parent else {
+        let Some(parent) = self.parent.as_ref().and_then(Weak::upgrade) else {
             return false;
         };
         let parent_entity = parent.get_entity();
@@ -99,7 +101,7 @@ impl Goal for FollowParentGoal {
             return;
         }
         self.delay = to_goal_ticks(10);
-        if let Some(parent) = &self.parent {
+        if let Some(parent) = self.parent.as_ref().and_then(Weak::upgrade) {
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
             let parent_pos = parent.get_entity().pos.load();
             let steered = mob.get_mob_entity().steered();

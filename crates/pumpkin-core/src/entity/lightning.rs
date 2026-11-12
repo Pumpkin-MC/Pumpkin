@@ -1,6 +1,6 @@
 use rustc_hash::FxHashSet;
 use std::sync::{
-    Arc, Mutex,
+    Arc, Mutex, Weak,
     atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering},
 };
 
@@ -26,7 +26,7 @@ pub struct LightningBoltEntity {
     seed: AtomicI64,
     flashes: AtomicI32,
     visual_only: AtomicBool,
-    cause: Mutex<Option<Arc<Player>>>,
+    cause: Mutex<Option<Weak<Player>>>,
     hit_entities: Mutex<FxHashSet<i32>>,
     blocks_set_on_fire: AtomicI32,
 }
@@ -56,14 +56,17 @@ impl LightningBoltEntity {
         self.visual_only.load(Ordering::Relaxed)
     }
 
-    pub fn set_cause(&self, cause: Option<Arc<Player>>) {
+    pub fn set_cause(&self, cause: Option<&Arc<Player>>) {
         if let Ok(mut c) = self.cause.lock() {
-            *c = cause;
+            *c = cause.map(Arc::downgrade);
         }
     }
 
     pub fn get_cause(&self) -> Option<Arc<Player>> {
-        self.cause.lock().ok().and_then(|c| c.clone())
+        self.cause
+            .lock()
+            .ok()
+            .and_then(|c| c.as_ref().and_then(Weak::upgrade))
     }
 
     pub fn get_blocks_set_on_fire(&self) -> i32 {

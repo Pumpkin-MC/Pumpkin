@@ -108,6 +108,7 @@ impl EntityBase for LeashKnotEntity {
                     .and_then(|guard| {
                         guard
                             .as_ref()
+                            .and_then(std::sync::Weak::upgrade)
                             .map(|holder| holder.get_entity().entity_id == knot_id)
                     })
                     .unwrap_or(false);
@@ -147,7 +148,7 @@ impl EntityBase for LeashKnotEntity {
         for entity_base in &entities {
             let ent = entity_base.get_entity();
             if let Ok(guard) = ent.leashed_to.try_lock()
-                && let Some(holder) = guard.as_ref()
+                && let Some(holder) = guard.as_ref().and_then(std::sync::Weak::upgrade)
                 && holder.get_entity().entity_id == player_id
             {
                 player_leashed_mobs.push(ent);
@@ -166,7 +167,7 @@ impl EntityBase for LeashKnotEntity {
             for entity_base in &entities {
                 let ent = entity_base.get_entity();
                 if let Ok(guard) = ent.leashed_to.try_lock()
-                    && let Some(holder) = guard.as_ref()
+                    && let Some(holder) = guard.as_ref().and_then(std::sync::Weak::upgrade)
                     && holder.get_entity().entity_id == knot_id
                 {
                     ent.leash_to(player.clone() as Arc<dyn EntityBase>);

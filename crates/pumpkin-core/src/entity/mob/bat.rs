@@ -382,7 +382,7 @@ mod tests {
         );
         bat.mob_entity
             .living_entity
-            .fall(bat.as_ref(), -10.0, false, false);
+            .fall(bat.as_ref(), -10.0, false);
         let fall_distance = bat.mob_entity.living_entity.fall_distance.load();
         world.level.shutdown().await;
         assert_eq!(normal, 0);

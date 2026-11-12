@@ -1,7 +1,7 @@
 //! Vanilla `Fox` inner goals.
 
-use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
+use std::sync::{Arc, Weak};
 
 use pumpkin_data::Block;
 use pumpkin_data::entity::EntityType;
@@ -171,8 +171,8 @@ fn is_path_clear(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
 pub struct DefendTrustedTargetGoal {
     track_target_goal: TrackTargetGoal,
     target_predicate: TargetPredicate,
-    trusted: Option<Arc<dyn EntityBase>>,
-    attacker: Option<Arc<dyn EntityBase>>,
+    trusted: Option<Weak<dyn EntityBase>>,
+    attacker: Option<Weak<dyn EntityBase>>,
     timestamp: i32,
 }
 
@@ -217,8 +217,8 @@ impl Goal for DefendTrustedTargetGoal {
         };
         let timestamp = living.get_last_hurt_by_mob_timestamp();
         let attacker = living.get_last_hurt_by_mob();
-        self.trusted = Some(trusted.clone());
-        self.attacker.clone_from(&attacker);
+        self.trusted = Some(Arc::downgrade(&trusted));
+        self.attacker = attacker.as_ref().map(Arc::downgrade);
         if timestamp == self.timestamp {
             return false;
         }
@@ -242,10 +242,12 @@ impl Goal for DefendTrustedTargetGoal {
     fn start(&mut self, mob: &dyn Mob) {
         self.track_target_goal.start_targeting(
             mob,
-            self.attacker.clone(),
+            self.attacker.as_ref().and_then(Weak::upgrade),
             TargetReason::TargetAttackedOwner,
         );
-        if let Some(living) = self.trusted.as_ref().and_then(|t| t.get_living_entity()) {
+        if let Some(trusted) = self.trusted.as_ref().and_then(Weak::upgrade)
+            && let Some(living) = trusted.get_living_entity()
+        {
             self.timestamp = living.get_last_hurt_by_mob_timestamp();
         }
         if let Some(fox) = as_fox(mob) {

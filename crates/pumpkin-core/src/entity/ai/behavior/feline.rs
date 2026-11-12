@@ -18,10 +18,13 @@ use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::mob::Mob;
 
 pub const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
+pub const TEMPT_SPEED: f64 = 0.6;
+pub const SPRINT_SPEED: f64 = 1.33;
+const STROLL_PROBABILITY: f32 = 1.000_000_1E-5;
 
 #[must_use]
 pub fn tempt_goal() -> Box<TemptGoal> {
-    Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true))
+    Box::new(TemptGoal::new(TEMPT_SPEED, TEMPT_ITEMS, true))
 }
 
 /// Shy of players while `gate` holds: untamed cats, wary ocelots.
@@ -32,7 +35,7 @@ pub const fn flee_players(priority: u8, gate: MobFilter) -> Flee {
         TargetMatch::Type(&EntityType::PLAYER),
         16.0,
         0.8,
-        1.33,
+        SPRINT_SPEED,
     )
     .as_long_as(gate)
 }
@@ -42,7 +45,13 @@ pub fn apply_tail(goals: &GoalSelector, mob: Weak<dyn Mob>, first: u8) {
     goals.add_goal(first, Box::new(LeapAtTargetGoal::new(0.3)));
     goals.add_goal(first + 1, Box::new(OcelotAttackGoal::new()));
     goals.add_goal(first + 2, BreedGoal::new(0.8));
-    goals.add_goal(first + 3, Box::new(WanderAroundGoal::new(0.8)));
+    goals.add_goal(
+        first + 3,
+        Box::new(WanderAroundGoal::water_avoiding_with_probability(
+            0.8,
+            STROLL_PROBABILITY,
+        )),
+    );
     goals.add_goal(
         first + 4,
         LookAtEntityGoal::with_default(mob, &EntityType::PLAYER, 10.0),
