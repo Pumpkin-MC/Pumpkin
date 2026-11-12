@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::{
-    ChestLikeProperties, ChestType, CopperBulbLikeProperties, CopperGolemPose,
-    CopperGolemStatueLikeProperties, DoubleBlockHalf, EnumVariants, HorizontalFacing,
-    IronChainLikeProperties, LanternLikeProperties, LightningRodLikeProperties,
-    MangroveRootsLikeProperties, OakDoorLikeProperties, OakFenceLikeProperties,
-    OakTrapdoorLikeProperties, WhiteWoolSlabLikeProperties, WhiteWoolStairsLikeProperties,
+    ChestLikeProperties, ChestType, CopperGolemPose, CopperGolemStatueLikeProperties,
+    DoubleBlockHalf, EnumVariants, HorizontalFacing, MangroveRootsLikeProperties,
+    OakDoorLikeProperties,
 };
+use pumpkin_data::block_transformer::{get_next_weathering, get_previous_weathering};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
@@ -149,163 +148,44 @@ pub trait WeatheringCopper: ChangeOverTimeBlock<WeatherState> {
     }
 }
 
-/// All 14 copper families with their 4 weathering stages (Unaffected, Exposed, Weathered, Oxidized).
-const COPPER_PROGRESSIONS: &[(&Block, &Block, &Block, &Block)] = &[
-    (
-        &Block::COPPER_BLOCK,
-        &Block::EXPOSED_COPPER,
-        &Block::WEATHERED_COPPER,
-        &Block::OXIDIZED_COPPER,
-    ),
-    (
-        &Block::CUT_COPPER,
-        &Block::EXPOSED_CUT_COPPER,
-        &Block::WEATHERED_CUT_COPPER,
-        &Block::OXIDIZED_CUT_COPPER,
-    ),
-    (
-        &Block::CHISELED_COPPER,
-        &Block::EXPOSED_CHISELED_COPPER,
-        &Block::WEATHERED_CHISELED_COPPER,
-        &Block::OXIDIZED_CHISELED_COPPER,
-    ),
-    (
-        &Block::CUT_COPPER_SLAB,
-        &Block::EXPOSED_CUT_COPPER_SLAB,
-        &Block::WEATHERED_CUT_COPPER_SLAB,
-        &Block::OXIDIZED_CUT_COPPER_SLAB,
-    ),
-    (
-        &Block::CUT_COPPER_STAIRS,
-        &Block::EXPOSED_CUT_COPPER_STAIRS,
-        &Block::WEATHERED_CUT_COPPER_STAIRS,
-        &Block::OXIDIZED_CUT_COPPER_STAIRS,
-    ),
-    (
-        &Block::COPPER_DOOR,
-        &Block::EXPOSED_COPPER_DOOR,
-        &Block::WEATHERED_COPPER_DOOR,
-        &Block::OXIDIZED_COPPER_DOOR,
-    ),
-    (
-        &Block::COPPER_TRAPDOOR,
-        &Block::EXPOSED_COPPER_TRAPDOOR,
-        &Block::WEATHERED_COPPER_TRAPDOOR,
-        &Block::OXIDIZED_COPPER_TRAPDOOR,
-    ),
-    (
-        &Block::COPPER_GRATE,
-        &Block::EXPOSED_COPPER_GRATE,
-        &Block::WEATHERED_COPPER_GRATE,
-        &Block::OXIDIZED_COPPER_GRATE,
-    ),
-    (
-        &Block::COPPER_BULB,
-        &Block::EXPOSED_COPPER_BULB,
-        &Block::WEATHERED_COPPER_BULB,
-        &Block::OXIDIZED_COPPER_BULB,
-    ),
-    (
-        &Block::COPPER_LANTERN,
-        &Block::EXPOSED_COPPER_LANTERN,
-        &Block::WEATHERED_COPPER_LANTERN,
-        &Block::OXIDIZED_COPPER_LANTERN,
-    ),
-    (
-        &Block::COPPER_CHEST,
-        &Block::EXPOSED_COPPER_CHEST,
-        &Block::WEATHERED_COPPER_CHEST,
-        &Block::OXIDIZED_COPPER_CHEST,
-    ),
-    (
-        &Block::COPPER_GOLEM_STATUE,
-        &Block::EXPOSED_COPPER_GOLEM_STATUE,
-        &Block::WEATHERED_COPPER_GOLEM_STATUE,
-        &Block::OXIDIZED_COPPER_GOLEM_STATUE,
-    ),
-    (
-        &Block::COPPER_BARS,
-        &Block::EXPOSED_COPPER_BARS,
-        &Block::WEATHERED_COPPER_BARS,
-        &Block::OXIDIZED_COPPER_BARS,
-    ),
-    (
-        &Block::COPPER_CHAIN,
-        &Block::EXPOSED_COPPER_CHAIN,
-        &Block::WEATHERED_COPPER_CHAIN,
-        &Block::OXIDIZED_COPPER_CHAIN,
-    ),
-    (
-        &Block::LIGHTNING_ROD,
-        &Block::EXPOSED_LIGHTNING_ROD,
-        &Block::WEATHERED_LIGHTNING_ROD,
-        &Block::OXIDIZED_LIGHTNING_ROD,
-    ),
-];
-
 /// Returns the next oxidized block in sequence, or `None` if already oxidized or not a weathering copper block.
 #[must_use]
 pub fn get_next(block: &Block) -> Option<&'static Block> {
-    for &(unaffected, exposed, weathered, oxidized) in COPPER_PROGRESSIONS {
-        if block == unaffected {
-            return Some(exposed);
-        }
-        if block == exposed {
-            return Some(weathered);
-        }
-        if block == weathered {
-            return Some(oxidized);
-        }
-    }
-    None
+    get_next_weathering(block.id).map(BlockId::to_block)
 }
 
 /// Returns the previous deoxidized block in sequence, or `None` if unaffected or not a weathering copper block.
 #[must_use]
 pub fn get_previous(block: &Block) -> Option<&'static Block> {
-    for &(unaffected, exposed, weathered, oxidized) in COPPER_PROGRESSIONS {
-        if block == oxidized {
-            return Some(weathered);
-        }
-        if block == weathered {
-            return Some(exposed);
-        }
-        if block == exposed {
-            return Some(unaffected);
-        }
-    }
-    None
+    get_previous_weathering(block.id).map(BlockId::to_block)
 }
 
 /// Returns the first unaffected block in this copper family, or `None` if not a weathering copper block.
 #[must_use]
 pub fn get_first(block: &Block) -> Option<&'static Block> {
-    for &(unaffected, exposed, weathered, oxidized) in COPPER_PROGRESSIONS {
-        if block == unaffected || block == exposed || block == weathered || block == oxidized {
-            return Some(unaffected);
-        }
+    if get_previous(block).is_none() && get_next(block).is_none() {
+        return None;
     }
-    None
+    let mut first = Block::from_id(block.id);
+    while let Some(prev) = get_previous(first) {
+        first = prev;
+    }
+    Some(first)
 }
 
 /// Returns the `WeatherState` of the given block, or `None` if it is not an unwaxed weathering copper block.
 #[must_use]
 pub fn get_weather_state(block: &Block) -> Option<WeatherState> {
-    for &(unaffected, exposed, weathered, oxidized) in COPPER_PROGRESSIONS {
-        if block == unaffected {
-            return Some(WeatherState::Unaffected);
-        }
-        if block == exposed {
-            return Some(WeatherState::Exposed);
-        }
-        if block == weathered {
-            return Some(WeatherState::Weathered);
-        }
-        if block == oxidized {
-            return Some(WeatherState::Oxidized);
-        }
+    if get_previous(block).is_none() && get_next(block).is_none() {
+        return None;
     }
-    None
+    let mut steps = 0usize;
+    let mut cur = block;
+    while let Some(prev) = get_previous(cur) {
+        cur = prev;
+        steps += 1;
+    }
+    WeatherState::from_ordinal(steps)
 }
 
 /// Returns true if the block can weather further (has a next state).
@@ -325,141 +205,12 @@ pub const fn get_chance_modifier(state: WeatherState) -> f32 {
 
 /// Converts a block state ID of `from_block` to the corresponding state ID of `to_block`, preserving all block properties.
 #[must_use]
-#[expect(clippy::too_many_lines)]
 pub fn with_properties_of(
     from_block: &Block,
     from_state_id: BlockStateId,
     to_block: &Block,
 ) -> BlockStateId {
-    // 1. Full blocks without properties
-    if from_block == &Block::COPPER_BLOCK
-        || from_block == &Block::EXPOSED_COPPER
-        || from_block == &Block::WEATHERED_COPPER
-        || from_block == &Block::OXIDIZED_COPPER
-        || from_block == &Block::CUT_COPPER
-        || from_block == &Block::EXPOSED_CUT_COPPER
-        || from_block == &Block::WEATHERED_CUT_COPPER
-        || from_block == &Block::OXIDIZED_CUT_COPPER
-        || from_block == &Block::CHISELED_COPPER
-        || from_block == &Block::EXPOSED_CHISELED_COPPER
-        || from_block == &Block::WEATHERED_CHISELED_COPPER
-        || from_block == &Block::OXIDIZED_CHISELED_COPPER
-    {
-        return to_block.default_state.id;
-    }
-
-    // 2. Stairs
-    if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_STAIRS) {
-        let props = WhiteWoolStairsLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 3. Slabs
-    if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SLABS) {
-        let props = WhiteWoolSlabLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 4. Doors
-    if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_DOORS) {
-        let props = OakDoorLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 5. Trapdoors
-    if from_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_TRAPDOORS) {
-        let props = OakTrapdoorLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 6. Copper Bulbs
-    if from_block == &Block::COPPER_BULB
-        || from_block == &Block::EXPOSED_COPPER_BULB
-        || from_block == &Block::WEATHERED_COPPER_BULB
-        || from_block == &Block::OXIDIZED_COPPER_BULB
-    {
-        let props = CopperBulbLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 7. Copper Grates
-    if from_block == &Block::COPPER_GRATE
-        || from_block == &Block::EXPOSED_COPPER_GRATE
-        || from_block == &Block::WEATHERED_COPPER_GRATE
-        || from_block == &Block::OXIDIZED_COPPER_GRATE
-    {
-        let props = MangroveRootsLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 8. Copper Lanterns
-    if from_block == &Block::COPPER_LANTERN
-        || from_block == &Block::EXPOSED_COPPER_LANTERN
-        || from_block == &Block::WEATHERED_COPPER_LANTERN
-        || from_block == &Block::OXIDIZED_COPPER_LANTERN
-    {
-        let props = LanternLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 9. Copper Chests
-    if from_block == &Block::COPPER_CHEST
-        || from_block == &Block::EXPOSED_COPPER_CHEST
-        || from_block == &Block::WEATHERED_COPPER_CHEST
-        || from_block == &Block::OXIDIZED_COPPER_CHEST
-    {
-        let props = ChestLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 10. Copper Golem Statues
-    if from_block == &Block::COPPER_GOLEM_STATUE
-        || from_block == &Block::EXPOSED_COPPER_GOLEM_STATUE
-        || from_block == &Block::WEATHERED_COPPER_GOLEM_STATUE
-        || from_block == &Block::OXIDIZED_COPPER_GOLEM_STATUE
-    {
-        let props = CopperGolemStatueLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 11. Copper Bars
-    if from_block == &Block::COPPER_BARS
-        || from_block == &Block::EXPOSED_COPPER_BARS
-        || from_block == &Block::WEATHERED_COPPER_BARS
-        || from_block == &Block::OXIDIZED_COPPER_BARS
-    {
-        let props = OakFenceLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 12. Copper Chains
-    if from_block == &Block::COPPER_CHAIN
-        || from_block == &Block::EXPOSED_COPPER_CHAIN
-        || from_block == &Block::WEATHERED_COPPER_CHAIN
-        || from_block == &Block::OXIDIZED_COPPER_CHAIN
-    {
-        let props = IronChainLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // 13. Lightning Rods
-    if from_block == &Block::LIGHTNING_ROD
-        || from_block == &Block::EXPOSED_LIGHTNING_ROD
-        || from_block == &Block::WEATHERED_LIGHTNING_ROD
-        || from_block == &Block::OXIDIZED_LIGHTNING_ROD
-    {
-        let props = LightningRodLikeProperties::from_state_id(from_state_id);
-        return props.to_state_id(to_block);
-    }
-
-    // Fallback: use relative state index
-    let offset = from_state_id
-        .as_u16()
-        .saturating_sub(from_block.default_state.id.as_u16()) as usize;
-    to_block
-        .states
-        .get(offset)
-        .map_or(to_block.default_state.id, |s| s.id)
+    to_block.with_properties_of(from_block, from_state_id)
 }
 
 /// Returns the next block state for a weathering copper block, preserving all properties.
@@ -707,6 +458,13 @@ impl BlockBehaviour for WeatheringCopperChainBlock {
         ChainBlock.on_place(args)
     }
 
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        ChainBlock.get_state_for_neighbor_update(args)
+    }
+
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         change_over_time(args.world, args.position, args.block);
     }
@@ -759,6 +517,13 @@ impl BlockMetadata for WeatheringCopperStairBlock {
 impl BlockBehaviour for WeatheringCopperStairBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         StairBlock.on_place(args)
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        StairBlock.get_state_for_neighbor_update(args)
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
@@ -832,6 +597,13 @@ impl BlockBehaviour for WeatheringCopperTrapDoorBlock {
         TrapDoorBlock.on_place(args)
     }
 
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        TrapDoorBlock.get_state_for_neighbor_update(args)
+    }
+
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         TrapDoorBlock.normal_use(args)
     }
@@ -892,6 +664,13 @@ impl BlockMetadata for WeatheringCopperSlabBlock {
 impl BlockBehaviour for WeatheringCopperSlabBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         SlabBlock.on_place(args)
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        SlabBlock.get_state_for_neighbor_update(args)
     }
 
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
@@ -1125,7 +904,7 @@ impl CopperGolemStatueBlock {
             SoundCategory::Blocks,
             &pos.to_f64(),
         );
-        world.update_neighbors(pos, None);
+        world.update_neighbour_for_output_signal(pos, block);
     }
 }
 
@@ -1224,8 +1003,7 @@ impl BlockBehaviour for CopperGolemStatueBlock {
         if args.item_stack.item.id == Item::HONEYCOMB.id {
             return BlockActionResult::Pass;
         }
-        Self::update_pose(args.world, args.block, args.position);
-        BlockActionResult::Success
+        BlockActionResult::PassToDefaultBlockAction
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {

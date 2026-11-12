@@ -3,23 +3,24 @@ use std::sync::Arc;
 use crate::block::entities::bed::BedBlockEntity;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::{Block as BlockTag, Taggable};
 use pumpkin_data::translation;
-use pumpkin_data::{Block, BlockState, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::OnLandedUponArgs;
-use crate::block::UpdateEntityMovementAfterFallOnArgs;
-use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
-    PathComputationType, PlacedArgs,
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+    OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs,
 };
+use crate::entity::dismount_helper;
 use crate::entity::{Entity, EntityBase, player::Player};
 use crate::world::World;
+use pumpkin_data::HorizontalFacingExt;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
 
@@ -77,17 +78,7 @@ impl BlockBehaviour for BedBlock {
                     .get_block_state(&args.position.offset(facing.to_offset()))
                     .replaceable();
         }
-        false
-    }
-
-    fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance * 0.5, 1.0);
-        }
-    }
-
-    fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
-        bounce_entity_after_fall(args.entity, 0.66);
+        true
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
@@ -171,6 +162,30 @@ impl BlockBehaviour for BedBlock {
                 );
             }
         }
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let mut bed_props = BedProperties::from_state_id(args.state_id);
+        let neighbor_dir = if bed_props.part == BedPart::Foot {
+            bed_props.facing.to_block_direction()
+        } else {
+            bed_props.facing.opposite().to_block_direction()
+        };
+        if args.direction == neighbor_dir {
+            let neighbor_block = args.neighbor_state_id.to_block();
+            if neighbor_block == args.block {
+                let neighbor_props = BedProperties::from_state_id(args.neighbor_state_id);
+                if neighbor_props.part != bed_props.part {
+                    bed_props.occupied = neighbor_props.occupied;
+                    return bed_props.to_state_id(args.block);
+                }
+            }
+            return Block::AIR.default_state.id;
+        }
+        args.state_id
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
@@ -307,7 +322,11 @@ impl BedBlock {
 
         // Make sure there are no monsters nearby
         for entity in world.entities.load().iter() {
-            if !entity_prevents_sleep(entity.get_entity()) {
+            if !entity_prevents_sleep(entity.get_entity())
+                || entity
+                    .get_mob()
+                    .is_some_and(|mob| !mob.is_preventing_player_rest(player.as_ref()))
+            {
                 continue;
             }
 
@@ -354,6 +373,30 @@ impl BedBlock {
 }
 
 impl BedBlock {
+    pub fn find_stand_up_position(
+        entity_type: &'static EntityType,
+        world: &World,
+        pos: &BlockPos,
+        forward: BlockDirection,
+        yaw: f32,
+    ) -> Option<Vector3<f64>> {
+        let right = forward.rotate_clockwise();
+        let side = if is_facing_angle(right, yaw) {
+            right.opposite()
+        } else {
+            right
+        };
+
+        if is_bunk_bed(world, pos) {
+            find_bunk_bed_stand_up_position(entity_type, world, pos, forward, side)
+        } else {
+            let offsets = bed_stand_up_offsets(forward, side);
+            find_stand_up_position_at_offset(entity_type, world, pos, &offsets, true).or_else(
+                || find_stand_up_position_at_offset(entity_type, world, pos, &offsets, false),
+            )
+        }
+    }
+
     pub fn set_occupied(
         occupied: bool,
         world: &Arc<World>,
@@ -387,6 +430,136 @@ impl BedBlock {
     }
 }
 
+fn find_bunk_bed_stand_up_position(
+    entity_type: &'static EntityType,
+    world: &World,
+    pos: &BlockPos,
+    forward: BlockDirection,
+    side: BlockDirection,
+) -> Option<Vector3<f64>> {
+    let offsets = bed_surround_stand_up_offsets(forward, side);
+    if let Some(position) =
+        find_stand_up_position_at_offset(entity_type, world, pos, &offsets, true)
+    {
+        return Some(position);
+    }
+
+    let below = pos.down();
+    if let Some(position) =
+        find_stand_up_position_at_offset(entity_type, world, &below, &offsets, true)
+    {
+        return Some(position);
+    }
+
+    let above_offsets = bed_above_stand_up_offsets(forward);
+    if let Some(position) =
+        find_stand_up_position_at_offset(entity_type, world, pos, &above_offsets, true)
+    {
+        return Some(position);
+    }
+
+    if let Some(position) =
+        find_stand_up_position_at_offset(entity_type, world, pos, &offsets, false)
+    {
+        return Some(position);
+    }
+
+    find_stand_up_position_at_offset(entity_type, world, &below, &offsets, false).or_else(|| {
+        find_stand_up_position_at_offset(entity_type, world, pos, &above_offsets, false)
+    })
+}
+
+fn find_stand_up_position_at_offset(
+    entity_type: &'static EntityType,
+    world: &World,
+    pos: &BlockPos,
+    offsets: &[(i32, i32)],
+    check_dangerous: bool,
+) -> Option<Vector3<f64>> {
+    offsets.iter().find_map(|(dx, dz)| {
+        let check_pos = BlockPos(Vector3::new(pos.0.x + dx, pos.0.y, pos.0.z + dz));
+        dismount_helper::find_safe_dismount_location(
+            entity_type,
+            world,
+            &check_pos,
+            check_dangerous,
+        )
+    })
+}
+
+fn is_bunk_bed(world: &World, pos: &BlockPos) -> bool {
+    world
+        .get_block(&pos.down())
+        .has_tag(&BlockTag::MINECRAFT_BEDS)
+}
+
+fn is_facing_angle(direction: BlockDirection, yaw: f32) -> bool {
+    let radians = yaw.to_radians();
+    let dx = -radians.sin();
+    let dz = radians.cos();
+    let offset = direction.to_offset();
+    offset.x as f32 * dx + offset.z as f32 * dz > 0.0
+}
+
+fn bed_stand_up_offsets(forward: BlockDirection, side: BlockDirection) -> Vec<(i32, i32)> {
+    let mut offsets = bed_surround_stand_up_offsets(forward, side);
+    offsets.extend(bed_above_stand_up_offsets(forward));
+    offsets
+}
+
+fn bed_surround_stand_up_offsets(forward: BlockDirection, side: BlockDirection) -> Vec<(i32, i32)> {
+    let (fx, fz) = step(forward);
+    let (sx, sz) = step(side);
+    vec![
+        (sx, sz),
+        (sx - fx, sz - fz),
+        (sx - fx * 2, sz - fz * 2),
+        (-fx * 2, -fz * 2),
+        (-sx - fx * 2, -sz - fz * 2),
+        (-sx - fx, -sz - fz),
+        (-sx, -sz),
+        (-sx + fx, -sz + fz),
+        (fx, fz),
+        (sx + fx, sz + fz),
+    ]
+}
+
+fn bed_above_stand_up_offsets(forward: BlockDirection) -> Vec<(i32, i32)> {
+    let (fx, fz) = step(forward);
+    vec![(0, 0), (-fx, -fz)]
+}
+
+fn step(direction: BlockDirection) -> (i32, i32) {
+    let offset = direction.to_offset();
+    (offset.x, offset.z)
+}
+
 fn entity_prevents_sleep(entity: &Entity) -> bool {
     NO_SLEEP_IDS.contains(&entity.entity_type.id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stand_up_offset_order_matches_vanilla() {
+        assert_eq!(
+            bed_stand_up_offsets(BlockDirection::North, BlockDirection::East),
+            vec![
+                (1, 0),
+                (1, 1),
+                (1, 2),
+                (0, 2),
+                (-1, 2),
+                (-1, 1),
+                (-1, 0),
+                (-1, -1),
+                (0, -1),
+                (1, -1),
+                (0, 0),
+                (0, 1),
+            ]
+        );
+    }
 }

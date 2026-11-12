@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -11,6 +12,7 @@ use pumpkin_util::math::vector3::Vector3;
 use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::ai::random_pos::land_random_pos;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::item::ItemEntity;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::piglin::{PiglinActivity, PiglinEntity};
@@ -39,8 +41,6 @@ impl PiglinAi {
     pub const MAX_DISTANCE_TO_WALK_TO_ITEM: f64 = 9.0;
     pub const MAX_TIME_TRYING_TO_REACH_ITEM: i32 = 200;
     pub const DISABLE_WALK_TO_ADMIRE_DURATION: i32 = 200;
-    pub const TARGETING_RANGE: f64 = 16.0;
-    pub const MIN_VISIBILITY_DISTANCE: f64 = 2.0;
     pub const THROW_SPEED: f64 = 0.3;
     pub const THROW_HAND_Y_DISTANCE_FROM_EYE: f64 = 0.3;
     pub const RANDOM_THROW_POS_RANGE_HORIZONTAL: i32 = 4;
@@ -175,45 +175,17 @@ impl PiglinAi {
     }
 
     #[must_use]
-    pub fn get_barter_response_items() -> Vec<ItemStack> {
-        let roll = rand::random_range(0..459);
-        match roll {
-            0..5 => vec![ItemStack::new(1, &Item::ENCHANTED_BOOK)],
-            5..13 => vec![ItemStack::new(1, &Item::IRON_BOOTS)],
-            13..21 => vec![ItemStack::new(1, &Item::SPLASH_POTION)],
-            21..39 => vec![ItemStack::new(1, &Item::POTION)],
-            39..49 => vec![ItemStack::new(
-                rand::random_range(10..=36),
-                &Item::IRON_NUGGET,
-            )],
-            49..59 => vec![ItemStack::new(
-                rand::random_range(2..=4),
-                &Item::ENDER_PEARL,
-            )],
-            59..79 => vec![ItemStack::new(rand::random_range(3..=9), &Item::STRING)],
-            79..99 => vec![ItemStack::new(rand::random_range(5..=12), &Item::QUARTZ)],
-            99..139 => vec![ItemStack::new(1, &Item::OBSIDIAN)],
-            139..179 => vec![ItemStack::new(
-                rand::random_range(1..=3),
-                &Item::CRYING_OBSIDIAN,
-            )],
-            179..219 => vec![ItemStack::new(1, &Item::FIRE_CHARGE)],
-            219..259 => vec![ItemStack::new(rand::random_range(2..=4), &Item::LEATHER)],
-            259..299 => vec![ItemStack::new(rand::random_range(2..=8), &Item::SOUL_SAND)],
-            299..339 => vec![ItemStack::new(
-                rand::random_range(2..=8),
-                &Item::NETHER_BRICK,
-            )],
-            339..379 => vec![ItemStack::new(
-                rand::random_range(6..=12),
-                &Item::SPECTRAL_ARROW,
-            )],
-            379..419 => vec![ItemStack::new(rand::random_range(8..=16), &Item::GRAVEL)],
-            _ => vec![ItemStack::new(
-                rand::random_range(8..=16),
-                &Item::BLACKSTONE,
-            )],
-        }
+    pub fn get_barter_response_items(piglin: &PiglinEntity) -> Vec<ItemStack> {
+        let world = piglin.mob_entity.living_entity.entity.world.load();
+        let Some(table) = world.get_loot_table("minecraft:gameplay/piglin_bartering") else {
+            return Vec::new();
+        };
+        let params = crate::world::loot::LootContextParameters {
+            world: Some(&world),
+            this_entity: Some(piglin),
+            ..Default::default()
+        };
+        crate::world::loot::generate_loot_from_handle(&table, rand::random(), &params)
     }
 
     #[must_use]
@@ -240,54 +212,25 @@ impl PiglinAi {
             .is_some_and(|player| Self::is_player_holding_loved_item(&player))
     }
 
-    /// Whether the piglin can see and would notice `target`, invisibility and sneaking included.
+    /// Vanilla `Sensor.isEntityTargetable`: non-combat test within the follow range,
+    /// unscaled by sneaking and invisibility for the current attack target.
     #[must_use]
     pub fn is_entity_targetable(piglin: &PiglinEntity, target: &Player) -> bool {
-        let entity = &piglin.mob_entity.living_entity.entity;
-        let target_entity = target.get_entity();
-        if !target.living_entity.is_part_of_game() {
-            return false;
-        }
-
+        let living = &piglin.mob_entity.living_entity;
+        let target_id = target.get_entity().entity_id;
         let is_attack_target = piglin
             .mob_entity
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-            .is_some_and(|current| current.get_entity().entity_id == target_entity.entity_id);
-        let modifier = if is_attack_target {
-            1.0
+            .get_target()
+            .is_some_and(|current| current.get_entity().entity_id == target_id);
+        let conditions = TargetPredicate::create_non_attackable()
+            .set_base_max_distance(living.get_attribute_value(&Attributes::FOLLOW_RANGE));
+        let conditions = if is_attack_target {
+            conditions.ignore_distance_scaling_factor()
         } else {
-            Self::visibility_percent(target)
+            conditions
         };
-        let visibility_distance =
-            (Self::TARGETING_RANGE * modifier).max(Self::MIN_VISIBILITY_DISTANCE);
-        let distance_sq = entity
-            .pos
-            .load()
-            .squared_distance_to_vec(&target_entity.pos.load());
-        if distance_sq > visibility_distance * visibility_distance {
-            return false;
-        }
-
-        entity
-            .world
-            .load()
-            .clip(&pumpkin_world::clip::ClipContext::new(
-                entity.get_eye_pos(),
-                target_entity.get_eye_pos(),
-                pumpkin_world::clip::ClipBlock::Visual,
-                pumpkin_world::clip::ClipFluid::None,
-            ))
-            .is_miss
-    }
-
-    /// How visible `target` is to a piglin, from 1.0 down to 0.1.
-    fn visibility_percent(target: &Player) -> f64 {
-        target
-            .living_entity
-            .visibility_percent(Some(&EntityType::PIGLIN))
+        let world = living.entity.world.load();
+        conditions.test(&world, Some(piglin), target)
     }
 
     pub fn throw_items(piglin: &PiglinEntity, items: Vec<ItemStack>) {

@@ -45,19 +45,12 @@ const fn pack_variant(
         | (pattern_color.id() as i32 & COLOR_MASK) << PATTERN_COLOR_SHIFT
 }
 
-fn dye_color_by_id(id: i32) -> DyeColor {
-    u8::try_from(id)
-        .ok()
-        .and_then(DyeColor::by_id)
-        .unwrap_or(DyeColor::White)
-}
-
 fn get_base_color(packed: i32) -> DyeColor {
-    dye_color_by_id(packed >> BASE_COLOR_SHIFT & COLOR_MASK)
+    DyeColor::by_id_or_white(packed >> BASE_COLOR_SHIFT & COLOR_MASK)
 }
 
 fn get_pattern_color(packed: i32) -> DyeColor {
-    dye_color_by_id(packed >> PATTERN_COLOR_SHIFT & COLOR_MASK)
+    DyeColor::by_id_or_white(packed >> PATTERN_COLOR_SHIFT & COLOR_MASK)
 }
 
 const fn get_pattern(packed: i32) -> TropicalFishPattern {
@@ -169,6 +162,7 @@ impl Mob for TropicalFishEntity {
     fn finalize_spawn(
         &self,
         _world: &Arc<crate::world::World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let mut group_data = self.finalize_school_spawn(group_data);

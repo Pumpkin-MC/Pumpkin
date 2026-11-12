@@ -6,6 +6,7 @@ use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::beacon::BeaconBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::beehive::BeehiveBlock;
+use crate::block::blocks::bonemealable_feature_placer::BonemealableFeaturePlacerBlock;
 use crate::block::blocks::brewing_stand::BrewingStandBlock;
 use crate::block::blocks::brushable_block::BrushableBlock;
 use crate::block::blocks::bubble_column::BubbleColumnBlock;
@@ -176,7 +177,8 @@ use crate::block::{
     BlockBehaviour, BlockHitResult, BlockMetadata, BonemealArgs, FluidMetadata,
     GetInsideCollisionShapeArgs, GetScreenHandlerFactoryArgs, OnEntityCollisionArgs,
     OnEntityStepArgs, OnLandedUponArgs, OnProjectileHitArgs, PathComputationType,
-    UpdateEntityMovementAfterFallOnArgs, stop_vertical_movement_after_fall,
+    UpdateEntityMovementAfterFallOnArgs, bounce_entity_after_fall,
+    stop_vertical_movement_after_fall,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -421,6 +423,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(AmethystBlock);
     manager.register(BuddingAmethystBlock);
     manager.register(GrassBlock);
+    manager.register(BonemealableFeaturePlacerBlock);
     manager.register(MyceliumBlock);
     manager.register(PodzolBlock);
     manager.register(RootedDirtBlock);
@@ -1289,17 +1292,23 @@ impl BlockRegistry {
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block.on_landed_upon(OnLandedUponArgs {
                 world,
+                block,
                 fall_distance,
                 entity,
             });
+        } else if let Some(living) = entity.get_living_entity() {
+            let reduced_fall_distance = fall_distance * (1.0 - block.fall_distance_reduction);
+            living.handle_fall_damage(entity, reduced_fall_distance, 1.0);
         }
     }
 
     pub fn update_entity_movement_after_fall_on(&self, block: &Block, entity: &dyn EntityBase) {
         if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
             pumpkin_block.update_entity_movement_after_fall_on(
-                UpdateEntityMovementAfterFallOnArgs { entity },
+                UpdateEntityMovementAfterFallOnArgs { block, entity },
             );
+        } else if block.bounce_restitution > 0.0 {
+            bounce_entity_after_fall(entity, f64::from(block.bounce_restitution));
         } else {
             stop_vertical_movement_after_fall(entity);
         }

@@ -28,10 +28,7 @@ use pumpkin_protocol::{
 use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
 use tokio::{
     io::{BufReader, BufWriter},
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
+    net::TcpStream,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
@@ -46,7 +43,7 @@ use crate::{
     server::Server,
 };
 
-use super::JavaClient;
+use super::{JavaClient, JavaReadHalf, JavaWriteHalf};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 
@@ -67,14 +64,15 @@ pub struct PendingConnection {
     pub version: AtomicCell<JavaMinecraftVersion>,
     pub connection_state: AtomicCell<ConnectionState>,
     pub close_token: CancellationToken,
-    pub network_writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
-    pub network_reader: TCPNetworkDecoder<BufReader<OwnedReadHalf>>,
+    pub network_writer: TCPNetworkEncoder<BufWriter<JavaWriteHalf>>,
+    pub network_reader: TCPNetworkDecoder<BufReader<JavaReadHalf>>,
     pub gameprofile: Option<GameProfile>,
     pub config: Option<PlayerConfig>,
     pub brand: Option<String>,
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
     pub vine_challenge: Option<[u8; 16]>,
+    pub velocity_message_id: Option<i32>,
     /// Whether a login was started. Used to reject a second `SLoginStart`, which
     /// would otherwise replace an already authenticated profile.
     pub login_started: bool,
@@ -95,6 +93,26 @@ impl PendingConnection {
         server: Weak<Server>,
     ) -> Self {
         let (read, write) = tcp_stream.into_split();
+        Self::from_transport(
+            Box::new(read),
+            Box::new(write),
+            address,
+            id,
+            packet_limiter,
+            server,
+        )
+    }
+
+    /// A connection over any byte stream, such as the in-memory pipe of an integrated server.
+    #[must_use]
+    pub fn from_transport(
+        read: JavaReadHalf,
+        write: JavaWriteHalf,
+        address: SocketAddr,
+        id: u64,
+        packet_limiter: PacketRateLimiter,
+        server: Weak<Server>,
+    ) -> Self {
         Self {
             id,
             address,
@@ -112,6 +130,7 @@ impl PendingConnection {
             login_success_sent: false,
             verify_token: None,
             vine_challenge: None,
+            velocity_message_id: None,
             server,
         }
     }
@@ -299,7 +318,52 @@ impl PendingConnection {
         self.close();
     }
 
+    async fn read_haproxy_header(&mut self) -> bool {
+        let Some(reader) = self.network_reader.reader_mut() else {
+            return false;
+        };
+        let close_token = self.close_token.clone();
+        let result = tokio::select! {
+            () = close_token.cancelled() => {
+                debug!("Canceling pending connection HAProxy header read");
+                return false;
+            },
+            () = tokio::time::sleep(HANDSHAKE_IDLE_TIMEOUT) => {
+                debug!(
+                    "Client {} sent no HAProxy header for {}s, dropping it",
+                    self.id,
+                    HANDSHAKE_IDLE_TIMEOUT.as_secs()
+                );
+                return false;
+            },
+            res = crate::net::proxy::haproxy::read_header(reader) => res,
+        };
+
+        match result {
+            Ok(Some(address)) => {
+                debug!("Updated address from HAProxy header for client {}", self.id);
+                self.address = address;
+                true
+            }
+            Ok(None) => true,
+            Err(err) => {
+                debug!(
+                    "Failed to read HAProxy header from client {}: {}",
+                    self.id, err
+                );
+                false
+            }
+        }
+    }
+
     pub async fn handle_login_sequence(&mut self, server: &Arc<Server>) -> PacketHandlerResult {
+        if server.advanced_config.networking.proxy.enabled
+            && server.advanced_config.networking.proxy.haproxy.enabled
+            && !self.read_haproxy_header().await
+        {
+            return PacketHandlerResult::Stop;
+        }
+
         while let Some(packet) = self.get_packet().await {
             if !self.packet_limiter.check_packet() {
                 warn!(

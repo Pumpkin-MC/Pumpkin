@@ -41,11 +41,7 @@ impl TntMinecart {
 
         self.fuse.store(fuse, Ordering::Relaxed);
         let world = entity.world.load();
-        world.send_entity_status(
-            entity,
-            EntityStatus::TntPrime,
-            Some(ActorEventID::PrimeTNTCart),
-        );
+        world.send_entity_status(entity, EntityStatus::TntPrime, ActorEventID::PrimeTNTCart);
         world.play_sound(
             Sound::EntityTntPrimed,
             SoundCategory::Blocks,

@@ -11,16 +11,14 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::OnLandedUponArgs;
-use crate::block::UpdateEntityMovementAfterFallOnArgs;
-use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
-    PathComputationType, PlacedArgs,
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+    OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs,
 };
 use crate::entity::{EntityBase, player::Player};
 use crate::world::World;
+use pumpkin_data::HorizontalFacingExt;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
 
@@ -78,17 +76,7 @@ impl BlockBehaviour for StrawBedBlock {
                     .get_block_state(&args.position.offset(facing.to_offset()))
                     .replaceable();
         }
-        false
-    }
-
-    fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance * 0.5, 1.0);
-        }
-    }
-
-    fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
-        bounce_entity_after_fall(args.entity, 0.66);
+        true
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
@@ -166,6 +154,30 @@ impl BlockBehaviour for StrawBedBlock {
                 );
             }
         }
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        let mut bed_props = BedProperties::from_state_id(args.state_id);
+        let neighbor_dir = if bed_props.part == BedPart::Foot {
+            bed_props.facing.to_block_direction()
+        } else {
+            bed_props.facing.opposite().to_block_direction()
+        };
+        if args.direction == neighbor_dir {
+            let neighbor_block = args.neighbor_state_id.to_block();
+            if neighbor_block == args.block {
+                let neighbor_props = BedProperties::from_state_id(args.neighbor_state_id);
+                if neighbor_props.part != bed_props.part {
+                    bed_props.occupied = neighbor_props.occupied;
+                    return bed_props.to_state_id(args.block);
+                }
+            }
+            return Block::AIR.default_state.id;
+        }
+        args.state_id
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
@@ -292,17 +304,6 @@ impl StrawBedBlock {
         } else {
             (position.offset(bed_props.facing.to_offset()), *position)
         };
-
-        if world.dimension.bed_rule.explodes {
-            world.break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS);
-            world.break_block(&bed_foot_pos, None, BlockFlags::SKIP_DROPS);
-            world.explode(
-                bed_head_pos.to_centered_f64(),
-                5.0,
-                crate::world::ExplosionInteraction::Block,
-            );
-            return BlockActionResult::SuccessServer;
-        }
 
         if let Some(message) = Self::sleep_refusal(
             world,

@@ -34,7 +34,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 3;
+pub const PLUGIN_API_VERSION: u32 = 5;
 
 const PLUGIN_DIR: &str = "./plugins";
 
@@ -1055,6 +1055,27 @@ impl PluginManager {
             .collect()
     }
 
+    /// Get telemetry information for all active plugins.
+    #[must_use]
+    pub fn active_plugins_telemetry(&self) -> Vec<crate::telemetry::PluginInfo> {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        plugins
+            .iter()
+            .filter(|p| p.is_active && p.instance.is_some())
+            .map(|p| crate::telemetry::PluginInfo {
+                name: p.metadata.name.clone(),
+                version: p.metadata.version.clone(),
+                language: p
+                    .loader_data
+                    .as_deref()
+                    .and_then(|data| p.loader.binding_language(data)),
+            })
+            .collect()
+    }
+
     /// Checks if plugin loaded
     #[must_use]
     pub fn is_plugin_loaded(&self, name: &str) -> bool {
@@ -1232,11 +1253,15 @@ impl PluginManager {
             }
         }
 
-        // Process non-blocking handlers
-        for handler in handlers {
-            if !handler.is_blocking() {
-                handler.handle_dyn(server, event).await;
-            }
+        // Run non-blocking handlers concurrently
+        let non_blocking: Vec<_> = handlers
+            .iter()
+            .filter(|h| !h.is_blocking())
+            .map(|h| h.handle_dyn(server, event))
+            .collect();
+
+        if !non_blocking.is_empty() {
+            futures::future::join_all(non_blocking).await;
         }
     }
 

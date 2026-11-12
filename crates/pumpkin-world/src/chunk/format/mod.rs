@@ -133,6 +133,18 @@ fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId
                     pumpkin_nbt::tag::NbtTag::Short(x) => BlockStateId::new_or_air(*x as u16),
                     pumpkin_nbt::tag::NbtTag::Byte(x) => BlockStateId::new_or_air(*x as u16),
                     pumpkin_nbt::tag::NbtTag::Long(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::String(s) => {
+                        let entry =
+                            crate::generation::structure::template::PaletteEntry::new(s.to_string());
+                        if let Some(state) =
+                            crate::generation::structure::template::BlockStateResolver::resolve_simple(
+                                &entry,
+                            )
+                        {
+                            return state.id;
+                        }
+                        BlockStateId::AIR
+                    }
                     pumpkin_nbt::tag::NbtTag::Compound(compound) => {
                         if let Ok(entry) =
                             crate::generation::structure::template::PaletteEntry::from_nbt_compound(

@@ -2,8 +2,11 @@ use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
-use pumpkin_data::block_properties::{DoubleBlockHalf, OakDoorLikeProperties};
+use pumpkin_data::block_properties::{
+    ChestLikeProperties, ChestType, DoubleBlockHalf, OakDoorLikeProperties,
+};
 use pumpkin_data::data_component_impl::BlockTransformerImpl;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
@@ -63,26 +66,44 @@ impl ItemBehaviour for AxeItem {
                 };
                 let (other_block, other_state_id) = world.get_block_and_state_id(&other_half_pos);
                 if other_block == block {
-                    let other_new_state_id = if result.target_block.states.len() <= 1 {
-                        result.target_block.default_state.id
-                    } else if let Some(other_props) = other_block.properties(other_state_id) {
-                        let props = other_props.to_props();
-                        result
-                            .target_block
-                            .from_properties(&props)
-                            .to_state_id(result.target_block)
-                    } else {
-                        result.target_block.default_state.id
-                    };
+                    let other_new_state_id = result
+                        .target_block
+                        .with_properties_of(other_block, other_state_id);
                     world.set_block_state(
                         &other_half_pos,
                         other_new_state_id,
-                        BlockFlags::NOTIFY_ALL,
+                        BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
                     );
+                }
+            } else if block.has_tag(&tag::Block::MINECRAFT_COPPER_CHESTS) {
+                let chest_props = ChestLikeProperties::from_state_id(current_state_id);
+                if chest_props.r#type != ChestType::Single {
+                    let neighbor_dir = match chest_props.r#type {
+                        ChestType::Left => chest_props.facing.rotate_clockwise(),
+                        ChestType::Right => chest_props.facing.rotate_counter_clockwise(),
+                        ChestType::Single => chest_props.facing,
+                    };
+                    let neighbor_pos = location.offset(neighbor_dir.to_offset());
+                    let (neighbor_block, neighbor_state_id) =
+                        world.get_block_and_state_id(&neighbor_pos);
+                    if neighbor_block == block {
+                        let neighbor_new_state_id = result
+                            .target_block
+                            .with_properties_of(neighbor_block, neighbor_state_id);
+                        world.set_block_state(
+                            &neighbor_pos,
+                            neighbor_new_state_id,
+                            BlockFlags::NOTIFY_LISTENERS,
+                        );
+                        if let Some(particle) = result.entry.particle {
+                            world.sync_world_event(particle, neighbor_pos, 0);
+                        }
+                    }
                 }
             }
 
             world.set_block_state(&location, result.new_state_id, BlockFlags::NOTIFY_ALL);
+            world.emit_game_event(GameEvent::BlockChange.name(), location.to_f64());
 
             if player.gamemode.load() != GameMode::Creative {
                 let _ = item.damage_item(i32::from(result.entry.item_damage_per_use));

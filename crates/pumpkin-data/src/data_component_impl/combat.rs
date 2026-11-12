@@ -881,10 +881,17 @@ pub struct KineticConditionImpl {
     pub min_relative_speed: f32,
 }
 impl KineticConditionImpl {
-    pub fn test(&self, ticks_used: i32, attacker_speed: f64, relative_speed: f64) -> bool {
+    /// `entity_factor` scales both speed thresholds: 1 for players, 0.2 for mobs.
+    pub fn test(
+        &self,
+        ticks_used: i32,
+        attacker_speed: f64,
+        relative_speed: f64,
+        entity_factor: f64,
+    ) -> bool {
         ticks_used <= self.max_duration_ticks
-            && attacker_speed >= f64::from(self.min_speed)
-            && relative_speed >= f64::from(self.min_relative_speed)
+            && attacker_speed >= f64::from(self.min_speed) * entity_factor
+            && relative_speed >= f64::from(self.min_relative_speed) * entity_factor
     }
     fn read(compound: &NbtCompound, key: &str) -> Option<Self> {
         let condition = compound.get_compound(key)?;
@@ -1158,6 +1165,7 @@ impl DataComponentImpl for AdditionalTradeCostImpl {
     default_impl!(AdditionalTradeCost);
 }
 
+/// Scales how far the listed mobs notice the wearer, vanilla `MobVisibility`. Mob heads.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MobVisibilityImpl {
     pub targeting_entity_types: IDSet<EntityType>,
@@ -1170,12 +1178,20 @@ impl Hash for MobVisibilityImpl {
     }
 }
 impl MobVisibilityImpl {
+    pub const MAX_VISIBILITY: f32 = 10.0;
+
+    /// Vanilla `floatRange(0, MAX_VISIBILITY)`, which also rejects NaN.
+    #[must_use]
+    pub fn is_valid_visibility(visibility: f32) -> bool {
+        (0.0..=Self::MAX_VISIBILITY).contains(&visibility)
+    }
+
     pub fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
         let targeting_entity_types =
             IDSet::<EntityType>::read(compound.get("targeting_entity_types")?)?;
         let visibility = compound.get_float("visibility")?;
-        Some(Self {
+        Self::is_valid_visibility(visibility).then_some(Self {
             targeting_entity_types,
             visibility,
         })

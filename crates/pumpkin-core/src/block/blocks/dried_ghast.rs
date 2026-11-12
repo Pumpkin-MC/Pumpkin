@@ -116,8 +116,10 @@ impl BlockBehaviour for DriedGhastBlock {
                     args.world,
                     Uuid::new_v4(),
                 );
+                if let Some(mob) = ghastling.get_mob() {
+                    mob.spawn_as_baby();
+                }
                 let entity = ghastling.get_entity();
-                entity.set_age(-24000);
                 entity.set_rotation(horizontal_facing_to_yaw(props.facing), 0.0);
                 args.world.play_sound(
                     Sound::EntityGhastlingSpawn,
@@ -127,11 +129,6 @@ impl BlockBehaviour for DriedGhastBlock {
                 args.world.spawn_entity(ghastling);
             }
         } else if props.hydration > 0 {
-            args.world.play_sound(
-                Sound::BlockDriedGhastTransition,
-                SoundCategory::Blocks,
-                &args.position.to_f64(),
-            );
             props.hydration -= 1;
             args.world.set_block_state(
                 args.position,

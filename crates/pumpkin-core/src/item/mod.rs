@@ -70,7 +70,13 @@ pub trait ItemBehaviour: Send + Sync {
 
     fn on_spear_jab(&self, _stack: &ItemStack, _player: &Player) {}
 
-    fn on_use_tick(&self, _stack: &ItemStack, _player: &Player, _remaining_use_ticks: i32) {}
+    fn on_use_tick(
+        &self,
+        _stack: &ItemStack,
+        _user: &dyn crate::entity::EntityBase,
+        _remaining_use_ticks: i32,
+    ) {
+    }
 
     /// Returns the maximum number of ticks this item can be used for.
     /// Return 0 if the item does not have a behaviour-driven use duration.
@@ -83,11 +89,19 @@ pub trait ItemBehaviour: Send + Sync {
     }
 
     fn get_start_and_end_pos(&self, player: &Player) -> (Vector3<f64>, Vector3<f64>) {
-        let start_pos = player.eye_position();
         let (yaw, pitch) = player.rotation();
+        self.get_start_and_end_pos_with_rotation(player, yaw, pitch)
+    }
+
+    fn get_start_and_end_pos_with_rotation(
+        &self,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+    ) -> (Vector3<f64>, Vector3<f64>) {
+        let start_pos = player.eye_position();
         let (yaw_rad, pitch_rad) = (f64::from(yaw.to_radians()), f64::from(pitch.to_radians()));
-        let block_interaction_range = 4.5; // This is not the same as the block_interaction_range in the
-        // player entity.
+        let block_interaction_range = player.block_interaction_range();
         let direction = Vector3::new(
             -yaw_rad.sin() * pitch_rad.cos() * block_interaction_range,
             -pitch_rad.sin() * block_interaction_range,

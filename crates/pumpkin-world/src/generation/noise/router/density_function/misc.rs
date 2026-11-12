@@ -431,16 +431,8 @@ impl StaticChunkNoiseFunctionComponentImpl for Slice {
         buffer: &mut [f32],
         volume: &DensityVolume,
     ) {
-        let input_volume = match self.axis {
-            Axis::X => {
-                if volume.size_x == 1 && volume.min_block_x == self.coordinate {
-                    ChunkNoiseFunctionComponent::sample_volume_from_stack(
-                        &mut component_stack[..=self.input_index],
-                        buffer,
-                        volume,
-                    );
-                    return;
-                }
+        let (input_volume, is_single_slice) = match self.axis {
+            Axis::X => (
                 DensityVolume::new(
                     1,
                     volume.size_y,
@@ -448,20 +440,13 @@ impl StaticChunkNoiseFunctionComponentImpl for Slice {
                     self.coordinate,
                     volume.min_block_y,
                     volume.min_block_z,
-                    volume.step_block_x,
+                    1,
                     volume.step_block_y,
                     volume.step_block_z,
-                )
-            }
-            Axis::Y => {
-                if volume.size_y == 1 && volume.min_block_y == self.coordinate {
-                    ChunkNoiseFunctionComponent::sample_volume_from_stack(
-                        &mut component_stack[..=self.input_index],
-                        buffer,
-                        volume,
-                    );
-                    return;
-                }
+                ),
+                volume.size_x == 1,
+            ),
+            Axis::Y => (
                 DensityVolume::new(
                     volume.size_x,
                     1,
@@ -470,19 +455,12 @@ impl StaticChunkNoiseFunctionComponentImpl for Slice {
                     self.coordinate,
                     volume.min_block_z,
                     volume.step_block_x,
-                    volume.step_block_y,
+                    1,
                     volume.step_block_z,
-                )
-            }
-            Axis::Z => {
-                if volume.size_z == 1 && volume.min_block_z == self.coordinate {
-                    ChunkNoiseFunctionComponent::sample_volume_from_stack(
-                        &mut component_stack[..=self.input_index],
-                        buffer,
-                        volume,
-                    );
-                    return;
-                }
+                ),
+                volume.size_y == 1,
+            ),
+            Axis::Z => (
                 DensityVolume::new(
                     volume.size_x,
                     volume.size_y,
@@ -492,10 +470,19 @@ impl StaticChunkNoiseFunctionComponentImpl for Slice {
                     self.coordinate,
                     volume.step_block_x,
                     volume.step_block_y,
-                    volume.step_block_z,
-                )
-            }
+                    1,
+                ),
+                volume.size_z == 1,
+            ),
         };
+        if is_single_slice {
+            ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                &mut component_stack[..=self.input_index],
+                buffer,
+                &input_volume,
+            );
+            return;
+        }
         let mut input = DensityBuffer::acquire(&input_volume);
         ChunkNoiseFunctionComponent::sample_volume_from_stack(
             &mut component_stack[..=self.input_index],
@@ -606,14 +593,44 @@ impl StaticChunkNoiseFunctionComponentImpl for RangeChoice {
         volume: &DensityVolume,
     ) {
         ChunkNoiseFunctionComponent::sample_volume_from_stack(
-            &mut component_stack[..=self.when_in_index],
+            &mut component_stack[..=self.input_index],
             buffer,
             volume,
         );
-        let mut input = DensityBuffer::acquire(volume);
+        let min_inc = self.data.min_inclusive;
+        let max_exc = self.data.max_exclusive;
+        let mut any_in = false;
+        let mut any_out = false;
+        for &v in buffer.iter() {
+            if min_inc <= v && v < max_exc {
+                any_in = true;
+            } else {
+                any_out = true;
+            }
+            if any_in && any_out {
+                break;
+            }
+        }
+        if !any_out {
+            ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                &mut component_stack[..=self.when_in_index],
+                buffer,
+                volume,
+            );
+            return;
+        }
+        if !any_in {
+            ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                &mut component_stack[..=self.when_out_index],
+                buffer,
+                volume,
+            );
+            return;
+        }
+        let mut when_in = DensityBuffer::acquire(volume);
         ChunkNoiseFunctionComponent::sample_volume_from_stack(
-            &mut component_stack[..=self.input_index],
-            &mut input,
+            &mut component_stack[..=self.when_in_index],
+            &mut when_in,
             volume,
         );
         let mut when_out = DensityBuffer::acquire(volume);
@@ -622,10 +639,15 @@ impl StaticChunkNoiseFunctionComponentImpl for RangeChoice {
             &mut when_out,
             volume,
         );
-        for ((value, input), when_out) in buffer.iter_mut().zip(input.iter()).zip(when_out.iter()) {
-            if !(self.data.min_inclusive <= *input && *input < self.data.max_exclusive) {
-                *value = *when_out;
-            }
+        for ((value, &when_in), &when_out) in
+            buffer.iter_mut().zip(when_in.iter()).zip(when_out.iter())
+        {
+            let input = *value;
+            *value = if min_inc <= input && input < max_exc {
+                when_in
+            } else {
+                when_out
+            };
         }
     }
 }

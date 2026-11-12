@@ -166,7 +166,7 @@ impl BlockBehaviour for NoteBlock {
         args.world.play_sound_raw(
             convert_instrument_to_sound(instrument) as u16,
             SoundCategory::Records,
-            &args.position.to_f64(),
+            &args.position.to_centered_f64(),
             3.0,
             pitch,
         );
@@ -248,5 +248,10 @@ const fn is_base_block(instrument: NoteblockInstrument) -> bool {
             | NoteblockInstrument::Didgeridoo
             | NoteblockInstrument::Bit
             | NoteblockInstrument::Banjo
+            | NoteblockInstrument::Pling
+            | NoteblockInstrument::Trumpet
+            | NoteblockInstrument::TrumpetExposed
+            | NoteblockInstrument::TrumpetWeathered
+            | NoteblockInstrument::TrumpetOxidized
     )
 }

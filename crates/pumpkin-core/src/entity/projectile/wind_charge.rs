@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::tag;
 use pumpkin_util::math::vector3::Vector3;
@@ -86,16 +87,36 @@ impl WindChargeEntity {
     }
 
     pub fn create_explosion(&self, position: Vector3<f64>) {
-        let (power, calculator) = match self.kind {
-            WindChargeKind::Normal { .. } => (1.2, WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone()),
-            WindChargeKind::Breeze => (3.0, BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone()),
+        let world = self.get_entity().world.load();
+        let (power, calculator, sound, is_normal) = match self.kind {
+            WindChargeKind::Normal { .. } => (
+                1.2,
+                WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
+                pumpkin_data::sound::Sound::EntityWindChargeWindBurst,
+                true,
+            ),
+            WindChargeKind::Breeze => (
+                3.0,
+                BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR.clone(),
+                pumpkin_data::sound::Sound::EntityBreezeWindBurst,
+                false,
+            ),
         };
-        self.get_entity().world.load().explode_with_calculator(
-            position,
+        let mut explosion = crate::world::Explosion::new(
             power,
-            crate::world::ExplosionInteraction::Trigger,
-            Some(calculator),
+            position,
+            world.get_block_interaction(crate::world::ExplosionInteraction::Trigger),
+        )
+        .with_damage_calculator(calculator)
+        .with_particles_and_sound(
+            pumpkin_data::particle::Particle::GustEmitterSmall,
+            pumpkin_data::particle::Particle::GustEmitterLarge,
+            sound,
         );
+        if is_normal {
+            explosion = explosion.from_wind_charge();
+        }
+        world.run_explosion(&explosion, position, power);
     }
 
     pub fn deflect(
@@ -115,8 +136,8 @@ impl WindChargeEntity {
 }
 
 impl EntityBase for WindChargeEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown_item_entity.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown_item_entity.owner)
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
@@ -146,8 +167,7 @@ impl EntityBase for WindChargeEntity {
         let hit_pos = hit.hit_pos();
         if let ProjectileHit::Entity { ref entity, .. } = hit {
             let world = self.get_entity().world.load();
-            let owner_id = self.thrown_item_entity.owner_id;
-            let owner = owner_id.and_then(|id| world.get_entity_by_id(id));
+            let owner = self.thrown_item_entity.owner.get(&world);
 
             let _ = entity.damage_with_context(
                 entity.as_ref(),

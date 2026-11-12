@@ -69,7 +69,7 @@ impl PortalType {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn get_portal_destination(
+    pub async fn get_portal_destination(
         &self,
         current_level: &World,
         dest_world: Arc<World>,
@@ -92,18 +92,12 @@ impl PortalType {
                         let platform_pos = BlockPos::new(100, 49, 0);
 
                         // Ensure chunks covering the platform are loaded/generated
-                        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                            tokio::task::block_in_place(|| {
-                                handle.block_on(async {
-                                    let center_chunk =
-                                        Vector2::new(platform_pos.0.x >> 4, platform_pos.0.z >> 4);
-                                    dest_world
-                                        .level
-                                        .get_or_fetch_chunk(center_chunk, |_| ())
-                                        .await;
-                                });
-                            });
-                        }
+                        let center_chunk =
+                            Vector2::new(platform_pos.0.x >> 4, platform_pos.0.z >> 4);
+                        dest_world
+                            .level
+                            .get_or_fetch_chunk(center_chunk, |_| ())
+                            .await;
 
                         // Generate/regenerate the obsidian platform (5x5 obsidian at Y=48, and 5x5x3 air above it)
                         for dx in -2..=2 {
@@ -187,45 +181,32 @@ impl PortalType {
                 let scale_factor_current = current_level.dimension.coordinate_scale;
 
                 let teleportation_scale = scale_factor_current / scale_factor_new;
-                let worldborder = dest_world
-                    .worldborder
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let (clamped_x, clamped_z) = worldborder.clamp_block(
-                    (pos.x * teleportation_scale).floor() as i32,
-                    (pos.z * teleportation_scale).floor() as i32,
-                );
-                drop(worldborder);
+                let (clamped_x, clamped_z) = {
+                    let worldborder = dest_world
+                        .worldborder
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    worldborder.clamp_block(
+                        (pos.x * teleportation_scale).floor() as i32,
+                        (pos.z * teleportation_scale).floor() as i32,
+                    )
+                };
 
                 let approximate_exit_pos =
                     BlockPos::new(clamped_x, pos.y.floor() as i32, clamped_z);
                 let source_portal_axis = source_portal.map_or(HorizontalAxis::X, |p| p.axis);
 
-                let exit_portal = NetherPortal::search_for_portal(
-                    &dest_world,
-                    approximate_exit_pos,
-                )
-                .or_else(|| {
-                    // Ensure the chunks around approximate_exit_pos are generated/loaded in dest_world
-                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        tokio::task::block_in_place(|| {
-                            handle.block_on(async {
-                                let center_chunk = Vector2::new(
-                                    approximate_exit_pos.0.x >> 4,
-                                    approximate_exit_pos.0.z >> 4,
-                                );
-                                for dx in -1..=1 {
-                                    for dz in -1..=1 {
-                                        let chunk_pos =
-                                            Vector2::new(center_chunk.x + dx, center_chunk.y + dz);
-                                        dest_world
-                                            .level
-                                            .get_or_fetch_chunk(chunk_pos, |_| ())
-                                            .await;
-                                    }
-                                }
-                            });
-                        });
+                let mut exit_portal =
+                    NetherPortal::search_for_portal(&dest_world, approximate_exit_pos).await;
+
+                if exit_portal.is_none() {
+                    let center_chunk =
+                        Vector2::new(approximate_exit_pos.0.x >> 4, approximate_exit_pos.0.z >> 4);
+                    for dx in -1..=1 {
+                        for dz in -1..=1 {
+                            let chunk_pos = Vector2::new(center_chunk.x + dx, center_chunk.y + dz);
+                            dest_world.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+                        }
                     }
 
                     if let Some((build_pos, axis, is_fallback)) = NetherPortal::find_safe_location(
@@ -234,16 +215,14 @@ impl PortalType {
                         source_portal_axis,
                     ) {
                         NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback);
-                        Some(PortalSearchResult {
+                        exit_portal = Some(PortalSearchResult {
                             lower_corner: build_pos,
                             axis,
                             width: 2,
                             height: 3,
-                        })
-                    } else {
-                        None
+                        });
                     }
-                });
+                }
 
                 let (final_pos, yaw) = exit_portal.map_or_else(
                     || (approximate_exit_pos.0.to_f64(), None),

@@ -2,18 +2,29 @@
 use super::*;
 
 impl BedrockClient {
-    pub fn handle_interaction(&self, packet: &SInteract) {
-        if matches!(packet.action, Action::OpenInventory) {
-            if self.inventory_opened.load(Ordering::Relaxed) {
-                return;
+    pub fn handle_interaction(&self, player: &Arc<Player>, packet: &SInteract) {
+        match packet.action {
+            Action::OpenInventory => {
+                if player.open_vehicle_inventory() {
+                    return;
+                }
+                if self.inventory_opened.load(Ordering::Relaxed) {
+                    return;
+                }
+                self.inventory_opened.store(true, Ordering::Relaxed);
+                self.try_enqueue_client_packet(&CContainerOpen {
+                    container_id: 0,
+                    container_type: 0xff,
+                    position: BlockPos::ZERO,
+                    target_entity_id: VarLong(-1),
+                });
             }
-            self.inventory_opened.store(true, Ordering::Relaxed);
-            self.try_enqueue_client_packet(&CContainerOpen {
-                container_id: 0,
-                container_type: 0xff,
-                position: BlockPos::ZERO,
-                target_entity_id: VarLong(-1),
-            });
+            Action::StopRiding => {
+                if let Some(vehicle) = player.get_entity().get_vehicle() {
+                    vehicle.get_entity().remove_passenger(player.entity_id());
+                }
+            }
+            _ => {}
         }
     }
 }

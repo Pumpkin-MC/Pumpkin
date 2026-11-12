@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use futures::executor::block_on;
 use pumpkin_data::translation::java;
 use pumpkin_gametest::{GameTestBatchReport, GameTestReporter, GameTestRetryOptions};
 use pumpkin_protocol::java::client::play::SuggestionProviders;
@@ -138,7 +137,7 @@ impl CommandExecutor for RunExecutor {
         // Vanilla TestCommand::run always clears the current GameTestTicker first.
         // Without this, issuing another /test run with a different retry mode lets
         // two runners own the same controller/structure concurrently.
-        block_on(stop_game_tests());
+        stop_game_tests();
 
         let number_was_supplied = context.arguments.contains_key(ARG_NUMBER_OF_TIMES);
         let number_of_times = if number_was_supplied {
@@ -196,7 +195,7 @@ impl CommandExecutor for RunExecutor {
             let test_x = base_x + column * TEST_GRID_SPACING;
             let test_z = base_z + row * TEST_GRID_SPACING;
 
-            block_on(enqueue_game_test(GameTestQueueEntry::new(
+            enqueue_game_test(GameTestQueueEntry::new(
                 test_id.clone(),
                 world.clone(),
                 test_x,
@@ -204,7 +203,7 @@ impl CommandExecutor for RunExecutor {
                 rotation_steps,
                 retry_options,
                 report.clone(),
-            )));
+            ));
 
             info!(
                 target: "pumpkin::gametest",
@@ -226,7 +225,7 @@ struct StopExecutor;
 
 impl CommandExecutor for StopExecutor {
     fn execute(&self, _context: &CommandContext) -> CommandExecutorResult {
-        block_on(stop_game_tests());
+        stop_game_tests();
         Ok(1)
     }
 }

@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
@@ -34,6 +33,9 @@ pub struct PluginInfo {
     pub name: String,
     /// The version of the plugin.
     pub version: String,
+    /// The guest binding language or runtime used by the plugin (e.g. "rust", "go", "javascript", "python", "native").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 /// Type alias for plugin telemetry information.
@@ -376,43 +378,34 @@ pub fn build_heartbeat_payload(
     server: &Server,
     telemetry_config: &TelemetryConfig,
 ) -> HeartbeatPayload {
-    let os = sysinfo::System::long_os_version().unwrap_or_else(|| {
-        let name = sysinfo::System::name().unwrap_or_else(|| std::env::consts::OS.to_string());
+    let os = sysinfo::System::long_os_version().unwrap_or_else(|_| {
+        let name = sysinfo::System::name().unwrap_or_else(|_| std::env::consts::OS.to_string());
         sysinfo::System::os_version().map_or(name.clone(), |ver| format!("{name} {ver}"))
     });
     let arch = std::env::consts::ARCH.to_string();
     let cpu_cores = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
 
-    let (ram_allocated_mb, total_ram_mb, cpu_model) = if sysinfo::IS_SUPPORTED_SYSTEM {
-        let mut sys = sysinfo::System::new_all();
-        sys.refresh_all();
-        let ram_allocated = sys.used_memory() / (1024 * 1024);
-        let total_ram = sys.total_memory() / (1024 * 1024);
-        let cpu_model = sys.cpus().first().map_or_else(
-            || "Unknown".to_string(),
-            |c| {
-                let brand = c.brand().trim();
-                if brand.is_empty() {
-                    "Unknown".to_string()
-                } else {
-                    brand.to_string()
-                }
-            },
-        );
-        (ram_allocated, total_ram, cpu_model)
-    } else {
-        (0, 0, "Unknown".to_string())
-    };
+    let (ram_allocated_mb, total_ram_mb, cpu_model) = sysinfo::System::new_all().map_or_else(
+        |_| (0, 0, "Unknown".to_string()),
+        |sys| {
+            let ram_allocated = sys.used_memory() / (1024 * 1024);
+            let total_ram = sys.total_memory() / (1024 * 1024);
+            let cpu_model = sys.cpus().first().map_or_else(
+                || "Unknown".to_string(),
+                |c| {
+                    let brand = c.brand().trim();
+                    if brand.is_empty() {
+                        "Unknown".to_string()
+                    } else {
+                        brand.to_string()
+                    }
+                },
+            );
+            (ram_allocated, total_ram, cpu_model)
+        },
+    );
 
-    let plugins = server
-        .plugin_manager
-        .active_plugins()
-        .into_iter()
-        .map(|p| PluginInfo {
-            name: p.name,
-            version: p.version,
-        })
-        .collect();
+    let plugins = server.plugin_manager.active_plugins_telemetry();
 
     let is_public = telemetry_config.public;
     let public_name = if is_public {
@@ -485,15 +478,12 @@ pub fn start_telemetry_with_config(server: Arc<Server>, config: &TelemetryConfig
 
     server.spawn_task(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
-        while !crate::SHOULD_STOP.load(Ordering::Relaxed) {
+        loop {
             tokio::select! {
                 _ = interval.tick() => {}
-                () = crate::STOP_INTERRUPT.cancelled() => {
+                () = server_task.stop_token.cancelled() => {
                     break;
                 }
-            }
-            if crate::SHOULD_STOP.load(Ordering::Relaxed) {
-                break;
             }
 
             let payload = build_heartbeat_payload(&server_task, &config);
@@ -589,10 +579,12 @@ mod tests {
                 PluginInfo {
                     name: "Essential Admin Tools".to_string(),
                     version: "1.0.0".to_string(),
+                    language: Some("rust".to_string()),
                 },
                 PluginInfo {
                     name: "PumpkinAuth".to_string(),
                     version: "1.2.0".to_string(),
+                    language: Some("go".to_string()),
                 },
             ],
             is_public: true,
@@ -620,6 +612,8 @@ mod tests {
         assert_eq!(parsed["is_public"], true);
         assert_eq!(parsed["public_name"], "My High-Performance Pumpkin SMP");
         assert_eq!(parsed["plugins"].as_array().unwrap().len(), 2);
+        assert_eq!(parsed["plugins"][0]["language"], "rust");
+        assert_eq!(parsed["plugins"][1]["language"], "go");
     }
 
     #[test]

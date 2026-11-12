@@ -72,6 +72,10 @@ async fn main() {
 
     let config = PumpkinConfig::load(&exec_dir);
 
+    if has_init_settings_arg(std::env::args().skip(1)) {
+        exit(0);
+    }
+
     let vanilla_data = VanillaData::load();
 
     pumpkin_core::init_logger(&config.advanced);
@@ -172,10 +176,11 @@ async fn main() {
         config.telemetry,
         vanilla_data,
         plugin_loaders,
+        true,
     )
     .await
     .unwrap_or_else(|error| {
-        tracing::error!("Failed to initialize world storage: {error}");
+        tracing::error!("{error}");
         exit(1);
     });
     let plugin_wait_time = pumpkin_server.init_plugins().await;
@@ -399,6 +404,10 @@ async fn setup_sighandler() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn has_init_settings_arg(mut args: impl Iterator<Item = String>) -> bool {
+    args.any(|arg| arg == "--init-settings" || arg == "--initSettings")
 }
 
 fn parse_convert_world_arg(mut args: impl Iterator<Item = String>) -> Option<String> {

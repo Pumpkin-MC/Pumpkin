@@ -508,7 +508,11 @@ impl ClientPacket for CRecipeBookAdd<'_> {
                 )
             })
             .count();
-        let dynamic_count = self.dynamic_recipes.len();
+        let dynamic_count = self
+            .dynamic_recipes
+            .iter()
+            .filter(|r| matches!(r, DynamicRecipe::Crafting(_) | DynamicRecipe::Cooking(_)))
+            .count();
         let total = crafting_count + RECIPES_COOKING.len() + dynamic_count;
 
         // Entry count (VarInt)
@@ -680,8 +684,12 @@ impl ClientPacket for CRecipeBookAdd<'_> {
                         book_category,
                     )?;
                 }
-                DynamicRecipe::Brewing(_) => {
-                    // Brewing recipes are not displayed in the recipe book
+                DynamicRecipe::Brewing(_)
+                | DynamicRecipe::Stonecutting(_)
+                | DynamicRecipe::SmithingTransform(_)
+                | DynamicRecipe::SmithingTrim(_)
+                | DynamicRecipe::SpecialCrafting(_) => {
+                    // Non-crafting/cooking recipes are not displayed in the recipe book
                     continue;
                 }
             }
@@ -955,6 +963,7 @@ mod tests {
         let result = RecipeResultStruct {
             id: "minecraft:air",
             count: 1,
+            components: &[],
         };
         for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
             let mut bytes = Vec::new();

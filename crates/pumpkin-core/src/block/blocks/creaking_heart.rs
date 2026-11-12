@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{Axis, CreakingHeartLikeProperties, CreakingHeartState};
-use pumpkin_data::item::Item;
-use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::{
+    Axis, CreakingHeartLikeProperties, CreakingHeartState, PaleOakWoodLikeProperties,
+};
+use pumpkin_data::environment_attribute::EnvironmentAttribute;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{BlockId, BlockStateId};
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
@@ -15,8 +17,24 @@ use crate::block::{BlockBehaviour, BrokenArgs, OnNeighborUpdateArgs, OnPlaceArgs
 pub struct CreakingHeartBlock;
 
 impl CreakingHeartBlock {
-    const fn is_pale_oak_log(id: BlockId) -> bool {
-        matches!(id, BlockId::PALE_OAK_LOG | BlockId::STRIPPED_PALE_OAK_LOG)
+    fn active_state(
+        world: &crate::world::World,
+        pos: &pumpkin_util::math::position::BlockPos,
+    ) -> CreakingHeartState {
+        if world
+            .environment_attributes()
+            .get_value_bool(EnvironmentAttribute::GameplayCreakingActive, pos)
+        {
+            CreakingHeartState::Awake
+        } else {
+            CreakingHeartState::Dormant
+        }
+    }
+
+    fn is_aligned_pale_oak_log(state_id: BlockStateId, axis: Axis) -> bool {
+        let block = state_id.to_block();
+        block.has_tag(&tag::Block::MINECRAFT_PALE_OAK_LOGS)
+            && PaleOakWoodLikeProperties::from_state_id(state_id).axis == axis
     }
 
     fn check_active_logs(
@@ -30,10 +48,10 @@ impl CreakingHeartBlock {
             Axis::Z => (pos.north(), pos.south()),
         };
 
-        let block_a = world.get_block_state_id(&pos_a).to_block_id();
-        let block_b = world.get_block_state_id(&pos_b).to_block_id();
+        let state_a = world.get_block_state_id(&pos_a);
+        let state_b = world.get_block_state_id(&pos_b);
 
-        Self::is_pale_oak_log(block_a) && Self::is_pale_oak_log(block_b)
+        Self::is_aligned_pale_oak_log(state_a, axis) && Self::is_aligned_pale_oak_log(state_b, axis)
     }
 }
 
@@ -58,7 +76,7 @@ impl BlockBehaviour for CreakingHeartBlock {
             let mut props = CreakingHeartLikeProperties::from_state_id(state_id);
 
             if Self::check_active_logs(args.world.as_ref(), args.position, props.axis) {
-                props.creaking_heart_state = CreakingHeartState::Dormant;
+                props.creaking_heart_state = Self::active_state(args.world, args.position);
                 args.world.set_block_state(
                     args.position,
                     props.to_state_id(args.block),
@@ -89,7 +107,7 @@ impl BlockBehaviour for CreakingHeartBlock {
                         &args.position.to_f64(),
                     );
                 }
-                CreakingHeartState::Dormant
+                Self::active_state(args.world, args.position)
             } else {
                 CreakingHeartState::Uprooted
             };
@@ -106,14 +124,10 @@ impl BlockBehaviour for CreakingHeartBlock {
     }
 
     fn broken(&self, args: BrokenArgs<'_>) {
-        {
-            args.world.play_sound(
-                Sound::BlockCreakingHeartBreak,
-                SoundCategory::Blocks,
-                &args.position.to_f64(),
-            );
-            args.world
-                .drop_stack(args.position, ItemStack::new(1, &Item::CREAKING_HEART));
-        }
+        args.world.play_sound(
+            Sound::BlockCreakingHeartBreak,
+            SoundCategory::Blocks,
+            &args.position.to_f64(),
+        );
     }
 }

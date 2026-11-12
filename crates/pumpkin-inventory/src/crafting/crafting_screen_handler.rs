@@ -14,6 +14,8 @@
 //! - Transmute recipes (upgrading items)
 //! - Special recipes (like decorated pots)
 
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::DataComponentImpl;
 use std::any::Any;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
@@ -53,6 +55,7 @@ pub struct RecipeResult {
     pub item_id: String,
     pub count: u8,
     pub pot_decorations: Option<[u16; 4]>,
+    pub components: &'static [(DataComponent, &'static dyn DataComponentImpl)],
 }
 
 impl RecipeResult {
@@ -65,6 +68,9 @@ impl RecipeResult {
         let item = pumpkin_data::item::Item::from_registry_key(key)
             .unwrap_or(&pumpkin_data::item::Item::AIR);
         let mut stack = ItemStack::new(self.count, item);
+        for (component, value) in self.components {
+            stack.patch.push((*component, Some(value.clone_dyn())));
+        }
         if let Some(sherds) = self.pot_decorations {
             let sherd_names = sherds
                 .into_iter()
@@ -205,6 +211,7 @@ fn recipe_matches(
                 item_id: result.id.to_string(),
                 count: result.count,
                 pot_decorations: None,
+                components: result.components,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingShapeless {
@@ -233,6 +240,7 @@ fn recipe_matches(
                 item_id: result.id.to_string(),
                 count: result.count,
                 pot_decorations: None,
+                components: result.components,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingTransmute {
@@ -257,6 +265,7 @@ fn recipe_matches(
                 item_id: result.id.to_string(),
                 count: result.count,
                 pot_decorations: None,
+                components: result.components,
             })
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingDecoratedPot { .. }) => {
@@ -282,6 +291,7 @@ fn recipe_matches(
                 item_id: "minecraft:decorated_pot".to_string(),
                 count: 1,
                 pot_decorations: Some(sherds),
+                components: &[],
             })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shaped {
@@ -334,6 +344,7 @@ fn recipe_matches(
                 item_id: result.item_id.clone(),
                 count: result.count,
                 pot_decorations: None,
+                components: &[],
             })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shapeless {
@@ -362,6 +373,7 @@ fn recipe_matches(
                 item_id: result.item_id.clone(),
                 count: result.count,
                 pot_decorations: None,
+                components: &[],
             })
         }
         _ => None,
@@ -482,6 +494,7 @@ impl Slot for ResultSlot {
             stack.item.id as i32,
             stack.item_count as i32,
         );
+        player.on_recipe_crafted(stack);
         for i in 0..self.inventory.size() {
             self.inventory.remove_stack_specific(i, 1);
         }
@@ -673,3 +686,30 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::item::Item;
+
+    fn mace_result(grid_size: u8, top_slot: usize) -> Option<String> {
+        let inventory = CraftingInventory::new(grid_size, grid_size);
+        inventory.set_stack(top_slot, ItemStack::new(1, &Item::HEAVY_CORE));
+        inventory.set_stack(
+            top_slot + usize::from(grid_size),
+            ItemStack::new(1, &Item::BREEZE_ROD),
+        );
+        match_crafting_recipe(&inventory, None).map(|result| result.item_id)
+    }
+
+    #[test]
+    fn padded_shaped_recipe_matches_in_any_column() {
+        for (grid_size, top_slot) in [(2, 0), (2, 1), (3, 0), (3, 1), (3, 5)] {
+            assert_eq!(
+                mace_result(grid_size, top_slot).as_deref(),
+                Some("minecraft:mace"),
+                "grid {grid_size}x{grid_size}, top slot {top_slot}"
+            );
+        }
+    }
+}

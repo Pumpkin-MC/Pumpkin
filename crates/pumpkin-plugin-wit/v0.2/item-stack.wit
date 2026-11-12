@@ -46,6 +46,55 @@ interface item-stack {
         /// Returns the maximum number of items that can be in this stack.
         get-max-count: async func() -> u8;
 
+        /// Creates an independent copy of this item stack.
+        clone: async func() -> item-stack;
+
+        /// Creates a copy of this item stack with the specified count.
+        with-count: async func(count: u8) -> item-stack;
+
+        /// Checks whether this item stack has the same item type and data components as another stack (ignoring count).
+        is-similar: async func(other: item-stack) -> bool;
+
+        /// Returns the current durability damage on this item stack (0 if undamaged).
+        get-damage: async func() -> s32;
+        /// Sets the durability damage on this item stack.
+        set-damage: async func(damage: s32);
+        /// Applies `amount` durability damage to this item stack, respecting Unbreaking and unbreakable state.
+        /// Returns `true` if the item broke and was depleted.
+        damage-item: async func(amount: s32) -> bool;
+        /// Returns the maximum durability damage this item stack can take (0 if not damageable).
+        get-max-damage: async func() -> s32;
+        /// Returns whether this item stack can take durability damage.
+        is-damageable: async func() -> bool;
+        /// Returns whether this item stack has the unbreakable component.
+        is-unbreakable: async func() -> bool;
+        /// Sets or removes the unbreakable component on this item stack.
+        set-unbreakable: async func(unbreakable: bool);
+
+        /// Returns whether this item belongs to the specified item tag (e.g. `"minecraft:pickaxes"` or `"#c:tools"`).
+        has-tag: async func(tag: string) -> bool;
+        /// Returns all item tags this item belongs to.
+        get-tags: async func() -> list<string>;
+        /// Returns whether this item stack is the correct tool to harvest drops from the specified block (e.g. `"minecraft:diamond_ore"`).
+        is-correct-for-drops: async func(block-name: string) -> bool;
+        /// Returns the mining speed multiplier of this item stack against the specified block (1.0 if no tool rule matches).
+        get-mining-speed: async func(block-name: string) -> f32;
+
+        /// Returns the anvil repair cost of this item stack.
+        get-repair-cost: async func() -> s32;
+        /// Sets the anvil repair cost of this item stack.
+        set-repair-cost: async func(cost: s32);
+
+        /// Returns the custom item model resource location override, if set.
+        get-item-model: async func() -> option<string>;
+        /// Sets or clears the custom item model resource location override.
+        set-item-model: async func(model: option<string>);
+
+        /// Returns the enchantment glint override, if set.
+        get-enchantment-glint-override: async func() -> option<bool>;
+        /// Sets or clears the enchantment glint override.
+        set-enchantment-glint-override: async func(glint: option<bool>);
+
         /// Returns all enchantments on this item stack.
         get-enchantments: async func() -> list<enchantment-value>;
         /// Adds an enchantment to this item stack.
@@ -101,4 +150,13 @@ interface item-stack {
         /// Removes a data component from this item stack.
         remove-component: async func(component: data-component);
     }
+
+    /// Returns whether the item with `item-name` (e.g. `"minecraft:diamond_pickaxe"` or `"diamond_pickaxe"`) belongs to `tag` (e.g. `"#minecraft:pickaxes"` or `"c:tools"`).
+    is-item-in-tag: func(item-name: string, tag: string) -> bool;
+
+    /// Returns the registry keys of all items in `tag` (e.g. `"minecraft:pickaxes"` or `"c:ores"`).
+    get-items-in-tag: func(tag: string) -> list<string>;
+
+    /// Returns all item tags that the item with `item-name` belongs to.
+    get-item-tags: func(item-name: string) -> list<string>;
 }

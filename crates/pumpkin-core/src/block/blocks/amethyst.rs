@@ -1,9 +1,9 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId, FacingExt,
-    block_properties::AmethystClusterLikeProperties,
+    block_properties::AmethystClusterLikeProperties, fluid::Fluid,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use rand::RngExt;
 
 use crate::block::{
@@ -37,16 +37,16 @@ impl BlockMetadata for AmethystBlock {
 impl BlockBehaviour for AmethystBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = AmethystClusterLikeProperties::from_state_id(args.block.default_state.id);
-        props.facing = args.direction.to_facing();
+        props.facing = args.direction.opposite().to_facing();
         props.waterlogged = args.replacing.water_source();
         props.to_state_id(args.block)
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        // Use the provided direction, or fallback to the current state's direction if missing
+        // Use the provided direction, or fallback to the current state's support direction if missing
         let direction = args
             .direction
-            .unwrap_or_else(|| self.get_direction(args.state.id, args.block));
+            .unwrap_or_else(|| self.get_direction(args.state.id, args.block).opposite());
 
         WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction)
     }
@@ -55,6 +55,15 @@ impl BlockBehaviour for AmethystBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
+        let props = AmethystClusterLikeProperties::from_state_id(args.state_id);
+        if props.waterlogged {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
         WallMountedBlock::get_state_for_neighbor_update(self, args)
     }
 }
@@ -62,7 +71,7 @@ impl BlockBehaviour for AmethystBlock {
 impl WallMountedBlock for AmethystBlock {
     fn get_direction(&self, state_id: BlockStateId, _block: &Block) -> BlockDirection {
         let props = AmethystClusterLikeProperties::from_state_id(state_id);
-        props.facing.to_block_direction().opposite()
+        props.facing.to_block_direction()
     }
 }
 

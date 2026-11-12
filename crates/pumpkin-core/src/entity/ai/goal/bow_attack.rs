@@ -64,7 +64,8 @@ impl BowAttackGoal {
             )
     }
 
-    fn is_holding_bow(mob: &dyn Mob) -> bool {
+    #[must_use]
+    pub fn is_holding_bow(mob: &dyn Mob) -> bool {
         Self::main_hand_item(mob).item.id == Item::BOW.id
     }
 

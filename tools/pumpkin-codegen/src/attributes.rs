@@ -13,6 +13,12 @@ struct Attributes {
     id: u8,
     /// Default numeric value applied to entities that do not override this attribute.
     default_value: f64,
+    /// Minimum allowed value (`RangedAttribute.getMinValue`).
+    min_value: f64,
+    /// Maximum allowed value (`RangedAttribute.getMaxValue`).
+    max_value: f64,
+    /// Whether this attribute is synchronized to clients (`Attribute.isClientSyncable`).
+    client_syncable: bool,
 }
 
 /// Generates the `TokenStream` for the `Attributes` struct and its associated constants.
@@ -33,12 +39,18 @@ pub fn build() -> TokenStream {
 
         let id_lit = LitInt::new(&raw_value.id.to_string(), Span::call_site());
         let default_value_lit = raw_value.default_value;
+        let min_value_lit = raw_value.min_value;
+        let max_value_lit = raw_value.max_value;
+        let client_syncable_lit = raw_value.client_syncable;
         let name_str = format!("minecraft:{raw_name}");
 
         constant_defs.push(quote!(
             pub const #constant_ident: Self = Self {
                 id: #id_lit,
                 default_value: #default_value_lit,
+                min_value: #min_value_lit,
+                max_value: #max_value_lit,
+                client_syncable: #client_syncable_lit,
                 name: #name_str,
             };
         ));
@@ -51,6 +63,9 @@ pub fn build() -> TokenStream {
         pub struct Attributes {
             pub id: u8,
             pub default_value: f64,
+            pub min_value: f64,
+            pub max_value: f64,
+            pub client_syncable: bool,
             pub name: &'static str,
         }
         impl PartialEq for Attributes {
@@ -70,6 +85,15 @@ pub fn build() -> TokenStream {
             pub const ALL: &'static [Self] = &[
                 #(Self::#constant_idents),*
             ];
+
+            #[must_use]
+            pub const fn sanitize_value(&self, value: f64) -> f64 {
+                if value.is_nan() {
+                    self.min_value
+                } else {
+                    value.clamp(self.min_value, self.max_value)
+                }
+            }
         }
     }
 }
