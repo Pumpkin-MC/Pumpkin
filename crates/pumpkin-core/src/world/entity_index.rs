@@ -1,10 +1,12 @@
 use std::sync::{Arc, RwLock, Weak};
 
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use rustc_hash::FxHashMap;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::mob::has_game_event_listener;
 use crossbeam::atomic::AtomicCell;
 
 type Registry = Vec<Arc<dyn EntityBase>>;
@@ -64,6 +66,11 @@ struct Index {
     slots: FxHashMap<i32, usize>,
     uuids: FxHashMap<Uuid, usize>,
     ranges: Vec<Option<CellRange>>,
+    /// Copy of each entity's bounds, so exact tests skip the entity itself.
+    bounds: Vec<AtomicCell<BoundingBox>>,
+    types: Vec<&'static EntityType>,
+    /// Mobs with game event listeners, in list order.
+    listeners: Vec<usize>,
     cells: FxHashMap<Cell, Vec<usize>>,
     oversized: Vec<usize>,
 }
@@ -79,12 +86,21 @@ impl Index {
         self.ranges.clear();
         self.cells.clear();
         self.oversized.clear();
-        for (slot, entity) in registry.iter().enumerate() {
-            let entity = entity.get_entity();
+        self.types.clear();
+        self.bounds.clear();
+        self.listeners.clear();
+        for (slot, registered) in registry.iter().enumerate() {
+            let entity = registered.get_entity();
             self.slots.insert(entity.entity_id, slot);
             // The first in list order wins, like a linear search.
             self.uuids.entry(entity.entity_uuid).or_insert(slot);
-            let range = Self::entity_range(&entity.bounding_box.load());
+            self.types.push(entity.entity_type);
+            if registered.get_mob().is_some_and(has_game_event_listener) {
+                self.listeners.push(slot);
+            }
+            let bounds = entity.bounding_box.load();
+            self.bounds.push(AtomicCell::new(bounds));
+            let range = Self::entity_range(&bounds);
             self.ranges.push(range);
             self.insert(slot, range);
         }
@@ -109,6 +125,7 @@ impl Index {
         let Some(&slot) = self.slots.get(&entity_id) else {
             return;
         };
+        self.bounds[slot].store(*area);
         let next = Self::entity_range(area);
         let previous = self.ranges[slot];
         if previous == next {
@@ -132,21 +149,31 @@ impl Index {
         self.insert(slot, next);
     }
 
-    fn candidates(&self, area: &BoundingBox, len: usize) -> Vec<usize> {
+    fn intersects(&self, slot: usize, area: &BoundingBox) -> bool {
+        area.intersects(&self.bounds[slot].load())
+    }
+
+    /// Slots in registry order whose type passes `matches` and whose cells touch `area`.
+    fn candidates(
+        &self,
+        area: &BoundingBox,
+        matches: impl Fn(&'static EntityType) -> bool,
+    ) -> Vec<usize> {
+        let matches = |slot: &usize| matches(self.types[*slot]);
         let Some(range) = CellRange::of(area) else {
-            return (0..len).collect();
+            return (0..self.types.len()).filter(matches).collect();
         };
-        let mut slots = self.oversized.clone();
+        let mut slots: Vec<usize> = self.oversized.iter().copied().filter(matches).collect();
         if range.count() <= self.cells.len() as u64 {
             for cell in range.cells() {
                 if let Some(members) = self.cells.get(&cell) {
-                    slots.extend_from_slice(members);
+                    slots.extend(members.iter().copied().filter(matches));
                 }
             }
         } else {
             for (&cell, members) in &self.cells {
                 if range.contains(cell) {
-                    slots.extend_from_slice(members);
+                    slots.extend(members.iter().copied().filter(matches));
                 }
             }
         }
@@ -188,12 +215,39 @@ impl EntityIndex {
         registry: Arc<Registry>,
         area: BoundingBox,
     ) -> impl Iterator<Item = Arc<dyn EntityBase>> + use<> {
-        let slots = self.with_index(&registry, |index| index.candidates(&area, registry.len()));
-        slots.into_iter().filter_map(move |slot| {
-            let entity = &registry[slot];
-            area.intersects(&entity.get_entity().bounding_box.load())
-                .then(|| entity.clone())
-        })
+        self.query_types(registry, area, |_| true)
+    }
+
+    /// Like [`Self::query`], limited to entity types that pass `matches`.
+    pub fn query_types<F: Fn(&'static EntityType) -> bool>(
+        &self,
+        registry: Arc<Registry>,
+        area: BoundingBox,
+        matches: F,
+    ) -> impl Iterator<Item = Arc<dyn EntityBase>> + use<F> {
+        let slots = self.with_index(&registry, |index| {
+            let mut slots = index.candidates(&area, matches);
+            slots.retain(|&slot| index.intersects(slot, &area));
+            slots
+        });
+        slots.into_iter().map(move |slot| registry[slot].clone())
+    }
+
+    /// Mobs with game event listeners whose body overlaps `area`, in list order.
+    pub fn listeners(
+        &self,
+        registry: Arc<Registry>,
+        area: BoundingBox,
+    ) -> impl Iterator<Item = Arc<dyn EntityBase>> + use<> {
+        let slots: Vec<usize> = self.with_index(&registry, |index| {
+            index
+                .listeners
+                .iter()
+                .copied()
+                .filter(|&slot| index.intersects(slot, &area))
+                .collect()
+        });
+        slots.into_iter().map(move |slot| registry[slot].clone())
     }
 
     /// The first entity with `uuid` in registry order, without a scan.
@@ -208,13 +262,17 @@ impl EntityIndex {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let next = Index::entity_range(&area);
-        if index
-            .slots
-            .get(&entity_id)
-            .is_none_or(|&slot| index.ranges[slot] == next)
-        {
-            bounds.store(area);
-            return;
+        match index.slots.get(&entity_id) {
+            None => {
+                bounds.store(area);
+                return;
+            }
+            Some(&slot) if index.ranges[slot] == next => {
+                index.bounds[slot].store(area);
+                bounds.store(area);
+                return;
+            }
+            Some(_) => {}
         }
         drop(index);
         let mut index = self

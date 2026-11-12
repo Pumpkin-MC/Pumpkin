@@ -265,6 +265,33 @@ impl ToTokens for CookingRecipeStruct {
     }
 }
 
+/// Vanilla `ShapedRecipePattern.shrink`.
+fn shrink(pattern: &[String]) -> Vec<&str> {
+    let is_filled = |c: char| c != ' ';
+    let top = pattern
+        .iter()
+        .position(|row| row.contains(is_filled))
+        .expect("shaped recipe pattern has no ingredients");
+    let bottom = pattern
+        .iter()
+        .rposition(|row| row.contains(is_filled))
+        .unwrap();
+    let left = pattern
+        .iter()
+        .filter_map(|row| row.find(is_filled))
+        .min()
+        .unwrap();
+    let right = pattern
+        .iter()
+        .filter_map(|row| row.rfind(is_filled))
+        .max()
+        .unwrap();
+    pattern[top..=bottom]
+        .iter()
+        .map(|row| &row[left..=right])
+        .collect()
+}
+
 /// Deserialized shaped crafting recipe.
 #[derive(Deserialize)]
 pub struct CraftingShapedRecipeStruct {
@@ -302,11 +329,7 @@ impl ToTokens for CraftingShapedRecipeStruct {
                 quote! { (#key, #ingredient) }
             })
             .collect::<Vec<_>>();
-        let pattern = self
-            .pattern
-            .iter()
-            .map(quote::ToTokens::to_token_stream)
-            .collect::<Vec<_>>();
+        let pattern = shrink(&self.pattern);
         let result = self.result.to_token_stream();
 
         tokens.extend(quote! {

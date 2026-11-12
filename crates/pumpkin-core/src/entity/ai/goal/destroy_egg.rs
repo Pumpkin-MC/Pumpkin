@@ -74,7 +74,7 @@ impl Stepping for DestroyEggGoal {
             Sound::EntityZombieDestroyEgg as u16,
             SoundCategory::Hostile,
             &pos_f64,
-            0.7,
+            0.5,
             random.mul_add(0.2, 0.9),
         );
     }
@@ -93,7 +93,7 @@ impl Stepping for DestroyEggGoal {
 }
 
 impl MoveToTargetPos for DestroyEggGoal {
-    fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool {
+    fn is_target_pos(&self, world: &World, block_pos: BlockPos) -> bool {
         self.step_and_destroy_block_goal
             .is_target_pos(world, block_pos)
     }

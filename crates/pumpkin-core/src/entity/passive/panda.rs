@@ -5,7 +5,6 @@ use std::sync::{
 
 use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
@@ -26,8 +25,6 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
-
-const TEMPT_ITEMS: &[&Item] = &[&Item::BAMBOO];
 
 pub const FLAG_SNEEZE: u8 = 2;
 pub const FLAG_ROLL: u8 = 4;
@@ -143,7 +140,14 @@ impl PandaEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.2, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.0,
+                    &tag::Item::MINECRAFT_PANDA_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -250,8 +254,6 @@ impl AgeableMob for PandaEntity {
 impl Animal for PandaEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_PANDA_FOOD)
-            || item_stack.item == &Item::BAMBOO
-            || item_stack.item == &Item::CAKE
     }
 }
 
@@ -282,13 +284,11 @@ impl Mob for PandaEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_ageable_nbt(nbt);
         nbt.put_string("MainGene", self.get_main_gene().as_str().to_string());
         nbt.put_string("HiddenGene", self.get_hidden_gene().as_str().to_string());
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_ageable_nbt(nbt);
         if let Some(main) = nbt.get_string("MainGene") {
             self.set_main_gene(PandaGene::from_name(main));
         }

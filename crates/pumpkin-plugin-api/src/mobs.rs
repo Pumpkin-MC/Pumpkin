@@ -148,7 +148,9 @@ macro_rules! define_mob_wrapper {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Sheep entities.
-    Sheep, Sheep, SheepData
+    Sheep,
+    Sheep,
+    SheepData
 );
 
 impl<'a> Sheep<'a> {
@@ -183,7 +185,9 @@ impl<'a> Sheep<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Wolf entities.
-    Wolf, Wolf, WolfData
+    Wolf,
+    Wolf,
+    WolfData
 );
 
 impl<'a> Wolf<'a> {
@@ -246,7 +250,9 @@ impl<'a> Wolf<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Cat entities.
-    Cat, Cat, CatData
+    Cat,
+    Cat,
+    CatData
 );
 
 impl<'a> Cat<'a> {
@@ -309,7 +315,9 @@ impl<'a> Cat<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Villager entities.
-    Villager, Villager, VillagerData
+    Villager,
+    Villager,
+    VillagerData
 );
 
 impl<'a> Villager<'a> {
@@ -359,7 +367,9 @@ impl<'a> Villager<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Creeper entities.
-    Creeper, Creeper, CreeperData
+    Creeper,
+    Creeper,
+    CreeperData
 );
 
 impl<'a> Creeper<'a> {
@@ -422,7 +432,9 @@ impl<'a> Creeper<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Slime and Magma Cube entities.
-    Slime, Slime, SlimeData
+    Slime,
+    Slime,
+    SlimeData
 );
 
 impl<'a> Slime<'a> {
@@ -443,7 +455,9 @@ impl<'a> Slime<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Enderman entities.
-    Enderman, Enderman, EndermanData
+    Enderman,
+    Enderman,
+    EndermanData
 );
 
 impl<'a> Enderman<'a> {
@@ -476,7 +490,9 @@ impl<'a> Enderman<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Iron Golem entities.
-    IronGolem, IronGolem, IronGolemData
+    IronGolem,
+    IronGolem,
+    IronGolemData
 );
 
 impl<'a> IronGolem<'a> {
@@ -497,7 +513,9 @@ impl<'a> IronGolem<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Fox entities.
-    Fox, Fox, FoxData
+    Fox,
+    Fox,
+    FoxData
 );
 
 impl<'a> Fox<'a> {
@@ -546,7 +564,9 @@ impl<'a> Fox<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Shulker entities.
-    Shulker, Shulker, ShulkerData
+    Shulker,
+    Shulker,
+    ShulkerData
 );
 
 impl<'a> Shulker<'a> {
@@ -596,7 +616,9 @@ impl<'a> Shulker<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Zombie entities.
-    Zombie, Zombie, ZombieData
+    Zombie,
+    Zombie,
+    ZombieData
 );
 
 impl<'a> Zombie<'a> {
@@ -631,7 +653,9 @@ impl<'a> Zombie<'a> {
 
 define_mob_wrapper!(
     /// Specialized wrapper for Ageable animal mobs (cows, pigs, chickens, rabbits, etc.).
-    Ageable, Ageable, AgeableData
+    Ageable,
+    Ageable,
+    AgeableData
 );
 
 impl<'a> Ageable<'a> {

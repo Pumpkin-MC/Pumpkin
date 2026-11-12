@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use pumpkin_data::enchantment::LevelBasedValue;
 use pumpkin_util::math::vector3::Vector3;
@@ -80,18 +79,16 @@ impl ApplyEntityImpulse {
             local_dir.z * scale.z * mag,
         );
 
-        let current_velocity = entity.velocity.load();
-        let new_velocity = current_velocity + impulse;
-        entity.velocity.store(new_velocity);
-        entity.velocity_dirty.store(true, Ordering::SeqCst);
-        entity.send_velocity();
-
-        let player = owner
-            .cloned()
-            .or_else(|| world.get_player_by_id(entity.entity_id));
-
-        if let Some(player) = player {
-            player.set_velocity(new_velocity);
+        // A player's goes through `PlayerVelocityEvent`
+        entity.add_velocity(impulse);
+        if let Some(owner) = owner
+            && owner.entity_id() == entity.entity_id
+        {
+            owner.living_entity.apply_post_impulse_grace_time(10);
+        } else if let Some(entity_base) = world.get_entity_by_id(entity.entity_id)
+            && let Some(living) = entity_base.get_living_entity()
+        {
+            living.apply_post_impulse_grace_time(10);
         }
     }
 }

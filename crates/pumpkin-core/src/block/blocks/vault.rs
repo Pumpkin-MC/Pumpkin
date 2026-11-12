@@ -3,7 +3,6 @@ use std::sync::Arc;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{LadderLikeProperties, VaultLikeProperties, VaultState};
 use pumpkin_data::item::Item;
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
@@ -11,6 +10,8 @@ use pumpkin_world::world::BlockFlags;
 use crate::block::entities::vault::VaultBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, OnPlaceArgs, PlacedArgs, UseWithItemArgs};
+use crate::entity::EntityBase;
+use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
 #[pumpkin_block("minecraft:vault")]
 pub struct VaultBlock;
@@ -105,12 +106,31 @@ impl BlockBehaviour for VaultBlock {
             &args.position.to_f64(),
         );
 
-        // Spawn trial vault loot (emeralds, diamond, iron)
-        let loot_stacks = vec![
-            ItemStack::new(4, &Item::EMERALD),
-            ItemStack::new(1, &Item::DIAMOND),
-            ItemStack::new(2, &Item::IRON_INGOT),
-        ];
+        let custom_loot_table = vault_entity
+            .config
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(|cfg| cfg.get_string("loot_table").map(str::to_owned));
+        let default_loot_table = if props.ominous {
+            "minecraft:chests/trial_chambers/reward_ominous"
+        } else {
+            "minecraft:chests/trial_chambers/reward"
+        };
+        let loot_table_key = custom_loot_table.as_deref().unwrap_or(default_loot_table);
+        let loot_stacks = args
+            .world
+            .get_loot_table(loot_table_key)
+            .map(|handle| {
+                let params = LootContextParameters {
+                    world: Some(args.world),
+                    position: Some(args.position.to_centered_f64()),
+                    this_entity: Some(args.player.as_ref() as &dyn EntityBase),
+                    ..Default::default()
+                };
+                generate_loot_from_handle(&handle, rand::random(), &params)
+            })
+            .unwrap_or_default();
 
         for stack in loot_stacks {
             args.world.drop_stack(args.position, stack);

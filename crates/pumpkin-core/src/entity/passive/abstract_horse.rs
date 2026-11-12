@@ -214,10 +214,8 @@ pub trait AbstractHorse: Animal + AgeableMob {
 
     fn randomize_attributes(&self) {}
 
-    fn refresh_age_dimensions(&self) {
-        let entity = self.get_entity();
-        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, self.is_baby()));
-    }
+    /// Re-pins a size override after growing up; the age size itself comes from data.
+    fn refresh_age_dimensions(&self) {}
 
     fn finalize_horse_spawn(
         &self,
@@ -1293,6 +1291,10 @@ macro_rules! abstract_horse_mob_hooks {
     (@shared) => {
         fn get_mob_entity(&self) -> &$crate::entity::mob::MobEntity {
             &self.mob_entity
+        }
+
+        fn on_climbable(&self) -> bool {
+            false
         }
 
         fn as_ageable(&self) -> Option<&dyn $crate::entity::ageable::AgeableMob> {

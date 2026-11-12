@@ -525,6 +525,20 @@ impl RegionFile for LinearV2File {
         }
     }
 
+    fn has_chunk(&self, index: usize) -> bool {
+        self.chunks_data[index].is_some()
+    }
+
+    fn delete_chunk(&mut self, index: usize) -> std::io::Result<bool> {
+        if self.chunks_data[index].take().is_none() {
+            return Ok(false);
+        }
+        self.timestamps[index] = 0;
+        self.buckets[Self::chunk_bucket_index(index, self.grid_size)] = None;
+        self.staged = true;
+        Ok(true)
+    }
+
     fn read_chunk(&self, index: usize) -> Result<Option<Bytes>, ChunkReadingError> {
         Ok(self.chunks_data[index].clone())
     }

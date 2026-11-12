@@ -152,13 +152,12 @@ Change what the task needs and nothing else. If the task is ambiguous, pick the 
 
 ## Checking your work
 
-CI only runs on the affected packages (`.github/scripts/ci_packages.py`). Locally, run it on the crates you touched plus the crates that depend on them. `cargo-nextest` and `cargo-machete` install with `cargo install`, and `typos` is `typos-cli` on crates.io.
+CI only runs on the affected packages (`.github/scripts/ci_packages.py`). Locally, run it on the crates you touched plus the crates that depend on them. `cargo-nextest` installs with `cargo install`, and `typos` is `typos-cli` on crates.io.
 
 ```bash
 cargo fmt --check
 cargo clippy -p <crate> --all-targets --all-features
 cargo nextest run -p <crate> --no-tests=pass
-cargo machete
 typos
 ```
 
