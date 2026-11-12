@@ -10,6 +10,8 @@ use crate::entity::EntityBase;
 use crate::entity::ai::goal::breed::BreedGoal;
 
 const BREED_RANGE: f64 = 3.0;
+const DEFAULT_SPEED_MODIFIER: f32 = 1.0;
+const DEFAULT_CLOSE_ENOUGH_DISTANCE: i32 = 2;
 const DURATION: i32 = 110;
 const MIN_CHILD_DELAY: i32 = 60;
 const CHILD_DELAY_SPREAD: i32 = 50;
@@ -35,10 +37,23 @@ pub struct AnimalMakeLove {
 impl AnimalMakeLove {
     #[must_use]
     pub const fn new(partner_type: &'static EntityType) -> Self {
+        Self::with_speed_and_distance(
+            partner_type,
+            DEFAULT_SPEED_MODIFIER,
+            DEFAULT_CLOSE_ENOUGH_DISTANCE,
+        )
+    }
+
+    #[must_use]
+    pub const fn with_speed_and_distance(
+        partner_type: &'static EntityType,
+        speed_modifier: f32,
+        close_enough_distance: i32,
+    ) -> Self {
         Self {
             partner_type,
-            speed_modifier: 1.0,
-            close_enough_distance: 2,
+            speed_modifier,
+            close_enough_distance,
             spawn_child_at_time: 0,
         }
     }

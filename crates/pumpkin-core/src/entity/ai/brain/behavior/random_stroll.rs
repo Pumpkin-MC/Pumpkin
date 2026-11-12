@@ -124,3 +124,60 @@ fn get_target_fly_pos(
         f64::from(std::f32::consts::FRAC_PI_2),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::Ordering;
+
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::vector3::Vector3;
+
+    use super::*;
+    use crate::entity::ai::brain::BrainTick;
+    use crate::entity::ai::brain::behavior::BehaviorControl;
+    use crate::entity::ai::test_support::world;
+    use crate::entity::passive::cow::CowEntity;
+    use crate::entity::{Entity, EntityBase};
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn starts(mut behavior: OneShot, in_water: bool) -> Result<bool, Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::COW,
+        ));
+        cow.get_entity()
+            .touching_water
+            .store(in_water, Ordering::Relaxed);
+        let mut state = crate::entity::ai::brain::BrainState::default();
+        for id in behavior.required_memories() {
+            state.register_memory(*id);
+        }
+        let started = behavior.try_start(&mut BrainTick {
+            state: &mut state,
+            world: &world,
+            mob: &*cow,
+            time: 0,
+        });
+        Ok(started)
+    }
+
+    #[tokio::test]
+    async fn a_stroll_that_may_not_start_in_water_waits_for_dry_land() -> TestResult {
+        let not_from_water = stroll_with_water(0.15, false);
+        let from_water = stroll_with_water(0.15, true);
+        let default = stroll(0.15);
+        let results = (
+            starts(not_from_water, true)?,
+            starts(stroll_with_water(0.15, false), false)?,
+            starts(from_water, true)?,
+            starts(default, true)?,
+        );
+
+        assert_eq!(results, (false, true, true, true));
+        Ok(())
+    }
+}

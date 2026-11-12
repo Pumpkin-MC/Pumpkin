@@ -4,9 +4,21 @@ use super::super::memory::position_tracker::{EntityTracker, PositionTracker};
 use super::super::memory::walk_target::WalkTarget;
 use super::super::memory::{MemoryStatus, types};
 use super::OneShot;
+use crate::entity::mob::Mob;
 
 #[must_use]
 pub fn create(min_range: i32, max_range: i32, speed_modifier: f32) -> OneShot {
+    create_with(min_range, max_range, move |_| speed_modifier)
+}
+
+/// Vanilla `BabyFollowAdult.create(followRange, speedModifier, ...)` with a speed that depends on
+/// the mob, as the function overload has it.
+#[must_use]
+pub fn create_with(
+    min_range: i32,
+    max_range: i32,
+    speed_modifier: impl Fn(&dyn Mob) -> f32 + Send + Sync + 'static,
+) -> OneShot {
     OneShot::new(
         "BabyFollowAdult",
         vec![
@@ -43,7 +55,7 @@ pub fn create(min_range: i32, max_range: i32, speed_modifier: f32) -> OneShot {
                 types::WALK_TARGET,
                 WalkTarget::new(
                     Arc::new(EntityTracker::new(adult, false)),
-                    speed_modifier,
+                    speed_modifier(tick.mob),
                     min_range - 1,
                 ),
             );

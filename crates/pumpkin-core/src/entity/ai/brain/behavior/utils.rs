@@ -186,6 +186,13 @@ pub fn is_other_target_much_further_away_than_current_attack_target(
     dist_to_other > dist_to_current + how_much_further_away * how_much_further_away
 }
 
+/// Vanilla `BehaviorUtils.isWithinAttackRange` without its ranged weapon branch (nothing here
+/// holds a usable non-melee weapon): the melee reach.
+#[must_use]
+pub fn is_within_attack_range(body: &dyn Mob, target: &dyn EntityBase) -> bool {
+    body.get_mob_entity().is_in_attack_range(target)
+}
+
 #[must_use]
 pub fn is_breeding(brain: &BrainState) -> bool {
     brain.has_memory_value(types::BREED_TARGET.id())

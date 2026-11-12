@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::entity_variant::{HorseVariant, RabbitVariant};
+use pumpkin_data::entity_variant::{AxolotlVariant, HorseVariant, RabbitVariant};
 use rand::RngExt;
 
 use crate::entity::EntityBase;
@@ -51,6 +51,10 @@ pub enum SpawnGroupData {
     Zombie {
         is_baby: bool,
         can_spawn_jockey: bool,
+    },
+    Axolotl {
+        types: [AxolotlVariant; 2],
+        group_size: u32,
     },
 }
 

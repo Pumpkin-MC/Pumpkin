@@ -2072,6 +2072,10 @@ pub trait Mob: EntityBase + Send + Sync {
         self.pre_damage(damage_type, source)
     }
 
+    fn mob_can_be_seen_as_enemy(&self) -> bool {
+        true
+    }
+
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
 
     fn on_damage_with_context(
@@ -2806,6 +2810,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn is_pushed_by_fluids(&self) -> bool {
         self.mob_is_pushed_by_fluids()
+    }
+
+    fn can_be_seen_as_enemy(&self) -> bool {
+        self.mob_can_be_seen_as_enemy() && self.is_visible_and_vulnerable()
     }
 
     fn sound_source(&self) -> SoundCategory {
