@@ -70,6 +70,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:hopper_transfers_to_chest",
     "pumpkin:tnt_redstone_ignites",
     "pumpkin:furnace_ignites_and_smelts",
+    "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
     "pumpkin:powered_rail_propagation",
     "pumpkin:activator_rail_propagation",
     "pumpkin:detector_rail_minecart",
@@ -459,6 +460,13 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             furnace_smelting::test_furnace_ignites_and_smelts,
+        );
+        register_function_test(
+            "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
+            "pumpkin:empty_3x4x3",
+            30,
+            0,
+            furnace_smelting::test_furnace_returns_empty_bucket_from_lava_bucket_fuel,
         );
         register_function_test(
             "pumpkin:powered_rail_propagation",
