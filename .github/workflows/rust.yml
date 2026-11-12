@@ -220,7 +220,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_NDK_PLATFORM: 24
-      CARGO_BUILD_JOBS: 1
     steps:
       - uses: actions/checkout@v7
         with:
