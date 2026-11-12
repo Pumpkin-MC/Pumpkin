@@ -2065,7 +2065,9 @@ impl<'de> Deserialize<'de> for ProfileNbt {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let mut profile = pumpkin_nbt::NbtCompound::new();
         match serde_json::Value::deserialize(deserializer)? {
-            serde_json::Value::String(name) => profile.put_string("name", name),
+            serde_json::Value::String(name) if is_valid_player_name(&name) => {
+                profile.put_string("name", name);
+            }
             serde_json::Value::Object(fields) => {
                 for (key, value) in fields {
                     let tag = if key == "id" {
@@ -2074,6 +2076,8 @@ impl<'de> Deserialize<'de> for ProfileNbt {
                             return Err(serde::de::Error::custom("a profile id is four ints"));
                         };
                         pumpkin_nbt::tag::NbtTag::IntArray(id.to_vec())
+                    } else if key == "name" && !value.as_str().is_some_and(is_valid_player_name) {
+                        return Err(serde::de::Error::custom("invalid profile name"));
                     } else {
                         hover::json_to_nbt(&value)
                     };
@@ -2084,6 +2088,12 @@ impl<'de> Deserialize<'de> for ProfileNbt {
         }
         Ok(Self(profile))
     }
+}
+
+/// Vanilla's `StringUtil.isValidPlayerName`, which its `PLAYER_NAME` codec checks:
+/// at most 16 characters, each from `!` to `~`.
+fn is_valid_player_name(name: &str) -> bool {
+    name.len() <= 16 && name.as_bytes().iter().all(u8::is_ascii_graphic)
 }
 
 /// The content type of the text component.
@@ -2137,7 +2147,7 @@ pub enum TextContent {
         #[serde(rename = "player")]
         profile: ProfileNbt,
         /// Whether the hat layer is drawn over the head.
-        #[serde(default = "default_hat")]
+        #[serde(default = "default_hat", deserialize_with = "bool_or_byte")]
         hat: bool,
     },
 }
@@ -2145,6 +2155,16 @@ pub enum TextContent {
 /// Vanilla draws the hat layer unless `hat` turns it off.
 const fn default_hat() -> bool {
     true
+}
+
+/// NBT has no booleans, so [`TextComponent::from_nbt`] hands over `hat` as a
+/// byte, which vanilla's `NbtOps` also reads as a boolean.
+fn bool_or_byte<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    value
+        .as_bool()
+        .or_else(|| value.as_i64().map(|byte| byte != 0))
+        .ok_or_else(|| serde::de::Error::custom("expected a boolean"))
 }
 
 /// Tests for the text component implementations.
@@ -2351,7 +2371,7 @@ mod test {
     }
 
     /// A head keeps its whole profile and `hat` through a plugin's `to-json` and
-    /// `from-json`, and the profile's `id` goes out as an int array.
+    /// `from-json` and through NBT, and the profile's `id` goes out as an int array.
     #[test]
     fn player_sprite_keeps_its_profile_and_hat() {
         let json = r#"{"type":"object","object":"player","player":{"name":"Steve","id":[1,2,3,4],"properties":[{"name":"textures","value":"e30="}]},"hat":false}"#;
@@ -2365,6 +2385,13 @@ mod test {
         let profile = nbt.get_compound("player").unwrap();
         assert_eq!(profile.get_int_array("id"), Some(&[1, 2, 3, 4][..]));
         assert_eq!(profile.get_list("properties").map(<[_]>::len), Some(1));
+
+        // NBT has no booleans, so `hat` comes back from it as the byte 0.
+        for component in [head.clone(), TextComponent::text("a").add_child(head)] {
+            let nbt = component.to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+            let from_nbt = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(nbt));
+            assert_eq!(from_nbt, component);
+        }
     }
 
     /// Vanilla rejects these profiles too, so they never reach a client.
@@ -2372,6 +2399,9 @@ mod test {
     fn malformed_player_profiles_are_rejected() {
         for json in [
             r#"{"player":5}"#,
+            r#"{"player":"abcdefghijklmnopq"}"#,
+            r#"{"player":{"name":5}}"#,
+            r#"{"player":{"name":"a b"}}"#,
             r#"{"player":{"id":[1,2,3]}}"#,
             r#"{"player":{"id":"00000001-0000-0002-0000-000300000004"}}"#,
         ] {
