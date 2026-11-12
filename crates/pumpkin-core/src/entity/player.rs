@@ -3373,6 +3373,7 @@ impl Player {
         self.tick_health();
         self.tick_raid_omen();
         self.tick_maps(server);
+        self.tick_compasses();
 
         // Anti-spam counter decay
         let anti_spam = &server.advanced_config.chat.anti_spam;
@@ -6137,6 +6138,69 @@ impl Player {
                     }
                 }
             }
+        }
+    }
+
+    /// Clears the lodestone target of tracked compasses whose lodestone POI is gone.
+    /// Mirrors vanilla `LodestoneTracker#tick` on `CompassItem#inventoryTick`.
+    fn tick_compasses(&self) {
+        use pumpkin_data::data_component_impl::{LodestoneTarget, LodestoneTrackerImpl};
+        use pumpkin_data::item::Item;
+        use pumpkin_data::poi_type::PoiType;
+        use pumpkin_util::math::position::BlockPos;
+        use pumpkin_util::math::vector3::Vector3;
+
+        let world = self.world();
+
+        // Returns a new stack with the target cleared, or None if the target is still valid.
+        let cleared_target = |stack: &ItemStack| -> Option<ItemStack> {
+            let tracker = stack.get_data_component::<LodestoneTrackerImpl>()?;
+            let target = tracker.target.as_ref()?;
+            if target.dimension != world.dimension.minecraft_name {
+                return None;
+            }
+            let target_pos = BlockPos(Vector3::new(target.x, target.y, target.z));
+            if world
+                .portal_poi
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .exists(&target_pos, &|poi| poi == PoiType::Lodestone)
+            {
+                return None;
+            }
+            let mut new_stack = stack.clone();
+            new_stack.set_data_component(LodestoneTrackerImpl {
+                target: None::<LodestoneTarget>,
+                tracked: true,
+            });
+            Some(new_stack)
+        };
+
+        let inventory = self.inventory();
+        let mut changed: Vec<(usize, ItemStack)> = Vec::new();
+        {
+            let inv = inventory
+                .main_inventory
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (slot, stack) in inv.iter().enumerate() {
+                if stack.item.id == Item::COMPASS.id
+                    && let Some(new_stack) = cleared_target(stack)
+                {
+                    changed.push((slot, new_stack));
+                }
+            }
+        }
+
+        let off_hand = inventory.off_hand_item();
+        if off_hand.item.id == Item::COMPASS.id
+            && let Some(new_stack) = cleared_target(&off_hand)
+        {
+            inventory.set_slot(PlayerInventory::OFF_HAND_SLOT, new_stack);
+        }
+
+        for (slot, stack) in changed {
+            inventory.set_slot(slot, stack);
         }
     }
 

@@ -55,6 +55,7 @@ use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::jigsaw::JigsawBlock;
 use crate::block::blocks::leaves::LeavesBlock;
 use crate::block::blocks::light::LightBlock;
+use crate::block::blocks::lodestone::LodestoneBlock;
 use crate::block::blocks::logs::LogBlock;
 use crate::block::blocks::loom::LoomBlock;
 use crate::block::blocks::magma::MagmaBlock;
@@ -395,6 +396,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChiseledBookshelfBlock);
     manager.register(ShelfBlock);
     manager.register(LecternBlock);
+    manager.register(LodestoneBlock);
     manager.register(DragonEggBlock);
     manager.register(StemBlock);
     manager.register(AttachedStemBlock);
