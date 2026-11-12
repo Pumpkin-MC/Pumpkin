@@ -12,12 +12,14 @@ use crate::pumpkin::plugin::recipe::RecipeManager as WitRecipeManager;
 use pumpkin::plugin::server::CommandSender as WasmCommandSender;
 use pumpkin_core::command::CommandSender;
 
+use super::permission::to_wit_permission;
 use super::player::{from_wit_permission_level, parse_ban_expiry, to_wit_permission_level};
 use crate::{
     pumpkin::{
         self,
         plugin::{
             datapack::DatapackManager as WitDatapackManager,
+            permission::Permission,
             player::{BanIpOptions, BanPlayerOptions, Player},
             server::{
                 BanManager as WitBanManager, BannedIpEntry, BannedPlayerEntry, Difficulty,
@@ -401,6 +403,15 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .collect();
         server.broadcast_server_links(&protocol_links);
         Ok(())
+    }
+
+    fn get_all_permissions(&mut self, _rep: Resource<Server>) -> wasmtime::Result<Vec<Permission>> {
+        let registry = &self.require_server()?.permission_manager.registry;
+        Ok(registry
+            .get_permissions()
+            .into_iter()
+            .map(to_wit_permission)
+            .collect())
     }
 
     fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
