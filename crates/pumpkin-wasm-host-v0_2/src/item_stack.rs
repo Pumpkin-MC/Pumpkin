@@ -540,11 +540,15 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
     ) -> wasmtime::Result<()> {
         let stack = accessor.get_res(&res)?;
         let mut stack = stack.lock().await;
-        let level = level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32;
 
-        stack.set_custom_data("pumpkin:enchantments", &enchantment_id, NbtTag::Int(level));
+        stack.set_custom_data(
+            "pumpkin:enchantments",
+            &enchantment_id,
+            NbtTag::Int(level as i32),
+        );
 
         if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id) {
+            let level = level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32;
             let mut current_encs = if let Some((_, Some(data))) = stack
                 .patch
                 .iter()
