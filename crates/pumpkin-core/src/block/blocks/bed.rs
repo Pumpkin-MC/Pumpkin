@@ -335,7 +335,11 @@ impl BedBlock {
 
         // Make sure there are no monsters nearby
         for entity in world.entities.load().iter() {
-            if !entity_prevents_sleep(entity.get_entity()) {
+            if !entity_prevents_sleep(entity.get_entity())
+                || entity
+                    .get_mob()
+                    .is_some_and(|mob| !mob.is_preventing_player_rest(player.as_ref()))
+            {
                 continue;
             }
 

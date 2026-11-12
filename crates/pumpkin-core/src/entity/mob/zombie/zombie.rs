@@ -1,12 +1,14 @@
-use crate::entity::Entity;
-use crate::entity::EntityBase;
+use crate::entity::mob::Mob;
 use crate::entity::mob::equipment::RegionalDifficulty;
+use crate::entity::mob::spawn::{EntitySpawnReason, SpawnGroupData};
 use crate::entity::mob::zombie::ZombieEntityBase;
-use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 use pumpkin_data::BlockState;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
@@ -21,38 +23,40 @@ impl ZombieEntity {
         let zombie = Self { entity };
         Arc::new(zombie)
     }
-
-    #[must_use]
-    pub fn with_can_break_doors(entity: Entity, can_break_doors: bool) -> Arc<Self> {
-        let entity = ZombieEntityBase::with_can_break_doors(entity, can_break_doors);
-        let zombie = Self { entity };
-        Arc::new(zombie)
-    }
 }
 
 impl Mob for ZombieEntity {
-    fn xp_reward(&self) -> u32 {
-        self.entity.xp_reward()
-    }
-
-    fn can_hold_item(&self, stack: &ItemStack) -> bool {
-        self.entity.can_hold_item(stack)
-    }
+    crate::zombie_mob_hooks!(entity);
 
     fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
         super::wants_to_pick_up(self, stack)
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.ambient_sound
     }
 
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityZombieStep, 0.15, 1.0);
     }
 
-    fn get_mob_entity(&self) -> &MobEntity {
-        &self.entity.mob_entity
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        reason: EntitySpawnReason,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        self.entity
+            .finalize_zombie_spawn(self, world, reason, group_data)
     }
 
-    fn spawn_as_baby(&self) -> bool {
-        self.entity.spawn_as_baby()
+    fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
+        self.entity.do_hurt_target(self, target)
+    }
+
+    fn post_tick(&self) {
+        self.entity
+            .tick_drowning(self, &EntityType::DROWNED, WorldEvent::SoundZombieToDrowned);
     }
 
     fn populate_default_equipment_slots(
@@ -64,32 +68,23 @@ impl Mob for ZombieEntity {
             .populate_default_equipment_slots(world, difficulty);
     }
 
-    fn populate_default_equipment_enchantments(&self, difficulty: &RegionalDifficulty) {
-        self.entity
-            .populate_default_equipment_enchantments(difficulty);
-    }
-
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.entity.mob_write_nbt(nbt);
+        self.entity.write_nbt(nbt);
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.entity.mob_read_nbt(nbt);
+        self.entity.read_nbt(self, nbt);
     }
 }
 
 impl ZombieEntity {
     #[must_use]
     pub fn can_break_doors(&self) -> bool {
-        self.entity
-            .can_break_doors
-            .load(std::sync::atomic::Ordering::Relaxed)
+        self.entity.can_break_doors()
     }
 
     pub fn set_can_break_doors(&self, can_break: bool) {
-        self.entity
-            .can_break_doors
-            .store(can_break, std::sync::atomic::Ordering::Relaxed);
+        self.entity.set_can_break_doors(can_break, self);
     }
 
     #[must_use]

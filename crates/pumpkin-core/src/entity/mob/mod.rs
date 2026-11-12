@@ -862,12 +862,17 @@ impl MobEntity {
         *t = target.as_ref().map(Arc::downgrade);
     }
 
+    /// The target, checked again on every read so a player who turns creative is dropped.
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
-        self.target
+        let target = self
+            .target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
-            .and_then(Weak::upgrade)
+            .and_then(Weak::upgrade)?;
+        (EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity())
+            && self.living_entity.can_attack(target.as_ref()))
+        .then_some(target)
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -920,15 +925,15 @@ impl MobEntity {
             return false;
         }
 
-        let current_brightness = if is_thundering {
-            (sky_light - 10).max(block_light)
+        let brightness = if is_thundering {
+            world.get_raw_brightness(pos, 10)
         } else {
-            sky_light.max(block_light)
+            world.get_max_local_raw_brightness(pos)
         };
 
         // TODO
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
-        current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
+        brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
 
     pub fn check_mob_spawn_rules(
@@ -1256,6 +1261,49 @@ static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
         .fold(f32::MAX, f32::min)
 });
 
+/// Rolls a gift loot table at the mob and hands each stack a plugin did not cancel to `drop`.
+/// Returns whether anything was dropped.
+pub(crate) fn drop_from_gift_loot_table(
+    mob: &dyn Mob,
+    key: &str,
+    mut drop: impl FnMut(ItemStack),
+) -> bool {
+    let entity = mob.get_entity();
+    let world = entity.world.load_full();
+    let Some(table) = world.get_loot_table(key) else {
+        return false;
+    };
+    let this_entity: &dyn EntityBase = mob;
+    let params = crate::world::loot::LootContextParameters {
+        world: Some(&world),
+        position: Some(entity.pos.load()),
+        this_entity: Some(this_entity),
+        ..Default::default()
+    };
+    let drops =
+        crate::world::loot::generate_loot_from_handle(&table, mob.get_random().random(), &params);
+    let mut dropped = false;
+    for stack in drops {
+        let mut drop_event =
+            crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent::new(
+                entity.entity_id,
+                format!("minecraft:{}", stack.item.registry_key),
+                stack.item_count,
+            );
+        if let Some(server) = world.server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut drop_event);
+        }
+        if drop_event.cancelled {
+            continue;
+        }
+        drop(stack);
+        dropped = true;
+    }
+    dropped
+}
+
 pub(crate) fn pick_up_nearby_items(mob: &dyn Mob) {
     let living = &mob.get_mob_entity().living_entity;
     let entity = &living.entity;
@@ -1287,7 +1335,7 @@ pub(crate) fn pick_up_nearby_items(mob: &dyn Mob) {
     }
 }
 
-fn has_game_event_listener(mob: &dyn Mob) -> bool {
+pub(crate) fn has_game_event_listener(mob: &dyn Mob) -> bool {
     let mut listens = false;
     mob.for_each_game_event_listener(&mut |_| listens = true);
     listens
@@ -1324,8 +1372,7 @@ pub(crate) fn game_event_listener_links(
     links.extend(
         world
             .entity_index
-            .query(world.entities.load_full(), area)
-            .filter(|other| other.get_mob().is_some_and(has_game_event_listener))
+            .listeners(world.entities.load_full(), area)
             .map(|other| other.get_entity().entity_id),
     );
 }
@@ -1848,6 +1895,10 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_on_flap(&self) {}
 
     /// See [`EntityBase::play_step_sound`].
+    fn mob_next_step(&self) -> f32 {
+        self.get_entity().default_next_step()
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
         self.play_block_step_sound(state);
     }
@@ -1915,6 +1966,7 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().can_pick_up_loot()
     }
 
+    /// Must not change over the mob's life: the entity index caches which mobs listen.
     fn for_each_game_event_listener(
         &self,
         _visit: &mut dyn FnMut(&dyn crate::world::game_event::GameEventListener),
@@ -2186,6 +2238,15 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     /// How much this mob likes standing on `pos`, used to rank stroll candidates.
+    /// Whether a random target position is safe to path to.
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        self.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_stable_destination(world, pos)
+    }
+
     fn get_walk_target_value(&self, pos: &BlockPos) -> f32 {
         self.as_animal()
             .map_or(0.0, |animal| animal.animal_walk_target_value(pos))
@@ -2205,6 +2266,30 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn as_raider(&self) -> Option<&dyn raider::Raider> {
         None
+    }
+
+    fn as_zombie(&self) -> Option<&zombie::ZombieEntityBase> {
+        None
+    }
+
+    fn on_offspring_spawned_from_egg(&self, _spawner: &Player, _offspring: &dyn Mob) {}
+
+    /// Runs after this mob was positioned on its vehicle.
+    fn mob_ride_tick(&self) {}
+
+    /// How much faster a spear rider charges on this mount.
+    fn charge_speed_modifier(&self) -> f32 {
+        1.0
+    }
+
+    /// Whether this monster keeps `player` from sleeping nearby.
+    fn is_preventing_player_rest(&self, _player: &dyn EntityBase) -> bool {
+        true
+    }
+
+    /// Called on the entity credited with a kill; `false` skips the victim's death loot.
+    fn killed_entity(&self, _killed: &dyn EntityBase) -> bool {
+        true
     }
 
     /// Must return `Some(self)` for every `NeutralMob` implementor. Not compiler-enforced.
@@ -2725,6 +2810,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn sound_source(&self) -> SoundCategory {
         self.mob_sound_source()
+    }
+
+    fn next_step(&self) -> f32 {
+        self.mob_next_step()
     }
 
     fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {

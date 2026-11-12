@@ -28,10 +28,19 @@ pub struct PumpkinMetadata {
     pub license_key: Option<String>,
     /// ISO-8601 timestamp of when this binary/license was issued.
     pub issued_at: String,
+    /// Optional marketplace Ed25519 signature hex over the metadata for authenticated crash/telemetry reporting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wasm_signature_hex: Option<String>,
 }
 
 impl From<pumpkin_plugin_api::MarketplaceMetadata> for PumpkinMetadata {
     fn from(m: pumpkin_plugin_api::MarketplaceMetadata) -> Self {
+        let (clean_issued_at, extracted_sig) = match m.issued_at.split_once('#') {
+            Some((ts, sig)) if !sig.trim().is_empty() => {
+                (ts.to_string(), Some(sig.trim().to_string()))
+            }
+            _ => (m.issued_at, None),
+        };
         Self {
             marketplace_url: m.marketplace_url,
             plugin_id: m.plugin_id,
@@ -42,7 +51,8 @@ impl From<pumpkin_plugin_api::MarketplaceMetadata> for PumpkinMetadata {
             is_paid: m.is_paid,
             user_id: m.user_id,
             license_key: m.license_key,
-            issued_at: m.issued_at,
+            issued_at: clean_issued_at,
+            wasm_signature_hex: extracted_sig,
         }
     }
 }
@@ -98,4 +108,106 @@ pub struct CheckUpdateResponse {
     pub update_available: bool,
     /// The latest stable version string, if one exists.
     pub latest_version: Option<String>,
+}
+
+/// Host runtime environment metadata reported alongside crash reports.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RuntimeEnvironment {
+    /// Host runtime type (`"pumpkin"` or `"vine"`).
+    pub server_type: String,
+    /// Host software version (e.g. `"0.2.2"`).
+    pub server_version: String,
+    /// Target Minecraft version if known (e.g. `"1.21.4"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minecraft_version: Option<String>,
+    /// Host operating system name (e.g. `"Linux"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
+    /// Host CPU architecture (e.g. `"x86_64"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arch: Option<String>,
+}
+
+impl Default for RuntimeEnvironment {
+    fn default() -> Self {
+        Self {
+            server_type: "pumpkin".to_string(),
+            server_version: env!("CARGO_PKG_VERSION").to_string(),
+            minecraft_version: None,
+            os: Some("Linux".to_string()),
+            arch: Some("x86_64".to_string()),
+        }
+    }
+}
+
+/// A single WebAssembly stack trace frame attached to a crash report.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrashBacktraceFrame {
+    /// Optional WebAssembly function index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub func_index: Option<u32>,
+    /// Optional demangled function symbol name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub func_name: Option<String>,
+    /// Optional WebAssembly module or component name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module_name: Option<String>,
+    /// Optional byte offset within the WASM code section.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wasm_offset: Option<u64>,
+}
+
+/// Payload transmitted to `POST /api/v1/rest/telemetry/crash` on Pumpkin Marketplace.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrashReportPayload {
+    /// Verified `pumpkin.metadata` extracted from the WASM binary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<PumpkinMetadata>,
+    /// Marketplace Ed25519 signature hex over the metadata proving binary authenticity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wasm_signature_hex: Option<String>,
+    /// Host runtime environment (`"pumpkin"` or `"vine"`).
+    pub server_type: String,
+    /// Host software version.
+    pub server_version: String,
+    /// Target Minecraft version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minecraft_version: Option<String>,
+    /// Host OS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
+    /// Host CPU architecture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arch: Option<String>,
+    /// Trap classification (`"panic"`, `"unreachable"`, `"memory_out_of_bounds"`, `"out_of_fuel"`, `"stack_overflow"`).
+    pub trap_code: String,
+    /// WIT export, event hook, or command that triggered the crash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_hook: Option<String>,
+    /// Scrubbed guest panic message or trap string.
+    pub error_message: String,
+    /// Optional guest source file and line (`"src/lib.rs:42:9"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location: Option<String>,
+    /// Optional structured WASM stack trace frames.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backtrace: Option<Vec<CrashBacktraceFrame>>,
+    /// Number of identical occurrences batched since the last report (`1..=25`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub occurrence_count: Option<u32>,
+}
+
+/// Response returned by `POST /api/v1/rest/telemetry/crash`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrashReportResponse {
+    /// Processing status (`"recorded"`, `"throttled"`, `"ignored_license"`, `"ignored_unlicensed"`).
+    pub status: String,
+    /// Human-readable status message.
+    pub message: String,
+    /// Computed 64-character SHA-256 deduplication fingerprint.
+    #[serde(default)]
+    pub fingerprint: Option<String>,
+    /// Database ID of the deduplicated crash group.
+    #[serde(default)]
+    pub crash_group_id: Option<i64>,
 }

@@ -9,6 +9,7 @@ use rand::RngExt;
 use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::experience_orb::ExperienceOrbEntity;
+use crate::entity::passive::animal::Animal;
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
 
@@ -158,11 +159,13 @@ impl BreedGoal {
             animal.on_bred_without_offspring(brain);
         }
 
-        world_full.send_entity_status(
-            entity,
-            EntityStatus::InLoveHearts,
-            ActorEventID::InLoveHearts,
-        );
+        if animal.is_none_or(Animal::shows_breeding_hearts) {
+            world_full.send_entity_status(
+                entity,
+                EntityStatus::InLoveHearts,
+                ActorEventID::InLoveHearts,
+            );
+        }
         if world.level_info.load().game_rules.mob_drops
             && let Ok(experience) = u32::try_from(experience)
             && experience > 0
