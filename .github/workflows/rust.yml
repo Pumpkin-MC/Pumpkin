@@ -234,7 +234,10 @@ jobs:
           profile: pixel_5
           force-avd-creation: false
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: cargo ndk-test -t arm64-v8a --workspace
+          script: |
+            adb shell mkdir -p /data/local/tmp/pumpkin
+            adb push assets /data/local/tmp/pumpkin/
+            cargo ndk-test -t arm64-v8a --workspace
 
   build_pull_request:
     name: Build affected packages
