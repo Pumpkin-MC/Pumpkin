@@ -220,6 +220,9 @@ jobs:
       needs.clippy.result == 'success' &&
       (needs.check_wit.result == 'success' || needs.check_wit.result == 'skipped')
     runs-on: ubuntu-latest
+    env:
+      CARGO_NDK_PLATFORM: 24
+      CARGO_BUILD_JOBS: 1
     steps:
       - uses: actions/checkout@v7
         with:
@@ -233,6 +236,24 @@ jobs:
         with:
           shared-key: android-debug-${{ runner.os }}-${{ runner.arch }}
       - run: cargo install cargo-ndk
+      - name: Prepare vanilla datapack
+        shell: bash
+        run: |
+          if [ ! -d assets/datapack/data/minecraft ]; then
+            MC_VERSION=$(awk -F '"' '/^const MC_VERSION: &str = / { print $2 }' crates/pumpkin-data/build.rs)
+            echo "Preparing vanilla datapack for Minecraft $MC_VERSION"
+            VERSION_URL=$(curl -fsSL --retry 3 https://piston-meta.mojang.com/mc/game/version_manifest_v2.json | jq -er --arg version "$MC_VERSION" '.versions[] | select(.id == $version) | .url')
+            SERVER_URL=$(curl -fsSL --retry 3 "$VERSION_URL" | jq -er '.downloads.server.url')
+            curl -fL --retry 3 "$SERVER_URL" -o "$RUNNER_TEMP/minecraft-bundle.jar"
+            unzip -p "$RUNNER_TEMP/minecraft-bundle.jar" "META-INF/versions/$MC_VERSION/server-$MC_VERSION.jar" > "$RUNNER_TEMP/minecraft-server.jar"
+            mkdir -p assets/datapack
+            unzip -q "$RUNNER_TEMP/minecraft-server.jar" 'data/*' -d assets/datapack
+          fi
+          if [ -d assets/conventional_tags/data/c ] && [ ! -d assets/datapack/data/c ]; then
+            cp -R assets/conventional_tags/data/c assets/datapack/data/c
+          fi
+      - name: Build Android test binaries before starting the emulator
+        run: cargo ndk -t arm64-v8a test --workspace --no-run
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -240,8 +261,6 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Start Android emulator and test
         uses: reactivecircus/android-emulator-runner@v2
-        env:
-          CARGO_NDK_PLATFORM: 24
         with:
           api-level: 35
           target: google_apis
@@ -249,7 +268,7 @@ jobs:
           profile: pixel_5
           force-avd-creation: false
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: cargo ndk-test -t arm64-v8a
+          script: cargo ndk-test -t arm64-v8a --workspace
 
   build_pull_request:
     name: Build affected packages
