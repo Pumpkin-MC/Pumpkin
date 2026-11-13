@@ -206,9 +206,8 @@ fn verify_chunk_carvers(
 
 #[test]
 fn no_blend_no_beard_0_0() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_no_blend_no_beard_0_0.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_no_blend_no_beard_0_0.chunk");
     verify_chunk_noise(
         0,
         Dimension::OVERWORLD,
@@ -221,9 +220,8 @@ fn no_blend_no_beard_0_0() {
 
 #[test]
 fn no_blend_no_beard_7_4() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_no_blend_no_beard_7_4.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_no_blend_no_beard_7_4.chunk");
     verify_chunk_noise(
         0,
         Dimension::OVERWORLD,
@@ -236,7 +234,7 @@ fn no_blend_no_beard_7_4() {
 
 #[test]
 fn no_blend_no_beard_only_cell_cache_interpolated_0_0() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+    let expected: Vec<u16> = include_json!(
         "../../../../../assets/tests/noise_no_blend_no_beard_only_cell_cache_interpolated_0_0.chunk"
     );
     verify_chunk_noise(
@@ -251,9 +249,8 @@ fn no_blend_no_beard_only_cell_cache_interpolated_0_0() {
 
 #[test]
 fn no_blend_no_beard_badlands_minus595_544() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_no_blend_no_beard_-595_544.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_no_blend_no_beard_-595_544.chunk");
     verify_chunk_noise(
         0,
         Dimension::OVERWORLD,
@@ -266,9 +263,8 @@ fn no_blend_no_beard_badlands_minus595_544() {
 
 #[test]
 fn no_blend_no_beard_frozen_ocean_minus119_183() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_no_blend_no_beard_-119_183.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_no_blend_no_beard_-119_183.chunk");
     verify_chunk_noise(
         0,
         Dimension::OVERWORLD,
@@ -281,9 +277,8 @@ fn no_blend_no_beard_frozen_ocean_minus119_183() {
 
 #[test]
 fn no_blend_no_beard_13579_minus6_11() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_no_blend_no_beard_13579_-6_11.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_no_blend_no_beard_13579_-6_11.chunk");
     verify_chunk_noise(
         13579,
         Dimension::OVERWORLD,
@@ -296,9 +291,8 @@ fn no_blend_no_beard_13579_minus6_11() {
 
 #[test]
 fn no_blend_no_beard_13579_minus2_15() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_no_blend_no_beard_13579_-2_15.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_no_blend_no_beard_13579_-2_15.chunk");
     verify_chunk_noise(
         13579,
         Dimension::OVERWORLD,
@@ -311,9 +305,8 @@ fn no_blend_no_beard_13579_minus2_15() {
 
 #[test]
 fn no_blend_no_beard_13579_minus7_9() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_no_blend_no_beard_13579_-7_9.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_no_blend_no_beard_13579_-7_9.chunk");
     verify_chunk_noise(
         13579,
         Dimension::OVERWORLD,
@@ -326,9 +319,8 @@ fn no_blend_no_beard_13579_minus7_9() {
 
 #[test]
 fn nether_noise_no_blend_no_beard_0_0() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_nether_no_blend_no_beard_0_0.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_nether_no_blend_no_beard_0_0.chunk");
     verify_chunk_noise(
         0,
         Dimension::THE_NETHER,
@@ -341,9 +333,8 @@ fn nether_noise_no_blend_no_beard_0_0() {
 
 #[test]
 fn nether_noise_no_blend_no_beard_7_4() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_nether_no_blend_no_beard_7_4.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_nether_no_blend_no_beard_7_4.chunk");
     verify_chunk_noise(
         0,
         Dimension::THE_NETHER,
@@ -356,9 +347,8 @@ fn nether_noise_no_blend_no_beard_7_4() {
 
 #[test]
 fn end_noise_no_blend_no_beard_0_0() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_end_no_blend_no_beard_0_0.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_end_no_blend_no_beard_0_0.chunk");
     verify_chunk_noise(
         0,
         Dimension::THE_END,
@@ -371,9 +361,8 @@ fn end_noise_no_blend_no_beard_0_0() {
 
 #[test]
 fn end_noise_no_blend_no_beard_7_4() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/noise_end_no_blend_no_beard_7_4.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/noise_end_no_blend_no_beard_7_4.chunk");
     verify_chunk_noise(
         0,
         Dimension::THE_END,
@@ -386,9 +375,8 @@ fn end_noise_no_blend_no_beard_7_4() {
 
 #[test]
 fn no_blend_no_beard_surface_0_0() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/no_blend_no_beard_surface_0_0.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/no_blend_no_beard_surface_0_0.chunk");
     verify_chunk_surface(
         0,
         Dimension::OVERWORLD,
@@ -401,7 +389,7 @@ fn no_blend_no_beard_surface_0_0() {
 
 #[test]
 fn no_blend_no_beard_surface_badlands_minus595_544() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+    let expected: Vec<u16> = include_json!(
         "../../../../../assets/tests/no_blend_no_beard_surface_badlands_-595_544.chunk"
     );
     verify_chunk_surface(
@@ -416,7 +404,7 @@ fn no_blend_no_beard_surface_badlands_minus595_544() {
 
 #[test]
 fn no_blend_no_beard_surface_frozen_ocean_minus119_183() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+    let expected: Vec<u16> = include_json!(
         "../../../../../assets/tests/no_blend_no_beard_surface_frozen_ocean_-119_183.chunk"
     );
     verify_chunk_surface(
@@ -431,9 +419,8 @@ fn no_blend_no_beard_surface_frozen_ocean_minus119_183() {
 
 #[test]
 fn nether_surface_no_blend_no_beard_0_0() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/nether_surface_no_blend_no_beard_0_0.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/nether_surface_no_blend_no_beard_0_0.chunk");
     verify_chunk_surface(
         0,
         Dimension::THE_NETHER,
@@ -446,9 +433,8 @@ fn nether_surface_no_blend_no_beard_0_0() {
 
 #[test]
 fn nether_surface_no_blend_no_beard_7_4() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/nether_surface_no_blend_no_beard_7_4.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/nether_surface_no_blend_no_beard_7_4.chunk");
     verify_chunk_surface(
         0,
         Dimension::THE_NETHER,
@@ -461,9 +447,8 @@ fn nether_surface_no_blend_no_beard_7_4() {
 
 #[test]
 fn end_surface_no_blend_no_beard_0_0() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/end_surface_no_blend_no_beard_0_0.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/end_surface_no_blend_no_beard_0_0.chunk");
     verify_chunk_surface(
         0,
         Dimension::THE_END,
@@ -476,9 +461,8 @@ fn end_surface_no_blend_no_beard_0_0() {
 
 #[test]
 fn end_surface_no_blend_no_beard_7_4() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/end_surface_no_blend_no_beard_7_4.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/end_surface_no_blend_no_beard_7_4.chunk");
     verify_chunk_surface(
         0,
         Dimension::THE_END,
@@ -491,9 +475,8 @@ fn end_surface_no_blend_no_beard_7_4() {
 
 #[test]
 fn biomes_no_blend_no_beard_5_5() {
-    let expected: Vec<BiomeTestData> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/biome_no_blend_no_beard_0.json"
-    );
+    let expected: Vec<BiomeTestData> =
+        include_json!("../../../../../assets/tests/biome_no_blend_no_beard_0.json");
     verify_chunk_biomes(
         0,
         Dimension::OVERWORLD,
@@ -504,9 +487,8 @@ fn biomes_no_blend_no_beard_5_5() {
 
 #[test]
 fn no_blend_no_beard_surface_7_4() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/no_blend_no_beard_surface_7_4.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/no_blend_no_beard_surface_7_4.chunk");
     verify_chunk_surface(
         0,
         Dimension::OVERWORLD,
@@ -519,9 +501,8 @@ fn no_blend_no_beard_surface_7_4() {
 
 #[test]
 fn no_blend_no_beard_surface_13579_minus6_11() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/no_blend_no_beard_surface_13579_-6_11.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/no_blend_no_beard_surface_13579_-6_11.chunk");
     verify_chunk_surface(
         13579,
         Dimension::OVERWORLD,
@@ -534,9 +515,8 @@ fn no_blend_no_beard_surface_13579_minus6_11() {
 
 #[test]
 fn no_blend_no_beard_surface_13579_minus2_15() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/no_blend_no_beard_surface_13579_-2_15.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/no_blend_no_beard_surface_13579_-2_15.chunk");
     verify_chunk_surface(
         13579,
         Dimension::OVERWORLD,
@@ -549,9 +529,8 @@ fn no_blend_no_beard_surface_13579_minus2_15() {
 
 #[test]
 fn no_blend_no_beard_surface_13579_minus7_9() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/no_blend_no_beard_surface_13579_-7_9.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/no_blend_no_beard_surface_13579_-7_9.chunk");
     verify_chunk_surface(
         13579,
         Dimension::OVERWORLD,
@@ -564,9 +543,8 @@ fn no_blend_no_beard_surface_13579_minus7_9() {
 
 #[test]
 fn no_blend_no_beard_carvers_0_0() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/no_blend_no_beard_carvers_0_0.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/no_blend_no_beard_carvers_0_0.chunk");
     verify_chunk_carvers(
         0,
         Dimension::OVERWORLD,
@@ -579,9 +557,8 @@ fn no_blend_no_beard_carvers_0_0() {
 
 #[test]
 fn no_blend_no_beard_carvers_7_4() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/no_blend_no_beard_carvers_7_4.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/no_blend_no_beard_carvers_7_4.chunk");
     verify_chunk_carvers(
         0,
         Dimension::OVERWORLD,
@@ -594,9 +571,8 @@ fn no_blend_no_beard_carvers_7_4() {
 
 #[test]
 fn nether_carvers_no_blend_no_beard_0_0() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/nether_carvers_no_blend_no_beard_0_0.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/nether_carvers_no_blend_no_beard_0_0.chunk");
     verify_chunk_carvers(
         0,
         Dimension::THE_NETHER,
@@ -609,9 +585,8 @@ fn nether_carvers_no_blend_no_beard_0_0() {
 
 #[test]
 fn nether_carvers_no_blend_no_beard_7_4() {
-    let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
-        "../../../../../assets/tests/nether_carvers_no_blend_no_beard_7_4.chunk"
-    );
+    let expected: Vec<u16> =
+        include_json!("../../../../../assets/tests/nether_carvers_no_blend_no_beard_7_4.chunk");
     verify_chunk_carvers(
         0,
         Dimension::THE_NETHER,
@@ -625,6 +600,6 @@ fn nether_carvers_no_blend_no_beard_7_4() {
 #[test]
 fn grid_8x8_biomes() {
     let expected: Vec<BiomeTestData> =
-        pumpkin_util::read_data_from_file!("../../../../../assets/tests/grid_8x8_biomes.json");
+        include_json!("../../../../../assets/tests/grid_8x8_biomes.json");
     verify_chunk_biomes(0, Dimension::OVERWORLD, &expected, "grid_8x8_biomes");
 }

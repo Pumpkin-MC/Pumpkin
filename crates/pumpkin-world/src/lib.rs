@@ -3,6 +3,15 @@
 
 use pumpkin_data::{Block, dimension::Dimension};
 
+/// Embeds a JSON fixture
+#[cfg(test)]
+macro_rules! include_json {
+    ($path:literal) => {
+        serde_json::from_str(include_str!($path))
+            .expect(concat!("Failed to decode JSON fixture: ", $path))
+    };
+}
+
 pub mod biome;
 pub mod block;
 pub mod chunk;
