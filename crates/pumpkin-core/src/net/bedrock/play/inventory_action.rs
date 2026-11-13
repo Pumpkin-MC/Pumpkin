@@ -211,6 +211,9 @@ impl BedrockClient {
                     }
 
                     if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+                        if !Arc::ptr_eq(&player.world(), &world) {
+                            return;
+                        }
                         let result = server.block_registry.on_use(
                             block,
                             player,
@@ -255,7 +258,9 @@ impl BedrockClient {
                             &server,
                         );
 
-                        if should_try_block_placement(&item_result) {
+                        if should_try_block_placement(&item_result)
+                            && Arc::ptr_eq(&world, &player.world())
+                        {
                             let item_id = stack.item.id;
                             if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
                                 let dummy_use_item_on =

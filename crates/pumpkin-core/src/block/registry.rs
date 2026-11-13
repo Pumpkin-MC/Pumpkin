@@ -848,7 +848,10 @@ impl BlockRegistry {
         server
             .plugin_manager
             .fire_blocking(server, &mut can_build_event);
-        if can_build_event.cancelled || !can_build_event.buildable {
+        if can_build_event.cancelled
+            || !can_build_event.buildable
+            || !Arc::ptr_eq(&player.world(), &world)
+        {
             return Ok(None);
         }
 
@@ -860,7 +863,7 @@ impl BlockRegistry {
             true,
         );
         server.plugin_manager.fire_blocking(server, &mut event);
-        if event.cancelled {
+        if event.cancelled || !Arc::ptr_eq(&player.world(), &world) {
             return Ok(None);
         }
 

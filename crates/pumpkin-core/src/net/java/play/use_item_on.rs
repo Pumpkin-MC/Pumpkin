@@ -213,7 +213,10 @@ impl JavaClient {
             .item_registry
             .use_on_block(&mut item, player, position, face, cursor_pos, block, server);
 
-        if should_try_block_placement(&item_result) {
+        // use_on_block may have moved the player, skip placement and old-world reads
+        let still_in_world = Arc::ptr_eq(&player.world(), &world);
+
+        if still_in_world && should_try_block_placement(&item_result) {
             // Check if the item is a block, because not every item can be placed :D
             let item_id = item.item.id;
             if let Some(block) = Block::from_item_id(item_id) {
@@ -232,7 +235,7 @@ impl JavaClient {
 
         let after = item.clone();
 
-        if item_result.consumes_action() || !item.are_equal(&before) {
+        if still_in_world && (item_result.consumes_action() || !item.are_equal(&before)) {
             // fresh block: advancement reads the result
             let (block, state_id) = world.get_block_and_state_id(&position);
             let state = pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
