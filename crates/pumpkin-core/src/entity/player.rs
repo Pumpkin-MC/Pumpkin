@@ -3462,26 +3462,35 @@ impl Player {
         }
 
         let starting_time = self.delayed_tick_start.load(Ordering::Relaxed);
-        if !self.continue_mining(position, &world, state, starting_time) {
+        let speed = block::calc_block_breaking(self, state, Block::from_state_id(state.id));
+        if speed <= 0.0 {
+            self.has_delayed_destroy.store(false, Ordering::Relaxed);
+            self.refuse_delayed_destroy(&world, position, state);
+        } else if self.continue_mining(position, &world, state, starting_time) {
+            self.has_delayed_destroy.store(false, Ordering::Relaxed);
+            if !self.break_block(&position) {
+                self.refuse_delayed_destroy(&world, position, state);
+            }
+        } else {
             return;
-        }
-
-        self.has_delayed_destroy.store(false, Ordering::Relaxed);
-        if !self.break_block(&position) {
-            world.set_block_breaking(
-                &self.living_entity.entity,
-                position,
-                BlockBreakingProgress::Stop,
-            );
-            self.try_send_client_packet(&CBlockUpdate::new(
-                position,
-                VarInt(i32::from(state.id.as_u16())),
-            ));
         }
         self.current_block_destroy_stage
             .store(-1, Ordering::Relaxed);
         self.current_block_breaking_speed
             .store(0, Ordering::Relaxed);
+    }
+
+    /// Stops the delayed break animation and resynchronizes the target block.
+    fn refuse_delayed_destroy(&self, world: &Arc<World>, position: BlockPos, state: &BlockState) {
+        world.set_block_breaking(
+            &self.living_entity.entity,
+            position,
+            BlockBreakingProgress::Stop,
+        );
+        self.try_send_client_packet(&CBlockUpdate::new(
+            position,
+            VarInt(i32::from(state.id.as_u16())),
+        ));
     }
 
     /// Clears normal and delayed mining state without sending block updates.
