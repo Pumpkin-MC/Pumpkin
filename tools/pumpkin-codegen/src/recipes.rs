@@ -608,7 +608,7 @@ impl ToTokens for RecipeCategoryTypes {
 
 /// Reads recipe JSON files from the 26.2 datapack and emits the complete recipe constants and helpers `TokenStream`.
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new("../../assets/datapack/data/minecraft/recipe");
+    let dir = crate::asset_path("datapack/data/minecraft/recipe");
     let mut recipes_assets: BTreeMap<String, RecipeTypes> = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing recipe directory")
