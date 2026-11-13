@@ -26,6 +26,9 @@ syn = { version = "3.0", features = ["full", "extra-traits"] }
 pumpkin-util = { path = "../../crates/pumpkin-util", features = ["codegen"] }
 pumpkin-nbt = { path = "../../crates/pumpkin-nbt" }
 
+[lints.cargo]
+unused_dependencies = "deny"
+
 [lints.clippy]
 expect_used = "allow"
 unwrap_used = "allow"
