@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use crate::block::entities::BlockEntity;
@@ -5,7 +6,6 @@ use crate::block::entities::chest::ChestBlockEntity;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
 use pumpkin_data::entity::EntityPose;
-use pumpkin_data::loot_table::get_loot_table;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::Inventory;
@@ -33,10 +33,13 @@ use crate::entity::EntityBase;
 use crate::entity::passive::cat::CatEntity;
 use crate::entity::passive::tamable::TamableAnimal;
 use crate::entity::player::Player;
+use crate::plugin::api::events::world::loot_generate::LootGenerateEvent;
 use crate::world::World;
 use crate::world::loot::{LootContextParameters, fill_chest_inventory_handle};
 use pumpkin_data::BlockState;
 
+// TODO vanilla `BaseContainerBlockEntity.canOpen`: the `lock` component, with `container.isLocked` and the
+// `CHEST_LOCKED` sound on a failed open.
 struct ChestScreenFactory {
     inventory: Arc<dyn Inventory>,
     loot_pending: bool,
@@ -133,49 +136,195 @@ fn placed_chest_impl<E: BlockEntity + 'static>(
     }
 }
 
+/// Direction to the other half of a double chest, `None` for a single chest.
+const fn connected_direction(props: ChestLikeProperties) -> Option<HorizontalFacing> {
+    match props.r#type {
+        ChestType::Single => None,
+        ChestType::Left => Some(props.facing.rotate_clockwise()),
+        ChestType::Right => Some(props.facing.rotate_counter_clockwise()),
+    }
+}
+
+/// Vanilla `DoubleBlockCombiner.combineWithNeigbour`: the other half counts only while it is the
+/// same block, faces the same way and is the opposite half.
+fn connected_half(
+    world: &World,
+    block: &Block,
+    position: &BlockPos,
+    props: ChestLikeProperties,
+) -> Option<BlockPos> {
+    let direction = connected_direction(props)?;
+    get_chest_properties_if_can_connect(
+        world,
+        block,
+        position,
+        props.facing,
+        direction,
+        props.r#type.opposite(),
+    )?;
+    Some(position.offset(direction.to_offset()))
+}
+
+/// Vanilla `CompoundContainer` order: the `RIGHT` half comes first.
+fn combine_halves(
+    chest_type: ChestType,
+    this: Arc<dyn Inventory>,
+    other: Arc<dyn Inventory>,
+) -> Arc<dyn Inventory> {
+    if chest_type == ChestType::Right {
+        DoubleInventory::new(this, other)
+    } else {
+        DoubleInventory::new(other, this)
+    }
+}
+
+thread_local! {
+    /// Chests (world address, position) whose `LootGenerateEvent` is being handled on this thread.
+    static LOOT_EVENT_DISPATCH: RefCell<Vec<(usize, BlockPos)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Keeps a chest in [`LOOT_EVENT_DISPATCH`] while its event fires, also if a handler panics.
+struct LootEventDispatch;
+
+impl LootEventDispatch {
+    fn enter(chest: (usize, BlockPos)) -> Self {
+        LOOT_EVENT_DISPATCH.with_borrow_mut(|chests| chests.push(chest));
+        Self
+    }
+}
+
+impl Drop for LootEventDispatch {
+    fn drop(&mut self) {
+        LOOT_EVENT_DISPATCH.with_borrow_mut(Vec::pop);
+    }
+}
+
+/// Vanilla `RandomizableContainer.unpackLootTable`: fills the chest from its pending loot table once.
+fn unpack_loot_table(world: &World, entity: &Arc<dyn BlockEntity>, player: Option<&Player>) {
+    // Fired before the loot lock -> a handler reading this chest would unpack it again.
+    // A cancel still clears the key, the chest just stays empty.
+    // TODO let `LootGenerateEvent` carry the container, context and generated items so a plugin can edit the loot.
+    // TODO concurrent first unpacks on different threads each fire the event, only the one that takes the
+    // key decides. One event per unpack needs an "unpacking" loot state that other threads wait on.
+    let chest = (std::ptr::from_ref(world) as usize, entity.get_position());
+    // A handler reading this chest lands here again: it stays packed, the outer call decides.
+    if LOOT_EVENT_DISPATCH.with_borrow(|chests| chests.contains(&chest)) {
+        return;
+    }
+    let cancelled_key = entity.loot_table_key().filter(|key| {
+        let _dispatch = LootEventDispatch::enter(chest);
+        world.cancelled_by_plugin(|| LootGenerateEvent::new(key.clone()))
+    });
+    let mut unpacked = None;
+    entity.unpack_loot_table_with(&mut |loot_key, seed| {
+        // The cancel only covers the key the event saw.
+        if cancelled_key.as_deref() != Some(loot_key.as_str()) {
+            fill_loot_table(world, entity, player, &loot_key, seed);
+        }
+        unpacked = Some(loot_key);
+    });
+    // Outside the loot lock: advancement handlers must not run while it is held.
+    if let (Some(player), Some(loot_key)) = (player, unpacked) {
+        player.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                loot_table_id: loot_key,
+            },
+        );
+    }
+}
+
+fn fill_loot_table(
+    world: &World,
+    entity: &Arc<dyn BlockEntity>,
+    player: Option<&Player>,
+    loot_key: &str,
+    seed: i64,
+) {
+    // Vanilla resolves an unknown key to `LootTable.EMPTY`: the key is cleared, nothing is placed.
+    let (Some(table), Some(inventory)) = (
+        world.get_loot_table(loot_key),
+        entity.clone().get_inventory(),
+    ) else {
+        return;
+    };
+    fill_chest_inventory_handle(
+        &inventory,
+        &table,
+        seed,
+        &LootContextParameters {
+            world: Some(world),
+            // Vanilla `ORIGIN` is `Vec3.atCenterOf` of the half being unpacked.
+            position: Some(entity.get_position().to_centered_f64()),
+            this_entity: player.map(|player| player as &dyn EntityBase),
+            luck: player.map_or(0.0, |player| {
+                player
+                    .living_entity
+                    .get_attribute_value(&pumpkin_data::attributes::Attributes::LUCK)
+                    as f32
+            }),
+            ..Default::default()
+        },
+    );
+    inventory.mark_dirty();
+}
+
+/// Vanilla `ChestBlock.getContainer` with `ignoreBeingBlocked = true`: a double chest is one container.
+///
+/// Vanilla unpacks a half on its first slot access. every caller reads slots right away, so both
+/// halves unpack here.
+pub fn chest_container(
+    world: &World,
+    block: &Block,
+    position: &BlockPos,
+    state_id: BlockStateId,
+    entity: &Arc<dyn BlockEntity>,
+) -> Option<Arc<dyn Inventory>> {
+    unpack_loot_table(world, entity, None);
+    let this = entity.clone().get_container()?;
+    let props = ChestLikeProperties::from_state_id(state_id);
+    let other = connected_half(world, block, position, props)
+        .and_then(|other_pos| world.get_block_entity(&other_pos))
+        .and_then(|other| {
+            unpack_loot_table(world, &other, None);
+            other.get_container()
+        });
+    Some(match other {
+        Some(other) => combine_halves(props.r#type, this, other),
+        None => this,
+    })
+}
+
 /// Computes the comparator output for a chest, combining both halves for double chests.
 fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8> {
     let state = args.world.get_block_state_id(args.position);
-    let first_chest = args.world.get_block_entity(args.position);
-    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
+    let first_chest = args.world.get_block_entity(args.position)?;
 
     let chest_props = ChestLikeProperties::from_state_id(state);
-    let connected_towards = match chest_props.r#type {
-        ChestType::Single => None,
-        ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
-        ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
-    };
+    let other_pos = connected_half(args.world, args.block, args.position, chest_props);
 
     // Vanilla passes `ignoreBeingBlocked = false`, so a blocked half reads zero.
-    if is_chest_blocked(args.world, args.position) {
-        return Some(0);
-    }
-
-    if let Some(direction) = connected_towards
-        && is_chest_blocked(args.world, &args.position.offset(direction.to_offset()))
+    if is_chest_blocked(args.world, args.position)
+        || other_pos.is_some_and(|other_pos| is_chest_blocked(args.world, &other_pos))
     {
         return Some(0);
     }
 
-    if let Some(direction) = connected_towards
-        && let Some(second_inventory) = args
-            .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
-            .and_then(BlockEntity::get_inventory)
-    {
-        let double_inventory = if matches!(chest_props.r#type, ChestType::Right) {
-            DoubleInventory::new(first_inventory, second_inventory)
-        } else {
-            DoubleInventory::new(second_inventory, first_inventory)
-        };
-        Some(crate::block::calculate_comparator_output(
-            double_inventory.as_ref(),
-        ))
-    } else {
-        Some(crate::block::calculate_comparator_output(
-            first_inventory.as_ref(),
-        ))
+    // Vanilla reads every slot through `getItem`, which unpacks pending loot first.
+    let second_chest = other_pos.and_then(|other_pos| args.world.get_block_entity(&other_pos));
+    for entity in std::iter::once(&first_chest).chain(&second_chest) {
+        unpack_loot_table(args.world, entity, None);
     }
+
+    let first_inventory = first_chest.get_inventory()?;
+    let inventory = match second_chest.and_then(BlockEntity::get_inventory) {
+        Some(second_inventory) => {
+            combine_halves(chest_props.r#type, first_inventory, second_inventory)
+        }
+        None => first_inventory,
+    };
+    Some(crate::block::calculate_comparator_output(
+        inventory.as_ref(),
+    ))
 }
 
 /// Returns a screen handler factory for opening a chest or double chest inventory.
@@ -188,97 +337,35 @@ fn get_chest_screen_handler_factory(
     let state = args.world.get_block_state_id(args.position);
     let first_chest = args.world.get_block_entity(args.position);
 
-    let player_is_spectator = args.player.gamemode.load() == GameMode::Spectator;
-
     let chest_props = ChestLikeProperties::from_state_id(state);
-    let connected_towards = match chest_props.r#type {
-        ChestType::Single => None,
-        ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
-        ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
-    };
+    let other_pos = connected_half(args.world, args.block, args.position, chest_props);
 
-    let unpack = |entity: &Arc<dyn BlockEntity>| {
-        if let Some((loot_key, seed)) = entity.take_loot_table()
-            && let Some(table) = get_loot_table(&loot_key)
-            && let Some(inv) = entity.clone().get_inventory()
-        {
-            args.player.trigger_advancement(
-                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
-                    loot_table_id: loot_key.clone(),
-                },
-            );
-            fill_chest_inventory_handle(
-                &inv,
-                &crate::world::loot::LootTableHandle::Static(table),
-                seed,
-                &LootContextParameters {
-                    world: Some(args.world),
-                    position: Some(args.position.to_f64()),
-                    this_entity: Some(args.player.as_ref()),
-                    luck: args
-                        .player
-                        .living_entity
-                        .get_attribute_value(&pumpkin_data::attributes::Attributes::LUCK)
-                        as f32,
-                    ..Default::default()
-                },
-            );
-            inv.mark_dirty();
-        }
-    };
-
-    // Unpack deferred loot table on first open (non-spectator only).
-    if !player_is_spectator && let Some(ref entity) = first_chest {
-        unpack(entity);
-    }
-
-    let first_loot_pending = first_chest
-        .as_ref()
-        .is_some_and(|entity| entity.has_loot_table());
-    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
-
-    if is_chest_blocked(args.world, args.position) {
+    // Vanilla gives a blocked chest no menu, so it stays packed too.
+    if is_chest_blocked(args.world, args.position)
+        || other_pos.is_some_and(|other_pos| is_chest_blocked(args.world, &other_pos))
+    {
         return None;
     }
 
-    if let Some(direction) = connected_towards {
-        let neighbor_pos = args.position.offset(direction.to_offset());
-        if is_chest_blocked(args.world, &neighbor_pos) {
-            return None;
-        }
-    }
-
+    let second = other_pos.and_then(|other_pos| args.world.get_block_entity(&other_pos));
     // Both halves of a double chest are unpacked at once, like vanilla's CompoundContainer.
-    if !player_is_spectator
-        && let Some(direction) = connected_towards
-        && let Some(second) = args
-            .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
-    {
-        unpack(&second);
+    if args.player.gamemode.load() != GameMode::Spectator {
+        for entity in first_chest.iter().chain(&second) {
+            unpack_loot_table(args.world, entity, Some(args.player));
+        }
     }
 
-    let loot_pending = first_loot_pending
-        || connected_towards.is_some_and(|direction| {
-            args.world
-                .get_block_entity(&args.position.offset(direction.to_offset()))
-                .is_some_and(|second| second.has_loot_table())
-        });
+    let loot_pending = first_chest
+        .iter()
+        .chain(&second)
+        .any(|entity| entity.has_loot_table());
+    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
 
-    let inventory = if let Some(direction) = connected_towards
-        && let Some(second_inventory) = args
-            .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
-            .and_then(BlockEntity::get_inventory)
-    {
-        // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
-        if matches!(chest_props.r#type, ChestType::Right) {
-            DoubleInventory::new(first_inventory, second_inventory)
-        } else {
-            DoubleInventory::new(second_inventory, first_inventory)
+    let inventory = match second.and_then(BlockEntity::get_inventory) {
+        Some(second_inventory) => {
+            combine_halves(chest_props.r#type, first_inventory, second_inventory)
         }
-    } else {
-        first_inventory
+        None => first_inventory,
     };
 
     Some(Box::new(ChestScreenFactory {
@@ -288,17 +375,7 @@ fn get_chest_screen_handler_factory(
 }
 
 fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {
-    let stat = if args.block.id == Block::TRAPPED_CHEST.id {
-        pumpkin_data::statistic::CustomStatistic::TriggerTrappedChest
-    } else {
-        pumpkin_data::statistic::CustomStatistic::OpenChest
-    };
-    args.player.increment_stat(
-        pumpkin_data::statistic::StatisticCategory::Custom,
-        stat as i32,
-        1,
-    );
-
+    // Vanilla awards the stat only when there is a menu, so a blocked chest doesn't count.
     if let Some(factory) = get_chest_screen_handler_factory(GetScreenHandlerFactoryArgs {
         server: args.server,
         world: args.world,
@@ -308,6 +385,17 @@ fn normal_use_chest_impl(args: &NormalUseArgs<'_>) -> BlockActionResult {
     }) {
         args.player
             .open_handled_screen(factory.as_ref(), Some(*args.position));
+        let stat = if args.block.id == Block::TRAPPED_CHEST.id {
+            pumpkin_data::statistic::CustomStatistic::TriggerTrappedChest
+        } else {
+            pumpkin_data::statistic::CustomStatistic::OpenChest
+        };
+        args.player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            stat as i32,
+            1,
+        );
+        // TODO vanilla `PiglinAi.angerNearbyPiglins(level, player, true)`.
     }
 
     BlockActionResult::Success

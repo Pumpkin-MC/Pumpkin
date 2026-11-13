@@ -717,9 +717,12 @@ impl ItemStack {
         }
     }
 
+    /// Vanilla `ItemStack.isSameItemSameComponents`: an empty stack reads as air, whatever id is left on it.
     #[must_use]
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
-        // Items must match
+        if self.is_empty() || other.is_empty() {
+            return self.is_empty() && other.is_empty();
+        }
         if self.item != other.item {
             return false;
         }
@@ -851,7 +854,10 @@ impl ItemStack {
         // Try to get item by registry key
         let item = Item::from_registry_key(registry_key)?;
 
-        let count = compound.get_int("count")? as u8;
+        // Vanilla `ItemStack.CODEC`: `count` defaults to 1 and must be within 1..=99.
+        let count = u8::try_from(compound.get_numeric_int("count").unwrap_or(1))
+            .ok()
+            .filter(|count| (1..=99).contains(count))?;
 
         // Create the item stack
         let mut item_stack = Self::new(count, item);
@@ -904,6 +910,38 @@ mod tests {
         ItemStack::new(1, &Item::IRON_SWORD)
     }
 
+    fn stack_nbt(count: Option<NbtTag>) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:stone".to_string());
+        if let Some(count) = count {
+            nbt.put("count", count);
+        }
+        nbt
+    }
+
+    /// Vanilla `ItemStack.CODEC`: `/summon item ~ ~ ~ {Item:{id:"stone"}}` is one stone.
+    #[test]
+    fn missing_count_reads_as_one() {
+        let stack = ItemStack::read_item_stack(&stack_nbt(None));
+        assert_eq!(stack.map(|stack| stack.item_count), Some(1));
+    }
+
+    #[test]
+    fn count_accepts_any_numeric_tag() {
+        let stack = ItemStack::read_item_stack(&stack_nbt(Some(NbtTag::Byte(5))));
+        assert_eq!(stack.map(|stack| stack.item_count), Some(5));
+    }
+
+    #[test]
+    fn count_outside_one_to_ninety_nine_is_rejected() {
+        for count in [0, 100, 300, -1] {
+            assert!(
+                ItemStack::read_item_stack(&stack_nbt(Some(NbtTag::Int(count)))).is_none(),
+                "count {count} was accepted"
+            );
+        }
+    }
+
     #[test]
     fn items_with_different_components_are_not_equal_in_either_direction() {
         let plain = ItemStack::new(1, &Item::COAL);
@@ -916,6 +954,18 @@ mod tests {
         assert!(!plain.are_items_and_components_equal(&customized));
         assert!(!customized.are_items_and_components_equal(&plain));
         assert!(customized.are_items_and_components_equal(&customized.clone()));
+    }
+
+    /// A stack shrunk to 0 keeps its id, vanilla still reads it as air.
+    #[test]
+    fn empty_stack_with_a_leftover_id_is_air() {
+        let mut used_up = ItemStack::new(1, &Item::COAL);
+        used_up.decrement(1);
+        let coal = ItemStack::new(1, &Item::COAL);
+
+        assert!(!used_up.are_items_and_components_equal(&coal));
+        assert!(!coal.are_items_and_components_equal(&used_up));
+        assert!(used_up.are_items_and_components_equal(ItemStack::EMPTY));
     }
 
     #[test]

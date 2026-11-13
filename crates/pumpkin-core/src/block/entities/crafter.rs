@@ -343,8 +343,37 @@ impl Inventory for CrafterBlockEntity {
         self.mark_dirty();
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        let changed = pumpkin_inventory::update_locked_stack(&self.items, slot, update);
+        // Like `set_stack`, a write re-enables the slot.
+        if changed && self.is_slot_disabled(slot) {
+            self.set_slot_state(slot, true);
+        }
+        changed
+    }
+
+    /// Vanilla `CrafterBlockEntity.canPlaceItem`: hoppers spread items, a slot only takes more while
+    /// no later slot is empty or holds fewer of the same item.
     fn is_valid_slot_for(&self, slot: usize, _stack: &ItemStack) -> bool {
-        !self.is_slot_disabled(slot)
+        if self.is_slot_disabled(slot) {
+            return false;
+        }
+        let current = self.get_stack(slot);
+        if current.is_empty() {
+            return true;
+        }
+        if current.item_count >= current.get_max_stack_size() {
+            return false;
+        }
+        !(slot + 1..self.size()).any(|other| {
+            if self.is_slot_disabled(other) {
+                return false;
+            }
+            let other = self.get_stack(other);
+            other.is_empty()
+                || (other.item_count < current.item_count
+                    && other.are_items_and_components_equal(&current))
+        })
     }
 
     fn mark_dirty(&self) {
@@ -365,5 +394,37 @@ impl Clearable for CrafterBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         items.fill_with(|| ItemStack::EMPTY.clone());
         self.mark_dirty();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::item::Item;
+
+    /// Vanilla spreads hopper input: only the last slot with the fewest items takes more.
+    #[test]
+    fn hoppers_fill_the_smallest_later_stack() {
+        let crafter = CrafterBlockEntity::new(BlockPos::new(0, 0, 0));
+        for slot in 0..CrafterBlockEntity::INVENTORY_SIZE {
+            let count = if slot == 4 { 1 } else { 2 };
+            crafter.set_stack(slot, ItemStack::new(count, &Item::DIAMOND));
+        }
+        let diamond = ItemStack::new(1, &Item::DIAMOND);
+        let accepting: Vec<_> = (0..CrafterBlockEntity::INVENTORY_SIZE)
+            .filter(|&slot| crafter.is_valid_slot_for(slot, &diamond))
+            .collect();
+        assert_eq!(
+            accepting,
+            (4..CrafterBlockEntity::INVENTORY_SIZE).collect::<Vec<_>>()
+        );
+
+        // A disabled slot doesn't count as the smaller one.
+        crafter
+            .disabled_slots
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)[4] = true;
+        assert!(crafter.is_valid_slot_for(0, &diamond));
+        assert!(!crafter.is_valid_slot_for(4, &diamond));
     }
 }

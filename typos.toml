@@ -14,3 +14,4 @@ convertable = "convertable"
 # Vanilla method names
 areMergable = "areMergable"
 isMergable = "isMergable"
+combineWithNeigbour = "combineWithNeigbour"

@@ -138,12 +138,21 @@ macro_rules! impl_block_entity_for_chest {
                 self
             }
 
-            fn take_loot_table(&self) -> Option<(String, i64)> {
+            fn unpack_loot_table_with(&self, fill: &mut dyn FnMut(String, i64)) {
                 let mut guard = self
                     .loot_table
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                guard.take().map(|key| (key, self.loot_table_seed))
+                if let Some(key) = guard.take() {
+                    fill(key, self.loot_table_seed);
+                }
+            }
+
+            fn loot_table_key(&self) -> Option<String> {
+                self.loot_table
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone()
             }
 
             fn has_loot_table(&self) -> bool {
@@ -237,6 +246,14 @@ macro_rules! impl_inventory_for_chest {
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 items[slot] = stack;
                 self.mark_dirty();
+            }
+
+            fn update_stack(
+                &self,
+                slot: usize,
+                update: &mut dyn FnMut(&mut ItemStack) -> bool,
+            ) -> bool {
+                pumpkin_inventory::update_locked_stack(&self.items, slot, update)
             }
 
             fn on_open(&self) {

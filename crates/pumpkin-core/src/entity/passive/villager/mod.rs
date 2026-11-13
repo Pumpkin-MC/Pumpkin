@@ -1518,29 +1518,19 @@ impl Mob for VillagerEntity {
                 .clone(),
             &mut remainder,
         );
-        let taken = stack.item_count - remainder.item_count;
-        let living = &self.mob_entity.living_entity;
-        if taken == 0 || !living.pickup(item.get_entity(), u32::from(taken)) {
-            return;
-        }
-        let mut remainder = stack;
-        add_to_inventory(
-            &mut self
-                .inventory
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            &mut remainder,
-        );
-        living.on_item_pickup(item);
-        if remainder.is_empty() {
-            item.get_entity().remove();
-        } else {
-            *item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = remainder;
-            item.init_data_tracker();
-        }
+        let planned = stack.item_count - remainder.item_count;
+        // Added from the live stack, writing a stale remainder back would revive taken items.
+        self.mob_entity
+            .living_entity
+            .pick_up_from(item, planned, |ground| {
+                add_to_inventory(
+                    &mut self
+                        .inventory
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    ground,
+                );
+            });
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {

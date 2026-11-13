@@ -73,6 +73,11 @@ impl BlockEntity for LecternBlockEntity {
         Some(self)
     }
 
+    /// Vanilla `LecternBlockEntity` is no `Container`: hoppers, droppers and crafters skip it.
+    fn get_container(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        None
+    }
+
     fn is_comparator_dirty(&self) -> bool {
         self.comparator_dirty.load(Ordering::Relaxed)
     }
@@ -231,6 +236,24 @@ impl Inventory for LecternBlockEntity {
         // A freshly placed book always opens on its first page.
         self.page.store(0, Ordering::Relaxed);
         self.mark_dirty();
+    }
+
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot != 0 {
+            return false;
+        }
+        // One lock for read and write, a parallel write would be lost otherwise.
+        let mut book = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !update(&mut book) {
+            return false;
+        }
+        drop(book);
+        self.page.store(0, Ordering::Relaxed);
+        self.mark_dirty();
+        true
     }
 
     fn mark_dirty(&self) {

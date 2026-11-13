@@ -516,24 +516,9 @@ impl Mob for AllayEntity {
                 stored.get_max_stack_size() - stored.item_count
             })
         };
-        let living = &self.mob_entity.living_entity;
-        if count == 0 || !living.pickup(item.get_entity(), u32::from(count)) {
-            return;
-        }
-        living.on_item_pickup(item);
-        let empty = {
-            let mut ground = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.add_item(&mut ground);
-            ground.is_empty()
-        };
-        if empty {
-            item.get_entity().remove();
-        } else {
-            item.init_data_tracker();
-        }
+        self.mob_entity
+            .living_entity
+            .pick_up_from(item, count, |ground| self.add_item(ground));
     }
 
     fn post_tick(&self) {

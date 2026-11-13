@@ -1108,43 +1108,27 @@ impl Mob for PiglinEntity {
 
     fn pick_up_item(&self, item: &ItemEntity) {
         self.stop_walking();
-        let count = {
-            let stack = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            // Nuggets are taken whole, everything else one at a time.
+        // Nuggets are taken whole, everything else one at a time.
+        let take_count = |stack: &ItemStack| {
             if stack.item.id == Item::GOLD_NUGGET.id {
                 stack.item_count
             } else {
                 stack.item_count.min(1)
             }
         };
-        if count == 0
-            || !self
-                .mob_entity
-                .living_entity
-                .pickup(item.get_entity(), u32::from(count))
-        {
+        let planned = take_count(
+            &item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        let Some(taken) = self
+            .mob_entity
+            .living_entity
+            .pick_up_from(item, planned, |ground| ground.split(take_count(ground)))
+        else {
             return;
-        }
-        self.mob_entity.living_entity.on_item_pickup(item);
-
-        let taken = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .split(count);
-        let emptied = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_empty();
-        if emptied {
-            item.get_entity().remove();
-        } else {
-            item.init_data_tracker();
-        }
+        };
 
         if PiglinAi::is_loved_item(&taken) {
             self.time_trying_to_reach_item.store(-1, Ordering::Relaxed);

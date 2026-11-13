@@ -234,6 +234,8 @@ impl JukeboxBlockEntity {
 }
 
 /// Implements single-slot inventory for jukebox (matches vanilla's `SingleStackInventory`)
+// TODO vanilla automation: `canPlaceItem` only takes a `JUKEBOX_PLAYABLE` item into an empty slot, and `setTheItem`
+// starts or stops the song and sets `HAS_RECORD`. Now any item goes in, nothing plays and the block state stays.
 impl Inventory for JukeboxBlockEntity {
     fn size(&self) -> usize {
         1
@@ -276,6 +278,36 @@ impl Inventory for JukeboxBlockEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
         self.mark_dirty();
+    }
+
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot >= self.size() {
+            return false;
+        }
+        let (updated, removed) = {
+            let mut record = self
+                .record_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let had_record = !record.is_empty();
+            let updated = update(&mut record);
+            (updated, updated && had_record && record.is_empty())
+        };
+        // Taking the record out stops the song, like `remove_stack`.
+        if removed {
+            self.stop_playing();
+        }
+        updated
+    }
+
+    /// Vanilla `canTakeItem`: only into a container with an empty slot, so a pulled record always fits.
+    fn can_transfer_to(
+        &self,
+        hopper_inventory: &dyn Inventory,
+        _slot: usize,
+        _stack: &ItemStack,
+    ) -> bool {
+        (0..hopper_inventory.size()).any(|slot| hopper_inventory.get_stack(slot).is_empty())
     }
 
     fn mark_dirty(&self) {
@@ -362,6 +394,18 @@ mod tests {
         jukebox.tick(&world);
         assert!(allay.is_dancing());
         jukebox.remove_stack(0);
+        assert!(!allay.is_dancing());
+
+        // A hopper takes the record through `update_stack`.
+        jukebox.set_stack(0, ItemStack::new(1, &Item::MUSIC_DISC_CAT));
+        jukebox.start_playing(100);
+        jukebox.tick(&world);
+        assert!(allay.is_dancing());
+        let record = ItemStack::new(1, &Item::MUSIC_DISC_CAT);
+        assert!(
+            crate::block::entities::hopper::HopperBlockEntity::take_one(&jukebox, 0, &record)
+                .is_some()
+        );
         assert!(!allay.is_dancing());
         world.level.shutdown().await;
         Ok(())

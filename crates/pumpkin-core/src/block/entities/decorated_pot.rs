@@ -11,6 +11,8 @@ pub struct DecoratedPotBlockEntity {
     pub item: Mutex<Option<ItemStack>>,
 }
 
+// TODO vanilla `DecoratedPotBlockEntity` is a `ContainerSingleItem`: hoppers and droppers fill and empty it,
+// and it can hold a loot table. Without an inventory automation skips it.
 impl BlockEntity for DecoratedPotBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID

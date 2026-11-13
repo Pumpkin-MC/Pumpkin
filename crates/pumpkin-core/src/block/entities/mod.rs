@@ -78,19 +78,22 @@ pub trait BlockEntity: Any + Send + Sync {
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
 
-    /// Atomically takes the pending loot-table key and seed from this block entity.
-    ///
-    /// Returns `Some((key, seed))` if a deferred loot table was set, clearing it in the
-    /// process. Returns `None` for entities that do not support loot tables, or if the
-    /// loot has already been generated.
-    fn take_loot_table(&self) -> Option<(String, i64)> {
-        None
-    }
+    /// Clears the pending loot-table key and runs `fill` with it and the seed. The loot lock is held
+    /// until `fill` returns, so a concurrent access waits until the loot is placed instead of
+    /// inserting into a slot the loot then overwrites. Does nothing without a pending table.
+    // TODO vanilla `RandomizableContainerBlockEntity`: barrels, shulker boxes, dispensers, droppers, hoppers,
+    // crafters and decorated pots hold loot tables too. Only chests implement this.
+    fn unpack_loot_table_with(&self, _fill: &mut dyn FnMut(String, i64)) {}
 
     /// Returns `true` if this block entity has a pending deferred loot table that has
     /// not yet been unpacked. Does not consume the loot table.
     fn has_loot_table(&self) -> bool {
         false
+    }
+
+    /// Vanilla `getLootTable`: the pending loot table key, without consuming it.
+    fn loot_table_key(&self) -> Option<String> {
+        None
     }
 
     fn write_internal(&self, nbt: &mut NbtCompound) {
@@ -125,6 +128,14 @@ pub trait BlockEntity: Any + Send + Sync {
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
+    }
+
+    /// Vanilla `Container`: the inventory hoppers, droppers and crafters move items through.
+    ///
+    /// Hoppers on parallel threads write through `Inventory::update_stack`, so the returned
+    /// inventory must override it with one lock for read and write (`update_locked_stack`).
+    fn get_container(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        self.get_inventory()
     }
 
     /// Copies the block entity's state on the item stack dropped for it.
@@ -337,7 +348,6 @@ pub fn create_block_entity(
     block_entity_type_id: u16,
     position: BlockPos,
 ) -> Option<Arc<dyn BlockEntity>> {
-    use pumpkin_data::block_properties::FacingHopper;
     if block_entity_type_id == u16::MAX {
         return None;
     }
@@ -378,10 +388,7 @@ pub fn create_block_entity(
         "daylight_detector" => Some(Arc::new(
             daylight_detector::DaylightDetectorBlockEntity::new(position),
         )),
-        "hopper" => Some(Arc::new(hopper::HopperBlockEntity::new(
-            position,
-            FacingHopper::Down,
-        ))),
+        "hopper" => Some(Arc::new(hopper::HopperBlockEntity::new(position))),
         "comparator" => Some(Arc::new(comparator::ComparatorBlockEntity::new(position))),
         "banner" => Some(Arc::new(banner::BannerBlockEntity::new(position))),
         "structure_block" => Some(Arc::new(structure_block::StructureBlockBlockEntity::new(

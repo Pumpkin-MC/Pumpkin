@@ -67,7 +67,7 @@ use rustc_hash::FxHashMap;
 pub use error::InventoryError;
 pub use inventory::{
     Clearable, ComparableInventory, Inventory, SimpleInventory, split_stack_slice,
-    sync_read_items_from_nbt, sync_write_items_to_nbt,
+    sync_read_items_from_nbt, sync_write_items_to_nbt, update_locked_stack,
 };
 use pumpkin_data::data_component_impl::EquipmentSlot;
 pub use viewer::ViewerCountTracker;

@@ -262,6 +262,10 @@ impl Inventory for ShulkerBoxBlockEntity {
         self.mark_dirty();
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        pumpkin_inventory::update_locked_stack(&self.items, slot, update)
+    }
+
     fn is_valid_slot_for(&self, _slot: usize, stack: &ItemStack) -> bool {
         !stack
             .item
