@@ -188,6 +188,10 @@ impl JavaClient {
                 }
                 return Ok(());
             }
+            // a block event may have moved the player
+            if !Arc::ptr_eq(&player.world(), &world) {
+                return Ok(());
+            }
         }
 
         let slot_index = if matches!(hand, Hand::Right) {
