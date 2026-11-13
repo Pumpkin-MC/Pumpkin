@@ -3467,17 +3467,21 @@ impl Player {
         }
 
         self.has_delayed_destroy.store(false, Ordering::Relaxed);
-        self.current_block_destroy_stage
-            .store(-1, Ordering::Relaxed);
-        self.current_block_breaking_speed
-            .store(0, Ordering::Relaxed);
-
         if !self.break_block(&position) {
+            world.set_block_breaking(
+                &self.living_entity.entity,
+                position,
+                BlockBreakingProgress::Stop,
+            );
             self.try_send_client_packet(&CBlockUpdate::new(
                 position,
                 VarInt(i32::from(state.id.as_u16())),
             ));
         }
+        self.current_block_destroy_stage
+            .store(-1, Ordering::Relaxed);
+        self.current_block_breaking_speed
+            .store(0, Ordering::Relaxed);
     }
 
     /// Clears normal and delayed mining state without sending block updates.
