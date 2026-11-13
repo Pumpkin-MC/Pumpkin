@@ -1118,8 +1118,7 @@ impl MobEntity {
             .as_ref()
             .is_some_and(|holder| holder.get_entity().entity_id == player.entity_id())
         {
-            entity.unleash();
-            if entity.is_leashed() {
+            if !entity.unleash() {
                 return false;
             }
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
@@ -1141,14 +1140,17 @@ impl MobEntity {
         {
             let diff = entity.pos.load() - player.get_entity().pos.load();
             if diff.length_squared() <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
+                let new_holder: Arc<dyn EntityBase> = player.clone();
+                if !entity.approve_leash_attachment(new_holder.as_ref()) {
+                    return false;
+                }
                 if holder.is_some() {
-                    entity.unleash();
-                    if entity.is_leashed() {
+                    if !entity.unleash() {
                         return false;
                     }
                     entity.spawn_at_location(ItemStack::new(1, &Item::LEAD));
                 }
-                entity.leash_to(player.clone() as Arc<dyn EntityBase>);
+                entity.attach_leash(&new_holder);
                 if entity
                     .get_leash_holder()
                     .is_none_or(|holder| holder.get_entity().entity_id != player.entity_id())

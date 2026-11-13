@@ -377,13 +377,18 @@ mod tests {
             Entity::new(world.clone(), Vector3::default(), &EntityType::SNOWBALL),
             owner.get_entity(),
         );
-        let start = snowball.get_entity().pos.load();
+        let start = Vector3::new(8.5, 65.5, 0.5);
+        snowball.get_entity().set_pos(start);
         snowball
             .get_entity()
-            .set_velocity(Vector3::new(6.0, 0.0, 0.0));
+            .tick_count
+            .store(8, std::sync::atomic::Ordering::Relaxed);
+        snowball
+            .get_entity()
+            .set_velocity(Vector3::new(-6.0, 0.0, 0.0));
         snowball.thrown.process_tick(&snowball);
         assert!(!snowball.get_entity().is_removed());
-        assert!((-3.1..-2.9).contains(&snowball.get_entity().velocity.load().x));
+        assert!((2.9..3.1).contains(&snowball.get_entity().velocity.load().x));
         assert!(snowball.thrown.owner.matches(owner.get_entity()));
         assert!(
             breeze
@@ -401,15 +406,103 @@ mod tests {
                 .any(|(event, _, _)| *event == GameEvent::ProjectileLand)
         );
 
+        for age in [9, 10] {
+            let previous_x = snowball.get_entity().pos.load().x;
+            snowball
+                .get_entity()
+                .tick_count
+                .store(age, std::sync::atomic::Ordering::Relaxed);
+            snowball.thrown.process_tick(&snowball);
+            assert!(!snowball.get_entity().is_removed());
+            assert!(snowball.get_entity().pos.load().x > previous_x + 2.0);
+        }
+
         // Re-entering the same deflector must not reverse and halve the velocity again.
         snowball.get_entity().set_pos(start);
         snowball
             .get_entity()
-            .set_velocity(Vector3::new(6.0, 0.0, 0.0));
+            .set_velocity(Vector3::new(-6.0, 0.0, 0.0));
         snowball.thrown.process_tick(&snowball);
         assert!(!snowball.get_entity().is_removed());
-        assert!(snowball.get_entity().velocity.load().x > 5.9);
+        assert!(snowball.get_entity().velocity.load().x < -5.9);
+        assert!(snowball.get_entity().pos.load().x < start.x - 5.0);
+
         world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn snowball_reentry_passes_the_deflector_but_hits_other_obstacles() -> TestResult {
+        use crate::entity::mob::breeze::BreezeEntity;
+
+        for block_only in [true, false] {
+            let folder = tempfile::tempdir()?;
+            let world = world(&folder);
+            world
+                .level
+                .loaded_chunks
+                .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+            let owner = SnowGolemEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(0.5, 64.0, 0.5),
+                &EntityType::SNOW_GOLEM,
+            ));
+            world.spawn_entity(owner.clone());
+            let breeze = BreezeEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(4.5, 64.0, 0.5),
+                &EntityType::BREEZE,
+            ));
+            world.spawn_entity(breeze);
+            let snowball = SnowballEntity::new_shot(
+                Entity::new(world.clone(), Vector3::default(), &EntityType::SNOWBALL),
+                owner.get_entity(),
+            );
+            let entity = snowball.get_entity();
+            entity
+                .tick_count
+                .store(8, std::sync::atomic::Ordering::Relaxed);
+            entity.set_pos(Vector3::new(8.5, 65.5, 0.5));
+            entity.set_velocity(Vector3::new(-6.0, 0.0, 0.0));
+            snowball.thrown.process_tick(&snowball);
+            assert!(entity.velocity.load().x > 2.9);
+
+            // Fall back onto the upper face of the same stationary Breeze.
+            entity.set_pos(Vector3::new(4.5, 66.2, 0.5));
+            entity.set_velocity(Vector3::new(0.0, -0.4, 0.0));
+            for _ in 0..3 {
+                let previous_y = entity.pos.load().y;
+                snowball.thrown.process_tick(&snowball);
+                assert!(!entity.is_removed());
+                assert!(entity.pos.load().y < previous_y - 0.3);
+            }
+            world.set_block_state(
+                &BlockPos::new(4, 62, 0),
+                Block::STONE.default_state.id,
+                BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE,
+            );
+            let target = (!block_only).then(|| {
+                let target = SnowGolemEntity::new(Entity::new(
+                    world.clone(),
+                    Vector3::new(4.5, 63.0, 0.5),
+                    &EntityType::SNOW_GOLEM,
+                ));
+                world.spawn_entity(target.clone());
+                target
+            });
+            entity.set_velocity(Vector3::new(0.0, -6.0, 0.0));
+            snowball.thrown.process_tick(&snowball);
+            assert!(entity.is_removed());
+            if let Some(target) = target {
+                assert_eq!(
+                    target.mob_entity.living_entity.get_last_damage_source(),
+                    Some((DamageType::THROWN, owner.get_entity().entity_id))
+                );
+            } else {
+                assert_eq!(entity.pos.load().y, 63.0);
+            }
+            world.level.shutdown().await;
+        }
         Ok(())
     }
 

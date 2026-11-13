@@ -5,7 +5,8 @@ use std::sync::{
 
 use pumpkin_core::{
     entity::{
-        Entity, EntityBase, item::ItemEntity, passive::snow_golem::SnowGolemEntity, player::Player,
+        Entity, EntityBase, decoration::leash_knot::LeashKnotEntity, item::ItemEntity,
+        passive::snow_golem::SnowGolemEntity, player::Player,
     },
     net::ClientPlatform,
     plugin::{
@@ -13,7 +14,9 @@ use pumpkin_core::{
         api::events::{
             EventPriority,
             block::entity_block_form::EntityBlockFormEvent,
+            entity::entity_unleash::EntityUnleashEvent,
             player::{
+                player_leash_entity::PlayerLeashEntityEvent,
                 player_shear_entity::PlayerShearEntityEvent,
                 player_unleash_entity::PlayerUnleashEntityEvent,
             },
@@ -36,6 +39,36 @@ struct ShearEvents {
     hand: AtomicU8,
     count: AtomicUsize,
     cancel: AtomicBool,
+    cancel_unleash: AtomicBool,
+    cancel_leash: AtomicBool,
+}
+
+impl EventHandler<PlayerLeashEntityEvent> for ShearEvents {
+    fn handle_blocking<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        event: &'a mut PlayerLeashEntityEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if event.entity_id == self.entity_id {
+                event.cancelled = self.cancel_leash.load(Ordering::Relaxed);
+            }
+        })
+    }
+}
+
+impl EventHandler<EntityUnleashEvent> for ShearEvents {
+    fn handle_blocking<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        event: &'a mut EntityUnleashEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if event.entity_id == self.entity_id {
+                event.cancelled = self.cancel_unleash.load(Ordering::Relaxed);
+            }
+        })
+    }
 }
 
 impl EventHandler<PlayerShearEntityEvent> for ShearEvents {
@@ -78,7 +111,7 @@ impl EventHandler<PlayerUnleashEntityEvent> for ShearEvents {
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             if event.entity_id == self.entity_id {
-                event.cancelled = self.cancel.load(Ordering::Relaxed);
+                event.cancelled = self.cancel_unleash.load(Ordering::Relaxed);
             }
         })
     }
@@ -132,6 +165,8 @@ fn check_player_shearing(
         hand: AtomicU8::new(0),
         count: AtomicUsize::new(0),
         cancel: AtomicBool::new(true),
+        cancel_unleash: AtomicBool::new(false),
+        cancel_leash: AtomicBool::new(false),
     });
     server.plugin_manager.register::<PlayerShearEntityEvent, _>(
         hooks.clone(),
@@ -193,6 +228,7 @@ fn check_player_shearing(
     check_cancelled_equipment_with_pumpkin(server, player, golem, &hooks)?;
     check_offhand_equipment_without_pumpkin(server, player, golem, &hooks)?;
     check_leash_precedes_pumpkin(server, player, golem, &hooks)?;
+    check_leash_replacement_and_knot_cleanup(server, player, golem, &hooks)?;
     check_snow_formation_events(server, golem, &hooks)?;
     check_normal_leashing_and_dead_interaction(server, player, golem, &hooks)?;
     Ok(())
@@ -318,7 +354,8 @@ fn check_leash_precedes_pumpkin(
     server
         .plugin_manager
         .register::<PlayerUnleashEntityEvent, _>(hooks.clone(), EventPriority::Normal, true);
-    hooks.cancel.store(true, Ordering::Relaxed);
+    hooks.cancel.store(false, Ordering::Relaxed);
+    hooks.cancel_unleash.store(true, Ordering::Relaxed);
     client.handle_interact(player, &interact, server);
     if golem.get_entity().get_leash_holder().is_none()
         || !golem.has_pumpkin()
@@ -326,7 +363,29 @@ fn check_leash_precedes_pumpkin(
     {
         return Err("Cancelled leash cutting changed the leash, pumpkin or shears".into());
     }
-    hooks.cancel.store(false, Ordering::Relaxed);
+    let entity = golem.get_entity();
+    let original_pos = entity.pos.load();
+    let world = entity.world.load();
+    entity.set_pos(
+        player
+            .position()
+            .add_raw(Entity::LEASH_SNAP_DISTANCE + 2.0, 0.0, 0.0),
+    );
+    let entities_before = world.entities.load().len();
+    let retained = (0..3).all(|_| {
+        matches!(
+            entity.tick_leash(golem),
+            pumpkin_core::entity::LeashTick::NotLeashed
+        ) && entity.is_leashed()
+            && world.entities.load().len() == entities_before
+    });
+    entity.set_pos(original_pos);
+    if !retained {
+        return Err(
+            "Cancelled leash snapping must retain the connection without dropping leads".into(),
+        );
+    }
+    hooks.cancel_unleash.store(false, Ordering::Relaxed);
     client.handle_interact(player, &interact, server);
     if golem.get_entity().get_leash_holder().is_some()
         || !golem.has_pumpkin()
@@ -335,6 +394,127 @@ fn check_leash_precedes_pumpkin(
         return Err("Shearing must cut the leash before removing the pumpkin".into());
     }
     Ok(())
+}
+
+fn check_leash_replacement_and_knot_cleanup(
+    server: &Arc<Server>,
+    player: &Arc<Player>,
+    golem: &SnowGolemEntity,
+    hooks: &Arc<ShearEvents>,
+) -> Result<(), String> {
+    use pumpkin_core::world::BlockFlags;
+    use pumpkin_data::Block;
+
+    let ClientPlatform::Java(client) = player.client.as_ref() else {
+        return Err("Expected a Java player".into());
+    };
+    let entity = golem.get_entity();
+    let world = entity.world.load();
+    let pos = entity.block_pos.load();
+    let previous_block = world.get_block_state_id(&pos);
+    world.set_block_state(
+        &pos,
+        Block::OAK_FENCE.default_state.id,
+        BlockFlags::NOTIFY_ALL,
+    );
+    let knot = LeashKnotEntity::create_knot(&world, pos);
+    entity.attach_leash(&knot);
+    server.plugin_manager.register::<PlayerLeashEntityEvent, _>(
+        hooks.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    server.plugin_manager.register::<EntityUnleashEvent, _>(
+        hooks.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    let result = (|| {
+        player
+            .inventory
+            .set_held_item(ItemStack::new(2, &Item::LEAD));
+        let packet = SInteract {
+            entity_id: VarInt(entity.entity_id),
+            r#type: VarInt(ActionType::Interact as i32),
+            target_position: None,
+            hand: Some(VarInt(0)),
+            sneaking: false,
+        };
+        hooks.cancel_leash.store(true, Ordering::Relaxed);
+        let before = count_dropped_leads(&world);
+        client.handle_interact(player, &packet, server);
+        if entity
+            .get_leash_holder()
+            .is_none_or(|holder| holder.get_entity().entity_id != knot.get_entity().entity_id)
+            || player.inventory.held_item().item_count != 2
+            || count_dropped_leads(&world) != before
+        {
+            return Err(
+                "Cancelled leash replacement must retain the knot connection and both leads".into(),
+            );
+        }
+        hooks.cancel_leash.store(false, Ordering::Relaxed);
+        client.handle_interact(player, &packet, server);
+        if entity
+            .get_leash_holder()
+            .is_none_or(|holder| holder.get_entity().entity_id != player.entity_id())
+            || player.inventory.held_item().item_count != 1
+            || count_dropped_leads(&world) != before + 1
+        {
+            return Err("Approved leash replacement must attach to the player and drop exactly one old lead".into());
+        }
+
+        entity.attach_leash(&knot);
+        world.set_block_state(&pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
+        hooks.cancel_unleash.store(true, Ordering::Relaxed);
+        let before = count_dropped_leads(&world);
+        for _ in 0..3 {
+            knot.tick(knot.as_ref(), server);
+            if knot.get_entity().is_removed()
+                || !entity.is_leashed()
+                || count_dropped_leads(&world) != before
+            {
+                return Err(
+                    "Cancelled knot cleanup must retain the holder without dropping leads".into(),
+                );
+            }
+        }
+        hooks.cancel_unleash.store(false, Ordering::Relaxed);
+        knot.tick(knot.as_ref(), server);
+        if !knot.get_entity().is_removed()
+            || entity.is_leashed()
+            || count_dropped_leads(&world) != before + 1
+        {
+            return Err("Approved knot cleanup must remove the holder and drop one lead".into());
+        }
+        Ok(())
+    })();
+    hooks.cancel_leash.store(false, Ordering::Relaxed);
+    hooks.cancel_unleash.store(false, Ordering::Relaxed);
+    entity.remove_leash();
+    knot.get_entity().remove();
+    world.set_block_state(&pos, previous_block, BlockFlags::NOTIFY_ALL);
+    result
+}
+
+fn count_dropped_leads(world: &pumpkin_core::world::World) -> usize {
+    world
+        .entities
+        .load()
+        .iter()
+        .filter_map(|entity| entity.cast_any().downcast_ref::<ItemEntity>())
+        .map(|item| {
+            let stack = item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if stack.item == &Item::LEAD {
+                usize::from(stack.item_count)
+            } else {
+                0
+            }
+        })
+        .sum()
 }
 
 fn check_shearing_drop(golem: &SnowGolemEntity) -> Result<(), String> {

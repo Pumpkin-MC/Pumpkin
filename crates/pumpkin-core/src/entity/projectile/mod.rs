@@ -344,13 +344,7 @@ impl ThrownItemEntity {
             return false;
         };
         let target_entity = target.get_entity();
-        if !target_entity
-            .entity_type
-            .has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_DEFLECTS_PROJECTILES)
-            || (target_entity.entity_type == &EntityType::BREEZE
-                && (self.entity.entity_type == &EntityType::WIND_CHARGE
-                    || self.entity.entity_type == &EntityType::BREEZE_WIND_CHARGE))
-        {
+        if !self.is_deflector(target_entity) {
             return false;
         }
         if self.owner.mark_deflected_by(target_entity) {
@@ -370,6 +364,15 @@ impl ThrownItemEntity {
         true
     }
 
+    fn is_deflector(&self, entity: &Entity) -> bool {
+        entity
+            .entity_type
+            .has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_DEFLECTS_PROJECTILES)
+            && !(entity.entity_type == &EntityType::BREEZE
+                && (self.entity.entity_type == &EntityType::WIND_CHARGE
+                    || self.entity.entity_type == &EntityType::BREEZE_WIND_CHARGE))
+    }
+
     /// Returns if collision should be skipped (e.g. owner or projectile vs projectile)
     fn should_skip_collision(
         &self,
@@ -379,6 +382,11 @@ impl ThrownItemEntity {
     ) -> bool {
         let other_ent = other.get_entity();
         if other_ent.entity_id == self_ent.entity_id {
+            return true;
+        }
+
+        // A suppressed repeat deflection must not stop movement at the same surface.
+        if self.is_deflector(other_ent) && self.owner.was_deflected_by(other_ent) {
             return true;
         }
 
@@ -451,6 +459,10 @@ fn calculate_ray_intersection(
     let d = [dir.x, dir.y, dir.z];
 
     for i in 0..3 {
+        // A contact on a face is not a hit when the projectile is leaving the box.
+        if (s[i] <= b_min[i] && d[i] < 0.0) || (s[i] >= b_max[i] && d[i] > 0.0) {
+            return None;
+        }
         if d[i].abs() < 1e-9 {
             if s[i] < b_min[i] || s[i] > b_max[i] {
                 return None;

@@ -160,6 +160,10 @@ impl ProjectileOwner {
         self.last_deflected_by.swap(Some(entity.entity_id)) != Some(entity.entity_id)
     }
 
+    pub(crate) fn was_deflected_by(&self, entity: &Entity) -> bool {
+        self.last_deflected_by.load() == Some(entity.entity_id)
+    }
+
     /// Vanilla `checkLeftOwner`, once per tick before moving.
     pub fn check_left_owner(&self, projectile: &Entity) {
         if self.left_owner.load(Relaxed) {

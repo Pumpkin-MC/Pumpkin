@@ -4832,6 +4832,12 @@ impl Entity {
         reason = "callers pass owned or cast Arc<dyn EntityBase>"
     )]
     pub fn leash_to(&self, holder: Arc<dyn EntityBase>) {
+        if self.approve_leash_attachment(holder.as_ref()) {
+            self.attach_leash(&holder);
+        }
+    }
+
+    pub(crate) fn approve_leash_attachment(&self, holder: &dyn EntityBase) -> bool {
         let holder_entity_id = holder.get_entity().entity_id;
         let world = self.world.load();
         if let Some(server) = world.server.upgrade()
@@ -4847,11 +4853,10 @@ impl Entity {
                 };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
-                return;
+                return false;
             }
         }
-
-        self.attach_leash(&holder);
+        true
     }
 
     pub fn attach_leash(&self, holder: &Arc<dyn EntityBase>) {
@@ -4896,7 +4901,8 @@ impl Entity {
         );
     }
 
-    pub fn unleash(&self) {
+    /// Removes the leash unless plugins cancel, returning whether this call removed it.
+    pub fn unleash(&self) -> bool {
         let world = self.world.load();
         if let Some(server) = world.server.upgrade() {
             let mut event =
@@ -4906,12 +4912,12 @@ impl Entity {
                 );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
-                return;
+                return false;
             }
         }
 
         let Some(holder) = self.get_leash_holder() else {
-            return;
+            return false;
         };
         if let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
@@ -4924,19 +4930,14 @@ impl Entity {
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
-                return;
+                return false;
             }
         }
-        self.leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-
-        self.send_leash_removed();
+        self.remove_leash()
     }
 
     /// Cuts leash connections, returning `None` when there are none to cut.
-    /// `Some(false)` means plugins cancelled the cuts; callers must not fall through to shearing.
+    /// `Some(false)` means no cut succeeded; callers must not fall through to shearing.
     pub fn shear_off_all_leash_connections(
         &self,
         caller: &dyn EntityBase,
@@ -5006,12 +5007,15 @@ impl Entity {
                 }
             }
         }
-        self.remove_leash();
+        if !self.remove_leash() {
+            return false;
+        }
         self.spawn_at_location(ItemStack::new(1, &pumpkin_data::item::Item::LEAD));
         true
     }
 
-    pub fn remove_leash(&self) {
+    /// Removes the leash, returning whether this call took the connection.
+    pub fn remove_leash(&self) -> bool {
         let old_holder = self
             .leashed_to
             .lock()
@@ -5020,6 +5024,7 @@ impl Entity {
         if old_holder.is_some() {
             self.send_leash_removed();
         }
+        old_holder.is_some()
     }
 
     fn send_leash_removed(&self) {
@@ -5138,11 +5143,13 @@ impl Entity {
 
         let distance = self.leash_distance_to(holder_entity);
         if distance > Self::LEASH_SNAP_DISTANCE {
+            if !self.unleash() {
+                return LeashTick::NotLeashed;
+            }
             let holder_pos = holder_entity.pos.load();
             self.world
                 .load()
                 .play_sound(Sound::ItemLeadBreak, SoundCategory::Neutral, &holder_pos);
-            self.unleash();
             let lead_item =
                 pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
             self.world
@@ -6390,6 +6397,62 @@ impl Flag {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn concurrent_leash_shearing_drops_one_lead_per_connection()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{ai::test_support::world, passive::snow_golem::SnowGolemEntity};
+        use std::sync::{Barrier, atomic::AtomicUsize};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let golem = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let holder: Arc<dyn EntityBase> = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(4.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let removals = AtomicUsize::new(0);
+        for _ in 0..16 {
+            golem.get_entity().attach_leash(&holder);
+            let barrier = Barrier::new(8);
+            std::thread::scope(|scope| {
+                for _ in 0..8 {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        if golem.get_entity().drop_leash_from_shearing(None) {
+                            removals.fetch_add(1, Ordering::Relaxed);
+                        }
+                    });
+                }
+            });
+        }
+        assert_eq!(removals.load(Ordering::Relaxed), 16);
+        let leads: usize = world
+            .entities
+            .load()
+            .iter()
+            .filter_map(|entity| entity.cast_any().downcast_ref::<item::ItemEntity>())
+            .map(|item| {
+                let stack = item
+                    .get_item_stack()
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if stack.item == &pumpkin_data::item::Item::LEAD {
+                    usize::from(stack.item_count)
+                } else {
+                    0
+                }
+            })
+            .sum();
+        assert_eq!(leads, 16);
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[test]
     fn equipment_break_status_maps_all_slots() {
