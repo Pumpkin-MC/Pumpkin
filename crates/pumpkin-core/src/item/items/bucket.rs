@@ -107,7 +107,7 @@ const fn get_fill_sound(item: &Item) -> Sound {
 fn give_filled_bucket_stack(
     stack: &mut ItemStack,
     player: &Player,
-    mut filled: ItemStack,
+    filled: ItemStack,
     limit_creative_stack_size: bool,
 ) {
     player.trigger_advancement(
@@ -115,6 +115,15 @@ fn give_filled_bucket_stack(
             item_id: filled.item.registry_key.to_string(),
         },
     );
+    create_filled_result(stack, player, filled, limit_creative_stack_size);
+}
+
+pub(crate) fn create_filled_result(
+    stack: &mut ItemStack,
+    player: &Player,
+    mut filled: ItemStack,
+    limit_creative_stack_size: bool,
+) {
     if limit_creative_stack_size && player.gamemode.load() == GameMode::Creative {
         let has_item = {
             let inv = player
@@ -200,6 +209,7 @@ fn apply_mob_bucket_components(bucket_stack: &ItemStack, mob: &dyn EntityBase, p
             bucketable.load_from_bucket_tag(nbt);
         }
         bucketable.set_from_bucket(true);
+        apply_sulfur_cube_content(bucket_stack, mob);
         return;
     }
     if let Some(bucket_data) = bucket_stack.get_data_component::<BucketEntityDataImpl>()
@@ -220,6 +230,16 @@ fn apply_mob_bucket_components(bucket_stack: &ItemStack, mob: &dyn EntityBase, p
     if let Some(custom_name) = bucket_stack.get_data_component::<CustomNameImpl>() {
         mob.get_entity().set_custom_name(custom_name.name.clone());
     }
+    apply_sulfur_cube_content(bucket_stack, mob);
+    if let Some(mob_trait) = mob.get_mob() {
+        mob_trait
+            .get_mob_entity()
+            .persistence_required
+            .store(true, Ordering::Relaxed);
+    }
+}
+
+fn apply_sulfur_cube_content(bucket_stack: &ItemStack, mob: &dyn EntityBase) {
     if let Some(sulfur_content) = bucket_stack.get_data_component::<SulfurCubeContentImpl>()
         && !sulfur_content.item.is_empty()
         && let Some(living) = mob.get_living_entity()
@@ -229,12 +249,6 @@ fn apply_mob_bucket_components(bucket_stack: &ItemStack, mob: &dyn EntityBase, p
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .put(&EquipmentSlot::BODY, sulfur_content.item.clone());
-    }
-    if let Some(mob_trait) = mob.get_mob() {
-        mob_trait
-            .get_mob_entity()
-            .persistence_required
-            .store(true, Ordering::Relaxed);
     }
 }
 
@@ -480,22 +494,16 @@ impl ItemBehaviour for EmptyBucketItem {
             );
             fill_mob_bucket_stack(item, player, &Item::SULFUR_CUBE_BUCKET, entity.as_ref());
             ent.remove();
-        } else if (entity_type == &EntityType::MOOSHROOM || entity_type == &EntityType::GOAT)
-            && ent.age.load(Ordering::Relaxed) >= 0
-        {
+        } else if entity_type == &EntityType::GOAT && ent.age.load(Ordering::Relaxed) >= 0 {
             let world = ent.world.load();
-            let sound = if entity_type == &EntityType::GOAT {
-                if let Some(goat) = entity
-                    .cast_any()
-                    .downcast_ref::<crate::entity::passive::goat::GoatEntity>()
-                    && goat.is_screaming()
-                {
-                    Sound::EntityGoatScreamingMilk
-                } else {
-                    Sound::EntityGoatMilk
-                }
+            let sound = if let Some(goat) = entity
+                .cast_any()
+                .downcast_ref::<crate::entity::passive::goat::GoatEntity>(
+            ) && goat.is_screaming()
+            {
+                Sound::EntityGoatScreamingMilk
             } else {
-                Sound::EntityCowMilk
+                Sound::EntityGoatMilk
             };
             world.play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
             fill_bucket_stack(item, player, &Item::MILK_BUCKET);
@@ -622,13 +630,8 @@ impl ItemBehaviour for FilledBucketItem {
         }
         if item.item.id == Item::WATER_BUCKET.id {
             let entity_type = entity.get_entity().entity_type;
-            let result_item = if entity_type == &EntityType::AXOLOTL {
-                Some((&Item::AXOLOTL_BUCKET, Sound::ItemBucketFillAxolotl))
-            } else if entity_type == &EntityType::TADPOLE {
-                Some((&Item::TADPOLE_BUCKET, Sound::ItemBucketFillTadpole))
-            } else {
-                None
-            };
+            let result_item = (entity_type == &EntityType::AXOLOTL)
+                .then_some((&Item::AXOLOTL_BUCKET, Sound::ItemBucketFillAxolotl));
 
             if let Some((mob_bucket, sound)) = result_item {
                 let ent = entity.get_entity();

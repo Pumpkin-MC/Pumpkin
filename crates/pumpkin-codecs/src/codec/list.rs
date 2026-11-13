@@ -73,10 +73,10 @@ where
             for element in i {
                 total_count += 1;
                 if elements.len() >= MAX {
-                    failed.push(element.clone());
+                    failed.push(element);
                     continue;
                 }
-                let element_result = T::decode(element.clone(), ops);
+                let element_result = T::decode(element, ops);
                 result = result.add_message(&element_result);
                 if let Some(element) = element_result.into_result_or_partial() {
                     elements.push(element.0);
@@ -120,7 +120,7 @@ where
             let mut result = DataResult::new_success(());
 
             for element in i {
-                let element_result = T::decode(element.clone(), ops);
+                let element_result = T::decode(element, ops);
                 result = result.add_message(&element_result);
                 if let Some(element) = element_result.into_result_or_partial() {
                     elements.push(element.0);

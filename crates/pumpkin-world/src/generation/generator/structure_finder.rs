@@ -156,13 +156,9 @@ fn search_structure_starts(
     use crate::{
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
         generation::{
-            noise::router::{
-                multi_noise_sampler::MultiNoiseSampler,
-                surface_height_sampler::{
-                    SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
-                },
-            },
+            noise::router::multi_noise_sampler::MultiNoiseSampler,
             structure::{
+                height_sampler::NoiseHeightSampler,
                 lazily_generate_structure,
                 placement::should_generate_structure,
                 structures::{StructureGeneratorContext, create_chunk_random},
@@ -218,16 +214,7 @@ fn search_structure_starts(
                             chunk_z,
                             || {
                                 let settings = noise_generator.settings;
-                                let mut height_sampler = SurfaceHeightEstimateSampler::generate(
-                                    &noise_generator.base_router.surface_estimator,
-                                    &SurfaceHeightSamplerBuilderOptions::new(
-                                        settings.shape.min_y as i32,
-                                        settings.shape.height as i32,
-                                        (settings.shape.height
-                                            / settings.shape.vertical_cell_block_count() as u16)
-                                            as usize,
-                                    ),
-                                );
+                                let mut height_sampler = NoiseHeightSampler::new(noise_generator);
                                 let mut biome_sampler = MultiNoiseSampler::generate(
                                     &noise_generator.base_router.multi_noise,
                                 );

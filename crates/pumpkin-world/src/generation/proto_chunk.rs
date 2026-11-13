@@ -1124,9 +1124,16 @@ impl ProtoChunk {
 
         block_registry.spawn_mobs_for_chunk_generation(cache, biome, x, z);
 
-        let entities = cache
-            .get_center_chunk_mut()
-            .take_pending_structure_entities();
+        let center = cache.get_center_chunk_mut();
+        let entities = center
+            .take_pending_structure_entities()
+            .into_iter()
+            .map(|nbt| {
+                let entity_biome = structure_entity_position(&nbt)
+                    .map_or(biome, |(x, y, z)| center.get_terrain_gen_biome(x, y, z));
+                (nbt, entity_biome)
+            })
+            .collect();
         block_registry.spawn_structure_entities(entities);
 
         cache.get_center_chunk_mut().stage = StagedChunkEnum::Spawn;
@@ -1699,18 +1706,25 @@ impl ProtoChunk {
         false
     }
 
-    /// Adds references to nearby structure starts that intersect this chunk.
+    /// Every `wanted` structure start, from this chunk or up to 8 chunks away, that reaches
+    /// into the chunk at `chunk_x`, `chunk_z`.
     #[expect(clippy::too_many_lines)]
-    pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
-        debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
+    pub(crate) fn structure_references_in_chunk(
+        generator: &super::generator::VanillaGenerator,
+        chunk_x: i32,
+        chunk_z: i32,
+        chunk_min_y: i32,
+        chunk_height: u16,
+        wanted: impl Fn(StructureKeys) -> bool,
+    ) -> Vec<(StructureKeys, Arc<Mutex<StructurePiecesCollector>>)> {
         let random_config = &generator.random_config;
         let settings = generator.settings;
         let noise_router = &generator.base_router;
         let global_cache = &generator.global_structure_cache;
         let calculator = &generator.structure_calculator;
 
-        let start_x = chunk_pos::start_block_x(self.x);
-        let start_z = chunk_pos::start_block_z(self.z);
+        let start_x = chunk_pos::start_block_x(chunk_x);
+        let start_z = chunk_pos::start_block_z(chunk_z);
         let end_x = start_x + 15;
         let end_z = start_z + 15;
 
@@ -1724,16 +1738,11 @@ impl ProtoChunk {
 
         let mut references = Vec::new();
         let mut candidate_chunks = Vec::with_capacity(4);
-        // Constant across every chunk in the dimension, so hoist it out of the loop
-        // and out of the (cached) structure-start computation below.
-        // Matches vanilla WorldGenerationContext:
-        // minY = Math.max(heightAccessor.getMinY(), generator.getMinY())
-        // height = Math.min(heightAccessor.getHeight(), generator.getGenDepth())
-        let chunk_min_y = (self.generation_bottom_y() as i32).max(self.bottom_y() as i32);
-        let chunk_height = self.generation_height().min(self.height());
 
         for (set_index, set) in StructureSet::ALL.iter().enumerate() {
-            if !generator.enabled_structure_sets.contains(&set_index) {
+            if !generator.enabled_structure_sets.contains(&set_index)
+                || !set.structures.iter().any(|entry| wanted(entry.structure))
+            {
                 continue;
             }
 
@@ -1741,10 +1750,10 @@ impl ProtoChunk {
 
             match &set.placement.placement_type {
                 StructurePlacementType::RandomSpread(spread) => {
-                    let min_rx = pumpkin_util::math::floor_div(self.x - 8, spread.spacing);
-                    let max_rx = pumpkin_util::math::floor_div(self.x + 8, spread.spacing);
-                    let min_rz = pumpkin_util::math::floor_div(self.z - 8, spread.spacing);
-                    let max_rz = pumpkin_util::math::floor_div(self.z + 8, spread.spacing);
+                    let min_rx = pumpkin_util::math::floor_div(chunk_x - 8, spread.spacing);
+                    let max_rx = pumpkin_util::math::floor_div(chunk_x + 8, spread.spacing);
+                    let min_rz = pumpkin_util::math::floor_div(chunk_z - 8, spread.spacing);
+                    let max_rz = pumpkin_util::math::floor_div(chunk_z + 8, spread.spacing);
 
                     for rx in min_rx..=max_rx {
                         for rz in min_rz..=max_rz {
@@ -1756,7 +1765,7 @@ impl ProtoChunk {
                                     rz,
                                     set.placement.salt,
                                 );
-                            if (cx - self.x).abs() <= 8 && (cz - self.z).abs() <= 8 {
+                            if (cx - chunk_x).abs() <= 8 && (cz - chunk_z).abs() <= 8 {
                                 candidate_chunks.push((cx, cz));
                             }
                         }
@@ -1766,8 +1775,8 @@ impl ProtoChunk {
                     global_cache.collect_strongholds_in_range(
                         seed,
                         placement,
-                        self.x,
-                        self.z,
+                        chunk_x,
+                        chunk_z,
                         8,
                         &mut candidate_chunks,
                     );
@@ -1842,17 +1851,38 @@ impl ProtoChunk {
                     );
 
                     if let Some(start_data) = start_data {
-                        if start_data
-                            .get_adjusted_bounding_box(&entry.structure)
-                            .intersects_raw_xz(start_x, start_z, end_x, end_z)
+                        if wanted(entry.structure)
+                            && start_data
+                                .get_adjusted_bounding_box(&entry.structure)
+                                .intersects_raw_xz(start_x, start_z, end_x, end_z)
                         {
-                            references.push((entry.structure, start_data.collector.clone()));
+                            references.push((entry.structure, start_data.collector));
                         }
                         break;
                     }
                 }
             }
         }
+
+        references
+    }
+
+    /// Adds references to nearby structure starts that intersect this chunk.
+    pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
+        // Matches vanilla WorldGenerationContext:
+        // minY = Math.max(heightAccessor.getMinY(), generator.getMinY())
+        // height = Math.min(heightAccessor.getHeight(), generator.getGenDepth())
+        let chunk_min_y = (self.generation_bottom_y() as i32).max(self.bottom_y() as i32);
+        let chunk_height = self.generation_height().min(self.height());
+        let references = Self::structure_references_in_chunk(
+            generator,
+            self.x,
+            self.z,
+            chunk_min_y,
+            chunk_height,
+            |_| true,
+        );
 
         for (key, pos) in references {
             self.structure_starts
@@ -1999,4 +2029,14 @@ impl GenerationCache for ProtoChunk {
     fn get_sea_level(&self) -> i32 {
         Self::get_sea_level(self)
     }
+}
+
+fn structure_entity_position(nbt: &NbtCompound) -> Option<(i32, i32, i32)> {
+    let pos = nbt.get_list("Pos")?;
+    let coordinate = |index: usize| {
+        pos.get(index)?
+            .extract_double()
+            .map(|value| value.floor() as i32)
+    };
+    Some((coordinate(0)?, coordinate(1)?, coordinate(2)?))
 }

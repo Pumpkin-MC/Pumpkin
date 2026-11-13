@@ -3,13 +3,14 @@ pub mod play;
 pub(crate) mod recipe;
 use crossbeam::atomic::AtomicCell;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     io::{Cursor, Error, Write},
     net::SocketAddr,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
     },
+    time::Instant,
 };
 
 use tracing::{debug, error, warn};
@@ -24,18 +25,21 @@ use pumpkin_protocol::{
             client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
             disconnect::CDisconnect,
         },
+        network_stack_latency::NetworkStackLatency,
         packet_decoder::BedrockBatchDecoder,
         packet_encoder::BedrockBatchEncoder,
         server::{
             actor_event::SActorEvent, animate::SAnimate, block_actor_data::SBlockActorData,
             block_pick_request::SBlockPickRequest,
             client_cache_blob_status::SClientCacheBlobStatus,
-            client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
-            container_close::SContainerClose, cursor_item_drag::SCursorItemDrag, emote::SEmote,
-            emote_list::SEmoteList, interact::SInteract,
-            inventory_transaction::SInventoryTransaction, item_stack_request::SItemStackRequest,
-            loading_screen::SLoadingScreen, login::SLogin, matchmaking_cancel::SMatchmakingCancel,
-            mob_equipment::SMobEquipment, modal_form_response::SModalFormResponse,
+            client_cache_status::SClientCacheStatus,
+            client_movement_prediction_sync::SClientMovementPredictionSync,
+            command_request::SCommandRequest, container_close::SContainerClose,
+            cursor_item_drag::SCursorItemDrag, emote::SEmote, emote_list::SEmoteList,
+            interact::SInteract, inventory_transaction::SInventoryTransaction,
+            item_stack_request::SItemStackRequest, loading_screen::SLoadingScreen, login::SLogin,
+            matchmaking_cancel::SMatchmakingCancel, mob_equipment::SMobEquipment,
+            modal_form_response::SModalFormResponse,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, player_hotbar::SPlayerHotbar,
             register_audio_content::SRegisterAudioContent, request_ability::SRequestAbility,
@@ -59,6 +63,7 @@ use tokio::{
 
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
+pub mod blob_cache;
 pub mod level_chunk;
 pub mod login;
 use self::level_chunk::CLevelChunk;
@@ -67,6 +72,7 @@ use crate::{
     entity::player::Player,
     net::{
         DisconnectReason, MAX_PENDING_BYTES, PacketHandlerResult, PacketRateLimiter,
+        chunk_sender::{ChunkSendOutcome, DeliveryFailure},
         decrement_pending_bytes,
     },
     plugin::api::events::world::chunk_send::ChunkSend,
@@ -74,6 +80,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use pumpkin_protocol::bedrock::server::login::ClientData;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::level::SyncChunk;
 
@@ -136,10 +143,28 @@ pub struct BedrockClient {
     /// The next form ID to use for custom forms.
     pub next_form_id: AtomicU32,
     pub inventory_opened: AtomicBool,
+    /// Last processed `PlayerAuthInput` tick. Motion for the own player must carry it.
+    pub input_tick: AtomicU64,
+    /// Client predicted velocity from the last `PlayerAuthInput`. Pushes build on it.
+    pub client_delta: AtomicCell<pumpkin_util::math::vector3::Vector3<f64>>,
+    /// World age of the last server motion sent to the own player.
+    pub own_motion_age: AtomicCell<i64>,
+    /// `PlayerAuthInput` tick tagged on that last own-player `SetActorMotion`.
+    pub own_motion_tick: AtomicU64,
+    /// Push velocity the client carries from the server's motions.
+    pub push_residual: std::sync::Mutex<crate::entity::player::client_push::PushResidual>,
+    /// Ids and send times of unanswered `NetworkStackLatency` probes, oldest first.
+    pending_latencies: std::sync::Mutex<VecDeque<(u64, Instant)>>,
+    next_latency_id: AtomicU64,
+    last_latency_send: AtomicCell<Instant>,
+    /// Inputs since the last teleport without reaching it. Resent past a threshold.
+    pub teleport_unconfirmed_inputs: AtomicU32,
+    /// Network position of the last own teleport `MovePlayer`, which the client must reach.
+    pub teleport_sent_pos: AtomicCell<pumpkin_util::math::vector3::Vector3<f32>>,
     /// Separate from normal vitals caching so the first rejected use always gets corrected.
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
-    pub blob_cache: std::sync::Mutex<HashMap<u64, Vec<u8>>>,
+    pub blob_cache: std::sync::Mutex<blob_cache::BlobCache>,
     pub streaming_packs: std::sync::Mutex<HashMap<String, BedrockStreamingPack>>,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
@@ -177,9 +202,19 @@ impl BedrockClient {
             pending_bytes: Arc::new(AtomicUsize::new(0)),
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
+            input_tick: AtomicU64::new(0),
+            client_delta: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
+            own_motion_age: AtomicCell::new(i64::MIN),
+            own_motion_tick: AtomicU64::new(0),
+            push_residual: std::sync::Mutex::default(),
+            pending_latencies: std::sync::Mutex::new(VecDeque::new()),
+            next_latency_id: AtomicU64::new(1),
+            last_latency_send: AtomicCell::new(Instant::now()),
+            teleport_unconfirmed_inputs: AtomicU32::new(0),
+            teleport_sent_pos: AtomicCell::new(pumpkin_util::math::vector3::Vector3::default()),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
-            blob_cache: std::sync::Mutex::new(HashMap::new()),
+            blob_cache: std::sync::Mutex::new(blob_cache::BlobCache::new()),
             streaming_packs: std::sync::Mutex::new(HashMap::new()),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
@@ -357,31 +392,32 @@ impl BedrockClient {
         self.close().await;
     }
 
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+    /// Queues the chunks and reports which were sent and why the others were not.
+    /// With an `epoch`, chunks are dropped if the player's chunk epoch moved on (world change)
+    /// while they were being encoded.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk], epoch: Option<u32>) -> ChunkSendOutcome {
+        let mut outcome = ChunkSendOutcome::default();
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
             debug!(
-                "send_chunks: player not set yet, dropping {} chunks",
+                "send_chunks: player not set yet, deferring {} chunks",
                 chunks.len()
             );
-            return;
+            return outcome;
         };
         let Some(server) = player.world().server.upgrade() else {
-            return;
+            return outcome;
         };
 
-        let mut valid_chunks = Vec::with_capacity(chunks.len());
-        for chunk in chunks {
-            let mut event = ChunkSend::new(player.world(), chunk.clone());
-            server.plugin_manager.fire(&server, &mut event).await;
-            if !event.cancelled {
-                valid_chunks.push(chunk.clone());
-            }
-        }
-
+        let valid_chunks = ChunkSend::filter(&server, &player.world(), chunks).await;
+        outcome.record_cancelled(chunks, &valid_chunks);
         if valid_chunks.is_empty() {
-            return;
+            return outcome;
         }
+        let valid_positions: Vec<_> = valid_chunks
+            .iter()
+            .map(|chunk| Vector2::new(chunk.x, chunk.z))
+            .collect();
 
         let bedrock_dimension =
             if player.world().dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
@@ -409,49 +445,95 @@ impl BedrockClient {
                     &block_actors,
                 ) {
                     Ok((payload, blobs)) => {
-                        encoded_payloads.push(payload);
+                        encoded_payloads.push((Vector2::new(chunk.x, chunk.z), Some(payload)));
                         new_blobs.extend(blobs);
                     }
-                    Err(e) => error!("Failed to serialize Bedrock chunk: {:?}", e),
+                    Err(e) => {
+                        error!("Failed to serialize Bedrock chunk: {:?}", e);
+                        encoded_payloads.push((Vector2::new(chunk.x, chunk.z), None));
+                    }
                 }
             }
             let _ = tx.send((encoded_payloads, new_blobs));
         });
 
         let Ok((encoded_payloads, new_blobs)) = rx.await else {
-            return;
+            // Encoding task died -> counts as an encode failure for every chunk
+            outcome.failed.extend(
+                valid_positions
+                    .into_iter()
+                    .map(|pos| (pos, DeliveryFailure::Unencodable)),
+            );
+            return outcome;
         };
+
+        let packets = self.wrap_chunk_payloads(encoded_payloads).await;
+
+        // Checked and queued under the sender lock: a world change resets the sender under it
+        // before queueing `CChangeDimension`, so no old-world chunk can land behind that packet
+        let _sender = epoch.map(|_| {
+            player
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
+        if epoch.is_some_and(|epoch| player.chunk_send_epoch.load(Ordering::Relaxed) != epoch) {
+            outcome.failed.extend(
+                valid_positions
+                    .into_iter()
+                    .map(|pos| (pos, DeliveryFailure::Deferred)),
+            );
+            return outcome;
+        }
 
         if !new_blobs.is_empty() {
             let mut cache = self
                 .blob_cache
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for (hash, payload) in new_blobs {
-                cache.insert(hash, payload);
+            for (hash, blob) in new_blobs {
+                cache.insert(hash, blob);
             }
         }
 
-        let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
-        {
-            let encoder = self.network_writer.read().await;
-            for payload in encoded_payloads {
-                let mut packet_buf = Vec::new();
-                match encoder.write_game_packet(
-                    CLevelChunk::PACKET_ID as u16,
-                    SubClient::Main,
-                    SubClient::Main,
-                    &payload,
-                    &mut packet_buf,
-                ) {
-                    Ok(()) => packets_to_enqueue.push(packet_buf),
-                    Err(err) => error!("Failed to write game packet wrapper: {err}"),
-                }
+        for (pos, packet) in packets {
+            match packet.map(|packet| self.try_enqueue_packet_data(packet.into())) {
+                Some(true) => outcome.sent.push(pos),
+                Some(false) => outcome.failed.push((pos, DeliveryFailure::Deferred)),
+                None => outcome.failed.push((pos, DeliveryFailure::Unencodable)),
             }
         }
-        for packet_buf in packets_to_enqueue {
-            self.enqueue_packet_data(packet_buf.into()).await;
-        }
+        outcome
+    }
+
+    /// Wraps encoded chunk payloads as game packets, `None` for chunks that failed to encode.
+    async fn wrap_chunk_payloads(
+        &self,
+        encoded_payloads: Vec<(Vector2<i32>, Option<Vec<u8>>)>,
+    ) -> Vec<(Vector2<i32>, Option<Vec<u8>>)> {
+        let encoder = self.network_writer.read().await;
+        encoded_payloads
+            .into_iter()
+            .map(|(pos, payload)| {
+                let packet = payload.and_then(|payload| {
+                    let mut packet_buf = Vec::new();
+                    match encoder.write_game_packet(
+                        CLevelChunk::PACKET_ID as u16,
+                        SubClient::Main,
+                        SubClient::Main,
+                        &payload,
+                        &mut packet_buf,
+                    ) {
+                        Ok(()) => Some(packet_buf),
+                        Err(err) => {
+                            error!("Failed to write game packet wrapper: {err}");
+                            None
+                        }
+                    }
+                });
+                (pos, packet)
+            })
+            .collect()
     }
 
     pub fn set_player(&self, player: Arc<Player>) {
@@ -474,13 +556,14 @@ impl BedrockClient {
     ///
     /// * `packet_data`: A `Bytes` payload representing the encoded packet.
     #[allow(clippy::unused_async)]
-    pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
-        self.try_enqueue_packet_data(packet_data);
+    pub async fn enqueue_packet_data(&self, packet_data: Bytes) -> bool {
+        self.try_enqueue_packet_data(packet_data)
     }
 
-    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+    /// `false` when the packet was dropped instead of queued.
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
         if self.is_closed() {
-            return;
+            return false;
         }
 
         let packet_len = packet_data.len();
@@ -496,7 +579,7 @@ impl BedrockClient {
                 );
                 self.close_token.cancel();
             }
-            return;
+            return false;
         }
 
         if let Err(err) = self
@@ -508,7 +591,9 @@ impl BedrockClient {
             if !self.is_closed() {
                 error!("Failed to add packet to the outgoing packet queue for client: {err}");
             }
+            return false;
         }
+        true
     }
 
     pub fn write_raw_packet<P: BClientPacket>(
@@ -861,9 +946,8 @@ impl BedrockClient {
                 let form_resp = SModalFormResponse::read(reader)?;
                 self.handle_modal_form_response(player, server, form_resp);
             }
-            SLoadingScreen::PACKET_ID => {
-                // Ignore for now
-            }
+            // Ignore for now; movement is client authoritative, so there is no prediction to sync
+            SLoadingScreen::PACKET_ID | SClientMovementPredictionSync::PACKET_ID => {}
             SBlockPickRequest::PACKET_ID => {
                 let packet = SBlockPickRequest::read(reader)?;
                 self.handle_block_pick_request(player, &packet);
@@ -874,6 +958,9 @@ impl BedrockClient {
             }
             SRequestAbility::PACKET_ID => {
                 self.handle_request_ability(player, &SRequestAbility::read(reader)?);
+            }
+            NetworkStackLatency::PACKET_ID => {
+                self.handle_network_stack_latency(player, NetworkStackLatency::read(reader)?);
             }
             SMobEquipment::PACKET_ID => {
                 let packet = SMobEquipment::read(reader)?;
@@ -901,21 +988,22 @@ impl BedrockClient {
     }
 
     pub fn handle_client_cache_blob_status(&self, packet: SClientCacheBlobStatus) {
-        if packet.miss_hashes.is_empty() {
-            return;
-        }
         let missing_blobs = {
-            let cache = self
+            let mut cache = self
                 .blob_cache
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for hash in packet.hit_hashes {
+                cache.remove(hash);
+            }
             let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
             for hash in packet.miss_hashes {
-                if let Some(payload) = cache.get(&hash) {
+                if let Some(blob) = cache.get(hash) {
                     missing_blobs.push(MissingBlobData {
                         blob_id: hash,
-                        blob_data: payload.clone(),
+                        blob_data: blob.clone(),
                     });
+                    cache.mark_answered(hash);
                 } else {
                     warn!("Client requested missing blob {hash:#x} not found in server cache");
                 }

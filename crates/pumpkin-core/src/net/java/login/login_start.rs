@@ -36,31 +36,27 @@ impl PendingConnection {
         }
 
         let proxy = &server.advanced_config.networking.proxy;
-        if proxy.enabled {
-            if proxy.vine.enabled {
-                vine::vine_login(self).await;
-                None
-            } else if proxy.velocity.enabled {
-                velocity::velocity_login(self).await;
-                None
-            } else if proxy.bungeecord.enabled {
-                match bungeecord::bungeecord_login(
-                    &self.address,
-                    &self.server_address,
-                    login_start.name.into_string(),
-                    &proxy.bungeecord.secret,
-                ) {
-                    Ok((_ip, profile)) => {
-                        self.gameprofile = Some(profile.clone());
-                        self.finish_login(server, &profile).await
-                    }
-                    Err(error) => {
-                        self.kick(TextComponent::text(error.to_string())).await;
-                        Some(PacketHandlerResult::Stop)
-                    }
+        if proxy.enabled && proxy.vine.enabled {
+            vine::vine_login(self).await;
+            None
+        } else if proxy.enabled && proxy.velocity.enabled {
+            velocity::velocity_login(self).await;
+            None
+        } else if proxy.enabled && proxy.bungeecord.enabled {
+            match bungeecord::bungeecord_login(
+                &self.address,
+                &self.server_address,
+                login_start.name.into_string(),
+                &proxy.bungeecord.secret,
+            ) {
+                Ok((_ip, profile)) => {
+                    self.gameprofile = Some(profile.clone());
+                    self.finish_login(server, &profile).await
                 }
-            } else {
-                None
+                Err(error) => {
+                    self.kick(TextComponent::text(error.to_string())).await;
+                    Some(PacketHandlerResult::Stop)
+                }
             }
         } else {
             let id = if server.advanced_config.networking.java.online_mode {

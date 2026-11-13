@@ -653,7 +653,7 @@ fn verify_stage_parity(seed: u64, stage_dumps: &[ChunkStageDump]) {
             _ => Dimension::OVERWORLD,
         };
         let seed = Seed(seed);
-        let world_gen = get_world_gen(seed, dim.clone(), false, Vec::new(), String::new());
+        let world_gen = get_world_gen(seed, dim, false, Vec::new(), String::new());
         let WorldGenerator::Noise(generator) = &*world_gen else {
             unreachable!()
         };

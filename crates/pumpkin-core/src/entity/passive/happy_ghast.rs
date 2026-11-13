@@ -5,7 +5,6 @@ use std::sync::{
 
 use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
@@ -22,8 +21,6 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
-
-pub const HAPPY_GHAST_FOOD: &[&Item] = &[&Item::SNOWBALL];
 
 /// Represents a Happy Ghast, a passive flying mob.
 ///
@@ -60,9 +57,9 @@ impl HappyGhastEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(
                 1,
-                Box::new(TemptGoal::with_stop_distance(
+                Box::new(TemptGoal::with_tag_and_stop_distance(
                     1.0,
-                    HAPPY_GHAST_FOOD,
+                    &tag::Item::MINECRAFT_HAPPY_GHAST_TEMPT_ITEMS,
                     false,
                     7.0,
                 )),
@@ -121,7 +118,6 @@ impl Animal for HappyGhastEntity {
         item_stack
             .item
             .has_tag(&tag::Item::MINECRAFT_HAPPY_GHAST_FOOD)
-            || HAPPY_GHAST_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
