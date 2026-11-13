@@ -6,7 +6,6 @@ use crate::world::World;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
-use std::sync::Arc;
 
 const GIVE_UP_TICKS: i32 = 1200;
 const STAY_TICKS: i32 = 1200;
@@ -62,6 +61,7 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
     pub fn find_target_pos(&mut self, mob: &dyn Mob) -> bool {
         let block_pos = mob.get_entity().block_pos.load();
         let mut block_pos_mut = BlockPos::new(0, 0, 0);
+        let world = mob.get_entity().world.load_full();
 
         let mut k = self.lowest_y;
         while k <= self.max_y_difference {
@@ -73,26 +73,21 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
                         block_pos_mut.0.x = block_pos.0.x + m;
                         block_pos_mut.0.y = block_pos.0.y + k - 1;
                         block_pos_mut.0.z = block_pos.0.z + n;
-                        // Make sure the world lock is dropped
+                        let can_target =
+                            self.move_to_target_pos
+                                .get()
+                                .is_some_and(|move_to_target_pos| {
+                                    move_to_target_pos.is_target_pos(&world, block_pos_mut)
+                                });
+
+                        if mob
+                            .get_mob_entity()
+                            .is_in_position_target_range_pos(&block_pos_mut)
+                            && can_target
                         {
-                            let world = mob.get_entity().world.load_full();
-
-                            let can_target =
-                                self.move_to_target_pos
-                                    .get()
-                                    .is_some_and(|move_to_target_pos| {
-                                        move_to_target_pos.is_target_pos(world, block_pos_mut)
-                                    });
-
-                            if mob
-                                .get_mob_entity()
-                                .is_in_position_target_range_pos(&block_pos_mut)
-                                && can_target
-                            {
-                                self.target_pos = block_pos_mut;
-                                return true;
-                            }
-                        };
+                            self.target_pos = block_pos_mut;
+                            return true;
+                        }
 
                         n = if n > 0 { -n } else { 1 - n };
                     }
@@ -108,11 +103,6 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
     #[must_use]
     pub fn get_target_pos(&self) -> BlockPos {
         self.target_pos.up()
-    }
-
-    #[must_use]
-    pub const fn should_reset_path(&self) -> bool {
-        self.trying_time % 40 == 0
     }
 
     #[must_use]
@@ -139,10 +129,14 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
 
 // Contains overridable functions
 pub trait MoveToTargetPos: Send + Sync {
-    fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool;
+    fn is_target_pos(&self, world: &World, block_pos: BlockPos) -> bool;
 
     fn get_desired_distance_to_target(&self) -> f64 {
         1.0
+    }
+
+    fn should_recalculate_path(&self, trying_time: i32) -> bool {
+        trying_time % 40 == 0
     }
 
     fn next_start_tick(&self, mob: &dyn Mob) -> i32
@@ -172,7 +166,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
             .move_to_target_pos
             .get()
             .is_some_and(|move_to_target_pos| {
-                move_to_target_pos.is_target_pos(world, self.target_pos)
+                move_to_target_pos.is_target_pos(&world, self.target_pos)
             });
         self.trying_time >= -self.safe_waiting_time
             && self.trying_time <= GIVE_UP_TICKS
@@ -206,7 +200,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
         } else {
             self.reached = false;
             self.trying_time += 1;
-            if self.should_reset_path() {
+            if move_to_target_pos.should_recalculate_path(self.trying_time) {
                 let steered = mob.get_mob_entity().steered();
                 let mut navigator = steered.navigator();
 

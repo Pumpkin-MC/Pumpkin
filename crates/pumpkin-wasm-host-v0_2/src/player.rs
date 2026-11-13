@@ -1467,6 +1467,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    fn stop_all_sounds(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.stop_sound(None, None);
+        Ok(())
+    }
+
     fn spawn_particles(
         &mut self,
         player: Resource<Player>,
@@ -2106,6 +2112,29 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         }))
     }
 
+    fn get_last_death_location(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<(String, pumpkin::plugin::common::BlockPos)>> {
+        let player = self.get(&player)?;
+        let guard = player.last_death_location.lock_ignore_poison();
+        Ok(guard.as_ref().map(|(dim, pos)| {
+            (
+                dim.clone(),
+                pumpkin::plugin::common::BlockPos {
+                    x: pos.0.x,
+                    y: pos.0.y,
+                    z: pos.0.z,
+                },
+            )
+        }))
+    }
+
+    fn get_client_view_distance(&mut self, player: Resource<Player>) -> wasmtime::Result<u8> {
+        let player = self.get(&player)?;
+        Ok(player.config.load().view_distance.get())
+    }
+
     fn hide_player(
         &mut self,
         player: Resource<Player>,
@@ -2478,6 +2507,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.experience_points.load(Ordering::Relaxed))
     }
 
+    fn get_exp_to_level(&mut self, player: Resource<Player>) -> wasmtime::Result<i32> {
+        let player = self.get(&player)?;
+        let level = player.experience_level.load(Ordering::Relaxed);
+        Ok(pumpkin_util::math::experience::points_in_level(level))
+    }
+
     fn is_flying(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
         let player = self.get(&player)?;
         Ok(player.is_flying())
@@ -2793,6 +2828,28 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         }
     }
 
+    fn can_harvest_block(
+        &mut self,
+        player: Resource<Player>,
+        pos: pumpkin::plugin::world::BlockPos,
+    ) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        let internal_pos = pumpkin_util::math::position::BlockPos::new(pos.x, pos.y, pos.z);
+        let (block, state) = player.world().get_block_and_state(&internal_pos);
+        Ok(player.can_harvest(state, block))
+    }
+
+    fn get_mining_speed(
+        &mut self,
+        player: Resource<Player>,
+        pos: pumpkin::plugin::world::BlockPos,
+    ) -> wasmtime::Result<f32> {
+        let player = self.get(&player)?;
+        let internal_pos = pumpkin_util::math::position::BlockPos::new(pos.x, pos.y, pos.z);
+        let block = player.world().get_block(&internal_pos);
+        Ok(player.get_mining_speed(block))
+    }
+
     fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
@@ -2923,6 +2980,88 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         Ok(())
     }
 
+    async fn damage_item_in_slot(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        slot: pumpkin::plugin::world::EquipmentSlot,
+        amount: i32,
+    ) -> wasmtime::Result<bool> {
+        let player = accessor.get_res(&player)?;
+        let internal_slot = crate::living_entity::from_wit_equipment_slot(slot);
+        run_blocking(accessor, move || {
+            let Some(slot_index) = player.inventory().equipment_slot_index(&internal_slot) else {
+                return false;
+            };
+            let was_empty = player.inventory().get_slot(slot_index).is_empty();
+            if was_empty {
+                return false;
+            }
+            player.damage_item_in_slot(&internal_slot, amount);
+            player.inventory().get_slot(slot_index).is_empty()
+        })
+        .await
+    }
+
+    async fn damage_held_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        amount: i32,
+    ) -> wasmtime::Result<bool> {
+        let player = accessor.get_res(&player)?;
+        run_blocking(accessor, move || {
+            let slot_index = player.inventory().get_selected_slot() as usize;
+            if player.inventory().get_slot(slot_index).is_empty() {
+                return false;
+            }
+            player.damage_held_item(amount);
+            player.inventory().get_slot(slot_index).is_empty()
+        })
+        .await
+    }
+
+    async fn damage_item_stack(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        item: Resource<WitHostItemStack>,
+        amount: i32,
+    ) -> wasmtime::Result<bool> {
+        let stack_arc = accessor.get_res(&item)?;
+        let mut stack_clone = stack_arc.lock().await.clone();
+        let player = accessor.get_res(&player)?;
+        let (result, updated_stack) = run_blocking(accessor, move || {
+            let res = player.damage_item_stack(&mut stack_clone, amount);
+            (res, stack_clone)
+        })
+        .await?;
+        if result != pumpkin_data::item_stack::DamageResult::Untouched {
+            *stack_arc.lock().await = updated_stack;
+        }
+        Ok(result == pumpkin_data::item_stack::DamageResult::Broken)
+    }
+
+    async fn break_block(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        pos: pumpkin::plugin::world::BlockPos,
+    ) -> wasmtime::Result<bool> {
+        let player = accessor.get_res(&player)?;
+        let internal_pos = pumpkin_util::math::position::BlockPos::new(pos.x, pos.y, pos.z);
+        run_blocking(accessor, move || player.break_block(&internal_pos)).await
+    }
+
+    async fn swing_hand(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        hand: pumpkin::plugin::common::Hand,
+    ) -> wasmtime::Result<()> {
+        let player = accessor.get_res(&player)?;
+        let internal_hand = from_wasm_hand(hand);
+        run_blocking(accessor, move || {
+            player.swing_hand(internal_hand, true);
+        })
+        .await
+    }
+
     async fn set_ender_chest_item(
         accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
@@ -3006,7 +3145,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         if let Some(client) = player.client.java() {
             let packet =
                 pumpkin_protocol::java::client::play::CDeleteChat::from_signature(&signature);
-            client.send_packet(&packet).await;
+            client.try_send_packet(&packet);
         }
         Ok(())
     }
@@ -3020,7 +3159,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         if let Some(client) = player.client.java() {
             let packet =
                 pumpkin_protocol::java::client::play::CDeleteChat::from_cache_id(signature_id);
-            client.send_packet(&packet).await;
+            client.try_send_packet(&packet);
         }
         Ok(())
     }
@@ -3033,12 +3172,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
         if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
-            client
-                .send_packet(&pumpkin_protocol::java::client::play::CTransfer::new(
-                    &host,
-                    pumpkin_protocol::codec::var_int::VarInt(i32::from(port)),
-                ))
-                .await;
+            client.try_send_packet(&pumpkin_protocol::java::client::play::CTransfer::new(
+                &host,
+                pumpkin_protocol::codec::var_int::VarInt(i32::from(port)),
+            ));
         }
         Ok(())
     }
@@ -3687,7 +3824,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         packet: pumpkin::plugin::java_packets::ClientboundPacket,
     ) -> wasmtime::Result<()> {
-        let player = accessor.get_res(&player)?.clone();
+        let player = accessor.get_res(&player)?;
 
         let client = player
             .client
@@ -3697,7 +3834,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             &packet,
             pumpkin_data::packet::CURRENT_MC_VERSION,
         ) {
-            client.send_packet_now_data(bytes).await;
+            client.try_enqueue_packet_data(bytes);
         }
         Ok(())
     }
@@ -3725,7 +3862,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         pack: pumpkin::plugin::player::JavaResourcePack,
     ) -> wasmtime::Result<()> {
-        let player = accessor.get_res(&player)?.clone();
+        let player = accessor.get_res(&player)?;
 
         let uuid = Uuid::from_wit(&pack.id);
         let prompt_message = pack
@@ -3734,17 +3871,15 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             .transpose()?;
 
         if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
-            client
-                .send_packet(
-                    &pumpkin_protocol::java::client::play::CAddResourcePack::new(
-                        &uuid,
-                        &pack.url,
-                        &pack.hash,
-                        pack.forced,
-                        prompt_message,
-                    ),
-                )
-                .await;
+            client.try_send_packet(
+                &pumpkin_protocol::java::client::play::CAddResourcePack::new(
+                    &uuid,
+                    &pack.url,
+                    &pack.hash,
+                    pack.forced,
+                    prompt_message,
+                ),
+            );
         }
         Ok(())
     }
@@ -3754,16 +3889,14 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         id: pumpkin::plugin::uuid::Uuid,
     ) -> wasmtime::Result<()> {
-        let player = accessor.get_res(&player)?.clone();
+        let player = accessor.get_res(&player)?;
 
         let uuid = Uuid::from_wit(&id);
 
         if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
-            client
-                .send_packet(
-                    &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(Some(&uuid)),
-                )
-                .await;
+            client.try_send_packet(
+                &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(Some(&uuid)),
+            );
         }
         Ok(())
     }
@@ -3772,12 +3905,12 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
         accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<()> {
-        let player = accessor.get_res(&player)?.clone();
+        let player = accessor.get_res(&player)?;
 
         if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
-            client
-                .send_packet(&pumpkin_protocol::java::client::play::CRemoveResourcePack::new(None))
-                .await;
+            client.try_send_packet(
+                &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(None),
+            );
         }
         Ok(())
     }
@@ -3811,26 +3944,22 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
                 match client.connection_state.load() {
                     pumpkin_protocol::ConnectionState::Config => {
-                        client
-                            .send_packet(
-                                &pumpkin_protocol::java::client::config::CConfigShowDialog::new(
-                                    pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
-                                        &protocol_dialog,
-                                    )),
-                                ),
-                            )
-                            .await;
+                        client.try_send_packet(
+                            &pumpkin_protocol::java::client::config::CConfigShowDialog::new(
+                                pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
+                                    &protocol_dialog,
+                                )),
+                            ),
+                        );
                     }
                     pumpkin_protocol::ConnectionState::Play => {
-                        client
-                            .send_packet(
-                                &pumpkin_protocol::java::client::play::CPlayShowDialog::new(
-                                    pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
-                                        &protocol_dialog,
-                                    )),
-                                ),
-                            )
-                            .await;
+                        client.try_send_packet(
+                            &pumpkin_protocol::java::client::play::CPlayShowDialog::new(
+                                pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
+                                    &protocol_dialog,
+                                )),
+                            ),
+                        );
                     }
                     _ => {}
                 }
@@ -3867,18 +3996,14 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
                 match client.connection_state.load() {
                     pumpkin_protocol::ConnectionState::Config => {
-                        client
-                            .send_packet(
-                                &pumpkin_protocol::java::client::config::CConfigClearDialog::new(),
-                            )
-                            .await;
+                        client.try_send_packet(
+                            &pumpkin_protocol::java::client::config::CConfigClearDialog::new(),
+                        );
                     }
                     pumpkin_protocol::ConnectionState::Play => {
-                        client
-                            .send_packet(
-                                &pumpkin_protocol::java::client::play::CPlayClearDialog::new(),
-                            )
-                            .await;
+                        client.try_send_packet(
+                            &pumpkin_protocol::java::client::play::CPlayClearDialog::new(),
+                        );
                     }
                     _ => {}
                 }

@@ -25,8 +25,6 @@ use crate::entity::{
     player::Player,
 };
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::WARPED_FUNGUS, &Item::WARPED_FUNGUS_ON_A_STICK];
-
 pub struct StriderEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
@@ -55,7 +53,14 @@ impl StriderEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.65));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.4, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.4,
+                    &tag::Item::MINECRAFT_STRIDER_TEMPT_ITEMS,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -98,7 +103,6 @@ impl AgeableMob for StriderEntity {
 impl Animal for StriderEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_STRIDER_FOOD)
-            || item_stack.item == &Item::WARPED_FUNGUS
     }
 }
 

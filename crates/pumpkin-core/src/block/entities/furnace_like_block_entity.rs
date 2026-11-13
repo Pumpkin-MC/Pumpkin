@@ -418,12 +418,7 @@ macro_rules! impl_block_entity_for_cooking {
                                 is_dirty = true;
                                 if let Ok(mut items_guard) = self.items.try_write() {
                                     if !items_guard[1].is_empty() {
-                                        let remainder = items_guard[1]
-                                            .get_data_component::<
-                                                pumpkin_data::data_component_impl::UseRemainderImpl,
-                                            >()
-                                            .and_then(|component| component.remainder.as_deref())
-                                            .and_then(pumpkin_data::item::Item::from_registry_key);
+                                        let remainder = items_guard[1].item.crafting_remainder;
                                         items_guard[1].decrement(1);
                                         if let Some(remainder_item) = remainder
                                         {
