@@ -872,6 +872,12 @@ pub struct Block {
     pub velocity_multiplier: f32,
     /// Jump velocity multiplier applied when jumping from this block.
     pub jump_velocity_multiplier: f32,
+    /// Vertical bounce restitution (`Block.getBounceRestitution`).
+    #[serde(default)]
+    pub bounce_restitution: f32,
+    /// Fraction of fall distance reduced on landing (`Block.getFallDistanceReduction`).
+    #[serde(default)]
+    pub fall_distance_reduction: f32,
     /// Hash keys referencing the properties defined for this block.
     pub properties: Vec<i32>,
     /// State ID of the default (canonical) block state.
@@ -903,6 +909,8 @@ impl ToTokens for Block {
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
+        let bounce_restitution = &self.bounce_restitution;
+        let fall_distance_reduction = &self.fall_distance_reduction;
         let experience = if let Some(exp) = &self.experience {
             let exp_tokens = exp.to_token_stream();
             quote! { Some(#exp_tokens) }
@@ -935,6 +943,8 @@ impl ToTokens for Block {
                 slipperiness: #slipperiness,
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,
+                bounce_restitution: #bounce_restitution,
+                fall_distance_reduction: #fall_distance_reduction,
                 item_id: #item_id,
                 default_state: &mappings::BLOCK_STATES[#default_state],
                 states: block_states(#first_state, #state_count),
@@ -1949,6 +1959,24 @@ pub fn build() -> TokenStream {
                 match self.id {
                     #(#block_properties_from_props_and_name_arms)*
                     _ => panic!("Invalid props")
+                }
+            }
+
+            #[doc = r" Copies matching block properties from `source_state_id` of `source_block` onto `self`."]
+            #[must_use]
+            pub fn with_properties_of(
+                &self,
+                source_block: &Self,
+                source_state_id: BlockStateId,
+            ) -> BlockStateId {
+                if self.states.len() <= 1 {
+                    return self.default_state.id;
+                }
+                if let Some(source_props) = source_block.properties(source_state_id) {
+                    let props = source_props.to_props();
+                    self.from_properties(&props).to_state_id(self)
+                } else {
+                    self.default_state.id
                 }
             }
         }

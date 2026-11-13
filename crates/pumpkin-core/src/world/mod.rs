@@ -5900,6 +5900,109 @@ impl World {
     }
 
     #[must_use]
+    pub fn get_block_drops(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        tool: Option<ItemStack>,
+        entity: Option<&dyn EntityBase>,
+    ) -> Vec<ItemStack> {
+        let (block, state) = self.get_block_and_state(position);
+        if state.is_air() {
+            return Vec::new();
+        }
+        if state.tool_required()
+            && !tool
+                .as_ref()
+                .is_some_and(|stack| stack.is_correct_for_drops(block))
+        {
+            return Vec::new();
+        }
+        let Some(loot_table) = block.loot_table.and_then(|key| self.get_loot_table(key)) else {
+            return Vec::new();
+        };
+        let seed: i64 = rand::random();
+        let params = crate::world::loot::LootContextParameters {
+            world: Some(self),
+            tool: Some(tool.unwrap_or_else(|| ItemStack::EMPTY.clone())),
+            block_state: Some(state),
+            position: Some(position.to_f64()),
+            this_entity: entity,
+            ..Default::default()
+        };
+        let mut items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
+        if !items.is_empty()
+            && let Some(block_entity) = self.get_block_entity(position)
+        {
+            for stack in &mut items {
+                if Block::from_item_id(stack.item.id) == Some(block) {
+                    block_entity.collect_item_components(stack);
+                }
+            }
+        }
+        items
+    }
+
+    pub fn break_block_naturally(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        tool: Option<ItemStack>,
+        trigger_effect: bool,
+        mut flags: BlockFlags,
+    ) -> bool {
+        let (broken_block, broken_block_state) = self.get_block_and_state(position);
+        if broken_block_state.is_air() {
+            return false;
+        }
+
+        let can_harvest = !broken_block_state.tool_required()
+            || tool
+                .as_ref()
+                .is_none_or(|stack| stack.is_correct_for_drops(broken_block));
+
+        if !flags.contains(BlockFlags::SKIP_DROPS) && can_harvest {
+            let params = crate::world::loot::LootContextParameters {
+                world: Some(self),
+                tool: tool.filter(|item| !item.is_empty()),
+                block_state: Some(broken_block_state),
+                position: Some(position.to_f64()),
+                ..Default::default()
+            };
+            crate::block::drop_loot(self, broken_block, position, true, &params);
+        }
+
+        flags.insert(BlockFlags::SKIP_DROPS);
+        let new_state_id = if *self.get_fluid(position) == Fluid::WATER {
+            Block::WATER.default_state.id
+        } else {
+            Block::AIR.default_state.id
+        };
+
+        let broken_state_id = self.set_block_state(position, new_state_id, flags);
+        let broken_block = Block::from_state_id(broken_state_id);
+        if trigger_effect
+            && !broken_block.is_air()
+            && broken_state_id != new_state_id
+            && broken_block != &Block::FIRE
+            && broken_block != &Block::SOUL_FIRE
+        {
+            let je_packet = CWorldEvent::new(
+                WorldEvent::ParticlesDestroyBlock as i32,
+                *position,
+                broken_state_id.as_u16().into(),
+                false,
+            );
+            let be_packet = CLevelEvent {
+                event_id: VarInt(LevelEvent::ParticlesDestroyBlock as i32),
+                position: position.to_centered_f64().to_f32_lossy(),
+                data: VarInt(BlockState::to_be_network_id(broken_state_id) as i32),
+            };
+            self.broadcast_to_chunk_editioned(position.chunk_position(), &je_packet, &be_packet);
+        }
+
+        broken_state_id != new_state_id || !broken_block.is_air()
+    }
+
+    #[must_use]
     pub const fn environment_attributes(&self) -> EnvironmentAttributes<'_> {
         EnvironmentAttributes::new(self)
     }

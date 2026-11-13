@@ -153,11 +153,32 @@ impl Mob for SnowGolemEntity {
             self.set_has_pumpkin(false);
             let pos = entity.pos.load();
             world.play_sound(Sound::EntitySnowGolemShear, SoundCategory::Players, &pos);
-            let item_entity = Arc::new(ItemEntity::new(
-                Entity::new(world.clone(), pos, &EntityType::ITEM),
-                ItemStack::new(1, &Item::CARVED_PUMPKIN),
-            ));
-            world.spawn_entity(item_entity);
+            let drops = world
+                .get_loot_table("minecraft:shearing/snow_golem")
+                .map_or_else(
+                    || vec![ItemStack::new(1, &Item::CARVED_PUMPKIN)],
+                    |handle| {
+                        let params = crate::world::loot::LootContextParameters {
+                            world: Some(&world),
+                            position: Some(pos),
+                            this_entity: Some(self as &dyn EntityBase),
+                            tool: Some(item_stack.clone()),
+                            ..Default::default()
+                        };
+                        crate::world::loot::generate_loot_from_handle(
+                            &handle,
+                            rand::random(),
+                            &params,
+                        )
+                    },
+                );
+            for drop_stack in drops {
+                let item_entity = Arc::new(ItemEntity::new(
+                    Entity::new(world.clone(), pos, &EntityType::ITEM),
+                    drop_stack,
+                ));
+                world.spawn_entity(item_entity);
+            }
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                 let _ = item_stack.damage_item(1);
             }

@@ -31,9 +31,7 @@ use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::{Taggable, WorldgenBiome};
-
-const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
+use pumpkin_data::tag::{self, Taggable, WorldgenBiome};
 
 #[derive(Clone, Copy)]
 enum SheepColorProvider {
@@ -94,7 +92,14 @@ impl SheepEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.1,
+                    &tag::Item::MINECRAFT_SHEEP_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(5, Box::new(EatGrassGoal::default()));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::water_avoiding(1.0)));
@@ -224,10 +229,7 @@ impl AgeableMob for SheepEntity {
 
 impl Animal for SheepEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        item_stack
-            .item
-            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_SHEEP_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
+        item_stack.item.has_tag(&tag::Item::MINECRAFT_SHEEP_FOOD)
     }
 
     fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {

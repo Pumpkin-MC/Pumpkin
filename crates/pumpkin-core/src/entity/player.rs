@@ -5707,6 +5707,82 @@ impl Player {
         !state.tool_required() || self.inventory().held_item().is_correct_for_drops(block)
     }
 
+    pub fn break_block(self: &Arc<Self>, position: &BlockPos) -> bool {
+        let world = self.world();
+        let (block, state) = world.get_block_and_state(position);
+        if state.is_air() {
+            return false;
+        }
+
+        let held = self.inventory().held_item();
+        let gamemode = self.gamemode.load();
+        let server = world.server.upgrade();
+        let can_mine_item = server
+            .as_ref()
+            .is_none_or(|s| s.item_registry.can_mine(held.item, self));
+        let cannot_mine = !can_mine_item
+            || gamemode == GameMode::Spectator
+            || (gamemode == GameMode::Creative
+                && held
+                    .get_data_component::<ToolImpl>()
+                    .is_some_and(|t| !t.can_destroy_blocks_in_creative))
+            || (gamemode == GameMode::Adventure
+                && !held
+                    .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
+                    .is_some_and(|c| c.matches_block(block)));
+        if cannot_mine {
+            return false;
+        }
+
+        if gamemode == GameMode::Creative {
+            let new_state = world.break_block(
+                position,
+                Some(self),
+                pumpkin_world::world::BlockFlags::NOTIFY_ALL
+                    | pumpkin_world::world::BlockFlags::SKIP_DROPS,
+            );
+            if new_state.is_some() {
+                if let Some(server) = &server {
+                    server
+                        .block_registry
+                        .broken(&world, block, self, position, server, state);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        let block_drop = self.can_harvest(state, block);
+        let flags = if block_drop {
+            pumpkin_world::world::BlockFlags::NOTIFY_ALL
+        } else {
+            pumpkin_world::world::BlockFlags::SKIP_DROPS
+                | pumpkin_world::world::BlockFlags::NOTIFY_ALL
+        };
+
+        let new_state = world.break_block(position, Some(self), flags);
+        if new_state.is_some() {
+            if let Some(server) = &server {
+                server
+                    .block_registry
+                    .broken(&world, block, self, position, server, state);
+            }
+            self.apply_tool_damage_for_block_break(state);
+            if block_drop {
+                self.add_exhaustion(MINE_BLOCK_EXHAUSTION);
+            }
+            let item_id = held.item.id;
+            self.increment_stat(statistics::StatisticCategory::Used, item_id as i32, 1);
+            self.increment_stat(
+                statistics::StatisticCategory::Mined,
+                block.id.as_u16() as i32,
+                1,
+            );
+            return true;
+        }
+        false
+    }
+
     /// The id under which Pumpkin will store it's `mining_efficiency` modifier value
     const EFFICIENCY_ATTRIBUTE_MODIFIER_ID: &'static str = "minecraft:enchantment.efficiency";
 
