@@ -302,28 +302,6 @@ pub(crate) fn try_pickup_fluid_at(
     None
 }
 
-fn try_pickup_bucket_item(
-    world: &Arc<World>,
-    player: &Player,
-    block_pos: BlockPos,
-    direction: BlockDirection,
-) -> Option<&'static Item> {
-    if let Some(item) = try_pickup_fluid_at(world, Some(player), block_pos) {
-        return Some(item);
-    }
-
-    let target_pos = block_pos.offset(direction.to_offset());
-    let (block, state) = world.get_block_and_state_id(&target_pos);
-
-    world.block_registry.pickup_fluid(PickupFluidArgs {
-        player: Some(player),
-        world,
-        block,
-        state_id: state,
-        position: &target_pos,
-    })
-}
-
 pub(crate) const fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
     item.id != Item::LAVA_BUCKET.id
         && item.id != Item::POWDER_SNOW_BUCKET.id
@@ -508,8 +486,7 @@ impl ItemBehaviour for EmptyBucketItem {
 
         let block_pos = hit.block_pos;
 
-        let Some(filled_item) = try_pickup_bucket_item(&world, player, block_pos, hit.direction)
-        else {
+        let Some(filled_item) = try_pickup_fluid_at(&world, Some(player), block_pos) else {
             return;
         };
 
