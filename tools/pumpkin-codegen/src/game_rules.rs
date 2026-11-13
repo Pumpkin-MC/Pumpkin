@@ -3,18 +3,26 @@ use std::{collections::BTreeMap, fs};
 use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use serde_json::Value;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawGameRule {
+    Bool(bool),
+    Int { default: i64, min: i32, max: i32 },
+}
 
 /// Generates the `TokenStream` for the `GameRule` enum, `GameRuleRegistry` struct, and their
-/// accessor methods with proper default values for each rule.
+/// accessor methods with proper default values and integer bounds for each rule.
 pub fn build() -> TokenStream {
-    let game_rules: BTreeMap<String, Value> =
+    let game_rules: BTreeMap<String, RawGameRule> =
         serde_json::from_str(&fs::read_to_string("../../assets/game_rules.json").unwrap())
             .expect("Failed to parse game_rules.json");
 
     let mut enum_variants = TokenStream::new();
     let mut enum_variants_list = TokenStream::new();
     let mut enum_to_string = TokenStream::new();
+    let mut int_bounds_arms = TokenStream::new();
     let mut struct_fields = TokenStream::new();
     let mut default_values = TokenStream::new();
     let mut getter_match = TokenStream::new();
@@ -22,31 +30,20 @@ pub fn build() -> TokenStream {
     let mut default_functions = TokenStream::new();
 
     for (raw_name, raw_value) in &game_rules {
-        let (variant_type, field_type, default_value) = match raw_value {
-            Value::Bool(b) => (quote! { Bool }, quote! { bool }, quote! { #b }),
-            Value::Number(n) if n.is_i64() => {
-                let i = n.as_i64().unwrap();
-                (quote! { Int }, quote! { i64 }, quote! { #i })
-            }
-            Value::Object(obj) => {
-                let default_val = obj
-                    .get("default")
-                    .expect("Object game rule missing default value");
-                match default_val {
-                    Value::Number(n) if n.is_i64() => {
-                        let i = n.as_i64().unwrap();
-                        (quote! { Int }, quote! { i64 }, quote! { #i })
-                    }
-                    _ => panic!("Unsupported default value type in object for key '{raw_name}'"),
-                }
-            }
-            _ => panic!("Unsupported value type for key '{raw_name}'"),
-        };
-
         let snake_case = format_ident!("{}", raw_name.to_snake_case());
         let pascal_case = format_ident!("{}", raw_name.to_pascal_case());
         let default_fn_name = format!("default_{snake_case}");
         let default_fn_ident = format_ident!("default_{snake_case}");
+
+        let (variant_type, field_type, default_value) = match raw_value {
+            RawGameRule::Bool(b) => (quote! { Bool }, quote! { bool }, quote! { #b }),
+            RawGameRule::Int { default, min, max } => {
+                int_bounds_arms.extend(quote! {
+                    Self::#pascal_case => Some((#min, #max)),
+                });
+                (quote! { Int }, quote! { i64 }, quote! { #default })
+            }
+        };
 
         // Struct field
         struct_fields.extend(quote! {
@@ -103,10 +100,19 @@ pub fn build() -> TokenStream {
         }
 
         impl GameRule {
+            #[must_use]
             pub const fn all() -> &'static [Self] {
                 &[
                     #enum_variants_list
                 ]
+            }
+
+            #[must_use]
+            pub const fn int_bounds(&self) -> Option<(i32, i32)> {
+                match self {
+                    #int_bounds_arms
+                    _ => None,
+                }
             }
         }
 

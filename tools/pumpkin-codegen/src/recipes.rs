@@ -265,6 +265,33 @@ impl ToTokens for CookingRecipeStruct {
     }
 }
 
+/// Vanilla `ShapedRecipePattern.shrink`.
+fn shrink(pattern: &[String]) -> Vec<&str> {
+    let is_filled = |c: char| c != ' ';
+    let top = pattern
+        .iter()
+        .position(|row| row.contains(is_filled))
+        .expect("shaped recipe pattern has no ingredients");
+    let bottom = pattern
+        .iter()
+        .rposition(|row| row.contains(is_filled))
+        .unwrap();
+    let left = pattern
+        .iter()
+        .filter_map(|row| row.find(is_filled))
+        .min()
+        .unwrap();
+    let right = pattern
+        .iter()
+        .filter_map(|row| row.rfind(is_filled))
+        .max()
+        .unwrap();
+    pattern[top..=bottom]
+        .iter()
+        .map(|row| &row[left..=right])
+        .collect()
+}
+
 /// Deserialized shaped crafting recipe.
 #[derive(Deserialize)]
 pub struct CraftingShapedRecipeStruct {
@@ -302,11 +329,7 @@ impl ToTokens for CraftingShapedRecipeStruct {
                 quote! { (#key, #ingredient) }
             })
             .collect::<Vec<_>>();
-        let pattern = self
-            .pattern
-            .iter()
-            .map(quote::ToTokens::to_token_stream)
-            .collect::<Vec<_>>();
+        let pattern = shrink(&self.pattern);
         let result = self.result.to_token_stream();
 
         tokens.extend(quote! {
@@ -435,18 +458,66 @@ pub struct RecipeResultStruct {
     id: Option<String>,
     /// Number of result items produced (defaults to 1).
     count: Option<u8>,
-    // TODO: components: Option<RecipeResultComponentsStruct>,
+    /// Data components set on the result item.
+    components: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Deserialized `minecraft:suspicious_stew_effects` entry.
+#[derive(Deserialize)]
+struct SuspiciousStewEffectEntry {
+    id: String,
+    #[serde(default = "default_stew_effect_duration")]
+    duration: i32,
+}
+
+/// Vanilla `SuspiciousStewEffects.Entry` duration default.
+const fn default_stew_effect_duration() -> i32 {
+    160
+}
+
+fn result_component_tokens(name: &str, value: &serde_json::Value) -> TokenStream {
+    match name {
+        "minecraft:suspicious_stew_effects" => {
+            let entries: Vec<SuspiciousStewEffectEntry> =
+                serde_json::from_value(value.clone()).expect("Invalid suspicious_stew_effects");
+            let entries = entries.iter().map(|entry| {
+                let id = &entry.id;
+                let duration = entry.duration;
+                quote! {
+                    crate::data_component_impl::SuspiciousStewEffect {
+                        effect: std::borrow::Cow::Borrowed(#id),
+                        duration: #duration,
+                    }
+                }
+            });
+            quote! {
+                (
+                    crate::data_component::DataComponent::SuspiciousStewEffects,
+                    &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                        effects: std::borrow::Cow::Borrowed(&[#(#entries),*]),
+                    },
+                )
+            }
+        }
+        _ => panic!("Unsupported recipe result component {name}"),
+    }
 }
 
 impl ToTokens for RecipeResultStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let id = self.id.as_deref().unwrap_or("minecraft:air");
         let count = self.count.unwrap_or(1).to_token_stream();
+        let components = self
+            .components
+            .iter()
+            .flatten()
+            .map(|(name, value)| result_component_tokens(name, value));
 
         tokens.extend(quote! {
             RecipeResultStruct {
                 id: #id,
                 count: #count,
+                components: &[#(#components),*],
             }
         });
     }
@@ -742,10 +813,21 @@ pub fn build() -> TokenStream {
             pub result: RecipeResultStruct,
         }
 
-        #[derive(Clone, Debug, Serialize)]
+        #[derive(Clone, Serialize)]
         pub struct RecipeResultStruct {
             pub id: &'static str,
             pub count: u8,
+            #[serde(skip)]
+            pub components: &'static [(crate::data_component::DataComponent, &'static dyn crate::data_component_impl::DataComponentImpl)],
+        }
+
+        impl std::fmt::Debug for RecipeResultStruct {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("RecipeResultStruct")
+                    .field("id", &self.id)
+                    .field("count", &self.count)
+                    .finish_non_exhaustive()
+            }
         }
 
         #[derive(Clone, Debug, Serialize)]

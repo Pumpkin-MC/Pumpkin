@@ -242,6 +242,17 @@ impl TextComponentBase {
                         click_tag.put_string("value", command.to_string());
                     }
                 }
+                ClickEvent::ShowDialog { dialog } => {
+                    click_tag.put_string("action", "show_dialog".to_string());
+                    click_tag.put("dialog", dialog.to_nbt());
+                }
+                ClickEvent::Custom { id, payload } => {
+                    click_tag.put_string("action", "custom".to_string());
+                    click_tag.put_string("id", id.to_string());
+                    if let Some(payload) = payload {
+                        click_tag.put("payload", payload.to_nbt());
+                    }
+                }
                 ClickEvent::SuggestCommand { command } => {
                     click_tag.put_string("action", "suggest_command".to_string());
                     if *version >= JavaMinecraftVersion::V_1_21_5 {
@@ -289,11 +300,18 @@ impl TextComponentBase {
                             hover_tag.put_list("value", list);
                         }
                     }
-                    HoverEvent::ShowItem { id, count } => {
+                    HoverEvent::ShowItem {
+                        id,
+                        count,
+                        components,
+                    } => {
                         hover_tag.put_string("action", "show_item".to_string());
                         hover_tag.put_string("id", id.to_string());
                         if let Some(cnt) = count {
                             hover_tag.put_int("count", *cnt);
+                        }
+                        if let Some(components) = components {
+                            hover_tag.put("components", components.to_nbt());
                         }
                     }
                     HoverEvent::ShowEntity { id, uuid, name } => {
@@ -327,12 +345,19 @@ impl TextComponentBase {
                             hover_tag.put_list("contents", list);
                         }
                     }
-                    HoverEvent::ShowItem { id, count } => {
+                    HoverEvent::ShowItem {
+                        id,
+                        count,
+                        components,
+                    } => {
                         hover_tag.put_string("action", "show_item".to_string());
                         let mut contents = pumpkin_nbt::NbtCompound::new();
                         contents.put_string("id", id.to_string());
                         if let Some(cnt) = count {
                             contents.put_int("count", *cnt);
+                        }
+                        if let Some(components) = components {
+                            contents.put("components", components.to_nbt());
                         }
                         hover_tag.put_compound("contents", contents);
                     }
@@ -369,7 +394,7 @@ impl TextComponentBase {
                             hover_tag.put_list("value", list);
                         }
                     }
-                    HoverEvent::ShowItem { id, count } => {
+                    HoverEvent::ShowItem { id, count, .. } => {
                         hover_tag.put_string("action", "show_item".to_string());
                         let count_val = count.unwrap_or(1);
                         hover_tag
@@ -636,6 +661,23 @@ impl TextComponentBase {
                         );
                     }
                 }
+                ClickEvent::ShowDialog { dialog } => {
+                    click_map.insert(
+                        "action".to_string(),
+                        serde_json::Value::String("show_dialog".to_string()),
+                    );
+                    click_map.insert("dialog".to_string(), dialog.0.as_ref().clone());
+                }
+                ClickEvent::Custom { id, payload } => {
+                    click_map.insert(
+                        "action".to_string(),
+                        serde_json::Value::String("custom".to_string()),
+                    );
+                    click_map.insert("id".to_string(), serde_json::Value::String(id.to_string()));
+                    if let Some(payload) = payload {
+                        click_map.insert("payload".to_string(), payload.0.as_ref().clone());
+                    }
+                }
                 ClickEvent::SuggestCommand { command } => {
                     click_map.insert(
                         "action".to_string(),
@@ -713,7 +755,11 @@ impl TextComponentBase {
                             hover_map.insert("value".to_string(), serde_json::Value::Array(list));
                         }
                     }
-                    HoverEvent::ShowItem { id, count } => {
+                    HoverEvent::ShowItem {
+                        id,
+                        count,
+                        components,
+                    } => {
                         hover_map.insert(
                             "action".to_string(),
                             serde_json::Value::String("show_item".to_string()),
@@ -722,6 +768,9 @@ impl TextComponentBase {
                             .insert("id".to_string(), serde_json::Value::String(id.to_string()));
                         if let Some(cnt) = count {
                             hover_map.insert("count".to_string(), serde_json::json!(*cnt));
+                        }
+                        if let Some(components) = components {
+                            hover_map.insert("components".to_string(), components.0.clone());
                         }
                     }
                     HoverEvent::ShowEntity { id, uuid, name } => {
@@ -773,7 +822,11 @@ impl TextComponentBase {
                                 .insert("contents".to_string(), serde_json::Value::Array(list));
                         }
                     }
-                    HoverEvent::ShowItem { id, count } => {
+                    HoverEvent::ShowItem {
+                        id,
+                        count,
+                        components,
+                    } => {
                         hover_map.insert(
                             "action".to_string(),
                             serde_json::Value::String("show_item".to_string()),
@@ -783,6 +836,9 @@ impl TextComponentBase {
                             .insert("id".to_string(), serde_json::Value::String(id.to_string()));
                         if let Some(cnt) = count {
                             contents.insert("count".to_string(), serde_json::json!(*cnt));
+                        }
+                        if let Some(components) = components {
+                            contents.insert("components".to_string(), components.0.clone());
                         }
                         hover_map
                             .insert("contents".to_string(), serde_json::Value::Object(contents));
@@ -839,7 +895,7 @@ impl TextComponentBase {
                             hover_map.insert("value".to_string(), serde_json::Value::Array(list));
                         }
                     }
-                    HoverEvent::ShowItem { id, count } => {
+                    HoverEvent::ShowItem { id, count, .. } => {
                         hover_map.insert(
                             "action".to_string(),
                             serde_json::Value::String("show_item".to_string()),
@@ -1205,9 +1261,14 @@ impl TextComponentBase {
                         })
                     },
                 ),
-                HoverEvent::ShowItem { id, count } => Some(HoverEvent::ShowItem {
+                HoverEvent::ShowItem {
+                    id,
+                    count,
+                    components,
+                } => Some(HoverEvent::ShowItem {
                     id: id.clone(),
                     count: count.to_owned(),
+                    components: components.clone(),
                 }),
             };
         }
@@ -2064,7 +2125,7 @@ pub enum TextContent {
 /// Tests for the text component implementations.
 #[cfg(test)]
 mod test {
-    use crate::text::click::ClickEvent;
+    use crate::text::click::{ClickEvent, ClickPayload};
     use crate::text::{
         TextComponent,
         color::{Color, NamedColor},
@@ -2102,6 +2163,7 @@ mod test {
             .hover_event(HoverEvent::ShowItem {
                 id: Cow::Borrowed("minecraft:diamond_sword"),
                 count: Some(1),
+                components: None,
             })
             .0
             .to_nbt_compound();
@@ -2129,6 +2191,19 @@ mod test {
         assert!(hover.get_compound("entity").is_none());
     }
 
+    /// `/tellraw`'s JSON keeps a `show_item` hover's components, and they go
+    /// out as NBT, as vanilla's `ItemStack` codec reads them.
+    #[test]
+    fn hover_show_item_keeps_its_components() {
+        let json = r#"{"text":"[Sword]","hover_event":{"action":"show_item","id":"minecraft:diamond_sword","components":{"minecraft:enchantments":{"minecraft:sharpness":5}}}}"#;
+        let component: TextComponent = serde_json::from_str(json).unwrap();
+        let compound = component.0.to_nbt_compound();
+        let hover = compound.get_compound("hover_event").unwrap();
+        let components = hover.get_compound("components").unwrap();
+        let enchantments = components.get_compound("minecraft:enchantments").unwrap();
+        assert!(enchantments.get("minecraft:sharpness").is_some());
+    }
+
     /// `count` is optional for the client, so it must stay out of the payload
     /// when it was never set.
     #[test]
@@ -2137,6 +2212,7 @@ mod test {
             .hover_event(HoverEvent::ShowItem {
                 id: Cow::Borrowed("minecraft:diamond_sword"),
                 count: None,
+                components: None,
             })
             .0
             .to_nbt_compound();
@@ -2179,6 +2255,42 @@ mod test {
         let click = compound.get_compound("click_event").unwrap();
         assert_eq!(click.get_string("url"), Some("https://example.com"));
         assert!(click.get_string("value").is_none());
+    }
+
+    #[test]
+    fn sign_click_actions_round_trip_through_json_and_nbt() {
+        let show = TextComponent::text("dialog").click_event(ClickEvent::ShowDialog {
+            dialog: ClickPayload(Box::new(
+                serde_json::json!({"type":"minecraft:notice","title":"x"}),
+            )),
+        });
+        let json = serde_json::to_string(&show).unwrap();
+        let from_json: TextComponent = serde_json::from_str(&json).unwrap();
+        assert_eq!(from_json, show);
+        let nbt = show
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+        let from_nbt = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(nbt));
+        assert_eq!(from_nbt, show);
+
+        let custom = TextComponent::text("custom").click_event(ClickEvent::Custom {
+            id: Cow::Borrowed("example:action"),
+            payload: Some(ClickPayload(Box::new(serde_json::json!({"value": 1})))),
+        });
+        let json = serde_json::to_string(&custom).unwrap();
+        let from_json: TextComponent = serde_json::from_str(&json).unwrap();
+        assert_eq!(from_json, custom);
+        let nbt = custom
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+        let from_nbt = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(nbt));
+        assert_eq!(from_nbt, custom);
+    }
+
+    #[test]
+    fn null_dialog_payloads_are_rejected() {
+        let json = r#"{"text":"x","click_event":{"action":"show_dialog","dialog":null}}"#;
+        assert!(serde_json::from_str::<TextComponent>(json).is_err());
     }
 
     #[test]

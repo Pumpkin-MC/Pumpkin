@@ -127564,7 +127564,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const APPLE : Self = Self { id : 882 , registry_key : "minecraft:apple" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x05\x0Cmining_speed\0\0\x80?\x01\x12hidden_in_commands\x02\x03\x0Cuse_duration@\x08\x10enchantable_slot\x04none\x01\rhand_equipped\0\x01\x0Eshould_despawn\x01\x03\ruse_animation\x02\x01\x0Fstacked_by_data\0\x01\x0Eliquid_clipped\0\x03\x06damage\0\x03\x11enchantable_value\0\x03\x11creative_category\x04\x08\x0Ecreative_group\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x05apple\0\0\x01\x0Eallow_off_hand\0\x01\x04foil\0\x03\x0Bframe_count\x02\x03\x0Emax_stack_size\x80\x01\0\n\x0Eminecraft:food\n\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x08\x05\x13saturation_modifier\x9A\x99\x99>\0\t\titem_tags\x08\x02\x11minecraft:is_food\n\x17minecraft:use_animation\x08\x05value\x03eat\0\n\x0Eminecraft:tags\t\x04tags\x08\x02\x11minecraft:is_food\0\n\x17minecraft:use_modifiers\x08\x0Bstart_using\x06always\x05\x0Cuse_duration\xCD\xCC\xCC?\x05\x11movement_modifier33\xB3>\x01\x0Femit_vibrations\x01\0\n\x16minecraft:display_name\x08\x05value\x0Fitem.apple.name\0\0\0" } ;
+    pub const APPLE : Self = Self { id : 883 , registry_key : "minecraft:apple" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:display_name\x08\x05value\x0Fitem.apple.name\0\t\titem_tags\x08\x02\x11minecraft:is_food\n\x0Eminecraft:food\x03\tnutrition\x08\x01\x0Ecan_always_eat\0\n\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x99>\0\n\x17minecraft:use_animation\x08\x05value\x03eat\0\n\x17minecraft:use_modifiers\x08\x0Bstart_using\x06always\x05\x11movement_modifier33\xB3>\x01\x0Femit_vibrations\x01\x05\x0Cuse_duration\xCD\xCC\xCC?\0\n\x0Fitem_properties\x01\x0Eliquid_clipped\0\x03\x0Bframe_count\x02\x01\x04foil\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x03\ruse_animation\x02\x03\x11enchantable_value\0\x01\rhand_equipped\0\x03\x0Cuse_duration@\x03\x11creative_category\x04\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x05apple\0\0\x01\x12hidden_in_commands\x02\x08\x10enchantable_slot\x04none\x03\x06damage\0\x01\x0Eshould_despawn\x01\x03\x0Emax_stack_size\x80\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x02\x11minecraft:is_food\0\0\0" } ;
     pub const ARCHER_POTTERY_SHERD: Self = Self {
         id: 673,
         registry_key: "minecraft:archer_pottery_sherd",
@@ -127649,7 +127649,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const BAKED_POTATO : Self = Self { id : 281 , registry_key : "minecraft:baked_potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\ron_use_action\x01\x03\tnutrition\n\x05\x13saturation_modifier\x9A\x99\x19?\x08\rcooldown_type\0\x03\rcooldown_time\0\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const BAKED_POTATO : Self = Self { id : 281 , registry_key : "minecraft:baked_potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x05\x13saturation_modifier\x9A\x99\x19?\x03\rcooldown_time\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x03\tnutrition\n\x08\x11using_converts_to\0\0\x03\x16minecraft:use_duration@\0\0" } ;
     pub const BALLOON: Self = Self {
         id: 614,
         registry_key: "minecraft:balloon",
@@ -127833,7 +127833,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const BANNER_PATTERN: Self = Self {
-        id: 849,
+        id: 850,
         registry_key: "minecraft:banner_pattern",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -127902,7 +127902,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const BEEF : Self = Self { id : 273 , registry_key : "minecraft:beef" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\tnutrition\x06\x08\x11using_converts_to\0\x03\ron_use_action\x01\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x99>\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const BEEF : Self = Self { id : 273 , registry_key : "minecraft:beef" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x05\x13saturation_modifier\x9A\x99\x99>\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x06\x03\ron_use_action\x01\x08\x11using_converts_to\0\0\x03\x16minecraft:use_duration@\0\0" } ;
     pub const BEEHIVE: Self = Self {
         id: -219,
         registry_key: "minecraft:beehive",
@@ -127910,9 +127910,9 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const BEETROOT : Self = Self { id : 285 , registry_key : "minecraft:beetroot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x03\tnutrition\x02\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0\0" } ;
-    pub const BEETROOT_SEEDS : Self = Self { id : 295 , registry_key : "minecraft:beetroot_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\x0Bcrop_result\x12minecraft:beetroot\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\0\0\0" } ;
-    pub const BEETROOT_SOUP : Self = Self { id : 286 , registry_key : "minecraft:beetroot_soup" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x05\x13saturation_modifier\x9A\x99\x19?\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x03\tnutrition\x0C\x08\x11using_converts_to\x04bowl\x03\rcooldown_time\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x18minecraft:max_stack_size\x02\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const BEETROOT : Self = Self { id : 285 , registry_key : "minecraft:beetroot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x02\x08\x11using_converts_to\0\x03\ron_use_action\x01\x08\rcooldown_type\0\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x19?\0\0\0" } ;
+    pub const BEETROOT_SEEDS : Self = Self { id : 295 , registry_key : "minecraft:beetroot_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\x0Bcrop_result\x12minecraft:beetroot\x08\rplant_at_face\x02up\x01\x1Aplant_at_any_solid_surface\0\t\x08plant_at\x08\x02\x12minecraft:farmland\0\0\0" } ;
+    pub const BEETROOT_SOUP : Self = Self { id : 286 , registry_key : "minecraft:beetroot_soup" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\x04bowl\x03\tnutrition\x0C\x03\ron_use_action\x01\0\x03\x18minecraft:max_stack_size\x02\x03\x16minecraft:use_duration@\0\0" } ;
     pub const BELL: Self = Self {
         id: -206,
         registry_key: "minecraft:bell",
@@ -128074,7 +128074,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const BLACK_BUNDLE : Self = Self { id : 861 , registry_key : "minecraft:black_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Cbundle_black\x08\x10bundle_open_back\x16bundle_black_open_back\x08\x11bundle_open_front\x17bundle_black_open_front\0\0\x01\x0Eallow_off_hand\0\x05\x0Cmining_speed\0\0\x80?\x03\x0Bframe_count\x02\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\0\x01\x17can_destroy_in_creative\x01\x03\x11creative_category\x06\x01\x04foil\0\x01\x0Eliquid_clipped\0\x03\x11enchantable_value\0\x03\ruse_animation\0\x08\x10enchantable_slot\x04none\x01\x0Eshould_despawn\x01\x03\x0Emax_stack_size\x02\x03\x06damage\0\x08\x0Ecreative_group\0\x01\rhand_equipped\0\x01\x12hidden_in_commands\x02\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\t\titem_tags\0\0\0\0" } ;
+    pub const BLACK_BUNDLE : Self = Self { id : 862 , registry_key : "minecraft:black_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x05\x0Cmining_speed\0\0\x80?\x03\x0Cuse_duration\0\x01\x0Fstacked_by_data\0\x03\x06damage\0\x03\x0Emax_stack_size\x02\x03\x11enchantable_value\0\x01\x04foil\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\x03\x0Bframe_count\x02\x01\x0Eliquid_clipped\0\x01\x12hidden_in_commands\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Cbundle_black\x08\x11bundle_open_front\x17bundle_black_open_front\x08\x10bundle_open_back\x16bundle_black_open_back\0\0\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x01\rhand_equipped\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\t\titem_tags\0\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0\0" } ;
     pub const BLACK_CANDLE: Self = Self {
         id: -428,
         registry_key: "minecraft:black_candle",
@@ -128292,7 +128292,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const BLUE_BUNDLE : Self = Self { id : 862 , registry_key : "minecraft:blue_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\0\0\n\x0Fitem_properties\x03\x0Cuse_duration\0\x03\x11enchantable_value\0\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x01\x0Eallow_off_hand\0\x01\x0Eliquid_clipped\0\x01\x04foil\0\x08\x0Ecreative_group\0\x01\x0Eshould_despawn\x01\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x15bundle_blue_open_back\x08\x11bundle_open_front\x16bundle_blue_open_front\x08\x07default\x0Bbundle_blue\0\0\x03\x06damage\0\x03\x0Emax_stack_size\x02\x01\rhand_equipped\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x01\x0Fstacked_by_data\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0\0" } ;
+    pub const BLUE_BUNDLE : Self = Self { id : 863 , registry_key : "minecraft:blue_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\x03\x06damage\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bbundle_blue\x08\x10bundle_open_back\x15bundle_blue_open_back\x08\x11bundle_open_front\x16bundle_blue_open_front\0\0\x01\x04foil\0\x01\x0Eliquid_clipped\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x04none\x01\x0Eallow_off_hand\0\x03\x0Cuse_duration\0\x03\x11creative_category\x06\x03\x11enchantable_value\0\x03\x0Emax_stack_size\x02\x08\x0Ecreative_group\0\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x01\rhand_equipped\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0\0" } ;
     pub const BLUE_CANDLE: Self = Self {
         id: -424,
         registry_key: "minecraft:blue_candle",
@@ -128462,7 +128462,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const BOAT: Self = Self {
-        id: 845,
+        id: 846,
         registry_key: "minecraft:boat",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -128573,8 +128573,8 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const BREAD : Self = Self { id : 261 , registry_key : "minecraft:bread" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\rcooldown_time\0\x03\ron_use_action\x01\x03\tnutrition\n\x08\rcooldown_type\0\x05\x13saturation_modifier\x9A\x99\x19?\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x16minecraft:use_duration@\0\0" } ;
-    pub const BREEZE_ROD : Self = Self { id : 878 , registry_key : "minecraft:breeze_rod" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x17minecraft:hand_equipped\x01\x05value\x01\0\t\titem_tags\0\0\n\x16minecraft:display_name\x08\x05value\x14item.breeze_rod.name\0\n\x0Fitem_properties\x01\x0Eshould_despawn\x01\x08\x0Ecreative_group\0\x01\x04foil\0\x01\x12hidden_in_commands\x02\x03\x0Emax_stack_size\x80\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\nbreeze_rod\0\0\x01\x0Eallow_off_hand\0\x03\x06damage\0\x01\x17can_destroy_in_creative\x01\x08\x10enchantable_slot\x04none\x03\x11enchantable_value\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x01\x0Eliquid_clipped\0\x01\rhand_equipped\x01\x03\x11creative_category\x08\x03\x0Bframe_count\x02\x03\x0Cuse_duration\0\0\0\0" } ;
+    pub const BREAD : Self = Self { id : 261 , registry_key : "minecraft:bread" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\tnutrition\n\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\0\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const BREEZE_ROD : Self = Self { id : 879 , registry_key : "minecraft:breeze_rod" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\0\0\n\x16minecraft:display_name\x08\x05value\x14item.breeze_rod.name\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x0Fitem_properties\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x04none\x03\x11creative_category\x08\x03\x0Emax_stack_size\x80\x01\x03\ruse_animation\0\x01\x04foil\0\x01\rhand_equipped\x01\x03\x06damage\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x01\x0Eallow_off_hand\0\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\nbreeze_rod\0\0\x08\x0Ecreative_group\0\x03\x11enchantable_value\0\x03\x0Bframe_count\x02\x01\x0Eliquid_clipped\0\x03\x0Cuse_duration\0\0\0\0" } ;
     pub const BREEZE_SPAWN_EGG: Self = Self {
         id: 506,
         registry_key: "minecraft:breeze_spawn_egg",
@@ -128638,7 +128638,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const BROWN_BUNDLE : Self = Self { id : 863 , registry_key : "minecraft:brown_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x01\x0Eliquid_clipped\0\x01\rhand_equipped\0\x03\x11creative_category\x06\x01\x17can_destroy_in_creative\x01\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x16bundle_brown_open_back\x08\x11bundle_open_front\x17bundle_brown_open_front\x08\x07default\x0Cbundle_brown\0\0\x03\ruse_animation\0\x01\x0Fstacked_by_data\0\x03\x0Bframe_count\x02\x03\x11enchantable_value\0\x01\x12hidden_in_commands\x02\x08\x10enchantable_slot\x04none\x03\x0Emax_stack_size\x02\x08\x0Ecreative_group\0\x03\x06damage\0\x05\x0Cmining_speed\0\0\x80?\x01\x04foil\0\x01\x0Eshould_despawn\x01\x03\x0Cuse_duration\0\x01\x0Eallow_off_hand\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0\0" } ;
+    pub const BROWN_BUNDLE : Self = Self { id : 864 , registry_key : "minecraft:brown_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:storage_item\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\0\t\titem_tags\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\x01\x04foil\0\x03\x11creative_category\x06\x03\x0Bframe_count\x02\x03\x11enchantable_value\0\x03\x06damage\0\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x04none\x01\rhand_equipped\0\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x03\x0Cuse_duration\0\x01\x0Fstacked_by_data\0\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x17bundle_brown_open_front\x08\x07default\x0Cbundle_brown\x08\x10bundle_open_back\x16bundle_brown_open_back\0\0\x03\ruse_animation\0\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\0\0\0" } ;
     pub const BROWN_CANDLE: Self = Self {
         id: -425,
         registry_key: "minecraft:brown_candle",
@@ -128856,7 +128856,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const BUNDLE : Self = Self { id : 864 , registry_key : "minecraft:bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\x03\x0Bframe_count\x02\x03\x06damage\0\x01\x0Eshould_despawn\x01\x03\x11enchantable_value\0\x01\x04foil\0\x01\rhand_equipped\0\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\0\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x03\x0Emax_stack_size\x02\x01\x17can_destroy_in_creative\x01\x08\x10enchantable_slot\x04none\x03\x11creative_category\x06\x01\x0Eallow_off_hand\0\x01\x0Eliquid_clipped\0\x08\x0Ecreative_group\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x10bundle_open_back\x08\x11bundle_open_front\x11bundle_open_front\x08\x07default\x06bundle\0\0\0\t\titem_tags\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\0\0" } ;
+    pub const BUNDLE : Self = Self { id : 865 , registry_key : "minecraft:bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\0\n\x0Fitem_properties\x03\x0Bframe_count\x02\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\x03\x0Cuse_duration\0\x01\x17can_destroy_in_creative\x01\x03\x11creative_category\x06\x03\x11enchantable_value\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x10bundle_open_back\x08\x11bundle_open_front\x11bundle_open_front\x08\x07default\x06bundle\0\0\x01\x0Fstacked_by_data\0\x03\x06damage\0\x08\x10enchantable_slot\x04none\x01\rhand_equipped\0\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x01\x0Eshould_despawn\x01\x01\x04foil\0\x01\x12hidden_in_commands\x02\x01\x0Eallow_off_hand\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0\0" } ;
     pub const BURN_POTTERY_SHERD: Self = Self {
         id: 677,
         registry_key: "minecraft:burn_pottery_sherd",
@@ -128920,7 +128920,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const CAMERA : Self = Self { id : 609 , registry_key : "minecraft:camera" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x10minecraft:camera\x05\x10picture_duration\0\0\x80?\x05\x13black_bars_duration\xCD\xCCL>\x05\x14shutter_screen_ratio\0\0\0?\x05\x10shutter_duration\xCD\xCCL>\x05\x13slide_away_duration\xCD\xCCL>\x05\x17black_bars_screen_ratio\n\xD7\xA3=\0\x08\x0Fminecraft:block\x10minecraft:camera\x03\x16minecraft:use_duration\xC0\x9A\x0C\0\0" } ;
+    pub const CAMERA : Self = Self { id : 609 , registry_key : "minecraft:camera" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x10minecraft:camera\x05\x10picture_duration\0\0\x80?\x05\x13slide_away_duration\xCD\xCCL>\x05\x10shutter_duration\xCD\xCCL>\x05\x14shutter_screen_ratio\0\0\0?\x05\x13black_bars_duration\xCD\xCCL>\x05\x17black_bars_screen_ratio\n\xD7\xA3=\0\x03\x16minecraft:use_duration\xC0\x9A\x0C\x08\x0Fminecraft:block\x10minecraft:camera\0\0" } ;
     pub const CAMPFIRE: Self = Self {
         id: 601,
         registry_key: "minecraft:campfire",
@@ -128943,13 +128943,13 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const CARPET: Self = Self {
-        id: 792,
+        id: 793,
         registry_key: "minecraft:carpet",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const CARROT : Self = Self { id : 279 , registry_key : "minecraft:carrot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x19?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x08\x11using_converts_to\0\x03\rcooldown_time\0\x03\tnutrition\x06\0\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\x0Bcrop_result\x11minecraft:carrots\x08\rplant_at_face\x02up\x01\x1Aplant_at_any_solid_surface\0\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const CARROT : Self = Self { id : 279 , registry_key : "minecraft:carrot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\rplant_at_face\x02up\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\x08\x0Bcrop_result\x11minecraft:carrots\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\tnutrition\x06\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x19?\x03\ron_use_action\x01\x08\rcooldown_type\0\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\0\0" } ;
     pub const CARROT_ON_A_STICK: Self = Self {
         id: 527,
         registry_key: "minecraft:carrot_on_a_stick",
@@ -129077,7 +129077,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const CHEMISTRY_TABLE: Self = Self {
-        id: 838,
+        id: 839,
         registry_key: "minecraft:chemistry_table",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -129251,7 +129251,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const CHICKEN : Self = Self { id : 275 , registry_key : "minecraft:chicken" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x99>\x03\tnutrition\x04\x03\rcooldown_time\0\t\x07effects\n\x02\x03\x02id\"\x03\tamplifier\0\x05\x06chance\x9A\x99\x99>\x08\rdescriptionId\rpotion.hunger\x08\x04name\x06hunger\x03\x08duration<\0\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const CHICKEN : Self = Self { id : 275 , registry_key : "minecraft:chicken" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x05\x13saturation_modifier\x9A\x99\x99>\x01\x0Ecan_always_eat\0\t\x07effects\n\x02\x03\tamplifier\0\x05\x06chance\x9A\x99\x99>\x08\rdescriptionId\rpotion.hunger\x03\x08duration<\x03\x02id\"\x08\x04name\x06hunger\0\x03\rcooldown_time\0\x08\x11using_converts_to\0\x03\tnutrition\x04\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x08\rcooldown_type\0\0\0\0" } ;
     pub const CHICKEN_SPAWN_EGG: Self = Self {
         id: 439,
         registry_key: "minecraft:chicken_spawn_egg",
@@ -129371,7 +129371,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const CHORUS_FRUIT : Self = Self { id : 568 , registry_key : "minecraft:chorus_fruit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\tnutrition\x08\x08\x11using_converts_to\0\x08\rcooldown_type\x0Bchorusfruit\x05\x13saturation_modifier\x9A\x99\x99>\x03\ron_use_action\0\x01\x0Ecan_always_eat\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time(\0\0\0" } ;
+    pub const CHORUS_FRUIT : Self = Self { id : 568 , registry_key : "minecraft:chorus_fruit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x08\x11using_converts_to\0\x03\tnutrition\x08\x05\x13saturation_modifier\x9A\x99\x99>\x03\rcooldown_time(\x01\x0Ecan_always_eat\x01\x03\ron_use_action\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\x0Bchorusfruit\0\x03\x16minecraft:use_duration@\0\0" } ;
     pub const CHORUS_PLANT: Self = Self {
         id: 240,
         registry_key: "minecraft:chorus_plant",
@@ -129596,7 +129596,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const COD : Self = Self { id : 264 , registry_key : "minecraft:cod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\tnutrition\x04\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x08\x11using_converts_to\0\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const COD : Self = Self { id : 264 , registry_key : "minecraft:cod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x01\x19minecraft:stacked_by_data\x01\n\x0Eminecraft:food\x08\rcooldown_type\0\x03\ron_use_action\x01\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\tnutrition\x04\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x08\x11using_converts_to\0\0\x03\x16minecraft:use_duration@\0\0" } ;
     pub const COD_BUCKET: Self = Self {
         id: 367,
         registry_key: "minecraft:cod_bucket",
@@ -129619,7 +129619,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const COLORED_TORCH_BP: Self = Self {
-        id: 843,
+        id: 844,
         registry_key: "minecraft:colored_torch_bp",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -129647,7 +129647,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const COLORED_TORCH_RG: Self = Self {
-        id: 842,
+        id: 843,
         registry_key: "minecraft:colored_torch_rg",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -129703,14 +129703,14 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const CONCRETE: Self = Self {
-        id: 826,
+        id: 827,
         registry_key: "minecraft:concrete",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const CONCRETE_POWDER: Self = Self {
-        id: 827,
+        id: 828,
         registry_key: "minecraft:concrete_powder",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -129723,14 +129723,14 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const COOKED_BEEF : Self = Self { id : 274 , registry_key : "minecraft:cooked_beef" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\ron_use_action\x01\x03\rcooldown_time\0\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x10\x05\x13saturation_modifier\xCD\xCCL?\0\0\0" } ;
-    pub const COOKED_CHICKEN : Self = Self { id : 276 , registry_key : "minecraft:cooked_chicken" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\0\x03\ron_use_action\x01\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x03\tnutrition\x0C\0\0\0" } ;
-    pub const COOKED_COD : Self = Self { id : 268 , registry_key : "minecraft:cooked_cod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\n\x08\rcooldown_type\0\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\0\0\0" } ;
-    pub const COOKED_MUTTON : Self = Self { id : 561 , registry_key : "minecraft:cooked_mutton" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x08\rcooldown_type\0\x03\ron_use_action\x01\x03\tnutrition\x0C\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\xCD\xCCL?\x08\x11using_converts_to\0\0\0\0" } ;
-    pub const COOKED_PORKCHOP : Self = Self { id : 263 , registry_key : "minecraft:cooked_porkchop" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x05\x13saturation_modifier\xCD\xCCL?\x03\tnutrition\x10\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x08\rcooldown_type\0\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0\0" } ;
-    pub const COOKED_RABBIT : Self = Self { id : 289 , registry_key : "minecraft:cooked_rabbit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\0\x03\rcooldown_time\0\x03\tnutrition\n\0\0\0" } ;
-    pub const COOKED_SALMON : Self = Self { id : 269 , registry_key : "minecraft:cooked_salmon" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x05\x13saturation_modifier\xCD\xCCL?\x08\x11using_converts_to\0\x03\ron_use_action\x01\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x0C\0\x01\x19minecraft:stacked_by_data\x01\0\0" } ;
-    pub const COOKIE : Self = Self { id : 271 , registry_key : "minecraft:cookie" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\rcooldown_type\0\x03\rcooldown_time\0\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x04\0\0\0" } ;
+    pub const COOKED_BEEF : Self = Self { id : 274 , registry_key : "minecraft:cooked_beef" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x05\x13saturation_modifier\xCD\xCCL?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x03\ron_use_action\x01\x03\tnutrition\x10\0\0\0" } ;
+    pub const COOKED_CHICKEN : Self = Self { id : 276 , registry_key : "minecraft:cooked_chicken" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x19?\x03\tnutrition\x0C\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const COOKED_COD : Self = Self { id : 268 , registry_key : "minecraft:cooked_cod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x19?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x03\rcooldown_time\0\x03\tnutrition\n\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\0\x03\x16minecraft:use_duration@\x01\x19minecraft:stacked_by_data\x01\0\0" } ;
+    pub const COOKED_MUTTON : Self = Self { id : 561 , registry_key : "minecraft:cooked_mutton" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x0C\x05\x13saturation_modifier\xCD\xCCL?\x03\ron_use_action\x01\x08\rcooldown_type\0\x03\rcooldown_time\0\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const COOKED_PORKCHOP : Self = Self { id : 263 , registry_key : "minecraft:cooked_porkchop" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x08\x11using_converts_to\0\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\x05\x13saturation_modifier\xCD\xCCL?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x10\x08\rcooldown_type\0\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const COOKED_RABBIT : Self = Self { id : 289 , registry_key : "minecraft:cooked_rabbit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x08\rcooldown_type\0\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x03\tnutrition\n\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x19?\0\0\0" } ;
+    pub const COOKED_SALMON : Self = Self { id : 269 , registry_key : "minecraft:cooked_salmon" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\x01\x19minecraft:stacked_by_data\x01\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x03\ron_use_action\x01\x03\rcooldown_time\0\x03\tnutrition\x0C\x05\x13saturation_modifier\xCD\xCCL?\x08\rcooldown_type\0\0\0\0" } ;
+    pub const COOKIE : Self = Self { id : 271 , registry_key : "minecraft:cookie" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\ron_use_action\x01\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\tnutrition\x04\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\0\0\0" } ;
     pub const COPPER_AXE: Self = Self {
         id: 752,
         registry_key: "minecraft:copper_axe",
@@ -129892,7 +129892,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const COPPER_SPEAR : Self = Self { id : 854 , registry_key : "minecraft:copper_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\0\n\x10minecraft:damage\x02\x05value\x02\0\0\n\x18minecraft:swing_duration\x05\x05value\x9A\x99Y?\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x14minecraft:durability\x03\x0Emax_durability\xFC\x02\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x05\x11damage_multiplier\x85\xEBQ?\x02\x05delay\r\0\x05\x0Fdamage_modifier\0\0\0\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x11damage_conditions\x02\x0Cmax_duration\xFA\0\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_durationP\0\x05\tmin_speed\0\0@A\0\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x14knockback_conditions\x02\x0Cmax_duration\xA5\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed33\xA3@\0\0\0\t\titem_tags\x08\x04\x15minecraft:copper_tier\x12minecraft:is_spear\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Citem.copper_spear.attack_hit\x08\x0Battack_miss\x1Ditem.copper_spear.attack_miss\0\n\x17minecraft:use_modifiers\x05\x0Cuse_duration\0\xA0\x8CG\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_sound\x15item.copper_spear.use\x01\x0Femit_vibrations\0\x08\x0Bstart_using\x06always\0\n\x16minecraft:display_name\x08\x05value\x16item.copper_spear.name\0\n\x12minecraft:cooldown\x08\x08category\x05spear\x05\x08duration\x9A\x99Y?\x08\x04type\x06attack\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\r\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x16minecraft:copper_spear\0\x08\rrepair_amount)context.other->query.remaining_durability\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04name\x16minecraft:copper_ingot\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\x01\x12hidden_in_commands\x02\x03\x11creative_category\x06\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Ccopper_spear\0\0\x01\x04foil\0\x03\x0Emax_stack_size\x02\x01\rhand_equipped\x01\x05\x0Cmining_speed\0\0\x80?\x03\x0Bframe_count\x02\x01\x0Eliquid_clipped\0\x08\x10enchantable_slot\x0Bmelee_spear\x03\ruse_animation\0\x08\x0Ecreative_group\0\x03\x11enchantable_value\x1A\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x03\x06damage\x04\x01\x0Fstacked_by_data\0\x01\x0Eshould_despawn\x01\x03\x0Cuse_duration\x80\xE4\xAF\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:copper_tier\x12minecraft:is_spear\0\0\0" } ;
+    pub const COPPER_SPEAR : Self = Self { id : 855 , registry_key : "minecraft:copper_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x10minecraft:damage\x02\x05value\x02\0\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\x03\x0Emax_durability\xFC\x02\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Citem.copper_spear.attack_hit\x08\x0Battack_miss\x1Ditem.copper_spear.attack_miss\0\n\x0Fitem_properties\x03\x0Bframe_count\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Ccopper_spear\0\0\x01\x12hidden_in_commands\x02\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x03\x0Cuse_duration\x80\xE4\xAF\x01\x01\x17can_destroy_in_creative\x01\x01\rhand_equipped\x01\x01\x0Fstacked_by_data\0\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x01\x0Eshould_despawn\x01\x03\x0Emax_stack_size\x02\x03\x06damage\x04\x03\x11enchantable_value\x1A\x03\x11creative_category\x06\x01\x0Eliquid_clipped\0\x01\x04foil\0\x08\x10enchantable_slot\x0Bmelee_spear\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x18minecraft:swing_duration\x05\x05value\x9A\x99Y?\0\t\titem_tags\x08\x04\x15minecraft:copper_tier\x12minecraft:is_spear\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x05\rhitbox_margin\0\0\x80>\x02\x05delay\r\0\n\x14knockback_conditions\x02\x0Cmax_duration\xA5\0\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\0\x05\x0Fdamage_modifier\0\0\0\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x11damage_conditions\x02\x0Cmax_duration\xFA\0\x05\tmin_speed\0\0\0\0\x05\x12min_relative_speed33\x93@\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_durationP\0\x05\tmin_speed\0\0@A\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\x11damage_multiplier\x85\xEBQ?\0\0\n\x17minecraft:use_modifiers\x05\x11movement_modifier\0\0\x80?\x05\x0Cuse_duration\0\xA0\x8CG\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x15item.copper_spear.use\x08\x0Bstart_using\x06always\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\x08\rrepair_amount)context.other->query.remaining_durability\t\x05items\n\x02\x08\x04name\x16minecraft:copper_spear\0\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04name\x16minecraft:copper_ingot\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x12minecraft:cooldown\x05\x08duration\x9A\x99Y?\x08\x04type\x06attack\x08\x08category\x05spear\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:copper_tier\x12minecraft:is_spear\0\n\x15minecraft:enchantable\x01\x05value\r\x08\x04slot\x0Bmelee_spear\0\n\x16minecraft:display_name\x08\x05value\x16item.copper_spear.name\0\0\0" } ;
     pub const COPPER_SWORD: Self = Self {
         id: 749,
         registry_key: "minecraft:copper_sword",
@@ -129915,28 +129915,28 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const CORAL: Self = Self {
-        id: 820,
+        id: 821,
         registry_key: "minecraft:coral",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const CORAL_BLOCK: Self = Self {
-        id: 796,
+        id: 797,
         registry_key: "minecraft:coral_block",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const CORAL_FAN: Self = Self {
-        id: 805,
+        id: 806,
         registry_key: "minecraft:coral_fan",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const CORAL_FAN_DEAD: Self = Self {
-        id: 806,
+        id: 807,
         registry_key: "minecraft:coral_fan_dead",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -130257,7 +130257,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const CYAN_BUNDLE : Self = Self { id : 865 , registry_key : "minecraft:cyan_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x03\x11enchantable_value\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x15bundle_cyan_open_back\x08\x11bundle_open_front\x16bundle_cyan_open_front\x08\x07default\x0Bbundle_cyan\0\0\x03\x11creative_category\x06\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\0\x08\x10enchantable_slot\x04none\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\x03\ruse_animation\0\x01\x04foil\0\x01\x0Eliquid_clipped\0\x01\x12hidden_in_commands\x02\x03\x06damage\0\x03\x0Emax_stack_size\x02\x03\x0Bframe_count\x02\x01\rhand_equipped\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\0\t\titem_tags\0\0\0\0" } ;
+    pub const CYAN_BUNDLE : Self = Self { id : 866 , registry_key : "minecraft:cyan_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\x03\x0Emax_stack_size\x02\x08\x10enchantable_slot\x04none\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x01\x0Fstacked_by_data\0\x01\x04foil\0\x03\x11creative_category\x06\x01\rhand_equipped\0\x03\x0Cuse_duration\0\x08\x0Ecreative_group\0\x03\x06damage\0\x03\x11enchantable_value\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eallow_off_hand\0\x03\x0Bframe_count\x02\x01\x0Eliquid_clipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x16bundle_cyan_open_front\x08\x07default\x0Bbundle_cyan\x08\x10bundle_open_back\x15bundle_cyan_open_back\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0\0" } ;
     pub const CYAN_CANDLE: Self = Self {
         id: -422,
         registry_key: "minecraft:cyan_candle",
@@ -131021,7 +131021,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const DIAMOND_SPEAR : Self = Self { id : 855 , registry_key : "minecraft:diamond_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x17minecraft:diamond_spear\0\x08\rrepair_amount)context.other->query.remaining_durability\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04name\x11minecraft:diamond\0\0\0\n\x10minecraft:damage\x02\x05value\x04\0\0\n\x12minecraft:cooldown\x08\x08category\x05spear\x05\x08durationff\x86?\x08\x04type\x06attack\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\x03\x0Emax_durability\xB0\x18\0\n\x19minecraft:piercing_weapon\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:display_name\x08\x05value\x17item.diamond_spear.name\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x06\x16minecraft:diamond_tier\x1Dminecraft:transformable_items\x12minecraft:is_spear\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Ditem.diamond_spear.attack_hit\x08\x0Battack_miss\x1Eitem.diamond_spear.attack_miss\0\n\x0Fitem_properties\x08\x0Ecreative_group\0\x01\rhand_equipped\x01\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\x0Bframe_count\x02\x03\x11enchantable_value\x14\x01\x0Fstacked_by_data\0\x03\x0Emax_stack_size\x02\x08\x10enchantable_slot\x0Bmelee_spear\x01\x12hidden_in_commands\x02\x03\ruse_animation\0\x01\x0Eliquid_clipped\0\x01\x0Eshould_despawn\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\rdiamond_spear\0\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eallow_off_hand\0\x01\x17can_destroy_in_creative\x01\x03\x11creative_category\x06\x03\x06damage\x08\x01\x04foil\0\0\n\x18minecraft:swing_duration\x05\x05valueff\x86?\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\n\0\t\titem_tags\x08\x06\x16minecraft:diamond_tier\x1Dminecraft:transformable_items\x12minecraft:is_spear\n\x17minecraft:use_modifiers\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_sound\x16item.diamond_spear.use\x08\x0Bstart_using\x06always\x05\x0Cuse_duration\0\xA0\x8CG\x01\x0Femit_vibrations\0\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\x05\x11damage_multiplier\x9A\x99\x89?\n\x13dismount_conditions\x02\x0Cmax_duration<\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0 A\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x11damage_conditions\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\xC8\0\x05\x12min_relative_speed33\x93@\0\n\x14knockback_conditions\x05\tmin_speed33\xA3@\x02\x0Cmax_duration\x82\0\x05\x12min_relative_speed\0\0\0\0\0\x02\x05delay\n\0\x05\x0Fdamage_modifier\0\0\0\0\0\0\0\0" } ;
+    pub const DIAMOND_SPEAR : Self = Self { id : 856 , registry_key : "minecraft:diamond_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x01\x0Eallow_off_hand\0\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x03\x06damage\x08\x05\x0Cmining_speed\0\0\x80?\x03\x0Emax_stack_size\x02\x01\x0Fstacked_by_data\0\x01\x12hidden_in_commands\x02\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\x03\x11enchantable_value\x14\x01\x04foil\0\x01\x0Eliquid_clipped\0\x03\x0Bframe_count\x02\x08\x10enchantable_slot\x0Bmelee_spear\n\x0Eminecraft:icon\n\x08textures\x08\x07default\rdiamond_spear\0\0\x01\rhand_equipped\x01\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x17minecraft:diamond_spear\0\x08\rrepair_amount)context.other->query.remaining_durability\0\t\x05items\n\x02\x08\x04name\x11minecraft:diamond\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\0\0\n\x19minecraft:piercing_weapon\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x16item.diamond_spear.use\x08\x0Bstart_using\x06always\x05\x11movement_modifier\0\0\x80?\x05\x0Cuse_duration\0\xA0\x8CG\0\t\titem_tags\x08\x06\x16minecraft:diamond_tier\x1Dminecraft:transformable_items\x12minecraft:is_spear\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x12minecraft:cooldown\x08\x04type\x06attack\x05\x08durationff\x86?\x08\x08category\x05spear\0\n\x10minecraft:damage\x02\x05value\x04\0\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\x03\x0Emax_durability\xB0\x18\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x13dismount_conditions\x02\x0Cmax_duration<\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0 A\0\x05\rhitbox_margin\0\0\x80>\x05\x0Fdamage_modifier\0\0\0\0\n\x14knockback_conditions\x02\x0Cmax_duration\x82\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed33\xA3@\0\n\x11damage_conditions\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\xC8\0\x05\x12min_relative_speed33\x93@\0\x02\x05delay\n\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\x05\x11damage_multiplier\x9A\x99\x89?\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\0\0\n\x18minecraft:swing_duration\x05\x05valueff\x86?\0\n\x0Eminecraft:tags\t\x04tags\x08\x06\x16minecraft:diamond_tier\x1Dminecraft:transformable_items\x12minecraft:is_spear\0\n\x16minecraft:display_name\x08\x05value\x17item.diamond_spear.name\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Ditem.diamond_spear.attack_hit\x08\x0Battack_miss\x1Eitem.diamond_spear.attack_miss\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\n\0\0\0" } ;
     pub const DIAMOND_SWORD: Self = Self {
         id: 318,
         registry_key: "minecraft:diamond_sword",
@@ -131085,6 +131085,13 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
+    pub const DISC_PRESS: Self = Self {
+        id: -1251,
+        registry_key: "minecraft:disc_press",
+        version: BedrockItemVersion::None,
+        component_based: false,
+        definition_components: b"\n\0\0",
+    };
     pub const DISPENSER: Self = Self {
         id: 23,
         registry_key: "minecraft:dispenser",
@@ -131114,35 +131121,35 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const DOUBLE_PLANT: Self = Self {
-        id: 814,
+        id: 815,
         registry_key: "minecraft:double_plant",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const DOUBLE_STONE_BLOCK_SLAB: Self = Self {
-        id: 801,
+        id: 802,
         registry_key: "minecraft:double_stone_block_slab",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const DOUBLE_STONE_BLOCK_SLAB2: Self = Self {
-        id: 802,
+        id: 803,
         registry_key: "minecraft:double_stone_block_slab2",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const DOUBLE_STONE_BLOCK_SLAB3: Self = Self {
-        id: 803,
+        id: 804,
         registry_key: "minecraft:double_stone_block_slab3",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const DOUBLE_STONE_BLOCK_SLAB4: Self = Self {
-        id: 804,
+        id: 805,
         registry_key: "minecraft:double_stone_block_slab4",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -131176,7 +131183,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const DRIED_KELP : Self = Self { id : 270 , registry_key : "minecraft:dried_kelp" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration \n\x0Eminecraft:food\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x03\rcooldown_time\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\ron_use_action\x01\x03\tnutrition\x02\0\0\0" } ;
+    pub const DRIED_KELP : Self = Self { id : 270 , registry_key : "minecraft:dried_kelp" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\tnutrition\x02\x03\ron_use_action\x01\x08\rcooldown_type\0\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x16minecraft:use_duration \0\0" } ;
     pub const DRIED_KELP_BLOCK: Self = Self {
         id: -139,
         registry_key: "minecraft:dried_kelp_block",
@@ -131213,7 +131220,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const DYE: Self = Self {
-        id: 848,
+        id: 849,
         registry_key: "minecraft:dye",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -132122,7 +132129,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const ENCHANTED_GOLDEN_APPLE : Self = Self { id : 259 , registry_key : "minecraft:enchanted_golden_apple" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x01\x0Eminecraft:foil\x01\n\x0Eminecraft:food\x03\tnutrition\x08\x01\x0Ecan_always_eat\x01\x03\ron_use_action\x01\t\x07effects\n\x08\x03\x08duration<\x05\x06chance\0\0\x80?\x03\x02id\x14\x08\x04name\x0Cregeneration\x08\rdescriptionId\x13potion.regeneration\x03\tamplifier\x02\0\x08\rdescriptionId\x11potion.absorption\x03\x02id,\x03\x08duration\xF0\x01\x03\tamplifier\x06\x05\x06chance\0\0\x80?\x08\x04name\nabsorption\0\x08\rdescriptionId\x11potion.resistance\x05\x06chance\0\0\x80?\x03\x08duration\xD8\x04\x08\x04name\nresistance\x03\x02id\x16\x03\tamplifier\0\0\x03\tamplifier\0\x05\x06chance\0\0\x80?\x08\rdescriptionId\x15potion.fireResistance\x03\x08duration\xD8\x04\x03\x02id\x18\x08\x04name\x0Ffire_resistance\0\x08\rcooldown_type\0\x05\x13saturation_modifier\x9A\x99\x99?\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\0\x03\x16minecraft:use_duration@\x01\x19minecraft:stacked_by_data\x01\0\0" } ;
+    pub const ENCHANTED_GOLDEN_APPLE : Self = Self { id : 259 , registry_key : "minecraft:enchanted_golden_apple" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\x01\x0Eminecraft:foil\x01\n\x0Eminecraft:food\t\x07effects\n\x08\x03\x02id\x14\x08\x04name\x0Cregeneration\x03\tamplifier\x02\x05\x06chance\0\0\x80?\x08\rdescriptionId\x13potion.regeneration\x03\x08duration<\0\x08\x04name\nabsorption\x05\x06chance\0\0\x80?\x03\tamplifier\x06\x08\rdescriptionId\x11potion.absorption\x03\x08duration\xF0\x01\x03\x02id,\0\x03\tamplifier\0\x08\rdescriptionId\x11potion.resistance\x08\x04name\nresistance\x05\x06chance\0\0\x80?\x03\x02id\x16\x03\x08duration\xD8\x04\0\x08\x04name\x0Ffire_resistance\x05\x06chance\0\0\x80?\x03\x02id\x18\x03\tamplifier\0\x03\x08duration\xD8\x04\x08\rdescriptionId\x15potion.fireResistance\0\x03\rcooldown_time\0\x03\ron_use_action\x01\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\x01\x05\x13saturation_modifier\x9A\x99\x99?\x03\tnutrition\x08\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x01\x19minecraft:stacked_by_data\x01\0\0" } ;
     pub const ENCHANTING_TABLE: Self = Self {
         id: 116,
         registry_key: "minecraft:enchanting_table",
@@ -132145,7 +132152,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const END_CRYSTAL: Self = Self {
-        id: 851,
+        id: 852,
         registry_key: "minecraft:end_crystal",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -132404,7 +132411,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const FENCE: Self = Self {
-        id: 794,
+        id: 795,
         registry_key: "minecraft:fence",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -132627,6 +132634,13 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
+    pub const FROSTBITE_SPAWN_EGG: Self = Self {
+        id: 791,
+        registry_key: "minecraft:frostbite_spawn_egg",
+        version: BedrockItemVersion::None,
+        component_based: false,
+        definition_components: b"\n\0\0",
+    };
     pub const FROSTED_ICE: Self = Self {
         id: 207,
         registry_key: "minecraft:frosted_ice",
@@ -132697,7 +132711,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const GLOW_BERRIES : Self = Self { id : 883 , registry_key : "minecraft:glow_berries" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x08\x11using_converts_to\0\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x04\x05\x13saturation_modifier\x9A\x99\x99>\0\n\x0Eminecraft:seed\x01\x1Aplant_at_any_solid_surface\x01\x08\rplant_at_face\x04down\x08\x0Bcrop_result\x14minecraft:cave_vines\t\x08plant_at\x08\x04\ncave_vines\x1Ccave_vines_head_with_berries\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const GLOW_BERRIES : Self = Self { id : 884 , registry_key : "minecraft:glow_berries" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x04\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\x03\ron_use_action\x01\x03\rcooldown_time\0\x08\rcooldown_type\0\x05\x13saturation_modifier\x9A\x99\x99>\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:seed\t\x08plant_at\x08\x04\ncave_vines\x1Ccave_vines_head_with_berries\x01\x1Aplant_at_any_solid_surface\x01\x08\rplant_at_face\x04down\x08\x0Bcrop_result\x14minecraft:cave_vines\0\0\0" } ;
     pub const GLOW_FRAME: Self = Self {
         id: 638,
         registry_key: "minecraft:glow_frame",
@@ -132796,7 +132810,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const GOLDEN_APPLE : Self = Self { id : 258 , registry_key : "minecraft:golden_apple" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\x01\x03\rcooldown_time\0\x03\tnutrition\x08\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x08\rcooldown_type\0\t\x07effects\n\x04\x03\tamplifier\x02\x08\rdescriptionId\x13potion.regeneration\x03\x02id\x14\x05\x06chance\0\0\x80?\x08\x04name\x0Cregeneration\x03\x08duration\n\0\x08\rdescriptionId\x11potion.absorption\x03\x02id,\x08\x04name\nabsorption\x03\x08duration\xF0\x01\x03\tamplifier\0\x05\x06chance\0\0\x80?\0\x05\x13saturation_modifier\x9A\x99\x99?\x08\x11using_converts_to\0\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const GOLDEN_APPLE : Self = Self { id : 258 , registry_key : "minecraft:golden_apple" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\tnutrition\x08\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x08\rcooldown_type\0\t\x07effects\n\x04\x08\x04name\x0Cregeneration\x03\x08duration\n\x03\x02id\x14\x08\rdescriptionId\x13potion.regeneration\x05\x06chance\0\0\x80?\x03\tamplifier\x02\0\x08\rdescriptionId\x11potion.absorption\x08\x04name\nabsorption\x05\x06chance\0\0\x80?\x03\x08duration\xF0\x01\x03\x02id,\x03\tamplifier\0\0\x05\x13saturation_modifier\x9A\x99\x99?\x03\rcooldown_time\0\x01\x0Ecan_always_eat\x01\0\x03\x16minecraft:use_duration@\x01\x19minecraft:stacked_by_data\x01\0\0" } ;
     pub const GOLDEN_AXE: Self = Self {
         id: 328,
         registry_key: "minecraft:golden_axe",
@@ -132811,7 +132825,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const GOLDEN_CARROT : Self = Self { id : 283 , registry_key : "minecraft:golden_carrot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x99?\x08\rcooldown_type\0\x03\rcooldown_time\0\x03\tnutrition\x0C\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const GOLDEN_CARROT : Self = Self { id : 283 , registry_key : "minecraft:golden_carrot" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x08\rcooldown_type\0\x05\x13saturation_modifier\x9A\x99\x99?\x03\tnutrition\x0C\0\0\0" } ;
     pub const GOLDEN_CHESTPLATE: Self = Self {
         id: 355,
         registry_key: "minecraft:golden_chestplate",
@@ -132882,7 +132896,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const GOLDEN_SPEAR : Self = Self { id : 856 , registry_key : "minecraft:golden_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x14knockback_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration\xAA\0\x05\tmin_speed33\xA3@\0\x05\rhitbox_margin\0\0\x80>\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\x13\x01\0\x05\x11damage_multiplier333?\n\x13dismount_conditions\x05\tmin_speed\0\0PA\x02\x0Cmax_durationF\0\x05\x12min_relative_speed\0\0\0\0\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\x0Fdamage_modifier\0\0\0\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x02\x05delay\x0E\0\0\0\n\x12minecraft:cooldown\x05\x08duration33s?\x08\x04type\x06attack\x08\x08category\x05spear\0\n\x10minecraft:damage\x02\x05value\x01\0\0\n\x16minecraft:swing_sounds\x08\x0Battack_miss\x1Ditem.golden_spear.attack_miss\x08\nattack_hit\x1Citem.golden_spear.attack_hit\0\n\x18minecraft:swing_duration\x05\x05value33s?\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:golden_tier\x12minecraft:is_spear\0\n\x19minecraft:piercing_weapon\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x14minecraft:durability\x03\x0Emax_durability<\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x16minecraft:display_name\x08\x05value\x16item.golden_spear.name\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x15item.golden_spear.use\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_using\x06always\x05\x0Cuse_duration\0\xA0\x8CG\0\t\titem_tags\x08\x04\x15minecraft:golden_tier\x12minecraft:is_spear\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\x08\rrepair_amount)context.other->query.remaining_durability\t\x05items\n\x02\x08\x04name\x16minecraft:golden_spear\0\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04name\x14minecraft:gold_ingot\0\0\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x16\0\n\x0Fitem_properties\x08\x0Ecreative_group\0\x03\x11creative_category\x06\n\x0Eminecraft:icon\n\x08textures\x08\x07default\ngold_spear\0\0\x01\x17can_destroy_in_creative\x01\x03\x0Cuse_duration\x80\xE4\xAF\x01\x05\x0Cmining_speed\0\0\x80?\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x03\x06damage\x02\x03\x0Emax_stack_size\x02\x01\rhand_equipped\x01\x03\x11enchantable_value,\x01\x12hidden_in_commands\x02\x01\x0Eliquid_clipped\0\x01\x04foil\0\x03\x0Bframe_count\x02\x08\x10enchantable_slot\x0Bmelee_spear\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\0\0\0" } ;
+    pub const GOLDEN_SPEAR : Self = Self { id : 857 , registry_key : "minecraft:golden_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x12minecraft:cooldown\x05\x08duration33s?\x08\x08category\x05spear\x08\x04type\x06attack\0\n\x17minecraft:use_modifiers\x08\x0Bstart_using\x06always\x08\x0Bstart_sound\x15item.golden_spear.use\x05\x0Cuse_duration\0\xA0\x8CG\x01\x0Femit_vibrations\0\x05\x11movement_modifier\0\0\x80?\0\n\x16minecraft:display_name\x08\x05value\x16item.golden_spear.name\0\t\titem_tags\x08\x04\x15minecraft:golden_tier\x12minecraft:is_spear\n\x16minecraft:swing_sounds\x08\x0Battack_miss\x1Ditem.golden_spear.attack_miss\x08\nattack_hit\x1Citem.golden_spear.attack_hit\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\x03\x0Emax_durability<\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x16minecraft:golden_spear\0\x08\rrepair_amount)context.other->query.remaining_durability\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04name\x14minecraft:gold_ingot\0\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:golden_tier\x12minecraft:is_spear\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x02\x05delay\x0E\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\x05\x11damage_multiplier333?\x05\x0Fdamage_modifier\0\0\0\0\n\x13dismount_conditions\x02\x0Cmax_durationF\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0PA\0\n\x11damage_conditions\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\x13\x01\x05\x12min_relative_speed33\x93@\0\n\x14knockback_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration\xAA\0\x05\tmin_speed33\xA3@\0\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\0\0\n\x18minecraft:swing_duration\x05\x05value33s?\0\n\x0Fitem_properties\x08\x10enchantable_slot\x0Bmelee_spear\x03\x0Bframe_count\x02\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x01\rhand_equipped\x01\x01\x0Eliquid_clipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\ngold_spear\0\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x03\x11creative_category\x06\x03\x06damage\x02\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x03\x0Emax_stack_size\x02\x01\x04foil\0\x03\x11enchantable_value,\x01\x0Eshould_despawn\x01\x03\x0Cuse_duration\x80\xE4\xAF\x01\0\n\x15minecraft:enchantable\x01\x05value\x16\x08\x04slot\x0Bmelee_spear\0\n\x19minecraft:piercing_weapon\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\0\n\x10minecraft:damage\x02\x05value\x01\0\0\0\0" } ;
     pub const GOLDEN_SWORD: Self = Self {
         id: 325,
         registry_key: "minecraft:golden_sword",
@@ -132946,7 +132960,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const GRAY_BUNDLE : Self = Self { id : 866 , registry_key : "minecraft:gray_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\x01\x0Fstacked_by_data\0\x01\rhand_equipped\0\x03\x0Emax_stack_size\x02\x03\x06damage\0\x08\x10enchantable_slot\x04none\x03\ruse_animation\0\x01\x0Eshould_despawn\x01\x03\x0Cuse_duration\0\x01\x12hidden_in_commands\x02\x01\x0Eallow_off_hand\0\x01\x04foil\0\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x01\x0Eliquid_clipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bbundle_gray\x08\x10bundle_open_back\x15bundle_gray_open_back\x08\x11bundle_open_front\x16bundle_gray_open_front\0\0\x03\x11creative_category\x06\x05\x0Cmining_speed\0\0\x80?\x03\x11enchantable_value\0\0\t\titem_tags\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\0\0\0" } ;
+    pub const GRAY_BUNDLE : Self = Self { id : 867 , registry_key : "minecraft:gray_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x01\x04foil\0\x03\ruse_animation\0\x01\x12hidden_in_commands\x02\x03\x11enchantable_value\0\x01\rhand_equipped\0\x05\x0Cmining_speed\0\0\x80?\x03\x0Emax_stack_size\x02\x01\x0Eshould_despawn\x01\x01\x0Eliquid_clipped\0\x01\x0Eallow_off_hand\0\x01\x0Fstacked_by_data\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bbundle_gray\x08\x10bundle_open_back\x15bundle_gray_open_back\x08\x11bundle_open_front\x16bundle_gray_open_front\0\0\x03\x11creative_category\x06\x03\x06damage\0\x08\x10enchantable_slot\x04none\x03\x0Cuse_duration\0\x03\x0Bframe_count\x02\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\0\0" } ;
     pub const GRAY_CANDLE: Self = Self {
         id: -420,
         registry_key: "minecraft:gray_candle",
@@ -133087,7 +133101,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const GREEN_BUNDLE : Self = Self { id : 867 , registry_key : "minecraft:green_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x03\x11creative_category\x06\x01\rhand_equipped\0\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\0\x03\x0Bframe_count\x02\x08\x10enchantable_slot\x04none\x01\x0Eliquid_clipped\0\x08\x0Ecreative_group\0\x03\x06damage\0\x01\x04foil\0\x01\x12hidden_in_commands\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Cbundle_green\x08\x11bundle_open_front\x17bundle_green_open_front\x08\x10bundle_open_back\x16bundle_green_open_back\0\0\x01\x17can_destroy_in_creative\x01\x03\x11enchantable_value\0\x03\x0Emax_stack_size\x02\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0\0" } ;
+    pub const GREEN_BUNDLE : Self = Self { id : 868 , registry_key : "minecraft:green_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x01\x04foil\0\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x17bundle_green_open_front\x08\x07default\x0Cbundle_green\x08\x10bundle_open_back\x16bundle_green_open_back\0\0\x03\x0Bframe_count\x02\x03\x0Emax_stack_size\x02\x03\x11enchantable_value\0\x01\x0Eliquid_clipped\0\x03\x06damage\0\x08\x10enchantable_slot\x04none\x01\x0Eallow_off_hand\0\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x01\x0Eshould_despawn\x01\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x03\ruse_animation\0\x01\rhand_equipped\0\x03\x0Cuse_duration\0\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\0\0" } ;
     pub const GREEN_CANDLE: Self = Self {
         id: -426,
         registry_key: "minecraft:green_candle",
@@ -133488,14 +133502,14 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const HARD_STAINED_GLASS: Self = Self {
-        id: 840,
+        id: 841,
         registry_key: "minecraft:hard_stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const HARD_STAINED_GLASS_PANE: Self = Self {
-        id: 841,
+        id: 842,
         registry_key: "minecraft:hard_stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -133592,7 +133606,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const HONEY_BOTTLE : Self = Self { id : 604 , registry_key : "minecraft:honey_bottle" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\tnutrition\x0C\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\t\x0Eremove_effects\x03\x02&\x08\x11using_converts_to\x0Cglass_bottle\x08\rcooldown_type\0\x01\x0Ecan_always_eat\x01\x05\x13saturation_modifier\xCD\xCC\xCC=\0\x03\x18minecraft:max_stack_size \x03\x16minecraft:use_durationP\0\0" } ;
+    pub const HONEY_BOTTLE : Self = Self { id : 604 , registry_key : "minecraft:honey_bottle" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x18minecraft:max_stack_size \n\x0Eminecraft:food\x01\x0Ecan_always_eat\x01\x03\rcooldown_time\0\x03\tnutrition\x0C\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\t\x0Eremove_effects\x03\x02&\x05\x13saturation_modifier\xCD\xCC\xCC=\x08\x11using_converts_to\x0Cglass_bottle\x08\rcooldown_type\0\0\x03\x16minecraft:use_durationP\0\0" } ;
     pub const HONEYCOMB: Self = Self {
         id: 603,
         registry_key: "minecraft:honeycomb",
@@ -133687,6 +133701,20 @@ impl BedrockItem {
     pub const ICE_BOMB: Self = Self {
         id: 611,
         registry_key: "minecraft:ice_bomb",
+        version: BedrockItemVersion::None,
+        component_based: false,
+        definition_components: b"\n\0\0",
+    };
+    pub const ICE_CRYSTAL: Self = Self {
+        id: -1248,
+        registry_key: "minecraft:ice_crystal",
+        version: BedrockItemVersion::None,
+        component_based: false,
+        definition_components: b"\n\0\0",
+    };
+    pub const ICICLE: Self = Self {
+        id: -1247,
+        registry_key: "minecraft:icicle",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
@@ -133894,7 +133922,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const IRON_SPEAR : Self = Self { id : 857 , registry_key : "minecraft:iron_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x01\x0Eliquid_clipped\0\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x01\rhand_equipped\x01\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x03\x11enchantable_value\x1C\x03\x06damage\x06\x03\x0Emax_stack_size\x02\x03\x0Cuse_duration\x80\xE4\xAF\x01\x01\x12hidden_in_commands\x02\x08\x10enchantable_slot\x0Bmelee_spear\x03\x0Bframe_count\x02\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\niron_spear\0\0\x01\x17can_destroy_in_creative\x01\x01\x04foil\0\0\n\x18minecraft:swing_duration\x05\x05value33s?\0\n\x10minecraft:damage\x02\x05value\x03\0\0\t\titem_tags\x08\x04\x13minecraft:iron_tier\x12minecraft:is_spear\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x13item.iron_spear.use\x05\x0Cuse_duration\0\xA0\x8CG\x08\x0Bstart_using\x06always\x05\x11movement_modifier\0\0\x80?\0\n\x12minecraft:cooldown\x05\x08duration33s?\x08\x04type\x06attack\x08\x08category\x05spear\0\n\x14minecraft:durability\x03\x0Emax_durability\xF4\x03\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\0\n\x15minecraft:enchantable\x01\x05value\x0E\x08\x04slot\x0Bmelee_spear\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\0\n\x16minecraft:display_name\x08\x05value\x14item.iron_spear.name\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\x08\rrepair_amount)context.other->query.remaining_durability\t\x05items\n\x02\x08\x04name\x14minecraft:iron_spear\0\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04name\x14minecraft:iron_ingot\0\0\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x05\x11damage_multiplier33s?\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration2\0\x05\tmin_speed\0\x000A\0\x05\x0Fdamage_modifier\0\0\0\0\x02\x05delay\x0C\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\x05\rhitbox_margin\0\0\x80>\n\x11damage_conditions\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\xE1\0\x05\x12min_relative_speed33\x93@\0\n\x14knockback_conditions\x02\x0Cmax_duration\x87\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed33\xA3@\0\0\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Aitem.iron_spear.attack_hit\x08\x0Battack_miss\x1Bitem.iron_spear.attack_miss\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x13minecraft:iron_tier\x12minecraft:is_spear\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\0\0" } ;
+    pub const IRON_SPEAR : Self = Self { id : 858 , registry_key : "minecraft:iron_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Aitem.iron_spear.attack_hit\x08\x0Battack_miss\x1Bitem.iron_spear.attack_miss\0\n\x17minecraft:use_modifiers\x08\x0Bstart_using\x06always\x08\x0Bstart_sound\x13item.iron_spear.use\x01\x0Femit_vibrations\0\x05\x0Cuse_duration\0\xA0\x8CG\x05\x11movement_modifier\0\0\x80?\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x14minecraft:iron_spear\0\x08\rrepair_amount)context.other->query.remaining_durability\0\t\x05items\n\x02\x08\x04name\x14minecraft:iron_ingot\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\0\0\t\titem_tags\x08\x04\x13minecraft:iron_tier\x12minecraft:is_spear\n\x12minecraft:cooldown\x08\x04type\x06attack\x05\x08duration33s?\x08\x08category\x05spear\0\n\x16minecraft:display_name\x08\x05value\x14item.iron_spear.name\0\n\x10minecraft:damage\x02\x05value\x03\0\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\x03\x06damage\x06\x01\x0Eallow_off_hand\0\x01\x17can_destroy_in_creative\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\niron_spear\0\0\x08\x10enchantable_slot\x0Bmelee_spear\x01\x04foil\0\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\x03\x11enchantable_value\x1C\x03\x11creative_category\x06\x03\x0Emax_stack_size\x02\x03\x0Cuse_duration\x80\xE4\xAF\x01\x01\x0Eliquid_clipped\0\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x05\x0Cmining_speed\0\0\x80?\x01\rhand_equipped\x01\x08\x0Ecreative_group\0\x03\x0Bframe_count\x02\0\n\x15minecraft:enchantable\x01\x05value\x0E\x08\x04slot\x0Bmelee_spear\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x11damage_conditions\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\xE1\0\x05\x12min_relative_speed33\x93@\0\n\x13dismount_conditions\x05\tmin_speed\0\x000A\x02\x0Cmax_duration2\0\x05\x12min_relative_speed\0\0\0\0\0\x05\rhitbox_margin\0\0\x80>\x02\x05delay\x0C\0\x05\x0Fdamage_modifier\0\0\0\0\n\x14knockback_conditions\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration\x87\0\0\x05\x11damage_multiplier33s?\0\0\n\x18minecraft:swing_duration\x05\x05value33s?\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\x03\x0Emax_durability\xF4\x03\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x13minecraft:iron_tier\x12minecraft:is_spear\0\n\x19minecraft:piercing_weapon\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\0\0\0" } ;
     pub const IRON_SWORD: Self = Self {
         id: 309,
         registry_key: "minecraft:iron_sword",
@@ -134330,14 +134358,14 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const LEAVES: Self = Self {
-        id: 808,
+        id: 809,
         registry_key: "minecraft:leaves",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const LEAVES2: Self = Self {
-        id: 809,
+        id: 810,
         registry_key: "minecraft:leaves2",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -134358,7 +134386,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const LIGHT_BLOCK: Self = Self {
-        id: 844,
+        id: 845,
         registry_key: "minecraft:light_block",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -134476,7 +134504,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const LIGHT_BLUE_BUNDLE : Self = Self { id : 868 , registry_key : "minecraft:light_blue_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\x08\x0Ecreative_group\0\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x03\x11creative_category\x06\x01\x0Eallow_off_hand\0\x03\x0Emax_stack_size\x02\x01\rhand_equipped\0\x01\x0Fstacked_by_data\0\x03\x06damage\0\x01\x0Eliquid_clipped\0\x03\x11enchantable_value\0\x03\ruse_animation\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\x01\x0Eshould_despawn\x01\x05\x0Cmining_speed\0\0\x80?\x03\x0Cuse_duration\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x11bundle_light_blue\x08\x10bundle_open_back\x1Bbundle_light_blue_open_back\x08\x11bundle_open_front\x1Cbundle_light_blue_open_front\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0\0" } ;
+    pub const LIGHT_BLUE_BUNDLE : Self = Self { id : 869 , registry_key : "minecraft:light_blue_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x03\x06damage\0\x03\x11creative_category\x06\x01\x0Eliquid_clipped\0\x03\x0Bframe_count\x02\x01\rhand_equipped\0\x01\x0Fstacked_by_data\0\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x1Cbundle_light_blue_open_front\x08\x10bundle_open_back\x1Bbundle_light_blue_open_back\x08\x07default\x11bundle_light_blue\0\0\x03\ruse_animation\0\x01\x04foil\0\x03\x0Cuse_duration\0\x01\x0Eallow_off_hand\0\x08\x10enchantable_slot\x04none\x01\x12hidden_in_commands\x02\x01\x0Eshould_despawn\x01\x03\x11enchantable_value\0\x01\x17can_destroy_in_creative\x01\x03\x0Emax_stack_size\x02\x08\x0Ecreative_group\0\x05\x0Cmining_speed\0\0\x80?\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\0\0" } ;
     pub const LIGHT_BLUE_CANDLE: Self = Self {
         id: -416,
         registry_key: "minecraft:light_blue_candle",
@@ -134617,7 +134645,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const LIGHT_GRAY_BUNDLE : Self = Self { id : 869 , registry_key : "minecraft:light_gray_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x01\x0Fstacked_by_data\0\x03\x11creative_category\x06\x01\x0Eliquid_clipped\0\x01\rhand_equipped\0\x05\x0Cmining_speed\0\0\x80?\x08\x0Ecreative_group\0\x03\x0Emax_stack_size\x02\x01\x04foil\0\x03\x06damage\0\x08\x10enchantable_slot\x04none\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x1Cbundle_light_gray_open_front\x08\x10bundle_open_back\x1Bbundle_light_gray_open_back\x08\x07default\x11bundle_light_gray\0\0\x03\x0Cuse_duration\0\x01\x0Eallow_off_hand\0\x03\ruse_animation\0\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x01\x0Eshould_despawn\x01\x03\x11enchantable_value\0\0\t\titem_tags\0\0\0\0" } ;
+    pub const LIGHT_GRAY_BUNDLE : Self = Self { id : 870 , registry_key : "minecraft:light_gray_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x08\x10enchantable_slot\x04none\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x03\x0Bframe_count\x02\x03\x0Emax_stack_size\x02\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x1Bbundle_light_gray_open_back\x08\x11bundle_open_front\x1Cbundle_light_gray_open_front\x08\x07default\x11bundle_light_gray\0\0\x01\x04foil\0\x01\x0Fstacked_by_data\0\x03\x06damage\0\x03\ruse_animation\0\x01\x12hidden_in_commands\x02\x01\x0Eshould_despawn\x01\x03\x11creative_category\x06\x05\x0Cmining_speed\0\0\x80?\x01\rhand_equipped\0\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x03\x11enchantable_value\0\x03\x0Cuse_duration\0\0\t\titem_tags\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\0\0" } ;
     pub const LIGHT_GRAY_CANDLE: Self = Self {
         id: -421,
         registry_key: "minecraft:light_gray_candle",
@@ -134779,7 +134807,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const LIME_BUNDLE : Self = Self { id : 870 , registry_key : "minecraft:lime_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\x03\ruse_animation\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\x03\x11enchantable_value\0\x03\x0Bframe_count\x02\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Eallow_off_hand\0\x03\x11creative_category\x06\x01\x0Eshould_despawn\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bbundle_lime\x08\x10bundle_open_back\x15bundle_lime_open_back\x08\x11bundle_open_front\x16bundle_lime_open_front\0\0\x03\x06damage\0\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x03\x0Emax_stack_size\x02\x03\x0Cuse_duration\0\x01\x0Fstacked_by_data\0\x01\rhand_equipped\0\x01\x17can_destroy_in_creative\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\t\titem_tags\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0\0" } ;
+    pub const LIME_BUNDLE : Self = Self { id : 871 , registry_key : "minecraft:lime_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x08\x10enchantable_slot\x04none\x03\x0Cuse_duration\0\x01\x04foil\0\x03\x0Emax_stack_size\x02\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x16bundle_lime_open_front\x08\x07default\x0Bbundle_lime\x08\x10bundle_open_back\x15bundle_lime_open_back\0\0\x03\x0Bframe_count\x02\x05\x0Cmining_speed\0\0\x80?\x01\rhand_equipped\0\x01\x0Eallow_off_hand\0\x01\x0Fstacked_by_data\0\x01\x0Eliquid_clipped\0\x03\x06damage\0\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x03\x11enchantable_value\0\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0\0" } ;
     pub const LIME_CANDLE: Self = Self {
         id: -418,
         registry_key: "minecraft:lime_candle",
@@ -134998,14 +135026,14 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const LOG: Self = Self {
-        id: 793,
+        id: 794,
         registry_key: "minecraft:log",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const LOG2: Self = Self {
-        id: 822,
+        id: 823,
         registry_key: "minecraft:log2",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -135025,7 +135053,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const MAGENTA_BUNDLE : Self = Self { id : 871 , registry_key : "minecraft:magenta_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x01\x04foil\0\x01\x0Eshould_despawn\x01\x08\x0Ecreative_group\0\x01\x17can_destroy_in_creative\x01\x08\x10enchantable_slot\x04none\x03\x0Cuse_duration\0\x03\x11enchantable_value\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Ebundle_magenta\x08\x10bundle_open_back\x18bundle_magenta_open_back\x08\x11bundle_open_front\x19bundle_magenta_open_front\0\0\x01\x12hidden_in_commands\x02\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Eliquid_clipped\0\x03\x06damage\0\x01\rhand_equipped\0\x01\x0Fstacked_by_data\0\x01\x0Eallow_off_hand\0\x03\x11creative_category\x06\x03\ruse_animation\0\x03\x0Bframe_count\x02\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\0\t\titem_tags\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0\0" } ;
+    pub const MAGENTA_BUNDLE : Self = Self { id : 872 , registry_key : "minecraft:magenta_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\t\titem_tags\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x18bundle_magenta_open_back\x08\x11bundle_open_front\x19bundle_magenta_open_front\x08\x07default\x0Ebundle_magenta\0\0\x01\x0Eshould_despawn\x01\x03\x0Cuse_duration\0\x03\x0Emax_stack_size\x02\x01\x04foil\0\x03\x11enchantable_value\0\x03\x0Bframe_count\x02\x01\x0Fstacked_by_data\0\x01\rhand_equipped\0\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Eliquid_clipped\0\x03\x06damage\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0\0" } ;
     pub const MAGENTA_CANDLE: Self = Self {
         id: -415,
         registry_key: "minecraft:magenta_candle",
@@ -135369,8 +135397,8 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const MELON_SEEDS : Self = Self { id : 293 , registry_key : "minecraft:melon_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x01\x1Aplant_at_any_solid_surface\0\x08\x0Bcrop_result\x14minecraft:melon_stem\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\0\0\0" } ;
-    pub const MELON_SLICE : Self = Self { id : 272 , registry_key : "minecraft:melon_slice" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\tnutrition\x04\x03\ron_use_action\x01\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\x11using_converts_to\0\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const MELON_SEEDS : Self = Self { id : 293 , registry_key : "minecraft:melon_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x14minecraft:melon_stem\0\0\0" } ;
+    pub const MELON_SLICE : Self = Self { id : 272 , registry_key : "minecraft:melon_slice" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\tnutrition\x04\x05\x13saturation_modifier\x9A\x99\x99>\x08\rcooldown_type\0\x03\ron_use_action\x01\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x08\x11using_converts_to\0\0\0\0" } ;
     pub const MELON_STEM: Self = Self {
         id: 105,
         registry_key: "minecraft:melon_stem",
@@ -135414,7 +135442,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const MONSTER_EGG: Self = Self {
-        id: 824,
+        id: 825,
         registry_key: "minecraft:monster_egg",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -135588,7 +135616,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const MUSHROOM_STEW : Self = Self { id : 260 , registry_key : "minecraft:mushroom_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\rcooldown_time\0\x08\rcooldown_type\0\x03\tnutrition\x0C\x03\ron_use_action\x01\x08\x11using_converts_to\x04bowl\x05\x13saturation_modifier\x9A\x99\x19?\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x18minecraft:max_stack_size\x02\0\0" } ;
+    pub const MUSHROOM_STEW : Self = Self { id : 260 , registry_key : "minecraft:mushroom_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x08\rcooldown_type\0\x03\ron_use_action\x01\x08\x11using_converts_to\x04bowl\x03\tnutrition\x0C\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x19?\0\x03\x16minecraft:use_duration@\x03\x18minecraft:max_stack_size\x02\0\0" } ;
     pub const MUSIC_DISC_11: Self = Self {
         id: 554,
         registry_key: "minecraft:music_disc_11",
@@ -135618,7 +135646,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const MUSIC_DISC_BOUNCE: Self = Self {
-        id: 837,
+        id: 838,
         registry_key: "minecraft:music_disc_bounce",
         version: BedrockItemVersion::None,
         component_based: true,
@@ -135639,14 +135667,14 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const MUSIC_DISC_CREATOR: Self = Self {
-        id: 832,
+        id: 833,
         registry_key: "minecraft:music_disc_creator",
         version: BedrockItemVersion::None,
         component_based: true,
         definition_components: b"\n\0\0",
     };
     pub const MUSIC_DISC_CREATOR_MUSIC_BOX: Self = Self {
-        id: 833,
+        id: 834,
         registry_key: "minecraft:music_disc_creator_music_box",
         version: BedrockItemVersion::None,
         component_based: true,
@@ -135660,7 +135688,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const MUSIC_DISC_LAVA_CHICKEN: Self = Self {
-        id: 836,
+        id: 837,
         registry_key: "minecraft:music_disc_lava_chicken",
         version: BedrockItemVersion::None,
         component_based: true,
@@ -135695,7 +135723,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const MUSIC_DISC_PRECIPICE: Self = Self {
-        id: 834,
+        id: 835,
         registry_key: "minecraft:music_disc_precipice",
         version: BedrockItemVersion::None,
         component_based: true,
@@ -135723,7 +135751,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const MUSIC_DISC_TEARS: Self = Self {
-        id: 835,
+        id: 836,
         registry_key: "minecraft:music_disc_tears",
         version: BedrockItemVersion::None,
         component_based: true,
@@ -135743,7 +135771,7 @@ impl BedrockItem {
         component_based: true,
         definition_components: b"\n\0\0",
     };
-    pub const MUTTON : Self = Self { id : 560 , registry_key : "minecraft:mutton" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x99>\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x04\x08\rcooldown_type\0\x08\x11using_converts_to\0\x03\ron_use_action\x01\x03\rcooldown_time\0\0\0\0" } ;
+    pub const MUTTON : Self = Self { id : 560 , registry_key : "minecraft:mutton" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\x11using_converts_to\0\x03\tnutrition\x04\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0\0" } ;
     pub const MYCELIUM: Self = Self {
         id: 110,
         registry_key: "minecraft:mycelium",
@@ -135835,7 +135863,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const NETHER_WART : Self = Self { id : 294 , registry_key : "minecraft:nether_wart" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\x0Bcrop_result\x15minecraft:nether_wart\t\x08plant_at\x08\x02\tsoul_sand\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\0\0\0" } ;
+    pub const NETHER_WART : Self = Self { id : 294 , registry_key : "minecraft:nether_wart" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x15minecraft:nether_wart\t\x08plant_at\x08\x02\tsoul_sand\0\0\0" } ;
     pub const NETHER_WART_BLOCK: Self = Self {
         id: 214,
         registry_key: "minecraft:nether_wart_block",
@@ -135941,7 +135969,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const NETHERITE_SPEAR : Self = Self { id : 858 , registry_key : "minecraft:netherite_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x12minecraft:cooldown\x05\x08duration33\x93?\x08\x08category\x05spear\x08\x04type\x06attack\0\n\x10minecraft:damage\x02\x05value\x05\0\0\n\x16minecraft:display_name\x08\x05value\x19item.netherite_spear.name\0\n\x15minecraft:enchantable\x01\x05value\x0F\x08\x04slot\x0Bmelee_spear\0\n\x18minecraft:swing_duration\x05\x05value33\x93?\0\n\x18minecraft:fire_resistant\x01\x05value\x01\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\0\t\titem_tags\x08\x04\x18minecraft:netherite_tier\x12minecraft:is_spear\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Fitem.netherite_spear.attack_hit\x08\x0Battack_miss item.netherite_spear.attack_miss\0\n\x14minecraft:durability\x03\x0Emax_durability\xDC\x1F\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\x08\rrepair_amount)context.other->query.remaining_durability\t\x05items\n\x02\x08\x04name\x19minecraft:netherite_spear\0\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04name\x19minecraft:netherite_ingot\0\0\0\n\x0Fitem_properties\x08\x0Ecreative_group\0\x01\x04foil\0\x05\x0Cmining_speed\0\0\x80?\x03\x06damage\n\x03\x11enchantable_value\x1E\x01\x12hidden_in_commands\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Fnetherite_spear\0\0\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\x03\ruse_animation\0\x03\x11creative_category\x06\x01\x17can_destroy_in_creative\x01\x03\x0Emax_stack_size\x02\x01\rhand_equipped\x01\x01\x0Eliquid_clipped\0\x01\x0Fstacked_by_data\0\x08\x10enchantable_slot\x0Bmelee_spear\x03\x0Cuse_duration\x80\xE4\xAF\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x18minecraft:netherite_tier\x12minecraft:is_spear\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x08\x0Bstart_sound\x18item.netherite_spear.use\x05\x11movement_modifier\0\0\x80?\x05\x0Cuse_duration\0\xA0\x8CG\x08\x0Bstart_using\x06always\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\x0Fdamage_modifier\0\0\0\0\n\x11damage_conditions\x02\x0Cmax_duration\xAF\0\x05\tmin_speed\0\0\0\0\x05\x12min_relative_speed33\x93@\0\x05\x11damage_multiplier\x9A\x99\x99?\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x13dismount_conditions\x02\x0Cmax_duration2\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0\x10A\0\x05\rhitbox_margin\0\0\x80>\x02\x05delay\x08\0\n\x14knockback_conditions\x02\x0Cmax_durationn\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed33\xA3@\0\0\0\0\0" } ;
+    pub const NETHERITE_SPEAR : Self = Self { id : 859 , registry_key : "minecraft:netherite_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x19minecraft:netherite_spear\0\x08\rrepair_amount)context.other->query.remaining_durability\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04name\x19minecraft:netherite_ingot\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x19minecraft:piercing_weapon\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\0\n\x0Fitem_properties\x03\x0Bframe_count\x02\x03\ruse_animation\0\x08\x0Ecreative_group\0\x03\x11creative_category\x06\x01\rhand_equipped\x01\x01\x12hidden_in_commands\x02\x01\x0Eallow_off_hand\0\x08\x10enchantable_slot\x0Bmelee_spear\x01\x0Fstacked_by_data\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Fnetherite_spear\0\0\x05\x0Cmining_speed\0\0\x80?\x01\x17can_destroy_in_creative\x01\x03\x06damage\n\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\x0Emax_stack_size\x02\x03\x11enchantable_value\x1E\x01\x0Eshould_despawn\x01\x01\x0Eliquid_clipped\0\x01\x04foil\0\0\n\x18minecraft:fire_resistant\x01\x05value\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x18minecraft:netherite_tier\x12minecraft:is_spear\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Fitem.netherite_spear.attack_hit\x08\x0Battack_miss item.netherite_spear.attack_miss\0\n\x17minecraft:use_modifiers\x08\x0Bstart_sound\x18item.netherite_spear.use\x05\x11movement_modifier\0\0\x80?\x05\x0Cuse_duration\0\xA0\x8CG\x08\x0Bstart_using\x06always\x01\x0Femit_vibrations\0\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x02\x05delay\x08\0\x05\x11damage_multiplier\x9A\x99\x99?\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x14knockback_conditions\x02\x0Cmax_durationn\0\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\0\n\x13dismount_conditions\x05\tmin_speed\0\0\x10A\x02\x0Cmax_duration2\0\x05\x12min_relative_speed\0\0\0\0\0\x05\x0Fdamage_modifier\0\0\0\0\n\x11damage_conditions\x02\x0Cmax_duration\xAF\0\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\0\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\x03\x0Emax_durability\xDC\x1F\0\n\x16minecraft:display_name\x08\x05value\x19item.netherite_spear.name\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x0F\0\n\x10minecraft:damage\x02\x05value\x05\0\0\n\x12minecraft:cooldown\x08\x04type\x06attack\x08\x08category\x05spear\x05\x08duration33\x93?\0\n\x18minecraft:swing_duration\x05\x05value33\x93?\0\t\titem_tags\x08\x04\x18minecraft:netherite_tier\x12minecraft:is_spear\0\0" } ;
     pub const NETHERITE_SWORD: Self = Self {
         id: 619,
         registry_key: "minecraft:netherite_sword",
@@ -136138,7 +136166,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const OMINOUS_TRIAL_KEY : Self = Self { id : 879 , registry_key : "minecraft:ominous_trial_key" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:display_name\x08\x05value\x1Bitem.ominous_trial_key.name\0\t\titem_tags\0\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x11ominous_trial_key\0\0\x01\x12hidden_in_commands\x02\x03\x11enchantable_value\0\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x05\x0Cmining_speed\0\0\x80?\x03\x0Cuse_duration\0\x01\x0Eallow_off_hand\0\x03\x06damage\0\x01\x04foil\0\x08\x10enchantable_slot\x04none\x01\x0Fstacked_by_data\0\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x01\rhand_equipped\0\x03\x0Emax_stack_size\x80\x01\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x03\x11creative_category\x08\0\0\0" } ;
+    pub const OMINOUS_TRIAL_KEY : Self = Self { id : 880 , registry_key : "minecraft:ominous_trial_key" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:display_name\x08\x05value\x1Bitem.ominous_trial_key.name\0\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x01\x0Eallow_off_hand\0\x03\x06damage\0\x03\x0Bframe_count\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x11ominous_trial_key\0\0\x01\x0Eshould_despawn\x01\x05\x0Cmining_speed\0\0\x80?\x08\x0Ecreative_group\0\x01\rhand_equipped\0\x03\x0Cuse_duration\0\x03\x11enchantable_value\0\x01\x04foil\0\x03\ruse_animation\0\x01\x0Eliquid_clipped\0\x03\x11creative_category\x08\x03\x0Emax_stack_size\x80\x01\x08\x10enchantable_slot\x04none\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\0\t\titem_tags\0\0\0\0" } ;
     pub const OPEN_EYEBLOSSOM: Self = Self {
         id: -1018,
         registry_key: "minecraft:open_eyeblossom",
@@ -136146,7 +136174,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const ORANGE_BUNDLE : Self = Self { id : 872 , registry_key : "minecraft:orange_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x0Fitem_properties\x01\rhand_equipped\0\x01\x0Eallow_off_hand\0\x03\x0Emax_stack_size\x02\x08\x0Ecreative_group\0\x03\x11creative_category\x06\x03\x11enchantable_value\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x17bundle_orange_open_back\x08\x07default\rbundle_orange\x08\x11bundle_open_front\x18bundle_orange_open_front\0\0\x03\ruse_animation\0\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x04none\x01\x12hidden_in_commands\x02\x01\x0Eliquid_clipped\0\x01\x17can_destroy_in_creative\x01\x05\x0Cmining_speed\0\0\x80?\x01\x0Fstacked_by_data\0\x01\x04foil\0\x03\x0Bframe_count\x02\x03\x06damage\0\x03\x0Cuse_duration\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0\0" } ;
+    pub const ORANGE_BUNDLE : Self = Self { id : 873 , registry_key : "minecraft:orange_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x01\x0Eallow_off_hand\0\x03\x0Emax_stack_size\x02\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x18bundle_orange_open_front\x08\x07default\rbundle_orange\x08\x10bundle_open_back\x17bundle_orange_open_back\0\0\x01\x0Eshould_despawn\x01\x03\x0Cuse_duration\0\x01\x12hidden_in_commands\x02\x01\x0Eliquid_clipped\0\x08\x10enchantable_slot\x04none\x03\x0Bframe_count\x02\x08\x0Ecreative_group\0\x03\x11enchantable_value\0\x01\x04foil\0\x01\x0Fstacked_by_data\0\x01\rhand_equipped\0\x01\x17can_destroy_in_creative\x01\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x03\x11creative_category\x06\x03\x06damage\0\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\t\titem_tags\0\0\0\0" } ;
     pub const ORANGE_CANDLE: Self = Self {
         id: -414,
         registry_key: "minecraft:orange_candle",
@@ -136728,7 +136756,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const PINK_BUNDLE : Self = Self { id : 873 , registry_key : "minecraft:pink_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x01\x04foil\0\x03\x0Cuse_duration\0\x01\x0Eliquid_clipped\0\x08\x10enchantable_slot\x04none\x03\x0Bframe_count\x02\x01\rhand_equipped\0\x01\x0Eallow_off_hand\0\x05\x0Cmining_speed\0\0\x80?\x03\x0Emax_stack_size\x02\x01\x0Fstacked_by_data\0\x03\x11creative_category\x06\x08\x0Ecreative_group\0\x01\x12hidden_in_commands\x02\x03\x06damage\0\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x16bundle_pink_open_front\x08\x10bundle_open_back\x15bundle_pink_open_back\x08\x07default\x0Bbundle_pink\0\0\x03\x11enchantable_value\0\x01\x0Eshould_despawn\x01\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\t\titem_tags\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0\0" } ;
+    pub const PINK_BUNDLE : Self = Self { id : 874 , registry_key : "minecraft:pink_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Fitem_properties\x03\x11creative_category\x06\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bbundle_pink\x08\x10bundle_open_back\x15bundle_pink_open_back\x08\x11bundle_open_front\x16bundle_pink_open_front\0\0\x08\x0Ecreative_group\0\x08\x10enchantable_slot\x04none\x01\x04foil\0\x01\x12hidden_in_commands\x02\x03\x0Emax_stack_size\x02\x01\x0Eliquid_clipped\0\x05\x0Cmining_speed\0\0\x80?\x03\x11enchantable_value\0\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x03\x0Cuse_duration\0\x01\rhand_equipped\0\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x01\x0Fstacked_by_data\0\x03\x06damage\0\0\t\titem_tags\0\0\0\0" } ;
     pub const PINK_CANDLE: Self = Self {
         id: -419,
         registry_key: "minecraft:pink_candle",
@@ -136911,9 +136939,9 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const PITCHER_POD : Self = Self { id : 297 , registry_key : "minecraft:pitcher_pod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\x0Bcrop_result\x16minecraft:pitcher_crop\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\t\x08plant_at\x08\x02\x12minecraft:farmland\0\0\0" } ;
+    pub const PITCHER_POD : Self = Self { id : 297 , registry_key : "minecraft:pitcher_pod" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\x0Bcrop_result\x16minecraft:pitcher_crop\x01\x1Aplant_at_any_solid_surface\0\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\0\0\0" } ;
     pub const PLANKS: Self = Self {
-        id: 816,
+        id: 817,
         registry_key: "minecraft:planks",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -136947,7 +136975,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const POISONOUS_POTATO : Self = Self { id : 282 , registry_key : "minecraft:poisonous_potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x05\x13saturation_modifier\x9A\x99\x99>\x03\rcooldown_time\0\t\x07effects\n\x02\x03\x02id&\x03\tamplifier\0\x08\x04name\x06poison\x08\rdescriptionId\rpotion.poison\x03\x08duration\n\x05\x06chance\x9A\x99\x19?\0\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x03\ron_use_action\x01\x03\tnutrition\x04\0\0\0" } ;
+    pub const POISONOUS_POTATO : Self = Self { id : 282 , registry_key : "minecraft:poisonous_potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\tnutrition\x04\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x08\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\rcooldown_type\0\x03\rcooldown_time\0\t\x07effects\n\x02\x08\rdescriptionId\rpotion.poison\x03\x02id&\x08\x04name\x06poison\x05\x06chance\x9A\x99\x19?\x03\tamplifier\0\x03\x08duration\n\0\0\x03\x16minecraft:use_duration@\0\0" } ;
     pub const POLAR_BEAR_SPAWN_EGG: Self = Self {
         id: 477,
         registry_key: "minecraft:polar_bear_spawn_egg",
@@ -137424,7 +137452,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const PORKCHOP : Self = Self { id : 262 , registry_key : "minecraft:porkchop" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\rcooldown_time\0\x08\x11using_converts_to\0\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x99>\x03\tnutrition\x06\0\0\0" } ;
+    pub const PORKCHOP : Self = Self { id : 262 , registry_key : "minecraft:porkchop" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\tnutrition\x06\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x99>\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x03\ron_use_action\x01\0\0\0" } ;
     pub const PORTAL: Self = Self {
         id: 90,
         registry_key: "minecraft:portal",
@@ -137439,7 +137467,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const POTATO : Self = Self { id : 280 , registry_key : "minecraft:potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:seed\x08\x0Bcrop_result\x12minecraft:potatoes\x08\rplant_at_face\x02up\x01\x1Aplant_at_any_solid_surface\0\t\x08plant_at\x08\x02\x12minecraft:farmland\0\n\x0Eminecraft:food\x05\x13saturation_modifier\x9A\x99\x99>\x03\rcooldown_time\0\x08\x11using_converts_to\0\x08\rcooldown_type\0\x03\tnutrition\x02\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\0\0\0" } ;
+    pub const POTATO : Self = Self { id : 280 , registry_key : "minecraft:potato" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x99>\x03\ron_use_action\x01\x03\rcooldown_time\0\x03\tnutrition\x02\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x08\rcooldown_type\0\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:seed\x08\x0Bcrop_result\x12minecraft:potatoes\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\x01\x1Aplant_at_any_solid_surface\0\0\0\0" } ;
     pub const POTATOES: Self = Self {
         id: 142,
         registry_key: "minecraft:potatoes",
@@ -137573,7 +137601,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const PUFFERFISH : Self = Self { id : 267 , registry_key : "minecraft:pufferfish" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\t\x07effects\n\x06\x08\rdescriptionId\rpotion.poison\x03\x02id&\x05\x06chance\0\0\x80?\x03\tamplifier\x02\x08\x04name\x06poison\x03\x08durationx\0\x05\x06chance\0\0\x80?\x03\tamplifier\0\x03\x08duration\x1E\x08\rdescriptionId\x10potion.confusion\x03\x02id\x12\x08\x04name\x06nausea\0\x08\rdescriptionId\rpotion.hunger\x03\x08duration\x1E\x03\tamplifier\x04\x03\x02id\"\x08\x04name\x06hunger\x05\x06chance\0\0\x80?\0\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x03\tnutrition\x02\x08\rcooldown_type\0\x03\ron_use_action\x01\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\xCD\xCC\xCC=\0\x03\x16minecraft:use_duration@\x01\x19minecraft:stacked_by_data\x01\0\0" } ;
+    pub const PUFFERFISH : Self = Self { id : 267 , registry_key : "minecraft:pufferfish" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\t\x07effects\n\x06\x05\x06chance\0\0\x80?\x08\rdescriptionId\rpotion.poison\x03\x08durationx\x03\x02id&\x03\tamplifier\x02\x08\x04name\x06poison\0\x08\rdescriptionId\x10potion.confusion\x03\tamplifier\0\x05\x06chance\0\0\x80?\x03\x08duration\x1E\x03\x02id\x12\x08\x04name\x06nausea\0\x08\rdescriptionId\rpotion.hunger\x05\x06chance\0\0\x80?\x03\x02id\"\x03\x08duration\x1E\x03\tamplifier\x04\x08\x04name\x06hunger\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x02\x08\rcooldown_type\0\x03\ron_use_action\x01\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\0\0" } ;
     pub const PUFFERFISH_BUCKET: Self = Self {
         id: 370,
         registry_key: "minecraft:pufferfish_bucket",
@@ -137595,8 +137623,8 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const PUMPKIN_PIE : Self = Self { id : 284 , registry_key : "minecraft:pumpkin_pie" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\ron_use_action\x01\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x10\x08\rcooldown_type\0\x08\x11using_converts_to\0\x05\x13saturation_modifier\x9A\x99\x99>\x01\x0Ecan_always_eat\0\0\x03\x16minecraft:use_duration@\0\0" } ;
-    pub const PUMPKIN_SEEDS : Self = Self { id : 292 , registry_key : "minecraft:pumpkin_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x01\x1Aplant_at_any_solid_surface\0\x08\rplant_at_face\x02up\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\x0Bcrop_result\x16minecraft:pumpkin_stem\0\0\0" } ;
+    pub const PUMPKIN_PIE : Self = Self { id : 284 , registry_key : "minecraft:pumpkin_pie" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\rcooldown_time\0\x05\x13saturation_modifier\x9A\x99\x99>\x03\ron_use_action\x01\x03\tnutrition\x10\x08\x11using_converts_to\0\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const PUMPKIN_SEEDS : Self = Self { id : 292 , registry_key : "minecraft:pumpkin_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\rplant_at_face\x02up\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\x08\x0Bcrop_result\x16minecraft:pumpkin_stem\0\0\0" } ;
     pub const PUMPKIN_STEM: Self = Self {
         id: 104,
         registry_key: "minecraft:pumpkin_stem",
@@ -137604,7 +137632,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const PURPLE_BUNDLE : Self = Self { id : 874 , registry_key : "minecraft:purple_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\t\rallowed_items\0\0\0\n\x0Fitem_properties\x03\x0Emax_stack_size\x02\x08\x0Ecreative_group\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eshould_despawn\x01\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x18bundle_purple_open_front\x08\x07default\rbundle_purple\x08\x10bundle_open_back\x17bundle_purple_open_back\0\0\x03\x11enchantable_value\0\x01\x12hidden_in_commands\x02\x03\x11creative_category\x06\x01\x0Fstacked_by_data\0\x03\x06damage\0\x01\x0Eliquid_clipped\0\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x08\x10enchantable_slot\x04none\x03\x0Cuse_duration\0\x03\x0Bframe_count\x02\x01\x04foil\0\x01\x0Eallow_off_hand\0\x01\rhand_equipped\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\0\0" } ;
+    pub const PURPLE_BUNDLE : Self = Self { id : 875 , registry_key : "minecraft:purple_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\0\0\n\x0Fitem_properties\x03\x0Cuse_duration\0\x03\x0Bframe_count\x02\x01\x0Fstacked_by_data\0\x01\rhand_equipped\0\x03\x11creative_category\x06\x05\x0Cmining_speed\0\0\x80?\x01\x17can_destroy_in_creative\x01\x01\x04foil\0\x03\x11enchantable_value\0\x03\x06damage\0\x01\x0Eliquid_clipped\0\x08\x0Ecreative_group\0\x03\ruse_animation\0\x01\x0Eallow_off_hand\0\x03\x0Emax_stack_size\x02\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x18bundle_purple_open_front\x08\x07default\rbundle_purple\x08\x10bundle_open_back\x17bundle_purple_open_back\0\0\x01\x0Eshould_despawn\x01\x01\x12hidden_in_commands\x02\x08\x10enchantable_slot\x04none\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x16minecraft:storage_item\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\0\0\0" } ;
     pub const PURPLE_CANDLE: Self = Self {
         id: -423,
         registry_key: "minecraft:purple_candle",
@@ -137836,7 +137864,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const RABBIT : Self = Self { id : 288 , registry_key : "minecraft:rabbit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x99>\x03\rcooldown_time\0\x08\x11using_converts_to\0\x03\tnutrition\x06\x08\rcooldown_type\0\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const RABBIT : Self = Self { id : 288 , registry_key : "minecraft:rabbit" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\x11using_converts_to\0\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x06\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\x9A\x99\x99>\x03\ron_use_action\x01\0\0\0" } ;
     pub const RABBIT_FOOT: Self = Self {
         id: 538,
         registry_key: "minecraft:rabbit_foot",
@@ -137858,7 +137886,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const RABBIT_STEW : Self = Self { id : 290 , registry_key : "minecraft:rabbit_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x08\rcooldown_type\0\x03\tnutrition\x14\x08\x11using_converts_to\x04bowl\x05\x13saturation_modifier\x9A\x99\x19?\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x16minecraft:use_duration@\x03\x18minecraft:max_stack_size\x02\0\0" } ;
+    pub const RABBIT_STEW : Self = Self { id : 290 , registry_key : "minecraft:rabbit_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\tnutrition\x14\x08\rcooldown_type\0\x03\ron_use_action\x01\x08\x11using_converts_to\x04bowl\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x19?\0\x03\x18minecraft:max_stack_size\x02\0\0" } ;
     pub const RAIL: Self = Self {
         id: 66,
         registry_key: "minecraft:rail",
@@ -137936,7 +137964,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const RED_BUNDLE : Self = Self { id : 875 , registry_key : "minecraft:red_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x03\ruse_animation\0\x03\x11creative_category\x06\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x14bundle_red_open_back\x08\x07default\nbundle_red\x08\x11bundle_open_front\x15bundle_red_open_front\0\0\x01\x04foil\0\x03\x11enchantable_value\0\x03\x0Emax_stack_size\x02\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x01\x12hidden_in_commands\x02\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\0\x03\x06damage\0\x03\x0Bframe_count\x02\x01\rhand_equipped\0\x08\x10enchantable_slot\x04none\x01\x0Eallow_off_hand\0\x05\x0Cmining_speed\0\0\x80?\0\t\titem_tags\0\0\n\x16minecraft:storage_item\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\x01\x1Aallow_nested_storage_items\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0\0" } ;
+    pub const RED_BUNDLE : Self = Self { id : 876 , registry_key : "minecraft:red_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x18minecraft:max_stack_size\x01\x05value\x01\0\t\titem_tags\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x03\x0Cuse_duration\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x03\x06damage\0\x08\x0Ecreative_group\0\x03\x0Bframe_count\x02\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x14bundle_red_open_back\x08\x11bundle_open_front\x15bundle_red_open_front\x08\x07default\nbundle_red\0\0\x01\rhand_equipped\0\x03\x0Emax_stack_size\x02\x03\ruse_animation\0\x01\x04foil\0\x01\x0Eallow_off_hand\0\x01\x17can_destroy_in_creative\x01\x01\x0Eliquid_clipped\0\x01\x0Eshould_despawn\x01\x03\x11enchantable_value\0\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\x05\x0Cmining_speed\0\0\x80?\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\0\0\0" } ;
     pub const RED_CANDLE: Self = Self {
         id: -427,
         registry_key: "minecraft:red_candle",
@@ -138008,7 +138036,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const RED_FLOWER: Self = Self {
-        id: 813,
+        id: 814,
         registry_key: "minecraft:red_flower",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -138126,7 +138154,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const RED_SHRUB : Self = Self { id : 852 , registry_key : "minecraft:red_shrub" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x16minecraft:block_placer\x08\x05block\x13minecraft:red_shrub\x01\x10replaceBlockItem\x01\t\x06use_on\0\0\x01\x10alignedPlacement\0\x01\x11canUseBlockAsIcon\x01\0\n\x1Dminecraft:publisher_on_use_on\x01\x13autoSucceedOnClient\0\0\t\titem_tags\0\0\n\x16minecraft:display_name\x08\x05value\x13tile.red_shrub.name\0\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x03\ruse_animation\0\x03\x06damage\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\tred_shrub\0\0\x01\x0Eshould_despawn\x01\x03\x0Cuse_duration\0\x01\x04foil\0\x03\x11creative_category\x04\x08\x10enchantable_slot\x04none\x01\x0Eliquid_clipped\0\x03\x11enchantable_value\0\x01\x0Fstacked_by_data\0\x03\x0Emax_stack_size\x80\x01\x08\x0Ecreative_group\0\x03\x0Bframe_count\x02\x01\rhand_equipped\0\x01\x12hidden_in_commands\x02\x05\x0Cmining_speed\0\0\x80?\x01\x0Eallow_off_hand\0\0\n\x15minecraft:compostable\x01\x11composting_chance\x1E\0\0\0" } ;
+    pub const RED_SHRUB : Self = Self { id : 853 , registry_key : "minecraft:red_shrub" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x15minecraft:compostable\x01\x11composting_chance\x1E\0\n\x1Dminecraft:publisher_on_use_on\x01\x13autoSucceedOnClient\0\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x07default\tred_shrub\0\0\x01\x04foil\0\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x03\x11enchantable_value\0\x03\x0Emax_stack_size\x80\x01\x01\x0Fstacked_by_data\0\x03\x06damage\0\x03\x11creative_category\x04\x08\x10enchantable_slot\x04none\x08\x0Ecreative_group\0\x01\x0Eliquid_clipped\0\x01\x12hidden_in_commands\x02\x03\x0Bframe_count\x02\x03\x0Cuse_duration\0\x01\rhand_equipped\0\x05\x0Cmining_speed\0\0\x80?\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\0\n\x16minecraft:display_name\x08\x05value\x13tile.red_shrub.name\0\t\titem_tags\0\0\n\x16minecraft:block_placer\x01\x10alignedPlacement\0\x08\x05block\x13minecraft:red_shrub\t\x06use_on\0\0\x01\x11canUseBlockAsIcon\x01\x01\x10replaceBlockItem\x01\0\0\0" } ;
     pub const RED_SHULKER_BOX: Self = Self {
         id: -626,
         registry_key: "minecraft:red_shulker_box",
@@ -138337,7 +138365,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const ROTTEN_FLESH : Self = Self { id : 277 , registry_key : "minecraft:rotten_flesh" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\ron_use_action\x01\t\x07effects\n\x02\x03\tamplifier\0\x08\x04name\x06hunger\x03\x02id\"\x03\x08duration<\x08\rdescriptionId\rpotion.hunger\x05\x06chance\xCD\xCCL?\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x08\rcooldown_type\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\tnutrition\x08\x08\x11using_converts_to\0\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const ROTTEN_FLESH : Self = Self { id : 277 , registry_key : "minecraft:rotten_flesh" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\x11using_converts_to\0\x03\ron_use_action\x01\x03\tnutrition\x08\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\rcooldown_time\0\x08\rcooldown_type\0\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\t\x07effects\n\x02\x08\rdescriptionId\rpotion.hunger\x05\x06chance\xCD\xCCL?\x03\tamplifier\0\x03\x08duration<\x03\x02id\"\x08\x04name\x06hunger\0\0\0\0" } ;
     pub const SADDLE: Self = Self {
         id: 374,
         registry_key: "minecraft:saddle",
@@ -138345,7 +138373,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const SALMON : Self = Self { id : 265 , registry_key : "minecraft:salmon" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x03\rcooldown_time\0\x03\tnutrition\x04\x03\ron_use_action\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCC\xCC=\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const SALMON : Self = Self { id : 265 , registry_key : "minecraft:salmon" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\ron_use_action\x01\x03\tnutrition\x04\x01\x0Ecan_always_eat\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\rcooldown_time\0\0\x01\x19minecraft:stacked_by_data\x01\0\0" } ;
     pub const SALMON_BUCKET: Self = Self {
         id: 368,
         registry_key: "minecraft:salmon_bucket",
@@ -138403,7 +138431,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const SAPLING: Self = Self {
-        id: 807,
+        id: 808,
         registry_key: "minecraft:sapling",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -138514,7 +138542,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const SHELF_MUSHROOM : Self = Self { id : 853 , registry_key : "minecraft:shelf_mushroom" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\x08\x02\x1Cminecraft:mushrooms_for_stew\n\x16minecraft:block_placer\x01\x10replaceBlockItem\x01\x01\x11canUseBlockAsIcon\x01\t\x06use_on\0\0\x08\x05block\x18minecraft:shelf_mushroom\x01\x10alignedPlacement\0\0\n\x15minecraft:compostable\x01\x11composting_chanceA\0\n\x1Dminecraft:publisher_on_use_on\x01\x13autoSucceedOnClient\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x02\x1Cminecraft:mushrooms_for_stew\0\n\x16minecraft:display_name\x08\x05value\x18tile.shelf_mushroom.name\0\n\x0Fitem_properties\x08\x10enchantable_slot\x04none\x03\x0Bframe_count\x02\x01\rhand_equipped\0\x03\x0Emax_stack_size\x80\x01\x03\x06damage\0\x01\x0Fstacked_by_data\0\x03\x11enchantable_value\0\x01\x12hidden_in_commands\x02\x03\x0Cuse_duration\0\x08\x0Ecreative_group\0\x05\x0Cmining_speed\0\0\x80?\x03\x11creative_category\x04\x01\x0Eshould_despawn\x01\x01\x04foil\0\x01\x0Eliquid_clipped\0\x01\x0Eallow_off_hand\0\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\0\0\0" } ;
+    pub const SHELF_MUSHROOM : Self = Self { id : 854 , registry_key : "minecraft:shelf_mushroom" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\x08\x02\x1Cminecraft:mushrooms_for_stew\n\x0Fitem_properties\x08\x0Ecreative_group\0\x01\x04foil\0\x01\rhand_equipped\0\x01\x12hidden_in_commands\x02\x03\x0Emax_stack_size\x80\x01\x01\x0Eallow_off_hand\0\x01\x0Fstacked_by_data\0\x08\x10enchantable_slot\x04none\x01\x0Eliquid_clipped\0\x03\x06damage\0\x03\x11creative_category\x04\x03\x11enchantable_value\0\x03\x0Bframe_count\x02\x05\x0Cmining_speed\0\0\x80?\x03\x0Cuse_duration\0\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\0\n\x16minecraft:display_name\x08\x05value\x18tile.shelf_mushroom.name\0\n\x15minecraft:compostable\x01\x11composting_chanceA\0\n\x16minecraft:block_placer\x01\x10alignedPlacement\0\x01\x10replaceBlockItem\x01\x01\x11canUseBlockAsIcon\x01\t\x06use_on\0\0\x08\x05block\x18minecraft:shelf_mushroom\0\n\x1Dminecraft:publisher_on_use_on\x01\x13autoSucceedOnClient\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x02\x1Cminecraft:mushrooms_for_stew\0\0\0" } ;
     pub const SHELTER_POTTERY_SHERD: Self = Self {
         id: 692,
         registry_key: "minecraft:shelter_pottery_sherd",
@@ -138551,7 +138579,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const SHULKER_BOX: Self = Self {
-        id: 830,
+        id: 831,
         registry_key: "minecraft:shulker_box",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -138901,13 +138929,13 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const SPAWN_EGG: Self = Self {
-        id: 850,
+        id: 851,
         registry_key: "minecraft:spawn_egg",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const SPIDER_EYE : Self = Self { id : 278 , registry_key : "minecraft:spider_eye" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x03\tnutrition\x04\x08\x11using_converts_to\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\xCD\xCCL?\t\x07effects\n\x02\x03\x08duration\n\x08\rdescriptionId\rpotion.poison\x03\tamplifier\0\x05\x06chance\0\0\x80?\x03\x02id&\x08\x04name\x06poison\0\x08\rcooldown_type\0\x03\ron_use_action\x01\0\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const SPIDER_EYE : Self = Self { id : 278 , registry_key : "minecraft:spider_eye" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\rcooldown_time\0\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\rcooldown_type\0\t\x07effects\n\x02\x08\x04name\x06poison\x03\x08duration\n\x05\x06chance\0\0\x80?\x03\x02id&\x08\rdescriptionId\rpotion.poison\x03\tamplifier\0\0\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCCL?\x03\tnutrition\x04\x01\x0Ecan_always_eat\0\x03\ron_use_action\x01\0\0\0" } ;
     pub const SPIDER_SPAWN_EGG: Self = Self {
         id: 450,
         registry_key: "minecraft:spider_spawn_egg",
@@ -139105,14 +139133,14 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const STAINED_GLASS: Self = Self {
-        id: 828,
+        id: 829,
         registry_key: "minecraft:stained_glass",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const STAINED_GLASS_PANE: Self = Self {
-        id: 829,
+        id: 830,
         registry_key: "minecraft:stained_glass_pane",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -139175,28 +139203,28 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const STONE_BLOCK_SLAB: Self = Self {
-        id: 797,
+        id: 798,
         registry_key: "minecraft:stone_block_slab",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const STONE_BLOCK_SLAB2: Self = Self {
-        id: 798,
+        id: 799,
         registry_key: "minecraft:stone_block_slab2",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const STONE_BLOCK_SLAB3: Self = Self {
-        id: 799,
+        id: 800,
         registry_key: "minecraft:stone_block_slab3",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
     pub const STONE_BLOCK_SLAB4: Self = Self {
-        id: 800,
+        id: 801,
         registry_key: "minecraft:stone_block_slab4",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -139272,7 +139300,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const STONE_SPEAR : Self = Self { id : 859 , registry_key : "minecraft:stone_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\0\n\x0Fitem_properties\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\x0Bframe_count\x02\x03\x06damage\x04\x08\x0Ecreative_group\0\x03\x0Emax_stack_size\x02\x03\x11enchantable_value\n\x01\x12hidden_in_commands\x02\x01\x0Eallow_off_hand\0\x05\x0Cmining_speed\0\0\x80?\x03\x11creative_category\x06\x01\x0Fstacked_by_data\0\x08\x10enchantable_slot\x0Bmelee_spear\x01\x0Eliquid_clipped\0\x01\rhand_equipped\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bstone_spear\0\0\x01\x0Eshould_despawn\x01\x03\ruse_animation\0\x01\x17can_destroy_in_creative\x01\x01\x04foil\0\0\n\x10minecraft:damage\x02\x05value\x02\0\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\x03\x0Emax_durability\x84\x02\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\x08\rrepair_amount)context.other->query.remaining_durability\t\x05items\n\x02\x08\x04name\x15minecraft:stone_spear\0\0\t\x05items\n\x02\x08\x04tags,q.all_tags('minecraft:stone_tool_materials')\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\0\0\n\x17minecraft:use_modifiers\x05\x0Cuse_duration\0\xA0\x8CG\x01\x0Femit_vibrations\0\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_sound\x14item.stone_spear.use\x08\x0Bstart_using\x06always\0\t\titem_tags\x08\x04\x14minecraft:stone_tier\x12minecraft:is_spear\n\x12minecraft:cooldown\x05\x08duration\0\0@?\x08\x04type\x06attack\x08\x08category\x05spear\0\n\x15minecraft:enchantable\x01\x05value\x05\x08\x04slot\x0Bmelee_spear\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\x02\x05delay\x0E\0\n\x11damage_conditions\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\x02\x0Cmax_duration\x13\x01\0\x05\x11damage_multiplier\x85\xEBQ?\n\x14knockback_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration\xB4\0\x05\tmin_speed33\xA3@\0\x05\x0Fdamage_modifier\0\0\0\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_durationZ\0\x05\tmin_speed\0\0PA\0\0\0\n\x18minecraft:swing_duration\x05\x05value\0\0@?\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Bitem.stone_spear.attack_hit\x08\x0Battack_miss\x1Citem.stone_spear.attack_miss\0\n\x16minecraft:display_name\x08\x05value\x15item.stone_spear.name\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x14minecraft:stone_tier\x12minecraft:is_spear\0\0\0" } ;
+    pub const STONE_SPEAR : Self = Self { id : 860 , registry_key : "minecraft:stone_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x12minecraft:cooldown\x08\x08category\x05spear\x05\x08duration\0\0@?\x08\x04type\x06attack\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03min\0\x03\x03max\xC8\x01\0\x03\x0Emax_durability\x84\x02\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\x08\rrepair_amount)context.other->query.remaining_durability\t\x05items\n\x02\x08\x04name\x15minecraft:stone_spear\0\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04tags,q.all_tags('minecraft:stone_tool_materials')\0\0\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x14minecraft:stone_tier\x12minecraft:is_spear\0\n\x17minecraft:use_modifiers\x08\x0Bstart_using\x06always\x05\x0Cuse_duration\0\xA0\x8CG\x01\x0Femit_vibrations\0\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_sound\x14item.stone_spear.use\0\n\x0Fitem_properties\x01\rhand_equipped\x01\x01\x17can_destroy_in_creative\x01\x08\x10enchantable_slot\x0Bmelee_spear\x01\x04foil\0\x03\x11creative_category\x06\x01\x0Eliquid_clipped\0\x03\ruse_animation\0\x05\x0Cmining_speed\0\0\x80?\x03\x0Bframe_count\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bstone_spear\0\0\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\x01\x0Fstacked_by_data\0\x03\x0Cuse_duration\x80\xE4\xAF\x01\x01\x0Eshould_despawn\x01\x03\x11enchantable_value\n\x03\x0Emax_stack_size\x02\x01\x12hidden_in_commands\x02\x03\x06damage\x04\0\n\x10minecraft:damage\x02\x05value\x02\0\0\n\x16minecraft:display_name\x08\x05value\x15item.stone_spear.name\0\n\x18minecraft:swing_duration\x05\x05value\0\0@?\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\n\x11damage_conditions\x02\x0Cmax_duration\x13\x01\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\0\x05\x0Fdamage_modifier\0\0\0\0\x05\rhitbox_margin\0\0\x80>\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\n\x13dismount_conditions\x02\x0Cmax_durationZ\0\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0PA\0\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\x05\x11damage_multiplier\x85\xEBQ?\n\x14knockback_conditions\x02\x0Cmax_duration\xB4\0\x05\tmin_speed33\xA3@\x05\x12min_relative_speed\0\0\0\0\0\x02\x05delay\x0E\0\0\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x05\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Bitem.stone_spear.attack_hit\x08\x0Battack_miss\x1Citem.stone_spear.attack_miss\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\0\t\titem_tags\x08\x04\x14minecraft:stone_tier\x12minecraft:is_spear\n\x18minecraft:max_stack_size\x01\x05value\x01\0\0\0" } ;
     pub const STONE_STAIRS: Self = Self {
         id: 67,
         registry_key: "minecraft:stone_stairs",
@@ -139288,7 +139316,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const STONEBRICK: Self = Self {
-        id: 795,
+        id: 796,
         registry_key: "minecraft:stonebrick",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -139651,8 +139679,8 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const SUSPICIOUS_STEW : Self = Self { id : 602 , registry_key : "minecraft:suspicious_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x01\x0Ecan_always_eat\x01\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x03\rcooldown_time\0\x08\rcooldown_type\0\x03\tnutrition\x0C\x03\ron_use_action\x02\x05\x13saturation_modifier\x9A\x99\x19?\x08\x11using_converts_to\x04bowl\0\x03\x18minecraft:max_stack_size\x02\0\0" } ;
-    pub const SWEET_BERRIES : Self = Self { id : 287 , registry_key : "minecraft:sweet_berries" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\x0Bcrop_result\x1Aminecraft:sweet_berry_bush\x08\rplant_at_face\x02up\t\x08plant_at\x08\x14\x08farmland\x05grass\x04dirt\x0Bcoarse_dirt\x06podzol\nmoss_block\x08mycelium\x03mud\x14muddy_mangrove_roots\x0Fdirt_with_roots\x01\x1Aplant_at_any_solid_surface\0\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\rcooldown_type\0\x03\ron_use_action\x01\x03\rcooldown_time\0\x03\tnutrition\x04\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x05\x13saturation_modifier\x9A\x99\x99>\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\0\0" } ;
+    pub const SUSPICIOUS_STEW : Self = Self { id : 602 , registry_key : "minecraft:suspicious_stew" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x08\x11using_converts_to\x04bowl\x03\tnutrition\x0C\x03\ron_use_action\x02\x03\rcooldown_time\0\x08\rcooldown_type\0\x01\x0Ecan_always_eat\x01\x05\x13saturation_modifier\x9A\x99\x19?\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x03\x18minecraft:max_stack_size\x02\x03\x16minecraft:use_duration@\0\0" } ;
+    pub const SWEET_BERRIES : Self = Self { id : 287 , registry_key : "minecraft:sweet_berries" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x1Aminecraft:sweet_berry_bush\x01\x1Aplant_at_any_solid_surface\0\t\x08plant_at\x08\x14\x08farmland\x05grass\x04dirt\x0Bcoarse_dirt\x06podzol\nmoss_block\x08mycelium\x03mud\x14muddy_mangrove_roots\x0Fdirt_with_roots\0\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x03\rcooldown_time\0\x08\rcooldown_type\0\x03\ron_use_action\x01\x05\x13saturation_modifier\x9A\x99\x99>\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x03\tnutrition\x04\0\0\0" } ;
     pub const SWEET_BERRY_BUSH: Self = Self {
         id: -207,
         registry_key: "minecraft:sweet_berry_bush",
@@ -139689,7 +139717,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const TALLGRASS: Self = Self {
-        id: 821,
+        id: 822,
         registry_key: "minecraft:tallgrass",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -139751,7 +139779,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const TORCHFLOWER_SEEDS : Self = Self { id : 296 , registry_key : "minecraft:torchflower_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\x0Bcrop_result\x1Aminecraft:torchflower_crop\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\x01\x1Aplant_at_any_solid_surface\0\0\0\0" } ;
+    pub const TORCHFLOWER_SEEDS : Self = Self { id : 296 , registry_key : "minecraft:torchflower_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\x0Bcrop_result\x1Aminecraft:torchflower_crop\x01\x1Aplant_at_any_solid_surface\0\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\0\0\0" } ;
     pub const TOTEM_OF_UNDYING: Self = Self {
         id: 578,
         registry_key: "minecraft:totem_of_undying",
@@ -139780,7 +139808,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const TRIAL_KEY : Self = Self { id : 880 , registry_key : "minecraft:trial_key" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\0\0\n\x16minecraft:display_name\x08\x05value\x13item.trial_key.name\0\n\x0Fitem_properties\x01\x0Eallow_off_hand\0\x03\x11enchantable_value\0\x08\x10enchantable_slot\x04none\x08\x0Ecreative_group\0\x03\x06damage\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\ttrial_key\0\0\x01\x0Fstacked_by_data\0\x03\x0Emax_stack_size\x80\x01\x01\rhand_equipped\0\x01\x12hidden_in_commands\x02\x03\ruse_animation\0\x01\x04foil\0\x05\x0Cmining_speed\0\0\x80?\x03\x11creative_category\x08\x01\x0Eliquid_clipped\0\x03\x0Cuse_duration\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\0\0\0" } ;
+    pub const TRIAL_KEY : Self = Self { id : 881 , registry_key : "minecraft:trial_key" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Fitem_properties\x03\x11creative_category\x08\x01\x17can_destroy_in_creative\x01\x03\x0Cuse_duration\0\x01\x12hidden_in_commands\x02\x03\x11enchantable_value\0\x03\x0Emax_stack_size\x80\x01\x05\x0Cmining_speed\0\0\x80?\n\x0Eminecraft:icon\n\x08textures\x08\x07default\ttrial_key\0\0\x01\x0Eliquid_clipped\0\x03\ruse_animation\0\x08\x10enchantable_slot\x04none\x08\x0Ecreative_group\0\x01\x0Eallow_off_hand\0\x01\x0Eshould_despawn\x01\x01\rhand_equipped\0\x03\x06damage\0\x03\x0Bframe_count\x02\x01\x0Fstacked_by_data\0\x01\x04foil\0\0\n\x16minecraft:display_name\x08\x05value\x13item.trial_key.name\0\t\titem_tags\0\0\0\0" } ;
     pub const TRIAL_SPAWNER: Self = Self {
         id: -315,
         registry_key: "minecraft:trial_spawner",
@@ -139809,7 +139837,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const TROPICAL_FISH : Self = Self { id : 266 , registry_key : "minecraft:tropical_fish" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\x03\x16minecraft:use_duration@\n\x0Eminecraft:food\x08\x11using_converts_to\0\x05\x13saturation_modifier\xCD\xCC\xCC=\x03\rcooldown_time\0\x01\x0Ecan_always_eat\0\x08\rcooldown_type\0\x03\ron_use_action\x01\x03\tnutrition\x02\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\0\x01\x19minecraft:stacked_by_data\x01\0\0" } ;
+    pub const TROPICAL_FISH : Self = Self { id : 266 , registry_key : "minecraft:tropical_fish" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:food\x03\tnutrition\x02\t\x0Con_use_range\x05\x06\0\0\0A\0\0\0A\0\0\0A\x05\x13saturation_modifier\xCD\xCC\xCC=\x08\x11using_converts_to\0\x01\x0Ecan_always_eat\0\x03\rcooldown_time\0\x08\rcooldown_type\0\x03\ron_use_action\x01\0\x01\x19minecraft:stacked_by_data\x01\x03\x16minecraft:use_duration@\0\0" } ;
     pub const TROPICAL_FISH_BUCKET: Self = Self {
         id: 369,
         registry_key: "minecraft:tropical_fish_bucket",
@@ -140860,8 +140888,8 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const WHEAT_SEEDS : Self = Self { id : 291 , registry_key : "minecraft:wheat_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\t\x08plant_at\x08\x02\x12minecraft:farmland\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x0Fminecraft:wheat\x01\x1Aplant_at_any_solid_surface\0\0\0\0" } ;
-    pub const WHITE_BUNDLE : Self = Self { id : 876 , registry_key : "minecraft:white_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\t\titem_tags\0\0\n\x0Fitem_properties\n\x0Eminecraft:icon\n\x08textures\x08\x11bundle_open_front\x17bundle_white_open_front\x08\x07default\x0Cbundle_white\x08\x10bundle_open_back\x16bundle_white_open_back\0\0\x01\rhand_equipped\0\x08\x10enchantable_slot\x04none\x03\x06damage\0\x01\x12hidden_in_commands\x02\x03\x11creative_category\x06\x01\x04foil\0\x05\x0Cmining_speed\0\0\x80?\x03\ruse_animation\0\x03\x0Cuse_duration\0\x03\x0Emax_stack_size\x02\x03\x0Bframe_count\x02\x08\x0Ecreative_group\0\x03\x11enchantable_value\0\x01\x0Eliquid_clipped\0\x01\x0Fstacked_by_data\0\x01\x0Eallow_off_hand\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\0\0" } ;
+    pub const WHEAT_SEEDS : Self = Self { id : 291 , registry_key : "minecraft:wheat_seeds" , version : BedrockItemVersion :: Legacy , component_based : false , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:seed\x08\rplant_at_face\x02up\x08\x0Bcrop_result\x0Fminecraft:wheat\t\x08plant_at\x08\x02\x12minecraft:farmland\x01\x1Aplant_at_any_solid_surface\0\0\0\0" } ;
+    pub const WHITE_BUNDLE : Self = Self { id : 877 , registry_key : "minecraft:white_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x0Fitem_properties\x08\x10enchantable_slot\x04none\x03\x11enchantable_value\0\x03\x11creative_category\x06\x01\x17can_destroy_in_creative\x01\x05\x0Cmining_speed\0\0\x80?\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x16bundle_white_open_back\x08\x07default\x0Cbundle_white\x08\x11bundle_open_front\x17bundle_white_open_front\0\0\x01\x04foil\0\x01\rhand_equipped\0\x01\x0Eliquid_clipped\0\x01\x0Eshould_despawn\x01\x01\x0Eallow_off_hand\0\x08\x0Ecreative_group\0\x01\x0Fstacked_by_data\0\x03\x06damage\0\x01\x12hidden_in_commands\x02\x03\x0Emax_stack_size\x02\x03\ruse_animation\0\x03\x0Bframe_count\x02\x03\x0Cuse_duration\0\0\t\titem_tags\0\0\0\0" } ;
     pub const WHITE_CANDLE: Self = Self {
         id: -413,
         registry_key: "minecraft:white_candle",
@@ -141023,7 +141051,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const WIND_CHARGE : Self = Self { id : 881 , registry_key : "minecraft:wind_charge" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x12minecraft:cooldown\x08\x04type\x03use\x08\x08category\x0Bwind_charge\x05\x08duration\0\0\0?\0\n\x0Fitem_properties\x01\rhand_equipped\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bwind_charge\0\0\x01\x04foil\0\x05\x0Cmining_speed\0\0\x80?\x01\x12hidden_in_commands\x02\x08\x0Ecreative_group\0\x01\x0Eshould_despawn\x01\x03\x0Bframe_count\x02\x03\x06damage\0\x01\x0Eallow_off_hand\0\x03\x0Cuse_duration\0\x01\x0Eliquid_clipped\0\x03\x11enchantable_value\0\x03\ruse_animation\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x01\x17can_destroy_in_creative\x01\x03\x0Emax_stack_size\x80\x01\x01\x0Fstacked_by_data\0\0\n\x16minecraft:display_name\x08\x05value\x15item.wind_charge.name\0\n\x14minecraft:projectile\x05\x16minimum_critical_power\0\0\0\0\x08\x11projectile_entity\"minecraft:wind_charge_projectile<>\0\t\titem_tags\0\0\n\x13minecraft:throwable\x05\x11max_draw_duration\0\0\0\0\x05\x10max_launch_power\0\0\xC0?\x05\x12launch_power_scale\0\0\xC0?\x01\x1Cscale_power_by_draw_duration\0\x05\x11min_draw_duration\0\0\0\0\x01\x12do_swing_animation\x01\0\0\0" } ;
+    pub const WIND_CHARGE : Self = Self { id : 882 , registry_key : "minecraft:wind_charge" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x14minecraft:projectile\x05\x16minimum_critical_power\0\0\0\0\x08\x11projectile_entity\"minecraft:wind_charge_projectile<>\0\n\x13minecraft:throwable\x05\x11min_draw_duration\0\0\0\0\x05\x10max_launch_power\0\0\xC0?\x05\x11max_draw_duration\0\0\0\0\x01\x12do_swing_animation\x01\x01\x1Cscale_power_by_draw_duration\0\x05\x12launch_power_scale\0\0\xC0?\0\n\x0Fitem_properties\x03\x11enchantable_value\0\x03\x0Emax_stack_size\x80\x01\x03\ruse_animation\0\x01\x0Eshould_despawn\x01\x01\x17can_destroy_in_creative\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\x0Bwind_charge\0\0\x01\x0Eallow_off_hand\0\x03\x0Bframe_count\x02\x01\x0Fstacked_by_data\0\x03\x11creative_category\x06\x08\x10enchantable_slot\x04none\x08\x0Ecreative_group\0\x05\x0Cmining_speed\0\0\x80?\x01\x12hidden_in_commands\x02\x03\x0Cuse_duration\0\x01\x0Eliquid_clipped\0\x01\rhand_equipped\0\x01\x04foil\0\x03\x06damage\0\0\t\titem_tags\0\0\n\x12minecraft:cooldown\x05\x08duration\0\0\0?\x08\x08category\x0Bwind_charge\x08\x04type\x03use\0\n\x16minecraft:display_name\x08\x05value\x15item.wind_charge.name\0\0\0" } ;
     pub const WITCH_SPAWN_EGG: Self = Self {
         id: 456,
         registry_key: "minecraft:witch_spawn_egg",
@@ -141074,7 +141102,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const WOOD: Self = Self {
-        id: 831,
+        id: 832,
         registry_key: "minecraft:wood",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -141130,13 +141158,13 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const WOODEN_SLAB: Self = Self {
-        id: 812,
+        id: 813,
         registry_key: "minecraft:wooden_slab",
         version: BedrockItemVersion::None,
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const WOODEN_SPEAR : Self = Self { id : 860 , registry_key : "minecraft:wooden_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x12minecraft:cooldown\x05\x08durationff&?\x08\x04type\x06attack\x08\x08category\x05spear\0\n\x14minecraft:durability\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\x03\x0Emax_durabilityx\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\x08\rrepair_amount)context.other->query.remaining_durability\t\x05items\n\x02\x08\x04name\x16minecraft:wooden_spear\0\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\t\x05items\n\x02\x08\x04tags\x1Eq.all_tags('minecraft:planks')\0\0\0\n\x18minecraft:swing_duration\x05\x05valueff&?\0\n\x16minecraft:swing_sounds\x08\x0Battack_miss\x1Ditem.wooden_spear.attack_miss\x08\nattack_hit\x1Citem.wooden_spear.attack_hit\0\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:wooden_tier\x12minecraft:is_spear\0\n\x15minecraft:enchantable\x08\x04slot\x0Bmelee_spear\x01\x05value\x0F\0\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x05\rhitbox_margin\0\0\x80>\x02\x05delay\x0F\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x11damage_conditions\x02\x0Cmax_duration,\x01\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\0\x05\x0Fdamage_modifier\0\0\0\0\x05\x11damage_multiplier333?\n\x13dismount_conditions\x05\tmin_speed\0\0`A\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_durationd\0\0\n\x14knockback_conditions\x05\x12min_relative_speed\0\0\0\0\x02\x0Cmax_duration\xC8\0\x05\tmin_speed33\xA3@\0\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\0\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x0Eminecraft:fuel\x05\x08duration\0\0 A\0\n\x10minecraft:damage\x02\x05value\x01\0\0\n\x0Fitem_properties\x03\ruse_animation\0\x05\x0Cmining_speed\0\0\x80?\x03\x0Cuse_duration\x80\xE4\xAF\x01\x01\x0Eliquid_clipped\0\x01\x0Eshould_despawn\x01\x01\x0Eallow_off_hand\0\x01\x04foil\0\x01\rhand_equipped\x01\x01\x17can_destroy_in_creative\x01\x01\x12hidden_in_commands\x02\x03\x11creative_category\x06\x08\x10enchantable_slot\x0Bmelee_spear\x08\x0Ecreative_group\0\x03\x06damage\x02\x01\x0Fstacked_by_data\0\x03\x11enchantable_value\x1E\x03\x0Bframe_count\x02\n\x0Eminecraft:icon\n\x08textures\x08\x07default\nwood_spear\0\0\x03\x0Emax_stack_size\x02\0\t\titem_tags\x08\x04\x15minecraft:wooden_tier\x12minecraft:is_spear\n\x17minecraft:use_modifiers\x01\x0Femit_vibrations\0\x05\x0Cuse_duration\0\xA0\x8CG\x05\x11movement_modifier\0\0\x80?\x08\x0Bstart_sound\x15item.wooden_spear.use\x08\x0Bstart_using\x06always\0\n\x16minecraft:display_name\x08\x05value\x16item.wooden_spear.name\0\n\x19minecraft:piercing_weapon\x05\rhitbox_margin\0\0\x80>\n\x0Ecreative_reach\x05\x03min\0\0\0@\x05\x03max\0\0\xF0@\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\0\0\0" } ;
+    pub const WOODEN_SPEAR : Self = Self { id : 861 , registry_key : "minecraft:wooden_spear" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x0Eminecraft:tags\t\x04tags\x08\x04\x15minecraft:wooden_tier\x12minecraft:is_spear\0\n\x14minecraft:durability\x03\x0Emax_durabilityx\n\rdamage_chance\x03\x03max\xC8\x01\x03\x03min\0\0\0\n\x10minecraft:damage\x02\x05value\x01\0\0\n\x14minecraft:repairable\t\x0Crepair_items\n\x04\t\x05items\n\x02\x08\x04name\x16minecraft:wooden_spear\0\x08\rrepair_amount)context.other->query.remaining_durability\0\t\x05items\n\x02\x08\x04tags\x1Eq.all_tags('minecraft:planks')\0\x08\rrepair_amount\x1Bquery.max_durability * 0.25\0\0\n\x15minecraft:enchantable\x01\x05value\x0F\x08\x04slot\x0Bmelee_spear\0\t\titem_tags\x08\x04\x15minecraft:wooden_tier\x12minecraft:is_spear\n\x17minecraft:hand_equipped\x01\x05value\x01\0\n\x16minecraft:display_name\x08\x05value\x16item.wooden_spear.name\0\n\x16minecraft:swing_sounds\x08\nattack_hit\x1Citem.wooden_spear.attack_hit\x08\x0Battack_miss\x1Ditem.wooden_spear.attack_miss\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n\x18minecraft:swing_duration\x05\x05valueff&?\0\n\x12minecraft:cooldown\x08\x08category\x05spear\x05\x08durationff&?\x08\x04type\x06attack\0\n\x0Fitem_properties\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\x01\x0Eliquid_clipped\0\x08\x10enchantable_slot\x0Bmelee_spear\x01\x04foil\0\x08\x0Ecreative_group\0\x01\rhand_equipped\x01\n\x0Eminecraft:icon\n\x08textures\x08\x07default\nwood_spear\0\0\x03\x0Cuse_duration\x80\xE4\xAF\x01\x03\x11enchantable_value\x1E\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\x03\x11creative_category\x06\x01\x0Fstacked_by_data\0\x03\ruse_animation\0\x03\x06damage\x02\x01\x0Eallow_off_hand\0\x03\x0Bframe_count\x02\x01\x12hidden_in_commands\x02\0\n\x0Eminecraft:fuel\x05\x08duration\0\0 A\0\n\x17minecraft:use_modifiers\x05\x11movement_modifier\0\0\x80?\x01\x0Femit_vibrations\0\x08\x0Bstart_using\x06always\x05\x0Cuse_duration\0\xA0\x8CG\x08\x0Bstart_sound\x15item.wooden_spear.use\0\n\x18minecraft:kinetic_weapon\n\x18minecraft:kinetic_weapon\x02\x05delay\x0F\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\n\x13dismount_conditions\x05\x12min_relative_speed\0\0\0\0\x05\tmin_speed\0\0`A\x02\x0Cmax_durationd\0\0\x05\x0Fdamage_modifier\0\0\0\0\n\x14knockback_conditions\x05\tmin_speed33\xA3@\x02\x0Cmax_duration\xC8\0\x05\x12min_relative_speed\0\0\0\0\0\x05\rhitbox_margin\0\0\x80>\x05\x11damage_multiplier333?\n\x11damage_conditions\x02\x0Cmax_duration,\x01\x05\x12min_relative_speed33\x93@\x05\tmin_speed\0\0\0\0\0\n\x05reach\x05\x03max\0\0\x90@\x05\x03min\0\0\0@\0\0\0\n\x19minecraft:piercing_weapon\n\x05reach\x05\x03min\0\0\0@\x05\x03max\0\0\x90@\0\n\x0Ecreative_reach\x05\x03max\0\0\xF0@\x05\x03min\0\0\0@\0\x05\rhitbox_margin\0\0\x80>\0\0\0" } ;
     pub const WOODEN_SWORD: Self = Self {
         id: 310,
         registry_key: "minecraft:wooden_sword",
@@ -141145,7 +141173,7 @@ impl BedrockItem {
         definition_components: b"\n\0\0",
     };
     pub const WOOL: Self = Self {
-        id: 791,
+        id: 792,
         registry_key: "minecraft:wool",
         version: BedrockItemVersion::None,
         component_based: false,
@@ -141165,7 +141193,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const YELLOW_BUNDLE : Self = Self { id : 877 , registry_key : "minecraft:yellow_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\t\titem_tags\0\0\n\x16minecraft:storage_item\x01\x1Aallow_nested_storage_items\x01\t\rallowed_items\0\0\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x03\tmax_slots\x80\x01\0\n\x0Fitem_properties\x01\x0Eliquid_clipped\0\x03\x06damage\0\x03\x0Emax_stack_size\x02\x05\x0Cmining_speed\0\0\x80?\x03\x0Bframe_count\x02\x03\x11enchantable_value\0\x01\x12hidden_in_commands\x02\x01\x0Fstacked_by_data\0\n\x0Eminecraft:icon\n\x08textures\x08\x07default\rbundle_yellow\x08\x10bundle_open_back\x17bundle_yellow_open_back\x08\x11bundle_open_front\x18bundle_yellow_open_front\0\0\x01\rhand_equipped\0\x01\x17can_destroy_in_creative\x01\x01\x0Eshould_despawn\x01\x08\x10enchantable_slot\x04none\x01\x0Eallow_off_hand\0\x03\x11creative_category\x06\x01\x04foil\0\x03\ruse_animation\0\x03\x0Cuse_duration\0\x08\x0Ecreative_group\0\0\0\0" } ;
+    pub const YELLOW_BUNDLE : Self = Self { id : 878 , registry_key : "minecraft:yellow_bundle" , version : BedrockItemVersion :: DataDriven , component_based : true , definition_components : b"\n\0\n\ncomponents\t\titem_tags\0\0\n\x1Eminecraft:storage_weight_limit\x03\x10max_weight_limit\x80\x01\0\n\x16minecraft:storage_item\t\x0Cbanned_items\n\x04\x08\x04name\x15minecraft:shulker_box\0\x08\x04name\x1Cminecraft:undyed_shulker_box\0\x01\x1Aallow_nested_storage_items\x01\x03\tmax_slots\x80\x01\t\rallowed_items\0\0\0\n\x1Cminecraft:bundle_interaction\x03\x12num_viewable_slots\x18\0\n\x18minecraft:max_stack_size\x01\x05value\x01\0\n!minecraft:storage_weight_modifier\x03\x16weight_in_storage_item\x08\0\n\x0Fitem_properties\x03\x11creative_category\x06\x01\x0Eshould_despawn\x01\x01\x12hidden_in_commands\x02\x03\x0Cuse_duration\0\x01\x17can_destroy_in_creative\x01\x03\x0Bframe_count\x02\x08\x0Ecreative_group\0\x05\x0Cmining_speed\0\0\x80?\x08\x10enchantable_slot\x04none\x01\x0Eallow_off_hand\0\n\x0Eminecraft:icon\n\x08textures\x08\x10bundle_open_back\x17bundle_yellow_open_back\x08\x11bundle_open_front\x18bundle_yellow_open_front\x08\x07default\rbundle_yellow\0\0\x01\x0Fstacked_by_data\0\x01\x04foil\0\x03\x0Emax_stack_size\x02\x03\x06damage\0\x03\x11enchantable_value\0\x01\x0Eliquid_clipped\0\x03\ruse_animation\0\x01\rhand_equipped\0\0\0\0" } ;
     pub const YELLOW_CANDLE: Self = Self {
         id: -417,
         registry_key: "minecraft:yellow_candle",
@@ -141362,7 +141390,7 @@ impl BedrockItem {
         component_based: false,
         definition_components: b"\n\0\0",
     };
-    pub const ALL_BEDROCK_ITEMS: [&'static Self; 2076] = [
+    pub const ALL_BEDROCK_ITEMS: [&'static Self; 2080] = [
         &Self::ACACIA_BOAT,
         &Self::ACACIA_BUTTON,
         &Self::ACACIA_CHEST_BOAT,
@@ -141928,6 +141956,7 @@ impl BedrockItem {
         &Self::DIRT,
         &Self::DIRT_WITH_ROOTS,
         &Self::DISC_FRAGMENT_5,
+        &Self::DISC_PRESS,
         &Self::DISPENSER,
         &Self::DOLPHIN_SPAWN_EGG,
         &Self::DONKEY_SPAWN_EGG,
@@ -142150,6 +142179,7 @@ impl BedrockItem {
         &Self::FRIEND_POTTERY_SHERD,
         &Self::FROG_SPAWN,
         &Self::FROG_SPAWN_EGG,
+        &Self::FROSTBITE_SPAWN_EGG,
         &Self::FROSTED_ICE,
         &Self::FURNACE,
         &Self::GHAST_SPAWN_EGG,
@@ -142308,6 +142338,8 @@ impl BedrockItem {
         &Self::HUSK_SPAWN_EGG,
         &Self::ICE,
         &Self::ICE_BOMB,
+        &Self::ICE_CRYSTAL,
+        &Self::ICICLE,
         &Self::INFESTED_CHISELED_STONE_BRICKS,
         &Self::INFESTED_COBBLESTONE,
         &Self::INFESTED_CRACKED_STONE_BRICKS,
@@ -155090,7 +155122,7 @@ impl JavaToBedrockItemMapping {
             (-974, 4) => Some(&Self::ANDESITE_WALL),
             (672, 0) => Some(&Self::ANGLER_POTTERY_SHERD),
             (145, 0) => Some(&Self::ANVIL),
-            (882, 0) => Some(&Self::APPLE),
+            (883, 0) => Some(&Self::APPLE),
             (673, 0) => Some(&Self::ARCHER_POTTERY_SHERD),
             (722, 0) => Some(&Self::ARMADILLO_SCUTE),
             (721, 0) => Some(&Self::ARMADILLO_SPAWN_EGG),
@@ -155157,7 +155189,7 @@ impl JavaToBedrockItemMapping {
             (-815, 2) => Some(&Self::BIRCH_WOOD),
             (577, 0) => Some(&Self::BLACK_BANNER),
             (421, 15) => Some(&Self::BLACK_BED),
-            (861, 0) => Some(&Self::BLACK_BUNDLE),
+            (862, 0) => Some(&Self::BLACK_BUNDLE),
             (-428, 0) => Some(&Self::BLACK_CANDLE),
             (-611, 15) => Some(&Self::BLACK_CARPET),
             (-642, 15) => Some(&Self::BLACK_CONCRETE),
@@ -155186,7 +155218,7 @@ impl JavaToBedrockItemMapping {
             (460, 0) => Some(&Self::BLAZE_SPAWN_EGG),
             (577, 4) => Some(&Self::BLUE_BANNER),
             (421, 11) => Some(&Self::BLUE_BED),
-            (862, 0) => Some(&Self::BLUE_BUNDLE),
+            (863, 0) => Some(&Self::BLUE_BUNDLE),
             (-424, 0) => Some(&Self::BLUE_CANDLE),
             (-607, 11) => Some(&Self::BLUE_CARPET),
             (-638, 11) => Some(&Self::BLUE_CONCRETE),
@@ -155221,7 +155253,7 @@ impl JavaToBedrockItemMapping {
             (-849, 0) => Some(&Self::BRAIN_CORAL_BLOCK),
             (-840, 0) => Some(&Self::BRAIN_CORAL_FAN),
             (261, 0) => Some(&Self::BREAD),
-            (878, 0) => Some(&Self::BREEZE_ROD),
+            (879, 0) => Some(&Self::BREEZE_ROD),
             (506, 0) => Some(&Self::BREEZE_SPAWN_EGG),
             (676, 0) => Some(&Self::BREWER_POTTERY_SHERD),
             (435, 0) => Some(&Self::BREWING_STAND),
@@ -155232,7 +155264,7 @@ impl JavaToBedrockItemMapping {
             (45, 0) => Some(&Self::BRICKS),
             (577, 3) => Some(&Self::BROWN_BANNER),
             (421, 12) => Some(&Self::BROWN_BED),
-            (863, 0) => Some(&Self::BROWN_BUNDLE),
+            (864, 0) => Some(&Self::BROWN_BUNDLE),
             (-425, 0) => Some(&Self::BROWN_CANDLE),
             (-608, 12) => Some(&Self::BROWN_CARPET),
             (-639, 12) => Some(&Self::BROWN_CONCRETE),
@@ -155259,7 +155291,7 @@ impl JavaToBedrockItemMapping {
             (-841, 0) => Some(&Self::BUBBLE_CORAL_FAN),
             (363, 0) => Some(&Self::BUCKET),
             (-328, 0) => Some(&Self::BUDDING_AMETHYST),
-            (864, 0) => Some(&Self::BUNDLE),
+            (865, 0) => Some(&Self::BUNDLE),
             (677, 0) => Some(&Self::BURN_POTTERY_SHERD),
             (-1023, 0) => Some(&Self::BUSH),
             (81, 0) => Some(&Self::CACTUS),
@@ -155391,7 +155423,7 @@ impl JavaToBedrockItemMapping {
             (-311, 0) => Some(&Self::COPPER_ORE),
             (751, 0) => Some(&Self::COPPER_PICKAXE),
             (750, 0) => Some(&Self::COPPER_SHOVEL),
-            (854, 0) => Some(&Self::COPPER_SPEAR),
+            (855, 0) => Some(&Self::COPPER_SPEAR),
             (749, 0) => Some(&Self::COPPER_SWORD),
             (-1082, 0) => Some(&Self::COPPER_TORCH),
             (-792, 0) => Some(&Self::COPPER_TRAPDOOR),
@@ -155437,7 +155469,7 @@ impl JavaToBedrockItemMapping {
             (-900, 0) => Some(&Self::CUT_SANDSTONE_SLAB),
             (577, 6) => Some(&Self::CYAN_BANNER),
             (421, 9) => Some(&Self::CYAN_BED),
-            (865, 0) => Some(&Self::CYAN_BUNDLE),
+            (866, 0) => Some(&Self::CYAN_BUNDLE),
             (-422, 0) => Some(&Self::CYAN_CANDLE),
             (-605, 9) => Some(&Self::CYAN_CARPET),
             (-636, 9) => Some(&Self::CYAN_CONCRETE),
@@ -155529,7 +155561,7 @@ impl JavaToBedrockItemMapping {
             (56, 0) => Some(&Self::DIAMOND_ORE),
             (320, 0) => Some(&Self::DIAMOND_PICKAXE),
             (319, 0) => Some(&Self::DIAMOND_SHOVEL),
-            (855, 0) => Some(&Self::DIAMOND_SPEAR),
+            (856, 0) => Some(&Self::DIAMOND_SPEAR),
             (318, 0) => Some(&Self::DIAMOND_SWORD),
             (-592, 3) => Some(&Self::DIORITE),
             (-894, 0) => Some(&Self::DIORITE_SLAB),
@@ -155561,7 +155593,7 @@ impl JavaToBedrockItemMapping {
             (531, 0) => Some(&Self::ENCHANTED_BOOK),
             (259, 0) => Some(&Self::ENCHANTED_GOLDEN_APPLE),
             (116, 0) => Some(&Self::ENCHANTING_TABLE),
-            (851, 0) => Some(&Self::END_CRYSTAL),
+            (852, 0) => Some(&Self::END_CRYSTAL),
             (120, 0) => Some(&Self::END_PORTAL_FRAME),
             (208, 0) => Some(&Self::END_ROD),
             (121, 0) => Some(&Self::END_STONE),
@@ -155631,7 +155663,7 @@ impl JavaToBedrockItemMapping {
             (102, 0) => Some(&Self::GLASS_PANE),
             (438, 0) => Some(&Self::GLISTERING_MELON_SLICE),
             (598, 0) => Some(&Self::GLOBE_BANNER_PATTERN),
-            (883, 0) => Some(&Self::GLOW_BERRIES),
+            (884, 0) => Some(&Self::GLOW_BERRIES),
             (514, 0) => Some(&Self::GLOW_INK_SAC),
             (638, 0) => Some(&Self::GLOW_ITEM_FRAME),
             (-411, 0) => Some(&Self::GLOW_LICHEN),
@@ -155657,7 +155689,7 @@ impl JavaToBedrockItemMapping {
             (765, 0) => Some(&Self::GOLDEN_NAUTILUS_ARMOR),
             (327, 0) => Some(&Self::GOLDEN_PICKAXE),
             (326, 0) => Some(&Self::GOLDEN_SHOVEL),
-            (856, 0) => Some(&Self::GOLDEN_SPEAR),
+            (857, 0) => Some(&Self::GOLDEN_SPEAR),
             (325, 0) => Some(&Self::GOLDEN_SWORD),
             (-590, 1) => Some(&Self::GRANITE),
             (-896, 0) => Some(&Self::GRANITE_SLAB),
@@ -155667,7 +155699,7 @@ impl JavaToBedrockItemMapping {
             (13, 0) => Some(&Self::GRAVEL),
             (577, 8) => Some(&Self::GRAY_BANNER),
             (421, 7) => Some(&Self::GRAY_BED),
-            (866, 0) => Some(&Self::GRAY_BUNDLE),
+            (867, 0) => Some(&Self::GRAY_BUNDLE),
             (-420, 0) => Some(&Self::GRAY_CANDLE),
             (-603, 7) => Some(&Self::GRAY_CARPET),
             (-634, 7) => Some(&Self::GRAY_CONCRETE),
@@ -155687,7 +155719,7 @@ impl JavaToBedrockItemMapping {
             (-1158, 0) => Some(&Self::GRAY_WOOL_STAIRS),
             (577, 2) => Some(&Self::GREEN_BANNER),
             (421, 13) => Some(&Self::GREEN_BED),
-            (867, 0) => Some(&Self::GREEN_BUNDLE),
+            (868, 0) => Some(&Self::GREEN_BUNDLE),
             (-426, 0) => Some(&Self::GREEN_CANDLE),
             (-609, 13) => Some(&Self::GREEN_CARPET),
             (-640, 13) => Some(&Self::GREEN_CONCRETE),
@@ -155758,7 +155790,7 @@ impl JavaToBedrockItemMapping {
             (15, 0) => Some(&Self::IRON_ORE),
             (299, 0) => Some(&Self::IRON_PICKAXE),
             (298, 0) => Some(&Self::IRON_SHOVEL),
-            (857, 0) => Some(&Self::IRON_SPEAR),
+            (858, 0) => Some(&Self::IRON_SPEAR),
             (309, 0) => Some(&Self::IRON_SWORD),
             (167, 0) => Some(&Self::IRON_TRAPDOOR),
             (524, 0) => Some(&Self::ITEM_FRAME),
@@ -155802,10 +155834,10 @@ impl JavaToBedrockItemMapping {
             (340, 0) => Some(&Self::LEATHER_LEGGINGS),
             (-194, 0) => Some(&Self::LECTERN),
             (69, 0) => Some(&Self::LEVER),
-            (844, 0) => Some(&Self::LIGHT),
+            (845, 0) => Some(&Self::LIGHT),
             (577, 12) => Some(&Self::LIGHT_BLUE_BANNER),
             (421, 3) => Some(&Self::LIGHT_BLUE_BED),
-            (868, 0) => Some(&Self::LIGHT_BLUE_BUNDLE),
+            (869, 0) => Some(&Self::LIGHT_BLUE_BUNDLE),
             (-416, 0) => Some(&Self::LIGHT_BLUE_CANDLE),
             (-599, 3) => Some(&Self::LIGHT_BLUE_CARPET),
             (-630, 3) => Some(&Self::LIGHT_BLUE_CONCRETE),
@@ -155825,7 +155857,7 @@ impl JavaToBedrockItemMapping {
             (-1154, 0) => Some(&Self::LIGHT_BLUE_WOOL_STAIRS),
             (577, 7) => Some(&Self::LIGHT_GRAY_BANNER),
             (421, 8) => Some(&Self::LIGHT_GRAY_BED),
-            (869, 0) => Some(&Self::LIGHT_GRAY_BUNDLE),
+            (870, 0) => Some(&Self::LIGHT_GRAY_BUNDLE),
             (-421, 0) => Some(&Self::LIGHT_GRAY_CANDLE),
             (-604, 8) => Some(&Self::LIGHT_GRAY_CARPET),
             (-635, 8) => Some(&Self::LIGHT_GRAY_CONCRETE),
@@ -155850,7 +155882,7 @@ impl JavaToBedrockItemMapping {
             (111, 0) => Some(&Self::LILY_PAD),
             (577, 10) => Some(&Self::LIME_BANNER),
             (421, 5) => Some(&Self::LIME_BED),
-            (870, 0) => Some(&Self::LIME_BUNDLE),
+            (871, 0) => Some(&Self::LIME_BUNDLE),
             (-418, 0) => Some(&Self::LIME_CANDLE),
             (-601, 5) => Some(&Self::LIME_CARPET),
             (-632, 5) => Some(&Self::LIME_CONCRETE),
@@ -155875,7 +155907,7 @@ impl JavaToBedrockItemMapping {
             (322, 0) => Some(&Self::MACE),
             (577, 13) => Some(&Self::MAGENTA_BANNER),
             (421, 2) => Some(&Self::MAGENTA_BED),
-            (871, 0) => Some(&Self::MAGENTA_BUNDLE),
+            (872, 0) => Some(&Self::MAGENTA_BUNDLE),
             (-415, 0) => Some(&Self::MAGENTA_CANDLE),
             (-598, 2) => Some(&Self::MAGENTA_CARPET),
             (-629, 2) => Some(&Self::MAGENTA_CONCRETE),
@@ -155951,19 +155983,19 @@ impl JavaToBedrockItemMapping {
             (546, 0) => Some(&Self::MUSIC_DISC_BLOCKS),
             (545, 0) => Some(&Self::MUSIC_DISC_CAT),
             (547, 0) => Some(&Self::MUSIC_DISC_CHIRP),
-            (832, 0) => Some(&Self::MUSIC_DISC_CREATOR),
-            (833, 0) => Some(&Self::MUSIC_DISC_CREATOR_MUSIC_BOX),
+            (833, 0) => Some(&Self::MUSIC_DISC_CREATOR),
+            (834, 0) => Some(&Self::MUSIC_DISC_CREATOR_MUSIC_BOX),
             (548, 0) => Some(&Self::MUSIC_DISC_FAR),
-            (836, 0) => Some(&Self::MUSIC_DISC_LAVA_CHICKEN),
+            (837, 0) => Some(&Self::MUSIC_DISC_LAVA_CHICKEN),
             (549, 0) => Some(&Self::MUSIC_DISC_MALL),
             (550, 0) => Some(&Self::MUSIC_DISC_MELLOHI),
             (641, 0) => Some(&Self::MUSIC_DISC_OTHERSIDE),
             (635, 0) => Some(&Self::MUSIC_DISC_PIGSTEP),
-            (834, 0) => Some(&Self::MUSIC_DISC_PRECIPICE),
+            (835, 0) => Some(&Self::MUSIC_DISC_PRECIPICE),
             (715, 0) => Some(&Self::MUSIC_DISC_RELIC),
             (551, 0) => Some(&Self::MUSIC_DISC_STAL),
             (552, 0) => Some(&Self::MUSIC_DISC_STRAD),
-            (835, 0) => Some(&Self::MUSIC_DISC_TEARS),
+            (836, 0) => Some(&Self::MUSIC_DISC_TEARS),
             (555, 0) => Some(&Self::MUSIC_DISC_WAIT),
             (553, 0) => Some(&Self::MUSIC_DISC_WARD),
             (560, 0) => Some(&Self::MUTTON),
@@ -155996,7 +156028,7 @@ impl JavaToBedrockItemMapping {
             (621, 0) => Some(&Self::NETHERITE_PICKAXE),
             (629, 0) => Some(&Self::NETHERITE_SCRAP),
             (620, 0) => Some(&Self::NETHERITE_SHOVEL),
-            (858, 0) => Some(&Self::NETHERITE_SPEAR),
+            (859, 0) => Some(&Self::NETHERITE_SPEAR),
             (619, 0) => Some(&Self::NETHERITE_SWORD),
             (696, 0) => Some(&Self::NETHERITE_UPGRADE_SMITHING_TEMPLATE),
             (87, 0) => Some(&Self::NETHERRACK),
@@ -156024,11 +156056,11 @@ impl JavaToBedrockItemMapping {
             (455, 0) => Some(&Self::OCELOT_SPAWN_EGG),
             (-471, 0) => Some(&Self::OCHRE_FROGLIGHT),
             (605, 0) => Some(&Self::OMINOUS_BOTTLE),
-            (879, 0) => Some(&Self::OMINOUS_TRIAL_KEY),
+            (880, 0) => Some(&Self::OMINOUS_TRIAL_KEY),
             (-1018, 0) => Some(&Self::OPEN_EYEBLOSSOM),
             (577, 14) => Some(&Self::ORANGE_BANNER),
             (421, 1) => Some(&Self::ORANGE_BED),
-            (872, 0) => Some(&Self::ORANGE_BUNDLE),
+            (873, 0) => Some(&Self::ORANGE_BUNDLE),
             (-414, 0) => Some(&Self::ORANGE_CANDLE),
             (-597, 1) => Some(&Self::ORANGE_CARPET),
             (-628, 1) => Some(&Self::ORANGE_CONCRETE),
@@ -156105,7 +156137,7 @@ impl JavaToBedrockItemMapping {
             (496, 0) => Some(&Self::PILLAGER_SPAWN_EGG),
             (577, 9) => Some(&Self::PINK_BANNER),
             (421, 6) => Some(&Self::PINK_BED),
-            (873, 0) => Some(&Self::PINK_BUNDLE),
+            (874, 0) => Some(&Self::PINK_BUNDLE),
             (-419, 0) => Some(&Self::PINK_CANDLE),
             (-602, 6) => Some(&Self::PINK_CARPET),
             (-633, 6) => Some(&Self::PINK_CONCRETE),
@@ -156208,7 +156240,7 @@ impl JavaToBedrockItemMapping {
             (292, 0) => Some(&Self::PUMPKIN_SEEDS),
             (577, 5) => Some(&Self::PURPLE_BANNER),
             (421, 10) => Some(&Self::PURPLE_BED),
-            (874, 0) => Some(&Self::PURPLE_BUNDLE),
+            (875, 0) => Some(&Self::PURPLE_BUNDLE),
             (-423, 0) => Some(&Self::PURPLE_CANDLE),
             (-606, 10) => Some(&Self::PURPLE_CARPET),
             (-637, 10) => Some(&Self::PURPLE_CONCRETE),
@@ -156253,7 +156285,7 @@ impl JavaToBedrockItemMapping {
             (661, 0) => Some(&Self::RECOVERY_COMPASS),
             (577, 1) => Some(&Self::RED_BANNER),
             (421, 14) => Some(&Self::RED_BED),
-            (875, 0) => Some(&Self::RED_BUNDLE),
+            (876, 0) => Some(&Self::RED_BUNDLE),
             (-427, 0) => Some(&Self::RED_CANDLE),
             (-610, 14) => Some(&Self::RED_CARPET),
             (-641, 14) => Some(&Self::RED_CONCRETE),
@@ -156276,7 +156308,7 @@ impl JavaToBedrockItemMapping {
             (182, 0) => Some(&Self::RED_SANDSTONE_SLAB),
             (180, 0) => Some(&Self::RED_SANDSTONE_STAIRS),
             (-982, 12) => Some(&Self::RED_SANDSTONE_WALL),
-            (852, 0) => Some(&Self::RED_SHRUB),
+            (853, 0) => Some(&Self::RED_SHRUB),
             (-626, 14) => Some(&Self::RED_SHULKER_BOX),
             (-686, 14) => Some(&Self::RED_STAINED_GLASS),
             (-656, 14) => Some(&Self::RED_STAINED_GLASS_PANE),
@@ -156329,7 +156361,7 @@ impl JavaToBedrockItemMapping {
             (691, 0) => Some(&Self::SHEAF_POTTERY_SHERD),
             (424, 0) => Some(&Self::SHEARS),
             (442, 0) => Some(&Self::SHEEP_SPAWN_EGG),
-            (853, 0) => Some(&Self::SHELF_MUSHROOM),
+            (854, 0) => Some(&Self::SHELF_MUSHROOM),
             (692, 0) => Some(&Self::SHELTER_POTTERY_SHERD),
             (358, 0) => Some(&Self::SHIELD),
             (-1028, 0) => Some(&Self::SHORT_DRY_GRASS),
@@ -156416,8 +156448,8 @@ impl JavaToBedrockItemMapping {
             (316, 0) => Some(&Self::STONE_PICKAXE),
             (70, 0) => Some(&Self::STONE_PRESSURE_PLATE),
             (315, 0) => Some(&Self::STONE_SHOVEL),
-            (797, 0) => Some(&Self::STONE_SLAB),
-            (859, 0) => Some(&Self::STONE_SPEAR),
+            (798, 0) => Some(&Self::STONE_SLAB),
+            (860, 0) => Some(&Self::STONE_SPEAR),
             (-180, 0) => Some(&Self::STONE_STAIRS),
             (314, 0) => Some(&Self::STONE_SWORD),
             (-197, 0) => Some(&Self::STONECUTTER),
@@ -156475,7 +156507,7 @@ impl JavaToBedrockItemMapping {
             (578, 0) => Some(&Self::TOTEM_OF_UNDYING),
             (663, 0) => Some(&Self::TRADER_LLAMA_SPAWN_EGG),
             (146, 0) => Some(&Self::TRAPPED_CHEST),
-            (880, 0) => Some(&Self::TRIAL_KEY),
+            (881, 0) => Some(&Self::TRIAL_KEY),
             (-315, 0) => Some(&Self::TRIAL_SPAWNER),
             (556, 0) => Some(&Self::TRIDENT),
             (131, 0) => Some(&Self::TRIPWIRE_HOOK),
@@ -156609,7 +156641,7 @@ impl JavaToBedrockItemMapping {
             (337, 0) => Some(&Self::WHEAT),
             (291, 0) => Some(&Self::WHEAT_SEEDS),
             (577, 15) => Some(&Self::WHITE_BANNER),
-            (876, 0) => Some(&Self::WHITE_BUNDLE),
+            (877, 0) => Some(&Self::WHITE_BUNDLE),
             (-413, 0) => Some(&Self::WHITE_CANDLE),
             (171, 0) => Some(&Self::WHITE_CARPET),
             (236, 0) => Some(&Self::WHITE_CONCRETE),
@@ -156630,7 +156662,7 @@ impl JavaToBedrockItemMapping {
             (-1150, 0) => Some(&Self::WHITE_WOOL_STAIRS),
             (700, 0) => Some(&Self::WILD_ARMOR_TRIM_SMITHING_TEMPLATE),
             (-1024, 0) => Some(&Self::WILDFLOWERS),
-            (881, 0) => Some(&Self::WIND_CHARGE),
+            (882, 0) => Some(&Self::WIND_CHARGE),
             (456, 0) => Some(&Self::WITCH_SPAWN_EGG),
             (-216, 0) => Some(&Self::WITHER_ROSE),
             (-965, 0) => Some(&Self::WITHER_SKELETON_SKULL),
@@ -156642,13 +156674,13 @@ impl JavaToBedrockItemMapping {
             (332, 0) => Some(&Self::WOODEN_HOE),
             (312, 0) => Some(&Self::WOODEN_PICKAXE),
             (311, 0) => Some(&Self::WOODEN_SHOVEL),
-            (860, 0) => Some(&Self::WOODEN_SPEAR),
+            (861, 0) => Some(&Self::WOODEN_SPEAR),
             (310, 0) => Some(&Self::WOODEN_SWORD),
             (521, 0) => Some(&Self::WRITABLE_BOOK),
             (522, 0) => Some(&Self::WRITTEN_BOOK),
             (577, 11) => Some(&Self::YELLOW_BANNER),
             (421, 4) => Some(&Self::YELLOW_BED),
-            (877, 0) => Some(&Self::YELLOW_BUNDLE),
+            (878, 0) => Some(&Self::YELLOW_BUNDLE),
             (-417, 0) => Some(&Self::YELLOW_CANDLE),
             (-600, 4) => Some(&Self::YELLOW_CARPET),
             (-631, 4) => Some(&Self::YELLOW_CONCRETE),
@@ -156708,7 +156740,7 @@ impl JavaToBedrockItemMapping {
                 -974 => Some(&Self::ANDESITE_WALL),
                 672 => Some(&Self::ANGLER_POTTERY_SHERD),
                 145 => Some(&Self::ANVIL),
-                882 => Some(&Self::APPLE),
+                883 => Some(&Self::APPLE),
                 673 => Some(&Self::ARCHER_POTTERY_SHERD),
                 722 => Some(&Self::ARMADILLO_SCUTE),
                 721 => Some(&Self::ARMADILLO_SPAWN_EGG),
@@ -156775,7 +156807,7 @@ impl JavaToBedrockItemMapping {
                 -815 => Some(&Self::BIRCH_WOOD),
                 577 => Some(&Self::BLACK_BANNER),
                 421 => Some(&Self::BLACK_BED),
-                861 => Some(&Self::BLACK_BUNDLE),
+                862 => Some(&Self::BLACK_BUNDLE),
                 -428 => Some(&Self::BLACK_CANDLE),
                 -611 => Some(&Self::BLACK_CARPET),
                 -642 => Some(&Self::BLACK_CONCRETE),
@@ -156802,7 +156834,7 @@ impl JavaToBedrockItemMapping {
                 433 => Some(&Self::BLAZE_POWDER),
                 426 => Some(&Self::BLAZE_ROD),
                 460 => Some(&Self::BLAZE_SPAWN_EGG),
-                862 => Some(&Self::BLUE_BUNDLE),
+                863 => Some(&Self::BLUE_BUNDLE),
                 -424 => Some(&Self::BLUE_CANDLE),
                 -607 => Some(&Self::BLUE_CARPET),
                 -638 => Some(&Self::BLUE_CONCRETE),
@@ -156837,7 +156869,7 @@ impl JavaToBedrockItemMapping {
                 -849 => Some(&Self::BRAIN_CORAL_BLOCK),
                 -840 => Some(&Self::BRAIN_CORAL_FAN),
                 261 => Some(&Self::BREAD),
-                878 => Some(&Self::BREEZE_ROD),
+                879 => Some(&Self::BREEZE_ROD),
                 506 => Some(&Self::BREEZE_SPAWN_EGG),
                 676 => Some(&Self::BREWER_POTTERY_SHERD),
                 435 => Some(&Self::BREWING_STAND),
@@ -156846,7 +156878,7 @@ impl JavaToBedrockItemMapping {
                 108 => Some(&Self::BRICK_STAIRS),
                 -976 => Some(&Self::BRICK_WALL),
                 45 => Some(&Self::BRICKS),
-                863 => Some(&Self::BROWN_BUNDLE),
+                864 => Some(&Self::BROWN_BUNDLE),
                 -425 => Some(&Self::BROWN_CANDLE),
                 -608 => Some(&Self::BROWN_CARPET),
                 -639 => Some(&Self::BROWN_CONCRETE),
@@ -156873,7 +156905,7 @@ impl JavaToBedrockItemMapping {
                 -841 => Some(&Self::BUBBLE_CORAL_FAN),
                 363 => Some(&Self::BUCKET),
                 -328 => Some(&Self::BUDDING_AMETHYST),
-                864 => Some(&Self::BUNDLE),
+                865 => Some(&Self::BUNDLE),
                 677 => Some(&Self::BURN_POTTERY_SHERD),
                 -1023 => Some(&Self::BUSH),
                 81 => Some(&Self::CACTUS),
@@ -157005,7 +157037,7 @@ impl JavaToBedrockItemMapping {
                 -311 => Some(&Self::COPPER_ORE),
                 751 => Some(&Self::COPPER_PICKAXE),
                 750 => Some(&Self::COPPER_SHOVEL),
-                854 => Some(&Self::COPPER_SPEAR),
+                855 => Some(&Self::COPPER_SPEAR),
                 749 => Some(&Self::COPPER_SWORD),
                 -1082 => Some(&Self::COPPER_TORCH),
                 -792 => Some(&Self::COPPER_TRAPDOOR),
@@ -157049,7 +157081,7 @@ impl JavaToBedrockItemMapping {
                 -901 => Some(&Self::CUT_RED_SANDSTONE_SLAB),
                 -945 => Some(&Self::CUT_SANDSTONE),
                 -900 => Some(&Self::CUT_SANDSTONE_SLAB),
-                865 => Some(&Self::CYAN_BUNDLE),
+                866 => Some(&Self::CYAN_BUNDLE),
                 -422 => Some(&Self::CYAN_CANDLE),
                 -605 => Some(&Self::CYAN_CARPET),
                 -636 => Some(&Self::CYAN_CONCRETE),
@@ -157141,7 +157173,7 @@ impl JavaToBedrockItemMapping {
                 56 => Some(&Self::DIAMOND_ORE),
                 320 => Some(&Self::DIAMOND_PICKAXE),
                 319 => Some(&Self::DIAMOND_SHOVEL),
-                855 => Some(&Self::DIAMOND_SPEAR),
+                856 => Some(&Self::DIAMOND_SPEAR),
                 318 => Some(&Self::DIAMOND_SWORD),
                 -592 => Some(&Self::DIORITE),
                 -894 => Some(&Self::DIORITE_SLAB),
@@ -157173,7 +157205,7 @@ impl JavaToBedrockItemMapping {
                 531 => Some(&Self::ENCHANTED_BOOK),
                 259 => Some(&Self::ENCHANTED_GOLDEN_APPLE),
                 116 => Some(&Self::ENCHANTING_TABLE),
-                851 => Some(&Self::END_CRYSTAL),
+                852 => Some(&Self::END_CRYSTAL),
                 120 => Some(&Self::END_PORTAL_FRAME),
                 208 => Some(&Self::END_ROD),
                 121 => Some(&Self::END_STONE),
@@ -157243,7 +157275,7 @@ impl JavaToBedrockItemMapping {
                 102 => Some(&Self::GLASS_PANE),
                 438 => Some(&Self::GLISTERING_MELON_SLICE),
                 598 => Some(&Self::GLOBE_BANNER_PATTERN),
-                883 => Some(&Self::GLOW_BERRIES),
+                884 => Some(&Self::GLOW_BERRIES),
                 514 => Some(&Self::GLOW_INK_SAC),
                 638 => Some(&Self::GLOW_ITEM_FRAME),
                 -411 => Some(&Self::GLOW_LICHEN),
@@ -157269,7 +157301,7 @@ impl JavaToBedrockItemMapping {
                 765 => Some(&Self::GOLDEN_NAUTILUS_ARMOR),
                 327 => Some(&Self::GOLDEN_PICKAXE),
                 326 => Some(&Self::GOLDEN_SHOVEL),
-                856 => Some(&Self::GOLDEN_SPEAR),
+                857 => Some(&Self::GOLDEN_SPEAR),
                 325 => Some(&Self::GOLDEN_SWORD),
                 -590 => Some(&Self::GRANITE),
                 -896 => Some(&Self::GRANITE_SLAB),
@@ -157277,7 +157309,7 @@ impl JavaToBedrockItemMapping {
                 -972 => Some(&Self::GRANITE_WALL),
                 2 => Some(&Self::GRASS_BLOCK),
                 13 => Some(&Self::GRAVEL),
-                866 => Some(&Self::GRAY_BUNDLE),
+                867 => Some(&Self::GRAY_BUNDLE),
                 -420 => Some(&Self::GRAY_CANDLE),
                 -603 => Some(&Self::GRAY_CARPET),
                 -634 => Some(&Self::GRAY_CONCRETE),
@@ -157295,7 +157327,7 @@ impl JavaToBedrockItemMapping {
                 -553 => Some(&Self::GRAY_WOOL),
                 -1167 => Some(&Self::GRAY_WOOL_SLAB),
                 -1158 => Some(&Self::GRAY_WOOL_STAIRS),
-                867 => Some(&Self::GREEN_BUNDLE),
+                868 => Some(&Self::GREEN_BUNDLE),
                 -426 => Some(&Self::GREEN_CANDLE),
                 -609 => Some(&Self::GREEN_CARPET),
                 -640 => Some(&Self::GREEN_CONCRETE),
@@ -157366,7 +157398,7 @@ impl JavaToBedrockItemMapping {
                 15 => Some(&Self::IRON_ORE),
                 299 => Some(&Self::IRON_PICKAXE),
                 298 => Some(&Self::IRON_SHOVEL),
-                857 => Some(&Self::IRON_SPEAR),
+                858 => Some(&Self::IRON_SPEAR),
                 309 => Some(&Self::IRON_SWORD),
                 167 => Some(&Self::IRON_TRAPDOOR),
                 524 => Some(&Self::ITEM_FRAME),
@@ -157410,8 +157442,8 @@ impl JavaToBedrockItemMapping {
                 340 => Some(&Self::LEATHER_LEGGINGS),
                 -194 => Some(&Self::LECTERN),
                 69 => Some(&Self::LEVER),
-                844 => Some(&Self::LIGHT),
-                868 => Some(&Self::LIGHT_BLUE_BUNDLE),
+                845 => Some(&Self::LIGHT),
+                869 => Some(&Self::LIGHT_BLUE_BUNDLE),
                 -416 => Some(&Self::LIGHT_BLUE_CANDLE),
                 -599 => Some(&Self::LIGHT_BLUE_CARPET),
                 -630 => Some(&Self::LIGHT_BLUE_CONCRETE),
@@ -157429,7 +157461,7 @@ impl JavaToBedrockItemMapping {
                 -562 => Some(&Self::LIGHT_BLUE_WOOL),
                 -1176 => Some(&Self::LIGHT_BLUE_WOOL_SLAB),
                 -1154 => Some(&Self::LIGHT_BLUE_WOOL_STAIRS),
-                869 => Some(&Self::LIGHT_GRAY_BUNDLE),
+                870 => Some(&Self::LIGHT_GRAY_BUNDLE),
                 -421 => Some(&Self::LIGHT_GRAY_CANDLE),
                 -604 => Some(&Self::LIGHT_GRAY_CARPET),
                 -635 => Some(&Self::LIGHT_GRAY_CONCRETE),
@@ -157452,7 +157484,7 @@ impl JavaToBedrockItemMapping {
                 -863 => Some(&Self::LILAC),
                 -839 => Some(&Self::LILY_OF_THE_VALLEY),
                 111 => Some(&Self::LILY_PAD),
-                870 => Some(&Self::LIME_BUNDLE),
+                871 => Some(&Self::LIME_BUNDLE),
                 -418 => Some(&Self::LIME_CANDLE),
                 -601 => Some(&Self::LIME_CARPET),
                 -632 => Some(&Self::LIME_CONCRETE),
@@ -157475,7 +157507,7 @@ impl JavaToBedrockItemMapping {
                 -222 => Some(&Self::LODESTONE),
                 -204 => Some(&Self::LOOM),
                 322 => Some(&Self::MACE),
-                871 => Some(&Self::MAGENTA_BUNDLE),
+                872 => Some(&Self::MAGENTA_BUNDLE),
                 -415 => Some(&Self::MAGENTA_CANDLE),
                 -598 => Some(&Self::MAGENTA_CARPET),
                 -629 => Some(&Self::MAGENTA_CONCRETE),
@@ -157551,19 +157583,19 @@ impl JavaToBedrockItemMapping {
                 546 => Some(&Self::MUSIC_DISC_BLOCKS),
                 545 => Some(&Self::MUSIC_DISC_CAT),
                 547 => Some(&Self::MUSIC_DISC_CHIRP),
-                832 => Some(&Self::MUSIC_DISC_CREATOR),
-                833 => Some(&Self::MUSIC_DISC_CREATOR_MUSIC_BOX),
+                833 => Some(&Self::MUSIC_DISC_CREATOR),
+                834 => Some(&Self::MUSIC_DISC_CREATOR_MUSIC_BOX),
                 548 => Some(&Self::MUSIC_DISC_FAR),
-                836 => Some(&Self::MUSIC_DISC_LAVA_CHICKEN),
+                837 => Some(&Self::MUSIC_DISC_LAVA_CHICKEN),
                 549 => Some(&Self::MUSIC_DISC_MALL),
                 550 => Some(&Self::MUSIC_DISC_MELLOHI),
                 641 => Some(&Self::MUSIC_DISC_OTHERSIDE),
                 635 => Some(&Self::MUSIC_DISC_PIGSTEP),
-                834 => Some(&Self::MUSIC_DISC_PRECIPICE),
+                835 => Some(&Self::MUSIC_DISC_PRECIPICE),
                 715 => Some(&Self::MUSIC_DISC_RELIC),
                 551 => Some(&Self::MUSIC_DISC_STAL),
                 552 => Some(&Self::MUSIC_DISC_STRAD),
-                835 => Some(&Self::MUSIC_DISC_TEARS),
+                836 => Some(&Self::MUSIC_DISC_TEARS),
                 555 => Some(&Self::MUSIC_DISC_WAIT),
                 553 => Some(&Self::MUSIC_DISC_WARD),
                 560 => Some(&Self::MUTTON),
@@ -157596,7 +157628,7 @@ impl JavaToBedrockItemMapping {
                 621 => Some(&Self::NETHERITE_PICKAXE),
                 629 => Some(&Self::NETHERITE_SCRAP),
                 620 => Some(&Self::NETHERITE_SHOVEL),
-                858 => Some(&Self::NETHERITE_SPEAR),
+                859 => Some(&Self::NETHERITE_SPEAR),
                 619 => Some(&Self::NETHERITE_SWORD),
                 696 => Some(&Self::NETHERITE_UPGRADE_SMITHING_TEMPLATE),
                 87 => Some(&Self::NETHERRACK),
@@ -157624,9 +157656,9 @@ impl JavaToBedrockItemMapping {
                 455 => Some(&Self::OCELOT_SPAWN_EGG),
                 -471 => Some(&Self::OCHRE_FROGLIGHT),
                 605 => Some(&Self::OMINOUS_BOTTLE),
-                879 => Some(&Self::OMINOUS_TRIAL_KEY),
+                880 => Some(&Self::OMINOUS_TRIAL_KEY),
                 -1018 => Some(&Self::OPEN_EYEBLOSSOM),
-                872 => Some(&Self::ORANGE_BUNDLE),
+                873 => Some(&Self::ORANGE_BUNDLE),
                 -414 => Some(&Self::ORANGE_CANDLE),
                 -597 => Some(&Self::ORANGE_CARPET),
                 -628 => Some(&Self::ORANGE_CONCRETE),
@@ -157701,7 +157733,7 @@ impl JavaToBedrockItemMapping {
                 -970 => Some(&Self::PIGLIN_HEAD),
                 502 => Some(&Self::PIGLIN_SPAWN_EGG),
                 496 => Some(&Self::PILLAGER_SPAWN_EGG),
-                873 => Some(&Self::PINK_BUNDLE),
+                874 => Some(&Self::PINK_BUNDLE),
                 -419 => Some(&Self::PINK_CANDLE),
                 -602 => Some(&Self::PINK_CARPET),
                 -633 => Some(&Self::PINK_CONCRETE),
@@ -157802,7 +157834,7 @@ impl JavaToBedrockItemMapping {
                 86 => Some(&Self::PUMPKIN),
                 284 => Some(&Self::PUMPKIN_PIE),
                 292 => Some(&Self::PUMPKIN_SEEDS),
-                874 => Some(&Self::PURPLE_BUNDLE),
+                875 => Some(&Self::PURPLE_BUNDLE),
                 -423 => Some(&Self::PURPLE_CANDLE),
                 -606 => Some(&Self::PURPLE_CARPET),
                 -637 => Some(&Self::PURPLE_CONCRETE),
@@ -157845,7 +157877,7 @@ impl JavaToBedrockItemMapping {
                 516 => Some(&Self::RAW_IRON),
                 -451 => Some(&Self::RAW_IRON_BLOCK),
                 661 => Some(&Self::RECOVERY_COMPASS),
-                875 => Some(&Self::RED_BUNDLE),
+                876 => Some(&Self::RED_BUNDLE),
                 -427 => Some(&Self::RED_CANDLE),
                 -610 => Some(&Self::RED_CARPET),
                 -641 => Some(&Self::RED_CONCRETE),
@@ -157868,7 +157900,7 @@ impl JavaToBedrockItemMapping {
                 182 => Some(&Self::RED_SANDSTONE_SLAB),
                 180 => Some(&Self::RED_SANDSTONE_STAIRS),
                 -982 => Some(&Self::RED_SANDSTONE_WALL),
-                852 => Some(&Self::RED_SHRUB),
+                853 => Some(&Self::RED_SHRUB),
                 -626 => Some(&Self::RED_SHULKER_BOX),
                 -686 => Some(&Self::RED_STAINED_GLASS),
                 -656 => Some(&Self::RED_STAINED_GLASS_PANE),
@@ -157921,7 +157953,7 @@ impl JavaToBedrockItemMapping {
                 691 => Some(&Self::SHEAF_POTTERY_SHERD),
                 424 => Some(&Self::SHEARS),
                 442 => Some(&Self::SHEEP_SPAWN_EGG),
-                853 => Some(&Self::SHELF_MUSHROOM),
+                854 => Some(&Self::SHELF_MUSHROOM),
                 692 => Some(&Self::SHELTER_POTTERY_SHERD),
                 358 => Some(&Self::SHIELD),
                 -1028 => Some(&Self::SHORT_DRY_GRASS),
@@ -158008,8 +158040,8 @@ impl JavaToBedrockItemMapping {
                 316 => Some(&Self::STONE_PICKAXE),
                 70 => Some(&Self::STONE_PRESSURE_PLATE),
                 315 => Some(&Self::STONE_SHOVEL),
-                797 => Some(&Self::STONE_SLAB),
-                859 => Some(&Self::STONE_SPEAR),
+                798 => Some(&Self::STONE_SLAB),
+                860 => Some(&Self::STONE_SPEAR),
                 -180 => Some(&Self::STONE_STAIRS),
                 314 => Some(&Self::STONE_SWORD),
                 -197 => Some(&Self::STONECUTTER),
@@ -158066,7 +158098,7 @@ impl JavaToBedrockItemMapping {
                 578 => Some(&Self::TOTEM_OF_UNDYING),
                 663 => Some(&Self::TRADER_LLAMA_SPAWN_EGG),
                 146 => Some(&Self::TRAPPED_CHEST),
-                880 => Some(&Self::TRIAL_KEY),
+                881 => Some(&Self::TRIAL_KEY),
                 -315 => Some(&Self::TRIAL_SPAWNER),
                 556 => Some(&Self::TRIDENT),
                 131 => Some(&Self::TRIPWIRE_HOOK),
@@ -158199,7 +158231,7 @@ impl JavaToBedrockItemMapping {
                 -984 => Some(&Self::WET_SPONGE),
                 337 => Some(&Self::WHEAT),
                 291 => Some(&Self::WHEAT_SEEDS),
-                876 => Some(&Self::WHITE_BUNDLE),
+                877 => Some(&Self::WHITE_BUNDLE),
                 -413 => Some(&Self::WHITE_CANDLE),
                 171 => Some(&Self::WHITE_CARPET),
                 236 => Some(&Self::WHITE_CONCRETE),
@@ -158220,7 +158252,7 @@ impl JavaToBedrockItemMapping {
                 -1150 => Some(&Self::WHITE_WOOL_STAIRS),
                 700 => Some(&Self::WILD_ARMOR_TRIM_SMITHING_TEMPLATE),
                 -1024 => Some(&Self::WILDFLOWERS),
-                881 => Some(&Self::WIND_CHARGE),
+                882 => Some(&Self::WIND_CHARGE),
                 456 => Some(&Self::WITCH_SPAWN_EGG),
                 -216 => Some(&Self::WITHER_ROSE),
                 -965 => Some(&Self::WITHER_SKELETON_SKULL),
@@ -158232,11 +158264,11 @@ impl JavaToBedrockItemMapping {
                 332 => Some(&Self::WOODEN_HOE),
                 312 => Some(&Self::WOODEN_PICKAXE),
                 311 => Some(&Self::WOODEN_SHOVEL),
-                860 => Some(&Self::WOODEN_SPEAR),
+                861 => Some(&Self::WOODEN_SPEAR),
                 310 => Some(&Self::WOODEN_SWORD),
                 521 => Some(&Self::WRITABLE_BOOK),
                 522 => Some(&Self::WRITTEN_BOOK),
-                877 => Some(&Self::YELLOW_BUNDLE),
+                878 => Some(&Self::YELLOW_BUNDLE),
                 -417 => Some(&Self::YELLOW_CANDLE),
                 -600 => Some(&Self::YELLOW_CARPET),
                 -631 => Some(&Self::YELLOW_CONCRETE),

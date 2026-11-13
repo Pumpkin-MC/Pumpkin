@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use crate::{
     entity::{Entity, EntityBase, projectile::ThrownItemEntity},
     server::Server,
@@ -56,7 +57,7 @@ impl FireworkRocketEntity {
         Self {
             entity: ThrownItemEntity {
                 entity,
-                owner_id: None,
+                owner: ProjectileOwner::none(),
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
                 gravity: GRAVITY,
@@ -67,6 +68,12 @@ impl FireworkRocketEntity {
             attached_to_entity: None,
             shot_at_angle: AtomicBool::new(false),
         }
+    }
+
+    pub fn new_with_owner(entity: Entity, owner: &Entity, stack: ItemStack) -> Self {
+        let mut rocket = Self::new_with_stack(entity, stack);
+        rocket.entity.owner = ProjectileOwner::new(Some(owner));
+        rocket
     }
 
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
@@ -129,7 +136,7 @@ impl FireworkRocketEntity {
         world.send_entity_status(
             entity,
             EntityStatus::FireworksExplode,
-            Some(ActorEventID::FireworksExplode),
+            ActorEventID::FireworksExplode,
         );
         self.deal_explosion_damage(world);
 
@@ -152,10 +159,7 @@ impl FireworkRocketEntity {
 
         let damage_amount = 5.0 + (explosion_count as f32) * 2.0;
         let entity = self.get_entity();
-        let owner = self
-            .entity
-            .owner_id
-            .and_then(|id| world.get_entity_by_id(id));
+        let owner = self.entity.owner.get(world);
 
         if let Some(attached_id) = self.attached_to_entity
             && let Some(attached) = world.get_entity_by_id(attached_id)
@@ -207,8 +211,8 @@ impl FireworkRocketEntity {
 }
 
 impl EntityBase for FireworkRocketEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.entity.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.entity.owner)
     }
 
     fn init_data_tracker(&self) {
@@ -249,7 +253,7 @@ impl EntityBase for FireworkRocketEntity {
 
                 if shooter.is_fall_flying() {
                     let mut boost_cancelled = false;
-                    if let Some(player) = world.get_player_by_id(shooter_id)
+                    if let Some(player) = self.entity.owner.get_player(&world)
                         && let Some(server) = world.server.upgrade()
                     {
                         let mut event = crate::plugin::api::events::player::player_elytra_boost::PlayerElytraBoostEvent {
@@ -264,7 +268,8 @@ impl EntityBase for FireworkRocketEntity {
                     }
                     if !boost_cancelled {
                         let rotation = shooter.rotation().to_f64();
-                        let shooter_vel = shooter.velocity.load();
+                        // Boost from the client motion, the server doesn't simulate player flight
+                        let shooter_vel = shooter.known_movement();
 
                         let new_shooter_vel =
                             shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);

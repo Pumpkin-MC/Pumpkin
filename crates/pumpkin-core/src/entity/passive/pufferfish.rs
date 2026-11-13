@@ -131,10 +131,7 @@ impl PufferfishEntity {
             if let Some(living) = mob.get_living_entity() {
                 living.add_effect(Self::poison(state));
             }
-            let entity = self.get_entity();
-            if !entity.is_silent() {
-                entity.play_sound(Sound::EntityPufferFishSting);
-            }
+            self.play_entity_sound(Sound::EntityPufferFishSting, 1.0, 1.0);
         }
     }
 }
@@ -191,6 +188,10 @@ impl Mob for PufferfishEntity {
         }
     }
 
+    fn mob_receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn mob_player_collision(&self, player: &Arc<Player>) {
         let this: &dyn EntityBase = self;
         if !this.do_teams_allow_damage(player.as_ref()) {
@@ -213,7 +214,8 @@ impl Mob for PufferfishEntity {
                     0.0,
                 ));
             }
-            player.living_entity.add_effect(Self::poison(state));
+            // Through the player, so `effects_changed` advancements trigger like vanilla.
+            player.add_effect(Self::poison(state));
         }
     }
 

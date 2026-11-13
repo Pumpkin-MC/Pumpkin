@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::environment_attribute::Activity;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::mob::Mob;
 use crate::world::World;
@@ -63,6 +64,12 @@ pub struct Brain {
     behaviors: BTreeMap<i32, Vec<ActivityBehaviors>>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Schedule {
+    Villager,
+    BabyVillager,
+}
+
 pub struct BrainState {
     memories: MemoryStore,
     activity_requirements: Vec<Option<ActivityConditions>>,
@@ -70,6 +77,8 @@ pub struct BrainState {
     core_activities: ActivitySet,
     active_activities: ActivitySet,
     default_activity: Activity,
+    schedule: Option<Schedule>,
+    last_schedule_update: i64,
 }
 
 impl Default for BrainState {
@@ -81,6 +90,8 @@ impl Default for BrainState {
             core_activities: ActivitySet::single(Activity::Core),
             active_activities: ActivitySet::default(),
             default_activity: Activity::Idle,
+            schedule: None,
+            last_schedule_update: -9999,
         };
         state.use_default_activity();
         state
@@ -186,8 +197,26 @@ impl BrainState {
         self.default_activity = activity;
     }
 
+    pub const fn set_schedule(&mut self, schedule: Option<Schedule>) {
+        self.schedule = schedule;
+    }
+
     pub fn use_default_activity(&mut self) {
         self.set_active_activity(self.default_activity);
+    }
+
+    pub fn update_activity_from_schedule(&mut self, world: &World, game_time: i64, pos: &BlockPos) {
+        if game_time - self.last_schedule_update > 20 {
+            self.last_schedule_update = game_time;
+            let scheduled_activity = self.schedule.map_or(Activity::Idle, |schedule| {
+                world
+                    .environment_attributes()
+                    .get_value_activity(schedule == Schedule::BabyVillager, pos)
+            });
+            if !self.active_activities.contains(scheduled_activity) {
+                self.set_active_activity_if_possible(scheduled_activity);
+            }
+        }
     }
 
     #[must_use]
@@ -839,7 +868,7 @@ mod tests {
                 types::HOME,
                 memory::GlobalPos::new(
                     &pumpkin_data::dimension::Dimension::OVERWORLD,
-                    pumpkin_util::math::position::BlockPos::new(0, 64, 0),
+                    BlockPos::new(0, 64, 0),
                 ),
             );
             brain.add_activity(ActivityData::with_priority_start(
@@ -953,6 +982,65 @@ mod tests {
         assert!(mob.get_entity().is_removed());
         assert!(!has_memory);
         assert_eq!(observed.load(Ordering::Relaxed), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn schedule_updates_the_activity_at_most_once_per_twenty_ticks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let pos = BlockPos::new(0, 64, 0);
+        world.set_time_of_day(2000);
+        let mut brain = Brain::default();
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Work,
+            0,
+            Vec::new(),
+        ));
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Rest,
+            0,
+            Vec::new(),
+        ));
+        brain.set_schedule(Some(Schedule::Villager));
+
+        brain.update_activity_from_schedule(&world, 100, &pos);
+        assert!(brain.is_active(Activity::Work));
+
+        world.set_time_of_day(12000);
+        brain.update_activity_from_schedule(&world, 110, &pos);
+        assert!(brain.is_active(Activity::Work));
+
+        brain.update_activity_from_schedule(&world, 121, &pos);
+        world.level.shutdown().await;
+        assert!(brain.is_active(Activity::Rest));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn without_a_schedule_the_activity_falls_back_to_idle()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let pos = BlockPos::new(0, 64, 0);
+        let mut brain = Brain::default();
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Work,
+            0,
+            Vec::new(),
+        ));
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Idle,
+            0,
+            Vec::new(),
+        ));
+        brain.set_active_activity_if_possible(Activity::Work);
+        assert!(brain.is_active(Activity::Work));
+
+        brain.update_activity_from_schedule(&world, 100, &pos);
+        world.level.shutdown().await;
+        assert!(brain.is_active(Activity::Idle));
         Ok(())
     }
 }

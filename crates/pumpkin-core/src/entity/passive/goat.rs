@@ -3,12 +3,15 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -22,8 +25,6 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
-
-const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
 pub struct GoatEntity {
     pub mob_entity: MobEntity,
@@ -55,7 +56,14 @@ impl GoatEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.25,
+                    &tag::Item::MINECRAFT_GOAT_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -118,13 +126,33 @@ impl AgeableMob for GoatEntity {
 }
 
 impl Animal for GoatEntity {
+    fn play_eating_sound(&self) {
+        let sound = if self.is_screaming() {
+            Sound::EntityGoatScreamingEat
+        } else {
+            Sound::EntityGoatEat
+        };
+        let pitch = 0.8 + self.get_random().random::<f32>() * 0.4;
+        self.play_entity_sound(sound, 1.0, pitch);
+    }
+
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_GOAT_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
 impl Mob for GoatEntity {
+    fn calculate_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        self.mob_entity
+            .living_entity
+            .base_fall_damage(fall_distance, damage_modifier)
+            - 10
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityGoatStep, 0.15, 1.0);
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -190,11 +218,6 @@ impl Mob for GoatEntity {
             return true;
         }
 
-        let ambient_sound = if self.is_screaming() {
-            Sound::EntityGoatScreamingAmbient
-        } else {
-            Sound::EntityGoatAmbient
-        };
-        self.animal_interact(player, item_stack, ambient_sound)
+        self.animal_interact(player, item_stack)
     }
 }

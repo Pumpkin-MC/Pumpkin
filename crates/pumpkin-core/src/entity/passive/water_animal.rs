@@ -1,10 +1,10 @@
 use pumpkin_data::damage::DamageType;
-use rand::RngExt;
 
 use crate::entity::{
     EntityBase,
     breath::{DROWNING_DAMAGE, MAX_AIR},
     mob::Mob,
+    passive::animal::experience_reward,
 };
 
 pub const AMBIENT_SOUND_INTERVAL: i32 = 120;
@@ -27,21 +27,7 @@ pub(super) fn check_spawn_obstruction<M: Mob + ?Sized>(
     mob: &M,
     world: &crate::world::World,
 ) -> bool {
-    let entity = mob.get_entity();
-    let bounds = entity.bounding_box.load();
-    let root_vehicle = entity.root_vehicle_id();
-    let unobstructed = |other: &dyn EntityBase| {
-        let other = other.get_entity();
-        !other.is_alive() || !other.blocks_building || other.root_vehicle_id() == root_vehicle
-    };
-    world
-        .get_entities_at_box(&bounds)
-        .iter()
-        .all(|other| unobstructed(other.as_ref()))
-        && world
-            .get_players_at_box(&bounds)
-            .iter()
-            .all(|player| player.is_spectator() || unobstructed(player.as_ref()))
+    world.is_unobstructed(mob.get_entity())
 }
 
 pub(super) fn handle_air_supply<M: Mob + ?Sized>(
@@ -60,8 +46,4 @@ pub(super) fn handle_air_supply<M: Mob + ?Sized>(
     } else {
         entity.set_air_supply(MAX_AIR);
     }
-}
-
-pub(super) fn experience_reward<M: Mob + ?Sized>(mob: &M) -> u32 {
-    1 + mob.get_random().random_range(0..3)
 }

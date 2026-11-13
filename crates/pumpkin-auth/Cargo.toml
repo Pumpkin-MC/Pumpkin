@@ -21,6 +21,8 @@ crypto-bigint.workspace = true
 
 reqwest.workspace = true
 rustls.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
 webpki-root-certs.workspace = true
 
 [lints]

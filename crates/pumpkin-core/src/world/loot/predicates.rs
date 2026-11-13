@@ -170,16 +170,10 @@ fn entity_matches(
                     },
                 )
             }
-            "vehicle" => {
-                let guard = entity
-                    .get_entity()
-                    .vehicle
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                guard
-                    .as_ref()
-                    .is_some_and(|v| entity_matches(v.as_ref(), expected, params))
-            }
+            "vehicle" => entity
+                .get_entity()
+                .get_vehicle()
+                .is_some_and(|v| entity_matches(v.as_ref(), expected, params)),
             "passenger" => {
                 let guard = entity
                     .get_entity()

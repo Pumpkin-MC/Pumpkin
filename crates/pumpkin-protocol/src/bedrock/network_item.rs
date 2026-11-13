@@ -450,6 +450,10 @@ pub enum ContainerName {
     RecipeFood,
     RecipeBlocks,
     RecipeFurnaceItems,
+    ContainerReservedA,
+    ContainerReservedB,
+    ContainerReservedC,
+    ContainerReservedD,
 }
 
 impl TryFrom<u8> for ContainerName {
@@ -524,6 +528,10 @@ impl TryFrom<u8> for ContainerName {
             64 => Ok(Self::RecipeFood),
             65 => Ok(Self::RecipeBlocks),
             66 => Ok(Self::RecipeFurnaceItems),
+            67 => Ok(Self::ContainerReservedA),
+            68 => Ok(Self::ContainerReservedB),
+            69 => Ok(Self::ContainerReservedC),
+            70 => Ok(Self::ContainerReservedD),
             _ => Err(Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Invalid ContainerName ID: {value}"),
@@ -660,4 +668,29 @@ fn read_user_data(
         destroy_blocks,
         shield_blocking_tick,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_reserved_container_names() {
+        assert_eq!(
+            ContainerName::try_from(67).unwrap(),
+            ContainerName::ContainerReservedA
+        );
+        assert_eq!(
+            ContainerName::try_from(68).unwrap(),
+            ContainerName::ContainerReservedB
+        );
+        assert_eq!(
+            ContainerName::try_from(69).unwrap(),
+            ContainerName::ContainerReservedC
+        );
+        assert_eq!(
+            ContainerName::try_from(70).unwrap(),
+            ContainerName::ContainerReservedD
+        );
+    }
 }

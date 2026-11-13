@@ -53,7 +53,7 @@ impl SummonEntityEffect {
         if let Some(bolt) = spawned.cast_any().downcast_ref::<LightningBoltEntity>()
             && let Some(player) = owner
         {
-            bolt.set_cause(Some(player.clone()));
+            bolt.set_cause(Some(player));
         }
 
         world.spawn_entity(spawned.clone());

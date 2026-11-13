@@ -1,12 +1,14 @@
 use super::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::pathfinder::node::PathType;
+use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 const TELEPORT_DISTANCE_SQ: f64 = 144.0;
 
@@ -15,11 +17,19 @@ pub struct FollowOwnerGoal {
     start_distance_sq: f64,
     stop_distance_sq: f64,
     time_to_recalc_path: i32,
-    owner: Option<Arc<Player>>,
+    owner: Option<Weak<Player>>,
     old_water_cost: f32,
 }
 
 impl FollowOwnerGoal {
+    pub(crate) fn teleport_if_needed(mob: &dyn Mob) {
+        if let Some(owner) = Self::find_owner(mob)
+            && !Self::unable_to_move_to_owner(mob, Some(&owner))
+            && Self::should_try_teleport_to_owner(mob, &owner)
+        {
+            Self::try_teleport_to_owner(mob, &owner);
+        }
+    }
     #[must_use]
     pub fn new(speed_modifier: f64, start_distance: f32, stop_distance: f32) -> Box<Self> {
         Box::new(Self {
@@ -33,7 +43,7 @@ impl FollowOwnerGoal {
     }
 
     fn unable_to_move_to_owner(mob: &dyn Mob, owner: Option<&Player>) -> bool {
-        if mob.is_sitting() {
+        if mob.ordered_to_sit() {
             return true;
         }
         let mob_entity = &mob.get_mob_entity().living_entity.entity;
@@ -43,10 +53,7 @@ impl FollowOwnerGoal {
         let Some(owner) = owner else {
             return true;
         };
-        if owner.is_spectator() || !owner.living_entity.entity.is_alive() {
-            return true;
-        }
-        false
+        owner.is_spectator() || !owner.living_entity.entity.is_alive()
     }
 
     fn find_owner(mob: &dyn Mob) -> Option<Arc<Player>> {
@@ -75,37 +82,32 @@ impl FollowOwnerGoal {
         let mob_entity = &mob.get_mob_entity().living_entity.entity;
         let world = mob_entity.world.load_full();
 
-        let offsets: [(i32, i32, i32); 10] = {
+        for _ in 0..10 {
             let mut rng = mob.get_random();
-            std::array::from_fn(|_| {
-                (
-                    rng.random_range(-3..=3),
-                    rng.random_range(-1..=1),
-                    rng.random_range(-3..=3),
-                )
-            })
-        };
-
-        for (dx, dy, dz) in offsets {
+            let dx: i32 = rng.random_range(-3..=3);
+            let dz: i32 = rng.random_range(-3..=3);
             if dx.abs() < 2 && dz.abs() < 2 {
                 continue;
             }
-
+            let dy = rng.random_range(-1..=1);
             let target_x = owner_pos.x.floor() as i32 + dx;
             let target_y = owner_pos.y.floor() as i32 + dy;
             let target_z = owner_pos.z.floor() as i32 + dz;
 
-            let below = BlockPos(Vector3::new(target_x, target_y - 1, target_z));
-            let block_below = world.get_block_state(&below);
-            if !block_below.is_solid() {
+            let at = BlockPos(Vector3::new(target_x, target_y, target_z));
+            let mut context = PathfindingContext::new(mob_entity.block_pos.load().0, world.clone());
+            if context.get_land_node_type(at.0) != PathType::Walkable {
                 continue;
             }
-
-            let at = BlockPos(Vector3::new(target_x, target_y, target_z));
-            let above = BlockPos(Vector3::new(target_x, target_y + 1, target_z));
-            let block_at = world.get_block_state(&at);
-            let block_above = world.get_block_state(&above);
-            if !block_at.is_air() || !block_above.is_air() {
+            if !mob.can_fly_to_owner()
+                && world
+                    .get_block(&at.down())
+                    .has_tag(&tag::Block::MINECRAFT_LEAVES)
+            {
+                continue;
+            }
+            let delta = (at.0 - mob_entity.block_pos.load().0).to_f64();
+            if !world.no_collision(mob_entity, mob_entity.bounding_box.load().shift(delta)) {
                 continue;
             }
 
@@ -146,7 +148,7 @@ impl Goal for FollowOwnerGoal {
             return false;
         }
 
-        self.owner = Some(owner);
+        self.owner = Some(Arc::downgrade(&owner));
         true
     }
 
@@ -156,11 +158,12 @@ impl Goal for FollowOwnerGoal {
             return false;
         }
 
-        if Self::unable_to_move_to_owner(mob, self.owner.as_deref()) {
+        let owner = self.owner.as_ref().and_then(Weak::upgrade);
+        if Self::unable_to_move_to_owner(mob, owner.as_deref()) {
             return false;
         }
 
-        let Some(owner) = &self.owner else {
+        let Some(owner) = &owner else {
             return false;
         };
 
@@ -191,11 +194,11 @@ impl Goal for FollowOwnerGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(owner) = &self.owner else {
+        let Some(owner) = self.owner.as_ref().and_then(Weak::upgrade) else {
             return;
         };
 
-        let is_owner_far_away = Self::should_try_teleport_to_owner(mob, owner);
+        let is_owner_far_away = Self::should_try_teleport_to_owner(mob, &owner);
 
         if !is_owner_far_away {
             let mob_entity = mob.get_mob_entity();
@@ -217,7 +220,7 @@ impl Goal for FollowOwnerGoal {
         if self.time_to_recalc_path <= 0 {
             self.time_to_recalc_path = self.get_tick_count(10);
             if is_owner_far_away {
-                Self::try_teleport_to_owner(mob, owner);
+                Self::try_teleport_to_owner(mob, &owner);
             } else {
                 let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
                 let owner_pos = owner.living_entity.entity.pos.load();

@@ -143,7 +143,7 @@ impl super::Phase for StrafingPhase {
                 Vector3::new(0.0, 0.0, 0.0)
             };
 
-            let dot = dir_norm.dot(&aim) as f32;
+            let dot = dir_norm.dot(&aim);
             let angle_degs = dot.acos().to_degrees() + 0.5;
 
             *charge += 1;

@@ -1,3 +1,4 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
@@ -25,7 +26,7 @@ impl SplashPotionEntity {
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
+            owner: ProjectileOwner::none(),
             collides_with_projectiles: false,
             has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
@@ -52,6 +53,23 @@ impl SplashPotionEntity {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *write = item_stack;
+    }
+
+    pub fn hurts_water_sensitive_entities(&self) -> bool {
+        let stack = self
+            .item_stack
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(potion) = stack
+            .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+            .and_then(|contents| contents.potion_id)
+            .and_then(|id| u8::try_from(id).ok())
+            .and_then(pumpkin_data::potion::Potion::from_id)
+        else {
+            return false;
+        };
+        let (names, ids) = pumpkin_data::tag::Potion::MINECRAFT_HURTS_WATER_SENSITIVE_ENTITIES;
+        names.contains(&potion.name) || ids.contains(&u16::from(potion.id))
     }
 }
 
@@ -99,8 +117,8 @@ pub(crate) fn extinguish_fire_if_water_potion(
 }
 
 impl EntityBase for SplashPotionEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn init_data_tracker(&self) {
@@ -149,7 +167,7 @@ impl EntityBase for SplashPotionEntity {
         world.send_entity_status(
             self.get_entity(),
             pumpkin_data::entity::EntityStatus::Death,
-            Some(pumpkin_protocol::bedrock::server::actor_event::ActorEventID::Death),
+            pumpkin_protocol::bedrock::server::actor_event::ActorEventID::Death,
         );
 
         let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);
@@ -212,6 +230,32 @@ impl EntityBase for SplashPotionEntity {
             &CWorldEvent::new(event_id, block_pos, color, false),
         );
 
+        if self.hurts_water_sensitive_entities() {
+            let owner = self.thrown.owner.get(&world);
+            let potion_pos = self.get_entity().pos.load();
+            let search_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
+            for entity in world.get_all_at_box(&search_box) {
+                if entity.get_living_entity().is_some()
+                    && entity.is_sensitive_to_water()
+                    && entity
+                        .get_entity()
+                        .pos
+                        .load()
+                        .squared_distance_to_vec(&potion_pos)
+                        < 16.0
+                {
+                    entity.damage_with_context(
+                        entity.as_ref(),
+                        1.0,
+                        pumpkin_data::damage::DamageType::INDIRECT_MAGIC,
+                        None,
+                        Some(self),
+                        owner.as_deref(),
+                    );
+                }
+            }
+        }
+
         // If no effects, just splash (like water bottles)
         if effects.is_empty() {
             return;
@@ -226,7 +270,7 @@ impl EntityBase for SplashPotionEntity {
         let mut candidates = world.get_entities_at_box(&aabb);
         let players = world.get_players_at_box(&aabb);
         for p in players {
-            candidates.push(p.clone() as Arc<dyn EntityBase>);
+            candidates.push(p as Arc<dyn EntityBase>);
         }
 
         let mut affected: Vec<(Arc<dyn EntityBase>, f32)> = Vec::new();
@@ -263,6 +307,7 @@ impl EntityBase for SplashPotionEntity {
             affected.retain(|(c, _)| event.affected_entities.contains(&c.get_entity().entity_id));
         }
 
+        let owner = self.thrown.owner.get(&world);
         for (cand, scale) in affected {
             if let Some(living) = cand.get_living_entity() {
                 crate::item::potion::PotionContents::apply_effects_to(
@@ -270,6 +315,10 @@ impl EntityBase for SplashPotionEntity {
                     effects.clone(),
                     scale,
                     crate::item::potion::PotionApplicationSource::Normal,
+                    Some(crate::entity::living::EffectSource {
+                        direct: self,
+                        owner: owner.as_deref(),
+                    }),
                 );
             }
         }
