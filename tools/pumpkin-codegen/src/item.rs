@@ -21,6 +21,8 @@ use syn::{Ident, LitBool, LitByteStr, LitFloat, LitInt, LitStr};
 pub struct Item {
     /// Numeric protocol ID for this item.
     pub id: u16,
+    /// Item left behind when this item is consumed, from `Item.Properties.craftRemainder`.
+    pub crafting_remainder: Option<ItemStackTemplateComponent>,
     /// All data components attached to this item.
     pub components: ItemComponents,
 }
@@ -180,7 +182,7 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:use_effects")]
     pub use_effects: Option<UseEffectsComponent>,
     #[serde(rename = "minecraft:use_remainder")]
-    pub use_remainder: Option<UseRemainderComponent>,
+    pub use_remainder: Option<ItemStackTemplateComponent>,
     #[serde(rename = "minecraft:villager_food")]
     pub villager_food: Option<VillagerFoodComponent>,
     #[serde(rename = "minecraft:waxed")]
@@ -216,7 +218,7 @@ pub struct CompostableComponent {
 }
 
 #[derive(Deserialize, Clone)]
-pub struct UseRemainderComponent {
+pub struct ItemStackTemplateComponent {
     pub id: String,
 }
 
@@ -1889,12 +1891,26 @@ pub fn build() -> TokenStream {
         let components = &item.components;
         let components_tokens = components.to_token_stream();
 
+        let crafting_remainder = item
+            .crafting_remainder
+            .as_ref()
+            .map(|remainder| {
+                let name = remainder
+                    .id
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(&remainder.id);
+                let ident = format_ident!("{}", name.to_shouty_snake_case());
+                quote! { Some(&Self::#ident) }
+            })
+            .unwrap_or_else(|| quote! { None });
+
         let id_lit = LitInt::new(&item.id.to_string(), Span::call_site());
 
         constants.extend(quote! {
             pub const #const_ident: Self = Self {
                 id: #id_lit,
                 registry_key: #name,
+                crafting_remainder: #crafting_remainder,
                 components: &[#components_tokens],
             };
         });
@@ -2038,6 +2054,7 @@ pub fn build() -> TokenStream {
         pub struct Item {
             pub id: u16,
             pub registry_key: &'static str,
+            pub crafting_remainder: Option<&'static Item>,
             pub components: &'static [(DataComponent, &'static dyn DataComponentImpl)],
         }
 
