@@ -1122,10 +1122,12 @@ impl Mob for PiglinEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
+        // The event reported `planned`
+        // Vanilla PiglinAi.pickUpItem takes gold nuggets as the whole remaining stack and everything else as split(1)
         let Some(taken) = self
             .mob_entity
             .living_entity
-            .pick_up_from(item, planned, |ground| ground.split(take_count(ground)))
+            .pick_up_from(item, planned, |ground| ground.split(planned))
         else {
             return;
         };
