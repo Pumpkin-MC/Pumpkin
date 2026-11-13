@@ -13,19 +13,39 @@ pub struct Style {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<Color>,
     /// Whether to render the content in bold.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::short_form::flag"
+    )]
     pub bold: Option<bool>,
     /// Whether to render the content in italic.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::short_form::flag"
+    )]
     pub italic: Option<bool>,
     /// Whether to render the content in underlined.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::short_form::flag"
+    )]
     pub underlined: Option<bool>,
     /// Whether to render the content in strikethrough.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::short_form::flag"
+    )]
     pub strikethrough: Option<bool>,
     /// Whether to render the content in obfuscated.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::short_form::flag"
+    )]
     pub obfuscated: Option<bool>,
     /// When the text is shift-clicked by a player, this string is inserted in their chat input. It does not overwrite any existing text the player was writing. This only works in chat messages.
     #[serde(default, skip_serializing_if = "Option::is_none")]
