@@ -111,7 +111,6 @@ impl JavaClient {
         let off_hand_item_empty = off_hand_item.is_empty();
 
         let mut item = inventory.get_stack_in_hand(hand);
-        let before = item.clone();
         // TODO: vanilla ItemStack.useOn awards ITEM_USED after Item.useOn, only on a successful item interaction
         if !item.is_empty() {
             player.increment_stat(StatisticCategory::Used, item.item.id as i32, 1);
@@ -119,6 +118,9 @@ impl JavaClient {
         if !Arc::ptr_eq(&player.world(), &world) {
             return Ok(());
         }
+        // statistic event may change the hand stack
+        item = inventory.get_stack_in_hand(hand);
+        let before = item.clone();
 
         let equipment_slot = if matches!(hand, Hand::Right) {
             EquipmentSlot::MAIN_HAND
