@@ -65,6 +65,27 @@ impl JavaClient {
                     }
                     // interact and damage events may move the player or change it
                     if !Arc::ptr_eq(&player.world(), &world) {
+                        let mut mining_pos = player
+                            .mining_pos
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let tracked_pos = *mining_pos;
+                        let was_mining = player.mining.swap(false, Ordering::Relaxed);
+                        let stage = player
+                            .current_block_destroy_stage
+                            .swap(-1, Ordering::Relaxed);
+                        player
+                            .current_block_breaking_speed
+                            .store(0, Ordering::Relaxed);
+                        *mining_pos = BlockPos::default();
+                        drop(mining_pos);
+                        if was_mining || stage >= 0 {
+                            world.set_block_breaking(
+                                entity,
+                                tracked_pos,
+                                BlockBreakingProgress::Stop,
+                            );
+                        }
                         self.update_sequence(player_action.sequence.0);
                         return;
                     }

@@ -138,22 +138,22 @@ fn handle_beehive(
                 crate::world::loot::generate_loot_from_handle(&handle, rand::random(), &params)
             },
         );
+    let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) else {
+        return false;
+    };
     // handlers may move the player
-    if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) {
-        let mut event =
-            crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
-                player: player_arc,
-                block_pos: *location,
-                harvested_items: drops.clone(),
-                cancelled: false,
-            };
-        if !world.fire_block_event(location, block, &mut event)
-            || !Arc::ptr_eq(&player.world(), &world)
-        {
-            return false;
-        }
-        drops = event.harvested_items;
+    let mut event =
+        crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
+            player: player_arc,
+            block_pos: *location,
+            harvested_items: drops.clone(),
+            cancelled: false,
+        };
+    if !world.fire_block_event(location, block, &mut event) || !Arc::ptr_eq(&player.world(), &world)
+    {
+        return false;
     }
+    drops = event.harvested_items;
 
     props.honey_level = 0;
     let new_state_id = props.to_state_id(block);

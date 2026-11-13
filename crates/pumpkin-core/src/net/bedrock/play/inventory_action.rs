@@ -235,6 +235,7 @@ impl BedrockClient {
                             stack.item.id as i32,
                             1,
                         );
+                        stack = player.inventory().held_item();
                     }
                     // A statistic handler may have moved the player to another world.
                     if !stack.is_empty() && Arc::ptr_eq(&world, &player.world()) {

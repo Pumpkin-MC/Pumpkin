@@ -67,6 +67,12 @@ pub(crate) trait PressurePlate {
                 i32::from(calc_output),
             );
             if !world.fire_block_event(pos, block, &mut event) {
+                let current_state_id = world.get_block_state_id(pos);
+                if Block::from_state_id(current_state_id) == block
+                    && self.get_redstone_output(block, current_state_id) > 0
+                {
+                    world.schedule_block_tick(block, *pos, self.tick_rate(), TickPriority::Normal);
+                }
                 return;
             }
             let next_output = event.new_current.clamp(0, 15) as u8;

@@ -142,7 +142,9 @@ impl ItemBehaviour for BrushItem {
                 player_arc,
                 item.clone(),
             );
-            if !world.fire_block_event(&location, block, &mut event) {
+            if !world.fire_block_event(&location, block, &mut event)
+                || !Arc::ptr_eq(&player.world(), &world)
+            {
                 return BlockActionResult::Fail;
             }
         }

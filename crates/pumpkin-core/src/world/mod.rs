@@ -5830,7 +5830,10 @@ impl World {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         // handler may replace it
-        if event.cancelled || self.get_block_state_id(position) != broken_block_state.id {
+        if event.cancelled
+            || self.get_block_state_id(position) != broken_block_state.id
+            || cause.is_some_and(|player| !Arc::ptr_eq(&player.world(), self))
+        {
             return None;
         }
 

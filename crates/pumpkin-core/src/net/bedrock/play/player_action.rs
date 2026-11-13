@@ -54,10 +54,10 @@ impl BedrockClient {
                             .block_registry
                             .broken(&world, block, player, &location, server, state);
                     } else {
-                        self.sync_block_state_to_client(&world, location);
+                        self.sync_block_state_to_client(player, &world, location);
                     }
                 } else if player.block_action_restricted(block) {
-                    self.sync_block_state_to_client(&world, location);
+                    self.sync_block_state_to_client(player, &world, location);
                 } else if !state.is_air() {
                     let starts_breaking = !player.mining.load(Ordering::Relaxed)
                         || *player
@@ -107,7 +107,7 @@ impl BedrockClient {
                                 1,
                             );
                         } else {
-                            self.sync_block_state_to_client(&world, location);
+                            self.sync_block_state_to_client(player, &world, location);
                         }
                     } else {
                         let mut mining_pos = player
@@ -209,10 +209,10 @@ impl BedrockClient {
                                 1,
                             );
                         } else {
-                            self.sync_block_state_to_client(&world, location);
+                            self.sync_block_state_to_client(player, &world, location);
                         }
                     } else {
-                        self.sync_block_state_to_client(&world, location);
+                        self.sync_block_state_to_client(player, &world, location);
                         if matches!(action, PlayerAction::StopDestroyBlock) {
                             player.stop_mining();
                         } else {
@@ -298,8 +298,15 @@ impl BedrockClient {
         }
     }
 
-    // TODO: skip when the player left `world` (event world transfer)
-    pub fn sync_block_state_to_client(&self, world: &crate::world::World, position: BlockPos) {
+    pub fn sync_block_state_to_client(
+        &self,
+        player: &Player,
+        world: &Arc<crate::world::World>,
+        position: BlockPos,
+    ) {
+        if !Arc::ptr_eq(&player.world(), world) {
+            return;
+        }
         let runtime_id =
             pumpkin_data::BlockState::to_be_network_id(world.get_block_state_id(&position));
         self.try_enqueue_client_packet(&CUpdateBlock::new(position, runtime_id));

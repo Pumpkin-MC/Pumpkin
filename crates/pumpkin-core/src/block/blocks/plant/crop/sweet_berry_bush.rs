@@ -82,7 +82,8 @@ impl BlockBehaviour for SweetBerryBushBlock {
                         args.position,
                         &Block::SWEET_BERRY_BUSH,
                         &mut event,
-                    ) {
+                    ) || !Arc::ptr_eq(&args.player.world(), args.world)
+                    {
                         return BlockActionResult::Pass;
                     }
                     drops = event.harvested_items;

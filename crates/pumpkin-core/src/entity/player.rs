@@ -3324,7 +3324,7 @@ impl Player {
                         p.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                         p.increment_stat(StatisticCategory::Mined, block.id.as_u16() as i32, 1);
                     } else if let ClientPlatform::Bedrock(client) = p.client.as_ref() {
-                        client.sync_block_state_to_client(&world, pos);
+                        client.sync_block_state_to_client(self, &world, pos);
                     }
                 }
             }
@@ -5029,6 +5029,9 @@ impl Player {
         if (game_master && !self.can_use_game_master_blocks())
             || self.block_action_restricted(block)
         {
+            return None;
+        }
+        if !Arc::ptr_eq(&self.world(), world) {
             return None;
         }
         world.break_block(pos, Some(self), flags)

@@ -116,6 +116,9 @@ impl JavaClient {
         if !item.is_empty() {
             player.increment_stat(StatisticCategory::Used, item.item.id as i32, 1);
         }
+        if !Arc::ptr_eq(&player.world(), &world) {
+            return Ok(());
+        }
 
         let equipment_slot = if matches!(hand, Hand::Right) {
             EquipmentSlot::MAIN_HAND
