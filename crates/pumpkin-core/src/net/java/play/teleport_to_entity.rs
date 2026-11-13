@@ -18,21 +18,23 @@ impl JavaClient {
             return;
         }
 
+        // TODO: vanilla handleTeleportToEntityPacket searches any entity in all worlds,
+        // teleports there and never sets the camera
         if let Some(target_player) = server.get_player_by_uuid(packet.target) {
             let target_pos = target_player.living_entity.entity.pos.load();
             let target_yaw = target_player.living_entity.entity.yaw.load();
             let target_pitch = target_player.living_entity.entity.pitch.load();
 
             let target_id = target_player.living_entity.entity.entity_id;
-            player.camera_target_id.store(Some(target_id));
-            player.try_send_client_packet(&CSetCamera::new(target_id.into()));
-
-            player.request_teleport_to(
+            if player.request_teleport_to(
                 target_pos,
                 Some(target_yaw),
                 Some(target_pitch),
                 TeleportCause::Spectate,
-            );
+            ) {
+                player.camera_target_id.store(Some(target_id));
+                player.try_send_client_packet(&CSetCamera::new(target_id.into()));
+            }
         }
     }
 }

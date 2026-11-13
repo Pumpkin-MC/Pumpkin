@@ -3583,9 +3583,6 @@ impl Entity {
                 let dest_world_opt = portal_processor.destination_world.clone();
                 let src_portal = portal_processor.source_portal.clone();
                 let entity_id = self.entity_id;
-                let yaw = self.yaw.load();
-                let old_pitch = self.pitch.load();
-                let old_pos = self.pos.load();
 
                 if let Some(server) = world_clone.server.upgrade() {
                     server.spawn_task(async move {
@@ -3606,6 +3603,12 @@ impl Entity {
                             let yaw_val = transition.yaw;
                             let pitch = transition.pitch;
                             let teleport_pos = transition.position;
+
+                            // after the lookup, so passengers don't get the movement during it
+                            let entity = entity_arc.get_entity();
+                            let yaw = entity.yaw.load();
+                            let old_pitch = entity.pitch.load();
+                            let old_pos = entity.pos.load();
 
                             // Teleport the main entity
                             let cause = match portal_type {
