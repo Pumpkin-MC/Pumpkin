@@ -1660,11 +1660,23 @@ pub(super) fn consume_world(
         .expect("invalid world resource handle")
 }
 
-pub(crate) struct EventHandle {
+/// Represents a transient unsafe pointer to a event on the async callstack.
+///
+/// See [EventResource] for more details.
+///
+/// Only public because it is needed for `FromResource`
+/// DO NOT USE OUTSIDE OF THIS FILE
+pub struct EventHandle {
     data: NonNull<dyn Payload + 'static>,
     mutable: bool,
 }
 
+// `Payload` is always Send + Sync, and neither the `data` pointer
+// (only it's pointee) nor `mutable` is ever modified.
+//
+// Additionally it is only accessed though the enclosing Resource<EventHandle>
+// and so will ever be accessed from a single-thread at a time due to Wasmtime
+// Store guarantees
 unsafe impl Send for EventHandle {}
 unsafe impl Sync for EventHandle {}
 
@@ -1684,6 +1696,8 @@ impl EventHandle {
     }
 
     fn get_ref<'a, T: Payload + 'static>(&'a self) -> Result<&'a T, ()> {
+        // SAFETY: The pointer was originally coerced from a reference
+        // thus adheres to the constraints of a reference.
         unsafe { self.data.as_ref() }.downcast_ref::<T>().ok_or(())
     }
 
@@ -1691,10 +1705,26 @@ impl EventHandle {
         if !self.mutable {
             return Err(());
         }
+
+        // SAFETY: The pointer was originally coerced from a reference
+        // thus adheres to the constraints of a reference.
+        //
+        // `mutable` protects Rust mutable aliasing/borrowing rules.
         unsafe { self.data.as_mut() }.downcast_mut::<T>().ok_or(())
     }
 }
 
+/// Captures a possibly mutable reference to an event
+/// (which all implement `Payload`) as a temporary `Resource`
+///
+/// `Resource` contents must be `'static`, yet cloning the whole event to satisfy
+/// this would be wasteful. Instead, we use this wrapper to capture mutable
+/// or immutable reference (which lives e.g. on the async call stack) and
+/// generally try to ensure that it can't outlive the original reference
+///
+/// Unfortunately Rust has no linear types. Drop isn't suitable since the
+/// destructor is async and needs access to plugin context. Special care must
+/// be taken to call `destroy` as it goes out of scope.
 struct EventResource<'a> {
     data: Resource<WasmEvent>,
     _phantom: PhantomData<&'a mut (dyn Payload + 'static)>,
@@ -1705,6 +1735,8 @@ impl<'a> EventResource<'a> {
         event: &'a (dyn Payload + 'static),
         plugin: &'a Arc<WasmPlugin>,
     ) -> wasmtime::Result<Self> {
+        // SAFETY: Mostly protected by the `'a` lifetime.
+        // Otherwise hinges on `destroy` being called properly
         let static_event: &'static (dyn Payload + 'static) = unsafe { mem::transmute(event) };
         let handle = EventHandle::from_ref(static_event);
         Ok(Self {
@@ -1721,6 +1753,8 @@ impl<'a> EventResource<'a> {
         event: &'a mut (dyn Payload + 'static),
         plugin: &'a Arc<WasmPlugin>,
     ) -> wasmtime::Result<Self> {
+        // SAFETY: Mostly protected by the `'a` lifetime.
+        // Otherwise hinges on `destroy` being called properly
         let static_event: &'static mut (dyn Payload + 'static) = unsafe { mem::transmute(event) };
         let handle = EventHandle::from_mut(static_event);
         Ok(Self {
@@ -1733,10 +1767,17 @@ impl<'a> EventResource<'a> {
         })
     }
 
+    /// Returns a new resource borrow handle to the `data` owned by self.
+    ///
+    /// This is a key part of the safety; plugins must only be supplied *borrows*,
+    /// never ownership of the outer resource. That way the component model
+    /// ensures that the plugin won't hold onto it beyond the scope of the
+    /// export call.
     fn get_borrow(&self) -> Resource<WasmEvent> {
         Resource::new_borrow(self.data.rep())
     }
 
+    /// MUST be called before the original ref goes out of scope.
     async fn destroy(self, plugin: &Arc<WasmPlugin>) -> wasmtime::Result<()> {
         plugin
             .store
