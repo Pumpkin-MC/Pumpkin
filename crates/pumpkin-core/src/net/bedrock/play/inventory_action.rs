@@ -281,6 +281,7 @@ impl BedrockClient {
                                     &dummy_use_item_on,
                                     data.block_position,
                                     face,
+                                    &stack,
                                 ) && player.gamemode.load() != GameMode::Creative
                                 {
                                     stack.decrement(1);

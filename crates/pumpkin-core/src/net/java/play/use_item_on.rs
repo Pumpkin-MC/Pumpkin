@@ -105,11 +105,6 @@ impl JavaClient {
         let block = world.get_block(&position);
 
         let inventory = player.inventory();
-        let held_item = inventory.held_item();
-        let off_hand_item = inventory.off_hand_item();
-        let held_item_empty = held_item.is_empty();
-        let off_hand_item_empty = off_hand_item.is_empty();
-
         let mut item = inventory.get_stack_in_hand(hand);
         // TODO: vanilla ItemStack.useOn awards ITEM_USED after Item.useOn, only on a successful item interaction
         if !item.is_empty() {
@@ -121,6 +116,8 @@ impl JavaClient {
         // statistic event may change the hand stack
         item = inventory.get_stack_in_hand(hand);
         let before = item.clone();
+        let held_item_empty = inventory.held_item().is_empty();
+        let off_hand_item_empty = inventory.off_hand_item().is_empty();
 
         let equipment_slot = if matches!(hand, Hand::Right) {
             EquipmentSlot::MAIN_HAND
@@ -222,8 +219,15 @@ impl JavaClient {
             // Check if the item is a block, because not every item can be placed :D
             let item_id = item.item.id;
             if let Some(block) = Block::from_item_id(item_id) {
-                should_try_decrement =
-                    Self::run_is_block_place(player, block, server, use_item_on, position, face)?;
+                should_try_decrement = Self::run_is_block_place(
+                    player,
+                    block,
+                    server,
+                    use_item_on,
+                    position,
+                    face,
+                    &item,
+                )?;
             }
         }
 
@@ -370,11 +374,17 @@ impl JavaClient {
         use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
+        held_stack: &ItemStack,
     ) -> Result<bool, BlockPlacingError> {
-        match server
-            .block_registry
-            .place_block(player, block, server, use_item_on, location, face)
-        {
+        match server.block_registry.place_block(
+            player,
+            block,
+            server,
+            use_item_on,
+            location,
+            face,
+            held_stack,
+        ) {
             Ok(Some((final_block_pos, new_state))) => {
                 player.try_send_client_packet(&CBlockUpdate::new(
                     final_block_pos,

@@ -709,11 +709,9 @@ impl BlockRegistry {
         use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
+        held_stack: &ItemStack,
     ) -> Result<Option<(BlockPos, BlockStateId)>, BlockPlacingError> {
         let entity = &player.get_entity();
-        let held_stack = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0)
-            .ok()
-            .map(|hand| player.inventory().get_stack_in_hand(hand));
         let clicked_block_pos = BlockPos(location.0);
         let world = entity.world.load_full();
         let clicked_block = world.get_block(&clicked_block_pos);
@@ -724,10 +722,7 @@ impl BlockRegistry {
             }
             pumpkin_util::GameMode::Adventure => {
                 let can_place = held_stack
-                    .as_ref()
-                    .and_then(|s| {
-                        s.get_data_component::<pumpkin_data::data_component_impl::CanPlaceOnImpl>()
-                    })
+                    .get_data_component::<pumpkin_data::data_component_impl::CanPlaceOnImpl>()
                     .is_some_and(|comp| comp.matches_block(clicked_block));
                 if !can_place {
                     return Err(BlockPlacingError::InvalidGamemode);
@@ -797,9 +792,8 @@ impl BlockRegistry {
             use_item_on,
         );
 
-        if let Some(ref stack) = held_stack
-            && let Some(block_state_comp) =
-                stack.get_data_component::<pumpkin_data::data_component_impl::BlockStateImpl>()
+        if let Some(block_state_comp) =
+            held_stack.get_data_component::<pumpkin_data::data_component_impl::BlockStateImpl>()
             && let Some(props) = placed_block.properties(new_state)
         {
             let mut prop_list = props.to_props();
@@ -876,11 +870,9 @@ impl BlockRegistry {
             BlockState::to_be_network_id(new_state) as i32,
         );
 
-        if let Some(ref stack) = held_stack
-            && placed_block.default_state.block_entity_type != u16::MAX
-        {
-            if let Some(block_entity_data) =
-                stack.get_data_component::<pumpkin_data::data_component_impl::BlockEntityDataImpl>()
+        if !held_stack.is_empty() && placed_block.default_state.block_entity_type != u16::MAX {
+            if let Some(block_entity_data) = held_stack
+                .get_data_component::<pumpkin_data::data_component_impl::BlockEntityDataImpl>()
                 && let Some(existing_be) = world.get_block_entity(&final_block_pos)
             {
                 let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
@@ -895,7 +887,7 @@ impl BlockRegistry {
                 }
             }
             if let Some(block_entity) = world.get_block_entity(&final_block_pos) {
-                block_entity.apply_item_components(stack);
+                block_entity.apply_item_components(held_stack);
             }
         }
 
