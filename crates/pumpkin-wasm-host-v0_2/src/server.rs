@@ -90,6 +90,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         })
     }
 
+    fn is_difficulty_locked(&mut self, _res: Resource<Server>) -> wasmtime::Result<bool> {
+        let server = self.require_server()?;
+        Ok(server.level_info.load().difficulty_locked)
+    }
+
     fn get_player_count(&mut self, _res: Resource<Server>) -> wasmtime::Result<u32> {
         let server = self.require_server()?;
         Ok(server.get_player_count() as u32)
@@ -320,6 +325,20 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         ))
     }
 
+    fn get_spawn_protection_radius(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u32> {
+        let server = self.require_server()?;
+        Ok(server.basic_config.spawn_protection)
+    }
+
+    fn get_port(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u16> {
+        let server = self.require_server()?;
+        Ok(server.advanced_config.networking.java.address.port())
+    }
+
+    fn get_minecraft_version(&mut self, _rep: Resource<Server>) -> wasmtime::Result<String> {
+        Ok(pumpkin_data::packet::CURRENT_MC_VERSION.to_string())
+    }
+
     fn get_recipe_manager(
         &mut self,
         _rep: Resource<Server>,
@@ -420,6 +439,36 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
 }
 
 impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_difficulty(
+        accessor: &Accessor<PluginHostState, Self>,
+        _rep: Resource<Server>,
+        difficulty: Difficulty,
+    ) -> wasmtime::Result<()> {
+        let server = accessor.server()?;
+        let internal_diff = match difficulty {
+            Difficulty::Peaceful => pumpkin_util::Difficulty::Peaceful,
+            Difficulty::Easy => pumpkin_util::Difficulty::Easy,
+            Difficulty::Normal => pumpkin_util::Difficulty::Normal,
+            Difficulty::Hard => pumpkin_util::Difficulty::Hard,
+        };
+        run_blocking(accessor, move || {
+            server.set_difficulty(internal_diff, true);
+        })
+        .await
+    }
+
+    async fn set_difficulty_locked(
+        accessor: &Accessor<PluginHostState, Self>,
+        _rep: Resource<Server>,
+        locked: bool,
+    ) -> wasmtime::Result<()> {
+        let server = accessor.server()?;
+        run_blocking(accessor, move || {
+            server.set_difficulty_locked(locked);
+        })
+        .await
+    }
+
     async fn get_enchantment(
         accessor: &Accessor<PluginHostState, Self>,
         _rep: Resource<Server>,

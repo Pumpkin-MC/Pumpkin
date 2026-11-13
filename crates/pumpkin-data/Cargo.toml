@@ -193,8 +193,5 @@ criterion.workspace = true
 name = "has_random_ticks"
 harness = false
 
-[package.metadata.cargo-machete]
-ignored = ["phf"]
-
 [lints]
 workspace = true

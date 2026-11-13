@@ -33,7 +33,7 @@ pub mod authentication;
 pub mod bedrock;
 pub mod chat;
 pub mod chunk_sender;
-pub use chunk_sender::ChunkSender;
+pub use chunk_sender::{ChunkSendOutcome, ChunkSender};
 pub mod java;
 pub mod lan_broadcast;
 pub mod packet_limiter;
@@ -201,8 +201,12 @@ impl ClientPlatform {
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
         match self {
-            Self::Java(java) => java.try_enqueue_packet_data(packet_data),
-            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet_data(packet_data),
+            Self::Java(java) => {
+                java.try_enqueue_packet_data(packet_data);
+            }
+            Self::Bedrock(bedrock) => {
+                bedrock.try_enqueue_packet_data(packet_data);
+            }
         }
     }
 
@@ -210,8 +214,12 @@ impl ClientPlatform {
     /// packets a plugin injected itself.
     pub fn try_enqueue_packet_data_unobserved(&self, packet_data: Bytes) {
         match self {
-            Self::Java(java) => java.try_enqueue_packet_data_unobserved(packet_data),
-            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet_data(packet_data),
+            Self::Java(java) => {
+                java.try_enqueue_packet_data_unobserved(packet_data);
+            }
+            Self::Bedrock(bedrock) => {
+                bedrock.try_enqueue_packet_data(packet_data);
+            }
         }
     }
 
@@ -296,10 +304,11 @@ impl ClientPlatform {
         }
     }
 
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+    /// Reports the positions queued and why the others were not.
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> ChunkSendOutcome {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,
-            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks).await,
+            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks, None).await,
         }
     }
 

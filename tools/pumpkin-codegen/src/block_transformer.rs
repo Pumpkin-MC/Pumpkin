@@ -255,12 +255,53 @@ pub fn build() -> TokenStream {
 
     let mut generated_transformers = Vec::new();
     let mut lookup_arms = Vec::new();
+    let mut scrape_prev_arms = Vec::new();
+    let mut scrape_next_arms = Vec::new();
+    let mut wax_off_arms = Vec::new();
+    let mut wax_on_arms = Vec::new();
 
     for (stem, entries) in &files {
         let const_ident = format_ident!("{}", stem.to_shouty_snake_case());
         let mut entry_tokens = Vec::new();
 
         for entry in entries {
+            if stem == "axe" {
+                let is_scrape = entry.particle.as_deref() == Some("scrape");
+                let is_wax_off = entry.particle.as_deref() == Some("wax_off");
+                if is_scrape || is_wax_off {
+                    for rule in &entry.block_state_provider.rules {
+                        if !is_predicate_valid(&rule.if_true, &valid_blocks)
+                            || !is_provider_valid(&rule.then, &valid_blocks)
+                        {
+                            continue;
+                        }
+                        if rule.if_true.predicate_type == "minecraft:matching_blocks"
+                            && let Some(BlocksValue::Single(from_str)) = &rule.if_true.blocks
+                            && let Some(src) = &rule.then.source
+                            && let Some(to_str) = src.state_name()
+                        {
+                            let from_id = block_ident(from_str);
+                            let to_id = block_ident(to_str);
+                            if is_scrape {
+                                scrape_prev_arms.push(quote! {
+                                    BlockId::#from_id => Some(BlockId::#to_id),
+                                });
+                                scrape_next_arms.push(quote! {
+                                    BlockId::#to_id => Some(BlockId::#from_id),
+                                });
+                            } else {
+                                wax_off_arms.push(quote! {
+                                    BlockId::#from_id => Some(BlockId::#to_id),
+                                });
+                                wax_on_arms.push(quote! {
+                                    BlockId::#to_id => Some(BlockId::#from_id),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
             let disallowed: Vec<_> = entry
                 .disallowed_faces
                 .iter()
@@ -466,14 +507,8 @@ pub fn build() -> TokenStream {
                                 }
                                 BlockTransformerStateProvider::CopyProperties(target_id) => {
                                     let target_block = target_id.to_block();
-                                    let new_state_id = if target_block.states.len() <= 1 {
-                                        target_block.default_state.id
-                                    } else if let Some(source_props) = current_block.properties(current_state_id) {
-                                        let props = source_props.to_props();
-                                        target_block.from_properties(&props).to_state_id(target_block)
-                                    } else {
-                                        target_block.default_state.id
-                                    };
+                                    let new_state_id =
+                                        target_block.with_properties_of(current_block, current_state_id);
                                     (new_state_id, target_block)
                                 }
                             };
@@ -495,6 +530,38 @@ pub fn build() -> TokenStream {
         pub fn get_block_transformer(key: &str) -> Option<&'static BlockTransformer> {
             match key {
                 #(#lookup_arms)*
+                _ => None,
+            }
+        }
+
+        #[must_use]
+        pub const fn get_previous_weathering(id: BlockId) -> Option<BlockId> {
+            match id {
+                #(#scrape_prev_arms)*
+                _ => None,
+            }
+        }
+
+        #[must_use]
+        pub const fn get_next_weathering(id: BlockId) -> Option<BlockId> {
+            match id {
+                #(#scrape_next_arms)*
+                _ => None,
+            }
+        }
+
+        #[must_use]
+        pub const fn get_unwaxed(id: BlockId) -> Option<BlockId> {
+            match id {
+                #(#wax_off_arms)*
+                _ => None,
+            }
+        }
+
+        #[must_use]
+        pub const fn get_waxed(id: BlockId) -> Option<BlockId> {
+            match id {
+                #(#wax_on_arms)*
                 _ => None,
             }
         }

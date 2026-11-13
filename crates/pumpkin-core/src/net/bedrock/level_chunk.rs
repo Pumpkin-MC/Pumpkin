@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use std::io::{Error, Write};
 use xxhash_rust::xxh64::xxh64;
 
@@ -53,7 +54,7 @@ impl pumpkin_protocol::packet::Packet for CLevelChunk<'_> {
     const PACKET_ID: i32 = 58;
 }
 
-pub type ChunkBlob = (u64, Vec<u8>);
+pub type ChunkBlob = (u64, Bytes);
 pub type EncodedChunk = (Vec<u8>, Vec<ChunkBlob>);
 
 fn encode_block_actors(block_actors: &[NbtCompound]) -> Result<Vec<u8>, Error> {
@@ -146,12 +147,15 @@ impl CLevelChunk<'_> {
         let block_actor_bytes = encode_block_actors(block_actors)?;
 
         if cache_enabled {
-            for subchunk_buf in subchunk_bytes_list {
+            // `Bytes::from` keeps the whole allocation, so drop the growth slack first.
+            for mut subchunk_buf in subchunk_bytes_list {
+                subchunk_buf.shrink_to_fit();
                 let hash = xxh64(&subchunk_buf, 0);
-                blobs.push((hash, subchunk_buf));
+                blobs.push((hash, Bytes::from(subchunk_buf)));
             }
+            biome_buf.shrink_to_fit();
             let biome_hash = xxh64(&biome_buf, 0);
-            blobs.push((biome_hash, biome_buf));
+            blobs.push((biome_hash, Bytes::from(biome_buf)));
 
             VarUInt(blobs.len() as u32).write(&mut writer)?;
             for (hash, _) in &blobs {
