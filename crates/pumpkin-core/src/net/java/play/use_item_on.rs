@@ -333,6 +333,10 @@ impl JavaClient {
         }
 
         if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+            // use_with_item may have moved the player; skip default action in the old world
+            if !Arc::ptr_eq(&player.world(), world) {
+                return BlockActionResult::Pass;
+            }
             let result = server.block_registry.on_use(
                 block,
                 player,
