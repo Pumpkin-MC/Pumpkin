@@ -49,6 +49,9 @@ pub(super) fn touch_entities(world: &World, player: &Arc<Player>) {
         if entity.get_entity().entity_type == &EntityType::EXPERIENCE_ORB {
             orbs.push(entity);
         } else {
+            if !pickup_area(player).intersects(&entity.get_entity().bounding_box.load()) {
+                continue;
+            }
             entity.on_player_collision(player);
             if player.world().uuid != world.uuid {
                 return;
@@ -57,6 +60,8 @@ pub(super) fn touch_entities(world: &World, player: &Arc<Player>) {
     }
     if !orbs.is_empty() {
         let orb = &orbs[rand::rng().random_range(0..orbs.len())];
-        orb.on_player_collision(player);
+        if pickup_area(player).intersects(&orb.get_entity().bounding_box.load()) {
+            orb.on_player_collision(player);
+        }
     }
 }
