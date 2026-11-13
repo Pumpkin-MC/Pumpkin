@@ -78,8 +78,8 @@ impl BlockBehaviour for CoralPlantBlock {
         if !is_dead {
             crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
-        let props = CoralPlantLikeProperties::from_state_id(args.state_id);
-        if !is_dead && !props.waterlogged && !scan_for_water(args.world, args.position) {
+        if !is_dead && !args.state_id.is_waterlogged() && !scan_for_water(args.world, args.position)
+        {
             try_schedule_die_tick(args.block, args.world, args.position);
         }
         args.state_id

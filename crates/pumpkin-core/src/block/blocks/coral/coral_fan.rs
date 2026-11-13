@@ -173,8 +173,8 @@ impl BlockBehaviour for CoralFanBlock {
         if !is_dead {
             crate::block::simple_waterlogged::schedule_water_tick(&args);
         }
-        let waterlogged = is_waterlogged(args.block, args.state_id);
-        if !is_dead && !waterlogged && !scan_for_water(args.world, args.position) {
+        if !is_dead && !args.state_id.is_waterlogged() && !scan_for_water(args.world, args.position)
+        {
             try_schedule_die_tick(args.block, args.world, args.position);
         }
         args.state_id
