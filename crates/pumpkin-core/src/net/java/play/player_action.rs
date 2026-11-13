@@ -224,14 +224,7 @@ impl JavaClient {
 
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
-                    let Some(state) = world.get_block_state_if_loaded(&location) else {
-                        self.update_sequence(player_action.sequence.0);
-                        return;
-                    };
-                    let block = Block::from_state_id(state.id);
                     let gamemode = player.gamemode.load();
-                    // Vanilla `getDestroyProgress`, which returns 0 for unbreakable blocks.
-                    let speed = block::calc_block_breaking(player, state, block);
                     // Vanilla STOP_DESTROY_BLOCK only applies to the current destroy target.
                     let is_mining_target = player.mining.load(Ordering::Relaxed)
                         && *player
@@ -239,6 +232,18 @@ impl JavaClient {
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner)
                             == location;
+                    if gamemode != GameMode::Creative && !is_mining_target {
+                        self.update_sequence(player_action.sequence.0);
+                        return;
+                    }
+
+                    let Some(state) = world.get_block_state_if_loaded(&location) else {
+                        self.update_sequence(player_action.sequence.0);
+                        return;
+                    };
+                    let block = Block::from_state_id(state.id);
+                    // Vanilla `getDestroyProgress`, which returns 0 for unbreakable blocks.
+                    let speed = block::calc_block_breaking(player, state, block);
                     let progress = speed
                         * (player.tick_counter.load(Ordering::Relaxed)
                             - player.start_mining_time.load(Ordering::Relaxed)
