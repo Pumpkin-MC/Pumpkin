@@ -354,6 +354,17 @@ pub fn build() -> TokenStream {
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let has_precipitation = biome.has_precipitation;
         let temperature = biome.temperature;
+        let snow_golem_melts = match biome.attributes.get("minecraft:gameplay/snow_golem_melts") {
+            Some(value) => {
+                #[expect(
+                    clippy::expect_used,
+                    reason = "validate the extracted biome attribute at code generation"
+                )]
+                let value = value.as_bool().expect("snow_golem_melts must be a boolean");
+                quote! { Some(#value) }
+            }
+            None => quote! { None },
+        };
         let downfall = biome.downfall;
         let carvers: Vec<TokenStream> = biome
             .carvers
@@ -466,6 +477,7 @@ pub fn build() -> TokenStream {
                 id: #index,
                 registry_id: #name,
                 be_network_id: #be_network_id,
+                snow_golem_melts: #snow_golem_melts,
                 weather: Weather::new(
                      #has_precipitation,
                      #temperature,
@@ -503,6 +515,7 @@ pub fn build() -> TokenStream {
             pub id: u8,
             pub registry_id: &'static str,
             pub be_network_id: u8,
+            pub snow_golem_melts: Option<bool>,
             pub weather: Weather,
             pub carvers: &'static [&'static crate::carver::CarverConfig],
             pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],

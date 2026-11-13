@@ -1303,7 +1303,7 @@ fn y_rot(vector: Vector3<f64>, angle: f32) -> Vector3<f64> {
 }
 
 /// Attachment points for the entity's current pose and age, and the scale they grow with.
-fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) {
+fn attachments_of(entity: &(impl EntityBase + ?Sized)) -> (&'static EntityAttachments, f64) {
     let base = entity.get_entity();
     let entity_type = base.entity_type;
     let living = entity.get_living_entity();
@@ -1320,6 +1320,17 @@ fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) 
 pub(crate) fn attachment_point(point: [f64; 3], scale: f64, yaw: f32) -> Vector3<f64> {
     let [x, y, z] = point;
     y_rot(Vector3::new(x, y, z) * scale, -yaw.to_radians())
+}
+
+pub(crate) fn average_passenger_attachment(entity: &(impl EntityBase + ?Sized)) -> Vector3<f64> {
+    let (attachments, scale) = attachments_of(entity);
+    let points = attachments.passenger;
+    if points.is_empty() {
+        return Vector3::default();
+    }
+    points.iter().fold(Vector3::default(), |sum, point| {
+        sum + Vector3::new(point[0], point[1], point[2])
+    }) * (scale / points.len() as f64)
 }
 
 pub fn default_passenger_attachment_point(
@@ -4899,17 +4910,10 @@ impl Entity {
             }
         }
 
-        let old_holder = self
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if old_holder.is_none() {
+        let Some(holder) = self.get_leash_holder() else {
             return;
-        }
-
-        if let Some(holder) = old_holder.as_ref().and_then(Weak::upgrade)
-            && let Some(server) = world.server.upgrade()
+        };
+        if let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
         {
@@ -4919,9 +4923,92 @@ impl Entity {
                 cancelled: false,
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
         }
+        self.leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
 
         self.send_leash_removed();
+    }
+
+    /// Cuts leash connections, returning `None` when there are none to cut.
+    /// `Some(false)` means plugins cancelled the cuts; callers must not fall through to shearing.
+    pub fn shear_off_all_leash_connections(
+        &self,
+        caller: &dyn EntityBase,
+        player: Option<&Arc<Player>>,
+    ) -> Option<bool> {
+        let world = self.world.load();
+        let bounds = self.bounding_box.load();
+        let center = (bounds.min + bounds.max) * 0.5;
+        let area = BoundingBox::of_size(center, 32.0, 32.0, 32.0);
+        let connections = world
+            .get_entities_at_box(&area)
+            .into_iter()
+            .filter(|entity| {
+                entity
+                    .get_entity()
+                    .get_leash_holder()
+                    .is_some_and(|holder| holder.get_entity().entity_id == self.entity_id)
+            })
+            .collect::<Vec<_>>();
+        if self.get_leash_holder().is_none() && connections.is_empty() {
+            return None;
+        }
+        let mut dropped = self.drop_leash_from_shearing(player);
+        for entity in connections {
+            dropped |= entity.get_entity().drop_leash_from_shearing(player);
+        }
+        if dropped {
+            world.emit_game_event_with_context(
+                GameEvent::Shear.name(),
+                self.pos.load(),
+                &crate::world::game_event::GameEventContext {
+                    source_entity: player.map(|player| player.as_ref() as &dyn EntityBase),
+                },
+            );
+            world.play_sound(
+                Sound::ItemShearsSnip,
+                player.map_or_else(|| caller.sound_source(), |player| player.sound_source()),
+                &self.block_pos.load().to_centered_f64(),
+            );
+        }
+        Some(dropped)
+    }
+
+    fn drop_leash_from_shearing(&self, player: Option<&Arc<Player>>) -> bool {
+        if self.get_leash_holder().is_none() {
+            return false;
+        }
+        if let Some(server) = self.world.load().server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_unleash::EntityUnleashEvent::new(
+                    self.entity_id,
+                    "unleashed".to_string(),
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+            if let Some(player) = player {
+                let mut event = crate::plugin::api::events::player::player_unleash_entity::PlayerUnleashEntityEvent {
+                    player: player.clone(),
+                    entity_id: self.entity_id,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
+        }
+        self.remove_leash();
+        self.spawn_at_location(ItemStack::new(1, &pumpkin_data::item::Item::LEAD));
+        true
     }
 
     pub fn remove_leash(&self) {
@@ -5194,12 +5281,16 @@ impl Entity {
     }
 
     pub fn spawn_at_location(&self, stack: ItemStack) {
+        self.spawn_at_location_with_offset(stack, Vector3::default());
+    }
+
+    pub fn spawn_at_location_with_offset(&self, stack: ItemStack, offset: Vector3<f64>) {
         if stack.is_empty() {
             return;
         }
         let world = self.world.load();
         let item_entity = ItemEntity::new(
-            Self::new(world.clone(), self.pos.load(), &EntityType::ITEM),
+            Self::new(world.clone(), self.pos.load() + offset, &EntityType::ITEM),
             stack,
         );
         world.spawn_entity(Arc::new(item_entity));
@@ -6167,15 +6258,14 @@ impl Entity {
     }
 }
 
-impl EntityBase for Entity {
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+impl Entity {
+    pub(crate) fn base_tick(&self, caller: &dyn EntityBase) {
         // Recomputed during movement/block-collision handling in the same tick.
         let was_in_powder_snow = self.is_in_powder_snow.load(Ordering::Relaxed);
         self.was_in_powder_snow
             .store(was_in_powder_snow, Ordering::Relaxed);
         self.is_in_powder_snow.store(false, Ordering::Relaxed);
 
-        self.update_last_pos();
         self.tick_portal(caller);
         self.update_fluid_state(caller);
         self.check_out_of_world(caller);
@@ -6209,6 +6299,13 @@ impl EntityBase for Entity {
                 .store(riding_cooldown - 1, Ordering::Relaxed);
         }
         self.first_tick.store(false, Ordering::Relaxed);
+    }
+}
+
+impl EntityBase for Entity {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.update_last_pos();
+        self.base_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {

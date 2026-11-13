@@ -218,7 +218,12 @@ impl<'a> EnvironmentAttributes<'a> {
 
     /// Evaluates a boolean environment attribute at a position.
     #[must_use]
-    pub fn get_value_bool(&self, attribute: EnvironmentAttribute, _pos: &BlockPos) -> bool {
+    pub fn get_value_bool(&self, attribute: EnvironmentAttribute, pos: &BlockPos) -> bool {
+        if attribute == EnvironmentAttribute::GameplaySnowGolemMelts
+            && let Some(melts) = self.world.get_biome(pos).snow_golem_melts
+        {
+            return melts;
+        }
         self.get_dimension_value_bool(attribute)
     }
 

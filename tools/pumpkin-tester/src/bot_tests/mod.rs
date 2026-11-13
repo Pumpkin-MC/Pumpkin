@@ -7,6 +7,7 @@ mod player_actions;
 mod polar_bear;
 mod sheep_shearing;
 mod sign_authorization;
+mod snow_golem;
 mod status_ping;
 mod world_interaction;
 
@@ -39,6 +40,7 @@ pub async fn run_bot_tests(
     world_interaction::run_world_interaction_tests(server, &mut bot1, summary_lines).await?;
 
     sheep_shearing::run_sheep_shearing_test(server, summary_lines)?;
+    snow_golem::run_snow_golem_shearing_test(server, summary_lines)?;
 
     polar_bear::run_polar_bear_defense_test(server, &bot1, summary_lines)?;
 

@@ -3,6 +3,7 @@ use std::sync::{Arc, Weak};
 use crate::entity::EntityBase;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::living::LivingEntity;
 use crate::entity::mob::{Mob, RangedAttackMob};
 
 /// Generic ranged attack goal for mobs implementing [`RangedAttackMob`].
@@ -67,7 +68,11 @@ impl RangedAttackGoal {
         self.target
             .as_ref()
             .and_then(Weak::upgrade)
-            .is_some_and(|target| target.get_entity().is_alive())
+            .is_some_and(|target| {
+                target
+                    .get_living_entity()
+                    .is_some_and(LivingEntity::is_alive)
+            })
     }
 }
 
@@ -75,7 +80,9 @@ impl Goal for RangedAttackGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         let target = mob.get_mob_entity().get_target();
         if let Some(target) = target
-            && target.get_entity().is_alive()
+            && target
+                .get_living_entity()
+                .is_some_and(LivingEntity::is_alive)
         {
             self.target = Some(Arc::downgrade(&target));
             true
@@ -85,21 +92,14 @@ impl Goal for RangedAttackGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        if let Some(target) = self.target.as_ref().and_then(Weak::upgrade) {
-            if !target.get_entity().is_alive() {
-                return false;
-            }
-            mob.get_mob_entity().get_target().is_some()
-        } else {
-            false
-        }
+        self.can_start(mob)
+            || (self.target_alive() && !mob.get_mob_entity().steered().navigator().is_done())
     }
 
-    fn stop(&mut self, mob: &dyn Mob) {
+    fn stop(&mut self, _mob: &dyn Mob) {
         self.target = None;
         self.see_time = 0;
         self.attack_time = -1;
-        mob.get_mob_entity().steered().navigator().stop();
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -171,5 +171,77 @@ impl Goal for RangedAttackGoal {
             let max = self.attack_interval_max as f32;
             self.attack_time = (ratio.mul_add(max - min, min)).floor() as i32;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::{
+        Entity,
+        ai::{
+            pathfinder::{node::Node, path::Path},
+            test_support::world,
+        },
+        passive::snow_golem::SnowGolemEntity,
+    };
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+
+    #[tokio::test]
+    async fn ranged_goal_refreshes_targets_and_retains_navigation_after_target_loss()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let target: Arc<dyn EntityBase> = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(4.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let replacement: Arc<dyn EntityBase> = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(8.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let ranged: Arc<dyn RangedAttackMob> = mob.clone();
+        let mut goal = RangedAttackGoal::new(Arc::downgrade(&ranged), 1.25, 20, 10.0);
+        mob.mob_entity.set_target(Some(target.clone()));
+        assert!(goal.can_start(mob.as_ref()));
+        mob.mob_entity.set_target(Some(replacement.clone()));
+        assert!(goal.should_continue(mob.as_ref()));
+        drop(target);
+        assert_eq!(
+            goal.target
+                .as_ref()
+                .and_then(Weak::upgrade)
+                .map(|target| target.get_entity().entity_id),
+            Some(replacement.get_entity().entity_id)
+        );
+
+        let mut path = Path::new(
+            vec![
+                Node::new(BlockPos::new(0, 64, 0)),
+                Node::new(BlockPos::new(8, 64, 0)),
+            ],
+            BlockPos::new(8, 64, 0),
+            true,
+        );
+        path.set_next_node_index(1);
+        mob.mob_entity.steered().navigator().move_to_path(
+            Some(path),
+            1.25,
+            &mob.mob_entity.living_entity,
+        );
+        mob.mob_entity.set_target(None);
+        assert!(goal.should_continue(mob.as_ref()));
+        goal.stop(mob.as_ref());
+        assert!(!mob.mob_entity.steered().navigator().is_done());
+        world.level.shutdown().await;
+        Ok(())
     }
 }

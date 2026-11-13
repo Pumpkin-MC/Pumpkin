@@ -120,7 +120,7 @@ impl WindChargeEntity {
     }
 
     pub fn deflect(
-        &mut self,
+        &self,
         deflection: &ProjectileDeflectionType,
         deflector: Option<&dyn EntityBase>,
     ) -> bool {
@@ -130,7 +130,7 @@ impl WindChargeEntity {
             return false;
         }
 
-        deflection.deflect(self, deflector);
+        deflection.deflect_entity(self, deflector);
         true
     }
 }

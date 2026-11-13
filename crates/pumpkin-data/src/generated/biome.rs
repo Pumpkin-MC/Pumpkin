@@ -14,6 +14,7 @@ pub struct Biome {
     pub id: u8,
     pub registry_id: &'static str,
     pub be_network_id: u8,
+    pub snow_golem_melts: Option<bool>,
     pub weather: Weather,
     pub carvers: &'static [&'static crate::carver::CarverConfig],
     pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],
@@ -88,6 +89,7 @@ impl Biome {
         id: 0,
         registry_id: "badlands",
         be_network_id: 37u8,
+        snow_golem_melts: Some(true),
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -250,6 +252,7 @@ impl Biome {
         id: 1,
         registry_id: "bamboo_jungle",
         be_network_id: 48u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.95f32, TemperatureModifier::None, 0.9f32),
         features: &[
             &[],
@@ -428,6 +431,7 @@ impl Biome {
         id: 2,
         registry_id: "basalt_deltas",
         be_network_id: 181u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -492,6 +496,7 @@ impl Biome {
         id: 3,
         registry_id: "beach",
         be_network_id: 16u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.4f32),
         features: &[
             &[],
@@ -629,6 +634,7 @@ impl Biome {
         id: 4,
         registry_id: "birch_forest",
         be_network_id: 27u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.6f32, TemperatureModifier::None, 0.6f32),
         features: &[
             &[],
@@ -787,6 +793,7 @@ impl Biome {
         id: 5,
         registry_id: "cherry_grove",
         be_network_id: 192u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -934,6 +941,7 @@ impl Biome {
         id: 6,
         registry_id: "cold_ocean",
         be_network_id: 44u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -1097,6 +1105,7 @@ impl Biome {
         id: 7,
         registry_id: "crimson_forest",
         be_network_id: 179u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -1168,6 +1177,7 @@ impl Biome {
         id: 8,
         registry_id: "dappled_forest",
         be_network_id: 195u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.6f32, TemperatureModifier::None, 0.6f32),
         features: &[
             &[],
@@ -1329,6 +1339,7 @@ impl Biome {
         id: 9,
         registry_id: "dark_forest",
         be_network_id: 29u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.7f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -1486,6 +1497,7 @@ impl Biome {
         id: 10,
         registry_id: "deep_cold_ocean",
         be_network_id: 45u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -1649,6 +1661,7 @@ impl Biome {
         id: 11,
         registry_id: "deep_dark",
         be_network_id: 190u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.4f32),
         features: &[
             &[],
@@ -1730,6 +1743,7 @@ impl Biome {
         id: 12,
         registry_id: "deep_frozen_ocean",
         be_network_id: 47u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::Frozen, 0.5f32),
         features: &[
             &[],
@@ -1892,6 +1906,7 @@ impl Biome {
         id: 13,
         registry_id: "deep_lukewarm_ocean",
         be_network_id: 43u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -2065,6 +2080,7 @@ impl Biome {
         id: 14,
         registry_id: "deep_ocean",
         be_network_id: 24u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -2226,6 +2242,7 @@ impl Biome {
         id: 15,
         registry_id: "desert",
         be_network_id: 2u8,
+        snow_golem_melts: Some(true),
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -2384,6 +2401,7 @@ impl Biome {
         id: 16,
         registry_id: "dripstone_caves",
         be_network_id: 188u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.4f32),
         features: &[
             &[],
@@ -2528,6 +2546,7 @@ impl Biome {
         id: 17,
         registry_id: "end_barrens",
         be_network_id: 9u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[],
         carvers: &[],
@@ -2552,6 +2571,7 @@ impl Biome {
         id: 18,
         registry_id: "end_highlands",
         be_network_id: 9u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -2587,6 +2607,7 @@ impl Biome {
         id: 19,
         registry_id: "end_midlands",
         be_network_id: 9u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[],
         carvers: &[],
@@ -2611,6 +2632,7 @@ impl Biome {
         id: 20,
         registry_id: "eroded_badlands",
         be_network_id: 165u8,
+        snow_golem_melts: Some(true),
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -2773,6 +2795,7 @@ impl Biome {
         id: 21,
         registry_id: "flower_forest",
         be_network_id: 132u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.7f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -2934,6 +2957,7 @@ impl Biome {
         id: 22,
         registry_id: "forest",
         be_network_id: 4u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.7f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -3096,6 +3120,7 @@ impl Biome {
         id: 23,
         registry_id: "frozen_ocean",
         be_network_id: 46u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0f32, TemperatureModifier::Frozen, 0.5f32),
         features: &[
             &[],
@@ -3258,6 +3283,7 @@ impl Biome {
         id: 24,
         registry_id: "frozen_peaks",
         be_network_id: 183u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, -0.7f32, TemperatureModifier::None, 0.9f32),
         features: &[
             &[],
@@ -3388,6 +3414,7 @@ impl Biome {
         id: 25,
         registry_id: "frozen_river",
         be_network_id: 11u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -3536,6 +3563,7 @@ impl Biome {
         id: 26,
         registry_id: "grove",
         be_network_id: 185u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, -0.2f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -3682,6 +3710,7 @@ impl Biome {
         id: 27,
         registry_id: "ice_spikes",
         be_network_id: 140u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -3835,6 +3864,7 @@ impl Biome {
         id: 28,
         registry_id: "jagged_peaks",
         be_network_id: 182u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, -0.7f32, TemperatureModifier::None, 0.9f32),
         features: &[
             &[],
@@ -3965,6 +3995,7 @@ impl Biome {
         id: 29,
         registry_id: "jungle",
         be_network_id: 21u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.95f32, TemperatureModifier::None, 0.9f32),
         features: &[
             &[],
@@ -4143,6 +4174,7 @@ impl Biome {
         id: 30,
         registry_id: "lukewarm_ocean",
         be_network_id: 42u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -4316,6 +4348,7 @@ impl Biome {
         id: 31,
         registry_id: "lush_caves",
         be_network_id: 187u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -4459,6 +4492,7 @@ impl Biome {
         id: 32,
         registry_id: "mangrove_swamp",
         be_network_id: 191u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.9f32),
         features: &[
             &[],
@@ -4610,6 +4644,7 @@ impl Biome {
         id: 33,
         registry_id: "meadow",
         be_network_id: 186u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -4758,6 +4793,7 @@ impl Biome {
         id: 34,
         registry_id: "mushroom_fields",
         be_network_id: 14u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.9f32, TemperatureModifier::None, 1f32),
         features: &[
             &[],
@@ -4852,6 +4888,7 @@ impl Biome {
         id: 35,
         registry_id: "nether_wastes",
         be_network_id: 8u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -4933,6 +4970,7 @@ impl Biome {
         id: 36,
         registry_id: "ocean",
         be_network_id: 0u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -5094,6 +5132,7 @@ impl Biome {
         id: 37,
         registry_id: "old_growth_birch_forest",
         be_network_id: 155u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.6f32, TemperatureModifier::None, 0.6f32),
         features: &[
             &[],
@@ -5252,6 +5291,7 @@ impl Biome {
         id: 38,
         registry_id: "old_growth_pine_taiga",
         be_network_id: 32u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.3f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -5430,6 +5470,7 @@ impl Biome {
         id: 39,
         registry_id: "old_growth_spruce_taiga",
         be_network_id: 160u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.25f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -5608,6 +5649,7 @@ impl Biome {
         id: 40,
         registry_id: "pale_garden",
         be_network_id: 193u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.7f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -5742,6 +5784,7 @@ impl Biome {
         id: 41,
         registry_id: "plains",
         be_network_id: 1u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.4f32),
         features: &[
             &[],
@@ -5914,6 +5957,7 @@ impl Biome {
         id: 42,
         registry_id: "river",
         be_network_id: 7u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -6063,6 +6107,7 @@ impl Biome {
         id: 43,
         registry_id: "savanna",
         be_network_id: 35u8,
+        snow_golem_melts: Some(true),
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -6239,6 +6284,7 @@ impl Biome {
         id: 44,
         registry_id: "savanna_plateau",
         be_network_id: 36u8,
+        snow_golem_melts: Some(true),
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -6425,6 +6471,7 @@ impl Biome {
         id: 45,
         registry_id: "small_end_islands",
         be_network_id: 9u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[&[crate::placed_feature::PlacedFeature::EndIslandDecorated]],
         carvers: &[],
@@ -6449,6 +6496,7 @@ impl Biome {
         id: 46,
         registry_id: "snowy_beach",
         be_network_id: 26u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.05f32, TemperatureModifier::None, 0.3f32),
         features: &[
             &[],
@@ -6582,6 +6630,7 @@ impl Biome {
         id: 47,
         registry_id: "snowy_plains",
         be_network_id: 12u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -6737,6 +6786,7 @@ impl Biome {
         id: 48,
         registry_id: "snowy_slopes",
         be_network_id: 184u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, -0.3f32, TemperatureModifier::None, 0.9f32),
         features: &[
             &[],
@@ -6877,6 +6927,7 @@ impl Biome {
         id: 49,
         registry_id: "snowy_taiga",
         be_network_id: 30u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, -0.5f32, TemperatureModifier::None, 0.4f32),
         features: &[
             &[],
@@ -7049,6 +7100,7 @@ impl Biome {
         id: 50,
         registry_id: "soul_sand_valley",
         be_network_id: 178u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -7116,6 +7168,7 @@ impl Biome {
         id: 51,
         registry_id: "sparse_jungle",
         be_network_id: 23u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.95f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -7283,6 +7336,7 @@ impl Biome {
         id: 52,
         registry_id: "stony_peaks",
         be_network_id: 189u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 1f32, TemperatureModifier::None, 0.3f32),
         features: &[
             &[],
@@ -7408,6 +7462,7 @@ impl Biome {
         id: 53,
         registry_id: "stony_shore",
         be_network_id: 25u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.2f32, TemperatureModifier::None, 0.3f32),
         features: &[
             &[],
@@ -7541,6 +7596,7 @@ impl Biome {
         id: 54,
         registry_id: "sulfur_caves",
         be_network_id: 194u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.4f32),
         features: &[
             &[],
@@ -7674,6 +7730,7 @@ impl Biome {
         id: 55,
         registry_id: "sunflower_plains",
         be_network_id: 129u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.4f32),
         features: &[
             &[],
@@ -7846,6 +7903,7 @@ impl Biome {
         id: 56,
         registry_id: "swamp",
         be_network_id: 6u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.9f32),
         features: &[
             &[],
@@ -8022,6 +8080,7 @@ impl Biome {
         id: 57,
         registry_id: "taiga",
         be_network_id: 5u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.25f32, TemperatureModifier::None, 0.8f32),
         features: &[
             &[],
@@ -8194,6 +8253,7 @@ impl Biome {
         id: 58,
         registry_id: "the_end",
         be_network_id: 9u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -8230,6 +8290,7 @@ impl Biome {
         id: 59,
         registry_id: "the_void",
         be_network_id: 7u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -8262,6 +8323,7 @@ impl Biome {
         id: 60,
         registry_id: "warm_ocean",
         be_network_id: 40u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[
             &[],
@@ -8431,6 +8493,7 @@ impl Biome {
         id: 61,
         registry_id: "warped_forest",
         be_network_id: 180u8,
+        snow_golem_melts: None,
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -8492,6 +8555,7 @@ impl Biome {
         id: 62,
         registry_id: "windswept_forest",
         be_network_id: 34u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.2f32, TemperatureModifier::None, 0.3f32),
         features: &[
             &[],
@@ -8654,6 +8718,7 @@ impl Biome {
         id: 63,
         registry_id: "windswept_gravelly_hills",
         be_network_id: 131u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.2f32, TemperatureModifier::None, 0.3f32),
         features: &[
             &[],
@@ -8816,6 +8881,7 @@ impl Biome {
         id: 64,
         registry_id: "windswept_hills",
         be_network_id: 3u8,
+        snow_golem_melts: None,
         weather: Weather::new(true, 0.2f32, TemperatureModifier::None, 0.3f32),
         features: &[
             &[],
@@ -8978,6 +9044,7 @@ impl Biome {
         id: 65,
         registry_id: "windswept_savanna",
         be_network_id: 163u8,
+        snow_golem_melts: Some(true),
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
@@ -9153,6 +9220,7 @@ impl Biome {
         id: 66,
         registry_id: "wooded_badlands",
         be_network_id: 38u8,
+        snow_golem_melts: Some(true),
         weather: Weather::new(false, 2f32, TemperatureModifier::None, 0f32),
         features: &[
             &[],
