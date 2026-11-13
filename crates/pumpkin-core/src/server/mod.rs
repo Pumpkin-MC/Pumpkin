@@ -41,7 +41,7 @@ use pumpkin_world::world_info::anvil::{
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 use rand::seq::IndexedRandom;
 use rayon::prelude::*;
-use rsa::RsaPublicKey;
+use rsa::PublicKey as RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -161,6 +161,8 @@ pub struct Server {
     pub stop_token: CancellationToken,
     /// Set once shutdown closes admission, so the shutdown kick pass sees every admitted player.
     admission_closed: std::sync::RwLock<bool>,
+    /// Stores the latest available Pumpkin release if the startup update checker found a newer version.
+    pub available_update: std::sync::OnceLock<crate::update_checker::GitHubRelease>,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -212,8 +214,12 @@ impl Server {
                     basic_config.seed,
                     Dimension::OVERWORLD,
                 );
-                let default_data =
+                let mut default_data =
                     LevelData::from_world_generator(basic_config.seed, &overworld_gen);
+                if basic_config.hardcore {
+                    default_data.difficulty = Difficulty::Hard;
+                    default_data.difficulty_locked = true;
+                }
                 AnvilLevelInfo.write_world_info(&default_data, &world_path)?;
                 default_data
             }
@@ -237,6 +243,15 @@ impl Server {
             }
         };
 
+        let mut level_info = level_info;
+        if basic_config.hardcore {
+            level_info.difficulty = Difficulty::Hard;
+            level_info.difficulty_locked = true;
+            if let Err(err) = AnvilLevelInfo.write_world_info(&level_info, &world_path) {
+                error!("Failed to persist hardcore difficulty fix: {err}");
+            }
+        }
+
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
@@ -256,6 +271,7 @@ impl Server {
         );
         let advancement_manager = Arc::new(AdvancementManager::new(
             players_dir.clone(),
+            advanced_config.advancement.enabled,
             advanced_config.advancement.save_advancements,
         ));
         let white_list = AtomicBool::new(basic_config.white_list);
@@ -356,6 +372,7 @@ impl Server {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
             management_hub,
+            available_update: std::sync::OnceLock::new(),
         };
         let server = Arc::new(server);
 
@@ -1122,6 +1139,16 @@ impl Server {
         crate::telemetry::start_telemetry(self.clone());
     }
 
+    /// Starts the background update checker task if enabled in configuration.
+    pub fn start_update_checker(self: &Arc<Self>) {
+        crate::update_checker::start_update_checker(self);
+    }
+
+    /// Notifies a joining player in chat if they are an operator and a Pumpkin update is available.
+    pub fn notify_update_if_op(&self, player: &Player) {
+        crate::update_checker::notify_update_if_op(self, player);
+    }
+
     /// Generates a new container id.
     pub fn new_container_id(&self) -> u32 {
         self.container_id.fetch_add(1, Ordering::SeqCst)
@@ -1244,6 +1271,9 @@ impl Server {
             world.flush_synced_block_events();
 
             let players = world.players.load();
+            players.par_iter().for_each(|player| {
+                player.process_inbound_packets();
+            });
             players.par_iter().for_each(|player| {
                 player.tick(self);
             });

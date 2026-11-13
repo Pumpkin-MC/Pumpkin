@@ -32,6 +32,32 @@ impl CaveVinesBlock {
         }
         support_state.is_side_solid(BlockDirection::Down)
     }
+
+    fn drop_berries(
+        world: &std::sync::Arc<crate::world::World>,
+        pos: &BlockPos,
+        state_id: BlockStateId,
+        player: &crate::entity::player::Player,
+    ) {
+        let drops = world
+            .get_loot_table("minecraft:harvest/cave_vine")
+            .map_or_else(
+                || vec![ItemStack::new(1, &Item::GLOW_BERRIES)],
+                |handle| {
+                    let params = crate::world::loot::LootContextParameters {
+                        world: Some(world),
+                        position: Some(pos.to_centered_f64()),
+                        block_state: Some(pumpkin_data::BlockState::from_id(state_id)),
+                        this_entity: Some(player as &dyn crate::entity::EntityBase),
+                        ..Default::default()
+                    };
+                    crate::world::loot::generate_loot_from_handle(&handle, rand::random(), &params)
+                },
+            );
+        for stack in drops {
+            world.drop_stack(pos, stack);
+        }
+    }
 }
 
 impl BlockBehaviour for CaveVinesBlock {
@@ -144,8 +170,7 @@ impl BlockBehaviour for CaveVinesBlock {
             let mut props = CaveVinesLikeProperties::from_state_id(state_id);
             if props.berries {
                 props.berries = false;
-                args.world
-                    .drop_stack(args.position, ItemStack::new(1, &Item::GLOW_BERRIES));
+                Self::drop_berries(args.world, args.position, state_id, args.player);
                 let pitch = rand::rng().random_range(0.8f32..1.2f32);
                 args.world.play_sound_fine(
                     Sound::BlockCaveVinesPickBerries,
@@ -165,8 +190,7 @@ impl BlockBehaviour for CaveVinesBlock {
             let mut props = CaveVinesPlantLikeProperties::from_state_id(state_id);
             if props.berries {
                 props.berries = false;
-                args.world
-                    .drop_stack(args.position, ItemStack::new(1, &Item::GLOW_BERRIES));
+                Self::drop_berries(args.world, args.position, state_id, args.player);
                 let pitch = rand::rng().random_range(0.8f32..1.2f32);
                 args.world.play_sound_fine(
                     Sound::BlockCaveVinesPickBerries,

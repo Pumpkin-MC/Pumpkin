@@ -279,13 +279,15 @@ impl Goal for DolphinSwimToTreasureGoal {
 }
 
 struct DolphinSwimWithPlayerGoal {
-    player: Option<Arc<dyn EntityBase>>,
+    player: Option<Weak<dyn EntityBase>>,
     retained_player: Arc<crossbeam::atomic::AtomicCell<Option<i32>>>,
 }
 
 impl DolphinSwimWithPlayerGoal {
     fn give_grace(&self) {
-        if let Some(player) = self.player.as_ref().and_then(|player| player.get_player()) {
+        if let Some(player) = self.player.as_ref().and_then(Weak::upgrade)
+            && let Some(player) = player.get_player()
+        {
             player.add_effect(Effect {
                 effect_type: &StatusEffect::DOLPHINS_GRACE,
                 duration: 100,
@@ -306,38 +308,41 @@ impl Goal for DolphinSwimWithPlayerGoal {
         let conditions = TargetPredicate::create_non_attackable()
             .set_base_max_distance(10.0)
             .ignore_visibility();
-        self.player = TargetMatch::Type(&EntityType::PLAYER).find_nearest(
+        let found = TargetMatch::Type(&EntityType::PLAYER).find_nearest(
             &world,
             &SearchArea::from_feet(entity, 10.0, 0.0).players_anywhere(),
             |player| conditions.test(&world, Some(mob), player),
         );
-        let can_start = self.player.as_ref().is_some_and(|player| {
+        let can_start = found.as_ref().is_some_and(|player| {
             player.get_entity().is_swimming()
                 && mob.get_mob_entity().get_target().is_none_or(|target| {
                     target.get_entity().entity_id != player.get_entity().entity_id
                 })
         });
-        if !can_start {
+        if can_start {
+            self.player = found.as_ref().map(Arc::downgrade);
+            self.retained_player
+                .store(found.as_ref().map(|player| player.get_entity().entity_id));
+        } else {
             self.player = None;
+            self.retained_player.store(None);
         }
-        self.retained_player.store(
-            self.player
-                .as_ref()
-                .map(|player| player.get_entity().entity_id),
-        );
         can_start
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        self.player.as_ref().is_some_and(|player| {
-            player.get_entity().is_swimming()
-                && player
-                    .get_entity()
-                    .pos
-                    .load()
-                    .squared_distance_to_vec(&mob.get_entity().pos.load())
-                    < 256.0
-        })
+        self.player
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .is_some_and(|player| {
+                player.get_entity().is_swimming()
+                    && player
+                        .get_entity()
+                        .pos
+                        .load()
+                        .squared_distance_to_vec(&mob.get_entity().pos.load())
+                        < 256.0
+            })
     }
 
     fn start(&mut self, _mob: &dyn Mob) {
@@ -351,7 +356,7 @@ impl Goal for DolphinSwimWithPlayerGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(player) = &self.player else {
+        let Some(player) = self.player.as_ref().and_then(Weak::upgrade) else {
             return;
         };
         let target = player.get_entity();
@@ -640,7 +645,7 @@ enum FollowEntityGoal {
 
 struct FollowPlayerRiddenEntityGoal {
     targets: fn(&dyn EntityBase) -> bool,
-    player: Option<Arc<dyn EntityBase>>,
+    player: Option<Weak<dyn EntityBase>>,
     retained_player: Arc<crossbeam::atomic::AtomicCell<Option<i32>>>,
     time_to_recalc_path: i32,
     current_goal: FollowEntityGoal,
@@ -682,6 +687,7 @@ impl Goal for FollowPlayerRiddenEntityGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         self.player
             .as_ref()
+            .and_then(Weak::upgrade)
             .is_some_and(|player| Self::has_moved(player.as_ref()))
             || self
                 .nearby_controllers(mob)
@@ -690,14 +696,17 @@ impl Goal for FollowPlayerRiddenEntityGoal {
     }
 
     fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
-        self.player.as_ref().is_some_and(|player| {
-            player.get_entity().has_vehicle() && Self::has_moved(player.as_ref())
-        })
+        self.player
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .is_some_and(|player| {
+                player.get_entity().has_vehicle() && Self::has_moved(player.as_ref())
+            })
     }
 
     fn start(&mut self, mob: &dyn Mob) {
         if let Some(player) = self.nearby_controllers(mob).first() {
-            self.player = Some(player.clone());
+            self.player = Some(Arc::downgrade(player));
             self.retained_player
                 .store(Some(player.get_entity().entity_id));
         }
@@ -711,7 +720,7 @@ impl Goal for FollowPlayerRiddenEntityGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(player) = &self.player else {
+        let Some(player) = self.player.as_ref().and_then(Weak::upgrade) else {
             return;
         };
         let living = &mob.get_mob_entity().living_entity;

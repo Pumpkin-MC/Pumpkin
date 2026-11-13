@@ -357,14 +357,11 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
         .iter()
         .map(|passenger| passenger.get_entity().entity_id)
         .collect();
-    for other in [&base.vehicle, &base.leashed_to] {
-        if let Some(other) = other
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-        {
-            links.push(other.get_entity().entity_id);
-        }
+    for other in [base.get_vehicle(), base.get_leash_holder()]
+        .into_iter()
+        .flatten()
+    {
+        links.push(other.get_entity().entity_id);
     }
     if let Some(DelayedLeash::Entity(uuid)) = *base
         .delayed_leash

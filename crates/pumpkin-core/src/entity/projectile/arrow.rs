@@ -120,7 +120,7 @@ impl ArrowEntity {
     ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
-        entity.pos.store(owner_pos);
+        entity.set_pos(owner_pos);
         let mut launch_event =
             crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
                 entity.entity_id,
@@ -595,6 +595,7 @@ impl EntityBase for ArrowEntity {
                 .last_block_pos
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut started_falling = false;
             if let Some(pos) = last_pos {
                 let block = world.get_block(&pos);
                 if block.is_air() {
@@ -608,15 +609,17 @@ impl EntityBase for ArrowEntity {
                     vel.y *= rand::random::<f64>() * 0.2;
                     vel.z *= rand::random::<f64>() * 0.2;
                     entity.velocity.store(vel);
+                    // Vanilla `startFalling`: restart the despawn timer. The block hit latch is
+                    // cleared too, or the next block hit is ignored and the arrow falls through.
+                    self.life.store(0, Ordering::Relaxed);
+                    self.has_hit.store(false, Ordering::Relaxed);
+                    started_falling = true;
                 }
             }
 
-            // Increment in-ground time and life
             let _in_ground_time = self.in_ground_time.fetch_add(1, Ordering::Relaxed);
-            let life = self.life.fetch_add(1, Ordering::Relaxed);
-
-            // Despawn after enough time
-            if life >= Self::DESPAWN_TIME {
+            // Vanilla either starts falling or ticks the despawn timer, never both.
+            if !started_falling && self.life.fetch_add(1, Ordering::Relaxed) >= Self::DESPAWN_TIME {
                 entity.remove();
             }
             return;
@@ -889,10 +892,6 @@ impl EntityBase for ArrowEntity {
                 ..
             } => {
                 let target_entity_id = target.get_entity().entity_id;
-                self.pierced_entities
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push(target_entity_id);
 
                 // Calculate damage
                 let velocity = entity.velocity.load();
@@ -918,6 +917,11 @@ impl EntityBase for ArrowEntity {
 
                 let owner_entity = self.owner.get(&world);
 
+                self.pierced_entities
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(target_entity_id);
+
                 let damage_succeeded = target.damage_with_context(
                     target.as_ref(),
                     damage as f32,
@@ -927,6 +931,11 @@ impl EntityBase for ArrowEntity {
                     // Like vanilla, an ownerless arrow is its own cause.
                     Some(owner_entity.as_deref().unwrap_or(self)),
                 );
+
+                if is_enderman && !damage_succeeded {
+                    self.has_hit.store(false, Ordering::Relaxed);
+                    return;
+                }
 
                 if let Some(living) = target.get_living_entity() {
                     if punch > 0 {
@@ -998,13 +1007,13 @@ impl EntityBase for ArrowEntity {
         None
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
         // Only allow picking up grounded arrows
         if !self.in_ground.load(Ordering::Relaxed) {
-            return;
-        }
-
-        if player.living_entity.health.load() <= 0.0 {
             return;
         }
 

@@ -13,6 +13,7 @@ use crate::level::{Level, LoadedChunkChange, SyncChunk};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_util::math::vector2::Vector2;
+use rustc_hash::FxBuildHasher;
 use slotmap::Key;
 use std::cmp::{Ordering, max};
 use std::collections::{BinaryHeap, HashMap};
@@ -63,7 +64,7 @@ pub struct GenerationSchedule {
     last_high_priority: Vec<ChunkPos>,
     send_level: Arc<LevelChannel>,
 
-    public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk, FxBuildHasher>>,
     loaded_chunk_changes: Arc<crossbeam::queue::SegQueue<LoadedChunkChange>>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
@@ -809,8 +810,12 @@ impl GenerationSchedule {
             holder.dependency_stage = new_dependency;
 
             let effective_target = holder.target_stage.max(new_dependency);
-            for i in (effective_target as usize + 1)..StagedChunkEnum::COUNT {
-                let task = holder.tasks[i];
+            for (i, &task) in holder
+                .tasks
+                .iter()
+                .enumerate()
+                .skip(effective_target as usize + 1)
+            {
                 if !task.is_null() {
                     nodes_to_drop.push((*pos, i, task));
                 }
@@ -1063,11 +1068,11 @@ impl GenerationSchedule {
         // A neighboring generation cache may already have advanced this holder past the
         // returning task's stage. Drop every scheduled task satisfied by the returned data,
         // including that task's stale in-flight node.
-        for task_idx in (StagedChunkEnum::None as usize + 1)..=(stage as usize) {
-            if !holder.tasks[task_idx].is_null() {
-                self.waiting_for_chunks.remove(&holder.tasks[task_idx]);
-                self.drop_node(holder.tasks[task_idx]);
-                holder.tasks[task_idx] = NodeKey::null();
+        for task in &mut holder.tasks[(StagedChunkEnum::None as usize + 1)..=(stage as usize)] {
+            if !task.is_null() {
+                self.waiting_for_chunks.remove(task);
+                self.drop_node(*task);
+                *task = NodeKey::null();
             }
         }
     }
@@ -1467,8 +1472,10 @@ impl GenerationSchedule {
                             StagedChunkEnum::None,
                         ));
                         let effective_target = holder.target_stage.max(holder.dependency_stage);
-                        for i in (holder.current_stage as usize + 1)..=(effective_target as usize) {
-                            self.graph.add_edge(occupy, holder.tasks[i]);
+                        for &task in &holder.tasks
+                            [(holder.current_stage as usize + 1)..=(effective_target as usize)]
+                        {
+                            self.graph.add_edge(occupy, task);
                         }
                         holder.occupied = occupy;
 

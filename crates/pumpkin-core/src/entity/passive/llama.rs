@@ -167,10 +167,7 @@ impl LlamaEntity {
 
     fn is_leashed_to_wandering_trader(&self) -> bool {
         self.get_entity()
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
+            .get_leash_holder()
             .is_some_and(|holder| holder.get_entity().entity_type == &EntityType::WANDERING_TRADER)
     }
 
@@ -303,11 +300,6 @@ impl LlamaEntity {
 impl AgeableMob for LlamaEntity {
     fn get_ageable_data(&self) -> &AgeableData {
         &self.ageable_data
-    }
-
-    fn age_boundary_reached(&self) {
-        let entity = self.get_entity();
-        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, self.is_baby()));
     }
 }
 
@@ -491,6 +483,10 @@ impl CustomSound for LlamaEntity {
 }
 
 impl Mob for LlamaEntity {
+    fn on_climbable(&self) -> bool {
+        false
+    }
+
     fn on_elastic_leash_pull(&self) {
         if self.is_eating() {
             self.set_eating(false);

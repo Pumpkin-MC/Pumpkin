@@ -1,12 +1,15 @@
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::data_component_impl::FoodImpl;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::passive::animal::Animal;
+use crate::entity::player::Player;
 use crate::plugin::api::events::entity::entity_toggle_sit::EntityToggleSitEvent;
 
 /// Gate for goals vanilla runs only on wild animals.
@@ -161,6 +164,21 @@ pub trait TamableAnimal: Animal {
                 },
             );
         }
+    }
+
+    fn feed(
+        &self,
+        player: &Player,
+        item_stack: &mut ItemStack,
+        healing_factor: f32,
+        default_heal: f32,
+    ) {
+        let heal = item_stack
+            .get_data_component::<FoodImpl>()
+            .map_or(default_heal, |food| healing_factor * food.nutrition as f32);
+        item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+        self.get_mob_entity().living_entity.heal(heal);
+        self.play_eating_sound();
     }
 
     fn spawn_taming_particles(&self, success: bool) {

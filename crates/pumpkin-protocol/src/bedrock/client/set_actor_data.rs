@@ -46,6 +46,22 @@ impl SyncedActorDataList {
         self.0.insert(key, value);
     }
 
+    /// Lays `other` over `self`. Flag words are OR'd so base flags (gravity, collision, ...)
+    /// survive, every other key is replaced.
+    pub fn merge(&mut self, other: Self) {
+        for (key, value) in other.0 {
+            let value = match (self.0.get(&key), value) {
+                (Some(MetadataValue::Int64(base)), MetadataValue::Int64(extra))
+                    if key == entity_data_key::FLAGS || key == entity_data_key::FLAGS_TWO =>
+                {
+                    MetadataValue::Int64(base | extra)
+                }
+                (_, value) => value,
+            };
+            self.0.insert(key, value);
+        }
+    }
+
     pub fn set_flag(&mut self, key: u32, index: u8, value: bool) {
         if key == entity_data_key::PLAYER_FLAGS {
             let current_value = match self.0.get(&key) {

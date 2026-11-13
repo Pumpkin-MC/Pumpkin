@@ -281,6 +281,39 @@ impl RegionFile for PumpFile {
         Ok(this)
     }
 
+    fn has_chunk(&self, index: usize) -> bool {
+        self.staged.contains_key(&index) || (self.offsets[index] != 0 && self.lengths[index] != 0)
+    }
+
+    fn delete_chunk(&mut self, index: usize) -> std::io::Result<bool> {
+        let was_staged = self.staged.remove(&index).is_some();
+        let offset = self.offsets[index];
+        let len = self.lengths[index];
+        if offset == 0 || len == 0 {
+            return Ok(was_staged);
+        }
+
+        self.offsets[index] = 0;
+        self.lengths[index] = 0;
+
+        if self.file.is_some() {
+            let header = self.header_bytes();
+            let file = self.file()?;
+            if let Err(err) = write_all_at(file, &header, 0) {
+                self.offsets[index] = offset;
+                self.lengths[index] = len;
+                return Err(err);
+            }
+            self.used_sectors.set(offset, sector_count(len), false);
+            self.truncate_unused_tail();
+            self.unsynced = true;
+        } else {
+            self.used_sectors.set(offset, sector_count(len), false);
+        }
+
+        Ok(true)
+    }
+
     fn read_chunk(&self, index: usize) -> Result<Option<Bytes>, ChunkReadingError> {
         if let Some(staged) = self.staged.get(&index) {
             return Ok(Some(staged.clone()));

@@ -11,7 +11,7 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
     BlockBehaviour, BlockIsReplacing, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    OnLandedUponArgs, OnPlaceArgs, PathComputationType, UpdateEntityMovementAfterFallOnArgs,
+    OnPlaceArgs, PathComputationType, UpdateEntityMovementAfterFallOnArgs,
     bounce_entity_after_fall,
 };
 use crate::entity::EntityBase;
@@ -111,14 +111,8 @@ impl BlockBehaviour for ShelfMushroomBlock {
         }
     }
 
-    fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance, 0.0);
-        }
-    }
-
     fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
-        bounce_entity_after_fall(args.entity, 0.8);
+        bounce_entity_after_fall(args.entity, f64::from(args.block.bounce_restitution));
         let entity = args.entity.get_entity();
         if entity.entity_type != &EntityType::ITEM && entity.entity_type != &EntityType::TNT {
             entity.world.load().play_sound(
