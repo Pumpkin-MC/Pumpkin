@@ -2087,6 +2087,11 @@ impl<'de> Deserialize<'de> for ProfileNbt {
             }
             _ => return Err(serde::de::Error::custom("expected a name or a compound")),
         }
+        // The profile is sent on as it is, and NBT can't hold a string over 65535 bytes.
+        let mut writer = pumpkin_nbt::serializer::NbtWriteHelperJava::new(std::io::sink());
+        if profile.clone().serialize_content(&mut writer).is_err() {
+            return Err(serde::de::Error::custom("the profile doesn't fit in NBT"));
+        }
         Ok(Self(profile))
     }
 }
@@ -2518,6 +2523,11 @@ mod test {
         ] {
             assert!(head(&over).is_err(), "{form}");
         }
+
+        // Vanilla can't write a string over 65535 bytes to NBT, and "界" takes three.
+        let value = |length| format!(r#"[{{"name":"a","value":"{}"}}]"#, "界".repeat(length));
+        assert!(head(&value(21845)).is_ok());
+        assert!(head(&value(21846)).is_err());
     }
 }
 
