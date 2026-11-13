@@ -177,4 +177,17 @@ mod test {
         assert!(parse("salmon_spawn_egg[salmon/size=\"large\",").is_err());
         assert!(parse("salmon_spawn_egg[%]").is_err());
     }
+
+    #[test]
+    fn rejects_enchantment_levels_outside_vanilla_range() {
+        assert!(parse("trident[minecraft:enchantments={riptide:0}]").is_err());
+        assert!(parse("trident[minecraft:enchantments={riptide:2000}]").is_err());
+        assert!(parse("enchanted_book[minecraft:stored_enchantments={mending:2000}]").is_err());
+    }
+
+    #[test]
+    fn accepts_enchantment_levels_at_vanilla_limit() {
+        assert!(parse("trident[minecraft:enchantments={riptide:255}]").is_ok());
+        assert!(parse("enchanted_book[minecraft:stored_enchantments={mending:255}]").is_ok());
+    }
 }

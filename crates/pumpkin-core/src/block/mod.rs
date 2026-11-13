@@ -138,12 +138,18 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
         if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance, 1.0);
+            let reduced_fall_distance =
+                args.fall_distance * (1.0 - args.block.fall_distance_reduction);
+            living.handle_fall_damage(args.entity, reduced_fall_distance, 1.0);
         }
     }
 
     fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
-        stop_vertical_movement_after_fall(args.entity);
+        if args.block.bounce_restitution > 0.0 {
+            bounce_entity_after_fall(args.entity, f64::from(args.block.bounce_restitution));
+        } else {
+            stop_vertical_movement_after_fall(args.entity);
+        }
     }
 
     /// Called when a player starts digging this block, except in creative.
@@ -358,11 +364,13 @@ pub struct PlayerPlacedArgs<'a> {
 
 pub struct OnLandedUponArgs<'a> {
     pub world: &'a Arc<World>,
+    pub block: &'a Block,
     pub fall_distance: f32,
     pub entity: &'a dyn EntityBase,
 }
 
 pub struct UpdateEntityMovementAfterFallOnArgs<'a> {
+    pub block: &'a Block,
     pub entity: &'a dyn EntityBase,
 }
 

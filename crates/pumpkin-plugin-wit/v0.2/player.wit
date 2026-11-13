@@ -953,6 +953,8 @@ interface player {
         play-custom-sound-at: func(pos: position, sound-name: string, category: sound-category, volume: f32, pitch: f32);
         /// Stops a custom sound identifier from playing for this player.
         stop-custom-sound: func(sound-name: option<string>, category: option<sound-category>);
+        /// Stops all sounds currently playing for this player across all categories.
+        stop-all-sounds: func();
 
         /// Spawns particles visible only to this player.
         spawn-particles: func(particle: particle, pos: position, count: u32, offset: position, max-speed: f32);
@@ -981,6 +983,8 @@ interface player {
         open-book: func(hand: hand);
         /// Forces the sign text editor to open for the player at the specified sign block position.
         open-sign-editor: func(pos: block-pos, is-front-text: bool);
+        /// Broadcasts an arm-swing animation for this player's specified hand.
+        swing-hand: async func(hand: hand);
 
         // Velocity & Physics
 
@@ -1154,6 +1158,25 @@ interface player {
         /// Sets the item in the specified inventory slot.
         set-inventory-item: async func (slot: u8, stack: option<item-stack>);
 
+        /// Applies `amount` durability damage to the item in the specified equipment slot, respecting Unbreaking,
+        /// firing item damage/break events, and syncing the player's inventory. Returns `true` if the item broke.
+        damage-item-in-slot: async func (slot: equipment-slot, amount: s32) -> bool;
+        /// Applies `amount` durability damage to the item in the player's main hand, respecting Unbreaking,
+        /// firing item damage/break events, and syncing the player's inventory. Returns `true` if the item broke.
+        damage-held-item: async func (amount: s32) -> bool;
+        /// Applies `amount` durability damage to the given item stack as this player (respecting Unbreaking and firing
+        /// `PlayerItemDamageEvent` / `PlayerItemBreakEvent`). Returns `true` if the item broke.
+        damage-item-stack: async func (item: item-stack, amount: s32) -> bool;
+
+        /// Breaks the block at `pos` in the player's world as this player (matching Bukkit's `Player#breakBlock`),
+        /// checking game mode and tool restrictions, firing `BlockBreakEvent`, dropping loot with the held tool's
+        /// enchantments (Fortune / Silk Touch), damaging the held tool, adding exhaustion, and updating statistics.
+        break-block: async func (pos: block-pos) -> bool;
+        /// Returns whether the player can harvest drops from the block at `pos` with their currently held item.
+        can-harvest-block: func (pos: block-pos) -> bool;
+        /// Returns the player's current mining speed against the block at `pos` (accounting for held tool, Efficiency, effects, and water/air state).
+        get-mining-speed: func (pos: block-pos) -> f32;
+
         // Ender Chest Inventory
 
         /// Returns the item in the specified ender chest slot (0-26).
@@ -1208,6 +1231,8 @@ interface player {
         add-experience-levels:   async func(levels: s32);
         /// Adds experience points to the player.
         add-experience-points:   async func(points: s32);
+        /// Returns the total experience points required to advance from the player's current level to the next level.
+        get-exp-to-level:        func() -> s32;
 
         /// Returns whether the player is currently flying.
         is-flying:    func() -> bool;
@@ -1261,6 +1286,10 @@ interface player {
         set-respawn-location: func(pos: position);
         /// Returns the player's custom respawn / bed location, if set.
         get-respawn-location: func() -> option<position>;
+        /// Returns the dimension identifier and block position of the player's last death, if recorded.
+        get-last-death-location: func() -> option<tuple<string, block-pos>>;
+        /// Returns the view distance reported by the player's client settings.
+        get-client-view-distance: func() -> u8;
 
         /// Hides another player from this player's view (vanish).
         hide-player: func(other: player);

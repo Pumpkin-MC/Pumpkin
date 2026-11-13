@@ -6,7 +6,7 @@ interface server {
     use uuid.{uuid};
     use recipe.{recipe-manager};
     use enchantments.{enchantment-manager, custom-enchantment};
-    use permission.{permission-level};
+    use permission.{permission, permission-level};
     use advancement.{advancement-info};
     use datapack.{datapack-manager, datapack-info};
 
@@ -160,6 +160,15 @@ interface server {
         /// Returns the current difficulty level of the server.
         get-difficulty: func() -> difficulty;
 
+        /// Sets the difficulty level of the server and broadcasts the change to all worlds.
+        set-difficulty: async func(difficulty: difficulty);
+
+        /// Returns whether the server's difficulty is locked.
+        is-difficulty-locked: func() -> bool;
+
+        /// Sets whether the server's difficulty is locked.
+        set-difficulty-locked: async func(locked: bool);
+
         /// Returns the total number of players currently connected to the server.
         get-player-count: func() -> u32;
 
@@ -250,6 +259,15 @@ interface server {
         /// Returns the server's default gamemode.
         get-default-gamemode: func() -> game-mode;
 
+        /// Returns the spawn protection radius in blocks (0 if disabled).
+        get-spawn-protection-radius: func() -> u32;
+
+        /// Returns the port the Java Edition server is bound to.
+        get-port: func() -> u16;
+
+        /// Returns the target Minecraft version string supported by this server (e.g. `"1.21.4"`).
+        get-minecraft-version: func() -> string;
+
         /// Returns the recipe manager to register custom recipes.
         get-recipe-manager: func() -> recipe-manager;
 
@@ -282,5 +300,8 @@ interface server {
 
         /// Broadcasts custom server links to all connected players (displayed in the client Esc pause menu in 1.21+).
         set-server-links: func(links: list<server-link>);
+
+        /// Returns every permission node registered on the server, by Pumpkin and by plugins.
+        get-all-permissions: func() -> list<permission>;
     }
 }

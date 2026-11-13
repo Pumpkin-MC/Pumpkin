@@ -294,6 +294,11 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
         for _ in 0..len {
             let id = seq.get_var_int()?.0 as u8;
             let level = seq.get_var_int()?.0;
+            if !(1..=MAX_ENCHANTMENT_LEVEL).contains(&level) {
+                return Err(ReadingError::Message(format!(
+                    "Enchantment level {level} out of range"
+                )));
+            }
             enc.push((
                 Enchantment::from_id(id).ok_or(ReadingError::Message(
                     "EnchantmentsImpl Enchantment VarInt Incorrect!".into(),
@@ -896,6 +901,11 @@ impl DataComponentCodec<Self> for StoredEnchantmentsImpl {
         for _ in 0..len {
             let id = seq.get_var_int()?.0 as u8;
             let level = seq.get_var_int()?.0;
+            if !(1..=MAX_ENCHANTMENT_LEVEL).contains(&level) {
+                return Err(ReadingError::Message(format!(
+                    "Enchantment level {level} out of range"
+                )));
+            }
             stored_enchantments.push((
                 Enchantment::from_id(id).ok_or(ReadingError::Message(
                     "StoredEnchantmentsImpl Enchantment VarInt Incorrect!".into(),
@@ -3613,5 +3623,41 @@ mod tests {
                 "material reference {material} was accepted"
             );
         }
+    }
+
+    fn enchantment_wire_bytes(id: u8, level: i32) -> Vec<u8> {
+        let mut encoded = Vec::new();
+        encoded.write_var_int(&VarInt(1)).unwrap();
+        encoded.write_var_int(&VarInt(i32::from(id))).unwrap();
+        encoded.write_var_int(&VarInt(level)).unwrap();
+        encoded
+    }
+
+    #[test]
+    fn enchantment_levels_outside_the_vanilla_range_are_rejected() {
+        for level in [1, 255] {
+            assert!(
+                EnchantmentsImpl::deserialize(
+                    &mut enchantment_wire_bytes(Enchantment::RIPTIDE.id, level).as_slice()
+                )
+                .is_ok(),
+                "level {level} was rejected"
+            );
+        }
+        for level in [-1, 0, 256, 2000] {
+            assert!(
+                EnchantmentsImpl::deserialize(
+                    &mut enchantment_wire_bytes(Enchantment::RIPTIDE.id, level).as_slice()
+                )
+                .is_err(),
+                "level {level} was accepted"
+            );
+        }
+        assert!(
+            StoredEnchantmentsImpl::deserialize(
+                &mut enchantment_wire_bytes(Enchantment::MENDING.id, 2000).as_slice()
+            )
+            .is_err()
+        );
     }
 }
