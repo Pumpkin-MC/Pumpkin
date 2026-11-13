@@ -5,23 +5,6 @@ use super::*;
 /// break progress reaches 0.7, so a client finish that arrives a little early still counts.
 const FINISHED_DIGGING_PROGRESS_THRESHOLD: f32 = 0.7;
 
-/// Checks shared by both dig actions: Pumpkin's item behaviour hook and the vanilla
-/// spectator, creative tool and adventure `can_break` restrictions.
-fn cannot_mine_block(player: &Player, server: &Server, block: &Block, gamemode: GameMode) -> bool {
-    let inventory = player.inventory();
-    let held = inventory.held_item();
-    !server.item_registry.can_mine(held.item, player)
-        || gamemode == GameMode::Spectator
-        || (gamemode == GameMode::Creative
-            && held
-                .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
-                .is_some_and(|t| !t.can_destroy_blocks_in_creative))
-        || (gamemode == GameMode::Adventure
-            && !held
-                .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
-                .is_some_and(|c| c.matches_block(block)))
-}
-
 impl JavaClient {
     #[expect(clippy::too_many_lines)]
     pub fn handle_player_action(
@@ -86,7 +69,7 @@ impl JavaClient {
                     }
 
                     let gamemode = player.gamemode.load();
-                    let cannot_mine = cannot_mine_block(player, server, block, gamemode);
+                    let cannot_mine = player.cannot_mine_block(Some(server), block, gamemode);
                     if cannot_mine {
                         player.try_send_client_packet(&CBlockUpdate::new(
                             position,
@@ -244,58 +227,37 @@ impl JavaClient {
                     let block = Block::from_state_id(state.id);
                     // Vanilla `getDestroyProgress`, which returns 0 for unbreakable blocks.
                     let speed = block::calc_block_breaking(player, state, block);
-                    let progress = speed
-                        * (player.tick_counter.load(Ordering::Relaxed)
-                            - player.start_mining_time.load(Ordering::Relaxed)
-                            + 1) as f32;
-
-                    let valid_finish = !state.is_air()
-                        && speed > 0.0
-                        && !cannot_mine_block(player, server, block, gamemode)
-                        && (gamemode == GameMode::Creative
-                            || (is_mining_target
-                                && progress >= FINISHED_DIGGING_PROGRESS_THRESHOLD));
-                    if !valid_finish {
+                    if state.is_air()
+                        || speed <= 0.0
+                        || player.cannot_mine_block(Some(server), block, gamemode)
+                    {
                         player.stop_mining();
                         self.sync_block_state_to_client(&world, location);
                         self.update_sequence(player_action.sequence.0);
                         return;
                     }
 
-                    // Block break & play sound
-                    player.stop_mining();
-
-                    let block_drop =
-                        gamemode != GameMode::Creative && player.can_harvest(state, block);
-
-                    let new_state = world.break_block(
-                        &location,
-                        Some(player),
-                        if block_drop {
-                            BlockFlags::NOTIFY_ALL
-                        } else {
-                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
-                        },
-                    );
-                    if new_state.is_some() {
-                        server
-                            .block_registry
-                            .broken(&world, block, player, &location, server, state);
-
-                        player.apply_tool_damage_for_block_break(state);
-                        if block_drop {
-                            player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
-                        }
-                        let item_id = player.inventory().held_item().item.id;
-                        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
-                        player.increment_stat(
-                            StatisticCategory::Mined,
-                            block.id.as_u16() as i32,
-                            1,
-                        );
+                    if gamemode == GameMode::Creative {
+                        player.stop_mining();
+                        player.break_block(&location);
+                        self.sync_block_state_to_client(&world, location);
+                        self.update_sequence(player_action.sequence.0);
+                        return;
                     }
 
-                    self.sync_block_state_to_client(&world, location);
+                    let progress = speed
+                        * (player.tick_counter.load(Ordering::Relaxed)
+                            - player.start_mining_time.load(Ordering::Relaxed)
+                            + 1) as f32;
+                    if progress >= FINISHED_DIGGING_PROGRESS_THRESHOLD {
+                        player.stop_mining();
+                        player.break_block(&location);
+                        self.sync_block_state_to_client(&world, location);
+                    } else {
+                        // Vanilla `hasDelayedDestroy`: a finish can arrive before the server
+                        // tick has caught up, so keep mining until progress reaches 1.0.
+                        player.start_delayed_destroy(location);
+                    }
 
                     self.update_sequence(player_action.sequence.0);
                 }
