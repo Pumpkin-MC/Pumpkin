@@ -112,7 +112,7 @@ impl JavaClient {
 
         let mut item = inventory.get_stack_in_hand(hand);
         let before = item.clone();
-        // TODO: stat event may move the player or change block and hand, recheck after it
+        // TODO: vanilla ItemStack.useOn awards ITEM_USED after Item.useOn, only on a successful item interaction
         if !item.is_empty() {
             player.increment_stat(StatisticCategory::Used, item.item.id as i32, 1);
         }

@@ -57,7 +57,7 @@ pub(crate) trait PressurePlate {
         output: u8,
     ) {
         let calc_output = self.calculate_redstone_output(world, block, pos);
-        let has_output = calc_output > 0;
+        let mut has_output = calc_output > 0;
         if calc_output != output {
             let mut event = crate::plugin::block::block_redstone::BlockRedstoneEvent::new(
                 world.clone(),
@@ -82,7 +82,9 @@ pub(crate) trait PressurePlate {
             world.update_neighbors(&pos.down(), None);
 
             let was_pressed = output > 0;
+            // listener output decides the release tick
             let is_pressed = next_output > 0;
+            has_output = is_pressed;
             if !is_pressed && was_pressed {
                 let (_, click_off) = self.click_sounds(block);
                 world.play_block_sound(click_off, SoundCategory::Blocks, *pos);

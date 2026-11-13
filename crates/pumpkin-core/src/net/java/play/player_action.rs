@@ -77,7 +77,7 @@ impl JavaClient {
                         player
                             .current_block_breaking_speed
                             .store(0, Ordering::Relaxed);
-                        *mining_pos = BlockPos::default();
+                        *mining_pos = BlockPos::ZERO;
                         drop(mining_pos);
                         if was_mining || stage >= 0 {
                             world.set_block_breaking(
@@ -116,7 +116,7 @@ impl JavaClient {
                                 .block_registry
                                 .broken(&world, block, player, &position, server, state);
                         }
-                        self.sync_block_state_to_client(&world, position);
+                        self.sync_block_state_to_client(player, &world, position);
                         self.update_sequence(player_action.sequence.0);
                         return;
                     }
@@ -161,7 +161,7 @@ impl JavaClient {
                                     1,
                                 );
                             }
-                            self.sync_block_state_to_client(&world, position);
+                            self.sync_block_state_to_client(player, &world, position);
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
                             *player
@@ -269,7 +269,7 @@ impl JavaClient {
                         );
                     }
 
-                    self.sync_block_state_to_client(&world, location);
+                    self.sync_block_state_to_client(player, &world, location);
 
                     self.update_sequence(player_action.sequence.0);
                 }
@@ -320,8 +320,11 @@ impl JavaClient {
         );
     }
 
-    // TODO: skip when the player left `world` (event world transfer)
-    fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
+    fn sync_block_state_to_client(&self, player: &Player, world: &Arc<World>, position: BlockPos) {
+        // event moved the player
+        if !Arc::ptr_eq(&player.world(), world) {
+            return;
+        }
         let synced_state_id = world.get_block_state_id(&position);
         self.try_send_packet(&CBlockUpdate::new(
             position,

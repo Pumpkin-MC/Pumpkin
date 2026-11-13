@@ -372,7 +372,9 @@ fn move_piston(
         Vec::with_capacity(moved_blocks.len() + broken_blocks.len());
     let move_direction = if extend { dir } else { dir.opposite() };
 
-    // TODO: Handle rejected breaks without leaving earlier piston breaks partially applied.
+    // TODO: vanilla destroys unconditionally, don't fire a cancellable BlockBreakEvent here,
+    // a rejected break leaves the move partially applied and the moving piston overwrites it
+    // (cancel only through the piston extend/retract event)
     for &broken_block_pos in broken_blocks.iter().rev() {
         let block_state = world.get_block_state(&broken_block_pos);
         world.break_block(

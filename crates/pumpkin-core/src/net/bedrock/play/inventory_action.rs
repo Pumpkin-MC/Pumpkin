@@ -229,6 +229,7 @@ impl BedrockClient {
                     }
 
                     let mut stack = held_item;
+                    // TODO: vanilla ItemStack.useOn awards ITEM_USED after Item.useOn, only on a successful item interaction
                     if !stack.is_empty() {
                         player.increment_stat(
                             pumpkin_data::statistic::StatisticCategory::Used,
