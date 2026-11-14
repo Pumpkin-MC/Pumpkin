@@ -55,6 +55,11 @@ impl ItemBehaviour for GoatHornItem {
         let volume = instrument.range() / 16.0;
         let world = player.world();
         let pos = player.position();
+        // Mirrors InstrumentItem#use: cooldown matches the instrument's use duration.
+        let cooldown_group = stack
+            .get_use_cooldown()
+            .and_then(|c| c.cooldown_group.clone())
+            .unwrap_or_else(|| stack.item.registry_key.to_string());
 
         player.living_entity.set_active_hand(hand, stack, duration);
         world.play_sound_raw(
@@ -65,6 +70,7 @@ impl ItemBehaviour for GoatHornItem {
             1.0,
         );
         world.emit_game_event(GameEvent::InstrumentPlay.name(), pos);
+        player.set_item_cooldown(&cooldown_group, duration);
         player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
     }
 
