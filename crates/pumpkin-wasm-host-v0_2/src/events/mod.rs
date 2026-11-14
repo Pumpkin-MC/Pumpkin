@@ -37,10 +37,10 @@ impl pumpkin::plugin::event::Host for PluginHostState {}
 
 fn get_event_inner<E: Payload + ToFromWasmEvent + 'static>(
     state: &mut PluginHostState,
-    event: Resource<WasmEvent>,
+    event: &Resource<WasmEvent>,
 ) -> wasmtime::Result<Result<E::Wit, ()>> {
     let handle = {
-        let orig = state.get(&event)?;
+        let orig = state.get(event)?;
 
         EventHandle {
             data: orig.data,
@@ -57,11 +57,11 @@ fn get_event_inner<E: Payload + ToFromWasmEvent + 'static>(
 
 fn set_event_inner<E: Payload + ToFromWasmEvent + 'static>(
     state: &mut PluginHostState,
-    event: Resource<WasmEvent>,
+    event: &Resource<WasmEvent>,
     data: E::Wit,
 ) -> wasmtime::Result<Result<(), ()>> {
     let mut handle = {
-        let orig = match state.get(&event) {
+        let orig = match state.get(event) {
             Ok(orig) => orig,
             Err(err) => {
                 data.cleanup_event(state);
@@ -90,7 +90,7 @@ macro_rules! impl_event_getter_setter {
             &mut self,
             event: Resource<WasmEvent>,
         ) -> wasmtime::Result<Result<<$event_type as ToFromWasmEvent>::Wit, ()>> {
-            get_event_inner::<$event_type>(self, event)
+            get_event_inner::<$event_type>(self, &event)
         }
 
         fn $setter(
@@ -98,7 +98,7 @@ macro_rules! impl_event_getter_setter {
             event: Resource<pumpkin::plugin::event::Event>,
             data: <$event_type as ToFromWasmEvent>::Wit,
         ) -> wasmtime::Result<Result<(), ()>> {
-            set_event_inner::<$event_type>(self, event, data)
+            set_event_inner::<$event_type>(self, &event, data)
         }
     };
 }
@@ -1682,7 +1682,7 @@ pub(super) fn consume_world(
 
 /// Represents a transient unsafe pointer to a event on the async callstack.
 ///
-/// See [EventResource] for more details.
+/// See [`EventResource`] for more details.
 ///
 /// Only public because it is needed for `FromResource`
 /// DO NOT USE OUTSIDE OF THIS FILE
@@ -1691,13 +1691,14 @@ pub struct EventHandle {
     mutable: bool,
 }
 
-// `Payload` is always Send + Sync, and neither the `data` pointer
+// SAFETY: `Payload` is always Send + Sync, and neither the `data` pointer
 // (only it's pointee) nor `mutable` is ever modified.
 //
 // Additionally it is only accessed though the enclosing Resource<EventHandle>
 // and so will ever be accessed from a single-thread at a time due to Wasmtime
 // Store guarantees
 unsafe impl Send for EventHandle {}
+// SAFETY: ditto
 unsafe impl Sync for EventHandle {}
 
 impl EventHandle {
@@ -1715,13 +1716,13 @@ impl EventHandle {
         }
     }
 
-    fn get_ref<'a, T: Payload + 'static>(&'a self) -> Result<&'a T, ()> {
+    fn get_ref<T: Payload + 'static>(&self) -> Result<&T, ()> {
         // SAFETY: The pointer was originally coerced from a reference
         // thus adheres to the constraints of a reference.
         unsafe { self.data.as_ref() }.downcast_ref::<T>().ok_or(())
     }
 
-    fn get_mut<'a, T: Payload + 'static>(&'a mut self) -> Result<&'a mut T, ()> {
+    fn get_mut<T: Payload + 'static>(&mut self) -> Result<&mut T, ()> {
         if !self.mutable {
             return Err(());
         }
@@ -1855,7 +1856,7 @@ impl WasmPluginEventHandler {
             })
             .await
         {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(error) => {
                 tracing::error!(
                     handler_id = self.handler_id,
@@ -1866,7 +1867,7 @@ impl WasmPluginEventHandler {
         }
 
         match wasm_event.destroy(&self.plugin).await {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(error) => {
                 tracing::error!(
                     handler_id = self.handler_id,
@@ -1874,7 +1875,7 @@ impl WasmPluginEventHandler {
                     "Failed to cleanup resource for event."
                 );
             }
-        };
+        }
     }
 }
 
