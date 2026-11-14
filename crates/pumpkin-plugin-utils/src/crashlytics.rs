@@ -3,8 +3,8 @@
 use crate::{
     http::{HttpClient, HttpError},
     models::{
-        CrashBacktraceFrame, CrashReportPayload, CrashReportResponse, PumpkinMetadata,
-        RuntimeEnvironment,
+        CrashBacktraceFrame, CrashReportPayload, CrashReportResponse, DEFAULT_MARKETPLACE_URL,
+        DEFAULT_TELEMETRY_URL, PumpkinMetadata, RuntimeEnvironment,
     },
 };
 use ed25519_dalek::{Signer, SigningKey};
@@ -282,7 +282,19 @@ impl CrashReporter {
         Ok(Some(resp))
     }
 
-    /// Signs and transmits a `CrashReportPayload` to `{marketplace_url}/api/v1/rest/telemetry/crash`.
+    /// Resolves the crash ingestion URL, routing official Marketplace plugins to the isolated
+    /// `https://telemetry.pumpkinmc.org/v1/crash` endpoint while preserving custom/local URLs.
+    #[must_use]
+    pub fn resolve_crash_endpoint(marketplace_url: &str) -> String {
+        let base = marketplace_url.trim_end_matches('/');
+        if base.is_empty() || base.eq_ignore_ascii_case(DEFAULT_MARKETPLACE_URL) {
+            format!("{DEFAULT_TELEMETRY_URL}/v1/crash")
+        } else {
+            format!("{base}/v1/crash")
+        }
+    }
+
+    /// Signs and transmits a `CrashReportPayload` to the telemetry crash endpoint (`POST /v1/crash`).
     ///
     /// # Errors
     ///
@@ -309,10 +321,7 @@ impl CrashReporter {
         let (pubkey_hex, sig_hex) =
             sign_telemetry_payload(&signing_key, &timestamp_str, &json_bytes);
 
-        let url = format!(
-            "{}/api/v1/rest/telemetry/crash",
-            metadata.marketplace_url.trim_end_matches('/')
-        );
+        let url = Self::resolve_crash_endpoint(&metadata.marketplace_url);
         debug!(
             "Transmitting plugin crash report for '{}' v{} to {}",
             metadata.plugin_name, metadata.version, url
