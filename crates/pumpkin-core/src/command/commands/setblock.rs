@@ -45,6 +45,17 @@ impl CommandExecutor for SetBlockExecutor {
         let world = context.source.world();
         let pos = BlockPosArgumentType::get_loaded_block_pos(context, "pos")?;
 
+        // Vanilla's BlockInput::place returns setBlock's result, which is false when
+        // the target state is already present, and only then reports success.
+        let place = |flags| {
+            if world.get_block_state(&pos).id == block_state_id {
+                false
+            } else {
+                world.set_block_state(&pos, block_state_id, flags);
+                true
+            }
+        };
+
         let success = match mode {
             Mode::Destroy => {
                 world.break_block(
@@ -59,37 +70,19 @@ impl CommandExecutor for SetBlockExecutor {
                 );
                 true
             }
-            Mode::Replace => {
-                world.set_block_state(
-                    &pos,
-                    block_state_id,
-                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-                );
-                true
-            }
+            Mode::Replace => place(BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE),
             Mode::Keep => {
-                let old_state = world.get_block_state(&pos);
-                if old_state.is_air() {
-                    world.set_block_state(
-                        &pos,
-                        block_state_id,
-                        BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-                    );
-                    true
+                if world.get_block_state(&pos).is_air() {
+                    place(BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE)
                 } else {
                     false
                 }
             }
-            Mode::Strict => {
-                world.set_block_state(
-                    &pos,
-                    block_state_id,
-                    BlockFlags::NOTIFY_LISTENERS
-                        | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
-                        | BlockFlags::FORCE_STATE,
-                );
-                true
-            }
+            Mode::Strict => place(
+                BlockFlags::NOTIFY_LISTENERS
+                    | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+                    | BlockFlags::FORCE_STATE,
+            ),
         };
 
         if success {
