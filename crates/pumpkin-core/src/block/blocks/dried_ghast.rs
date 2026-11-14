@@ -2,7 +2,6 @@ use pumpkin_data::{
     BlockState, BlockStateId,
     block_properties::{DriedGhastLikeProperties, HorizontalFacing},
     entity::EntityType,
-    fluid::Fluid,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
@@ -12,8 +11,8 @@ use uuid::Uuid;
 
 use crate::{
     block::{
-        BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
-        PathComputationType, PlayerPlacedArgs, RandomTickArgs,
+        BlockBehaviour, OnPlaceArgs, OnScheduledTickArgs, PathComputationType, PlayerPlacedArgs,
+        RandomTickArgs,
     },
     entity::{EntityBase, r#type::from_type},
 };
@@ -51,22 +50,6 @@ impl BlockBehaviour for DriedGhastBlock {
         };
         args.world
             .play_sound(sound, SoundCategory::Blocks, &args.position.to_f64());
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let props = DriedGhastLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {

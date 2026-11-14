@@ -5,27 +5,67 @@ use pumpkin_data::{
     data_component_impl::EquipmentSlot,
     effect::StatusEffect,
     fluid::Fluid,
+    game_event::GameEvent,
     recipes::{CookingRecipeKind, get_cooking_recipe_with_ingredient},
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::entities::campfire::CampfireBlockEntity;
 use crate::{
     block::{
         BlockBehaviour, BlockIsReplacing, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-        OnPlaceArgs, OnProjectileHitArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
-        registry::BlockActionResult,
+        OnPlaceArgs, OnProjectileHitArgs, PathComputationType, PlaceLiquidArgs, PlacedArgs,
+        UseWithItemArgs, registry::BlockActionResult,
     },
     entity::EntityBase,
 };
-use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:campfires")]
 pub struct CampfireBlock;
 
+impl CampfireBlock {
+    fn douse(args: &PlaceLiquidArgs<'_>) {
+        args.world.emit_game_event(
+            GameEvent::BlockChange.name(),
+            args.position.to_centered_f64(),
+        );
+    }
+}
+
 impl BlockBehaviour for CampfireBlock {
+    fn place_liquid(&self, args: PlaceLiquidArgs<'_>) -> bool {
+        let mut properties = CampfireLikeProperties::from_state_id(args.state_id);
+        if properties.waterlogged || args.fluid != &Fluid::WATER {
+            return false;
+        }
+        if properties.lit {
+            args.world.play_sound(
+                Sound::EntityGenericExtinguishFire,
+                SoundCategory::Blocks,
+                &args.position.to_f64(),
+            );
+            Self::douse(&args);
+        }
+        properties.waterlogged = true;
+        properties.lit = false;
+        args.world.set_block_state(
+            args.position,
+            properties.to_state_id(args.block),
+            BlockFlags::NOTIFY_ALL,
+        );
+        args.world.schedule_fluid_tick(
+            args.fluid,
+            *args.position,
+            args.fluid.flow_speed as u8,
+            TickPriority::Normal,
+        );
+        true
+    }
+
     fn placed(&self, args: PlacedArgs<'_>) {
         let entity = CampfireBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(entity));
@@ -147,12 +187,6 @@ impl BlockBehaviour for CampfireBlock {
         let mut props = CampfireLikeProperties::from_state_id(args.state_id);
         if props.waterlogged {
             props.lit = false;
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
         }
 
         if args.direction == BlockDirection::Down {

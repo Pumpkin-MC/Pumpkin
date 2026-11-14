@@ -1,11 +1,7 @@
 use crate::block::entities::conduit::ConduitBlockEntity;
-use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType, PlacedArgs,
-};
-use pumpkin_data::fluid::Fluid;
+use crate::block::{BlockBehaviour, OnPlaceArgs, PathComputationType, PlacedArgs};
 use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::tick::TickPriority;
 use std::sync::Arc;
 
 #[pumpkin_block("minecraft:conduit")]
@@ -29,20 +25,5 @@ impl BlockBehaviour for ConduitBlock {
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
         false
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if args.state_id.is_waterlogged() {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 }

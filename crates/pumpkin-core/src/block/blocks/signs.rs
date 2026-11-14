@@ -10,7 +10,6 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::translation;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -25,7 +24,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::{ClickEvent, ClickPayload};
 use pumpkin_util::text::color::NamedColor;
-use pumpkin_world::tick::TickPriority;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -486,15 +484,6 @@ impl BlockBehaviour for SignBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        if args.state_id.is_waterlogged() {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-
         let is_hanging = args.block.name.contains("hanging");
         let is_wall_sign = args.block.name.contains("wall");
 

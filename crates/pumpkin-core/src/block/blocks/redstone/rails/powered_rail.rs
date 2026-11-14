@@ -1,13 +1,10 @@
 use pumpkin_data::BlockStateId;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 use crate::block::BlockBehaviour;
 use crate::block::CanPlaceAtArgs;
-use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::OnStateReplacedArgs;
@@ -45,21 +42,6 @@ impl BlockBehaviour for PoweredRailBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         update_flanking_rails_shape(args.world, args.block, args.state_id, args.position);
         self.update_powered_state(args.world, args.block, args.position);
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        if RailProperties::new(args.state_id, args.block).is_waterlogged() {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {

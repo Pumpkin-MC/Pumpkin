@@ -12,12 +12,20 @@ use pumpkin_world::{
 };
 
 use crate::block::{
-    BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    blocks::plant::PlantBlockBase,
+    BlockBehaviour, BonemealArgs, CanPlaceAtArgs, CanPlaceLiquidArgs,
+    GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase,
 };
 #[pumpkin_block("minecraft:seagrass")]
 pub struct SeaGrassBlock;
 impl BlockBehaviour for SeaGrassBlock {
+    fn is_liquid_block_container(&self) -> bool {
+        true
+    }
+
+    fn can_place_liquid(&self, _args: CanPlaceLiquidArgs<'_>) -> bool {
+        false
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }

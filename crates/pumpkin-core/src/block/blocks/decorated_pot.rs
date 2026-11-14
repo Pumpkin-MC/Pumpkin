@@ -1,17 +1,15 @@
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::DecoratedPotLikeProperties;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::tick::TickPriority;
 
 use crate::block::entities::decorated_pot::DecoratedPotBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs,
-    NormalUseArgs, OnPlaceArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
+    BlockBehaviour, BrokenArgs, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
+    PathComputationType, PlacedArgs, UseWithItemArgs,
 };
 
 #[pumpkin_block("minecraft:decorated_pot")]
@@ -23,22 +21,6 @@ impl BlockBehaviour for DecoratedPotBlock {
         props.facing = args.player.living_entity.entity.get_horizontal_facing();
         props.waterlogged = args.replacing.water_source();
         props.to_state_id(args.block)
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let props = DecoratedPotLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {

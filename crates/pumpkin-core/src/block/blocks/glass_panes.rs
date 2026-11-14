@@ -4,12 +4,10 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 
 type GlassPaneProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
 
@@ -29,14 +27,6 @@ impl BlockBehaviour for GlassPaneBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         let pane_props = GlassPaneProperties::from_state_id(args.state_id);
-        if pane_props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
         compute_pane_state(pane_props, args.world, args.block, args.position)
     }
 

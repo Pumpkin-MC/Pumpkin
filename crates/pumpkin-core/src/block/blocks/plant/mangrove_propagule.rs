@@ -1,16 +1,12 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockStateId, block_properties::MangrovePropaguleLikeProperties, fluid::Fluid, tag,
-    tag::Taggable,
+    Block, BlockStateId, block_properties::MangrovePropaguleLikeProperties, tag, tag::Taggable,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::{RandomGenerator, xoroshiro128::Xoroshiro};
-use pumpkin_world::{
-    tick::TickPriority,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::blocks::plant::tree_grower::TreeGrower;
 use crate::block::{
@@ -107,6 +103,10 @@ impl BlockBehaviour for MangrovePropaguleBlock {
         props.to_state_id(args.block)
     }
 
+    fn handles_neighbor_water_tick(&self) -> bool {
+        true
+    }
+
     fn get_state_for_neighbor_update(
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
@@ -115,14 +115,7 @@ impl BlockBehaviour for MangrovePropaguleBlock {
         if !Self::can_survive(args.world, args.position, &props) {
             return Block::AIR.default_state.id;
         }
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
+        crate::block::simple_waterlogged::schedule_water_tick(&args);
         args.state_id
     }
 

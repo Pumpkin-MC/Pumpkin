@@ -1,10 +1,6 @@
-use crate::block::{
-    BlockBehaviour, BlockMetadata, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
-};
+use crate::block::{BlockBehaviour, BlockMetadata, OnPlaceArgs, PathComputationType};
 use pumpkin_data::block_properties::{Axis, IronChainLikeProperties};
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{BlockDirection, BlockId, BlockState, BlockStateId};
-use pumpkin_world::tick::TickPriority;
 
 pub struct ChainBlock;
 
@@ -32,22 +28,6 @@ impl BlockBehaviour for ChainBlock {
         };
 
         props.to_state_id(args.block)
-    }
-
-    fn get_state_for_neighbor_update(
-        &self,
-        args: GetStateForNeighborUpdateArgs<'_>,
-    ) -> BlockStateId {
-        let props = IronChainLikeProperties::from_state_id(args.state_id);
-        if props.waterlogged {
-            args.world.schedule_fluid_tick(
-                &Fluid::WATER,
-                *args.position,
-                Fluid::WATER.flow_speed as u8,
-                TickPriority::Normal,
-            );
-        }
-        args.state_id
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {

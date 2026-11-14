@@ -11,7 +11,8 @@ use pumpkin_world::{
 };
 
 use crate::block::{
-    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, PlacedArgs,
+    BlockBehaviour, BrokenArgs, CanPlaceAtArgs, CanPlaceLiquidArgs, GetStateForNeighborUpdateArgs,
+    PlacedArgs,
     blocks::plant::{PlantBlockBase, seagrass::supports_seagrass},
 };
 #[pumpkin_block("minecraft:tall_seagrass")]
@@ -57,6 +58,14 @@ impl TallSeaGrassBlock {
 }
 
 impl BlockBehaviour for TallSeaGrassBlock {
+    fn is_liquid_block_container(&self) -> bool {
+        true
+    }
+
+    fn can_place_liquid(&self, _args: CanPlaceLiquidArgs<'_>) -> bool {
+        false
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let props = TallSeagrassLikeProperties::from_state_id(args.state.id);
         if props.half == DoubleBlockHalf::Upper {
