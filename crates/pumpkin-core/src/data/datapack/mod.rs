@@ -2274,8 +2274,15 @@ mod tests {
 
     #[test]
     fn vanilla_datapack_coverage_test() {
-        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let datapack_path = manifest_dir.join("../../assets/datapack");
+        let datapack_path = std::env::current_exe()
+            .unwrap()
+            .with_file_name("assets")
+            .join("datapack");
+        let datapack_path = if datapack_path.is_dir() {
+            datapack_path
+        } else {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/datapack")
+        };
         if !datapack_path.join("data/minecraft").is_dir() {
             return;
         }

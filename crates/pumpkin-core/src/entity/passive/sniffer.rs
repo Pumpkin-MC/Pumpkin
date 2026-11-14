@@ -26,12 +26,12 @@ use crate::entity::{
         wander_around::WanderAroundGoal,
     },
     item::ItemEntity,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, drop_from_gift_loot_table},
     passive::animal::Animal,
     player::Player,
 };
 
-pub const SNIFFER_FOOD: &[&Item] = &[&Item::TORCHFLOWER_SEEDS, &Item::PITCHER_POD];
+const SNIFFER_DIGGING_LOOT_TABLE: &str = "minecraft:gameplay/sniffer_digging";
 pub const SNIFFER_BABY_START_AGE: i32 = -48000;
 pub const DIGGING_DROP_SEED_OFFSET_TICKS: i32 = 120;
 
@@ -100,7 +100,14 @@ impl SnifferEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, BreedGoal::new(1.0));
-            goal_selector.add_goal(2, Box::new(TemptGoal::new(1.2, SNIFFER_FOOD, false)));
+            goal_selector.add_goal(
+                2,
+                Box::new(TemptGoal::with_tag(
+                    1.2,
+                    &tag::Item::MINECRAFT_SNIFFER_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(3, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -282,16 +289,11 @@ impl SnifferEntity {
 
         if self.drop_seed_at_tick.load(Ordering::Relaxed) == current_tick {
             let head_pos = self.get_head_position();
-            let seed_item = if rand::random::<bool>() {
-                &Item::TORCHFLOWER_SEEDS
-            } else {
-                &Item::PITCHER_POD
-            };
-            let item_stack = ItemStack::new(1, seed_item);
-
-            let item_entity = Entity::new(world.clone(), head_pos, &EntityType::ITEM);
-            let item_arc = Arc::new(ItemEntity::new(item_entity, item_stack));
-            world.spawn_entity_non_save(item_arc as Arc<dyn EntityBase>);
+            drop_from_gift_loot_table(self, SNIFFER_DIGGING_LOOT_TABLE, |item_stack| {
+                let item_entity = Entity::new(world.clone(), head_pos, &EntityType::ITEM);
+                let item_arc = Arc::new(ItemEntity::new(item_entity, item_stack));
+                world.spawn_entity_non_save(item_arc as Arc<dyn EntityBase>);
+            });
 
             world.play_sound(
                 Sound::EntitySnifferDropSeed,
@@ -344,7 +346,6 @@ impl Animal for SnifferEntity {
 
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_SNIFFER_FOOD)
-            || SNIFFER_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 

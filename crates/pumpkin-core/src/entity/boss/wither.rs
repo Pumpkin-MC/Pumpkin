@@ -660,13 +660,8 @@ impl Mob for WitherEntity {
             }
         }
 
-        if self.get_invulnerable_ticks() > 0
-            && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
-        {
-            return false;
-        }
-
-        true
+        self.get_invulnerable_ticks() <= 0
+            || damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
     }
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {

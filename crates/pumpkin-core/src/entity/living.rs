@@ -23,7 +23,6 @@ use uuid::Uuid;
 
 use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, GearDamage, NBTStorageInit};
-use crate::block::OnLandedUponArgs;
 use crate::entity::NBTStorage;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
@@ -1410,7 +1409,11 @@ impl LivingEntity {
         if effect.show_icon {
             flag |= 4;
         }
-        if effect.blend {
+        if effect.blend
+            || effect.effect_type.fade_in_ticks != 0
+            || effect.effect_type.fade_out_ticks != 0
+            || effect.effect_type.fade_out_threshold_ticks != 0
+        {
             flag |= 8;
         }
 
@@ -1434,17 +1437,20 @@ impl LivingEntity {
         };
 
         let chunk_pos = self.entity.chunk_pos.load();
-        self.entity
-            .world
-            .load()
-            .broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
-        if effect.effect_type != &StatusEffect::INSTANT_HEALTH
-            && effect.effect_type != &StatusEffect::INSTANT_DAMAGE
-        {
-            self.active_effects
+        let world = self.entity.world.load();
+        world.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        if !effect.effect_type.instantaneous {
+            let apply_sound = effect.effect_type.apply_sound;
+            let was_absent = self
+                .active_effects
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(effect.effect_type, effect);
+                .insert(effect.effect_type, effect)
+                .is_none();
+            if was_absent && let Some(sound) = apply_sound {
+                let category = self.entity.entity_type.sound_source;
+                world.play_sound_fine(sound, category, &self.entity.pos.load(), 1.0, 1.0);
+            }
         }
         self.sync_effect_particles();
     }
@@ -2361,16 +2367,9 @@ impl LivingEntity {
             }
             let world = self.entity.world.load();
             let block = world.get_block(&self.entity.get_pos_with_y_offset(0.2).0);
-            let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
-            if let Some(pumpkin_block) = pumpkin_block {
-                pumpkin_block.on_landed_upon(OnLandedUponArgs {
-                    world: &world,
-                    fall_distance,
-                    entity: caller,
-                });
-            } else {
-                self.handle_fall_damage(caller, fall_distance, 1.0);
-            }
+            world
+                .block_registry
+                .on_landed_upon(block, &world, fall_distance, caller);
         } else if height_difference < 0.0 {
             let new_fall_distance = if !self.should_prevent_fall_damage()
                 && !self.should_prevent_fall_damage_in_area()

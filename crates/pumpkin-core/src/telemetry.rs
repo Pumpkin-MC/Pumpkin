@@ -33,6 +33,9 @@ pub struct PluginInfo {
     pub name: String,
     /// The version of the plugin.
     pub version: String,
+    /// The guest binding language or runtime used by the plugin (e.g. "rust", "go", "javascript", "python", "native").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 /// Type alias for plugin telemetry information.
@@ -171,32 +174,54 @@ pub fn verify_telemetry_request(
     Ok(())
 }
 
-/// Client for communicating with the Pumpkin Marketplace telemetry backend.
+fn resolve_telemetry_urls(endpoint: &str) -> (String, String) {
+    let trimmed = endpoint.trim_end_matches('/');
+    trimmed.strip_suffix("/heartbeat").map_or_else(
+        || {
+            let shutdown_url = if trimmed.ends_with("/v1")
+                || trimmed.ends_with("/api/v1/telemetry")
+                || trimmed.ends_with("/api/v1/rest/telemetry")
+            {
+                format!("{trimmed}/shutdown")
+            } else {
+                format!("{trimmed}/v1/shutdown")
+            };
+            (trimmed.to_string(), shutdown_url)
+        },
+        |prefix| {
+            let shutdown_url = format!("{prefix}/shutdown");
+            let base_url = prefix
+                .strip_suffix("/api/v1/rest/telemetry")
+                .or_else(|| prefix.strip_suffix("/api/v1/telemetry"))
+                .or_else(|| prefix.strip_suffix("/v1"))
+                .unwrap_or(prefix)
+                .to_string();
+            (base_url, shutdown_url)
+        },
+    )
+}
+
+/// Client for communicating with the Pumpkin telemetry backend.
 pub struct TelemetryClient {
     pub signing_key: SigningKey,
     pub http_client: reqwest::Client,
     pub endpoint: String,
     pub api_base_url: String,
+    pub shutdown_endpoint: String,
 }
 
 impl TelemetryClient {
     /// Creates a new `TelemetryClient` instance.
     #[must_use]
     pub fn new(signing_key: SigningKey, http_client: reqwest::Client, endpoint: String) -> Self {
-        let api_base_url = endpoint
-            .strip_suffix("/api/v1/rest/telemetry/heartbeat")
-            .unwrap_or_else(|| {
-                endpoint
-                    .strip_suffix("/heartbeat")
-                    .unwrap_or_else(|| endpoint.trim_end_matches('/'))
-            })
-            .to_string();
+        let (api_base_url, shutdown_endpoint) = resolve_telemetry_urls(&endpoint);
 
         Self {
             signing_key,
             http_client,
             endpoint,
             api_base_url,
+            shutdown_endpoint,
         }
     }
 
@@ -292,10 +317,7 @@ impl TelemetryClient {
 
         let _ = self
             .http_client
-            .post(format!(
-                "{}/api/v1/rest/telemetry/shutdown",
-                self.api_base_url
-            ))
+            .post(&self.shutdown_endpoint)
             .header("Content-Type", "application/json")
             .header(HEADER_PUBLIC_KEY, pubkey_hex)
             .header(HEADER_SIGNATURE, sig_hex)
@@ -402,15 +424,7 @@ pub fn build_heartbeat_payload(
         },
     );
 
-    let plugins = server
-        .plugin_manager
-        .active_plugins()
-        .into_iter()
-        .map(|p| PluginInfo {
-            name: p.name,
-            version: p.version,
-        })
-        .collect();
+    let plugins = server.plugin_manager.active_plugins_telemetry();
 
     let is_public = telemetry_config.public;
     let public_name = if is_public {
@@ -584,10 +598,12 @@ mod tests {
                 PluginInfo {
                     name: "Essential Admin Tools".to_string(),
                     version: "1.0.0".to_string(),
+                    language: Some("rust".to_string()),
                 },
                 PluginInfo {
                     name: "PumpkinAuth".to_string(),
                     version: "1.2.0".to_string(),
+                    language: Some("go".to_string()),
                 },
             ],
             is_public: true,
@@ -615,6 +631,8 @@ mod tests {
         assert_eq!(parsed["is_public"], true);
         assert_eq!(parsed["public_name"], "My High-Performance Pumpkin SMP");
         assert_eq!(parsed["plugins"].as_array().unwrap().len(), 2);
+        assert_eq!(parsed["plugins"][0]["language"], "rust");
+        assert_eq!(parsed["plugins"][1]["language"], "go");
     }
 
     #[test]
@@ -720,7 +738,7 @@ mod tests {
         // Set up mock axum server
         let app = Router::new()
             .route(
-                "/api/v1/rest/telemetry/heartbeat",
+                "/v1/heartbeat",
                 post(move |req: Request| async move {
                     let headers = req.headers().clone();
                     let pubkey = headers.get(HEADER_PUBLIC_KEY).and_then(|v| v.to_str().ok());
@@ -761,7 +779,7 @@ mod tests {
                 }),
             )
             .route(
-                "/api/v1/rest/telemetry/shutdown",
+                "/v1/shutdown",
                 post(move |req: Request| async move {
                     let headers = req.headers().clone();
                     let pubkey = headers.get(HEADER_PUBLIC_KEY).and_then(|v| v.to_str().ok());
@@ -795,7 +813,7 @@ mod tests {
             axum::serve(listener, app).await.unwrap();
         });
 
-        let endpoint = format!("http://127.0.0.1:{port}/api/v1/rest/telemetry/heartbeat");
+        let endpoint = format!("http://127.0.0.1:{port}/v1/heartbeat");
         let http_client = pumpkin_auth::client_builder().build().unwrap();
         let client = TelemetryClient::new(signing_key, http_client, endpoint);
 
@@ -838,9 +856,7 @@ mod tests {
         let response = pumpkin_auth::client_builder()
             .build()
             .unwrap()
-            .post(format!(
-                "http://127.0.0.1:{port}/api/v1/rest/telemetry/heartbeat"
-            ))
+            .post(format!("http://127.0.0.1:{port}/v1/heartbeat"))
             .header("Content-Type", "application/json")
             .header(HEADER_PUBLIC_KEY, &expected_pubkey)
             .header(HEADER_SIGNATURE, "00".repeat(64)) // invalid signature
@@ -851,5 +867,21 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn telemetry_client_resolves_canonical_and_legacy_urls() {
+        let (base, shutdown) =
+            resolve_telemetry_urls("https://telemetry.pumpkinmc.org/v1/heartbeat");
+        assert_eq!(base, "https://telemetry.pumpkinmc.org");
+        assert_eq!(shutdown, "https://telemetry.pumpkinmc.org/v1/shutdown");
+
+        let (legacy_base, legacy_shutdown) =
+            resolve_telemetry_urls("https://market.pumpkinmc.org/api/v1/rest/telemetry/heartbeat");
+        assert_eq!(legacy_base, "https://market.pumpkinmc.org");
+        assert_eq!(
+            legacy_shutdown,
+            "https://market.pumpkinmc.org/api/v1/rest/telemetry/shutdown"
+        );
     }
 }

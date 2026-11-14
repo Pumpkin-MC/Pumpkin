@@ -32,6 +32,10 @@ members = [
 # [workspace.lints.rust]
 # missing_docs = "warn"
 
+[workspace.lints.cargo]
+unused_dependencies = "deny"
+unused_workspace_dependencies = "deny"
+
 [workspace.lints.clippy]
 # Groups
 all = { level = "deny", priority = -1 }
@@ -205,7 +209,6 @@ num-traits = { version = "0.2", default-features = false, features = ["std"] }
 p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
-pumpkin-api-macros = { path = "crates/pumpkin-api-macros", default-features = false }
 pumpkin-auth = { path = "crates/pumpkin-auth", default-features = false }
 pumpkin-codecs = { path = "crates/pumpkin-codecs", default-features = false }
 pumpkin-command = { path = "crates/pumpkin-command", default-features = false }
@@ -218,7 +221,6 @@ pumpkin-macros = { path = "crates/pumpkin-macros", default-features = false }
 pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
 pumpkin-plugin-api = { path = "crates/pumpkin-plugin-api", default-features = false }
 pumpkin-plugin-runtime = { path = "crates/pumpkin-plugin-runtime", default-features = false }
-pumpkin-plugin-utils = { path = "crates/pumpkin-plugin-utils", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
 pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
 pumpkin-wasm-host = { path = "crates/pumpkin-wasm-host", default-features = false }

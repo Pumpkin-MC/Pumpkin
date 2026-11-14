@@ -269,8 +269,7 @@ impl ZombieVillagerEntity {
                 .entity_equipment
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .get(slot)
-                .clone();
+                .get(slot);
             if stack.is_empty() {
                 continue;
             }

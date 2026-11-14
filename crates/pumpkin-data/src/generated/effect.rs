@@ -2,6 +2,7 @@
 use crate::{
     attributes::Attributes,
     data_component_impl::{IDSetContent, Operation},
+    sound::Sound,
 };
 use std::hash::{Hash, Hasher};
 #[derive(Clone, Debug)]
@@ -13,6 +14,10 @@ pub struct StatusEffect {
     pub translation_key: &'static str,
     pub attribute_modifiers: &'static [Modifiers],
     pub instantaneous: bool,
+    pub apply_sound: Option<Sound>,
+    pub fade_in_ticks: i32,
+    pub fade_out_ticks: i32,
+    pub fade_out_threshold_ticks: i32,
 }
 impl PartialEq for StatusEffect {
     fn eq(&self, other: &Self) -> bool {
@@ -52,6 +57,10 @@ impl StatusEffect {
             operation: Operation::AddValue,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const BAD_OMEN: Self = Self {
         minecraft_name: "minecraft:bad_omen",
@@ -61,6 +70,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.bad_omen",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: Some(Sound::EventMobEffectBadOmen),
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const BLINDNESS: Self = Self {
         minecraft_name: "minecraft:blindness",
@@ -70,6 +83,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.blindness",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const BREATH_OF_THE_NAUTILUS: Self = Self {
         minecraft_name: "minecraft:breath_of_the_nautilus",
@@ -79,6 +96,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.breath_of_the_nautilus",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const CONDUIT_POWER: Self = Self {
         minecraft_name: "minecraft:conduit_power",
@@ -88,6 +109,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.conduit_power",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const DARKNESS: Self = Self {
         minecraft_name: "minecraft:darkness",
@@ -97,6 +122,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.darkness",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 22i32,
+        fade_out_ticks: 22i32,
+        fade_out_threshold_ticks: 22i32,
     };
     pub const DOLPHINS_GRACE: Self = Self {
         minecraft_name: "minecraft:dolphins_grace",
@@ -106,6 +135,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.dolphins_grace",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const FIRE_RESISTANCE: Self = Self {
         minecraft_name: "minecraft:fire_resistance",
@@ -115,6 +148,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.fire_resistance",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const GLOWING: Self = Self {
         minecraft_name: "minecraft:glowing",
@@ -124,6 +161,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.glowing",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const HASTE: Self = Self {
         minecraft_name: "minecraft:haste",
@@ -138,6 +179,10 @@ impl StatusEffect {
             operation: Operation::AddMultipliedTotal,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const HEALTH_BOOST: Self = Self {
         minecraft_name: "minecraft:health_boost",
@@ -152,6 +197,10 @@ impl StatusEffect {
             operation: Operation::AddValue,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const HERO_OF_THE_VILLAGE: Self = Self {
         minecraft_name: "minecraft:hero_of_the_village",
@@ -161,6 +210,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.hero_of_the_village",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const HUNGER: Self = Self {
         minecraft_name: "minecraft:hunger",
@@ -170,6 +223,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.hunger",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const INFESTED: Self = Self {
         minecraft_name: "minecraft:infested",
@@ -179,6 +236,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.infested",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const INSTANT_DAMAGE: Self = Self {
         minecraft_name: "minecraft:instant_damage",
@@ -188,6 +249,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.instant_damage",
         attribute_modifiers: &[],
         instantaneous: true,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const INSTANT_HEALTH: Self = Self {
         minecraft_name: "minecraft:instant_health",
@@ -197,6 +262,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.instant_health",
         attribute_modifiers: &[],
         instantaneous: true,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const INVISIBILITY: Self = Self {
         minecraft_name: "minecraft:invisibility",
@@ -211,6 +280,10 @@ impl StatusEffect {
             operation: Operation::AddMultipliedTotal,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const JUMP_BOOST: Self = Self {
         minecraft_name: "minecraft:jump_boost",
@@ -225,6 +298,10 @@ impl StatusEffect {
             operation: Operation::AddValue,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const LEVITATION: Self = Self {
         minecraft_name: "minecraft:levitation",
@@ -234,6 +311,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.levitation",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const LUCK: Self = Self {
         minecraft_name: "minecraft:luck",
@@ -248,6 +329,10 @@ impl StatusEffect {
             operation: Operation::AddValue,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const MINING_FATIGUE: Self = Self {
         minecraft_name: "minecraft:mining_fatigue",
@@ -262,6 +347,10 @@ impl StatusEffect {
             operation: Operation::AddMultipliedTotal,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const NAUSEA: Self = Self {
         minecraft_name: "minecraft:nausea",
@@ -271,6 +360,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.nausea",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 150i32,
+        fade_out_ticks: 20i32,
+        fade_out_threshold_ticks: 60i32,
     };
     pub const NIGHT_VISION: Self = Self {
         minecraft_name: "minecraft:night_vision",
@@ -280,6 +373,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.night_vision",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const OOZING: Self = Self {
         minecraft_name: "minecraft:oozing",
@@ -289,6 +386,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.oozing",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const POISON: Self = Self {
         minecraft_name: "minecraft:poison",
@@ -298,6 +399,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.poison",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const RAID_OMEN: Self = Self {
         minecraft_name: "minecraft:raid_omen",
@@ -307,6 +412,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.raid_omen",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: Some(Sound::EventMobEffectRaidOmen),
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const REGENERATION: Self = Self {
         minecraft_name: "minecraft:regeneration",
@@ -316,6 +425,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.regeneration",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const RESISTANCE: Self = Self {
         minecraft_name: "minecraft:resistance",
@@ -325,6 +438,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.resistance",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const SATURATION: Self = Self {
         minecraft_name: "minecraft:saturation",
@@ -334,6 +451,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.saturation",
         attribute_modifiers: &[],
         instantaneous: true,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const SLOW_FALLING: Self = Self {
         minecraft_name: "minecraft:slow_falling",
@@ -343,6 +464,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.slow_falling",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const SLOWNESS: Self = Self {
         minecraft_name: "minecraft:slowness",
@@ -357,6 +482,10 @@ impl StatusEffect {
             operation: Operation::AddMultipliedTotal,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const SPEED: Self = Self {
         minecraft_name: "minecraft:speed",
@@ -371,6 +500,10 @@ impl StatusEffect {
             operation: Operation::AddMultipliedTotal,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const STRENGTH: Self = Self {
         minecraft_name: "minecraft:strength",
@@ -385,6 +518,10 @@ impl StatusEffect {
             operation: Operation::AddValue,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const TRIAL_OMEN: Self = Self {
         minecraft_name: "minecraft:trial_omen",
@@ -394,6 +531,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.trial_omen",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: Some(Sound::EventMobEffectTrialOmen),
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const UNLUCK: Self = Self {
         minecraft_name: "minecraft:unluck",
@@ -408,6 +549,10 @@ impl StatusEffect {
             operation: Operation::AddValue,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const WATER_BREATHING: Self = Self {
         minecraft_name: "minecraft:water_breathing",
@@ -417,6 +562,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.water_breathing",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const WEAKNESS: Self = Self {
         minecraft_name: "minecraft:weakness",
@@ -431,6 +580,10 @@ impl StatusEffect {
             operation: Operation::AddValue,
         }],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const WEAVING: Self = Self {
         minecraft_name: "minecraft:weaving",
@@ -440,6 +593,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.weaving",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const WIND_CHARGED: Self = Self {
         minecraft_name: "minecraft:wind_charged",
@@ -449,6 +606,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.wind_charged",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     pub const WITHER: Self = Self {
         minecraft_name: "minecraft:wither",
@@ -458,6 +619,10 @@ impl StatusEffect {
         translation_key: "effect.minecraft.wither",
         attribute_modifiers: &[],
         instantaneous: false,
+        apply_sound: None,
+        fade_in_ticks: 0i32,
+        fade_out_ticks: 0i32,
+        fade_out_threshold_ticks: 0i32,
     };
     #[must_use]
     pub const fn to_bedrock_id(&self) -> i32 {

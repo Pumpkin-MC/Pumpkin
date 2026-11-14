@@ -315,20 +315,20 @@ fn verify_dimension_structure_starts(seed: u64, dim: Dimension, dump: &Dimension
 #[test]
 fn nether_structure_starts_dump() {
     let dump: StructureStartsDump =
-        pumpkin_util::read_data_from_file!("../../../../../assets/tests/structure_starts.json");
+        include_json!("../../../../../assets/tests/structure_starts.json");
     verify_dimension_structure_starts(dump.seed, Dimension::THE_NETHER, &dump.the_nether);
 }
 
 #[test]
 fn end_structure_starts_dump() {
     let dump: StructureStartsDump =
-        pumpkin_util::read_data_from_file!("../../../../../assets/tests/structure_starts.json");
+        include_json!("../../../../../assets/tests/structure_starts.json");
     verify_dimension_structure_starts(dump.seed, Dimension::THE_END, &dump.the_end);
 }
 
 #[test]
 fn overworld_structure_starts_dump() {
     let dump: StructureStartsDump =
-        pumpkin_util::read_data_from_file!("../../../../../assets/tests/structure_starts.json");
+        include_json!("../../../../../assets/tests/structure_starts.json");
     verify_dimension_structure_starts(dump.seed, Dimension::OVERWORLD, &dump.overworld);
 }
