@@ -3037,6 +3037,7 @@ dependencies = [
  "pumpkin-util",
  "rand 0.10.3",
  "serde",
+ "tempfile",
  "toml",
  "tracing",
  "uuid",
