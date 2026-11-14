@@ -2,7 +2,6 @@ use crate::entity::projectile::owner::ProjectileOwner;
 use rand::{Rng, RngExt, rng};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
 use uuid::Uuid;
 
 use crate::block::blocks::carved_pumpkin::find_golem_pattern;
@@ -577,7 +576,7 @@ impl DispenserBlock {
         let _ = item.split(1);
         let target = Self::target_position(ctx);
 
-        let tnt = TNTEntity::primed(ctx.world, &target, TNTEntity::DEFAULT_FUSE);
+        let tnt = TNTEntity::primed(ctx.world, &target, TNTEntity::DEFAULT_FUSE, None);
         let spawn_pos = tnt.get_entity().pos.load();
         ctx.world.spawn_entity(tnt);
         ctx.world
@@ -721,12 +720,7 @@ impl DispenserBlock {
             triangle(&mut rng(), facing.z, 0.114_850_000_000_000_01),
         )
         .normalize();
-        fireball.get_entity().set_velocity(dir);
-        let len = dir.horizontal_length();
-        fireball.get_entity().set_rotation(
-            dir.x.atan2(dir.z) as f32 * 57.295_776,
-            dir.y.atan2(len) as f32 * 57.295_776,
-        );
+        fireball.thrown.assign_directional_movement(dir);
         Self::finish_projectile_launch(ctx, Arc::new(fireball), WorldEvent::SoundBlazeFireball);
     }
 
@@ -740,8 +734,6 @@ impl DispenserBlock {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: WIND_CHARGE_GRAVITY,
         };
         Self::launch_thrown(

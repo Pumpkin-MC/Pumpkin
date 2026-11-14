@@ -85,6 +85,9 @@ pub struct LivingEntity {
     pub entity: Entity,
     /// Tracks the remaining time until the entity can regenerate health.
     pub hurt_cooldown: AtomicI32,
+    /// Arrows sticking out of the entity, synced so the client renders them.
+    arrow_count: AtomicI32,
+    remove_arrow_time: AtomicI32,
     /// Stores the amount of damage the entity last received.
     pub last_damage_taken: AtomicCell<f32>,
     /// The current health level of the entity.
@@ -411,6 +414,8 @@ impl LivingEntity {
             health: AtomicCell::new(max_health), // Initial health value from attributes
             entity,
             hurt_cooldown: AtomicI32::new(0),
+            arrow_count: AtomicI32::new(0),
+            remove_arrow_time: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             absorption: AtomicCell::new(0.0),
             fall_distance: AtomicCell::new(0.0),
@@ -1169,6 +1174,33 @@ impl LivingEntity {
             for attribute in updated {
                 mob.get_mob_entity().on_attribute_updated(attribute);
             }
+        }
+    }
+
+    #[must_use]
+    pub fn get_arrow_count(&self) -> i32 {
+        self.arrow_count.load(Relaxed)
+    }
+
+    pub fn set_arrow_count(&self, count: i32) {
+        self.arrow_count.store(count, Relaxed);
+        self.entity.set_synced_data(
+            tracked_data::living_entity::DATA_ARROW_COUNT_ID,
+            VarInt(count),
+        );
+    }
+
+    /// Stuck arrows fall out one at a time, faster the more there are.
+    fn tick_arrow_count(&self) {
+        let count = self.get_arrow_count();
+        if count <= 0 {
+            return;
+        }
+        if self.remove_arrow_time.load(Relaxed) <= 0 {
+            self.remove_arrow_time.store(20 * (30 - count), Relaxed);
+        }
+        if self.remove_arrow_time.fetch_sub(1, Relaxed) - 1 <= 0 {
+            self.set_arrow_count(count - 1);
         }
     }
 
@@ -4110,12 +4142,18 @@ impl LivingEntity {
         damage: f32,
     ) {
         let target_pos = self.entity.pos.load();
-        let (dx, dz) = source
-            .map(|source| source.get_entity().pos.load())
-            .or(position)
-            .map_or((0.0, 0.0), |pos| {
-                (pos.x - target_pos.x, pos.z - target_pos.z)
-            });
+        let (dx, dz) = if let Some((x, z)) =
+            source.and_then(|source| source.hurt_knockback_direction(&self.entity))
+        {
+            (-x, -z)
+        } else {
+            source
+                .map(|source| source.get_entity().pos.load())
+                .or(position)
+                .map_or((0.0, 0.0), |pos| {
+                    (pos.x - target_pos.x, pos.z - target_pos.z)
+                })
+        };
         if caller.get_mob().is_some_and(|mob| {
             mob.mob_knockback(
                 0.4,
@@ -4183,6 +4221,7 @@ impl EntityBase for LivingEntity {
             mob.tick_ambient_sound();
             mob.base_tick();
         }
+        self.tick_arrow_count();
 
         // Only tick movement if the entity is alive. This prevents a dead "corpse"
         // from continuing to be simulated (accumulating fall_distance/velocity).

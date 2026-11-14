@@ -1074,13 +1074,20 @@ impl BlockRegistry {
         None
     }
 
-    pub fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {
+    pub fn explode(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        position: &BlockPos,
+        explosion: &crate::world::Explosion<'_>,
+    ) {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block.explode(ExplodeArgs {
                 world,
                 block,
                 position,
+                explosion,
             });
         }
     }

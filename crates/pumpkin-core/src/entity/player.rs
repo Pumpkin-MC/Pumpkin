@@ -1556,6 +1556,29 @@ impl Player {
         self.set_client_loaded(false);
     }
 
+    /// Hitting a fireball or wind charge sends it where the player looks.
+    fn deflect_projectile(&self, victim: &dyn EntityBase) -> bool {
+        if !crate::entity::projectile::is_redirectable(victim.get_entity())
+            || victim.get_projectile_owner().is_none()
+            || !crate::entity::projectile_deflection::deflect(
+                victim,
+                crate::entity::projectile_deflection::ProjectileDeflection::AimDeflect,
+                Some(self),
+                Some(self.gameprofile.id),
+                true,
+                Vector3::new(1.0, 1.0, 1.0),
+            )
+        {
+            return false;
+        }
+        self.world().play_sound(
+            Sound::EntityPlayerAttackNodamage,
+            SoundCategory::Players,
+            &self.position(),
+        );
+        true
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn attack(&self, victim: &Arc<dyn EntityBase>) {
         let world = self.world();
@@ -1641,6 +1664,10 @@ impl Player {
             self.get_attack_cooldown_progress(f64::from(server.basic_config.tps), 0.5, attack_speed)
         };
         self.last_attacked_ticks.store(0, Ordering::Relaxed);
+
+        if self.deflect_projectile(victim.as_ref()) {
+            return;
+        }
 
         // Only reduce attack damage if in cooldown
         // TODO: Enchantments are reduced in the same way, just without the square.
@@ -7772,6 +7799,10 @@ impl NBTStorage for EnderChestInventory {
 impl NBTStorageInit for EnderChestInventory {}
 
 impl EntityBase for Player {
+    fn can_hit(&self) -> bool {
+        !self.is_spectator() && !self.get_entity().is_removed()
+    }
+
     fn sound_source(&self) -> SoundCategory {
         SoundCategory::Players
     }

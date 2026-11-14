@@ -133,7 +133,6 @@ use crate::entity::{Entity, EntityBase, mob};
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_nbt::compound::NbtCompound;
-use std::sync::atomic::AtomicBool;
 use tracing::{debug, warn};
 
 #[expect(clippy::too_many_lines)]
@@ -299,8 +298,6 @@ pub fn from_type(
             let thrown = ThrownItemEntity {
                 entity,
                 owner: ProjectileOwner::none(),
-                collides_with_projectiles: false,
-                has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new_normal(thrown))
@@ -309,8 +306,6 @@ pub fn from_type(
             let thrown = ThrownItemEntity {
                 entity,
                 owner: ProjectileOwner::none(),
-                collides_with_projectiles: false,
-                has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new_breeze(thrown))
