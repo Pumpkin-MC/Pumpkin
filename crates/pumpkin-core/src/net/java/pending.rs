@@ -656,7 +656,7 @@ impl PendingConnection {
                 | ResourcePackResponseResult::DownloadSuccess
                 | ResourcePackResponseResult::Discarded
                 | ResourcePackResponseResult::Unknown(_) => {
-                    self.start_known_packs(server).await;
+                    self.send_known_packs(server).await;
                 }
                 ResourcePackResponseResult::Accepted => {}
                 ResourcePackResponseResult::Declined => {
@@ -664,7 +664,7 @@ impl PendingConnection {
                         self.kick(TextComponent::text("Required resource pack was declined"))
                             .await;
                     } else {
-                        self.start_known_packs(server).await;
+                        self.send_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::DownloadFail => {
@@ -672,7 +672,7 @@ impl PendingConnection {
                         self.kick(TextComponent::text("Failed to download resource pack"))
                             .await;
                     } else {
-                        self.start_known_packs(server).await;
+                        self.send_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::InvalidUrl => {

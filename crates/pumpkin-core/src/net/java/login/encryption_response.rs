@@ -128,9 +128,6 @@ impl PendingConnection {
     }
 
     pub(super) async fn enable_compression(&mut self, server: &Server) {
-        if self.version.load() < JavaMinecraftVersion::V_1_8 {
-            return;
-        }
         let compression = server
             .advanced_config
             .networking
