@@ -214,10 +214,13 @@ impl ArmorStandEntity {
             .load()
             .drop_stack(&entity.block_pos.load(), armor_stand_item);
 
-        Self::on_break(entity);
+        self.broken_by_anything();
     }
 
-    fn on_break(entity: &Entity) {
+    /// Mirrors vanilla `ArmorStand#brokenByAnything`: the break sound and all
+    /// equipped items are dropped at the stand's position.
+    fn broken_by_anything(&self) {
+        let entity = self.get_entity();
         let world = entity.world.load();
         world.play_sound(
             Sound::EntityArmorStandBreak,
@@ -225,7 +228,26 @@ impl ArmorStandEntity {
             &entity.pos.load(),
         );
 
-        // TODO: Implement equipment slots and make them drop all of their stored items.
+        let mut equipment = self
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let drop_pos = entity.block_pos.load().up();
+        for slot in [
+            EquipmentSlot::HEAD,
+            EquipmentSlot::CHEST,
+            EquipmentSlot::LEGS,
+            EquipmentSlot::FEET,
+            EquipmentSlot::BODY,
+            EquipmentSlot::SADDLE,
+            EquipmentSlot::OFF_HAND,
+        ] {
+            let stack = equipment.put(&slot, ItemStack::EMPTY.clone());
+            if !stack.is_empty() {
+                world.drop_stack(&drop_pos, stack);
+            }
+        }
     }
 
     /// Spawns break particles at the armor stand's position.
@@ -243,6 +265,19 @@ impl ArmorStandEntity {
             10,
             Block::OAK_PLANKS.default_state.id.as_u16(),
         );
+    }
+
+    /// Mirrors vanilla `ArmorStand#causeDamage`: burn damage chips health, and at
+    /// 0.5 or less the stand breaks, dropping itself and all equipment.
+    fn cause_damage(&self, amount: f32) {
+        let entity = self.get_entity();
+        let new_health = self.living_entity.health.load() - amount;
+        if new_health <= 0.5 {
+            self.break_and_drop_items();
+            entity.remove();
+        } else {
+            self.living_entity.health.store(new_health);
+        }
     }
 }
 
@@ -366,13 +401,27 @@ impl EntityBase for ArmorStandEntity {
         }
 
         if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
-            Self::on_break(entity);
+            self.broken_by_anything();
             entity.remove();
             return false;
         }
 
-        // TODO: IGNITES_ARMOR_STANDS (in_fire, campfire) - set on fire
-        // TODO: BURNS_ARMOR_STANDS (on_fire) - reduce health
+        // Mirrors vanilla IGNITES_ARMOR_STANDS: ignite once, then burn health down.
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_IGNITES_ARMOR_STANDS) {
+            if entity.fire_ticks.load(Ordering::Relaxed) > 0 {
+                self.cause_damage(0.15);
+            } else {
+                self.set_on_fire_for(5.0);
+            }
+            return false;
+        }
+
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BURNS_ARMOR_STANDS)
+            && self.living_entity.health.load() > 0.5
+        {
+            self.cause_damage(4.0);
+            return false;
+        }
 
         let can_break = damage_type.has_tag(&tag::DamageType::MINECRAFT_CAN_BREAK_ARMOR_STAND);
         let always_kills =
