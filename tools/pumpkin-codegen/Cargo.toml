@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-codegen"
-version = "0.1.0-dev+26.1"
+version.workspace = true
 edition = "2024"
 rust-version.workspace = true
 
