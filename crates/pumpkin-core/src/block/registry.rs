@@ -700,7 +700,7 @@ impl BlockRegistry {
         replace_previous_block.map(|replacing| (block_pos, face.opposite(), replacing))
     }
 
-    #[expect(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines, clippy::too_many_arguments)]
     pub fn place_block(
         &self,
         player: &Arc<Player>,
@@ -872,8 +872,8 @@ impl BlockRegistry {
 
         if !held_stack.is_empty() && placed_block.default_state.block_entity_type != u16::MAX {
             if let Some(block_entity_data) = held_stack
-                .get_data_component::<pumpkin_data::data_component_impl::BlockEntityDataImpl>()
-                && let Some(existing_be) = world.get_block_entity(&final_block_pos)
+                .get_data_component::<pumpkin_data::data_component_impl::BlockEntityDataImpl>(
+            ) && let Some(existing_be) = world.get_block_entity(&final_block_pos)
             {
                 let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
                 existing_be.write_internal(&mut nbt);

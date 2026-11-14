@@ -102,7 +102,6 @@ impl JavaClient {
         if !Arc::ptr_eq(&player.world(), &world) {
             return Ok(());
         }
-        let block = world.get_block(&position);
 
         let inventory = player.inventory();
         let mut item = inventory.get_stack_in_hand(hand);
@@ -113,7 +112,8 @@ impl JavaClient {
         if !Arc::ptr_eq(&player.world(), &world) {
             return Ok(());
         }
-        // statistic event may change the hand stack
+        // statistic event may change the block and hand stack
+        let block = world.get_block(&position);
         item = inventory.get_stack_in_hand(hand);
         let before = item.clone();
         let held_item_empty = inventory.held_item().is_empty();
