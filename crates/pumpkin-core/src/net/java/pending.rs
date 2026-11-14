@@ -24,7 +24,7 @@ use pumpkin_protocol::{
         },
     },
     packet::MultiVersionJavaPacket,
-    ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
+    ser::{NetworkReadExt, NetworkReadSliceExt, NetworkWriteExt, ReadingError},
 };
 use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
 use tokio::{
@@ -674,7 +674,8 @@ impl PendingConnection {
         debug!("Handling plugin message");
         if plugin_message.channel.starts_with(BRAND_CHANNEL_PREFIX) {
             debug!("Got a client brand");
-            match core::str::from_utf8(plugin_message.data) {
+            let mut brand_slice = plugin_message.data;
+            match brand_slice.get_str_bounded_borrowed(256) {
                 Ok(brand) => self.brand = Some(brand.to_string()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
             }
