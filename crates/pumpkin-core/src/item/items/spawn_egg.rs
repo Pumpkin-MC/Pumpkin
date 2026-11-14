@@ -386,7 +386,18 @@ impl ItemBehaviour for SpawnEggItem {
                 return;
             }
             let pos = entity.get_entity().pos.load();
-            let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
+            // Vanilla `spawnOffspringFromSpawnEgg`: the clicked animal is both parents, so the
+            // baby gets its variant and attributes.
+            let mob = match entity
+                .get_mob()
+                .and_then(crate::entity::mob::Mob::as_animal)
+            {
+                // Vanilla `Frog.getBreedOffspring` returns null. Turtles lay eggs when bred but do
+                // have a baby form, so `spawns_offspring` is not the check here.
+                Some(_) if entity_type.id == EntityType::FROG.id => return,
+                Some(animal) => animal.get_breed_offspring(entity.as_ref()),
+                None => from_type(entity_type, pos, &world, Uuid::new_v4()),
+            };
             // no baby form, no offspring.
             if !mob
                 .get_mob()
