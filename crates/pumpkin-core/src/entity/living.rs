@@ -819,45 +819,111 @@ impl LivingEntity {
         }
     }
 
-    pub(crate) fn on_item_pickup(&self, item: &crate::entity::item::ItemEntity) {
+    /// Vanilla `Mob.pickUpItem` steps shared by every mob: pickup event, `onItemPickup`, `take`,
+    /// then shrinking or discarding the item entity.
+    ///
+    /// `take` moves items out of the ground stack under its lock, so a parallel pickup can't take
+    /// the same items, and returns what the mob keeps. `planned` is the count the event reports.
+    /// `None` when cancelled, already gone, or nothing moved.
+    pub fn pick_up_from<R>(
+        &self,
+        item: &crate::entity::item::ItemEntity,
+        planned: u8,
+        take: impl FnOnce(&mut ItemStack) -> R,
+    ) -> Option<R> {
+        if planned == 0 {
+            return None;
+        }
+        let approved = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if self.entity.world.load().cancelled_by_plugin(|| {
+            crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
+                self.entity.entity_id,
+                approved.item.registry_key.to_string(),
+                planned,
+            )
+        }) {
+            return None;
+        }
+        // A handler may have killed the collector or swapped the item the caller checked.
+        if self.entity.is_removed() || self.is_dead_or_dying() {
+            return None;
+        }
+
+        let (before, kept, taken, emptied) = {
+            let mut ground = item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if ground.is_empty()
+                || item.get_entity().is_removed()
+                || !ground.are_items_and_components_equal(&approved)
+            {
+                return None;
+            }
+            let before = ground.clone();
+            let kept = take(&mut ground);
+            let left = if ground.is_empty() {
+                0
+            } else {
+                ground.item_count
+            };
+            let taken = before.item_count.saturating_sub(left);
+            (before, kept, taken, ground.is_empty())
+        };
+        if taken == 0 {
+            return None;
+        }
+
+        self.on_item_pickup(item, &before);
+        self.send_pickup_animation(item.get_entity(), u32::from(taken));
+        if emptied {
+            item.get_entity().remove();
+        } else {
+            item.init_data_tracker();
+        }
+        Some(kept)
+    }
+
+    /// Vanilla `LivingEntity.onItemPickup`, with the ground stack as it was before the pickup.
+    fn on_item_pickup(&self, item: &crate::entity::item::ItemEntity, stack: &ItemStack) {
         let Some(owner) = item.get_owner_entity() else {
             return;
         };
         let Some(player) = owner.get_player() else {
             return;
         };
-        let item_id = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .item
-            .registry_key
-            .to_string();
         player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::ThrownItemPickedUpByEntity {
             entity_type: format!("minecraft:{}", self.entity.entity_type.resource_name),
-            item_id,
+            item_id: stack.item.registry_key.to_string(),
             is_baby: self.is_baby(),
             player_wearing_safe_armor: crate::entity::mob::piglin_ai::PiglinAi::is_wearing_safe_armor(&player.living_entity),
         });
     }
 
-    /// Picks up an item entity or XP orb.
+    // TODO the XP orb, arrow and trident callers ignore the result and insert or apply before the event,
+    // so a cancelled `EntityPickupItemEvent` still picks up. They should fire it first and stop on `false`.
+    /// Picks up a non-item entity such as an XP orb or arrow.
     pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
-        let mut pickup_event =
+        if self.entity.world.load().cancelled_by_plugin(|| {
             crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
                 self.entity.entity_id,
                 item.entity_type.id.to_string(),
                 stack_amount as u8,
-            );
-        if let Some(server) = self.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut pickup_event);
-            if pickup_event.cancelled {
-                return false;
-            }
+            )
+        }) {
+            return false;
         }
 
+        self.send_pickup_animation(item, stack_amount);
+        true
+    }
+
+    /// The take-item packets after a pickup
+    pub fn send_pickup_animation(&self, item: &Entity, stack_amount: u32) {
         let chunk_pos = self.entity.chunk_pos.load();
         self.entity.world.load().broadcast_to_chunk_editioned(
             chunk_pos,
@@ -871,7 +937,6 @@ impl LivingEntity {
                 actor_runtime_id: VarULong(self.entity.entity_id as u64),
             },
         );
-        true
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
@@ -3387,9 +3452,7 @@ impl LivingEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut compound = NbtCompound::new();
             for (slot, stack) in &guard.equipment {
-                if !stack.is_empty() {
-                    let mut item_nbt = NbtCompound::new();
-                    stack.write_item_stack(&mut item_nbt);
+                if let Some(item_nbt) = stack.to_nbt() {
                     compound.put(slot.to_name(), NbtTag::Compound(item_nbt));
                 }
             }

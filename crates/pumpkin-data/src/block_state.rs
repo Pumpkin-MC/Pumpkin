@@ -91,6 +91,12 @@ impl PartialEq for BlockState {
 impl Eq for BlockState {}
 
 impl BlockState {
+    /// Vanilla `BlockState.hasBlockEntity`.
+    #[must_use]
+    pub const fn has_block_entity(&self) -> bool {
+        self.block_entity_type != u16::MAX
+    }
+
     #[must_use]
     pub const fn is_air(&self) -> bool {
         self.state_flags & IS_AIR != 0

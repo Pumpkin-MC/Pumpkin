@@ -523,13 +523,13 @@ impl BundleContentsImpl {
 }
 impl DataComponentImpl for BundleContentsImpl {
     fn write_data(&self) -> NbtTag {
-        let mut list = Vec::new();
-        for stack in &self.items {
-            let mut item_compound = NbtCompound::new();
-            stack.write_item_stack(&mut item_compound);
-            list.push(NbtTag::Compound(item_compound));
-        }
-        NbtTag::List(list)
+        NbtTag::List(
+            self.items
+                .iter()
+                .filter_map(crate::item_stack::ItemStack::to_nbt)
+                .map(NbtTag::Compound)
+                .collect(),
+        )
     }
     default_impl!(BundleContents);
 }

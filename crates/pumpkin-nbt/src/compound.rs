@@ -241,6 +241,12 @@ impl NbtCompound {
             .and_then(super::tag::NbtTag::as_numeric_short)
     }
 
+    /// Returns any named numeric value as an int
+    #[must_use]
+    pub fn get_numeric_int(&self, name: &str) -> Option<i32> {
+        self.get(name).and_then(super::tag::NbtTag::as_numeric_int)
+    }
+
     /// Returns the named integer value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_int(&self, name: &str) -> Option<i32> {

@@ -247,20 +247,12 @@ impl Mob for DolphinEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .item_count;
-        if !living.pickup(item.get_entity(), u32::from(count)) {
+        // The count the pickup event approved. an item merged in meanwhile stays on the ground.
+        let Some(taken) = living.pick_up_from(item, count, |ground| ground.split(count)) else {
             return;
-        }
-        living.on_item_pickup(item);
-        let taken = std::mem::replace(
-            &mut *item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            ItemStack::EMPTY.clone(),
-        );
+        };
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::MAIN_HAND, taken);
-        item.get_entity().remove();
     }
 
     fn on_attack(&self, _target: &dyn EntityBase) {

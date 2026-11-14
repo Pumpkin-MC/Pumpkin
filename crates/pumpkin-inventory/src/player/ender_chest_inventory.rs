@@ -146,6 +146,10 @@ impl Inventory for EnderChestInventory {
         }
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        crate::update_locked_stack(&self.items, slot, update)
+    }
+
     fn on_open(&self) {
         if let Some(tracker) = self
             .tracker

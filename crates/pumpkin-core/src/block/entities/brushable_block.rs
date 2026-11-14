@@ -58,9 +58,8 @@ impl BlockEntity for BrushableBlockBlockEntity {
             }
         } else if let Ok(item) = self.item.lock()
             && let Some(it) = item.as_ref()
+            && let Some(it_nbt) = it.to_nbt()
         {
-            let mut it_nbt = NbtCompound::new();
-            it.write_item_stack(&mut it_nbt);
             nbt.put_compound("item", it_nbt);
         }
         if let Ok(hits) = self.hits.lock()
@@ -79,9 +78,8 @@ impl BlockEntity for BrushableBlockBlockEntity {
         let mut nbt = NbtCompound::new();
         if let Ok(item) = self.item.try_lock()
             && let Some(ref it) = *item
+            && let Some(it_nbt) = it.to_nbt()
         {
-            let mut it_nbt = NbtCompound::new();
-            it.write_item_stack(&mut it_nbt);
             nbt.put_compound("item", it_nbt);
         }
         if let Ok(direction) = self.hit_direction.try_lock()

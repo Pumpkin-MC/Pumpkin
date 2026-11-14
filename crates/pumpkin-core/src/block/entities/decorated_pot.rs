@@ -11,6 +11,8 @@ pub struct DecoratedPotBlockEntity {
     pub item: Mutex<Option<ItemStack>>,
 }
 
+// TODO vanilla `DecoratedPotBlockEntity` is a `ContainerSingleItem`: hoppers and droppers fill and empty it,
+// and it can hold a loot table. Without an inventory automation skips it.
 impl BlockEntity for DecoratedPotBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
@@ -43,9 +45,8 @@ impl BlockEntity for DecoratedPotBlockEntity {
         }
         if let Ok(item) = self.item.lock()
             && let Some(it) = item.as_ref()
+            && let Some(it_nbt) = it.to_nbt()
         {
-            let mut it_nbt = NbtCompound::new();
-            it.write_item_stack(&mut it_nbt);
             nbt.put_compound("item", it_nbt);
         }
     }
@@ -59,9 +60,8 @@ impl BlockEntity for DecoratedPotBlockEntity {
         }
         if let Ok(item) = self.item.try_lock()
             && let Some(ref it) = *item
+            && let Some(it_nbt) = it.to_nbt()
         {
-            let mut it_nbt = NbtCompound::new();
-            it.write_item_stack(&mut it_nbt);
             nbt.put_compound("item", it_nbt);
         }
         Some(nbt)

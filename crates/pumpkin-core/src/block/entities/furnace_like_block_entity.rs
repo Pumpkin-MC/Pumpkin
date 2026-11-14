@@ -269,6 +269,8 @@ macro_rules! impl_experience_container_for_cooking {
 #[macro_export]
 macro_rules! impl_inventory_for_cooking {
     ($struct_name:ty) => {
+        // TODO vanilla `WorldlyContainer`: hoppers fill the input from above, fuel from the sides, and take only the
+        // result (or `furnace_fuel_bottom_takeable` fuel, e.g. a bucket) from below. Without it they use any slot from any side.
         impl pumpkin_inventory::Inventory for $struct_name {
             fn size(&self) -> usize {
                 Self::INVENTORY_SIZE
@@ -323,7 +325,48 @@ macro_rules! impl_inventory_for_cooking {
                     && ItemStack::are_items_and_components_equal(&items[slot], &stack);
 
                 items[slot] = stack.clone();
+                self.on_stack_set(slot, is_same_item, &stack);
 
+                // Always consider the inventory changed when setting a stack
+                self.mark_dirty();
+            }
+
+            fn update_stack(
+                &self,
+                slot: usize,
+                update: &mut dyn FnMut(&mut ItemStack) -> bool,
+            ) -> bool {
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(stack) = items.get_mut(slot) else {
+                    return false;
+                };
+                let old = (slot == 0).then(|| stack.clone());
+                if !update(stack) {
+                    return false;
+                }
+                let is_same_item = old.is_some_and(|old| {
+                    !stack.is_empty() && ItemStack::are_items_and_components_equal(&old, stack)
+                });
+                self.on_stack_set(slot, is_same_item, stack);
+                true
+            }
+
+            fn mark_dirty(&self) {
+                self.dirty.store(true, Ordering::Relaxed);
+                self.comparator_dirty.store(true, Ordering::Relaxed);
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+        }
+
+        impl $struct_name {
+            /// Vanilla `AbstractFurnaceBlockEntity.setItem`: a different input item restarts cooking.
+            fn on_stack_set(&self, slot: usize, is_same_item: bool, stack: &ItemStack) {
                 if slot == 0 && !is_same_item {
                     if let Some(recipe) = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
                         stack.item,
@@ -335,18 +378,6 @@ macro_rules! impl_inventory_for_cooking {
                     }
                     self.set_cooking_time_spent(0);
                 }
-
-                // Always consider the inventory changed when setting a stack
-                self.mark_dirty();
-            }
-
-            fn mark_dirty(&self) {
-                self.dirty.store(true, Ordering::Relaxed);
-                self.comparator_dirty.store(true, Ordering::Relaxed);
-            }
-
-            fn as_any(&self) -> &dyn std::any::Any {
-                self
             }
         }
     };

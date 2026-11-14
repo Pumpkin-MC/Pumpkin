@@ -45,30 +45,34 @@ impl HopperMinecart {
         let inventory = &self.inventory;
         let cart_box = entity.bounding_box.load().expand(0.25, 0.0, 0.25);
 
-        if let Some(block_entity) = world.get_block_entity(&source_pos)
-            && let Some(source) = block_entity.get_inventory()
-        {
+        if let Some(source) = HopperBlockEntity::get_container_at(&world, &source_pos) {
             for slot in 0..source.size() {
                 let stack = source.get_stack(slot);
                 if stack.is_empty() || !source.can_transfer_to(inventory.as_ref(), slot, &stack) {
                     continue;
                 }
-                let one = source.remove_stack_specific(slot, 1);
+                let Some(one) = HopperBlockEntity::take_one(source.as_ref(), slot, &stack) else {
+                    continue;
+                };
                 if HopperBlockEntity::add_one_item(source.as_ref(), inventory.as_ref(), &one) {
                     return;
                 }
-                source.set_stack(slot, stack);
+                if let Some(leftover) = HopperBlockEntity::put_back(source.as_ref(), slot, one) {
+                    let pos = source_pos.to_centered_f64();
+                    world.scatter_stack(pos.x, pos.y, pos.z, leftover);
+                }
             }
-            return;
+        } else {
+            // `Hopper.SUCK_AABB` around the cart; never blocked, the cart isn't grid aligned.
+            let suction_box = BoundingBox::new(
+                Vector3::new(pos.x - 0.5, pos.y + 0.6875, pos.z - 0.5),
+                Vector3::new(pos.x + 0.5, pos.y + 2.0, pos.z + 0.5),
+            );
+            if Self::pick_up_item_internal(&world, inventory, &suction_box) {
+                return;
+            }
         }
-
-        let suction_box = BoundingBox::new(
-            Vector3::new(pos.x - 0.5, pos.y + 0.6875, pos.z - 0.5),
-            Vector3::new(pos.x + 0.5, pos.y + 2.0, pos.z + 0.5),
-        );
-        if Self::pick_up_item_internal(&world, inventory, &suction_box) {
-            return;
-        }
+        // Vanilla `MinecartHopper.suckInItems` falls back to its own box either way.
         Self::pick_up_item_internal(&world, inventory, &cart_box);
     }
 
@@ -81,34 +85,11 @@ impl HopperMinecart {
             let Some(item) = entity.get_item_entity() else {
                 continue;
             };
-            let (backup, one) = {
-                let mut stack = item
-                    .get_item_stack()
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if stack.is_empty() {
-                    continue;
-                }
-                (stack.clone(), stack.split(1))
-            };
-            if HopperBlockEntity::add_one_item(inventory.as_ref(), inventory.as_ref(), &one) {
-                let is_empty = {
-                    let stack = item
-                        .get_item_stack()
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    stack.is_empty()
-                };
-                if is_empty {
-                    item.get_entity().remove();
-                }
+            if item
+                .insert_into(|stack| HopperBlockEntity::add_stack(None, inventory.as_ref(), stack))
+            {
                 return true;
             }
-            let mut stack = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *stack = backup;
         }
         false
     }

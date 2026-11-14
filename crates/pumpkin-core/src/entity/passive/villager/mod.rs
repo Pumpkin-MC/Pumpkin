@@ -1164,6 +1164,9 @@ impl VillagerEntity {
             recipe.put_int("demand", offer.demand);
             recipe.put_int("tier", (index as i32 / 2).min(tier));
             recipe.put_compound("buyA", Self::bedrock_trade_item(base_cost, adjusted_count));
+            // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
+            // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
+            // Bedrock always sends `buyB`, an empty compound for "no second cost".
             recipe.put_compound(
                 "buyB",
                 offer.cost_b.as_ref().map_or_else(NbtCompound::new, |cost| {
@@ -1518,29 +1521,19 @@ impl Mob for VillagerEntity {
                 .clone(),
             &mut remainder,
         );
-        let taken = stack.item_count - remainder.item_count;
-        let living = &self.mob_entity.living_entity;
-        if taken == 0 || !living.pickup(item.get_entity(), u32::from(taken)) {
-            return;
-        }
-        let mut remainder = stack;
-        add_to_inventory(
-            &mut self
-                .inventory
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            &mut remainder,
-        );
-        living.on_item_pickup(item);
-        if remainder.is_empty() {
-            item.get_entity().remove();
-        } else {
-            *item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = remainder;
-            item.init_data_tracker();
-        }
+        let planned = stack.item_count - remainder.item_count;
+        // Added from the live stack, writing a stale remainder back would revive taken items.
+        self.mob_entity
+            .living_entity
+            .pick_up_from(item, planned, |ground| {
+                add_to_inventory(
+                    &mut self
+                        .inventory
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    ground,
+                );
+            });
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
@@ -1577,22 +1570,23 @@ impl Mob for VillagerEntity {
         if !offers.is_empty() {
             let mut recipes = Vec::new();
             for offer in offers.iter() {
+                // Unsaveable item: offer not saved.
+                // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
+                // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
+                let (Some(buy), Some(sell), Some(buy_b)) = (
+                    offer.base_cost_a.0.to_nbt(),
+                    offer.output.0.to_nbt(),
+                    offer
+                        .cost_b
+                        .as_ref()
+                        .map_or(Some(None), |cost_b| cost_b.0.to_nbt().map(Some)),
+                ) else {
+                    continue;
+                };
                 let mut recipe = NbtCompound::new();
-                let mut buy = NbtCompound::new();
-                let mut sell = NbtCompound::new();
-
-                let item_stack: &ItemStack = offer.base_cost_a.0.as_ref();
-                item_stack.write_item_stack(&mut buy);
                 recipe.put_compound("buy", buy);
-
-                let item_stack: &ItemStack = offer.output.0.as_ref();
-                item_stack.write_item_stack(&mut sell);
                 recipe.put_compound("sell", sell);
-
-                if let Some(cost_b) = &offer.cost_b {
-                    let mut buy_b = NbtCompound::new();
-                    let item_stack: &ItemStack = cost_b.0.as_ref();
-                    item_stack.write_item_stack(&mut buy_b);
+                if let Some(buy_b) = buy_b {
                     recipe.put_compound("buyB", buy_b);
                 }
 
@@ -1617,9 +1611,7 @@ impl Mob for VillagerEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !inventory.is_empty() {
             let mut inventory_list = Vec::new();
-            for item in inventory.iter() {
-                let mut item_compound = NbtCompound::new();
-                item.write_item_stack(&mut item_compound);
+            for item_compound in inventory.iter().filter_map(ItemStack::to_nbt) {
                 inventory_list.push(NbtTag::Compound(item_compound));
             }
             nbt.put("Inventory", NbtTag::List(inventory_list));
@@ -1690,6 +1682,13 @@ impl Mob for VillagerEntity {
                     let buy = recipe
                         .get_compound("buy")
                         .and_then(ItemStack::read_item_stack);
+                    // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
+                    // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
+                    // Bug: a `buyB` that is present but fails to decode (unknown item id,
+                    // count above the limit) reads as `None` here, which means "no second
+                    // cost", so the trade loads without its second payment. Reject the
+                    // recipe when `buyB` is present but invalid; keep `None` only when the
+                    // key is absent.
                     let buy_b = recipe
                         .get_compound("buyB")
                         .and_then(ItemStack::read_item_stack);

@@ -516,35 +516,58 @@ pub fn generate_loot_from_handle(
     }
 }
 
+/// Places loot into empty slots of `slots`. Occupied slots stay.
+pub fn place_items_in_slots(slots: &mut [ItemStack], items_to_place: Vec<ItemStack>, seed: i64) {
+    let empty_slots = slots
+        .iter()
+        .enumerate()
+        .filter(|(_, stack)| stack.is_empty())
+        .map(|(slot, _)| slot)
+        .collect();
+    place_items(empty_slots, items_to_place, seed, |slot, item| {
+        slots[slot] = item;
+    });
+}
+
 fn place_items_in_chest(
     inventory: &std::sync::Arc<dyn pumpkin_inventory::Inventory>,
+    items_to_place: Vec<ItemStack>,
+    seed: i64,
+) {
+    let empty_slots = (0..inventory.size())
+        .filter(|&slot| inventory.get_stack(slot).is_empty())
+        .collect();
+    place_items(empty_slots, items_to_place, seed, |slot, item| {
+        inventory.set_stack(slot, item);
+    });
+}
+
+/// Vanilla `LootTable.fill` placement: shuffled empty slots, split stacks, last slot first.
+fn place_items(
+    mut empty_slots: Vec<usize>,
     mut items_to_place: Vec<ItemStack>,
     seed: i64,
+    mut set: impl FnMut(usize, ItemStack),
 ) {
     if items_to_place.is_empty() {
         return;
     }
 
-    let inv_size = inventory.size();
     let mut rng = Xoroshiro::from_seed(seed as u64);
 
-    let mut available_slots: Vec<usize> = (0..inv_size)
-        .filter(|&slot| inventory.get_stack(slot).is_empty())
-        .collect();
-
-    for i in (1..available_slots.len()).rev() {
+    for i in (1..empty_slots.len()).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;
-        available_slots.swap(i, j);
+        empty_slots.swap(i, j);
     }
 
-    shuffle_and_split_items(&mut items_to_place, available_slots.len(), &mut rng);
+    shuffle_and_split_items(&mut items_to_place, empty_slots.len(), &mut rng);
 
     for item in items_to_place {
-        let Some(slot) = available_slots.pop() else {
+        let Some(slot) = empty_slots.pop() else {
             tracing::warn!("Tried to over-fill a container");
             return;
         };
-        inventory.set_stack(slot, item);
+        set(slot, item);
     }
 }
 

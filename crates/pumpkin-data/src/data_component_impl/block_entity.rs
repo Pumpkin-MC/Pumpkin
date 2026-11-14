@@ -107,10 +107,11 @@ impl DataComponentImpl for ContainerImpl {
     fn write_data(&self) -> NbtTag {
         let mut list = Vec::new();
         for (slot, stack) in &self.items {
+            let Some(item_compound) = stack.to_nbt() else {
+                continue;
+            };
             let mut entry = NbtCompound::new();
             entry.put_int("slot", *slot as i32);
-            let mut item_compound = NbtCompound::new();
-            stack.write_item_stack(&mut item_compound);
             entry.put_compound("item", item_compound);
             list.push(NbtTag::Compound(entry));
         }
@@ -250,9 +251,8 @@ impl SulfurCubeContentImpl {
 }
 impl DataComponentImpl for SulfurCubeContentImpl {
     fn write_data(&self) -> NbtTag {
-        let mut compound = NbtCompound::new();
-        self.item.write_item_stack(&mut compound);
-        NbtTag::Compound(compound)
+        // Unsaveable item: empty compound, read back as no component.
+        NbtTag::Compound(self.item.to_nbt().unwrap_or_default())
     }
     default_impl!(SulfurCubeContent);
 }

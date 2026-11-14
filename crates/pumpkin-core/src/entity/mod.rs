@@ -1,4 +1,5 @@
 use crate::{
+    block::stop_vertical_movement_after_fall,
     entity::{
         ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag},
         decoration::leash_knot::LeashKnotEntity,
@@ -2394,12 +2395,27 @@ impl Entity {
             {
                 let distance_to_ground = bounding_box.min.y - grounded_box.min.y;
                 let stepped = step_from_ground - Vector3::new(0.0, distance_to_ground, 0.0);
+                let on_ground = movement.y != stepped.y && movement.y < 0.0;
                 self.vertical_collision
                     .store(movement.y != stepped.y, Ordering::SeqCst);
-                self.on_ground.store(
-                    movement.y != stepped.y && movement.y < 0.0,
-                    Ordering::SeqCst,
-                );
+                self.on_ground.store(on_ground, Ordering::SeqCst);
+                // Vanilla checks support after the step, the pre-step support is stale.
+                let supporting = on_ground
+                    .then(|| {
+                        let area = Self::support_test_area(&bounding_box.shift(stepped))
+                            .expand_towards(-stepped.x, 0.0, -stepped.z);
+                        let (collisions, block_positions) =
+                            self.world.load().get_block_collisions(area, caller);
+                        Self::supporting_block_after(
+                            &collisions,
+                            &block_positions,
+                            &bounding_box,
+                            stepped,
+                            self.pos.load(),
+                        )
+                    })
+                    .flatten();
+                self.supporting_block_pos.store(supporting);
                 self.horizontal_collision.store(
                     movement.x != stepped.x || movement.z != stepped.z,
                     Ordering::SeqCst,
@@ -2516,8 +2532,9 @@ impl Entity {
             return movement;
         }
         let collision = self.collide(movement, caller);
+        // Vanilla `onGround`: stopped while moving down, even with no supporting block found.
         self.on_ground
-            .store(collision.supporting.is_some(), Ordering::SeqCst);
+            .store(collision.vertical && movement.y < 0.0, Ordering::SeqCst);
         self.supporting_block_pos.store(collision.supporting);
         self.horizontal_collision
             .store(collision.horizontal, Ordering::SeqCst);
@@ -2540,84 +2557,105 @@ impl Entity {
             return Collision::free(movement);
         }
 
-        let mut adjusted_movement = movement;
-        let mut supporting = None;
-        let mut vertical = false;
-
-        // Y-Axis adjustment
-        if movement.get_axis(Axis::Y) != 0.0 {
-            let mut max_time = 1.0;
-            let mut positions = block_positions.into_iter();
-            if let Some((mut collisions_len, mut position)) = positions.next() {
-                let mut supporting_block_pos = None;
-
-                for (i, inert_box) in collisions.iter().enumerate() {
-                    if i == collisions_len {
-                        let Some((next_len, next_pos)) = positions.next() else {
-                            break;
-                        };
-                        collisions_len = next_len;
-                        position = next_pos;
-                    }
-
-                    if let Some(collision_time) = bounding_box.calculate_collision_time(
-                        inert_box,
-                        adjusted_movement,
-                        Axis::Y,
-                        max_time,
-                    ) {
-                        max_time = collision_time;
-
-                        // If the entity is moving downwards and collides, set the supporting block position
-                        if movement.get_axis(Axis::Y) < 0.0 {
-                            supporting_block_pos = Some(position);
-                        }
-                    }
-                }
-
-                if max_time != 1.0 {
-                    vertical = true;
-                    let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-                    adjusted_movement.set_axis(Axis::Y, changed_component);
-                }
-
-                supporting = supporting_block_pos;
-            }
-        }
-
-        let mut horizontal_collision = false;
-
-        for axis in Axis::horizontal() {
-            if movement.get_axis(axis) == 0.0 {
+        // Vanilla `collideWithShapes`: Y, then the larger horizontal axis, on the already moved box.
+        let order = if movement.x.abs() < movement.z.abs() {
+            [Axis::Y, Axis::Z, Axis::X]
+        } else {
+            [Axis::Y, Axis::X, Axis::Z]
+        };
+        let mut adjusted_movement = Vector3::new(0.0, 0.0, 0.0);
+        for axis in order {
+            let wanted = movement.get_axis(axis);
+            if wanted == 0.0 {
                 continue;
             }
-
-            let mut max_time = 1.0;
-
-            for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    axis,
-                    max_time,
-                ) {
-                    max_time = collision_time;
-                }
-            }
-
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(axis) * max_time;
-                adjusted_movement.set_axis(axis, changed_component);
-                horizontal_collision = true;
-            }
+            let (allowed, _) =
+                bounding_box
+                    .shift(adjusted_movement)
+                    .collide_along(axis, &collisions, wanted);
+            adjusted_movement.set_axis(axis, allowed);
         }
+
+        // Vanilla `Mth.equal`: sideways cuts under 1e-5 are not a collision.
+        let horizontal = (movement.x - adjusted_movement.x).abs() >= 1.0e-5
+            || (movement.z - adjusted_movement.z).abs() >= 1.0e-5;
+        let vertical = adjusted_movement.y != movement.y;
+
+        let supporting = if vertical && movement.y < 0.0 {
+            Self::supporting_block_after(
+                &collisions,
+                &block_positions,
+                &bounding_box,
+                adjusted_movement,
+                self.pos.load(),
+            )
+        } else {
+            None
+        };
 
         Collision {
             movement: adjusted_movement,
             supporting,
-            horizontal: horizontal_collision,
+            horizontal,
             vertical,
         }
+    }
+
+    /// Vanilla `checkSupportingBlock`: a thin box under the final position, else under the start X/Z.
+    fn supporting_block_after(
+        collisions: &[BoundingBox],
+        block_positions: &[(usize, BlockPos)],
+        start_box: &BoundingBox,
+        movement: Vector3<f64>,
+        start_pos: Vector3<f64>,
+    ) -> Option<BlockPos> {
+        let test_area = Self::support_test_area(&start_box.shift(movement));
+        let position = start_pos + movement;
+        Self::find_supporting_block(collisions, block_positions, &test_area, &position).or_else(
+            || {
+                Self::find_supporting_block(
+                    collisions,
+                    block_positions,
+                    &test_area.shift(Vector3::new(-movement.x, 0.0, -movement.z)),
+                    &position,
+                )
+            },
+        )
+    }
+
+    fn support_test_area(final_box: &BoundingBox) -> BoundingBox {
+        BoundingBox::new(
+            Vector3::new(final_box.min.x, final_box.min.y - 1.0e-6, final_box.min.z),
+            Vector3::new(final_box.max.x, final_box.min.y, final_box.max.z),
+        )
+    }
+
+    /// Vanilla `CollisionGetter.findSupportingBlock`: the colliding block closest to `position`.
+    fn find_supporting_block(
+        collisions: &[BoundingBox],
+        block_positions: &[(usize, BlockPos)],
+        area: &BoundingBox,
+        position: &Vector3<f64>,
+    ) -> Option<BlockPos> {
+        let mut best: Option<(f64, BlockPos)> = None;
+        let mut start = 0;
+        for &(end, pos) in block_positions {
+            if collisions[start..end].iter().any(|s| s.intersects(area)) {
+                let distance = pos.to_centered_f64().squared_distance_to_vec(position);
+                // Ties go to the larger position in vanilla `Vec3i.compareTo` order (y, z, x).
+                let better = best.is_none_or(|(best_distance, best_pos)| {
+                    distance < best_distance
+                        || (distance == best_distance
+                            && (best_pos.0.y, best_pos.0.z, best_pos.0.x)
+                                < (pos.0.y, pos.0.z, pos.0.x))
+                });
+                if better {
+                    best = Some((distance, pos));
+                }
+            }
+            start = end;
+        }
+        best.map(|(_, pos)| pos)
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
@@ -3241,9 +3279,17 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        let velocity_multiplier = f64::from(caller.get_block_speed_factor());
-
-        self.velocity.store(final_move * velocity_multiplier);
+        // Vanilla `Entity.move`: velocity is kept, a wall zeroes its axis, the speed factor only slows X/Z.
+        let speed_factor = f64::from(caller.get_block_speed_factor());
+        let mut velocity = self.velocity.load();
+        if (motion.x - final_move.x).abs() >= 1.0e-5 {
+            velocity.x = 0.0;
+        }
+        if (motion.z - final_move.z).abs() >= 1.0e-5 {
+            velocity.z = 0.0;
+        }
+        self.velocity
+            .store(velocity.multiply(speed_factor, 1.0, speed_factor));
 
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
@@ -3252,10 +3298,15 @@ impl Entity {
 
         let (effect_pos, effect_block, effect_state) = self.get_block_with_y_offset(0.2);
         if motion.y != final_move.y {
-            let world = self.world.load();
-            world
-                .block_registry
-                .update_entity_movement_after_fall_on(effect_block, caller);
+            if motion.y < 0.0 {
+                let world = self.world.load();
+                world
+                    .block_registry
+                    .update_entity_movement_after_fall_on(effect_block, caller);
+            } else {
+                // Vanilla `restituteMovementAfterCollisions`: block bounciness only applies when landing.
+                stop_vertical_movement_after_fall(caller);
+            }
         }
 
         if self.is_removed() {
@@ -3518,6 +3569,7 @@ impl Entity {
             }
         }
 
+        // TODO: vanilla rolls from the entity `random`; same odds, not seed-reproducible.
         let amplitude = rand::random::<f64>().mul_add(PUSH_OUT_RANDOM_SPEED, PUSH_OUT_MIN_SPEED);
 
         let axis = direction.to_axis().into();
