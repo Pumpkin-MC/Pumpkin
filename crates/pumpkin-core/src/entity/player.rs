@@ -3478,11 +3478,11 @@ impl Player {
         let speed = block::calc_block_breaking(self, state, Block::from_state_id(state.id));
         if speed <= 0.0 {
             self.has_delayed_destroy.store(false, Ordering::Relaxed);
-            self.refuse_delayed_destroy(&world, position, state);
+            self.refuse_delayed_destroy(&world, position);
         } else if self.continue_mining(position, &world, state, starting_time) {
             self.has_delayed_destroy.store(false, Ordering::Relaxed);
             if !self.break_block(&position) {
-                self.refuse_delayed_destroy(&world, position, state);
+                self.refuse_delayed_destroy(&world, position);
             }
         } else {
             return;
@@ -3494,15 +3494,19 @@ impl Player {
     }
 
     /// Stops the delayed break animation and resynchronizes the target block.
-    fn refuse_delayed_destroy(&self, world: &Arc<World>, position: BlockPos, state: &BlockState) {
+    fn refuse_delayed_destroy(&self, world: &Arc<World>, position: BlockPos) {
         world.set_block_breaking(
             &self.living_entity.entity,
             position,
             BlockBreakingProgress::Stop,
         );
+        // Events may have moved the player.
+        if !Arc::ptr_eq(&self.world(), world) {
+            return;
+        }
         self.try_send_client_packet(&CBlockUpdate::new(
             position,
-            VarInt(i32::from(state.id.as_u16())),
+            VarInt(i32::from(world.get_block_state_id(&position).as_u16())),
         ));
     }
 
