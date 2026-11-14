@@ -151,7 +151,10 @@ pub enum AdvancementTrigger {
     CrafterRecipeCrafted {
         recipe_id: String,
     },
-    EffectsChanged,
+    EffectsChanged {
+        /// Entity type of the effect's source; vanilla passes `null` for removals and most sources.
+        source_type: Option<String>,
+    },
     SpearMobs {
         count: i32,
     },
@@ -959,8 +962,15 @@ impl Player {
                 );
             }
 
-            AdvancementTrigger::EffectsChanged => {
-                self.trigger_criterion_event("minecraft:effects_changed", |_cond| true);
+            AdvancementTrigger::EffectsChanged { source_type } => {
+                let effects = self.get_active_effects();
+                self.trigger_criterion_event("minecraft:effects_changed", |cond| {
+                    predicate::matches_effects_changed_condition(
+                        cond,
+                        &effects,
+                        source_type.as_deref(),
+                    )
+                });
             }
 
             AdvancementTrigger::SpearMobs { count } => {

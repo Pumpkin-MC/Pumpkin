@@ -1,3 +1,5 @@
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{RegistryKey, get_tag_values};
 use serde_json::Value;
 
@@ -644,6 +646,72 @@ impl ItemUsedOnBlockPredicate {
     }
 }
 
+/// Mirrors vanilla's `MobEffectsPredicate.MobEffectInstancePredicate` together with its map key.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MobEffectInstancePredicate {
+    pub effect: String,
+    pub amplifier: Option<IntBounds>,
+    pub duration: Option<IntBounds>,
+    pub ambient: Option<bool>,
+    pub visible: Option<bool>,
+}
+
+impl MobEffectInstancePredicate {
+    #[must_use]
+    pub fn matches(&self, instance: Option<&Effect>) -> bool {
+        let Some(instance) = instance else {
+            return false;
+        };
+        self.amplifier
+            .as_ref()
+            .is_none_or(|b| b.matches(i64::from(instance.amplifier)))
+            && self
+                .duration
+                .as_ref()
+                .is_none_or(|b| b.matches(i64::from(instance.duration)))
+            && self.ambient.is_none_or(|a| a == instance.ambient)
+            && self.visible.is_none_or(|v| v == instance.show_particles)
+    }
+}
+
+/// Mirrors vanilla's `MobEffectsPredicate`: every listed effect must be active and match.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct MobEffectsPredicate {
+    pub effect_map: Vec<MobEffectInstancePredicate>,
+}
+
+impl MobEffectsPredicate {
+    #[must_use]
+    pub fn matches(&self, effects: &[Effect]) -> bool {
+        self.effect_map.iter().all(|pred| {
+            pred.matches(
+                effects
+                    .iter()
+                    .find(|e| matches_id(&pred.effect, e.effect_type.minecraft_name)),
+            )
+        })
+    }
+
+    #[must_use]
+    pub fn from_value(val: &Value) -> Self {
+        let Value::Object(map) = val else {
+            return Self::default();
+        };
+        Self {
+            effect_map: map
+                .iter()
+                .map(|(effect, pred)| MobEffectInstancePredicate {
+                    effect: effect.clone(),
+                    amplifier: pred.get("amplifier").and_then(IntBounds::from_value),
+                    duration: pred.get("duration").and_then(IntBounds::from_value),
+                    ambient: pred.get("ambient").and_then(Value::as_bool),
+                    visible: pred.get("visible").and_then(Value::as_bool),
+                })
+                .collect(),
+        }
+    }
+}
+
 /// Strongly-typed entity condition.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct EntityPredicate {
@@ -1209,7 +1277,11 @@ pub enum CriterionConditions {
     StartedRiding(Option<EntityPredicate>),
     SummonedEntity(EntityPredicate),
     CrafterRecipeCrafted(String),
-    EffectsChanged,
+    EffectsChanged {
+        player: Option<EntityPredicate>,
+        effects: Option<MobEffectsPredicate>,
+        source: Option<EntityPredicate>,
+    },
     SpearMobs {
         count: Option<i32>,
     },
@@ -1575,7 +1647,34 @@ impl From<pumpkin_data::advancement_data::AdvancementCondition> for CriterionCon
             AC::StartedRiding(p) => Self::StartedRiding(p.as_ref().map(from_entity_condition)),
             AC::SummonedEntity(e) => Self::SummonedEntity(from_entity_condition(&e)),
             AC::CrafterRecipeCrafted(r) => Self::CrafterRecipeCrafted(r.to_string()),
-            AC::EffectsChanged => Self::EffectsChanged,
+            AC::EffectsChanged {
+                player,
+                effects,
+                source,
+            } => Self::EffectsChanged {
+                player: player.as_ref().map(from_entity_condition),
+                effects: effects.map(|effects| MobEffectsPredicate {
+                    effect_map: effects
+                        .iter()
+                        .map(|e| MobEffectInstancePredicate {
+                            effect: e.effect.to_string(),
+                            amplifier: (e.amplifier_min.is_some() || e.amplifier_max.is_some())
+                                .then_some(IntBounds {
+                                    min: e.amplifier_min,
+                                    max: e.amplifier_max,
+                                }),
+                            duration: (e.duration_min.is_some() || e.duration_max.is_some())
+                                .then_some(IntBounds {
+                                    min: e.duration_min,
+                                    max: e.duration_max,
+                                }),
+                            ambient: e.ambient,
+                            visible: e.visible,
+                        })
+                        .collect(),
+                }),
+                source: source.as_ref().map(from_entity_condition),
+            },
             AC::SpearMobs { count } => Self::SpearMobs { count },
             AC::Impossible => Self::Impossible,
             AC::Empty | AC::Tick => Self::Tick,
@@ -2001,7 +2100,11 @@ impl CriterionConditions {
                     .unwrap_or("")
                     .to_string(),
             ),
-            "minecraft:effects_changed" => Self::EffectsChanged,
+            "minecraft:effects_changed" => Self::EffectsChanged {
+                player: val.get("player").map(parse_entity_pred),
+                effects: val.get("effects").map(MobEffectsPredicate::from_value),
+                source: val.get("source").map(parse_entity_pred),
+            },
             "minecraft:spear_mobs" => Self::SpearMobs {
                 count: val.get("count").and_then(Value::as_i64).map(|v| v as i32),
             },
@@ -2142,9 +2245,36 @@ pub fn matches_enter_block_condition(cond: &Value, block_id: &str) -> bool {
     TagOrIdMatcher::from_value(cond).is_none_or(|m| m.matches(RegistryKey::Block, block_id))
 }
 
+/// `EffectsChangedTrigger.TriggerInstance.matches`, plus the `player` check that vanilla runs in
+/// `SimpleCriterionTrigger.trigger`. A required `source` never matches when there is no source.
+#[must_use]
+pub fn matches_effects_changed_condition(
+    cond: &CriterionConditions,
+    effects: &[Effect],
+    source_type: Option<&str>,
+) -> bool {
+    let CriterionConditions::EffectsChanged {
+        player,
+        effects: effects_pred,
+        source,
+    } = cond
+    else {
+        return false;
+    };
+    effects_pred.as_ref().is_none_or(|e| e.matches(effects))
+        && source.as_ref().is_none_or(|s| {
+            source_type.is_some_and(|source_type| s.matches(source_type, None, None))
+        })
+        && player
+            .as_ref()
+            .is_none_or(|p| p.matches(EntityType::PLAYER.resource_name, None, None))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_data::Advancement;
+    use pumpkin_data::effect::StatusEffect;
     use serde_json::json;
 
     #[test]
@@ -2512,5 +2642,65 @@ mod tests {
             }
             _ => panic!("Expected PlayerInteractedWithEntity variant"),
         }
+    }
+
+    fn effects_changed_condition(advancement: &Advancement) -> CriterionConditions {
+        advancement.criteria_definitions[0].conditions.into()
+    }
+
+    fn active(effect_type: &'static StatusEffect) -> Effect {
+        Effect {
+            effect_type,
+            duration: 200,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        }
+    }
+
+    #[test]
+    fn effects_changed_requires_every_listed_effect() {
+        let cond = effects_changed_condition(Advancement::NETHER_ALL_EFFECTS);
+        let CriterionConditions::EffectsChanged {
+            effects: Some(effects_pred),
+            ..
+        } = &cond
+        else {
+            panic!("Expected EffectsChanged with effects");
+        };
+        let mut effects: Vec<Effect> = effects_pred
+            .effect_map
+            .iter()
+            .map(|p| active(StatusEffect::from_minecraft_name(&p.effect).unwrap()))
+            .collect();
+
+        assert!(!matches_effects_changed_condition(
+            &cond,
+            &[active(&StatusEffect::SPEED)],
+            None
+        ));
+        assert!(matches_effects_changed_condition(&cond, &effects, None));
+        effects.pop();
+        assert!(!matches_effects_changed_condition(&cond, &effects, None));
+    }
+
+    #[test]
+    fn effects_changed_source_requires_a_source() {
+        let cond = effects_changed_condition(Advancement::HUSBANDRY_KILL_AXOLOTL_TARGET);
+        let effects = [active(&StatusEffect::REGENERATION)];
+
+        assert!(!matches_effects_changed_condition(&cond, &effects, None));
+        assert!(!matches_effects_changed_condition(
+            &cond,
+            &effects,
+            Some("minecraft:zombie")
+        ));
+        assert!(matches_effects_changed_condition(
+            &cond,
+            &effects,
+            Some("minecraft:axolotl")
+        ));
     }
 }
