@@ -5884,12 +5884,19 @@ impl Player {
         }
 
         // Before tool damage: a broken tool leaves the hand empty.
-        let item_id = self.inventory().held_item().item.id;
+        let held = self.inventory().held_item();
+        let used_item = held
+            .get_data_component::<ToolImpl>()
+            .is_some()
+            .then_some(held.item.id);
         self.apply_tool_damage_for_block_break(state);
         if block_drop {
             self.add_exhaustion(MINE_BLOCK_EXHAUSTION);
         }
-        self.increment_stat(statistics::StatisticCategory::Used, item_id as i32, 1);
+        // Vanilla `Item.mineBlock`: only tools count as used.
+        if let Some(item_id) = used_item {
+            self.increment_stat(statistics::StatisticCategory::Used, item_id as i32, 1);
+        }
         self.increment_stat(
             statistics::StatisticCategory::Mined,
             block.id.as_u16() as i32,
