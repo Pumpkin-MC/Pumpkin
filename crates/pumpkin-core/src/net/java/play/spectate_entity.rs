@@ -19,14 +19,39 @@ impl JavaClient {
         };
 
         let world = player.world();
-        if let Some(target) = world.get_entity_by_id(target_id) {
-            let target_pos = target.get_entity().pos.load();
-            let target_yaw = target.get_entity().yaw.load();
-            let target_pitch = target.get_entity().pitch.load();
-            let target_id = target.get_entity().entity_id;
+        let Some(target) = world.get_entity_by_id(target_id) else {
+            return;
+        };
 
-            player.set_camera_entity_id(target_id);
-            player.request_teleport(target_pos, target_yaw, target_pitch);
+        let entity = target.get_entity();
+        let block_pos = entity.block_pos.load().0;
+        // Vanilla drops a camera target that is outside the world border.
+        if !entity
+            .world
+            .load()
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(f64::from(block_pos.x), f64::from(block_pos.z))
+        {
+            return;
         }
+
+        // Vanilla allows a 3 block buffer beyond the entity interaction range.
+        if !player.can_interact_with_entity(target.as_ref(), 3.0)
+            || entity.is_removed()
+            || !target.can_hit()
+        {
+            return;
+        }
+
+        let target_pos = entity.pos.load();
+        let target_yaw = entity.yaw.load();
+        let target_pitch = entity.pitch.load();
+        let target_id = entity.entity_id;
+
+        player.set_camera_entity_id(target_id);
+
+        player.request_teleport(target_pos, target_yaw, target_pitch);
     }
 }
