@@ -564,11 +564,16 @@ impl<S: CommandSource> CommandDispatcher<S> {
                     command: format!("/{command}").into(),
                 });
 
-            if i > 10 {
+            // The cursor is a byte offset, so take the last 10 characters rather than bytes.
+            let start = context.input[..i]
+                .char_indices()
+                .rev()
+                .nth(9)
+                .map_or(0, |(index, _)| index);
+
+            if start > 0 {
                 error_text = error_text.add_text("...");
             }
-
-            let start = i.saturating_sub(10);
 
             let command_snippet = &context.input[start..i];
             error_text = error_text.add_text(command_snippet.to_owned());
