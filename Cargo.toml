@@ -15,6 +15,7 @@ members = [
     "crates/pumpkin-macros",
     "crates/pumpkin-nbt",
     "crates/pumpkin-plugin-api",
+    "crates/pumpkin-plugin-api-v0_2",
     "crates/pumpkin-plugin-runtime",
     "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
