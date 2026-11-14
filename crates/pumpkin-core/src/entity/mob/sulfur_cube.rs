@@ -49,6 +49,7 @@ use crate::entity::mob::spawn::{EntitySpawnReason, SpawnGroupData};
 use crate::entity::mob::{Mob, MobEntity, conversion};
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::projectile::arrow::ArrowEntity;
+use crate::entity::shearable::Shearable;
 use crate::entity::tnt::TNTEntity;
 use crate::entity::{Entity, EntityBase};
 use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
@@ -779,7 +780,26 @@ impl Bucketable for SulfurCubeEntity {
     }
 }
 
+/// Sulfur cubes eject their body item with their own sound, whatever the shearer.
+impl Shearable for SulfurCubeEntity {
+    fn shear(&self, _sound_category: SoundCategory, _tool: &ItemStack) -> bool {
+        if !self.has_body_item() {
+            return false;
+        }
+        Self::shear(self);
+        true
+    }
+
+    fn ready_for_shearing(&self) -> bool {
+        self.has_body_item()
+    }
+}
+
 impl Mob for SulfurCubeEntity {
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
