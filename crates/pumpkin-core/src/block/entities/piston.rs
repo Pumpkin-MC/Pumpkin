@@ -16,6 +16,7 @@ pub struct PistonBlockEntity {
     pub facing: BlockDirection,
     pub current_progress: AtomicCell<f32>,
     pub last_progress: AtomicCell<f32>,
+    pub last_ticked: AtomicCell<i64>,
     pub extending: bool,
     pub source: bool,
 }
@@ -222,6 +223,7 @@ impl BlockEntity for PistonBlockEntity {
     }
 
     fn tick(&self, world: &Arc<World>) {
+        self.last_ticked.store(world.get_world_age());
         let current_progress = self.current_progress.load();
         self.last_progress.store(current_progress);
         if current_progress >= 1.0 {
@@ -268,6 +270,7 @@ impl BlockEntity for PistonBlockEntity {
             facing: BlockDirection::from_index(facing as u8).unwrap_or(BlockDirection::Down),
             current_progress: last_progress.into(),
             last_progress: last_progress.into(),
+            last_ticked: 0.into(),
             extending,
             source,
         }

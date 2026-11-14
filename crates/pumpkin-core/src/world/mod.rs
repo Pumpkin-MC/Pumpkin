@@ -15,6 +15,7 @@ use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
 use pumpkin_world::poi::{PoiStorage, SectionPos};
 use rayon::prelude::*;
+use std::cell::Cell;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, RwLock, Weak};
 use std::{
@@ -205,6 +206,26 @@ use weather::Weather;
 const MAX_LIGHT_LEVEL: u8 = 15;
 const LIGHTNING_ROD_SEARCH_RADIUS: i32 = 128;
 pub const MOON_BRIGHTNESS_PER_PHASE: [f32; 8] = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
+
+// Per thread, not per world: scheduled ticks run on Rayon workers while commands and plugin
+// tasks keep running on Tokio, and a shared flag would be set for them as well.
+thread_local! {
+    static HANDLING_TICK: Cell<bool> = const { Cell::new(false) };
+}
+
+struct HandlingTickGuard(bool);
+
+impl HandlingTickGuard {
+    fn new() -> Self {
+        Self(HANDLING_TICK.replace(true))
+    }
+}
+
+impl Drop for HandlingTickGuard {
+    fn drop(&mut self) {
+        HANDLING_TICK.set(self.0);
+    }
+}
 
 fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
     crate::block::entities::chest_like_block_entity::build_chest_actor(position, state_id, None)
@@ -987,6 +1008,12 @@ impl World {
         queue.push(BlockEvent { pos, r#type, data });
     }
 
+    /// Whether the current thread is running this tick's scheduled ticks or block events.
+    #[must_use]
+    pub fn is_handling_tick() -> bool {
+        HANDLING_TICK.get()
+    }
+
     pub fn flush_synced_block_events(self: &Arc<Self>) {
         // THIS IS IMPORTANT
         // it prevents deadlocks and also removes the need to wait for a lock when adding a new synced block
@@ -998,6 +1025,7 @@ impl World {
             std::mem::take(&mut *queue)
         };
 
+        let _handling_tick = HandlingTickGuard::new();
         for event in events {
             let block = self.get_block(&event.pos);
             if !self.block_registry.on_synced_block_event(
@@ -2224,6 +2252,7 @@ impl World {
             .block_ticks
             .par_chunks(BATCH_SIZE)
             .for_each(|batch| {
+                let _handling_tick = HandlingTickGuard::new();
                 let world = world.clone();
                 for scheduled_tick in batch {
                     let pos = scheduled_tick.position;
@@ -2244,6 +2273,7 @@ impl World {
             .fluid_ticks
             .par_chunks(BATCH_SIZE)
             .for_each(|batch| {
+                let _handling_tick = HandlingTickGuard::new();
                 let world = world.clone();
                 for scheduled_tick in batch {
                     let pos = scheduled_tick.position;
@@ -2260,6 +2290,7 @@ impl World {
             .random_ticks
             .par_chunks(BATCH_SIZE)
             .for_each(|batch| {
+                let _handling_tick = HandlingTickGuard::new();
                 let world = world.clone();
                 for scheduled_tick in batch {
                     let pos = scheduled_tick.position;
