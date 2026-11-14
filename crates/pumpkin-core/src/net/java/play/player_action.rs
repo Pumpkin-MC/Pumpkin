@@ -135,36 +135,7 @@ impl JavaClient {
                         let speed = block::calc_block_breaking(player, state, block);
                         // Instant break
                         if speed >= 1.0 {
-                            // fresh block: attack may change it
-                            let (block, broken_state) = world.get_block_and_state(&position);
-                            let can_harvest = player.can_harvest(broken_state, block);
-                            let flags = if can_harvest {
-                                BlockFlags::NOTIFY_ALL
-                            } else {
-                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
-                            };
-                            let new_state = player.destroy_block(server, &world, &position, flags);
-                            if new_state.is_some() {
-                                server.block_registry.broken(
-                                    &world,
-                                    block,
-                                    player,
-                                    &position,
-                                    server,
-                                    broken_state,
-                                );
-                                player.apply_tool_damage_for_block_break(broken_state);
-                                if can_harvest {
-                                    player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
-                                }
-                                let item_id = player.inventory().held_item().item.id;
-                                player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
-                                player.increment_stat(
-                                    StatisticCategory::Mined,
-                                    block.id.as_u16() as i32,
-                                    1,
-                                );
-                            }
+                            player.break_block(&position);
                             self.sync_block_state_to_client(player, &world, position);
                         } else {
                             player.mining.store(true, Ordering::Relaxed);

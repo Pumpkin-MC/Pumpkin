@@ -5883,11 +5883,12 @@ impl Player {
             return true;
         }
 
+        // Before tool damage: a broken tool leaves the hand empty.
+        let item_id = self.inventory().held_item().item.id;
         self.apply_tool_damage_for_block_break(state);
         if block_drop {
             self.add_exhaustion(MINE_BLOCK_EXHAUSTION);
         }
-        let item_id = self.inventory().held_item().item.id;
         self.increment_stat(statistics::StatisticCategory::Used, item_id as i32, 1);
         self.increment_stat(
             statistics::StatisticCategory::Mined,
