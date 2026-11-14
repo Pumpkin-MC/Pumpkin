@@ -147,14 +147,20 @@ impl PendingConnection {
         self.close_token.cancelled().await;
     }
 
-    pub fn set_encryption(&mut self, shared_secret: &[u8]) -> Result<(), EncryptionError> {
+    pub async fn set_encryption(&mut self, shared_secret: &[u8]) -> Result<(), EncryptionError> {
         let crypt_key: [u8; 16] = shared_secret
             .try_into()
             .map_err(|_| EncryptionError::SharedWrongLength)?;
-        self.network_reader
+        // Drain all unencrypted outgoing bytes before switching the wire cipher.
+        // A failed flush is fatal; the client must not see mixed wire modes.
+        self.network_writer
+            .flush()
+            .await
+            .map_err(|err| EncryptionError::UnencryptedFlushFailed(err.to_string()))?;
+        self.network_writer
             .set_encryption(&crypt_key)
             .map_err(|_| EncryptionError::AlreadyEncrypted)?;
-        self.network_writer
+        self.network_reader
             .set_encryption(&crypt_key)
             .map_err(|_| EncryptionError::AlreadyEncrypted)?;
         Ok(())
@@ -227,8 +233,13 @@ impl PendingConnection {
         };
         if let Err(err) = self.network_writer.write_packet(payload).await {
             warn!("Failed to send packet to client {}: {}", self.id, err);
+            self.close();
+            return;
         }
-        let _ = self.network_writer.flush().await;
+        if let Err(err) = self.network_writer.flush().await {
+            warn!("Failed to flush packet for client {}: {}", self.id, err);
+            self.close();
+        }
     }
 
     /// `ConnectionPacketSentEvent` with the 26.3 packet. `None` when cancelled.

@@ -44,7 +44,7 @@ impl PendingConnection {
             return Some(PacketHandlerResult::Stop);
         };
 
-        if let Err(error) = self.set_encryption(&shared_secret) {
+        if let Err(error) = self.set_encryption(&shared_secret).await {
             self.kick(TextComponent::text(error.to_string())).await;
             return Some(PacketHandlerResult::Stop);
         }

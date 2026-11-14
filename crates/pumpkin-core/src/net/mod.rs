@@ -446,6 +446,8 @@ pub enum EncryptionError {
     SharedWrongLength,
     #[error("encryption is already enabled")]
     AlreadyEncrypted,
+    #[error("failed to flush plaintext before enabling encryption: {0}")]
+    UnencryptedFlushFailed(String),
     #[error("no encryption request is pending")]
     NoPendingVerifyToken,
     #[error("verify token does not match")]
