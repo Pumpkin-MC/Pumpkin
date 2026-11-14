@@ -60,6 +60,11 @@ impl JavaClient {
                 }
             }}
 
+            // event may move the player or change it
+            if !Arc::ptr_eq(&player.world(), &world) {
+                return Ok(());
+            }
+            let block = world.get_block(&position);
             if let Some(factory) = server
                 .block_registry
                 .get_screen_handler_factory(block, player, &position, server, &world)
@@ -68,17 +73,6 @@ impl JavaClient {
             }
             return Ok(());
         }
-
-        let inventory = player.inventory();
-        let held_item = inventory.held_item();
-        let off_hand_item = inventory.off_hand_item();
-        let held_item_empty = held_item.is_empty();
-        let off_hand_item_empty = off_hand_item.is_empty();
-
-        let mut item = inventory.get_stack_in_hand(hand);
-        let before = item.clone();
-        let item_id = item.item.id;
-        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
 
         let entity = &player.get_entity();
         let world = entity.world.load_full();
@@ -104,6 +98,27 @@ impl JavaClient {
             }
         }}
 
+        // event may move the player or change the block and hand
+        if !Arc::ptr_eq(&player.world(), &world) {
+            return Ok(());
+        }
+
+        let inventory = player.inventory();
+        let mut item = inventory.get_stack_in_hand(hand);
+        // TODO: vanilla ItemStack.useOn awards ITEM_USED after Item.useOn, only on a successful item interaction
+        if !item.is_empty() {
+            player.increment_stat(StatisticCategory::Used, item.item.id as i32, 1);
+        }
+        if !Arc::ptr_eq(&player.world(), &world) {
+            return Ok(());
+        }
+        // statistic event may change the block and hand stack
+        let block = world.get_block(&position);
+        item = inventory.get_stack_in_hand(hand);
+        let before = item.clone();
+        let held_item_empty = inventory.held_item().is_empty();
+        let off_hand_item_empty = inventory.off_hand_item().is_empty();
+
         let equipment_slot = if matches!(hand, Hand::Right) {
             EquipmentSlot::MAIN_HAND
         } else {
@@ -126,6 +141,8 @@ impl JavaClient {
                 server,
             );
             if result.consumes_action() {
+                // advancement reads the result
+                let (block, state_id) = world.get_block_and_state_id(&position);
                 let state =
                     pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
                         block.id,
@@ -133,7 +150,7 @@ impl JavaClient {
                     .then(|| {
                         let props =
                             pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
-                                world.get_block_state(&position).id,
+                                state_id,
                             );
                         ("lit".to_string(), props.r#lit.to_string())
                     });
@@ -170,6 +187,10 @@ impl JavaClient {
                 }
                 return Ok(());
             }
+            // a block event may have moved the player
+            if !Arc::ptr_eq(&player.world(), &world) {
+                return Ok(());
+            }
         }
 
         let slot_index = if matches!(hand, Hand::Right) {
@@ -184,16 +205,29 @@ impl JavaClient {
             return Ok(());
         }
 
+        // TODO: reject unloaded target (get_block_state_id_if_loaded), teleport may unload it
+        // fresh block: event and block handlers may change it
+        let block = world.get_block(&position);
         let item_result = server
             .item_registry
             .use_on_block(&mut item, player, position, face, cursor_pos, block, server);
 
-        if should_try_block_placement(&item_result) {
+        // use_on_block may have moved the player, skip placement and old-world reads
+        let still_in_world = Arc::ptr_eq(&player.world(), &world);
+
+        if still_in_world && should_try_block_placement(&item_result) {
             // Check if the item is a block, because not every item can be placed :D
             let item_id = item.item.id;
             if let Some(block) = Block::from_item_id(item_id) {
-                should_try_decrement =
-                    Self::run_is_block_place(player, block, server, use_item_on, position, face)?;
+                should_try_decrement = Self::run_is_block_place(
+                    player,
+                    block,
+                    server,
+                    use_item_on,
+                    position,
+                    face,
+                    &item,
+                )?;
             }
         }
 
@@ -207,13 +241,15 @@ impl JavaClient {
 
         let after = item.clone();
 
-        if item_result.consumes_action() || !item.are_equal(&before) {
+        if still_in_world && (item_result.consumes_action() || !item.are_equal(&before)) {
+            // fresh block: advancement reads the result
+            let (block, state_id) = world.get_block_and_state_id(&position);
             let state = pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
                 block.id,
             )
             .then(|| {
                 let props = pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
-                    world.get_block_state(&position).id,
+                    state_id,
                 );
                 ("lit".to_string(), props.r#lit.to_string())
             });
@@ -248,6 +284,15 @@ impl JavaClient {
             player.swing_hand(hand, true);
         }
 
+        // vanilla shrinks the stack it started with, a listener's hand change stands
+        let hand_unchanged = || {
+            (matches!(hand, Hand::Left) || inventory.get_selected_slot() as usize == slot_index)
+                && inventory.get_stack_in_hand(hand).are_equal(&before)
+        };
+        if !hand_unchanged() {
+            return Ok(());
+        }
+
         // Broadcast the break entity status before the slot sync; the client
         // needs the old item texture in the slot for break particles.
         if !before.is_empty() && after.is_empty() {
@@ -266,7 +311,8 @@ impl JavaClient {
             );
         }
 
-        if !after.are_equal(&before) {
+        // the Broken statistic event may change the hand
+        if !after.are_equal(&before) && hand_unchanged() {
             player.sync_hand_slot(slot_index, after.clone());
             inventory.set_stack_in_hand(hand, after);
         }
@@ -306,6 +352,10 @@ impl JavaClient {
         }
 
         if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+            // use_with_item may have moved the player; skip default action in the old world
+            if !Arc::ptr_eq(&player.world(), world) {
+                return BlockActionResult::Pass;
+            }
             let result = server.block_registry.on_use(
                 block,
                 player,
@@ -334,11 +384,17 @@ impl JavaClient {
         use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
+        held_stack: &ItemStack,
     ) -> Result<bool, BlockPlacingError> {
-        match server
-            .block_registry
-            .place_block(player, block, server, use_item_on, location, face)
-        {
+        match server.block_registry.place_block(
+            player,
+            block,
+            server,
+            use_item_on,
+            location,
+            face,
+            held_stack,
+        ) {
             Ok(Some((final_block_pos, new_state))) => {
                 player.try_send_client_packet(&CBlockUpdate::new(
                     final_block_pos,

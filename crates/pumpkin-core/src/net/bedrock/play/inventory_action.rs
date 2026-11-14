@@ -211,6 +211,9 @@ impl BedrockClient {
                     }
 
                     if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+                        if !Arc::ptr_eq(&player.world(), &world) {
+                            return;
+                        }
                         let result = server.block_registry.on_use(
                             block,
                             player,
@@ -229,14 +232,23 @@ impl BedrockClient {
                     }
 
                     let mut stack = held_item;
+                    // TODO: vanilla ItemStack.useOn awards ITEM_USED after Item.useOn, only on a successful item interaction
                     if !stack.is_empty() {
-                        let item_id = stack.item.id;
-                        let before = stack.clone();
                         player.increment_stat(
                             pumpkin_data::statistic::StatisticCategory::Used,
-                            item_id as i32,
+                            stack.item.id as i32,
                             1,
                         );
+                        stack = player.inventory().held_item();
+                    }
+                    // A statistic handler may have moved the player to another world.
+                    if !stack.is_empty() && Arc::ptr_eq(&world, &player.world()) {
+                        let item_id = stack.item.id;
+                        let before = stack.clone();
+                        let slot_index = player.inventory().get_selected_slot();
+                        // TODO: reject unloaded target (get_block_state_id_if_loaded), teleport may unload it
+                        // block handlers may change it
+                        let block = world.get_block(&data.block_position);
                         let item_result = server.item_registry.use_on_block(
                             &mut stack,
                             player,
@@ -247,7 +259,9 @@ impl BedrockClient {
                             &server,
                         );
 
-                        if should_try_block_placement(&item_result) {
+                        if should_try_block_placement(&item_result)
+                            && Arc::ptr_eq(&world, &player.world())
+                        {
                             let item_id = stack.item.id;
                             if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
                                 let dummy_use_item_on =
@@ -268,25 +282,39 @@ impl BedrockClient {
                                     &dummy_use_item_on,
                                     data.block_position,
                                     face,
+                                    &stack,
                                 ) && player.gamemode.load() != GameMode::Creative
                                 {
                                     stack.decrement(1);
                                 }
                             }
                         }
-                        if before.is_damageable() && stack.is_empty() {
-                            player.increment_stat(
-                                pumpkin_data::statistic::StatisticCategory::Broken,
-                                item_id as i32,
-                                1,
-                            );
-                            player.world().send_entity_status(
-                                player.get_entity(),
-                                crate::entity::equipment_break_status(&EquipmentSlot::MAIN_HAND),
-                                ActorEventID::None,
-                            );
+                        // vanilla shrinks the stack it started with, a listener's hand change stands
+                        let inventory = player.inventory();
+                        let hand_unchanged = || {
+                            inventory.get_selected_slot() == slot_index
+                                && inventory.held_item().are_equal(&before)
+                        };
+                        if hand_unchanged() {
+                            if before.is_damageable() && stack.is_empty() {
+                                player.increment_stat(
+                                    pumpkin_data::statistic::StatisticCategory::Broken,
+                                    item_id as i32,
+                                    1,
+                                );
+                                player.world().send_entity_status(
+                                    player.get_entity(),
+                                    crate::entity::equipment_break_status(
+                                        &EquipmentSlot::MAIN_HAND,
+                                    ),
+                                    ActorEventID::None,
+                                );
+                            }
+                            // the Broken statistic event may change the hand
+                            if hand_unchanged() {
+                                inventory.set_held_item(stack);
+                            }
                         }
-                        player.inventory().set_held_item(stack);
                     }
                 } else if data.action_type.0 == 1 {
                     // Click air / Use item
@@ -490,6 +518,7 @@ impl BedrockClient {
                                 );
                             }
                         }
+                        // TODO: interaction and statistic listeners may change the hand, this write-back overwrites it
                         player.inventory().set_held_item(stack);
                     }
                     ActionType::Attack => player.attack(&event.target),

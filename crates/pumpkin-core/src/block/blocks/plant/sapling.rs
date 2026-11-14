@@ -56,11 +56,8 @@ impl SaplingBlock {
 
         let tree_type = Self::get_tree_type(block);
         let mut event = StructureGrowEvent::new(*pos, tree_type, bone_meal);
-        if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
+        if !world.fire_block_event(pos, block, &mut event) {
+            return;
         }
         let Some(grower) = TreeGrower::for_block(block) else {
             return;
