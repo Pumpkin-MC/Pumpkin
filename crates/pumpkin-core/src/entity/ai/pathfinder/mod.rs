@@ -2373,20 +2373,39 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
             if self.is_done() {
                 self.inner.stop();
             } else if let Some(path) = &mut self.inner.path
-                && let Some(pos) = path.get_next_node_pos()
+                && let Some(next_block) = path.get_next_node_pos()
             {
-                let target_pos = Vector3::new(
-                    f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y) + 0.5,
-                    f64::from(pos.0.z) + 0.5,
-                );
                 let current_pos = entity.entity.pos.load();
-                let dx = target_pos.x - current_pos.x;
-                let dy = target_pos.y - current_pos.y;
-                let dz = target_pos.z - current_pos.z;
-                let dist_sq = dx * dx + dy * dy + dz * dz;
+                let x_distance = (current_pos.x - (f64::from(next_block.0.x) + 0.5)).abs();
+                let y_distance = (current_pos.y - f64::from(next_block.0.y)).abs();
+                let z_distance = (current_pos.z - (f64::from(next_block.0.z) + 0.5)).abs();
+                let width = entity.entity.width();
+                self.inner.max_distance_to_waypoint = PathNavigation::waypoint_margin(width);
+                let reach = f64::from(self.inner.max_distance_to_waypoint);
+                let close_enough =
+                    x_distance < reach && z_distance < reach && y_distance < NODE_REACH_Y;
 
-                if dist_sq < 0.5 * 0.5 {
+                let in_liquid = entity.entity.touching_water.load(Ordering::Relaxed)
+                    || entity.entity.touching_lava.load(Ordering::Relaxed);
+                let world = entity.entity.world.load();
+                let height = entity.entity.height();
+                let followed: &Path = path;
+                let corner_cut = followed
+                    .get_next_node()
+                    .is_some_and(|node| PathNavigation::can_cut_corner(node.path_type))
+                    && PathNavigation::should_target_next_node_in_direction(
+                        mob_pos,
+                        followed,
+                        || {
+                            in_liquid
+                                && followed.get_next_entity_pos(width).is_some_and(|next| {
+                                    PathNavigation::can_move_directly(
+                                        &world, mob_pos, next, height, false,
+                                    )
+                                })
+                        },
+                    );
+                if close_enough || corner_cut {
                     path.advance();
                 }
             }

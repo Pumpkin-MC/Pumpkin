@@ -35,7 +35,7 @@ const fn breed_type_roll(
     }
 }
 
-pub(super) fn villager_type_for_biome(registry_id: &str) -> VillagerType {
+pub(crate) fn villager_type_for_biome(registry_id: &str) -> VillagerType {
     match registry_id {
         "badlands" | "desert" | "eroded_badlands" | "wooded_badlands" => VillagerType::Desert,
         "bamboo_jungle" | "jungle" | "sparse_jungle" => VillagerType::Jungle,

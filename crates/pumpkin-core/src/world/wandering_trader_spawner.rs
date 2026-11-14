@@ -12,7 +12,6 @@ use pumpkin_world::world_info::data_files::{
     DEFAULT_WANDERING_TRADER_SPAWN_DELAY as DEFAULT_SPAWN_DELAY,
 };
 use rand::RngExt;
-use rand::seq::IndexedRandom;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
@@ -75,17 +74,10 @@ impl WanderingTraderSpawner {
     }
 
     fn spawn(world: &Arc<World>) -> bool {
-        let players: Vec<_> = world
-            .players
-            .load()
-            .iter()
-            .filter(|player| player.living_entity.entity.is_alive())
-            .cloned()
-            .collect();
-        let mut rng = rand::rng();
-        let Some(player) = players.choose(&mut rng) else {
+        let Some(player) = world.get_random_player() else {
             return true;
         };
+        let mut rng = rand::rng();
         if rng.random_range(0..SPAWN_ONE_IN_X_CHANCE) != 0 {
             return false;
         }

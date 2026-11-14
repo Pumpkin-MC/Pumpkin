@@ -398,12 +398,15 @@ impl ItemBehaviour for SpawnEggItem {
                 .set_rotation(rand::random::<f32>() * 360.0, 0.0);
             apply_entity_variant(item, mob.as_ref(), Some(player));
             if world.spawn_creature(
-                mob,
+                mob.clone(),
                 CreatureSpawnReason::SpawnerEgg,
                 world.get_player_by_uuid(player.gameprofile.id),
             ) {
                 item.decrement_unless_creative(player.gamemode.load(), 1);
                 world.emit_game_event(GameEvent::EntityPlace.name(), pos);
+                if let (Some(parent), Some(offspring)) = (entity.get_mob(), mob.get_mob()) {
+                    parent.on_offspring_spawned_from_egg(player, offspring);
+                }
             }
         }
     }

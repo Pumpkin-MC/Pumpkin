@@ -78,18 +78,17 @@ impl PendingConnection {
 
             self.gameprofile = Some(profile.clone());
 
-            if server.advanced_config.networking.java.encryption {
+            let online_mode = server.advanced_config.networking.java.online_mode;
+            // Clients before 1.20.5 have no `should_authenticate` flag in `CEncryptionRequest`
+            // and always contact Mojang's session server on encryption.
+            if server.advanced_config.networking.java.encryption
+                && (online_mode
+                    || self.version.load() >= pumpkin_util::version::JavaMinecraftVersion::V_1_20_5)
+            {
                 let verify_token: [u8; 4] = rand::random();
                 self.verify_token = Some(verify_token);
-                self.send_packet_now(
-                    &server
-                        .encryption_request(
-                            &verify_token,
-                            server.advanced_config.networking.java.online_mode,
-                        )
-                        .await,
-                )
-                .await;
+                self.send_packet_now(&server.encryption_request(&verify_token, online_mode).await)
+                    .await;
                 None
             } else {
                 self.finish_login(server, &profile).await

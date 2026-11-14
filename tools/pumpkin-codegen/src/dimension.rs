@@ -172,7 +172,10 @@ pub fn build() -> TokenStream {
                 .get("can_set_spawn")
                 .and_then(|v| v.as_str())
                 .unwrap_or("always");
-            let explodes = b.get("explodes").and_then(|v| v.as_bool()).unwrap_or(false);
+            let explodes = b
+                .get("destroy_on_use")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             let sleep_ident = match can_sleep {
                 "always" => quote!(BedRuleOption::Always),

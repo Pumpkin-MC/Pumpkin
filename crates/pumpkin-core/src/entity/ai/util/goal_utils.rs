@@ -37,11 +37,7 @@ pub fn is_restricted(restrict: bool, mob: &dyn Mob, pos: &BlockPos) -> bool {
 /// Takes the navigation lock, so callers must not already hold it.
 #[must_use]
 pub fn is_not_stable(mob: &dyn Mob, world: &World, pos: &BlockPos) -> bool {
-    !mob.get_mob_entity()
-        .navigator
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .is_stable_destination(world, pos)
+    !mob.is_stable_destination(world, pos)
 }
 
 #[must_use]

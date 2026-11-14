@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-codegen"
-version = "0.1.0-dev+26.1"
+version.workspace = true
 edition = "2024"
 rust-version.workspace = true
 
@@ -25,6 +25,9 @@ syn = { version = "3.0", features = ["full", "extra-traits"] }
 
 pumpkin-util = { path = "../../crates/pumpkin-util", features = ["codegen"] }
 pumpkin-nbt = { path = "../../crates/pumpkin-nbt" }
+
+[lints.cargo]
+unused_dependencies = "deny"
 
 [lints.clippy]
 expect_used = "allow"

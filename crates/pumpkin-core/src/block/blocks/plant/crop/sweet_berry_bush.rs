@@ -44,9 +44,32 @@ impl BlockBehaviour for SweetBerryBushBlock {
         let mut props = NetherWartLikeProperties::from_state_id(state_id);
         match props.age {
             2 | 3 => {
-                let index = props.age;
-                let count: u8 = rand::rng().random_range((index - 1)..=(index));
-                let mut drops = vec![ItemStack::new(count, &Item::SWEET_BERRIES)];
+                let mut drops = args
+                    .world
+                    .get_loot_table("minecraft:harvest/sweet_berry_bush")
+                    .map_or_else(
+                        || {
+                            let index = props.age;
+                            let count: u8 = rand::rng().random_range((index - 1)..=index);
+                            vec![ItemStack::new(count, &Item::SWEET_BERRIES)]
+                        },
+                        |handle| {
+                            let params = crate::world::loot::LootContextParameters {
+                                world: Some(args.world),
+                                position: Some(args.position.to_centered_f64()),
+                                block_state: Some(pumpkin_data::BlockState::from_id(state_id)),
+                                this_entity: Some(
+                                    args.player.as_ref() as &dyn crate::entity::EntityBase
+                                ),
+                                ..Default::default()
+                            };
+                            crate::world::loot::generate_loot_from_handle(
+                                &handle,
+                                rand::random(),
+                                &params,
+                            )
+                        },
+                    );
                 if let Some(player_arc) = args.world.get_player_by_uuid(args.player.gameprofile.id)
                     && let Some(server) = args.world.server.upgrade()
                 {

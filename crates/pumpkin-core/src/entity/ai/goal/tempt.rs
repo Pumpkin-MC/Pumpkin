@@ -52,9 +52,19 @@ impl TemptGoal {
 
     #[must_use]
     pub fn with_tag(speed: f64, tag: &'static Tag, can_scare: bool) -> Self {
+        Self::with_tag_and_stop_distance(speed, tag, can_scare, DEFAULT_STOP_DISTANCE)
+    }
+
+    #[must_use]
+    pub fn with_tag_and_stop_distance(
+        speed: f64,
+        tag: &'static Tag,
+        can_scare: bool,
+        stop_distance: f64,
+    ) -> Self {
         Self {
             tempt_items: TemptItems::Tag(tag),
-            ..Self::new(speed, &[], can_scare)
+            ..Self::with_stop_distance(speed, &[], can_scare, stop_distance)
         }
     }
 

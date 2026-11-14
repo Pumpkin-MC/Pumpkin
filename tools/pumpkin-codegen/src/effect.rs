@@ -20,6 +20,17 @@ struct Effect {
     attribute_modifiers: Vec<Modifiers>,
     /// Vanilla `MobEffect.isInstantaneous`.
     instantaneous: bool,
+    /// Sound played when the effect is first added (`MobEffect.soundOnAdded`).
+    apply_sound: Option<String>,
+    /// Blend fade-in duration in ticks (`MobEffect.blendInDurationTicks`).
+    #[serde(default)]
+    fade_in_ticks: i32,
+    /// Blend fade-out duration in ticks (`MobEffect.blendOutDurationTicks`).
+    #[serde(default)]
+    fade_out_ticks: i32,
+    /// Blend fade-out advance threshold in ticks (`MobEffect.blendOutAdvanceTicks`).
+    #[serde(default)]
+    fade_out_threshold_ticks: i32,
 }
 
 /// Classification of a mob effect determining its UI presentation and general purpose.
@@ -93,6 +104,16 @@ pub fn build() -> TokenStream {
         let color = effect.color;
         let translation_key = effect.translation_key;
         let instantaneous = effect.instantaneous;
+        let apply_sound = if let Some(sound_key) = effect.apply_sound {
+            let stripped = sound_key.strip_prefix("minecraft:").unwrap_or(&sound_key);
+            let sound_ident = format_ident!("{}", stripped.to_pascal_case());
+            quote! { Some(Sound::#sound_ident) }
+        } else {
+            quote! { None }
+        };
+        let fade_in_ticks = effect.fade_in_ticks;
+        let fade_out_ticks = effect.fade_out_ticks;
+        let fade_out_threshold_ticks = effect.fade_out_threshold_ticks;
         let category = effect.category.to_tokens();
         let slots = effect.attribute_modifiers;
         let slots = slots.into_iter().map(Modifiers::get_tokens);
@@ -107,6 +128,10 @@ pub fn build() -> TokenStream {
                 translation_key: #translation_key,
                 attribute_modifiers: &[#(#slots),*],
                 instantaneous: #instantaneous,
+                apply_sound: #apply_sound,
+                fade_in_ticks: #fade_in_ticks,
+                fade_out_ticks: #fade_out_ticks,
+                fade_out_threshold_ticks: #fade_out_threshold_ticks,
             };
         }]);
 
@@ -118,7 +143,7 @@ pub fn build() -> TokenStream {
 
     quote! {
         use std::hash::{Hash, Hasher};
-        use crate::{attributes::Attributes, data_component_impl::{Operation, IDSetContent}};
+        use crate::{attributes::Attributes, data_component_impl::{Operation, IDSetContent}, sound::Sound};
         #[derive(Clone, Debug)]
         pub struct StatusEffect {
             pub minecraft_name: &'static str,
@@ -128,6 +153,10 @@ pub fn build() -> TokenStream {
             pub translation_key: &'static str,
             pub attribute_modifiers: &'static [Modifiers],
             pub instantaneous: bool,
+            pub apply_sound: Option<Sound>,
+            pub fade_in_ticks: i32,
+            pub fade_out_ticks: i32,
+            pub fade_out_threshold_ticks: i32,
         }
 
         impl PartialEq for StatusEffect {

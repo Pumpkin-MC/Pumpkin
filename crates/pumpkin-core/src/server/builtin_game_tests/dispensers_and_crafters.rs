@@ -130,3 +130,47 @@ pub(super) async fn test_crafter_crafts_into_chest(helper: GameTestHelper) -> Ga
         .then_succeed();
     Ok(())
 }
+
+pub(super) async fn test_crafter_dispenses_crafting_remainders(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    build_stone_floor(&helper, 5, 5).await?;
+
+    let crafter_pos = BlockPos::new(1, 1, 2);
+    let chest_pos = BlockPos::new(2, 1, 2);
+    let power_pos = BlockPos::new(1, 2, 2);
+
+    let mut crafter_props = CrafterLikeProperties::default(&Block::CRAFTER);
+    crafter_props.orientation = Orientation::EastUp;
+    crafter_props.triggered = false;
+    crafter_props.crafting = false;
+    helper
+        .set_block(&crafter_pos, crafter_props.to_state_id(&Block::CRAFTER))
+        .await?;
+    helper.set_block_default(&chest_pos, &Block::CHEST).await?;
+
+    for slot in [0, 1, 3, 4] {
+        helper
+            .set_container_item(&crafter_pos, slot, "minecraft:honey_bottle", 1)
+            .await?;
+    }
+
+    helper
+        .set_block_default(&power_pos, &Block::REDSTONE_BLOCK)
+        .await?;
+
+    helper
+        .start_sequence()
+        .then_idle(6)
+        .then_execute(move |helper| async move {
+            helper.assert_container_empty(&crafter_pos).await?;
+            helper
+                .assert_container_contains_count(&chest_pos, "minecraft:honey_block", 1)
+                .await?;
+            helper
+                .assert_container_contains_count(&chest_pos, "minecraft:glass_bottle", 4)
+                .await
+        })
+        .then_succeed();
+    Ok(())
+}

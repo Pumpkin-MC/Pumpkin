@@ -152,11 +152,17 @@ impl Player {
         let entity = self.get_entity();
         let position = entity.pos.load();
         let teleport_id = self.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
-        *self
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Some((teleport_id.into(), position));
+        if !matches!(
+            self.client.as_ref(),
+            ClientPlatform::Java(c)
+                if c.version.load() < pumpkin_util::version::JavaMinecraftVersion::V_1_9
+        ) {
+            *self
+                .awaiting_teleport
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some((teleport_id.into(), position));
+        }
         match self.client.as_ref() {
             ClientPlatform::Java(_) => {
                 self.try_send_client_packet(&CPlayerPosition::new(
@@ -306,6 +312,18 @@ impl Player {
         }
 
         self.do_check_fall_damage(delta, requested.on_ground, requested.horizontal_collision);
+        if delta.y > 0.0 {
+            self.living_entity.fall_distance.store(0.0);
+        }
+        if requested.on_ground
+            || self.living_entity.has_landed_in_liquid()
+            || self.on_climbable()
+            || self.is_spectator()
+            || entity.is_fall_flying()
+            || self.living_entity.is_auto_spin_attack()
+        {
+            self.living_entity.try_reset_current_impulse_context();
+        }
 
         if pos_changed && let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
             chunker::update_position(&player);

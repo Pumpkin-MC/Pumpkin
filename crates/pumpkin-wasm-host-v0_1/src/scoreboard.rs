@@ -14,13 +14,13 @@ use pumpkin_wasm_host_common::state::{PluginHostState, ScoreboardProvider};
 
 fn map_number_format(
     nf: Option<scoreboard::NumberFormat>,
-    state: &PluginHostState,
+    state: &mut PluginHostState,
 ) -> wasmtime::Result<Option<NumberFormat>> {
     match nf {
         None => Ok(None),
         Some(scoreboard::NumberFormat::Blank) => Ok(Some(NumberFormat::Blank)),
         Some(scoreboard::NumberFormat::Fixed(tc)) => {
-            let text = state.get(&tc)?.clone();
+            let text = state.take(tc)?;
             Ok(Some(NumberFormat::Fixed(text)))
         }
     }
@@ -1171,5 +1171,35 @@ impl HostBedrockScoreboard for PluginHostState {
 
     fn drop(&mut self, _res: Resource<scoreboard::BedrockScoreboard>) -> wasmtime::Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_util::text::TextComponent;
+
+    #[test]
+    fn fixed_number_format_consumes_its_text_component() {
+        let mut state = PluginHostState::new();
+        let text = state
+            .add(TextComponent::text("fixed"))
+            .expect("text component resource should be inserted");
+        let text_rep = text.rep();
+
+        let number_format =
+            map_number_format(Some(scoreboard::NumberFormat::Fixed(text)), &mut state)
+                .expect("fixed number format should map");
+
+        assert_eq!(
+            number_format,
+            Some(NumberFormat::Fixed(TextComponent::text("fixed")))
+        );
+        assert!(
+            state
+                .resource_table
+                .get::<TextComponent>(&Resource::new_own(text_rep))
+                .is_err()
+        );
     }
 }

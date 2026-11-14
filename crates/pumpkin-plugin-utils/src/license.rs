@@ -1,20 +1,26 @@
 //! License validation, leasing, and offline grace periods.
 
+#[cfg(feature = "http")]
+use crate::http::HttpError;
+#[cfg(feature = "license")]
 use crate::{
-    http::{HttpClient, HttpError},
+    http::HttpClient,
     models::{CheckLicenseResponse, LicenseLease, LicenseStatus, PumpkinMetadata},
 };
+#[cfg(feature = "license")]
 use std::{
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
+#[cfg(feature = "license")]
 use tracing::{debug, info};
 
-/// License checking and verification errors.
+/// License checking and plugin initialization errors.
 #[derive(Debug, Error)]
 pub enum LicenseError {
     /// HTTP communication error with marketplace.
+    #[cfg(feature = "http")]
     #[error("Marketplace HTTP error: {0}")]
     Http(#[from] HttpError),
     /// Metadata validation error (e.g. missing license on paid plugin).
@@ -43,11 +49,13 @@ pub enum LicenseError {
 }
 
 /// Manages license checks, cached leases, and offline grace periods.
+#[cfg(feature = "license")]
 pub struct LicenseChecker {
     data_folder: PathBuf,
     http_client: HttpClient,
 }
 
+#[cfg(feature = "license")]
 impl LicenseChecker {
     /// Creates a new `LicenseChecker` instance for the given data folder.
     #[must_use]
@@ -212,6 +220,7 @@ impl LicenseChecker {
 }
 
 /// Minimal URL encoding helper for query parameters.
+#[cfg(feature = "license")]
 fn urlencoding(input: &str) -> String {
     let mut encoded = String::with_capacity(input.len());
     for byte in input.bytes() {

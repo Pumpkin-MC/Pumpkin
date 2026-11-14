@@ -19,6 +19,7 @@ use crate::entity::living::prevents_armor_change;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::projectile::arrow::ArrowEntity;
+use crate::entity::projectile_deflection::{ProjectileDeflection, default_deflection};
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::plugin::api::events::entity::entity_target::{EntityTargetEvent, TargetReason};
 use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
@@ -862,12 +863,17 @@ impl MobEntity {
         *t = target.as_ref().map(Arc::downgrade);
     }
 
+    /// The target, checked again on every read so a player who turns creative is dropped.
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
-        self.target
+        let target = self
+            .target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
-            .and_then(Weak::upgrade)
+            .and_then(Weak::upgrade)?;
+        (EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity())
+            && self.living_entity.can_attack(target.as_ref()))
+        .then_some(target)
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -1256,6 +1262,49 @@ static LEAST_SLIPPERINESS: LazyLock<f32> = LazyLock::new(|| {
         .fold(f32::MAX, f32::min)
 });
 
+/// Rolls a gift loot table at the mob and hands each stack a plugin did not cancel to `drop`.
+/// Returns whether anything was dropped.
+pub(crate) fn drop_from_gift_loot_table(
+    mob: &dyn Mob,
+    key: &str,
+    mut drop: impl FnMut(ItemStack),
+) -> bool {
+    let entity = mob.get_entity();
+    let world = entity.world.load_full();
+    let Some(table) = world.get_loot_table(key) else {
+        return false;
+    };
+    let this_entity: &dyn EntityBase = mob;
+    let params = crate::world::loot::LootContextParameters {
+        world: Some(&world),
+        position: Some(entity.pos.load()),
+        this_entity: Some(this_entity),
+        ..Default::default()
+    };
+    let drops =
+        crate::world::loot::generate_loot_from_handle(&table, mob.get_random().random(), &params);
+    let mut dropped = false;
+    for stack in drops {
+        let mut drop_event =
+            crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent::new(
+                entity.entity_id,
+                format!("minecraft:{}", stack.item.registry_key),
+                stack.item_count,
+            );
+        if let Some(server) = world.server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut drop_event);
+        }
+        if drop_event.cancelled {
+            continue;
+        }
+        drop(stack);
+        dropped = true;
+    }
+    dropped
+}
+
 pub(crate) fn pick_up_nearby_items(mob: &dyn Mob) {
     let living = &mob.get_mob_entity().living_entity;
     let entity = &living.entity;
@@ -1632,12 +1681,15 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
-    /// Whether a projectile that starts inside this mob's box still hits it.
-    fn can_be_picked_from_inside(&self) -> bool {
+    /// Whether a piercing weapon (spear) skips this mob; invulnerable mobs by default.
+    fn deflection(&self, _projectile: &dyn EntityBase) -> ProjectileDeflection {
+        default_deflection(&self.get_mob_entity().living_entity.entity)
+    }
+
+    fn projectile_receives_side_effects_on_hit(&self, _was_hurt: bool) -> bool {
         true
     }
 
-    /// Whether a piercing weapon (spear) skips this mob; invulnerable mobs by default.
     fn is_invulnerable_to_piercing_weapon(&self) -> bool {
         self.get_entity().invulnerable.load(Ordering::Relaxed)
     }
@@ -1847,6 +1899,10 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_on_flap(&self) {}
 
     /// See [`EntityBase::play_step_sound`].
+    fn mob_next_step(&self) -> f32 {
+        self.get_entity().default_next_step()
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, state: &BlockState) {
         self.play_block_step_sound(state);
     }
@@ -2186,6 +2242,15 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     /// How much this mob likes standing on `pos`, used to rank stroll candidates.
+    /// Whether a random target position is safe to path to.
+    fn is_stable_destination(&self, world: &World, pos: &BlockPos) -> bool {
+        self.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_stable_destination(world, pos)
+    }
+
     fn get_walk_target_value(&self, pos: &BlockPos) -> f32 {
         self.as_animal()
             .map_or(0.0, |animal| animal.animal_walk_target_value(pos))
@@ -2205,6 +2270,30 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn as_raider(&self) -> Option<&dyn raider::Raider> {
         None
+    }
+
+    fn as_zombie(&self) -> Option<&zombie::ZombieEntityBase> {
+        None
+    }
+
+    fn on_offspring_spawned_from_egg(&self, _spawner: &Player, _offspring: &dyn Mob) {}
+
+    /// Runs after this mob was positioned on its vehicle.
+    fn mob_ride_tick(&self) {}
+
+    /// How much faster a spear rider charges on this mount.
+    fn charge_speed_modifier(&self) -> f32 {
+        1.0
+    }
+
+    /// Whether this monster keeps `player` from sleeping nearby.
+    fn is_preventing_player_rest(&self, _player: &dyn EntityBase) -> bool {
+        true
+    }
+
+    /// Called on the entity credited with a kill; `false` skips the victim's death loot.
+    fn killed_entity(&self, _killed: &dyn EntityBase) -> bool {
+        true
     }
 
     /// Must return `Some(self)` for every `NeutralMob` implementor. Not compiler-enforced.
@@ -2727,6 +2816,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_sound_source()
     }
 
+    fn next_step(&self) -> f32 {
+        self.mob_next_step()
+    }
+
     fn play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
         self.mob_play_step_sound(pos, state);
     }
@@ -2863,6 +2956,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn can_hit(&self) -> bool {
         true
+    }
+
+    fn deflection(&self, projectile: &dyn EntityBase) -> ProjectileDeflection {
+        Mob::deflection(self, projectile)
+    }
+
+    fn projectile_receives_side_effects_on_hit(&self, was_hurt: bool) -> bool {
+        Mob::projectile_receives_side_effects_on_hit(self, was_hurt)
     }
 
     fn damage_with_context(
