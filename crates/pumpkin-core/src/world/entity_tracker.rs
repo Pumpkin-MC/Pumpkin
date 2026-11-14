@@ -574,6 +574,8 @@ impl TrackedEntity {
         }
     }
 
+    /// Vanilla `ServerEntity.sendPairingData`: sends the spawn packet and the entity's
+    /// current state to a player that starts tracking it.
     #[allow(clippy::too_many_lines)]
     pub fn add_pairing(&self, player: &Arc<Player>) {
         player.client.try_enqueue_spawn_packet(&self.entity);
@@ -671,6 +673,8 @@ impl TrackedEntity {
         }
 
         if let Some(living) = self.entity.get_living_entity() {
+            crate::entity::attributes::send_attributes_to_pairing_player(living, player);
+
             if let Ok(equipment_guard) = living.entity_equipment.try_lock() {
                 let mut equipment_list = Vec::new();
                 for (slot, item_stack) in &equipment_guard.equipment {
