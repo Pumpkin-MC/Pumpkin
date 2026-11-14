@@ -5398,6 +5398,71 @@ mod ai_step_tests {
         Ok(())
     }
 
+    /// Full ticks match official 26.3 ascent; death, NoAI and the island bound hold.
+    #[tokio::test]
+    async fn blaze_ascent_preserves_small_impulses_and_respects_lifecycle_and_reach() -> TestResult
+    {
+        use crate::entity::mob::blaze::BlazeEntity;
+        use crate::world::entity_islands::{EntityReach, TickReach};
+        use pumpkin_config::world::EntityIslandsConfig;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let target = BlazeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 100.0, 0.0),
+            &EntityType::BLAZE,
+        ));
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            ..Default::default()
+        };
+        // Expected displacements were measured on the official 26.3 server.
+        for (velocity, dead, no_ai, displacement) in [
+            (0.0, false, false, 0.090_000_007_152_557_52),
+            (-0.211_904_782_543_377_7, false, false, 0.001),
+            (0.0, true, false, 0.0),
+            (0.1, false, true, 0.0),
+        ] {
+            let blaze = BlazeEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(0.0, 90.0, 0.0),
+                &EntityType::BLAZE,
+            ));
+            let living = &blaze.entity.living_entity;
+            living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
+            living
+                .entity
+                .velocity
+                .store(Vector3::new(0.0, velocity, 0.0));
+            if dead {
+                living.set_health(0.0);
+            }
+            blaze.entity.set_no_ai(no_ai);
+            blaze.entity.set_target(Some(target.clone()));
+            let EntityReach::Conservative(TickReach { body, links, .. }) =
+                EntityReach::of(blaze.as_ref(), &config)
+            else {
+                return Err("Blaze must retain conservative island scheduling".into());
+            };
+
+            blaze.mob_tick(blaze.as_ref());
+            living.tick_movement(blaze.as_ref());
+
+            assert!((living.entity.pos.load().y - 90.0 - displacement).abs() < 1.0e-12);
+            assert_eq!(
+                living.entity.needs_sync.load(Ordering::Relaxed),
+                !dead && !no_ai
+            );
+            assert!(links.contains(&target.get_entity().entity_id));
+            let moved = living.entity.bounding_box.load();
+            assert!(moved.min.y >= body.min.y - 1.0e-12);
+            assert!(moved.max.y <= body.max.y + 1.0e-12);
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
     #[tokio::test]
     async fn goal_jump_survives_navigation_finish_and_expires_next_step() -> TestResult {
         let folder = tempfile::tempdir()?;

@@ -166,7 +166,9 @@ impl TrackedEntity {
         let entity = self.entity.get_entity();
         self.send_bedrock_move(entity, world);
         let tick = self.tick_count.fetch_add(1, Relaxed);
-        let needs_sync = entity.velocity_dirty.swap(false, Ordering::SeqCst);
+        let mut needs_sync = entity.needs_sync.swap(false, Ordering::SeqCst);
+        // Preserve the legacy tracker path for entities without an immediate velocity flush.
+        needs_sync |= entity.velocity_dirty.swap(false, Ordering::SeqCst);
         // Head yaw stays live every tick, only position/rotation sync is throttled.
         if tick.is_multiple_of(self.update_interval.max(1))
             || needs_sync
@@ -1337,5 +1339,124 @@ impl EntityTracker {
                 tracked.entity.get_entity().send_dirty_entity_data();
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::VanillaData;
+    use crate::entity::ai::test_support::world;
+    use crate::entity::living::LivingEntity;
+    use crate::server::Server;
+    use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+
+    /// `needs_sync` survives the living tick and forces a send outside the tracker interval.
+    #[tokio::test]
+    async fn needs_sync_survives_living_tick_and_bypasses_tracker_interval()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let basic = BasicConfiguration {
+            default_level_name: folder.path().to_string_lossy().into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..Default::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.bedrock.online_mode = false;
+        let server = Server::new(
+            basic,
+            advanced,
+            TelemetryConfig {
+                enabled: false,
+                ..Default::default()
+            },
+            VanillaData::default(),
+            Vec::new(),
+        )
+        .await?;
+        let world = server.worlds.load()[0].clone();
+        let living = Arc::new(LivingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 90.0, 0.0),
+            &EntityType::BLAZE,
+        )));
+        let entity = living.get_entity();
+        entity.has_no_gravity.store(true, Relaxed);
+        let tracker = TrackedEntity::new(living.clone(), 0, 3, false);
+        // Consume initial metadata and the existing initial immediate velocity send.
+        living.tick(living.as_ref(), &server);
+        tracker.send_changes(&world);
+
+        for speed in [0.1, 0.2] {
+            let last_motion = entity.last_sent_velocity.load();
+            let last_pos = entity.last_sent_pos.load();
+            entity.velocity.store(Vector3::new(0.0, speed, 0.0));
+            entity.needs_sync.store(true, Ordering::SeqCst);
+            living.tick(living.as_ref(), &server);
+            assert!(entity.needs_sync.load(Relaxed));
+            assert!(!entity.synched_data.is_dirty());
+            assert_eq!(entity.last_sent_velocity.load(), last_motion);
+            assert_ne!(entity.pos.load(), last_pos);
+
+            tracker.send_changes(&world);
+            assert_eq!(entity.last_sent_pos.load(), entity.pos.load());
+            assert_eq!(entity.last_sent_velocity.load(), entity.velocity.load());
+            assert!(!entity.needs_sync.load(Relaxed));
+        }
+
+        // An immediate send must not consume an ordinary tracker update.
+        entity.velocity.store(Vector3::new(0.0, 0.3, 0.0));
+        entity.velocity_dirty.store(true, Ordering::SeqCst);
+        entity.needs_sync.store(true, Ordering::SeqCst);
+        living.tick(living.as_ref(), &server);
+        assert!(!entity.velocity_dirty.load(Relaxed));
+        assert!(entity.needs_sync.load(Relaxed));
+        assert_eq!(entity.last_sent_velocity.load(), entity.velocity.load());
+        tracker.send_changes(&world);
+        // Tick three was periodic; tick four must be throttled without a new signal.
+        let last_pos = entity.last_sent_pos.load();
+        living.tick(living.as_ref(), &server);
+        tracker.send_changes(&world);
+        assert_ne!(entity.pos.load(), last_pos);
+        assert_eq!(entity.last_sent_pos.load(), last_pos);
+        server.shutdown().await;
+        Ok(())
+    }
+
+    /// `velocity_dirty` keeps its old path while `needs_sync` motion still uses the send threshold.
+    #[tokio::test]
+    async fn tracker_keeps_legacy_dirty_motion_and_thresholds_needs_sync_motion()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let entity = Arc::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 90.0, 0.0),
+            &EntityType::ITEM,
+        ));
+        let tracker = TrackedEntity::new(entity.clone(), 0, 20, false);
+        tracker.send_changes(&world);
+
+        entity.set_pos(Vector3::new(0.0, 90.1, 0.0));
+        entity.velocity.store(Vector3::new(0.0, 0.1, 0.0));
+        entity.velocity_dirty.store(true, Ordering::SeqCst);
+        tracker.send_changes(&world);
+        assert_eq!(entity.last_sent_pos.load(), entity.pos.load());
+        assert_eq!(entity.last_sent_velocity.load(), entity.velocity.load());
+        assert!(!entity.velocity_dirty.load(Relaxed));
+
+        let last_motion = entity.last_sent_velocity.load();
+        entity.set_pos(Vector3::new(0.0, 90.2, 0.0));
+        entity.velocity.store(Vector3::new(0.0, 0.1001, 0.0));
+        entity.needs_sync.store(true, Ordering::SeqCst);
+        entity.velocity_dirty.store(true, Ordering::SeqCst);
+        tracker.send_changes(&world);
+        assert_eq!(entity.last_sent_pos.load(), entity.pos.load());
+        assert_eq!(entity.last_sent_velocity.load(), last_motion);
+        assert!(!entity.needs_sync.load(Relaxed));
+        assert!(!entity.velocity_dirty.load(Relaxed));
+        world.level.shutdown().await;
+        Ok(())
     }
 }
