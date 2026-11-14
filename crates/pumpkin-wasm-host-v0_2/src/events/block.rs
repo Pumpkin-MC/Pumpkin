@@ -4,23 +4,40 @@ use tokio::sync::Mutex;
 
 use crate::{
     events::{
-        ToFromWasmEvent, cleanup_event, consume_player, consume_world, from_wasm_block_name,
+        CleanupEvent, ToFromWasmEvent, consume_player, consume_world, from_wasm_block_name,
         from_wasm_block_position, to_wasm_block_name, to_wasm_block_position,
     },
     pumpkin::plugin::event::{
-        BellResonateEventData, BellRingEventData, BlockBreakEventData, BlockBrushEventData,
-        BlockBurnEventData, BlockCanBuildEventData, BlockCookEventData, BlockDamageAbortEventData,
-        BlockDamageEventData, BlockDispenseArmorEventData, BlockDispenseEventData,
-        BlockDispenseLootEventData, BlockDropItemEventData, BlockExpEventData,
-        BlockExplodeEventData, BlockFadeEventData, BlockFertilizeEventData, BlockFormEventData,
-        BlockFromToEventData, BlockGrowEventData, BlockIgniteEventData, BlockMultiPlaceEventData,
-        BlockPhysicsEventData, BlockPistonExtendEventData, BlockPistonRetractEventData,
-        BlockPlaceEventData, BlockReceiveGameEventData, BlockRedstoneEventData,
-        BlockShearEntityEventData, BlockSpreadEventData, BrewingStartEventData,
-        CampfireStartEventData, CauldronLevelChangeEventData, CrafterCraftEventData,
-        EntityBlockFormEventData, Event, FluidLevelChangeEventData, InventoryBlockStartEventData,
-        LeavesDecayEventData, MoistureChangeEventData, NotePlayEventData, SculkBloomEventData,
-        SignChangeEventData, SpongeAbsorbEventData, TntPrimeEventData, VaultDisplayItemEventData,
+        BellResonateEvent as BellResonateEventData, BellRingEvent as BellRingEventData,
+        BlockBreakEvent as BlockBreakEventData, BlockBrushEvent as BlockBrushEventData,
+        BlockBurnEvent as BlockBurnEventData, BlockCanBuildEvent as BlockCanBuildEventData,
+        BlockCookEvent as BlockCookEventData, BlockDamageAbortEvent as BlockDamageAbortEventData,
+        BlockDamageEvent as BlockDamageEventData,
+        BlockDispenseArmorEvent as BlockDispenseArmorEventData,
+        BlockDispenseEvent as BlockDispenseEventData,
+        BlockDispenseLootEvent as BlockDispenseLootEventData,
+        BlockDropItemEvent as BlockDropItemEventData, BlockExpEvent as BlockExpEventData,
+        BlockExplodeEvent as BlockExplodeEventData, BlockFadeEvent as BlockFadeEventData,
+        BlockFertilizeEvent as BlockFertilizeEventData, BlockFormEvent as BlockFormEventData,
+        BlockFromToEvent as BlockFromToEventData, BlockGrowEvent as BlockGrowEventData,
+        BlockIgniteEvent as BlockIgniteEventData, BlockMultiPlaceEvent as BlockMultiPlaceEventData,
+        BlockPhysicsEvent as BlockPhysicsEventData,
+        BlockPistonExtendEvent as BlockPistonExtendEventData,
+        BlockPistonRetractEvent as BlockPistonRetractEventData,
+        BlockPlaceEvent as BlockPlaceEventData, BlockReceiveGameEvent as BlockReceiveGameEventData,
+        BlockRedstoneEvent as BlockRedstoneEventData,
+        BlockShearEntityEvent as BlockShearEntityEventData,
+        BlockSpreadEvent as BlockSpreadEventData, BrewingStartEvent as BrewingStartEventData,
+        CampfireStartEvent as CampfireStartEventData,
+        CauldronLevelChangeEvent as CauldronLevelChangeEventData,
+        CrafterCraftEvent as CrafterCraftEventData,
+        EntityBlockFormEvent as EntityBlockFormEventData,
+        FluidLevelChangeEvent as FluidLevelChangeEventData,
+        InventoryBlockStartEvent as InventoryBlockStartEventData,
+        LeavesDecayEvent as LeavesDecayEventData, MoistureChangeEvent as MoistureChangeEventData,
+        NotePlayEvent as NotePlayEventData, SculkBloomEvent as SculkBloomEventData,
+        SignChangeEvent as SignChangeEventData, SpongeAbsorbEvent as SpongeAbsorbEventData,
+        TntPrimeEvent as TntPrimeEventData, VaultDisplayItemEvent as VaultDisplayItemEventData,
     },
 };
 use pumpkin_core::plugin::block::{
@@ -72,133 +89,131 @@ use pumpkin_core::plugin::block::{
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl ToFromWasmEvent for BlockRedstoneEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockRedstoneEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
 
-        Event::BlockRedstoneEvent(BlockRedstoneEventData {
+        Self::Wit {
             target_world,
             state_id: self.block_state_id.as_u16(),
             block_pos: to_wasm_block_position(self.block_pos),
             old_current: self.old_current,
             new_current: self.new_current,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockRedstoneEvent(data) => Self {
-                world: consume_world(state, &data.target_world),
-                block_state_id: BlockStateId::new_or_air(data.state_id),
-                block_pos: from_wasm_block_position(data.block_pos),
-                old_current: data.old_current,
-                new_current: data.new_current,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            world: consume_world(state, &data.target_world),
+            block_state_id: BlockStateId::new_or_air(data.state_id),
+            block_pos: from_wasm_block_position(data.block_pos),
+            old_current: data.old_current,
+            new_current: data.new_current,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockBreakEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockBreakEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player = self.player.as_ref().map(|player| {
             state
                 .add(player.clone())
                 .expect("failed to add player resource")
         });
 
-        Event::BlockBreakEvent(BlockBreakEventData {
+        Self::Wit {
             player,
             block: to_wasm_block_name(self.block),
             block_pos: to_wasm_block_position(self.block_position),
             exp: self.exp,
             should_drop: self.drop,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockBreakEvent(data) => Self {
-                player: data.player.map(|player| consume_player(state, &player)),
-                block: from_wasm_block_name(&data.block),
-                block_position: from_wasm_block_position(data.block_pos),
-                exp: data.exp,
-                drop: data.should_drop,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            player: data.player.map(|player| consume_player(state, &player)),
+            block: from_wasm_block_name(&data.block),
+            block_position: from_wasm_block_position(data.block_pos),
+            exp: data.exp,
+            drop: data.should_drop,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockBurnEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockBurnEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::BlockBurnEvent(BlockBurnEventData {
+        Self::Wit {
             igniting_block: to_wasm_block_name(self.igniting_block),
             block: to_wasm_block_name(self.block),
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockBurnEvent(data) => Self {
-                world: consume_world(state, &data.target_world),
-                igniting_block: from_wasm_block_name(&data.igniting_block),
-                block: from_wasm_block_name(&data.block),
-                block_pos: from_wasm_block_position(data.block_pos),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            world: consume_world(state, &data.target_world),
+            igniting_block: from_wasm_block_name(&data.igniting_block),
+            block: from_wasm_block_name(&data.block),
+            block_pos: from_wasm_block_position(data.block_pos),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockCanBuildEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockCanBuildEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player = state
             .add(self.player.clone())
             .expect("failed to add player resource");
 
-        Event::BlockCanBuildEvent(BlockCanBuildEventData {
+        Self::Wit {
             block_to_build: to_wasm_block_name(self.block_to_build),
             buildable: self.buildable,
             player,
             block: to_wasm_block_name(self.block),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockCanBuildEvent(data) => Self {
-                block_to_build: from_wasm_block_name(&data.block_to_build),
-                buildable: data.buildable,
-                player: consume_player(state, &data.player),
-                block: from_wasm_block_name(&data.block),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            block_to_build: from_wasm_block_name(&data.block_to_build),
+            buildable: data.buildable,
+            player: consume_player(state, &data.player),
+            block: from_wasm_block_name(&data.block),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockGrowEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockGrowEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
 
-        Event::BlockGrowEvent(BlockGrowEventData {
+        Self::Wit {
             target_world,
             old_block: to_wasm_block_name(self.old_block),
             old_state_id: self.old_state_id.as_u16(),
@@ -206,423 +221,401 @@ impl ToFromWasmEvent for BlockGrowEvent {
             new_state_id: self.new_state_id.as_u16(),
             block_pos: to_wasm_block_position(self.block_pos),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockGrowEvent(data) => Self {
-                world: consume_world(state, &data.target_world),
-                old_block: from_wasm_block_name(&data.old_block),
-                old_state_id: BlockStateId::new_or_air(data.old_state_id),
-                new_block: from_wasm_block_name(&data.new_block),
-                new_state_id: BlockStateId::new_or_air(data.new_state_id),
-                block_pos: from_wasm_block_position(data.block_pos),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            world: consume_world(state, &data.target_world),
+            old_block: from_wasm_block_name(&data.old_block),
+            old_state_id: BlockStateId::new_or_air(data.old_state_id),
+            new_block: from_wasm_block_name(&data.new_block),
+            new_state_id: BlockStateId::new_or_air(data.new_state_id),
+            block_pos: from_wasm_block_position(data.block_pos),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockPlaceEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockPlaceEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player = state
             .add(self.player.clone())
             .expect("failed to add player resource");
 
-        Event::BlockPlaceEvent(BlockPlaceEventData {
+        Self::Wit {
             player,
             block_placed: to_wasm_block_name(self.block_placed),
             block_placed_against: to_wasm_block_name(self.block_placed_against),
             block_pos: to_wasm_block_position(self.block_position),
             can_build: self.can_build,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockPlaceEvent(data) => Self {
-                player: consume_player(state, &data.player),
-                block_placed: from_wasm_block_name(&data.block_placed),
-                block_placed_against: from_wasm_block_name(&data.block_placed_against),
-                block_position: from_wasm_block_position(data.block_pos),
-                can_build: data.can_build,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            player: consume_player(state, &data.player),
+            block_placed: from_wasm_block_name(&data.block_placed),
+            block_placed_against: from_wasm_block_name(&data.block_placed_against),
+            block_position: from_wasm_block_position(data.block_pos),
+            can_build: data.can_build,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockDamageEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockDamageEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player = state
             .add(self.player.clone())
             .expect("failed to add player resource");
 
-        Event::BlockDamageEvent(BlockDamageEventData {
+        Self::Wit {
             player,
             block_pos: to_wasm_block_position(self.block_pos),
             insta_break: self.insta_break,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockDamageEvent(data) => Self {
-                player: consume_player(state, &data.player),
-                block: &pumpkin_data::Block::AIR,
-                block_pos: from_wasm_block_position(data.block_pos),
-                insta_break: data.insta_break,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            player: consume_player(state, &data.player),
+            block: &pumpkin_data::Block::AIR,
+            block_pos: from_wasm_block_position(data.block_pos),
+            insta_break: data.insta_break,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockIgniteEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BlockIgniteEvent(BlockIgniteEventData {
+    type Wit = BlockIgniteEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockIgniteEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                igniting_block: &pumpkin_data::Block::FIRE,
-                player: None,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            igniting_block: &pumpkin_data::Block::FIRE,
+            player: None,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockFromToEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BlockFromToEvent(BlockFromToEventData {
+    type Wit = BlockFromToEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             from_pos: to_wasm_block_position(self.from_pos),
             to_pos: to_wasm_block_position(self.to_pos),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockFromToEvent(data) => Self {
-                from_pos: from_wasm_block_position(data.from_pos),
-                to_pos: from_wasm_block_position(data.to_pos),
-                block: &pumpkin_data::Block::WATER,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            from_pos: from_wasm_block_position(data.from_pos),
+            to_pos: from_wasm_block_position(data.to_pos),
+            block: &pumpkin_data::Block::WATER,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockFormEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BlockFormEvent(BlockFormEventData {
+    type Wit = BlockFormEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockFormEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                block: &pumpkin_data::Block::SNOW,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            block: &pumpkin_data::Block::SNOW,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockFadeEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BlockFadeEvent(BlockFadeEventData {
+    type Wit = BlockFadeEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockFadeEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                block: &pumpkin_data::Block::ICE,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            block: &pumpkin_data::Block::ICE,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockDispenseEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BlockDispenseEvent(BlockDispenseEventData {
+    type Wit = BlockDispenseEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             item_name: self.item_name.clone(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockDispenseEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                item_name: data.item_name,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            item_name: data.item_name,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockExplodeEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BlockExplodeEvent(BlockExplodeEventData {
+    type Wit = BlockExplodeEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             yield_rate: self.yield_rate,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockExplodeEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                yield_rate: data.yield_rate,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            yield_rate: data.yield_rate,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockPhysicsEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BlockPhysicsEvent(BlockPhysicsEventData {
+    type Wit = BlockPhysicsEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             changed_pos: to_wasm_block_position(self.changed_pos),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockPhysicsEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                changed_pos: from_wasm_block_position(data.changed_pos),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            changed_pos: from_wasm_block_position(data.changed_pos),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockPistonExtendEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BlockPistonExtendEvent(BlockPistonExtendEventData {
+    type Wit = BlockPistonExtendEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             direction: self.direction.clone(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockPistonExtendEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                direction: data.direction,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            direction: data.direction,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockPistonRetractEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BlockPistonRetractEvent(BlockPistonRetractEventData {
+    type Wit = BlockPistonRetractEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             direction: self.direction.clone(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockPistonRetractEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                direction: data.direction,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            direction: data.direction,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for NotePlayEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::NotePlayEvent(NotePlayEventData {
+    type Wit = NotePlayEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             instrument: self.instrument.clone(),
             note: self.note,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::NotePlayEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                instrument: data.instrument,
-                note: data.note,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            instrument: data.instrument,
+            note: data.note,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for SignChangeEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = SignChangeEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player = state
             .add(self.player.clone())
             .expect("failed to add player resource");
-        Event::SignChangeEvent(SignChangeEventData {
+        Self::Wit {
             player,
             block_pos: to_wasm_block_position(self.block_pos),
             lines: self.lines.clone(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::SignChangeEvent(data) => Self {
-                player: consume_player(state, &data.player),
-                block_pos: from_wasm_block_position(data.block_pos),
-                lines: data.lines,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            player: consume_player(state, &data.player),
+            block_pos: from_wasm_block_position(data.block_pos),
+            lines: data.lines,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for SpongeAbsorbEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::SpongeAbsorbEvent(SpongeAbsorbEventData {
+    type Wit = SpongeAbsorbEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::SpongeAbsorbEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for TNTPrimeEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::TntPrimeEvent(TntPrimeEventData {
+    type Wit = TntPrimeEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             prime_reason: self.prime_reason.clone(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::TntPrimeEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                prime_reason: data.prime_reason,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            prime_reason: data.prime_reason,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BellResonateEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BellResonateEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::BellResonateEvent(BellResonateEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BellResonateEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BellResonateEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                world: consume_world(state, &data.target_world),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            world: consume_world(state, &data.target_world),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BellRingEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BellRingEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::BellRingEvent(BellRingEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             entity_id: self.entity.as_ref().map(|e| e.get_entity().entity_id),
             direction: self.direction.map(|d| format!("{d:?}")),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BellRingEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BellRingEvent(_) => panic!("Cannot construct BellRingEvent from WASM"),
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BellRingEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockBrushEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockBrushEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
@@ -632,32 +625,29 @@ impl ToFromWasmEvent for BlockBrushEvent {
         let item = state
             .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
-        Event::BlockBrushEvent(BlockBrushEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             player,
             item,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockBrushEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockBrushEvent(_) => panic!("Cannot construct BlockBrushEvent from WASM"),
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockBrushEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockCookEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockCookEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
@@ -667,32 +657,29 @@ impl ToFromWasmEvent for BlockCookEvent {
         let result = state
             .add(Arc::new(Mutex::new(self.result.clone())))
             .expect("failed to add item stack resource");
-        Event::BlockCookEvent(BlockCookEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             source,
             result,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockCookEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockCookEvent(_) => panic!("Cannot construct BlockCookEvent from WASM"),
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockCookEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockDamageAbortEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockDamageAbortEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player = state
             .add(self.player.clone())
             .expect("failed to add player resource");
@@ -702,64 +689,56 @@ impl ToFromWasmEvent for BlockDamageAbortEvent {
         let item_in_hand = state
             .add(Arc::new(Mutex::new(self.item_in_hand.clone())))
             .expect("failed to add item stack resource");
-        Event::BlockDamageAbortEvent(BlockDamageAbortEventData {
+        Self::Wit {
             player,
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             item_in_hand,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-    }
-
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockDamageAbortEvent(_) => {
-                panic!("Cannot construct BlockDamageAbortEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
         }
+    }
+
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockDamageAbortEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockDispenseArmorEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockDispenseArmorEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
         let item = state
             .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
-        Event::BlockDispenseArmorEvent(BlockDispenseArmorEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             target_entity_id: self.target.get_entity().entity_id,
             item,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockDispenseArmorEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockDispenseArmorEvent(_) => {
-                panic!("Cannot construct BlockDispenseArmorEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockDispenseArmorEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockDispenseLootEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockDispenseLootEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
@@ -772,33 +751,28 @@ impl ToFromWasmEvent for BlockDispenseLootEvent {
                     .expect("failed to add item stack resource")
             })
             .collect();
-        Event::BlockDispenseLootEvent(BlockDispenseLootEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             items,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockDispenseLootEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockDispenseLootEvent(_) => {
-                panic!("Cannot construct BlockDispenseLootEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockDispenseLootEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockDropItemEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockDropItemEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
@@ -815,63 +789,57 @@ impl ToFromWasmEvent for BlockDropItemEvent {
                     .expect("failed to add item stack resource")
             })
             .collect();
-        Event::BlockDropItemEvent(BlockDropItemEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             player,
             items,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockDropItemEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockDropItemEvent(_) => panic!("Cannot construct BlockDropItemEvent from WASM"),
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockDropItemEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockExpEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockExpEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::BlockExpEvent(BlockExpEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             exp: self.exp,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockExpEvent(data) = event {
-            self.exp = data.exp;
         }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockExpEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                world: consume_world(state, &data.target_world),
-                exp: data.exp,
-            },
-            _ => panic!("unexpected event type"),
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.exp = data.exp;
+    }
+
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            world: consume_world(state, &data.target_world),
+            exp: data.exp,
         }
     }
 }
 
 impl ToFromWasmEvent for BlockFertilizeEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockFertilizeEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
@@ -884,34 +852,29 @@ impl ToFromWasmEvent for BlockFertilizeEvent {
             .iter()
             .map(|(pos, id)| (to_wasm_block_position(*pos), id.as_u16()))
             .collect();
-        Event::BlockFertilizeEvent(BlockFertilizeEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             player,
             changed_blocks,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockFertilizeEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockFertilizeEvent(_) => {
-                panic!("Cannot construct BlockFertilizeEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockFertilizeEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockMultiPlaceEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockMultiPlaceEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player = state
             .add(self.player.clone())
             .expect("failed to add player resource");
@@ -923,37 +886,31 @@ impl ToFromWasmEvent for BlockMultiPlaceEvent {
             .iter()
             .map(|(pos, id)| (to_wasm_block_position(*pos), id.as_u16()))
             .collect();
-        Event::BlockMultiPlaceEvent(BlockMultiPlaceEventData {
+        Self::Wit {
             player,
             target_world,
             placed_blocks,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockMultiPlaceEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockMultiPlaceEvent(_) => {
-                panic!("Cannot construct BlockMultiPlaceEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockMultiPlaceEvent from WASM");
     }
 }
-
 impl ToFromWasmEvent for BlockReceiveGameEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockReceiveGameEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::BlockReceiveGameEvent(BlockReceiveGameEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             game_event: self.game_event.clone(),
@@ -962,170 +919,151 @@ impl ToFromWasmEvent for BlockReceiveGameEvent {
                 .as_ref()
                 .map(|e| e.get_entity().entity_id),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockReceiveGameEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockReceiveGameEvent(_) => {
-                panic!("Cannot construct BlockReceiveGameEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockReceiveGameEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockShearEntityEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockShearEntityEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
         let item = state
             .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
-        Event::BlockShearEntityEvent(BlockShearEntityEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             target_entity_id: self.target.get_entity().entity_id,
             item,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockShearEntityEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockShearEntityEvent(_) => {
-                panic!("Cannot construct BlockShearEntityEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct BlockShearEntityEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for BlockSpreadEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BlockSpreadEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::BlockSpreadEvent(BlockSpreadEventData {
+        Self::Wit {
             source_pos: to_wasm_block_position(self.source_pos),
             target_pos: to_wasm_block_position(self.target_pos),
             target_world,
             new_state_id: self.new_state_id.as_u16(),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BlockSpreadEvent(data) = event {
-            self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BlockSpreadEvent(data) => Self {
-                source_pos: from_wasm_block_position(data.source_pos),
-                target_pos: from_wasm_block_position(data.target_pos),
-                world: consume_world(state, &data.target_world),
-                new_state_id: BlockStateId::new_or_air(data.new_state_id),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            source_pos: from_wasm_block_position(data.source_pos),
+            target_pos: from_wasm_block_position(data.target_pos),
+            world: consume_world(state, &data.target_world),
+            new_state_id: BlockStateId::new_or_air(data.new_state_id),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for BrewingStartEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = BrewingStartEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::BrewingStartEvent(BrewingStartEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             brewing_time: self.brewing_time,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BrewingStartEvent(data) = event {
-            self.brewing_time = data.brewing_time;
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BrewingStartEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                world: consume_world(state, &data.target_world),
-                brewing_time: data.brewing_time,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.brewing_time = data.brewing_time;
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            world: consume_world(state, &data.target_world),
+            brewing_time: data.brewing_time,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for CampfireStartEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = CampfireStartEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
         let item = state
             .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
-        Event::CampfireStartEvent(CampfireStartEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             item,
             slot: self.slot,
             cooking_time: self.cooking_time,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::CampfireStartEvent(data) = event {
-            self.cooking_time = data.cooking_time;
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::CampfireStartEvent(_) => panic!("Cannot construct CampfireStartEvent from WASM"),
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cooking_time = data.cooking_time;
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct CampfireStartEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for CauldronLevelChangeEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = CauldronLevelChangeEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::CauldronLevelChangeEvent(CauldronLevelChangeEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             old_level: self.old_level,
@@ -1133,274 +1071,241 @@ impl ToFromWasmEvent for CauldronLevelChangeEvent {
             reason: format!("{:?}", self.reason),
             entity_id: self.entity.as_ref().map(|e| e.get_entity().entity_id),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::CauldronLevelChangeEvent(data) = event {
-            self.new_level = data.new_level;
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::CauldronLevelChangeEvent(_) => {
-                panic!("Cannot construct CauldronLevelChangeEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.new_level = data.new_level;
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct CauldronLevelChangeEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for CrafterCraftEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = CrafterCraftEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
         let result = state
             .add(Arc::new(Mutex::new(self.result.clone())))
             .expect("failed to add item stack resource");
-        Event::CrafterCraftEvent(CrafterCraftEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             result,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::CrafterCraftEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::CrafterCraftEvent(_) => panic!("Cannot construct CrafterCraftEvent from WASM"),
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct CrafterCraftEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for EntityBlockFormEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = EntityBlockFormEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::EntityBlockFormEvent(EntityBlockFormEventData {
+        Self::Wit {
             entity_id: self.entity.get_entity().entity_id,
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             new_state_id: self.new_state_id.as_u16(),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::EntityBlockFormEvent(data) = event {
-            self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::EntityBlockFormEvent(_) => {
-                panic!("Cannot construct EntityBlockFormEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct EntityBlockFormEvent from WASM");
     }
 }
 
 impl ToFromWasmEvent for FluidLevelChangeEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = FluidLevelChangeEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::FluidLevelChangeEvent(FluidLevelChangeEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             new_state_id: self.new_state_id.as_u16(),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::FluidLevelChangeEvent(data) = event {
-            self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::FluidLevelChangeEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                world: consume_world(state, &data.target_world),
-                new_state_id: BlockStateId::new_or_air(data.new_state_id),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            world: consume_world(state, &data.target_world),
+            new_state_id: BlockStateId::new_or_air(data.new_state_id),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for InventoryBlockStartEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = InventoryBlockStartEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::InventoryBlockStartEvent(InventoryBlockStartEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::InventoryBlockStartEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                world: consume_world(state, &data.target_world),
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            world: consume_world(state, &data.target_world),
         }
     }
 }
 
 impl ToFromWasmEvent for LeavesDecayEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = LeavesDecayEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::LeavesDecayEvent(LeavesDecayEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::LeavesDecayEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::LeavesDecayEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                world: consume_world(state, &data.target_world),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            world: consume_world(state, &data.target_world),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for MoistureChangeEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = MoistureChangeEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::MoistureChangeEvent(MoistureChangeEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             new_moisture: self.new_moisture,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::MoistureChangeEvent(data) = event {
-            self.new_moisture = data.new_moisture;
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::MoistureChangeEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                world: consume_world(state, &data.target_world),
-                new_moisture: data.new_moisture,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.new_moisture = data.new_moisture;
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            world: consume_world(state, &data.target_world),
+            new_moisture: data.new_moisture,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for SculkBloomEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = SculkBloomEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-        Event::SculkBloomEvent(SculkBloomEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             charge: self.charge,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::SculkBloomEvent(data) = event {
-            self.charge = data.charge;
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::SculkBloomEvent(data) => Self {
-                block_pos: from_wasm_block_position(data.block_pos),
-                world: consume_world(state, &data.target_world),
-                charge: data.charge,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.charge = data.charge;
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            block_pos: from_wasm_block_position(data.block_pos),
+            world: consume_world(state, &data.target_world),
+            charge: data.charge,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for VaultDisplayItemEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = VaultDisplayItemEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
         let item = state
             .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
-        Event::VaultDisplayItemEvent(VaultDisplayItemEventData {
+        Self::Wit {
             block_pos: to_wasm_block_position(self.block_pos),
             target_world,
             item,
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::VaultDisplayItemEvent(data) = event {
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::VaultDisplayItemEvent(_) => {
-                panic!("Cannot construct VaultDisplayItemEvent from WASM")
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Cannot construct VaultDisplayItemEvent from WASM");
     }
 }

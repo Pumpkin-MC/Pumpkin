@@ -474,6 +474,10 @@ mod resource_with {
     impl FromResource for plugin::world::ChunkBuffer {
         type Internal = ChunkBuffer;
     }
+
+    impl FromResource for plugin::event::Event {
+        type Internal = crate::events::EventHandle;
+    }
 }
 
 impl pumpkin::plugin::java_packets::Host for PluginHostState {}
