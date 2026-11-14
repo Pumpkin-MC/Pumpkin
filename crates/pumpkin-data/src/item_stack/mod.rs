@@ -285,6 +285,12 @@ impl ItemStack {
             .map_or(1, |value| value.size)
     }
 
+    /// The stack returned to the crafting input after one item is consumed.
+    #[must_use]
+    pub fn crafting_remainder(&self) -> Option<Self> {
+        self.item.crafting_remainder.map(|item| Self::new(1, item))
+    }
+
     #[must_use]
     pub fn get_max_damage(&self) -> Option<i32> {
         self.get_data_component::<MaxDamageImpl>()
