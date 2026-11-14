@@ -184,7 +184,7 @@ const fn salt_mix(seed: i64, salt: i64) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_util::{math::vector3::Vector3, read_data_from_file};
+    use pumpkin_util::math::vector3::Vector3;
 
     use crate::{
         biome::hash_seed,
@@ -221,7 +221,7 @@ mod test {
     #[test]
     fn chunk_wide_blend() {
         let data: Vec<(i32, i32, i32, i32, i32, i32)> =
-            read_data_from_file!("../../../../assets/tests/biome_mixer.json");
+            include_json!("../../../../assets/tests/biome_mixer.json");
 
         let seed = hash_seed((-777i64) as u64);
         for (i, (x, y, z, result_x, result_y, result_z)) in data.into_iter().enumerate() {

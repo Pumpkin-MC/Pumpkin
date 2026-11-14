@@ -2997,7 +2997,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codegen"
-version = "0.1.0-dev+26.1"
+version = "0.2.2+26.3-26.60"
 dependencies = [
  "heck",
  "indexmap",
