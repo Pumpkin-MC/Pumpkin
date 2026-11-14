@@ -5704,6 +5704,7 @@ impl World {
                 position,
                 replaced_block_state_id,
                 block_moved,
+                flags,
             );
         }
 
