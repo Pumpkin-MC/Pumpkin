@@ -285,19 +285,28 @@ impl ToFromWasmEvent for BlockDamageEvent {
 }
 
 impl ToFromWasmEvent for BlockIgniteEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = self.player.as_ref().map(|player| {
+            state
+                .add(player.clone())
+                .expect("failed to add player resource")
+        });
+
         Event::BlockIgniteEvent(BlockIgniteEventData {
             block_pos: to_wasm_block_position(self.block_pos),
+            player,
+            cause: self.cause.clone(),
             cancelled: self.cancelled,
         })
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::BlockIgniteEvent(data) => Self {
                 block_pos: from_wasm_block_position(data.block_pos),
                 igniting_block: &pumpkin_data::Block::FIRE,
-                player: None,
+                player: data.player.map(|player| consume_player(state, &player)),
+                cause: data.cause,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
