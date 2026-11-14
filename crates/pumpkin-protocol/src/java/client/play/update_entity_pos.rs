@@ -66,6 +66,19 @@ impl<'a> ServerPacket<'a> for CUpdateEntityPos {
         } else {
             bytebuf.get_var_int()?
         };
+        // Mirrors the packed on ground flag and delta step count written since 26.3; only a
+        // single linear delta (0 steps) is supported, since the struct has no stepped variant.
+        let packed_on_ground = if *version >= JavaMinecraftVersion::V_26_3 {
+            let properties = bytebuf.get_var_int()?.0;
+            if properties >> 1 != 0 {
+                return Err(ReadingError::Message(
+                    "stepped entity position deltas are not supported".to_string(),
+                ));
+            }
+            Some(properties & 1 != 0)
+        } else {
+            None
+        };
         let delta = if *version >= JavaMinecraftVersion::V_1_9 {
             Vector3::new(
                 bytebuf.get_i16_be()?,
@@ -79,7 +92,9 @@ impl<'a> ServerPacket<'a> for CUpdateEntityPos {
                 i16::from(bytebuf.get_i8()?) * 128,
             )
         };
-        let on_ground = if *version >= JavaMinecraftVersion::V_1_8 {
+        let on_ground = if let Some(on_ground) = packed_on_ground {
+            on_ground
+        } else if *version >= JavaMinecraftVersion::V_1_8 {
             bytebuf.get_bool()?
         } else {
             false
@@ -89,5 +104,49 @@ impl<'a> ServerPacket<'a> for CUpdateEntityPos {
             delta,
             on_ground,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    use super::*;
+
+    fn round_trip(version: JavaMinecraftVersion) {
+        let packet = CUpdateEntityPos::new(VarInt(9), Vector3::new(4096, -128, 256), true);
+        let mut buf = Vec::new();
+        packet.write_packet_data(&mut buf, &version).unwrap();
+        let read = CUpdateEntityPos::read(&mut buf.as_slice(), &version).unwrap();
+        assert_eq!(read, packet);
+    }
+
+    #[test]
+    fn round_trips_at_26_3() {
+        round_trip(JavaMinecraftVersion::V_26_3);
+    }
+
+    #[test]
+    fn round_trips_before_26_3() {
+        round_trip(JavaMinecraftVersion::V_1_21_11);
+    }
+
+    #[test]
+    fn round_trips_before_1_9() {
+        round_trip(JavaMinecraftVersion::V_1_8);
+    }
+
+    #[test]
+    fn stepped_delta_is_rejected() {
+        let mut buf = Vec::new();
+        buf.write_var_int(&VarInt(9)).unwrap();
+        // properties: on_ground = false, step count = 1
+        buf.write_var_int(&VarInt(2)).unwrap();
+        buf.write_i16_be(1).unwrap();
+        buf.write_i16_be(2).unwrap();
+        buf.write_i16_be(3).unwrap();
+        assert!(
+            CUpdateEntityPos::read(&mut buf.as_slice(), &JavaMinecraftVersion::V_26_3).is_err()
+        );
     }
 }

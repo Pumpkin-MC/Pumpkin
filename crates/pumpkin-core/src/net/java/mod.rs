@@ -65,9 +65,11 @@ pub mod pending;
 pub mod play;
 pub mod recipe_helper;
 pub mod status;
+pub mod versions;
 
 pub use chunk_data::{CChunkData, ChunkLightExt};
 use outgoing::{DISCONNECT_FLUSH_TIMEOUT, OutgoingPacket, run_outgoing_packet_writer};
+pub use versions::JavaVersions;
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
@@ -82,6 +84,14 @@ use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::{error::PumpkinError, server::Server};
+
+/// Packet id followed by its payload, as the outgoing writer expects it.
+fn frame_packet(packet_id: i32, payload: &[u8]) -> Option<Bytes> {
+    let mut framed = Vec::with_capacity(5 + payload.len());
+    framed.write_var_int(&VarInt(packet_id)).ok()?;
+    framed.extend_from_slice(payload);
+    Some(framed.into())
+}
 
 #[repr(C)]
 pub struct JavaClient {
@@ -207,6 +217,11 @@ impl JavaClient {
             );
             self.close();
         }
+    }
+
+    /// Drops the player again when joining failed.
+    pub fn clear_player(&self) {
+        self.player.store(Arc::new(None));
     }
 
     pub fn set_player(&self, player: Arc<Player>) {
@@ -428,14 +443,28 @@ impl JavaClient {
     }
 
     /// Outbound choke point of all enqueue/send paths. `None` when the packet must be dropped.
-    fn reserve_pending_bytes(&self, packet_data: Bytes, observe: bool) -> Option<(Bytes, usize)> {
+    /// The returned extra packets must be queued right after the packet itself.
+    fn reserve_pending_bytes(
+        &self,
+        packet_data: Bytes,
+        observe: bool,
+    ) -> Option<(Bytes, usize, Vec<Bytes>)> {
         if self.close_token.is_cancelled() {
             return None;
         }
-        let packet_data = self.translate_outgoing(packet_data, observe)?;
+        let (packet_data, extras) = self.translate_outgoing(packet_data, observe);
+        let Some(packet_data) = packet_data else {
+            // Extra packets still go out when the packet itself was cancelled.
+            self.queue_extra_packets(extras);
+            return None;
+        };
+        let packet_len = self.reserve_bytes(packet_data.len())?;
+        Some((packet_data, packet_len, extras))
+    }
 
+    /// Adds `packet_len` to the pending bytes. `None` (and the connection closed) on overflow.
+    fn reserve_bytes(&self, packet_len: usize) -> Option<usize> {
         // Reserve first, release again if it does not fit.
-        let packet_len = packet_data.len();
         let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
         let new_bytes = prev_bytes.saturating_add(packet_len);
 
@@ -450,55 +479,67 @@ impl JavaClient {
             }
             return None;
         }
+        Some(packet_len)
+    }
 
-        Some((packet_data, packet_len))
+    /// Queues packets a `PacketSentEvent` handler added, already in the client's format.
+    fn queue_extra_packets(&self, extras: Vec<Bytes>) {
+        for extra in extras {
+            let Some(packet_len) = self.reserve_bytes(extra.len()) else {
+                return;
+            };
+            if !self.queue_outgoing(OutgoingPacket::normal(extra), packet_len) {
+                return;
+            }
+        }
     }
 
     /// `PacketSentEvent` for clients the multiversion plugin admitted below
     /// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
-    /// `None` when cancelled.
+    /// The packet is `None` when cancelled; the extra packets are sent either way.
     ///
     /// For clients on `CURRENT_MC_VERSION` the event is fired as a read-only observation
     /// (cancellable) for packets in the play state when `observe` is set, so packet-level
     /// plugins (anti-cheats, protocol libraries) see every outbound packet. `observe` is
     /// `false` for packets a plugin injected itself, to avoid echoing them back.
-    fn translate_outgoing(&self, packet_data: Bytes, observe: bool) -> Option<Bytes> {
+    fn translate_outgoing(&self, packet_data: Bytes, observe: bool) -> (Option<Bytes>, Vec<Bytes>) {
         let current_version = self.version.load() == CURRENT_MC_VERSION;
         if current_version
             && (!observe || !matches!(self.connection_state.load(), ConnectionState::Play))
         {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         }
-        // TODO: packets sent before `set_player` (e.g. an `add_player` kick) go out untranslated.
         let player = self.player.load_full();
         let Some(player) = player.as_ref() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         let Some(server) = player.world().server.upgrade() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         if !server.plugin_manager.has_handlers::<PacketSentEvent>() {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         }
 
         let mut reader = &packet_data[..];
         let Ok(packet_id) = reader.get_var_int() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         let payload = packet_data.slice(packet_data.len() - reader.len()..);
         let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
         server.plugin_manager.fire_blocking(&server, &mut event);
+
+        let extras = event
+            .extra_packets
+            .iter()
+            .filter_map(|(id, payload)| frame_packet(*id, payload))
+            .collect();
         if event.cancelled {
-            return None;
+            return (None, extras);
         }
         if current_version {
-            return Some(packet_data);
+            return (Some(packet_data), extras);
         }
-
-        let mut framed = Vec::with_capacity(5 + event.payload.len());
-        framed.write_var_int(&VarInt(event.packet_id)).ok()?;
-        framed.extend_from_slice(&event.payload);
-        Some(framed.into())
+        (frame_packet(event.packet_id, &event.payload), extras)
     }
 
     pub fn try_enqueue_packet(&self, packet_data: Bytes) {
@@ -507,16 +548,42 @@ impl JavaClient {
 
     /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
-        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data, true) else {
+        let Some((packet_data, packet_len, extras)) = self.reserve_pending_bytes(packet_data, true)
+        else {
             return false;
         };
-        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len)
+        let queued = self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len);
+        if queued {
+            self.queue_extra_packets(extras);
+        }
+        queued
     }
 
     /// Like [`Self::try_enqueue_packet_data`] but does not fire `PacketSentEvent` for
     /// current-version clients. For packets that a plugin already observed itself.
     pub fn try_enqueue_packet_data_unobserved(&self, packet_data: Bytes) -> bool {
-        let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data, false) else {
+        let Some((packet_data, packet_len, extras)) =
+            self.reserve_pending_bytes(packet_data, false)
+        else {
+            return false;
+        };
+        let queued = self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len);
+        if queued {
+            self.queue_extra_packets(extras);
+        }
+        queued
+    }
+
+    /// Queues an already-formatted raw Java packet (`packet_id` + client-version `payload`)
+    /// directly onto the wire queue without firing `PacketSentEvent`.
+    pub fn try_enqueue_raw_packet_direct(&self, packet_id: i32, payload: &[u8]) -> bool {
+        if self.close_token.is_cancelled() {
+            return false;
+        }
+        let Some(packet_data) = frame_packet(packet_id, payload) else {
+            return false;
+        };
+        let Some(packet_len) = self.reserve_bytes(packet_data.len()) else {
             return false;
         };
         self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len)
@@ -595,7 +662,7 @@ impl JavaClient {
     pub fn try_kick(&self, reason: &TextComponent) {
         if let Some(data) = self
             .serialize_disconnect(reason)
-            .and_then(|data| self.translate_outgoing(data, false))
+            .and_then(|data| self.translate_outgoing(data, false).0)
         {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
@@ -655,7 +722,7 @@ impl JavaClient {
         packet: Bytes,
         make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
     ) -> bool {
-        let Some((packet, packet_len)) = self.reserve_pending_bytes(packet, true) else {
+        let Some((packet, packet_len, extras)) = self.reserve_pending_bytes(packet, true) else {
             return false;
         };
 
@@ -663,6 +730,7 @@ impl JavaClient {
         if !self.queue_outgoing(make(packet, completion_tx), packet_len) {
             return false;
         }
+        self.queue_extra_packets(extras);
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
             // The outgoing packet task dropped before confirming the write.

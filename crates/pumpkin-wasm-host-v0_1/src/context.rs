@@ -1338,7 +1338,11 @@ fn register_server_event(
 ) {
     use pumpkin_core::plugin::server::{
         list_ping::ServerListPingEvent,
-        packet::{PacketReceivedEvent, PacketSentEvent},
+        packet::{
+            BedrockConnectionPacketReceivedEvent, BedrockConnectionPacketSentEvent,
+            JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent, PacketReceivedEvent,
+            PacketSentEvent,
+        },
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
         server_load::ServerLoadEvent,
@@ -1352,6 +1356,26 @@ fn register_server_event(
         }
         EventType::PacketSentEvent => {
             register_typed_event::<PacketSentEvent>(resource, handler, priority, blocking);
+        }
+        EventType::JavaConnectionPacketReceivedEvent => {
+            register_typed_event::<JavaConnectionPacketReceivedEvent>(
+                resource, handler, priority, blocking,
+            );
+        }
+        EventType::JavaConnectionPacketSentEvent => {
+            register_typed_event::<JavaConnectionPacketSentEvent>(
+                resource, handler, priority, blocking,
+            );
+        }
+        EventType::BedrockConnectionPacketReceivedEvent => {
+            register_typed_event::<BedrockConnectionPacketReceivedEvent>(
+                resource, handler, priority, blocking,
+            );
+        }
+        EventType::BedrockConnectionPacketSentEvent => {
+            register_typed_event::<BedrockConnectionPacketSentEvent>(
+                resource, handler, priority, blocking,
+            );
         }
         EventType::ServerCommandEvent => {
             register_typed_event::<ServerCommandEvent>(resource, handler, priority, blocking);
@@ -1445,6 +1469,10 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         match event_type {
             event_type @ (EventType::PacketReceivedEvent
             | EventType::PacketSentEvent
+            | EventType::JavaConnectionPacketReceivedEvent
+            | EventType::JavaConnectionPacketSentEvent
+            | EventType::BedrockConnectionPacketReceivedEvent
+            | EventType::BedrockConnectionPacketSentEvent
             | EventType::ServerCommandEvent
             | EventType::ServerListPingEvent
             | EventType::ServerBroadcastEvent
@@ -1718,6 +1746,36 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
 
         let context_res = self.get(&context)?;
         Ok(context_res.register_permission(util_permission))
+    }
+
+    fn register_java_versions(
+        &mut self,
+        context: Resource<WitContext>,
+        versions: Vec<pumpkin::plugin::player::JavaMinecraftVersion>,
+    ) -> wasmtime::Result<()> {
+        let context_res = self.get(&context)?;
+        let native_versions: Vec<pumpkin_util::version::JavaMinecraftVersion> = versions
+            .into_iter()
+            .map(crate::player::from_wasm_java_version)
+            .collect();
+        context_res
+            .plugin_manager
+            .java_versions
+            .register(&context_res.get_metadata().name, native_versions);
+        Ok(())
+    }
+
+    fn register_bedrock_versions(
+        &mut self,
+        context: Resource<WitContext>,
+        protocols: Vec<u32>,
+    ) -> wasmtime::Result<()> {
+        let context_res = self.get(&context)?;
+        context_res
+            .plugin_manager
+            .bedrock_versions
+            .register(&context_res.get_metadata().name, protocols);
+        Ok(())
     }
 
     fn get_data_folder(&mut self, _context: Resource<WitContext>) -> wasmtime::Result<String> {

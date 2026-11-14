@@ -658,6 +658,12 @@ pub struct Player {
     pub start_mining_time: AtomicI32,
     pub tick_counter: AtomicI32,
     pub mining_pos: Mutex<BlockPos>,
+    /// Vanilla `hasDelayedDestroy`: a finish below the progress threshold continues in tick.
+    pub has_delayed_destroy: AtomicBool,
+    /// Position of the block being broken by vanilla's delayed destroy.
+    pub delayed_destroy_pos: Mutex<BlockPos>,
+    /// Start tick of the delayed destroy.
+    pub delayed_tick_start: AtomicI32,
     pub last_input: AtomicI8,
     /// A counter for teleport IDs used to track pending teleports.
     pub teleport_id_count: AtomicI32,
@@ -989,6 +995,9 @@ impl Player {
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
             mining_pos: Mutex::new(BlockPos::ZERO),
+            has_delayed_destroy: AtomicBool::new(false),
+            delayed_destroy_pos: Mutex::new(BlockPos::ZERO),
+            delayed_tick_start: AtomicI32::new(0),
             abilities: std::sync::Mutex::new(abilities),
             stats: std::sync::Mutex::new(statistics::Statistics::default()),
             gamemode: AtomicCell::new(gamemode),
@@ -3026,7 +3035,7 @@ impl Player {
 
         let mut count = 0;
 
-        while let Some(packet) = self.inbound_packets.pop() {
+        while let Some(mut packet) = self.inbound_packets.pop() {
             if self.client.closed() {
                 break;
             }
@@ -3065,6 +3074,12 @@ impl Player {
                         server_arc
                             .plugin_manager
                             .fire_blocking(&server_arc, &mut event);
+                        if !event.cancelled {
+                            packet = RawPacket {
+                                id: event.packet_id,
+                                payload: event.payload,
+                            };
+                        }
                         event.cancelled
                     } else {
                         false
@@ -3277,11 +3292,17 @@ impl Player {
             }
         }
 
-        if self.mining.load(Ordering::Relaxed)
+        if self.living_entity.health.load() <= 0.0 {
+            self.reset_mining();
+        }
+
+        if self.has_delayed_destroy.load(Ordering::Relaxed)
             && let Some(p) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
-            let world_clone = p.world();
-            let server_clone = world_clone.server.upgrade();
+            p.tick_delayed_destroy();
+        } else if self.mining.load(Ordering::Relaxed)
+            && let Some(p) = self.world().get_player_by_uuid(self.gameprofile.id)
+        {
             let pos = *p
                 .mining_pos
                 .lock()
@@ -3300,30 +3321,9 @@ impl Player {
                 );
                 if finished && matches!(p.client.as_ref(), ClientPlatform::Bedrock(_)) {
                     p.stop_mining();
-
-                    let block = Block::from_state_id(state.id);
-                    let can_harvest = p.can_harvest(state, block);
-                    let flags = if can_harvest {
-                        pumpkin_world::world::BlockFlags::NOTIFY_ALL
-                    } else {
-                        pumpkin_world::world::BlockFlags::SKIP_DROPS
-                            | pumpkin_world::world::BlockFlags::NOTIFY_ALL
-                    };
-                    if let Some(server) = server_clone
-                        && let Some(broken_state_id) = p.destroy_block(&server, &world, &pos, flags)
+                    if !p.break_block(&pos)
+                        && let ClientPlatform::Bedrock(client) = p.client.as_ref()
                     {
-                        let (block, state) = BlockState::from_id_with_block(broken_state_id);
-                        server
-                            .block_registry
-                            .broken(&world, block, &p, &pos, &server, state);
-                        p.apply_tool_damage_for_block_break(state);
-                        if can_harvest {
-                            p.add_exhaustion(MINE_BLOCK_EXHAUSTION);
-                        }
-                        let item_id = p.inventory().held_item().item.id;
-                        p.increment_stat(StatisticCategory::Used, item_id as i32, 1);
-                        p.increment_stat(StatisticCategory::Mined, block.id.as_u16() as i32, 1);
-                    } else if let ClientPlatform::Bedrock(client) = p.client.as_ref() {
                         client.sync_block_state_to_client(self, &world, pos);
                     }
                 }
@@ -3439,6 +3439,81 @@ impl Player {
                 .store(stage, Ordering::Relaxed);
         }
         total_progress >= 1.0
+    }
+
+    /// Vanilla `hasDelayedDestroy`: keep a below-threshold finish alive until tick reaches 1.0.
+    pub(crate) fn start_delayed_destroy(&self, position: BlockPos) {
+        if !self.has_delayed_destroy.load(Ordering::Relaxed) {
+            self.has_delayed_destroy.store(true, Ordering::Relaxed);
+            *self
+                .delayed_destroy_pos
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = position;
+            self.delayed_tick_start.store(
+                self.start_mining_time.load(Ordering::Relaxed),
+                Ordering::Relaxed,
+            );
+            self.mining.store(false, Ordering::Relaxed);
+        }
+    }
+
+    /// Advances vanilla's delayed destroy state and breaks the block at full progress.
+    pub(crate) fn tick_delayed_destroy(self: &Arc<Self>) {
+        let position = *self
+            .delayed_destroy_pos
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let world = self.world();
+        let state = world.get_block_state(&position);
+        if state.is_air() {
+            self.has_delayed_destroy.store(false, Ordering::Relaxed);
+            self.current_block_destroy_stage
+                .store(-1, Ordering::Relaxed);
+            self.current_block_breaking_speed
+                .store(0, Ordering::Relaxed);
+            return;
+        }
+
+        let starting_time = self.delayed_tick_start.load(Ordering::Relaxed);
+        let speed = block::calc_block_breaking(self, state, Block::from_state_id(state.id));
+        if speed <= 0.0 {
+            self.has_delayed_destroy.store(false, Ordering::Relaxed);
+            self.refuse_delayed_destroy(&world, position, state);
+        } else if self.continue_mining(position, &world, state, starting_time) {
+            self.has_delayed_destroy.store(false, Ordering::Relaxed);
+            if !self.break_block(&position) {
+                self.refuse_delayed_destroy(&world, position, state);
+            }
+        } else {
+            return;
+        }
+        self.current_block_destroy_stage
+            .store(-1, Ordering::Relaxed);
+        self.current_block_breaking_speed
+            .store(0, Ordering::Relaxed);
+    }
+
+    /// Stops the delayed break animation and resynchronizes the target block.
+    fn refuse_delayed_destroy(&self, world: &Arc<World>, position: BlockPos, state: &BlockState) {
+        world.set_block_breaking(
+            &self.living_entity.entity,
+            position,
+            BlockBreakingProgress::Stop,
+        );
+        self.try_send_client_packet(&CBlockUpdate::new(
+            position,
+            VarInt(i32::from(state.id.as_u16())),
+        ));
+    }
+
+    /// Clears normal and delayed mining state without sending block updates.
+    pub(crate) fn reset_mining(&self) {
+        self.mining.store(false, Ordering::Relaxed);
+        self.has_delayed_destroy.store(false, Ordering::Relaxed);
+        self.current_block_destroy_stage
+            .store(-1, Ordering::Relaxed);
+        self.current_block_breaking_speed
+            .store(0, Ordering::Relaxed);
     }
 
     pub(crate) fn stop_mining(&self) {
@@ -4682,6 +4757,7 @@ impl Player {
                 let pitch = event.pitch;
                 let new_world = event.new_world;
 
+                self.reset_mining();
                 self.set_client_loaded(false);
                 let Some(player) = current_world.remove_player(self, false).await else {
                     return;
@@ -4819,12 +4895,17 @@ impl Player {
         self.living_entity.entity.set_pos(position);
         let entity = &self.living_entity.entity;
         entity.set_rotation(yaw, pitch);
-        // Moves are ignored until the client confirms, for both editions
-        *self
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Some((teleport_id.into(), position));
+        // Moves are ignored until the client confirms (teleport confirmation was added in 1.9).
+        if !matches!(
+            self.client.as_ref(),
+            ClientPlatform::Java(c) if c.version.load() < JavaMinecraftVersion::V_1_9
+        ) {
+            *self
+                .awaiting_teleport
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some((teleport_id.into(), position));
+        }
         match self.client.as_ref() {
             ClientPlatform::Java(client) => {
                 let packet = CPlayerPosition::new(
@@ -5194,6 +5275,7 @@ impl Player {
 
     pub fn kill(&self) {
         use pumpkin_data::damage::DamageType;
+        self.reset_mining();
         let health = self.living_entity.health.load();
         self.living_entity
             .damage(self, health + 10.0, DamageType::OUT_OF_WORLD);
@@ -5436,6 +5518,7 @@ impl Player {
     }
 
     pub async fn respawn(self: &Arc<Self>) {
+        self.reset_mining();
         self.world().respawn_player(self, false).await;
         // The client rebuilt its attribute state on respawn, so send the held
         // weapon modifiers again.
@@ -5771,80 +5854,47 @@ impl Player {
         !state.tool_required() || self.inventory().held_item().is_correct_for_drops(block)
     }
 
+    /// Vanilla `ServerPlayerGameMode.destroyBlock` plus the survival after-break effects.
     pub fn break_block(self: &Arc<Self>, position: &BlockPos) -> bool {
         let world = self.world();
+        let Some(server) = world.server.upgrade() else {
+            return false;
+        };
         let (block, state) = world.get_block_and_state(position);
         if state.is_air() {
             return false;
         }
 
-        let held = self.inventory().held_item();
-        let gamemode = self.gamemode.load();
-        let server = world.server.upgrade();
-        let can_mine_item = server
-            .as_ref()
-            .is_none_or(|s| s.item_registry.can_mine(held.item, self));
-        let cannot_mine = !can_mine_item
-            || gamemode == GameMode::Spectator
-            || (gamemode == GameMode::Creative
-                && held
-                    .get_data_component::<ToolImpl>()
-                    .is_some_and(|t| !t.can_destroy_blocks_in_creative))
-            || (gamemode == GameMode::Adventure
-                && !held
-                    .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
-                    .is_some_and(|c| c.matches_block(block)));
-        if cannot_mine {
-            return false;
-        }
-
-        if gamemode == GameMode::Creative {
-            let new_state = world.break_block(
-                position,
-                Some(self),
-                pumpkin_world::world::BlockFlags::NOTIFY_ALL
-                    | pumpkin_world::world::BlockFlags::SKIP_DROPS,
-            );
-            if new_state.is_some() {
-                if let Some(server) = &server {
-                    server
-                        .block_registry
-                        .broken(&world, block, self, position, server, state);
-                }
-                return true;
-            }
-            return false;
-        }
-
-        let block_drop = self.can_harvest(state, block);
+        let creative = self.gamemode.load() == GameMode::Creative;
+        let block_drop = !creative && self.can_harvest(state, block);
         let flags = if block_drop {
-            pumpkin_world::world::BlockFlags::NOTIFY_ALL
+            BlockFlags::NOTIFY_ALL
         } else {
-            pumpkin_world::world::BlockFlags::SKIP_DROPS
-                | pumpkin_world::world::BlockFlags::NOTIFY_ALL
+            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
         };
-
-        let new_state = world.break_block(position, Some(self), flags);
-        if new_state.is_some() {
-            if let Some(server) = &server {
-                server
-                    .block_registry
-                    .broken(&world, block, self, position, server, state);
-            }
-            self.apply_tool_damage_for_block_break(state);
-            if block_drop {
-                self.add_exhaustion(MINE_BLOCK_EXHAUSTION);
-            }
-            let item_id = held.item.id;
-            self.increment_stat(statistics::StatisticCategory::Used, item_id as i32, 1);
-            self.increment_stat(
-                statistics::StatisticCategory::Mined,
-                block.id.as_u16() as i32,
-                1,
-            );
+        let Some(broken_state_id) = self.destroy_block(&server, &world, position, flags) else {
+            return false;
+        };
+        let (block, state) = BlockState::from_id_with_block(broken_state_id);
+        server
+            .block_registry
+            .broken(&world, block, self, position, &server, state);
+        if creative {
             return true;
         }
-        false
+
+        self.apply_tool_damage_for_block_break(state);
+        if block_drop {
+            self.add_exhaustion(MINE_BLOCK_EXHAUSTION);
+        }
+        let item_id = self.inventory().held_item().item.id;
+        self.increment_stat(statistics::StatisticCategory::Used, item_id as i32, 1);
+        self.increment_stat(
+            statistics::StatisticCategory::Mined,
+            block.id.as_u16() as i32,
+            1,
+        );
+        true
     }
 
     /// The id under which Pumpkin will store it's `mining_efficiency` modifier value
