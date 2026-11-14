@@ -123,7 +123,7 @@ impl ObserverBlock {
         let opposite_facing_pos = block_pos.offset(facing.opposite().to_offset());
 
         world.update_neighbor(&opposite_facing_pos, block);
-        world.update_neighbors(&opposite_facing_pos, Some(facing));
+        world.update_neighbors_at(&opposite_facing_pos, block, Some(facing));
     }
 
     fn schedule_tick(world: &World, block_pos: &BlockPos) {
