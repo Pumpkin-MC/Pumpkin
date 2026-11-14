@@ -1589,9 +1589,23 @@ impl Player {
         let attacker_entity = &self.living_entity.entity;
         let config = &server.advanced_config.pvp;
 
+        let is_spin_attack = self.living_entity.is_auto_spin_attack();
+        let spin_weapon = if is_spin_attack {
+            self.living_entity
+                .auto_spin_attack_item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+        } else {
+            None
+        };
+
         let inventory = self.inventory();
-        let item_stack = inventory.held_item();
-        if !item_stack.is_empty() {
+        let (item_stack, spin_slot) = match spin_weapon {
+            Some((stack, slot)) => (stack, slot),
+            None => (inventory.held_item(), None),
+        };
+        if !item_stack.is_empty() && !is_spin_attack {
             self.increment_stat(
                 statistics::StatisticCategory::Used,
                 item_stack.item.id as i32,
@@ -1599,9 +1613,12 @@ impl Player {
             );
         }
 
-        let base_damage = self
-            .living_entity
-            .get_attribute_value(&Attributes::ATTACK_DAMAGE);
+        let base_damage = if is_spin_attack {
+            f64::from(self.living_entity.auto_spin_attack_dmg.load())
+        } else {
+            self.living_entity
+                .get_attribute_value(&Attributes::ATTACK_DAMAGE)
+        };
         let base_attack_speed = 4.0;
 
         let mut damage_multiplier = 1.0;
@@ -1873,7 +1890,18 @@ impl Player {
         // 2. Refactor compute cost as a closure: damage_held_item(self, |stack| -> i32 { ... })
         // 3. In practice, single-player scenarios are safe (this is not multiplayer). Document
         //    as a known limitation if refactoring is deemed too invasive.
-        self.damage_held_item(Self::combat_weapon_durability_cost(&item_stack));
+        let durability_cost = Self::combat_weapon_durability_cost(&item_stack);
+        if let Some(slot) = spin_slot {
+            if self
+                .inventory
+                .equipment_slot_index(&slot)
+                .is_some_and(|idx| self.inventory.get_slot(idx).item.id == item_stack.item.id)
+            {
+                self.damage_item_in_slot(&slot, durability_cost);
+            }
+        } else {
+            self.damage_held_item(durability_cost);
+        }
 
         // Vanilla `Player#attack` ends the successful-hit branch with
         // `causeFoodExhaustion(0.1F)`. Only landed hits exhaust; the miss/no-damage
@@ -1968,6 +1996,24 @@ impl Player {
 
     /// Damages a stack through the player's item events; the caller handles inventory and break updates.
     pub fn damage_item_stack(&self, stack: &mut ItemStack, amount: i32) -> DamageResult {
+        self.damage_item_stack_internal(stack, amount, true)
+    }
+
+    /// Vanilla `ItemStack.hurtWithoutBreaking`: applies durability damage clamped at `max_damage - 1`.
+    pub fn hurt_item_stack_without_breaking(
+        &self,
+        stack: &mut ItemStack,
+        amount: i32,
+    ) -> DamageResult {
+        self.damage_item_stack_internal(stack, amount, false)
+    }
+
+    fn damage_item_stack_internal(
+        &self,
+        stack: &mut ItemStack,
+        amount: i32,
+        allow_break: bool,
+    ) -> DamageResult {
         if matches!(
             self.gamemode.load(),
             GameMode::Creative | GameMode::Spectator
@@ -2000,7 +2046,11 @@ impl Player {
             amount
         };
 
-        let result = stack.damage_item(amount);
+        let result = if allow_break {
+            stack.damage_item(amount)
+        } else {
+            stack.damage_item_without_breaking(amount)
+        };
         if result != DamageResult::Untouched {
             let vehicle_type = self
                 .living_entity
@@ -2577,9 +2627,18 @@ impl Player {
         }
     }
 
-    const fn is_auto_spin_attack() -> bool {
-        // TODO: Track active auto-spin/riptide state and return true while it is active.
-        false
+    /// Vanilla `Player.startAutoSpinAttack`.
+    pub fn start_auto_spin_attack(
+        &self,
+        activation_ticks: i32,
+        dmg: f32,
+        item_stack: ItemStack,
+        slot: Option<EquipmentSlot>,
+    ) {
+        self.release_shoulders();
+        self.living_entity
+            .start_auto_spin_attack(activation_ticks, dmg, item_stack, slot);
+        self.update_player_pose();
     }
 
     fn can_fit_pose(&self, pose: EntityPose) -> bool {
@@ -2602,7 +2661,7 @@ impl Player {
             EntityPose::Swimming
         } else if entity.is_fall_flying() {
             EntityPose::FallFlying
-        } else if Self::is_auto_spin_attack() {
+        } else if self.living_entity.is_auto_spin_attack() {
             EntityPose::SpinAttack
         } else if entity.is_sneaking() && !self.is_flying() {
             EntityPose::Crouching
