@@ -223,10 +223,11 @@ impl<'a> EnvironmentAttributes<'a> {
             EnvironmentAttribute::GameplayIncreasedFireBurnout => {
                 self.world.level.get_rough_biome(pos).increased_fire_burnout
             }
-            EnvironmentAttribute::GameplaySnowGolemMelts => {
-                self.get_dimension_value_bool(attribute)
-                    || self.world.level.get_rough_biome(pos).snow_golem_melts
-            }
+            EnvironmentAttribute::GameplaySnowGolemMelts => self
+                .world
+                .get_biome(pos)
+                .snow_golem_melts
+                .unwrap_or_else(|| self.get_dimension_value_bool(attribute)),
             EnvironmentAttribute::GameplayCanPillagerPatrolSpawn => {
                 self.get_dimension_value_bool(attribute)
                     && self

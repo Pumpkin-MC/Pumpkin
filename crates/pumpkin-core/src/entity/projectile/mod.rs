@@ -2,6 +2,7 @@ use super::{Entity, EntityBase, living::LivingEntity};
 use crate::world::World;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
@@ -86,7 +87,7 @@ pub struct ThrownItemEntity {
 impl ThrownItemEntity {
     pub fn new(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         let mut owner_pos = owner.pos.load();
-        owner_pos.y += owner.get_eye_height() - 0.1;
+        owner_pos.y += owner.get_eye_height() - f64::from(0.1f32);
         entity.set_pos(owner_pos);
         Self {
             entity,
@@ -146,14 +147,18 @@ impl ThrownItemEntity {
         self.owner.check_left_owner(entity);
         entity.update_last_pos();
 
+        self.handle_first_tick_bubble_column(caller);
+
         // Apply gravity and inertia
         let mut velocity = entity.velocity.load();
-        velocity.y -= self.get_gravity();
+        if !entity.has_no_gravity() {
+            velocity.y -= self.get_gravity();
+        }
 
         let inertia = if entity.touching_water.load(Ordering::Relaxed) {
-            0.8
+            f64::from(0.8f32)
         } else {
-            0.99
+            f64::from(0.99f32)
         };
         velocity = velocity.multiply(inertia, inertia, inertia);
 
@@ -163,29 +168,17 @@ impl ThrownItemEntity {
         let start_pos = entity.pos.load();
         let delta = velocity;
 
-        // Update position
         let new_pos = start_pos.add(&delta);
-        entity.set_pos(new_pos);
-
-        // Send updated velocity to clients
-        let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-        let chunk_pos = entity.chunk_pos.load();
-        world.broadcast_to_chunk(chunk_pos, &packet);
 
         // Calculate search box for collisions
-        let search_box = BoundingBox::new(
-            Vector3::new(
-                start_pos.x.min(new_pos.x),
-                start_pos.y.min(new_pos.y),
-                start_pos.z.min(new_pos.z),
-            ),
-            Vector3::new(
-                start_pos.x.max(new_pos.x),
-                start_pos.y.max(new_pos.y),
-                start_pos.z.max(new_pos.z),
-            ),
-        )
-        .expand(0.3, 0.3, 0.3);
+        let search_box = entity
+            .bounding_box
+            .load()
+            .expand_towards(delta.x, delta.y, delta.z)
+            .expand_all(1.0);
+        let margin = f64::from(
+            ((entity.tick_count.load(Ordering::Relaxed) as f32 - 2.0) / 20.0).clamp(0.0, 0.3),
+        );
 
         let mut closest_t = 1.0f64;
         let mut hit = None;
@@ -226,7 +219,7 @@ impl ThrownItemEntity {
                 continue;
             }
 
-            let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
+            let ebb = cand.get_entity().bounding_box.load().expand_all(margin);
             if skips_hit_from_inside(cand.as_ref(), &ebb, &start_pos) {
                 continue;
             }
@@ -243,27 +236,141 @@ impl ThrownItemEntity {
             }
         }
 
-        // Handle hit or continue
-        if let Some(h) = hit {
-            // Ensure hit is only processed once per projectile
-            if self.has_hit.swap(true, Ordering::SeqCst) {
-                return;
-            }
+        entity.set_pos(hit.as_ref().map_or(new_pos, ProjectileHit::hit_pos));
+        self.update_rotation();
+        entity.tick_block_collisions(caller);
+        self.owner.emit_shoot_event(entity);
+        entity.base_tick(caller);
 
-            if let ProjectileHit::Block { pos, hit_pos, .. } = &h {
-                let block = world.get_block(pos);
-                let state = world.get_block_state(pos);
-                if let Some(server) = world.server.upgrade() {
+        // Handle hit or continue
+        if !entity.is_removed()
+            && let Some(h) = hit
+        {
+            self.hit_target_or_deflect_self(caller, h);
+        }
+        if !entity.is_removed() {
+            let packet = CEntityVelocity::new(entity.entity_id.into(), entity.velocity.load());
+            world.broadcast_to_chunk(entity.chunk_pos.load(), &packet);
+        }
+    }
+
+    fn update_rotation(&self) {
+        use pumpkin_util::math::{atan2, rot_lerp};
+        let entity = self.get_entity();
+        let velocity = entity.velocity.load();
+        let yaw = (atan2(velocity.x, velocity.z) * 180.0 / f64::from(std::f32::consts::PI)) as f32;
+        let pitch = (atan2(velocity.y, velocity.horizontal_length()) * 180.0
+            / f64::from(std::f32::consts::PI)) as f32;
+        entity.set_rotation(
+            rot_lerp(0.2, entity.yaw.load(), yaw),
+            rot_lerp(0.2, entity.pitch.load(), pitch),
+        );
+    }
+
+    fn handle_first_tick_bubble_column(&self, caller: &dyn EntityBase) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        if entity.first_tick.load(Ordering::Relaxed)
+            && let Some(server) = world.server.upgrade()
+        {
+            let bounds = entity.bounding_box.load();
+            for pos in BlockPos::iterate(bounds.min_block_pos(), bounds.max_block_pos()) {
+                let (block, state) = world.get_block_and_state(&pos);
+                if block == &pumpkin_data::Block::BUBBLE_COLUMN {
                     world
                         .block_registry
-                        .on_projectile_hit(block, &world, caller, pos, state, hit_pos, &server);
+                        .on_entity_collision(block, &world, caller, &pos, state, &server);
                 }
             }
-
-            // Just trigger hit effects and remove
-            caller.on_hit(h);
-            entity.remove();
         }
+    }
+
+    fn hit_target_or_deflect_self(&self, caller: &dyn EntityBase, hit: ProjectileHit) {
+        if self.try_deflect(caller, &hit) {
+            return;
+        }
+        let world = self.entity.world.load();
+        if let ProjectileHit::Block { pos, .. } = &hit
+            && world.get_block_state(pos).is_air()
+        {
+            return;
+        }
+        if self.has_hit.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        if let ProjectileHit::Block { pos, hit_pos, .. } = &hit {
+            let block = world.get_block(pos);
+            let state = world.get_block_state(pos);
+            if let Some(server) = world.server.upgrade() {
+                world
+                    .block_registry
+                    .on_projectile_hit(block, &world, caller, pos, state, hit_pos, &server);
+            }
+        }
+        if let ProjectileHit::Entity { entity: target, .. } = &hit
+            && target
+                .get_entity()
+                .entity_type
+                .has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_REDIRECTABLE_PROJECTILE)
+        {
+            let owner = self.owner.get(&world);
+            let deflection =
+                crate::entity::projectile_deflection::ProjectileDeflectionType::Redirected;
+            let deflected = target
+                .cast_any()
+                .downcast_ref::<wind_charge::WindChargeEntity>()
+                .map_or_else(
+                    || {
+                        deflection.deflect_entity(target.as_ref(), owner.as_deref());
+                        if let Some(fireball) =
+                            target.cast_any().downcast_ref::<fireball::FireballEntity>()
+                        {
+                            fireball.on_deflection(true);
+                        }
+                        true
+                    },
+                    |charge| charge.deflect(&deflection, owner.as_deref()),
+                );
+            if deflected && let Some(target_owner) = target.get_projectile_owner() {
+                target_owner.copy_owner_from(&self.owner);
+            }
+        }
+        caller.on_hit(hit);
+        self.entity.remove();
+    }
+
+    fn try_deflect(&self, caller: &dyn EntityBase, hit: &ProjectileHit) -> bool {
+        let ProjectileHit::Entity { entity: target, .. } = hit else {
+            return false;
+        };
+        let target_entity = target.get_entity();
+        if !self.is_deflector(target_entity) {
+            return false;
+        }
+        if self.owner.mark_deflected_by(target_entity) {
+            crate::entity::projectile_deflection::ProjectileDeflectionType::Simple
+                .deflect_entity(caller, Some(target.as_ref()));
+            if let Some(fireball) = caller.cast_any().downcast_ref::<fireball::FireballEntity>() {
+                fireball.on_deflection(false);
+            }
+            if target_entity.entity_type == &EntityType::BREEZE {
+                target_entity.world.load().play_sound(
+                    pumpkin_data::sound::Sound::EntityBreezeDeflect,
+                    target.sound_source(),
+                    &target_entity.pos.load(),
+                );
+            }
+        }
+        true
+    }
+
+    fn is_deflector(&self, entity: &Entity) -> bool {
+        entity
+            .entity_type
+            .has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_DEFLECTS_PROJECTILES)
+            && !(entity.entity_type == &EntityType::BREEZE
+                && (self.entity.entity_type == &EntityType::WIND_CHARGE
+                    || self.entity.entity_type == &EntityType::BREEZE_WIND_CHARGE))
     }
 
     /// Returns if collision should be skipped (e.g. owner or projectile vs projectile)
@@ -275,6 +382,11 @@ impl ThrownItemEntity {
     ) -> bool {
         let other_ent = other.get_entity();
         if other_ent.entity_id == self_ent.entity_id {
+            return true;
+        }
+
+        // A suppressed repeat deflection must not stop movement at the same surface.
+        if self.is_deflector(other_ent) && self.owner.was_deflected_by(other_ent) {
             return true;
         }
 
@@ -297,7 +409,12 @@ impl ThrownItemEntity {
         }
 
         // Projectile vs projectile logic
-        if !self.collides_with_projectiles && is_projectile(other_ent.entity_type) {
+        if !self.collides_with_projectiles
+            && is_projectile(other_ent.entity_type)
+            && !other_ent
+                .entity_type
+                .has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_REDIRECTABLE_PROJECTILE)
+        {
             return true;
         }
 
@@ -342,6 +459,10 @@ fn calculate_ray_intersection(
     let d = [dir.x, dir.y, dir.z];
 
     for i in 0..3 {
+        // A contact on a face is not a hit when the projectile is leaving the box.
+        if (s[i] <= b_min[i] && d[i] < 0.0) || (s[i] >= b_max[i] && d[i] > 0.0) {
+            return None;
+        }
         if d[i].abs() < 1e-9 {
             if s[i] < b_min[i] || s[i] > b_max[i] {
                 return None;

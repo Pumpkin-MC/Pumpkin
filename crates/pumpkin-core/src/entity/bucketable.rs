@@ -114,11 +114,8 @@ pub fn bucket_mob_pickup(
     mob.save_to_bucket_tag(&mut bucket);
     crate::item::items::bucket::give_filled_mob_bucket(stack, player, bucket);
     let leashed = entity.is_leashed();
-    if leashed {
-        entity.unleash();
-        if !entity.is_leashed() {
-            world.drop_stack(&entity.block_pos.load(), ItemStack::new(1, &Item::LEAD));
-        }
+    if leashed && entity.unleash() {
+        world.drop_stack(&entity.block_pos.load(), ItemStack::new(1, &Item::LEAD));
     }
     entity.remove();
     Some(true)

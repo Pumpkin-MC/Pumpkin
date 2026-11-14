@@ -1146,6 +1146,11 @@ pub(crate) fn is_valid_spawn_floor(
 
 fn is_block_dangerous(entity_type: &'static EntityType, state: &'static BlockState) -> bool {
     let block = Block::from_state_id(state.id);
+    if entity_type == &EntityType::SNOW_GOLEM
+        && block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SNOW_GOLEM_IMMUNE_TO)
+    {
+        return false;
+    }
     if !entity_type.fire_immune && is_burning_block(block) {
         return true;
     }

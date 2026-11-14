@@ -371,6 +371,17 @@ pub fn build() -> TokenStream {
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let has_precipitation = biome.has_precipitation;
         let temperature = biome.temperature;
+        let snow_golem_melts = match biome.attributes.get("minecraft:gameplay/snow_golem_melts") {
+            Some(value) => {
+                #[expect(
+                    clippy::expect_used,
+                    reason = "validate the extracted biome attribute at code generation"
+                )]
+                let value = value.as_bool().expect("snow_golem_melts must be a boolean");
+                quote! { Some(#value) }
+            }
+            None => quote! { None },
+        };
         let downfall = biome.downfall;
         let carvers: Vec<TokenStream> = biome
             .carvers
@@ -400,9 +411,6 @@ pub fn build() -> TokenStream {
         let creature_spawn_probability = &biome.creature_spawn_probability.unwrap_or(0.1);
         let increased_fire_burnout = biome
             .attr_bool("minecraft:gameplay/increased_fire_burnout")
-            .unwrap_or(false);
-        let snow_golem_melts = biome
-            .attr_bool("minecraft:gameplay/snow_golem_melts")
             .unwrap_or(false);
         let can_pillager_patrol_spawn = biome
             .attr_bool("minecraft:gameplay/can_pillager_patrol_spawn")
@@ -492,6 +500,7 @@ pub fn build() -> TokenStream {
                 id: #index,
                 registry_id: #name,
                 be_network_id: #be_network_id,
+                snow_golem_melts: #snow_golem_melts,
                 weather: Weather::new(
                      #has_precipitation,
                      #temperature,
@@ -502,7 +511,6 @@ pub fn build() -> TokenStream {
                 carvers: &[#(#carvers),*],
                 creature_spawn_probability: #creature_spawn_probability,
                 increased_fire_burnout: #increased_fire_burnout,
-                snow_golem_melts: #snow_golem_melts,
                 can_pillager_patrol_spawn: #can_pillager_patrol_spawn,
                 spawners: #spawners,
                 spawn_costs: phf::phf_map! {
@@ -532,12 +540,12 @@ pub fn build() -> TokenStream {
             pub id: u8,
             pub registry_id: &'static str,
             pub be_network_id: u8,
+            pub snow_golem_melts: Option<bool>,
             pub weather: Weather,
             pub carvers: &'static [&'static crate::carver::CarverConfig],
             pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],
             pub creature_spawn_probability: f32,
             pub increased_fire_burnout: bool,
-            pub snow_golem_melts: bool,
             pub can_pillager_patrol_spawn: bool,
             pub spawners: SpawnGroups,
             pub spawn_costs: phf::Map<&'static str, SpawnCosts>,

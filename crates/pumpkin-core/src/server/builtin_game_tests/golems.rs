@@ -1,8 +1,51 @@
-use pumpkin_data::Block;
+use pumpkin_data::{Block, block_properties::OakLeavesLikeProperties};
 use pumpkin_gametest::{GameTestHelper, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
 use super::build_stone_floor;
+
+pub(super) async fn test_snow_golem_snow_trail_support(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    build_stone_floor(&helper, 5, 5).await?;
+    helper
+        .set_block_default(&BlockPos::new(2, 0, 1), &Block::ICE)
+        .await?;
+    let mut leaves = OakLeavesLikeProperties::from_state_id(Block::OAK_LEAVES.default_state.id);
+    leaves.persistent = true;
+    helper
+        .set_block(
+            &BlockPos::new(1, 0, 2),
+            leaves.to_state_id(&Block::OAK_LEAVES),
+        )
+        .await?;
+    helper
+        .set_block_default(&BlockPos::new(2, 0, 2), &Block::STONE_SLAB)
+        .await?;
+    helper
+        .execute_command(
+            &BlockPos::new(2, 1, 2),
+            "summon minecraft:snow_golem ~-0.5 ~ ~-0.5 {NoAI:1b,NoGravity:1b}",
+        )
+        .await?;
+    helper.run_after_delay(5, |helper| async move {
+        helper
+            .assert_block_present(&BlockPos::new(1, 1, 1), &Block::SNOW)
+            .await?;
+        helper
+            .assert_block_present(&BlockPos::new(1, 1, 2), &Block::SNOW)
+            .await?;
+        helper
+            .assert_block_present(&BlockPos::new(2, 1, 1), &Block::AIR)
+            .await?;
+        helper
+            .assert_block_present(&BlockPos::new(2, 1, 2), &Block::AIR)
+            .await?;
+        helper.succeed();
+        Ok(())
+    });
+    Ok(())
+}
 
 pub(super) async fn test_snow_golem_pattern_spawns(helper: GameTestHelper) -> GameTestResult<()> {
     build_stone_floor(&helper, 5, 5).await?;

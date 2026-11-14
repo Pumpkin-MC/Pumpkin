@@ -8,6 +8,8 @@ use uuid::Uuid;
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
+use crate::world::game_event::GameEventContext;
+use pumpkin_data::game_event::GameEvent;
 
 /// Vanilla `EntityReference`: an entity known by UUID, found in any dimension.
 #[derive(Default)]
@@ -104,11 +106,13 @@ impl EntityReference {
     }
 }
 
-/// Vanilla `Projectile` owner state: who shot it and whether it has cleared them.
+/// Vanilla projectile ownership, launch event and collision state.
 #[derive(Default)]
 pub struct ProjectileOwner {
     owner: EntityReference,
     left_owner: AtomicBool,
+    has_been_shot: AtomicBool,
+    last_deflected_by: AtomicCell<Option<i32>>,
 }
 
 impl ProjectileOwner {
@@ -117,6 +121,8 @@ impl ProjectileOwner {
         Self {
             owner: EntityReference::none(),
             left_owner: AtomicBool::new(false),
+            has_been_shot: AtomicBool::new(false),
+            last_deflected_by: AtomicCell::new(None),
         }
     }
 
@@ -125,7 +131,37 @@ impl ProjectileOwner {
         Self {
             owner: EntityReference::new(owner),
             left_owner: AtomicBool::new(false),
+            has_been_shot: AtomicBool::new(false),
+            last_deflected_by: AtomicCell::new(None),
         }
+    }
+
+    pub(crate) fn copy_owner_from(&self, projectile: &Self) {
+        self.owner.set_uuid(projectile.uuid());
+    }
+
+    /// Emits vanilla's first-tick projectile launch event at its new position.
+    pub fn emit_shoot_event(&self, projectile: &Entity) {
+        if !self.has_been_shot.load(Relaxed) {
+            let world = projectile.world.load();
+            let owner = self.get(&world);
+            world.emit_game_event_with_context(
+                GameEvent::ProjectileShoot.name(),
+                projectile.pos.load(),
+                &GameEventContext {
+                    source_entity: owner.as_deref(),
+                },
+            );
+            self.has_been_shot.store(true, Relaxed);
+        }
+    }
+
+    pub(crate) fn mark_deflected_by(&self, entity: &Entity) -> bool {
+        self.last_deflected_by.swap(Some(entity.entity_id)) != Some(entity.entity_id)
+    }
+
+    pub(crate) fn was_deflected_by(&self, entity: &Entity) -> bool {
+        self.last_deflected_by.load() == Some(entity.entity_id)
     }
 
     /// Vanilla `checkLeftOwner`, once per tick before moving.
@@ -180,6 +216,7 @@ impl ProjectileOwner {
 
     pub fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.owner.write_nbt(nbt, "Owner");
+        nbt.put_bool("HasBeenShot", self.has_been_shot.load(Relaxed));
         if self.left_owner.load(Relaxed) {
             nbt.put_bool("LeftOwner", true);
         }
@@ -188,6 +225,10 @@ impl ProjectileOwner {
     /// Updates only the keys present, so a partial read keeps the rest.
     pub fn read_nbt(&self, nbt: &NbtCompound) {
         self.owner.read_nbt(nbt, "Owner");
+        if nbt.has("HasBeenShot") {
+            self.has_been_shot
+                .store(nbt.get_bool("HasBeenShot").unwrap_or(false), Relaxed);
+        }
         if nbt.has("LeftOwner") {
             self.left_owner
                 .store(nbt.get_bool("LeftOwner").unwrap_or(false), Relaxed);
@@ -199,6 +240,7 @@ impl ProjectileOwner {
         for key in removed {
             match &**key {
                 "Owner" => self.owner.clear(),
+                "HasBeenShot" => self.has_been_shot.store(false, Relaxed),
                 "LeftOwner" => self.left_owner.store(false, Relaxed),
                 _ => {}
             }

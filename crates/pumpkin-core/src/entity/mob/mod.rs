@@ -1113,32 +1113,58 @@ impl MobEntity {
     ) -> bool {
         let entity = &self.living_entity.entity;
 
-        // If already leashed to player, right-clicking unleashes the mob
-        let currently_leashed = entity.is_leashed();
-
-        if currently_leashed {
-            entity.unleash();
-            let lead_item =
-                pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-            entity
-                .world
-                .load()
-                .drop_stack(&entity.block_pos.load(), lead_item);
+        let holder = entity.get_leash_holder();
+        if holder
+            .as_ref()
+            .is_some_and(|holder| holder.get_entity().entity_id == player.entity_id())
+        {
+            if !entity.unleash() {
+                return false;
+            }
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                entity.spawn_at_location(ItemStack::new(1, &Item::LEAD));
+            }
+            entity.world.load().play_sound(
+                Sound::ItemLeadUntied,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+            );
             return true;
         }
 
-        // If holding a lead, leash the mob to the player
-        if (item_stack.item.registry_key == "lead"
-            || item_stack.item.registry_key == "minecraft:lead")
+        if item_stack.item == &Item::LEAD
             && can_be_leashed
+            && holder
+                .as_ref()
+                .is_none_or(|holder| holder.get_player().is_none())
         {
             let diff = entity.pos.load() - player.get_entity().pos.load();
-            let dist_sq = diff.length_squared();
-            if dist_sq <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
-                entity.leash_to(player.clone() as Arc<dyn EntityBase>);
+            if diff.length_squared() <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
+                let new_holder: Arc<dyn EntityBase> = player.clone();
+                if !entity.approve_leash_attachment(new_holder.as_ref()) {
+                    return false;
+                }
+                if holder.is_some() {
+                    if !entity.unleash() {
+                        return false;
+                    }
+                    entity.spawn_at_location(ItemStack::new(1, &Item::LEAD));
+                }
+                entity.attach_leash(&new_holder);
+                if entity
+                    .get_leash_holder()
+                    .is_none_or(|holder| holder.get_entity().entity_id != player.entity_id())
+                {
+                    return false;
+                }
                 if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                     item_stack.decrement(1);
                 }
+                entity.world.load().play_sound(
+                    Sound::ItemLeadTied,
+                    SoundCategory::Neutral,
+                    &entity.pos.load(),
+                );
                 return true;
             }
         }
@@ -1778,6 +1804,17 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn attempt_to_shear_equipment(&self, player: &Arc<Player>, shears: &mut ItemStack) -> bool {
+        self.attempt_to_shear_equipment_with_hand(player, shears, pumpkin_util::Hand::Right)
+            .unwrap_or(false)
+    }
+
+    /// Returns `None` without shearable equipment and `Some(false)` when plugins cancel.
+    fn attempt_to_shear_equipment_with_hand(
+        &self,
+        player: &Arc<Player>,
+        shears: &mut ItemStack,
+        hand: pumpkin_util::Hand,
+    ) -> Option<bool> {
         let mob_entity = self.get_mob_entity();
         let living = &mob_entity.living_entity;
         let creative = player.gamemode.load() == pumpkin_util::GameMode::Creative;
@@ -1808,9 +1845,7 @@ pub trait Mob: EntityBase + Send + Sync {
                     .then(|| (slot, stack.clone(), shearing_sound))
             })
         };
-        let Some((slot, stack, shearing_sound)) = sheared else {
-            return false;
-        };
+        let (slot, stack, shearing_sound) = sheared?;
 
         let entity = &living.entity;
         let world = entity.world.load();
@@ -1818,22 +1853,38 @@ pub trait Mob: EntityBase + Send + Sync {
             let mut event = PlayerShearEntityEvent {
                 player: player.clone(),
                 entity_id: entity.entity_id,
-                hand: 0,
+                hand: match hand {
+                    pumpkin_util::Hand::Right => 0,
+                    pumpkin_util::Hand::Left => 1,
+                },
                 cancelled: false,
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
-                return false;
+                return Some(false);
             }
         }
 
         let _ = player.damage_item_stack(shears, 1);
         mob_entity.set_item_slot(&slot, ItemStack::EMPTY.clone());
         world.emit_game_event(GameEvent::Unequip.name(), entity.pos.load());
-        world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
-        entity.spawn_at_location(stack);
+        world.emit_game_event_with_context(
+            GameEvent::Shear.name(),
+            entity.pos.load(),
+            &crate::world::game_event::GameEventContext {
+                source_entity: Some(player.as_ref()),
+            },
+        );
+        let item_id = stack.item.registry_key.to_string();
+        entity.spawn_at_location_with_offset(stack, super::average_passenger_attachment(self));
+        player.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerShearedEquipment {
+                entity_type: format!("minecraft:{}", entity.entity_type.resource_name),
+                item_id,
+            },
+        );
         world.play_sound_event(&shearing_sound, SoundCategory::Neutral, &entity.pos.load());
-        true
+        Some(true)
     }
 
     fn check_spawn_obstruction(&self, world: &World) -> bool {
