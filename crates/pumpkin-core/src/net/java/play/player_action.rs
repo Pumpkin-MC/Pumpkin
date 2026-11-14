@@ -31,7 +31,7 @@ impl JavaClient {
                     let position = player_action.position;
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
-                    let (block, state) = world.get_block_and_state(&position);
+                    let block = world.get_block(&position);
 
                     if let Some(server_arc) = world.server.upgrade() {
                         let mut interact_event = PlayerInteractEvent::new(
@@ -44,10 +44,7 @@ impl JavaClient {
                             .plugin_manager
                             .fire_blocking(&server_arc, &mut interact_event);
                         if interact_event.cancelled {
-                            player.try_send_client_packet(&CBlockUpdate::new(
-                                position,
-                                VarInt(i32::from(state.id.as_u16())),
-                            ));
+                            self.sync_block_state_to_client(player, &world, position);
                             self.update_sequence(player_action.sequence.0);
                             return;
                         }
