@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicI8, AtomicI32, AtomicU8, Ordering},
 };
 
-use pumpkin_data::{damage::DamageType, item_stack::ItemStack};
+use pumpkin_data::{Block, BlockStateId, damage::DamageType, item_stack::ItemStack};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::{
     codec::{item_stack_seralizer::ItemStackSerializer, var_int::VarInt},
@@ -11,6 +11,7 @@ use pumpkin_protocol::{
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
+use pumpkin_world::generation::structure::template::PaletteEntry;
 
 use crate::{
     entity::{Entity, EntityBase, living::LivingEntity},
@@ -662,6 +663,36 @@ impl DisplayEntity {
     }
 }
 
+/// Writes a block state the way vanilla's `BlockState.CODEC` does: `{id:..,properties:{..}}`.
+fn block_state_to_nbt(state: i32) -> NbtCompound {
+    let id = BlockStateId::new_or_air(u16::try_from(state).unwrap_or(0));
+    let block = Block::from_state_id(id);
+    let properties = block
+        .properties(id)
+        .map(|p| p.to_props())
+        .unwrap_or_default();
+    PaletteEntry::with_properties(format!("minecraft:{}", block.name), properties).to_nbt_compound()
+}
+
+/// Reads a block state written by `BlockState.CODEC`. Unknown blocks fall back to air like vanilla.
+fn block_state_from_nbt(nbt: &NbtCompound) -> u16 {
+    let Ok(entry) = PaletteEntry::from_nbt_compound(nbt) else {
+        return 0;
+    };
+    let Some(block) = Block::from_name(&entry.name) else {
+        return 0;
+    };
+    let default = block.default_state.id;
+    // `from_properties` panics for blocks without properties, so only ask when the block has some.
+    if entry.properties.is_empty() || block.properties(default).is_none() {
+        return default.as_u16();
+    }
+    block
+        .from_properties(&entry.properties)
+        .to_state_id(block)
+        .as_u16()
+}
+
 pub struct BlockDisplayEntity {
     pub display: DisplayEntity,
     pub block_state: AtomicI32,
@@ -691,12 +722,21 @@ impl BlockDisplayEntity {
 impl EntityBase for BlockDisplayEntity {
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         self.display.write_display_nbt(nbt);
-        nbt.put_int("block_state", self.block_state.load(Ordering::Relaxed));
+        nbt.put_compound(
+            "block_state",
+            block_state_to_nbt(self.block_state.load(Ordering::Relaxed)),
+        );
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.display.read_display_nbt(nbt);
-        if let Some(state) = nbt.get_int("block_state") {
+        // Older Pumpkin saves stored the raw state id.
+        let state = match nbt.get("block_state") {
+            Some(NbtTag::Int(id)) => Some(*id),
+            Some(NbtTag::Compound(c)) => Some(i32::from(block_state_from_nbt(c))),
+            _ => None,
+        };
+        if let Some(state) = state {
             self.block_state.store(state, Ordering::Relaxed);
         }
     }
