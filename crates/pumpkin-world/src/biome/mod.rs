@@ -397,7 +397,6 @@ pub fn hash_seed(seed: u64) -> i64 {
 #[cfg(test)]
 mod test {
     use pumpkin_data::{chunk::Biome, dimension::Dimension};
-    use pumpkin_util::read_data_from_file;
     use serde::Deserialize;
 
     use crate::{
@@ -431,7 +430,7 @@ mod test {
         }
 
         let expected_data: Vec<BiomeData> =
-            read_data_from_file!("../../../../assets/tests/biome_no_blend_no_beard_0.json");
+            include_json!("../../../../assets/tests/biome_no_blend_no_beard_0.json");
 
         let seed = 0;
         let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(

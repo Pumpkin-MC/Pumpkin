@@ -2,7 +2,6 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::fs;
-use std::path::Path;
 
 #[derive(Deserialize)]
 struct DataDrivenBrewingRecipe {
@@ -48,7 +47,7 @@ struct BrewingOutputPotionContents {
 /// Generates the `TokenStream` for `BREWING_RECIPES`, `POTION_RECIPES` and `ITEM_RECIPES`.
 pub fn build() -> TokenStream {
     // 2. Load 26.3 data-driven brewing recipes from datapack
-    let brewing_dir = Path::new("../../assets/datapack/data/minecraft/recipe/brewing");
+    let brewing_dir = crate::asset_path("datapack/data/minecraft/recipe/brewing");
     let mut entries: Vec<_> = fs::read_dir(brewing_dir)
         .expect("Missing brewing recipe directory")
         .flatten()

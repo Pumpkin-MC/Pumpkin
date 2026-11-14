@@ -63,7 +63,24 @@ pub struct Biome {
 }
 
 impl Biome {
+    fn attr_bool(&self, key: &str) -> Option<bool> {
+        let val = self.attributes.get(key)?;
+        val.as_bool()
+            .or_else(|| val.get("argument").and_then(Value::as_bool))
+    }
+
+    fn attr_f32(&self, key: &str) -> Option<f32> {
+        let val = self.attributes.get(key)?;
+        val.as_f64()
+            .or_else(|| val.get("argument").and_then(Value::as_f64))
+            .map(|v| v as f32)
+    }
+
     fn apply_natural_mob_spawns(&mut self) {
+        if self.creature_spawn_probability.is_none() {
+            self.creature_spawn_probability =
+                self.attr_f32("minecraft:gameplay/creature_world_gen_spawn_probability");
+        }
         let Some(attr) = self.attributes.get("minecraft:gameplay/natural_mob_spawns") else {
             return;
         };
@@ -381,6 +398,15 @@ pub fn build() -> TokenStream {
             .collect();
 
         let creature_spawn_probability = &biome.creature_spawn_probability.unwrap_or(0.1);
+        let increased_fire_burnout = biome
+            .attr_bool("minecraft:gameplay/increased_fire_burnout")
+            .unwrap_or(false);
+        let snow_golem_melts = biome
+            .attr_bool("minecraft:gameplay/snow_golem_melts")
+            .unwrap_or(false);
+        let can_pillager_patrol_spawn = biome
+            .attr_bool("minecraft:gameplay/can_pillager_patrol_spawn")
+            .unwrap_or(true);
 
         let temperature_modifier = biome
             .temperature_modifier
@@ -475,6 +501,9 @@ pub fn build() -> TokenStream {
                 features: &[#(#features),*],
                 carvers: &[#(#carvers),*],
                 creature_spawn_probability: #creature_spawn_probability,
+                increased_fire_burnout: #increased_fire_burnout,
+                snow_golem_melts: #snow_golem_melts,
+                can_pillager_patrol_spawn: #can_pillager_patrol_spawn,
                 spawners: #spawners,
                 spawn_costs: phf::phf_map! {
                     #(#spawn_costs),*
@@ -507,6 +536,9 @@ pub fn build() -> TokenStream {
             pub carvers: &'static [&'static crate::carver::CarverConfig],
             pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],
             pub creature_spawn_probability: f32,
+            pub increased_fire_burnout: bool,
+            pub snow_golem_melts: bool,
+            pub can_pillager_patrol_spawn: bool,
             pub spawners: SpawnGroups,
             pub spawn_costs: phf::Map<&'static str, SpawnCosts>,
         }

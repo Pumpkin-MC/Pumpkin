@@ -56,7 +56,7 @@ impl BedrockClient {
                             .get_slot(screen_slot)
                             .get_cloned_stack();
                         if !current_stack.is_empty() {
-                            player.drop_item(current_stack.clone());
+                            player.drop_item(current_stack);
 
                             player_screen_handler
                                 .get_slot(screen_slot)
