@@ -1164,6 +1164,9 @@ impl VillagerEntity {
             recipe.put_int("demand", offer.demand);
             recipe.put_int("tier", (index as i32 / 2).min(tier));
             recipe.put_compound("buyA", Self::bedrock_trade_item(base_cost, adjusted_count));
+            // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
+            // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
+            // Bedrock always sends `buyB`, an empty compound for "no second cost".
             recipe.put_compound(
                 "buyB",
                 offer.cost_b.as_ref().map_or_else(NbtCompound::new, |cost| {
@@ -1568,6 +1571,8 @@ impl Mob for VillagerEntity {
             let mut recipes = Vec::new();
             for offer in offers.iter() {
                 // Unsaveable item: offer not saved.
+                // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
+                // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
                 let (Some(buy), Some(sell), Some(buy_b)) = (
                     offer.base_cost_a.0.to_nbt(),
                     offer.output.0.to_nbt(),
@@ -1677,6 +1682,13 @@ impl Mob for VillagerEntity {
                     let buy = recipe
                         .get_compound("buy")
                         .and_then(ItemStack::read_item_stack);
+                    // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
+                    // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
+                    // Bug: a `buyB` that is present but fails to decode (unknown item id,
+                    // count above the limit) reads as `None` here, which means "no second
+                    // cost", so the trade loads without its second payment. Reject the
+                    // recipe when `buyB` is present but invalid; keep `None` only when the
+                    // key is absent.
                     let buy_b = recipe
                         .get_compound("buyB")
                         .and_then(ItemStack::read_item_stack);
