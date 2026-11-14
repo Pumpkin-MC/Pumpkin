@@ -1562,7 +1562,7 @@ impl ProtoChunk {
     }
 
     /// Returns the deterministic weighted fallback order for structures in a set.
-    fn weighted_structure_order(
+    pub(crate) fn weighted_structure_order(
         entries: &[WeightedEntry],
         seed: u64,
         chunk_x: i32,
