@@ -284,6 +284,14 @@ impl JavaClient {
             player.swing_hand(hand, true);
         }
 
+        // vanilla shrinks the stack it started with, a listener's hand change stands
+        let hand_unchanged = (matches!(hand, Hand::Left)
+            || inventory.get_selected_slot() as usize == slot_index)
+            && inventory.get_stack_in_hand(hand).are_equal(&before);
+        if !hand_unchanged {
+            return Ok(());
+        }
+
         // Broadcast the break entity status before the slot sync; the client
         // needs the old item texture in the slot for break particles.
         if !before.is_empty() && after.is_empty() {

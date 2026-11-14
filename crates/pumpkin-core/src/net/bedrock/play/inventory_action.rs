@@ -245,6 +245,7 @@ impl BedrockClient {
                     if !stack.is_empty() && Arc::ptr_eq(&world, &player.world()) {
                         let item_id = stack.item.id;
                         let before = stack.clone();
+                        let slot_index = player.inventory().get_selected_slot();
                         // TODO: reject unloaded target (get_block_state_id_if_loaded), teleport may unload it
                         // block handlers may change it
                         let block = world.get_block(&data.block_position);
@@ -288,19 +289,27 @@ impl BedrockClient {
                                 }
                             }
                         }
-                        if before.is_damageable() && stack.is_empty() {
-                            player.increment_stat(
-                                pumpkin_data::statistic::StatisticCategory::Broken,
-                                item_id as i32,
-                                1,
-                            );
-                            player.world().send_entity_status(
-                                player.get_entity(),
-                                crate::entity::equipment_break_status(&EquipmentSlot::MAIN_HAND),
-                                ActorEventID::None,
-                            );
+                        // vanilla shrinks the stack it started with, a listener's hand change stands
+                        let inventory = player.inventory();
+                        if inventory.get_selected_slot() == slot_index
+                            && inventory.held_item().are_equal(&before)
+                        {
+                            if before.is_damageable() && stack.is_empty() {
+                                player.increment_stat(
+                                    pumpkin_data::statistic::StatisticCategory::Broken,
+                                    item_id as i32,
+                                    1,
+                                );
+                                player.world().send_entity_status(
+                                    player.get_entity(),
+                                    crate::entity::equipment_break_status(
+                                        &EquipmentSlot::MAIN_HAND,
+                                    ),
+                                    ActorEventID::None,
+                                );
+                            }
+                            player.inventory().set_held_item(stack);
                         }
-                        player.inventory().set_held_item(stack);
                     }
                 } else if data.action_type.0 == 1 {
                     // Click air / Use item
