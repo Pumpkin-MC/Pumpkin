@@ -387,9 +387,10 @@ impl Mob for ArmadilloEntity {
         let entity = self.get_entity();
         let world = entity.world.load();
 
-        if entity.is_alive() && !self.is_baby() {
+        // Vanilla keeps counting while shedding is blocked, so a held-back scute drops once allowed.
+        if entity.is_alive() {
             let scute_time = self.scute_time.fetch_sub(1, Ordering::Relaxed) - 1;
-            if scute_time <= 0 {
+            if scute_time <= 0 && Mob::should_drop_loot(self) {
                 let pos = entity.pos.load();
                 if drop_from_gift_loot_table(self, ARMADILLO_SHED_LOOT_TABLE, |drop_stack| {
                     let item_entity = Arc::new(ItemEntity::new(
