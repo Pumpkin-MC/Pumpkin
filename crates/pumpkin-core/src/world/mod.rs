@@ -956,19 +956,22 @@ impl World {
         }
     }
 
-    pub fn set_game_rule(&self, rule: &GameRule, value: GameRuleValue<i64, bool>) {
+    pub fn set_game_rule(&self, rule: &GameRule, value: &GameRuleValue<i64, bool>) {
         let current_info = self.level_info.load();
         let mut new_info = (**current_info).clone();
         match (new_info.game_rules.get_mut(rule), value) {
             (GameRuleValue::Int(target), GameRuleValue::Int(val)) => {
-                *target = val;
+                *target = *val;
             }
             (GameRuleValue::Bool(target), GameRuleValue::Bool(val)) => {
-                *target = val;
+                *target = *val;
             }
             _ => {}
         }
         self.level_info.store(Arc::new(new_info));
+        if let Some(server) = self.server.upgrade() {
+            server.on_game_rule_changed(rule, value);
+        }
         if *rule == GameRule::AdvanceTime {
             let level_time = self
                 .level_time
@@ -3556,6 +3559,11 @@ impl World {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
+        let immediate_respawn = matches!(
+            self.get_game_rule(&GameRule::ImmediateRespawn),
+            GameRuleValue::Bool(true)
+        );
+        let enabled_respawn_screen = !immediate_respawn;
         // Send the login packet for our new player
         client
             .send_packet(&CLogin::new(
@@ -3584,7 +3592,7 @@ impl World {
                     .get()
                     .into(), // TODO: sim view dinstance
                 false,
-                true,
+                enabled_respawn_screen,
                 false,
                 PlayerSpawnData::new(
                     self.dimension.clone(),
@@ -3606,6 +3614,22 @@ impl World {
                 true,
             ))
             .await;
+        client.login_sent.store(true, Ordering::Relaxed);
+
+        // A rule change can land between reading the rule above and queuing the
+        // login packet, so send the current value once the client is in play.
+        let current_immediate_respawn = matches!(
+            self.get_game_rule(&GameRule::ImmediateRespawn),
+            GameRuleValue::Bool(true)
+        );
+        if immediate_respawn != current_immediate_respawn {
+            player
+                .send_client_packet(&CGameEvent::new(
+                    GameEvent::EnabledRespawnScreen,
+                    if current_immediate_respawn { 1.0 } else { 0.0 },
+                ))
+                .await;
+        }
 
         // tab list before `level.addNewPlayer`.
         // Java drops a player spawn whose info entry is missing and never retries,
