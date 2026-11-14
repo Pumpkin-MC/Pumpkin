@@ -3,14 +3,18 @@ use std::sync::Arc;
 use crate::{
     block::{
         BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-        OnLandedUponArgs, OnPlaceArgs, PathComputationType, PlacedArgs,
+        OnLandedUponArgs, OnPlaceArgs, OnProjectileHitArgs, PathComputationType, PlacedArgs,
     },
-    entity::player::Player,
+    entity::{
+        player::Player,
+        projectile::{may_break, may_interact},
+    },
     world::World,
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
     block_properties::{PointedDripstoneLikeProperties, SpeleothemThickness, VerticalDirection},
+    entity::EntityType,
     fluid::Fluid,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -146,6 +150,21 @@ impl BlockBehaviour for DripstoneBlock {
         }
         if let Some(living) = args.entity.get_living_entity() {
             living.handle_fall_damage(args.entity, args.fall_distance, 1.0);
+        }
+    }
+
+    fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
+        const TRIDENT_BREAK_MIN_SPEED: f64 = 0.6;
+
+        let projectile_entity = args.projectile.get_entity();
+        if args.block == &Block::POINTED_DRIPSTONE
+            && projectile_entity.entity_type == &EntityType::TRIDENT
+            && projectile_entity.velocity.load().length() > TRIDENT_BREAK_MIN_SPEED
+            && may_interact(args.projectile, args.world, args.position)
+            && may_break(args.projectile, args.world)
+        {
+            args.world
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
     }
 

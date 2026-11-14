@@ -796,6 +796,8 @@ impl EntityPredicate {
 pub struct DamagePredicate {
     pub blocked: Option<bool>,
     pub deflector: Option<bool>,
+    pub is_mace_smash: Option<bool>,
+    pub direct_entity: Option<String>,
     pub dealt: Option<FloatBounds>,
     pub taken: Option<FloatBounds>,
 }
@@ -803,6 +805,18 @@ pub struct DamagePredicate {
 impl DamagePredicate {
     #[must_use]
     pub fn matches(&self, is_blocked: bool, is_deflector: bool, damage: Option<f64>) -> bool {
+        self.matches_with_context(is_blocked, is_deflector, false, damage, None)
+    }
+
+    #[must_use]
+    pub fn matches_with_context(
+        &self,
+        is_blocked: bool,
+        is_deflector: bool,
+        is_mace_smash: bool,
+        damage: Option<f64>,
+        direct_entity_type: Option<&str>,
+    ) -> bool {
         if let Some(blocked) = self.blocked
             && blocked != is_blocked
         {
@@ -812,6 +826,19 @@ impl DamagePredicate {
             && deflector != is_deflector
         {
             return false;
+        }
+        if let Some(expected_mace) = self.is_mace_smash
+            && expected_mace != is_mace_smash
+        {
+            return false;
+        }
+        if let Some(expected_direct) = &self.direct_entity {
+            let Some(actual_direct) = direct_entity_type else {
+                return false;
+            };
+            if !matches_tag_or_id(RegistryKey::EntityType, expected_direct, actual_direct) {
+                return false;
+            }
         }
         if let Some(dealt) = &self.dealt {
             let Some(d) = damage else {
@@ -840,30 +867,57 @@ impl DamagePredicate {
 
         let damage_obj = map.get("damage").unwrap_or(val);
         let blocked = damage_obj.get("blocked").and_then(Value::as_bool);
+        let type_tags = damage_obj
+            .get("type")
+            .and_then(|t| t.get("tags"))
+            .and_then(Value::as_array);
         let deflector = damage_obj
             .get("type")
             .and_then(|t| t.get("is_projectile"))
             .and_then(Value::as_bool)
             .or_else(|| {
-                damage_obj
-                    .get("type")
-                    .and_then(|t| t.get("tags"))
-                    .and_then(Value::as_array)
-                    .map(|tags| {
-                        tags.iter().any(|entry| {
+                type_tags.and_then(|tags| {
+                    tags.iter()
+                        .find(|entry| {
                             entry
                                 .get("id")
                                 .and_then(Value::as_str)
                                 .is_some_and(|id| id.contains("projectile"))
                         })
-                    })
+                        .map(|entry| {
+                            entry
+                                .get("expected")
+                                .and_then(Value::as_bool)
+                                .unwrap_or(true)
+                        })
+                })
             });
+        let is_mace_smash = type_tags.and_then(|tags| {
+            tags.iter()
+                .find(|entry| {
+                    entry.get("id").and_then(Value::as_str) == Some("#minecraft:mace_smash")
+                })
+                .map(|entry| {
+                    entry
+                        .get("expected")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(true)
+                })
+        });
+        let direct_entity = damage_obj
+            .get("type")
+            .and_then(|t| t.get("direct_entity"))
+            .and_then(|de| de.get("minecraft:entity_type"))
+            .and_then(Value::as_str)
+            .map(ToString::to_string);
         let dealt = damage_obj.get("dealt").and_then(FloatBounds::from_value);
         let taken = damage_obj.get("taken").and_then(FloatBounds::from_value);
 
         Self {
             blocked,
             deflector,
+            is_mace_smash,
+            direct_entity,
             dealt,
             taken,
         }
@@ -1377,6 +1431,8 @@ impl From<pumpkin_data::advancement_data::AdvancementCondition> for CriterionCon
             AC::EntityHurtPlayer(d) => Self::EntityHurtPlayer(DamagePredicate {
                 blocked: d.blocked,
                 deflector: d.is_projectile,
+                is_mace_smash: d.is_mace_smash,
+                direct_entity: d.direct_entity.map(ToString::to_string),
                 dealt: d.dealt_min.map(|min| FloatBounds {
                     min: Some(min),
                     max: None,
@@ -1389,6 +1445,8 @@ impl From<pumpkin_data::advancement_data::AdvancementCondition> for CriterionCon
             AC::PlayerHurtEntity(d) => Self::PlayerHurtEntity(DamagePredicate {
                 blocked: d.blocked,
                 deflector: d.is_projectile,
+                is_mace_smash: d.is_mace_smash,
+                direct_entity: d.direct_entity.map(ToString::to_string),
                 dealt: d.dealt_min.map(|min| FloatBounds {
                     min: Some(min),
                     max: None,

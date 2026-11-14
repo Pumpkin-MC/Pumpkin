@@ -59,31 +59,39 @@ impl EntityBase for EvokerFangsEntity {
         if warmup < 0 {
             if warmup == -8 {
                 let bb = entity.bounding_box.load().expand(0.2, 0.0, 0.2);
-                let candidates = world.get_entities_at_box(&bb);
-
-                let owner = self.owner.get(&world);
+                // Players count as targets, spectators don't.
+                let candidates = world.get_all_at_box(&bb);
+                let owner = self
+                    .owner
+                    .get(&world)
+                    .filter(|owner| owner.get_living_entity().is_some());
 
                 for cand in candidates {
                     let cand_ent = cand.get_entity();
-                    if self.owner.matches(cand_ent) {
+                    if cand.get_living_entity().is_none()
+                        || cand.is_spectator()
+                        || !cand_ent.is_alive()
+                        || cand_ent.invulnerable.load(Ordering::Relaxed)
+                        || owner
+                            .as_ref()
+                            .is_some_and(|owner| owner.get_entity().entity_id == cand_ent.entity_id)
+                    {
                         continue;
                     }
-
-                    if cand_ent.entity_id != entity.entity_id && cand.get_living_entity().is_some()
-                    {
-                        let damage_type = if owner.is_some() {
-                            DamageType::INDIRECT_MAGIC
-                        } else {
-                            DamageType::MAGIC
-                        };
-                        let _ = cand.damage_with_context(
+                    if let Some(owner) = &owner {
+                        if owner.as_ref().is_allied_to(cand.as_ref()) {
+                            continue;
+                        }
+                        cand.damage_with_context(
                             cand.as_ref(),
                             6.0,
-                            damage_type,
+                            DamageType::INDIRECT_MAGIC,
                             Some(entity.pos.load()),
-                            Some(entity),
-                            owner.as_deref(),
+                            Some(self),
+                            Some(owner.as_ref()),
                         );
+                    } else {
+                        cand.damage(cand.as_ref(), 6.0, DamageType::MAGIC);
                     }
                 }
             }

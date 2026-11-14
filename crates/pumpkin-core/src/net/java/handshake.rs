@@ -31,6 +31,14 @@ impl PendingConnection {
         }
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;
+            // A plugin translating this version (see `register_java_versions`) admits it.
+            if server
+                .plugin_manager
+                .java_versions
+                .admits_protocol(protocol)
+            {
+                return;
+            }
             if protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {
                 self.kick(TextComponent::translate_cross(
                     translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,

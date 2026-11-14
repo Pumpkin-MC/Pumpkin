@@ -420,6 +420,10 @@ impl Mob for EndermanEntity {
         true
     }
 
+    fn projectile_receives_side_effects_on_hit(&self, was_hurt: bool) -> bool {
+        was_hurt
+    }
+
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
     }

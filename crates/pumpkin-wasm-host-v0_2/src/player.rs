@@ -107,7 +107,7 @@ pub(crate) fn from_wit_server_link(
     Ok((label, link.url))
 }
 
-const fn to_wasm_java_version(
+pub(crate) const fn to_wasm_java_version(
     version: JavaMinecraftVersion,
 ) -> pumpkin::plugin::player::JavaMinecraftVersion {
     match version {
@@ -167,14 +167,76 @@ const fn to_wasm_java_version(
     }
 }
 
-const fn to_wasm_bedrock_version(
+pub(crate) const fn from_wasm_java_version(
+    version: pumpkin::plugin::player::JavaMinecraftVersion,
+) -> JavaMinecraftVersion {
+    match version {
+        pumpkin::plugin::player::JavaMinecraftVersion::V172 => JavaMinecraftVersion::V_1_7_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V176 => JavaMinecraftVersion::V_1_7_6,
+        pumpkin::plugin::player::JavaMinecraftVersion::V18 => JavaMinecraftVersion::V_1_8,
+        pumpkin::plugin::player::JavaMinecraftVersion::V19 => JavaMinecraftVersion::V_1_9,
+        pumpkin::plugin::player::JavaMinecraftVersion::V191 => JavaMinecraftVersion::V_1_9_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V192 => JavaMinecraftVersion::V_1_9_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V193 => JavaMinecraftVersion::V_1_9_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V110 => JavaMinecraftVersion::V_1_10,
+        pumpkin::plugin::player::JavaMinecraftVersion::V111 => JavaMinecraftVersion::V_1_11,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1111 => JavaMinecraftVersion::V_1_11_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V112 => JavaMinecraftVersion::V_1_12,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1121 => JavaMinecraftVersion::V_1_12_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1122 => JavaMinecraftVersion::V_1_12_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V113 => JavaMinecraftVersion::V_1_13,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1131 => JavaMinecraftVersion::V_1_13_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1132 => JavaMinecraftVersion::V_1_13_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V114 => JavaMinecraftVersion::V_1_14,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1141 => JavaMinecraftVersion::V_1_14_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1142 => JavaMinecraftVersion::V_1_14_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1143 => JavaMinecraftVersion::V_1_14_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1144 => JavaMinecraftVersion::V_1_14_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V115 => JavaMinecraftVersion::V_1_15,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1151 => JavaMinecraftVersion::V_1_15_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1152 => JavaMinecraftVersion::V_1_15_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V116 => JavaMinecraftVersion::V_1_16,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1161 => JavaMinecraftVersion::V_1_16_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1162 => JavaMinecraftVersion::V_1_16_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1163 => JavaMinecraftVersion::V_1_16_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1164 => JavaMinecraftVersion::V_1_16_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V117 => JavaMinecraftVersion::V_1_17,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1171 => JavaMinecraftVersion::V_1_17_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V118 => JavaMinecraftVersion::V_1_18,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1182 => JavaMinecraftVersion::V_1_18_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V119 => JavaMinecraftVersion::V_1_19,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1191 => JavaMinecraftVersion::V_1_19_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1193 => JavaMinecraftVersion::V_1_19_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1194 => JavaMinecraftVersion::V_1_19_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V120 => JavaMinecraftVersion::V_1_20,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1202 => JavaMinecraftVersion::V_1_20_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1203 => JavaMinecraftVersion::V_1_20_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1205 => JavaMinecraftVersion::V_1_20_5,
+        pumpkin::plugin::player::JavaMinecraftVersion::V121 => JavaMinecraftVersion::V_1_21,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1212 => JavaMinecraftVersion::V_1_21_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1214 => JavaMinecraftVersion::V_1_21_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1215 => JavaMinecraftVersion::V_1_21_5,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1216 => JavaMinecraftVersion::V_1_21_6,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1217 => JavaMinecraftVersion::V_1_21_7,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1219 => JavaMinecraftVersion::V_1_21_9,
+        pumpkin::plugin::player::JavaMinecraftVersion::V12111 => JavaMinecraftVersion::V_1_21_11,
+        pumpkin::plugin::player::JavaMinecraftVersion::V261 => JavaMinecraftVersion::V_26_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V262 => JavaMinecraftVersion::V_26_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V263 => JavaMinecraftVersion::V_26_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::Unknown => JavaMinecraftVersion::Unknown,
+    }
+}
+
+pub(crate) const fn to_wasm_bedrock_version(
     version: BedrockMinecraftVersion,
 ) -> pumpkin::plugin::player::BedrockMinecraftVersion {
     match version {
         BedrockMinecraftVersion::V_1_21 => pumpkin::plugin::player::BedrockMinecraftVersion::V121,
-        BedrockMinecraftVersion::V_1_26_51 | BedrockMinecraftVersion::V_1_26_60 => {
-            // The v0.1 ABI does not define this Bedrock version.
-            pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
+        BedrockMinecraftVersion::V_1_26_51 => {
+            pumpkin::plugin::player::BedrockMinecraftVersion::V12651
+        }
+        BedrockMinecraftVersion::V_1_26_60 => {
+            pumpkin::plugin::player::BedrockMinecraftVersion::V12660
         }
         BedrockMinecraftVersion::Unknown => {
             pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
@@ -3688,6 +3750,35 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         Ok(to_wasm_java_version(client.version.load()))
     }
 
+    fn get_connection_id(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<u64> {
+        let player = self.get(&player)?.clone();
+
+        let client = player
+            .client
+            .java()
+            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+        Ok(client.id)
+    }
+
+    fn send_raw_packet(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+        packet_id: i32,
+        payload: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?.clone();
+
+        let client = player
+            .client
+            .java()
+            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+        client.try_enqueue_raw_packet_direct(packet_id, &payload);
+        Ok(())
+    }
+
     fn get_brand(
         &mut self,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
@@ -4076,6 +4167,46 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         } else {
             Ok(pumpkin::plugin::player::BedrockMinecraftVersion::Unknown)
         }
+    }
+
+    fn get_protocol_version(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<u32> {
+        let player = self.get(&player)?;
+
+        if let pumpkin_core::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+            Ok(client.protocol_version.load(Ordering::Relaxed))
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn get_connection_id(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<u64> {
+        let player = self.get(&player)?;
+
+        if let pumpkin_core::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+            Ok(client.id)
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn send_raw_packet(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        packet_id: u16,
+        payload: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?.clone();
+
+        if let pumpkin_core::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+            client.try_enqueue_raw_packet_direct(packet_id, &payload);
+        }
+        Ok(())
     }
 
     fn get_ability(

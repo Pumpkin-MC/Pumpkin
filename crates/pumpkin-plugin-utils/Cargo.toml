@@ -18,7 +18,7 @@ license = ["http"]
 # Marketplace release update checker (`/api/v1/rest/check-update`)
 updater = ["http"]
 
-# Automatic panic hook, error reporting, and Ed25519 telemetry signing (`/api/v1/rest/telemetry/crash`)
+# Automatic panic hook, error reporting, and Ed25519 telemetry signing (`/v1/crash`)
 crashlytics = [
     "http",
     "dep:ed25519-dalek",
