@@ -100,10 +100,7 @@ impl BlockEntity for HopperBlockEntity {
         let Some(properties) = hopper_properties(block.id, state.id) else {
             return;
         };
-        // Vanilla `pushItemsTick`: decrement first, move once the cooldown is down to 0.
-        // `TransferCooldown` comes from NBT; wraps like vanilla's `cooldownTime--`.
-        // One atomic step: a source setting a cooldown lands either before (and is counted down)
-        // or after this tick, never in between.
+        // Vanilla `pushItemsTick`: atomic wrapping decrement floored at 0, move once it hits 0.
         let previous = self
             .cooldown_time
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
@@ -212,8 +209,7 @@ impl HopperBlockEntity {
     }
 
     fn try_move_items(&self, state: HopperLikeProperties, world: &Arc<World>) {
-        // Emptiness first: an item a source just inserted is visible only together with the
-        // cooldown it set under the same slot lock, so it can't be ejected in the same tick.
+        // Emptiness before the cooldown check, so a just inserted item isn't ejected this tick.
         let has_items = !self.is_empty();
         if self.cooldown_time.load(Ordering::Relaxed) <= 0 && state.enabled {
             let mut success = has_items && self.eject_items(world, state.facing);
@@ -221,13 +217,9 @@ impl HopperBlockEntity {
                 success |= self.suck_in_items(world);
             }
             if success {
-                // A cooldown a source set during this move came later, like in vanilla it wins.
-                let _ = self.cooldown_time.compare_exchange(
-                    0,
-                    Self::MOVE_ITEM_SPEED,
-                    Ordering::Relaxed,
-                    Ordering::Relaxed,
-                );
+                // Vanilla `setCooldown(8)`: overrides a cooldown an insert set during this move.
+                self.cooldown_time
+                    .store(Self::MOVE_ITEM_SPEED, Ordering::Relaxed);
                 self.mark_dirty();
             }
         }
@@ -320,11 +312,8 @@ impl HopperBlockEntity {
         false
     }
 
-    /// Vanilla `removeItem(slot, 1)`. `None` when the slot no longer holds `approved`, the item the
-    /// move event let through: it was emptied or swapped while the event was firing.
-    ///
-    /// The offer runs without the source lock (holding it deadlocks two hoppers facing each
-    /// other), so the item is taken first and put back on failure instead of written over the slot.
+    /// Vanilla `removeItem(slot, 1)`. `None` when the slot no longer holds `approved`.
+    /// Taken before the offer, holding the source lock would deadlock two facing hoppers.
     pub(crate) fn take_one(
         container: &dyn Inventory,
         slot: usize,
@@ -344,8 +333,7 @@ impl HopperBlockEntity {
         one_item
     }
 
-    /// Undoes [`Self::take_one`] after a failed offer, under the slot's lock. Hands the item back
-    /// when the slot has no room for it any more, overwriting would undo someone else's write.
+    /// Undoes [`Self::take_one`] under the slot lock, returns the item if the slot has no room.
     pub(crate) fn put_back(
         container: &dyn Inventory,
         slot: usize,
