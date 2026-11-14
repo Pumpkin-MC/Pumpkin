@@ -1690,7 +1690,7 @@ impl Player {
                     .get_data_component::<pumpkin_data::data_component_impl::DamageTypeImpl>()
                     .map_or(DamageType::PLAYER_ATTACK, |dt| dt.damage_type)
             },
-            None,
+            Some(self.living_entity.entity.pos.load()),
             Some(self),
             Some(self),
         ) {
@@ -1803,7 +1803,7 @@ impl Player {
                                 other_victim.as_ref(),
                                 sweep_damage,
                                 DamageType::PLAYER_ATTACK,
-                                None,
+                                Some(self.living_entity.entity.pos.load()),
                                 Some(self),
                                 Some(self),
                             );
