@@ -5551,6 +5551,15 @@ impl Entity {
             passenger_entity.riding_cooldown.store(60, Relaxed);
             // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
 
+            // Mirrors Cushion#removePassenger: get-up sound while the cushion stays alive.
+            if self.entity_type == &EntityType::CUSHION && self.is_alive() {
+                self.world.load().play_sound(
+                    pumpkin_data::sound::Sound::EntityCushionGetUp,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    &self.pos.load(),
+                );
+            }
+
             passenger_entity
                 .bedrock_flags
                 .fetch_and(!(1i64 << entity_data_flag::RIDING), Ordering::Relaxed);
