@@ -4821,7 +4821,53 @@ impl Entity {
         reason = "callers pass owned or cast Arc<dyn EntityBase>"
     )]
     pub fn leash_to(&self, holder: Arc<dyn EntityBase>) {
-        let holder_entity_id = holder.get_entity().entity_id;
+        if self.fire_leash_event(&holder) {
+            self.attach_leash(&holder);
+        }
+    }
+
+    /// Moves the leash to `holder` only while `expected_holder_id` still holds it. The check and
+    /// the swap happen under one lock, so concurrent transfers (players' packets are handled in
+    /// parallel) cannot both win. Returns whether the leash moved.
+    pub fn leash_to_if_held_by(
+        &self,
+        expected_holder_id: i32,
+        holder: &Arc<dyn EntityBase>,
+    ) -> bool {
+        let held_by = |leashed_to: &Option<Weak<dyn EntityBase>>| {
+            leashed_to
+                .as_ref()
+                .and_then(Weak::upgrade)
+                .is_some_and(|current| current.get_entity().entity_id == expected_holder_id)
+        };
+        // Cheap check first so the plugin event only fires for entities that will move. Each lock
+        // is released before the next call: the event and `attach_leash` may lock it again.
+        let held = held_by(
+            &self
+                .leashed_to
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        if !held || !self.fire_leash_event(holder) {
+            return false;
+        }
+        let mut leashed_to = self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !held_by(&leashed_to) {
+            return false;
+        }
+        *leashed_to = Some(Arc::downgrade(holder));
+        // The effects go out under the same lock, so a later unleash is applied and sent after them.
+        self.send_leash_attached(holder);
+        drop(leashed_to);
+        true
+    }
+
+    /// Fires `PlayerLeashEntityEvent` when a player becomes the holder. Returns false if a plugin
+    /// cancelled it.
+    fn fire_leash_event(&self, holder: &Arc<dyn EntityBase>) -> bool {
         let world = self.world.load();
         if let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
@@ -4831,29 +4877,34 @@ impl Entity {
                 crate::plugin::api::events::player::player_leash_entity::PlayerLeashEntityEvent {
                     player: player_arc,
                     entity_id: self.entity_id,
-                    holder_id: holder_entity_id,
+                    holder_id: holder.get_entity().entity_id,
                     cancelled: false,
                 };
             server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return;
-            }
+            return !event.cancelled;
         }
-
-        self.attach_leash(&holder);
+        true
     }
 
     pub fn attach_leash(&self, holder: &Arc<dyn EntityBase>) {
+        let mut leashed_to = self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *leashed_to = Some(Arc::downgrade(holder));
+        // Sent under the same lock, so clients get leash changes in the order they happened.
+        self.send_leash_attached(holder);
+        drop(leashed_to);
+    }
+
+    /// Resets the leash motion and tells clients about the new holder. Does not lock `leashed_to`.
+    fn send_leash_attached(&self, holder: &Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
         self.leash_angular_momentum.store(0.0);
         *self
             .delayed_leash
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-        *self
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(holder));
 
         let je_packet = pumpkin_protocol::java::client::play::CSetEntityLink::new(
             self.entity_id,
@@ -4899,16 +4950,18 @@ impl Entity {
             }
         }
 
-        let old_holder = self
+        let mut leashed_to = self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if old_holder.is_none() {
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(old_holder) = leashed_to.take() else {
             return;
-        }
+        };
+        // Sent under the same lock, so clients get leash changes in the order they happened.
+        self.send_leash_removed();
+        drop(leashed_to);
 
-        if let Some(holder) = old_holder.as_ref().and_then(Weak::upgrade)
+        if let Some(holder) = old_holder.upgrade()
             && let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
@@ -4920,19 +4973,17 @@ impl Entity {
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
-
-        self.send_leash_removed();
     }
 
     pub fn remove_leash(&self) {
-        let old_holder = self
+        let mut leashed_to = self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if old_holder.is_some() {
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if leashed_to.take().is_some() {
             self.send_leash_removed();
         }
+        drop(leashed_to);
     }
 
     fn send_leash_removed(&self) {
