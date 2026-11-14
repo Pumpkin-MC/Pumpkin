@@ -151,7 +151,7 @@ impl Player {
     pub fn reject_client_move(&self) {
         let entity = self.get_entity();
         let position = entity.pos.load();
-        let teleport_id = self.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
+        let teleport_id = self.next_teleport_id();
         *self
             .awaiting_teleport
             .lock()
@@ -198,12 +198,7 @@ impl Player {
         }
 
         // Vanilla `absSnapRotationTo` while awaiting a teleport: look only.
-        if self
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-        {
+        if self.is_awaiting_teleport() {
             self.apply_and_broadcast_look(requested);
             return ClientMoveOutcome::Ignored;
         }

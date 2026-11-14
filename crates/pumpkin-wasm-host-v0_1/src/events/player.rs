@@ -416,6 +416,15 @@ impl ToFromWasmEvent for PlayerMoveEvent {
 }
 
 impl ToFromWasmEvent for PlayerTeleportEvent {
+    /// The v0.1 record has no rotation or cause, so those stay as they were.
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
+        if let Event::PlayerTeleportEvent(data) = event {
+            self.to = from_wasm_position(data.to_position);
+            self.cancelled = data.cancelled;
+        }
+    }
+
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add(self.player.clone())
@@ -435,6 +444,9 @@ impl ToFromWasmEvent for PlayerTeleportEvent {
                 player: consume_player(state, &data.player),
                 from: from_wasm_position(data.from_position),
                 to: from_wasm_position(data.to_position),
+                yaw: None,
+                pitch: None,
+                cause: pumpkin_core::plugin::player::player_teleport::TeleportCause::Unknown,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

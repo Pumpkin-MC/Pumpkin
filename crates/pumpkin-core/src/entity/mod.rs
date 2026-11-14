@@ -1,3 +1,5 @@
+use crate::plugin::api::events::entity::entity_teleport::EntityTeleportEvent;
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 use crate::{
     entity::{
         ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag},
@@ -401,7 +403,36 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         pitch: Option<f32>,
         world: Arc<World>,
     ) {
-        self.get_entity().teleport(position, yaw, pitch, &world);
+        self.teleport_with_cause(position, yaw, pitch, world, TeleportCause::Unknown);
+    }
+
+    /// Teleports the entity. Plugins can move or cancel it through
+    /// `EntityTeleportEvent`. A player gets `PlayerTeleportEvent` with the cause.
+    /// Returns the position the entity was moved to, or `None` if a plugin
+    /// cancelled it. A player changing world only starts the move, so the
+    /// position is the requested one and a later world-change event may still
+    /// alter it.
+    fn teleport_with_cause(
+        &self,
+        mut position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+        _cause: TeleportCause,
+    ) -> Option<Vector3<f64>> {
+        let entity = self.get_entity();
+        if let Some(server) = entity.world.load().server.upgrade()
+            && server.plugin_manager.has_handlers::<EntityTeleportEvent>()
+        {
+            let mut event = EntityTeleportEvent::new(entity.entity_id, entity.pos.load(), position);
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return None;
+            }
+            position = event.to_position;
+        }
+        entity.teleport(position, yaw, pitch, &world);
+        Some(position)
     }
 
     fn is_pushed_by_fluids(&self) -> bool {
@@ -3533,6 +3564,7 @@ impl Entity {
         self.velocity.store(velo);
     }
 
+    /// Advances the portal timer and, once it completes, teleports the entity and its passengers.
     fn tick_portal(&self, caller: &dyn EntityBase) {
         if self.portal_cooldown.load(Ordering::Relaxed) > 0 {
             self.portal_cooldown.fetch_sub(1, Ordering::Relaxed);
@@ -3551,7 +3583,6 @@ impl Entity {
                 let dest_world_opt = portal_processor.destination_world.clone();
                 let src_portal = portal_processor.source_portal.clone();
                 let entity_id = self.entity_id;
-                let yaw = self.yaw.load();
 
                 if let Some(server) = world_clone.server.upgrade() {
                     server.spawn_task(async move {
@@ -3573,16 +3604,38 @@ impl Entity {
                             let pitch = transition.pitch;
                             let teleport_pos = transition.position;
 
+                            // after the lookup, so passengers don't get the movement during it
+                            let entity = entity_arc.get_entity();
+                            let yaw = entity.yaw.load();
+                            let old_pitch = entity.pitch.load();
+                            let old_pos = entity.pos.load();
+
                             // Teleport the main entity
-                            entity_arc.teleport(teleport_pos, yaw_val, pitch, dest_world.clone());
+                            let cause = match portal_type {
+                                PortalType::Nether => TeleportCause::NetherPortal,
+                                PortalType::End => TeleportCause::EndPortal,
+                            };
+                            let Some(teleport_pos) = entity_arc.teleport_with_cause(
+                                teleport_pos,
+                                yaw_val,
+                                pitch,
+                                dest_world.clone(),
+                                cause,
+                            ) else {
+                                return;
+                            };
 
                             // Teleport all passengers recursively along with the vehicle
                             let yaw_delta = yaw_val.map(|y| y - yaw);
+                            let pitch_delta = pitch.map(|p| p - old_pitch);
                             Self::teleport_passengers_recursive(
                                 entity_arc.get_entity(),
+                                old_pos,
                                 teleport_pos,
                                 yaw_delta,
+                                pitch_delta,
                                 &dest_world,
+                                cause,
                             );
                         }
                     });
@@ -3596,12 +3649,18 @@ impl Entity {
         }
     }
 
-    /// Recursively teleports all passengers (and their passengers) to the destination
+    /// Recursively teleports all passengers (and their passengers) to the destination,
+    /// keeping each one's offset and rotation relative to its vehicle
+    /// (`Entity.calculatePassengerTransition`). `old_position` is the vehicle's
+    /// position before it moved.
     fn teleport_passengers_recursive(
         entity: &Self,
+        old_position: Vector3<f64>,
         position: Vector3<f64>,
         yaw_delta: Option<f32>,
+        pitch_delta: Option<f32>,
         dest_world: &Arc<World>,
+        cause: TeleportCause,
     ) {
         let passengers = entity
             .passengers
@@ -3611,6 +3670,9 @@ impl Entity {
         for passenger in passengers {
             let passenger_entity = passenger.get_entity();
             let passenger_yaw = yaw_delta.map(|delta| passenger_entity.yaw.load() + delta);
+            let passenger_pitch = pitch_delta.map(|delta| passenger_entity.pitch.load() + delta);
+            let passenger_old_position = passenger_entity.pos.load();
+            let requested_position = position + (passenger_old_position - old_position);
             passenger_entity.portal_cooldown.store(
                 passenger_entity.default_portal_cooldown(),
                 Ordering::Relaxed,
@@ -3623,12 +3685,30 @@ impl Entity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone();
 
-            passenger.teleport(position, passenger_yaw, None, dest_world.clone());
+            let Some(passenger_position) = passenger.teleport_with_cause(
+                requested_position,
+                passenger_yaw,
+                passenger_pitch,
+                dest_world.clone(),
+                cause,
+            ) else {
+                // Do not leave a link between entities in different worlds.
+                entity.remove_passenger_before_teleport(passenger_entity.entity_id);
+                continue;
+            };
 
             // Recursively teleport nested passengers
             for nested in nested_passengers {
                 let nested_entity = nested.get_entity();
-                Self::teleport_passengers_recursive(nested_entity, position, yaw_delta, dest_world);
+                Self::teleport_passengers_recursive(
+                    nested_entity,
+                    passenger_old_position,
+                    passenger_position,
+                    yaw_delta,
+                    pitch_delta,
+                    dest_world,
+                    cause,
+                );
             }
         }
     }
@@ -5466,6 +5546,7 @@ impl Entity {
         self.remove_passenger_internal(passenger_id, true);
     }
 
+    /// Removes a passenger without repositioning it, because it is about to be teleported.
     pub fn remove_passenger_before_teleport(&self, passenger_id: i32) {
         self.remove_passenger_internal(passenger_id, false);
     }
@@ -5530,10 +5611,7 @@ impl Entity {
             // the dismount packet, sends stale position packets from the old riding
             // position, and the server processes them before the teleport arrives.
             let teleport_id = if reposition && let Some(player) = passenger.get_player() {
-                let id = player
-                    .teleport_id_count
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                    + 1;
+                let id = player.next_teleport_id();
                 // Use fallback position as placeholder — updated below with real position
                 let placeholder =
                     Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);

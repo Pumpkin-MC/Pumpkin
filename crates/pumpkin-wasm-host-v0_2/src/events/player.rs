@@ -43,6 +43,7 @@ use crate::{
             PlayerTakeLecternBookEventData, PlayerTeleportEventData, PlayerToggleFlightEventData,
             PlayerToggleSneakEventData, PlayerToggleSprintEventData, PlayerUnleashEntityEventData,
             PlayerUnregisterChannelEventData, PlayerVelocityEventData,
+            TeleportCause as WasmTeleportCause,
         },
         uuid::Uuid as WitUuid,
     },
@@ -113,7 +114,7 @@ use pumpkin_core::plugin::player::{
     player_statistic_increment::PlayerStatisticIncrementEvent,
     player_swap_hands::PlayerSwapHandItemsEvent,
     player_take_lectern_book::PlayerTakeLecternBookEvent,
-    player_teleport::PlayerTeleportEvent,
+    player_teleport::{PlayerTeleportEvent, TeleportCause},
     player_toggle_flight_event::PlayerToggleFlightEvent,
     player_toggle_sneak_event::PlayerToggleSneakEvent,
     player_toggle_sprint_event::PlayerToggleSprintEvent,
@@ -415,6 +416,38 @@ impl ToFromWasmEvent for PlayerMoveEvent {
     }
 }
 
+const fn to_wasm_teleport_cause(cause: TeleportCause) -> WasmTeleportCause {
+    match cause {
+        TeleportCause::EnderPearl => WasmTeleportCause::EnderPearl,
+        TeleportCause::Command => WasmTeleportCause::Command,
+        TeleportCause::Plugin => WasmTeleportCause::Plugin,
+        TeleportCause::NetherPortal => WasmTeleportCause::NetherPortal,
+        TeleportCause::EndPortal => WasmTeleportCause::EndPortal,
+        TeleportCause::EndGateway => WasmTeleportCause::EndGateway,
+        TeleportCause::Spectate => WasmTeleportCause::Spectate,
+        TeleportCause::ConsumableEffect => WasmTeleportCause::ConsumableEffect,
+        TeleportCause::Dismount => WasmTeleportCause::Dismount,
+        TeleportCause::ExitBed => WasmTeleportCause::ExitBed,
+        TeleportCause::Unknown => WasmTeleportCause::Unknown,
+    }
+}
+
+const fn from_wasm_teleport_cause(cause: WasmTeleportCause) -> TeleportCause {
+    match cause {
+        WasmTeleportCause::EnderPearl => TeleportCause::EnderPearl,
+        WasmTeleportCause::Command => TeleportCause::Command,
+        WasmTeleportCause::Plugin => TeleportCause::Plugin,
+        WasmTeleportCause::NetherPortal => TeleportCause::NetherPortal,
+        WasmTeleportCause::EndPortal => TeleportCause::EndPortal,
+        WasmTeleportCause::EndGateway => TeleportCause::EndGateway,
+        WasmTeleportCause::Spectate => TeleportCause::Spectate,
+        WasmTeleportCause::ConsumableEffect => TeleportCause::ConsumableEffect,
+        WasmTeleportCause::Dismount => TeleportCause::Dismount,
+        WasmTeleportCause::ExitBed => TeleportCause::ExitBed,
+        WasmTeleportCause::Unknown => TeleportCause::Unknown,
+    }
+}
+
 impl ToFromWasmEvent for PlayerTeleportEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
@@ -425,6 +458,9 @@ impl ToFromWasmEvent for PlayerTeleportEvent {
             player,
             from_position: to_wasm_position(self.from),
             to_position: to_wasm_position(self.to),
+            yaw: self.yaw,
+            pitch: self.pitch,
+            cause: to_wasm_teleport_cause(self.cause),
             cancelled: self.cancelled,
         })
     }
@@ -435,6 +471,9 @@ impl ToFromWasmEvent for PlayerTeleportEvent {
                 player: consume_player(state, &data.player),
                 from: from_wasm_position(data.from_position),
                 to: from_wasm_position(data.to_position),
+                yaw: data.yaw,
+                pitch: data.pitch,
+                cause: from_wasm_teleport_cause(data.cause),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
