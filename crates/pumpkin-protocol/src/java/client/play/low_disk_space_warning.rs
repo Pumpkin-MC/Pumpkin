@@ -1,6 +1,5 @@
 use pumpkin_data::packet::clientbound::play::LOW_DISK_SPACE_WARNING;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::ClientPacket;
 
@@ -23,7 +22,6 @@ impl ClientPacket for CLowDiskSpaceWarning {
     fn write_packet_data(
         &self,
         _write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         Ok(())
     }

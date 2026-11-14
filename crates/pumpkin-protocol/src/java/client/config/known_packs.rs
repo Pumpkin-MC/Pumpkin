@@ -4,7 +4,6 @@ use pumpkin_macros::java_packet;
 use crate::ClientPacket;
 use crate::KnownPack;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(SELECT_KNOWN_PACKS)]
 pub struct CKnownPacks<'a> {
@@ -22,7 +21,6 @@ impl ClientPacket for CKnownPacks<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&crate::VarInt(self.known_packs.len() as i32))?;
         for pack in self.known_packs {

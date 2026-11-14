@@ -204,12 +204,12 @@ pub mod logging;
 pub mod wit {
     wit_bindgen::generate!({
         skip: ["init-plugin"],
-        path: "../pumpkin-plugin-wit/v0.1",
+        path: "../pumpkin-plugin-wit/v0.2",
         world: "plugin",
         chainable_methods: [
-            "pumpkin:plugin/command@0.1.0#command",
-            "pumpkin:plugin/command@0.1.0#command-node",
-            "pumpkin:plugin/text@0.1.0#text-component"
+            "pumpkin:plugin/command@0.2.0#command",
+            "pumpkin:plugin/command@0.2.0#command-node",
+            "pumpkin:plugin/text@0.2.0#text-component"
         ]
     });
 
@@ -250,21 +250,53 @@ impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
     }
 }
 
+/// No gametest callbacks can be registered through this crate yet, so none are ever invoked.
+// TODO: dispatch to registered handlers once the gametest API is wrapped here.
+impl wit::exports::pumpkin::plugin::gametest_callbacks::Guest for Component {
+    fn invoke_void(_callback: wit::pumpkin::plugin::gametest::VoidCallbackId) {}
+
+    fn invoke_test(
+        _callback: wit::pumpkin::plugin::gametest::TestCallbackId,
+        _test: wit::pumpkin::plugin::gametest::Test,
+    ) {
+    }
+
+    async fn invoke_async_test(
+        _callback: wit::pumpkin::plugin::gametest::AsyncTestCallbackId,
+        _test: wit::pumpkin::plugin::gametest::Test,
+    ) {
+    }
+
+    fn invoke_block_predicate(
+        _callback: wit::pumpkin::plugin::gametest::BlockPredicateCallbackId,
+        _permutation: wit::pumpkin::plugin::gametest::BlockPermutation,
+    ) -> bool {
+        false
+    }
+
+    fn invoke_entity_predicate(
+        _callback: wit::pumpkin::plugin::gametest::EntityPredicateCallbackId,
+        _entity: &wit::pumpkin::plugin::world::Entity,
+    ) -> bool {
+        false
+    }
+}
+
 impl wit::Guest for Component {
     /// WIT entry point — delegates to [`Plugin::on_load`].
-    fn on_load(context: Context) -> Result<(), String> {
+    async fn on_load(context: Context) -> Result<(), String> {
         plugin().on_load(context)
     }
 
     /// WIT entry point — delegates to [`Plugin::on_unload`].
-    fn on_unload(context: Context) -> Result<(), String> {
+    async fn on_unload(context: Context) -> Result<(), String> {
         plugin().on_unload(context)
     }
 
     /// WIT entry point — dispatches an incoming event to the registered handler for `event_id`.
     ///
     /// Returns the event unchanged if no handler is registered for the given id.
-    fn handle_event(event_id: u32, server: Server, event: events::Event) -> events::Event {
+    async fn handle_event(event_id: u32, server: Server, event: events::Event) -> events::Event {
         let handler = EVENT_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -280,7 +312,7 @@ impl wit::Guest for Component {
     /// WIT entry point — dispatches an incoming command invocation to the registered handler for `command_id`.
     ///
     /// Returns a [`CommandError`](command::CommandError) if no handler is registered for the given id.
-    fn handle_command(
+    async fn handle_command(
         command_id: u32,
         sender: command::CommandSender,
         server: Server,
@@ -302,7 +334,7 @@ impl wit::Guest for Component {
     }
 
     /// WIT entry point — dispatches an incoming command suggestion request to the registered handler.
-    fn handle_command_suggestion(
+    async fn handle_command_suggestion(
         handler_id: u32,
         sender: command::CommandSender,
         server: Server,
@@ -325,7 +357,7 @@ impl wit::Guest for Component {
     }
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
-    fn handle_task(handler_id: u32, server: Server) {
+    async fn handle_task(handler_id: u32, server: Server) {
         let handler = TASK_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -335,7 +367,11 @@ impl wit::Guest for Component {
         }
     }
 
-    fn handle_ai_goal_can_start(goal_id: u32, server: Server, entity: entity::Entity) -> bool {
+    async fn handle_ai_goal_can_start(
+        goal_id: u32,
+        server: Server,
+        entity: entity::Entity,
+    ) -> bool {
         let goal = crate::ai::AI_GOAL_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -347,7 +383,7 @@ impl wit::Guest for Component {
         }
     }
 
-    fn handle_ai_goal_should_continue(
+    async fn handle_ai_goal_should_continue(
         goal_id: u32,
         server: Server,
         entity: entity::Entity,
@@ -363,7 +399,7 @@ impl wit::Guest for Component {
         }
     }
 
-    fn handle_ai_goal_start(goal_id: u32, server: Server, entity: entity::Entity) {
+    async fn handle_ai_goal_start(goal_id: u32, server: Server, entity: entity::Entity) {
         let goal = crate::ai::AI_GOAL_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -373,7 +409,7 @@ impl wit::Guest for Component {
         }
     }
 
-    fn handle_ai_goal_tick(goal_id: u32, server: Server, entity: entity::Entity) {
+    async fn handle_ai_goal_tick(goal_id: u32, server: Server, entity: entity::Entity) {
         let goal = crate::ai::AI_GOAL_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -383,7 +419,7 @@ impl wit::Guest for Component {
         }
     }
 
-    fn handle_ai_goal_stop(goal_id: u32, server: Server, entity: entity::Entity) {
+    async fn handle_ai_goal_stop(goal_id: u32, server: Server, entity: entity::Entity) {
         let goal = crate::ai::AI_GOAL_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -393,14 +429,14 @@ impl wit::Guest for Component {
         }
     }
 
-    fn handle_ipc_message(
+    async fn handle_ipc_message(
         sender: wit::PluginId,
         message: wit::IpcMessage,
     ) -> Result<wit::IpcMessage, String> {
         plugin().handle_ipc_message(sender, message)
     }
 
-    fn handle_generate_phase(
+    async fn handle_generate_phase(
         generator_id: u32,
         phase: wit::pumpkin::plugin::world::GenerationPhase,
         chunk: wit::pumpkin::plugin::world::ChunkBuffer,

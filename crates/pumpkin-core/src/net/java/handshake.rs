@@ -1,7 +1,4 @@
-use pumpkin_data::{
-    packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION},
-    translation,
-};
+use pumpkin_data::{packet::CURRENT_MC_VERSION, translation};
 use pumpkin_protocol::{ConnectionState, java::server::handshake::SHandShake};
 use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 use tracing::debug;
@@ -30,23 +27,18 @@ impl PendingConnection {
             return;
         }
         if self.connection_state.load() != ConnectionState::Status {
-            let protocol = version;
             // A plugin translating this version (see `register_java_versions`) admits it.
-            if server
-                .plugin_manager
-                .java_versions
-                .admits_protocol(protocol)
-            {
+            if server.plugin_manager.java_versions.admits_protocol(version) {
                 return;
             }
-            if protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {
+            if version < CURRENT_MC_VERSION.protocol_version() as u32 {
                 self.kick(TextComponent::translate_cross(
                     translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,
                     translation::bedrock::DISCONNECTIONSCREEN_OUTDATEDCLIENT,
                     [TextComponent::text(CURRENT_MC_VERSION.to_string())],
                 ))
                 .await;
-            } else if protocol > CURRENT_MC_VERSION.protocol_version() as u32 {
+            } else if version > CURRENT_MC_VERSION.protocol_version() as u32 {
                 self.kick(TextComponent::translate_cross(
                     translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_SERVER,
                     translation::bedrock::DISCONNECTIONSCREEN_OUTDATEDSERVER,

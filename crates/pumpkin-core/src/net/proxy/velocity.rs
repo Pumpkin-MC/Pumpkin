@@ -164,10 +164,9 @@ pub fn receive_velocity_plugin_response(
 mod tests {
     use std::{error::Error, sync::Weak, time::Duration};
 
-    use pumpkin_data::packet::CURRENT_MC_VERSION;
     use pumpkin_protocol::{
-        ConnectionState, VarInt, java::packet_decoder::TCPNetworkDecoder,
-        packet::MultiVersionJavaPacket, ser::NetworkWriteExt,
+        ConnectionState, VarInt, java::packet_decoder::TCPNetworkDecoder, packet::JavaPacket,
+        ser::NetworkWriteExt,
     };
     use tokio::io::BufReader;
     use uuid::Uuid;
@@ -214,7 +213,7 @@ mod tests {
         let mut decoder = TCPNetworkDecoder::new(BufReader::new(client));
         let packet =
             tokio::time::timeout(Duration::from_secs(5), decoder.get_raw_packet()).await??;
-        assert_eq!(packet.id, CLoginPluginRequest::to_id(CURRENT_MC_VERSION));
+        assert_eq!(packet.id, CLoginPluginRequest::PACKET_ID);
         let mut payload = &packet.payload[..];
         let message_id = payload.get_var_int()?.0;
         assert_eq!(payload.get_str()?.as_ref(), PLAYER_INFO_CHANNEL);

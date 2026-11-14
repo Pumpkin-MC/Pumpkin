@@ -1,5 +1,4 @@
 /* This file is generated. Do not edit manually. */
-use pumpkin_util::version::JavaMinecraftVersion;
 pub type Tag = (&'static [&'static str], &'static [u16]);
 #[derive(Eq, PartialEq, Hash, Debug, Clone, Copy)]
 pub enum RegistryKey {
@@ -74,10 +73,6 @@ impl RegistryKey {
             Self::WorldgenWorldPreset => false,
             _ => true,
         }
-    }
-    #[must_use]
-    pub const fn is_valid_for_version(&self, _version: JavaMinecraftVersion) -> bool {
-        self.is_network_synced()
     }
     #[must_use]
     pub fn from_string(s: &str) -> Option<Self> {
@@ -30605,10 +30600,9 @@ pub fn get_tag_ids(tag_category: RegistryKey, tag: &str) -> Option<&'static [u16
 }
 #[must_use]
 pub const fn get_registry_key_tags(
-    version: JavaMinecraftVersion,
     tag_category: RegistryKey,
 ) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    if !tag_category.is_valid_for_version(version) {
+    if !tag_category.is_network_synced() {
         return None;
     }
     Some(get_latest_map(tag_category))

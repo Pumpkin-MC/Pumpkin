@@ -2,7 +2,7 @@ use pumpkin_data::packet::clientbound::play::MOVE_MINECART_ALONG_TRACK;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector3::Vector3;
 
 pub struct MinecartStep {
     pub position: Vector3<f64>,
@@ -29,7 +29,6 @@ impl ClientPacket for CMoveMinecartAlongTrack<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
         write.write_var_int(&VarInt(self.steps.len() as i32))?;

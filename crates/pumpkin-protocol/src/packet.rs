@@ -1,7 +1,5 @@
 use std::io::{Error, Read, Write};
 
-use pumpkin_util::version::JavaMinecraftVersion;
-
 use crate::{
     BClientPacket, BServerPacket,
     codec::var_int::VarIntType,
@@ -12,9 +10,9 @@ pub trait Packet {
     const PACKET_ID: VarIntType;
 }
 
-pub trait MultiVersionJavaPacket {
-    #[must_use]
-    fn to_id(version: JavaMinecraftVersion) -> i32;
+/// A Java packet of the current version.
+pub trait JavaPacket {
+    const PACKET_ID: i32;
 }
 
 impl<P: Packet + PacketWrite> BClientPacket for P {

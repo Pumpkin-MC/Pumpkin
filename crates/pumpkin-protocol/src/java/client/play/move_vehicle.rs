@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::MOVE_VEHICLE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(MOVE_VEHICLE)]
 pub struct CMoveVehicle {
@@ -29,11 +28,7 @@ impl CMoveVehicle {
 }
 
 impl ClientPacket for CMoveVehicle {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_f64_be(self.x)?;
         write.write_f64_be(self.y)?;
         write.write_f64_be(self.z)?;
@@ -44,7 +39,7 @@ impl ClientPacket for CMoveVehicle {
 }
 
 impl<'a> ServerPacket<'a> for CMoveVehicle {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             x: bytebuf.get_f64_be()?,
             y: bytebuf.get_f64_be()?,

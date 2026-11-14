@@ -4,7 +4,7 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::DEBUG_CHUNK_VALUE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector2::Vector2, version::JavaMinecraftVersion};
+use pumpkin_util::math::vector2::Vector2;
 
 #[java_packet(DEBUG_CHUNK_VALUE)]
 pub struct CDebugChunkValue<'a> {
@@ -25,11 +25,7 @@ impl<'a> CDebugChunkValue<'a> {
 }
 
 impl ClientPacket for CDebugChunkValue<'_> {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_i32_be(self.chunk_pos.x)?;
         write.write_i32_be(self.chunk_pos.y)?;
         write.write_string(self.name)?;
@@ -39,7 +35,7 @@ impl ClientPacket for CDebugChunkValue<'_> {
 }
 
 impl<'a> ServerPacket<'a> for CDebugChunkValue<'a> {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             chunk_pos: Vector2::new(bytebuf.get_i32_be()?, bytebuf.get_i32_be()?),
             name: bytebuf.get_str_borrowed()?,

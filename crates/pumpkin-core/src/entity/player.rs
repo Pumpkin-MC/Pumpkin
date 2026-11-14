@@ -1315,7 +1315,7 @@ impl Player {
     }
 
     /// Pairs tracked entities in chunks that were just queued for a player.
-    fn pair_entities_in_chunks(
+    pub fn pair_entities_in_chunks(
         &self,
         world: &crate::world::World,
         chunks: &[pumpkin_util::math::vector2::Vector2<i32>],
@@ -3194,14 +3194,16 @@ impl Player {
         let world = self.world();
         let player_chunk = self.get_entity().chunk_pos.load();
         let epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-        let version = match self.client.as_ref() {
-            ClientPlatform::Java(java_client) => java_client.version.load(),
-            ClientPlatform::Bedrock(_) => JavaMinecraftVersion::V_1_20_2,
+        let batch_acks = match self.client.as_ref() {
+            ClientPlatform::Java(java_client) => {
+                java_client.version.load() >= JavaMinecraftVersion::V_1_20_2
+            }
+            ClientPlatform::Bedrock(_) => false,
         };
 
         let view_distance = self.watched_section.load().view_distance;
         let prepared_batch = self.chunk_sender.try_lock().ok().and_then(|mut sender| {
-            sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
+            sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, batch_acks)
         });
 
         if let Some(batch) = prepared_batch {
@@ -4695,23 +4697,42 @@ impl Player {
         closest_entity
     }
 
-    pub async fn unload_watched_chunks(&self, world: &World) {
-        let radial_chunks = self.watched_section.load().all_chunks_within();
+    /// Stops watching the old world's chunks; returns the chunks the client holds, for
+    /// `forget_chunks` once `CRespawn` is sent.
+    pub async fn unload_watched_chunks(&self, world: &World) -> Vec<Vector2<i32>> {
+        let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
+        let held = {
+            let sender = self
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            radial_chunks
+                .iter()
+                .copied()
+                .filter(|pos| sender.is_chunk_sent(pos))
+                .collect()
+        };
         let level = &world.level;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks);
+        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks);
         if !chunks_to_clean.is_empty() {
             world.remove_entities_in_chunks(&chunks_to_clean).await;
             level.clean_entity_chunks(&chunks_to_clean);
-        }
-        for chunk in &chunks_to_clean {
-            self.send_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
-                .await;
         }
 
         self.watched_section.store(Cylindrical::new(
             Vector2::new(0, 0),
             NonZero::new(1).unwrap_or(NonZero::<u8>::MIN),
         ));
+        held
+    }
+
+    /// Vanilla `ChunkMap.dropChunk` after a world change: the client keeps its level when the
+    /// dimension key is unchanged, so the old world's chunks must be forgotten after `CRespawn`.
+    pub async fn forget_chunks(&self, chunks: &[Vector2<i32>]) {
+        for chunk in chunks {
+            self.send_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
+                .await;
+        }
     }
 
     /// Teleports the player to a different world or dimension with an optional position, yaw, and pitch.
@@ -4760,7 +4781,7 @@ impl Player {
                     new_list.push(player.clone());
                     new_list
                 });
-                self.unload_watched_chunks(&current_world).await;
+                let held_chunks = self.unload_watched_chunks(&current_world).await;
 
                 self.change_world_chunks(&current_world.level, &new_world);
                 self.living_entity.entity.set_world(new_world.clone());
@@ -4799,6 +4820,7 @@ impl Player {
                         if let Ok(data) = java.serialize_packet(&packet) {
                             java.send_packet_now(data).await;
                         }
+                        self.forget_chunks(&held_chunks).await;
                     }
                     ClientPlatform::Bedrock(bedrock) => {
                         let bedrock_dimension = if new_world.dimension == Dimension::OVERWORLD {
@@ -5773,14 +5795,6 @@ impl Player {
         );
         self.living_entity.entity.set_synced_data(
             pumpkin_data::tracked_data::player::PLAYER_MAIN_HAND,
-            config.main_hand as u8,
-        );
-        self.living_entity.entity.set_synced_data(
-            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-            config.skin_parts,
-        );
-        self.living_entity.entity.set_synced_data(
-            pumpkin_data::tracked_data::player::MAIN_ARM_ID,
             config.main_hand as u8,
         );
     }

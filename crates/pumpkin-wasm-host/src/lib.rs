@@ -138,6 +138,10 @@ impl PluginLoader for WasmPluginLoader {
         scheduler::tick(&self.task_scheduler, server);
     }
 
+    fn in_plugin_call(&self) -> bool {
+        pumpkin_plugin_runtime::in_plugin_call()
+    }
+
     fn binding_language(&self, data: &(dyn Any + Send + Sync)) -> Option<String> {
         data.downcast_ref::<String>().cloned()
     }

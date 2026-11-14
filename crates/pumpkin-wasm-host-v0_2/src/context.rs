@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 use wasmtime::component::Resource;
 
 use crate::{
-    events::{ToFromWasmEvent, WasmPluginEventHandler},
+    events::WasmPluginEventHandler,
     pumpkin::{
         self,
         plugin::{
@@ -17,12 +17,14 @@ use crate::{
 use pumpkin_core::plugin::Context;
 use pumpkin_wasm_host_common::state::PluginHostState;
 
-fn register_typed_event<E: pumpkin_core::plugin::Payload + ToFromWasmEvent + Clone + 'static>(
+fn register_typed_event<E: pumpkin_core::plugin::Payload + 'static>(
     ctx: &Context,
     handler: &Arc<WasmPluginEventHandler>,
     priority: pumpkin_core::plugin::EventPriority,
     blocking: bool,
-) {
+) where
+    WasmPluginEventHandler: pumpkin_core::plugin::EventHandler<E>,
+{
     ctx.register_event::<E, _>(Arc::clone(handler), priority, blocking);
 }
 

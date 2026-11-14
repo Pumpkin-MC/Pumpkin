@@ -6,9 +6,8 @@ pub use light::ChunkLightExt;
 
 use pumpkin_data::packet::clientbound::play::LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_protocol::ClientPacket;
-use pumpkin_protocol::packet::MultiVersionJavaPacket;
+use pumpkin_protocol::packet::JavaPacket;
 use pumpkin_protocol::ser::WritingError;
-use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use std::io::Write;
 
@@ -19,10 +18,8 @@ use std::io::Write;
 /// sky and block light.
 pub struct CChunkData<'a>(pub &'a ChunkData);
 
-impl MultiVersionJavaPacket for CChunkData<'_> {
-    fn to_id(version: JavaMinecraftVersion) -> i32 {
-        LEVEL_CHUNK_WITH_LIGHT.to_id(version)
-    }
+impl JavaPacket for CChunkData<'_> {
+    const PACKET_ID: i32 = LEVEL_CHUNK_WITH_LIGHT.to_id();
 }
 
 impl<'a> CChunkData<'a> {
@@ -33,44 +30,33 @@ impl<'a> CChunkData<'a> {
 }
 
 impl ClientPacket for CChunkData<'_> {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        v1_18::write_chunk_data(self.0, write, version)
+    fn write_packet_data(&self, write: impl Write) -> Result<(), WritingError> {
+        v1_18::write_chunk_data(self.0, write)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use pumpkin_world::chunk::ChunkData;
 
     #[test]
-    fn chunk_data_all_versions() {
+    fn chunk_data_serializes() {
         let chunk = ChunkData::empty(0, 0);
         let packet = CChunkData(&chunk);
 
-        let versions = [JavaMinecraftVersion::V_26_3];
-
-        for version in versions {
-            let mut buf = Vec::new();
-            let id = CChunkData::to_id(version);
-            assert_ne!(id, -1, "Packet ID for version {version:?} must be valid");
-            assert!(
-                packet.write_packet_data(&mut buf, &version).is_ok(),
-                "Failed to serialize chunk data for version {version:?}"
-            );
-            assert!(
-                !buf.is_empty(),
-                "Serialized buffer must not be empty for version {version:?}"
-            );
-        }
+        let mut buf = Vec::new();
+        assert_ne!(CChunkData::PACKET_ID, -1);
+        assert!(
+            packet.write_packet_data(&mut buf).is_ok(),
+            "Failed to serialize chunk data"
+        );
+        assert!(!buf.is_empty());
     }
 
     #[test]
-    fn populated_chunk_data_all_versions() {
+    fn populated_chunk_data_serializes() {
         let chunk = ChunkData::empty(0, 0);
         chunk
             .section
@@ -90,20 +76,12 @@ mod tests {
 
         let packet = CChunkData(&chunk);
 
-        let versions = [JavaMinecraftVersion::V_26_3];
-
-        for version in versions {
-            let mut buf = Vec::new();
-            let id = CChunkData::to_id(version);
-            assert_ne!(id, -1, "Packet ID for version {version:?} must be valid");
-            assert!(
-                packet.write_packet_data(&mut buf, &version).is_ok(),
-                "Failed to serialize populated chunk data for version {version:?}"
-            );
-            assert!(
-                !buf.is_empty(),
-                "Serialized buffer must not be empty for version {version:?}"
-            );
-        }
+        let mut buf = Vec::new();
+        assert_ne!(CChunkData::PACKET_ID, -1);
+        assert!(
+            packet.write_packet_data(&mut buf).is_ok(),
+            "Failed to serialize populated chunk data"
+        );
+        assert!(!buf.is_empty());
     }
 }

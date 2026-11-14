@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::SET_DEFAULT_SPAWN_POSITION;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+use pumpkin_util::math::position::BlockPos;
 
 use crate::{
     ClientPacket, ServerPacket,
@@ -42,56 +42,28 @@ impl CPlayerSpawnPosition {
 }
 
 impl ClientPacket for CPlayerSpawnPosition {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        if *version >= JavaMinecraftVersion::V_1_21_9 {
-            write.write_string(&self.dimension_name)?;
-        }
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
+        write.write_string(&self.dimension_name)?;
 
-        if *version >= JavaMinecraftVersion::V_1_8 {
-            write.write_block_pos(&self.location, version)?;
-        } else {
-            write.write_i32_be(self.location.0.x)?;
-            write.write_i32_be(self.location.0.y)?;
-            write.write_i32_be(self.location.0.z)?;
-        }
+        write.write_block_pos(&self.location)?;
 
-        if *version >= JavaMinecraftVersion::V_1_17 {
-            write.write_f32_be(self.yaw)?;
-        }
+        write.write_f32_be(self.yaw)?;
 
-        if *version >= JavaMinecraftVersion::V_1_21_9 {
-            write.write_f32_be(self.pitch)?;
-        }
+        write.write_f32_be(self.pitch)?;
 
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CPlayerSpawnPosition {
-    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let dimension_name = if *version >= JavaMinecraftVersion::V_1_21_9 {
-            read.get_str()?.into_string()
-        } else {
-            String::new()
-        };
+    fn read(read: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let dimension_name = read.get_str()?.into_string();
 
-        let location = read.get_block_pos(version)?;
+        let location = read.get_block_pos()?;
 
-        let yaw = if *version >= JavaMinecraftVersion::V_1_17 {
-            read.get_f32_be()?
-        } else {
-            0.0
-        };
+        let yaw = read.get_f32_be()?;
 
-        let pitch = if *version >= JavaMinecraftVersion::V_1_21_9 {
-            read.get_f32_be()?
-        } else {
-            0.0
-        };
+        let pitch = read.get_f32_be()?;
 
         Ok(Self {
             dimension_name,

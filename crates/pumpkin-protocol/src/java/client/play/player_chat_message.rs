@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::play::PLAYER_CHAT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::text::TextComponent;
 
 use crate::{
     ClientPacket, WritingError,
@@ -88,11 +88,7 @@ impl CPlayerChatMessage {
 
 //TODO: Check if we need this custom impl
 impl ClientPacket for CPlayerChatMessage {
-    fn write_packet_data(
-        &self,
-        mut write: impl Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.global_index)?;
         write.write_uuid(&self.sender)?;
         write.write_var_int(&self.index)?;
@@ -107,18 +103,18 @@ impl ClientPacket for CPlayerChatMessage {
             }
             Ok(())
         })?;
-        write.write_option(&self.unsigned_content, |p, v| p.write_component(v, version))?;
+        write.write_option(&self.unsigned_content, NetworkWriteExt::write_component)?;
         match &self.filter_type {
             FilterType::PassThrough => write.write_var_int(&VarInt(0))?,
             FilterType::FullyFiltered => write.write_var_int(&VarInt(1))?,
             FilterType::PartiallyFiltered(bit_set) => {
                 write.write_var_int(&VarInt(2))?;
-                bit_set.encode_with_version(&mut write, version)?;
+                bit_set.encode(&mut write)?;
             }
         }
         write.write_var_int(&self.chat_type)?;
-        write.write_component(&self.sender_name, version)?;
-        write.write_option(&self.target_name, |p, v| p.write_component(v, version))?;
+        write.write_component(&self.sender_name)?;
+        write.write_option(&self.target_name, NetworkWriteExt::write_component)?;
         Ok(())
     }
 }

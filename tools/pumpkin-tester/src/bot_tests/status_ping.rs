@@ -13,7 +13,7 @@ use pumpkin_protocol::{
             status::{SStatusPingRequest, SStatusRequest},
         },
     },
-    packet::MultiVersionJavaPacket,
+    packet::JavaPacket,
 };
 use tokio::{
     io::{BufReader, BufWriter},
@@ -53,15 +53,15 @@ pub async fn run_bot_status_ping_test(
         .await
         .map_err(|_| "Timed out waiting for CStatusResponse".to_string())?
         .map_err(|err| format!("Failed to decode CStatusResponse: {err}"))?;
-    if status_raw.id != CStatusResponse::to_id(CURRENT_MC_VERSION) {
+    if status_raw.id != CStatusResponse::PACKET_ID {
         return Err(format!(
             "Unexpected status packet id {}, expected {}",
             status_raw.id,
-            CStatusResponse::to_id(CURRENT_MC_VERSION)
+            CStatusResponse::PACKET_ID
         ));
     }
     let mut status_slice = &status_raw.payload[..];
-    let status = CStatusResponse::read(&mut status_slice, &CURRENT_MC_VERSION)
+    let status = CStatusResponse::read(&mut status_slice)
         .map_err(|err| format!("Failed to parse CStatusResponse: {err}"))?;
     let parsed: serde_json::Value = serde_json::from_str(&status.json_response)
         .map_err(|err| format!("Invalid status JSON: {err}"))?;
@@ -90,15 +90,15 @@ pub async fn run_bot_status_ping_test(
         .await
         .map_err(|_| "Timed out waiting for CPingResponse".to_string())?
         .map_err(|err| format!("Failed to decode CPingResponse: {err}"))?;
-    if pong_raw.id != CPingResponse::to_id(CURRENT_MC_VERSION) {
+    if pong_raw.id != CPingResponse::PACKET_ID {
         return Err(format!(
             "Unexpected ping response packet id {}, expected {}",
             pong_raw.id,
-            CPingResponse::to_id(CURRENT_MC_VERSION)
+            CPingResponse::PACKET_ID
         ));
     }
     let mut pong_slice = &pong_raw.payload[..];
-    let pong = CPingResponse::read(&mut pong_slice, &CURRENT_MC_VERSION)
+    let pong = CPingResponse::read(&mut pong_slice)
         .map_err(|err| format!("Failed to parse CPingResponse: {err}"))?;
     if pong.payload != expected_ping {
         return Err(format!(

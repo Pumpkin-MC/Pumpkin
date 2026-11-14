@@ -2,14 +2,11 @@
 use pumpkin_util::version::JavaMinecraftVersion;
 pub const CURRENT_MC_VERSION: JavaMinecraftVersion =
     pumpkin_util::version::JavaMinecraftVersion::V_26_3;
-pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion =
-    pumpkin_util::version::JavaMinecraftVersion::V_26_3;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PacketId(pub i32);
 impl PacketId {
-    #[doc = r" Converts the requested protocol version into the corresponding packet ID."]
     #[must_use]
-    pub const fn to_id(&self, _version: JavaMinecraftVersion) -> i32 {
+    pub const fn to_id(&self) -> i32 {
         self.0
     }
 }

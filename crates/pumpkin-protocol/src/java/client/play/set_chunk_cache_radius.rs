@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::SET_CHUNK_CACHE_RADIUS;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 #[java_packet(SET_CHUNK_CACHE_RADIUS)]
 pub struct CSetChunkCacheRadius {
@@ -19,18 +18,14 @@ impl CSetChunkCacheRadius {
 }
 
 impl ClientPacket for CSetChunkCacheRadius {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
         write.write_var_int(&self.radius)?;
         Ok(())
     }
 }
 
 impl<'a> ServerPacket<'a> for CSetChunkCacheRadius {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             radius: bytebuf.get_var_int()?,
         })
