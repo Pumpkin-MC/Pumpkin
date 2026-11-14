@@ -2,7 +2,7 @@ use std::{num::NonZeroUsize, time::Duration};
 
 use crate::{SchedulerError, TaskHandle, TaskRequest};
 
-/// Bounds all admitted work, including tasks waiting on external futures.
+/// Bounds all admitted work, including tasks waiting on external futures
 #[derive(Clone, Copy, Debug)]
 pub struct SchedulerConfig {
     maximum_tasks: NonZeroUsize,
@@ -43,17 +43,41 @@ pub enum SchedulerState {
     Stopped,
 }
 
-/// Counts of admitted tasks. A running task is excluded from ready even if
-/// it has already scheduled its next turn by waking itself
+/// Admitted tasks and cumulative terminal outcomes
+///
+/// Ready counts exclude running tasks, including tasks that wake themselves
+/// during polling
+/// Terminal counters are updated after cleanup and before result delivery
 #[derive(Clone, Copy, Debug)]
 pub struct SchedulerSnapshot {
     pub(crate) ready: usize,
     pub(crate) running: usize,
     pub(crate) pending: usize,
     pub(crate) slow_turns: u64,
+    pub(crate) completed: u64,
+    pub(crate) cancelled: u64,
+    pub(crate) failed: u64,
 }
 
 impl SchedulerSnapshot {
+    /// Returns the cumulative successful completions, including detached tasks
+    #[must_use]
+    pub const fn completed(self) -> u64 {
+        self.completed
+    }
+
+    /// Returns the cumulative cancelled task count
+    #[must_use]
+    pub const fn cancelled(self) -> u64 {
+        self.cancelled
+    }
+
+    /// Returns the cumulative errors, panics, and tasks stopped by driver loss
+    #[must_use]
+    pub const fn failed(self) -> u64 {
+        self.failed
+    }
+
     #[must_use]
     pub const fn ready(self) -> usize {
         self.ready
@@ -72,7 +96,7 @@ impl SchedulerSnapshot {
     }
 }
 
-/// Object-safe submission surface for tasks returning no value
+/// Object-safe submission interface for tasks returning no value
 pub trait SchedulerService: Send + Sync + 'static {
     fn config(&self) -> SchedulerConfig;
     fn state(&self) -> SchedulerState;

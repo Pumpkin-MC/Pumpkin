@@ -7,9 +7,9 @@ use std::{
 
 use futures::channel::oneshot;
 
-use crate::{ExecutionDomain, SchedulerError};
+use crate::{CancellationHandle, ExecutionDomain, SchedulerError};
 
-/// Identity assigned to one admitted task within a scheduler
+/// Identifies one admitted task within a scheduler
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SchedulerTaskId(pub(crate) u64);
 
@@ -20,26 +20,41 @@ impl SchedulerTaskId {
     }
 }
 
-/// Owned causal metadata preserved across suspension and worker moves
+/// Identifies a task and the call chain it belongs to
 ///
-/// A child inherits this chain only while it's parent is still valid
+/// Task, parent, and chain IDs remain unchanged across suspension and worker
+/// moves
+/// Cloned contexts remain valid as metadata after their task leaves admission
+/// Child requests require an active, uncancelled parent
 #[derive(Clone, Debug)]
 pub struct TaskContext {
     pub(crate) id: SchedulerTaskId,
     pub(crate) chain: SchedulerTaskId,
     pub(crate) parent: Option<SchedulerTaskId>,
     pub(crate) owner: Arc<()>,
+    pub(crate) cancellation: CancellationHandle,
 }
 
 impl TaskContext {
+    /// Returns the same cancellation capability held by this task's result handle
+    #[must_use]
+    pub fn cancellation_handle(&self) -> CancellationHandle {
+        self.cancellation.clone()
+    }
+
     #[must_use]
     pub const fn id(&self) -> SchedulerTaskId {
         self.id
     }
+    /// Returns the original root task's ID, including after root completion
     #[must_use]
     pub const fn chain(&self) -> SchedulerTaskId {
         self.chain
     }
+    /// Returns the parent ID assigned at submission
+    ///
+    /// The ID remains unchanged during cancellation reparenting, preserving the
+    /// original call chain for tracing
     #[must_use]
     pub const fn parent(&self) -> Option<SchedulerTaskId> {
         self.parent
@@ -53,7 +68,10 @@ impl TaskContext {
 pub type TaskFuture<T> = Pin<Box<dyn Future<Output = Result<T, SchedulerError>> + Send + 'static>>;
 pub type TaskWork<T = ()> = Box<dyn FnOnce(TaskContext) -> TaskFuture<T> + Send + 'static>;
 
-/// Owned asynchronous work. The factory itself runs on the Global domain scheduler driver
+/// Owned work to submit to a domain
+///
+/// The factory is queued during submission and invoked by the driver
+/// Both the factory and its future must avoid blocking or long-running CPU-heavy work
 pub struct TaskRequest<T = ()> {
     pub(crate) domain: ExecutionDomain,
     pub(crate) parent: Option<TaskContext>,
@@ -61,6 +79,7 @@ pub struct TaskRequest<T = ()> {
 }
 
 impl<T> TaskRequest<T> {
+    /// Starts an independent root chain when this request is submitted
     pub fn new<F, Fut>(domain: ExecutionDomain, work: F) -> Self
     where
         F: FnOnce(TaskContext) -> Fut + Send + 'static,
@@ -73,6 +92,12 @@ impl<T> TaskRequest<T> {
         }
     }
 
+    /// Inherits the parent's domain and chain, including downward cancellation
+    ///
+    /// Submission checks that the parent is still active in the same scheduler
+    /// Children share the root admission limit without reserved capacity
+    /// Children remain active after parent completion
+    /// Callers must await children whose results are required before the parent completes
     pub fn child<F, Fut>(parent: &TaskContext, work: F) -> Self
     where
         F: FnOnce(TaskContext) -> Fut + Send + 'static,
@@ -89,9 +114,12 @@ impl<T> TaskRequest<T> {
     }
 }
 
-/// Awaitable owned result
+/// The owned result of one accepted task
 ///
-/// Note: Dropping the handle does not cancel it's active work
+/// Accepted work continues when the handle is dropped
+/// Explicit cancellation is available through [`Self::cancellation_handle`]
+/// Results are delivered after the task's future is dropped and admission is released
+/// Detached children and external work have their own completion lifetimes
 #[must_use = "await the handle to observe task completion or failure"]
 pub struct TaskHandle<T = ()> {
     pub(crate) context: TaskContext,
@@ -99,6 +127,12 @@ pub struct TaskHandle<T = ()> {
 }
 
 impl<T> TaskHandle<T> {
+    /// Returns a cloneable cancellation handle that can be passed to another task
+    #[must_use]
+    pub fn cancellation_handle(&self) -> CancellationHandle {
+        self.context.cancellation_handle()
+    }
+
     #[must_use]
     pub const fn context(&self) -> &TaskContext {
         &self.context
