@@ -841,11 +841,8 @@ impl EntityBase for ItemEntity {
         if inserted || player.is_creative() {
             player.inventory_changed.store(true, Ordering::Relaxed);
 
-            let amount_picked_up = if player.is_creative() {
-                count_before
-            } else {
-                count_before - count_after
-            };
+            // A creative stack that fit nowhere is voided, so `count_after` is already 0.
+            let amount_picked_up = count_before - count_after;
 
             if amount_picked_up > 0 {
                 if inserted
