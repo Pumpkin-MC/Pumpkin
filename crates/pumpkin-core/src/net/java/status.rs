@@ -23,7 +23,6 @@ impl PendingConnection {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .get_status_response(client_version, &server.plugin_manager.java_versions)
         };
-
         let (max_players, num_players) = status_response
             .players
             .as_ref()

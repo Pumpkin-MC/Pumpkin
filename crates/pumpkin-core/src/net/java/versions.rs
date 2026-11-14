@@ -1,60 +1,100 @@
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{PoisonError, RwLock};
 
-use arc_swap::ArcSwap;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-/// Java versions the server admits: its own, plus the ones plugins registered to translate.
-#[derive(Default)]
+/// Thread-safe registry for Java Minecraft client versions supported by plugins.
+#[derive(Debug, Default)]
 pub struct JavaVersions {
-    /// By plugin name.
-    registered: ArcSwap<BTreeMap<String, Arc<[JavaMinecraftVersion]>>>,
+    versions: RwLock<BTreeMap<String, BTreeSet<JavaMinecraftVersion>>>,
 }
 
 impl JavaVersions {
-    /// Replaces `plugin`'s versions.
-    pub fn register(&self, plugin: &str, versions: impl IntoIterator<Item = JavaMinecraftVersion>) {
-        let versions: Arc<[_]> = versions
-            .into_iter()
-            .filter(|version| *version != JavaMinecraftVersion::Unknown)
-            .collect();
-        self.registered.rcu(|registered| {
-            let mut registered = (**registered).clone();
-            registered.insert(plugin.to_string(), versions.clone());
-            registered
-        });
-    }
-
-    pub fn unregister(&self, plugin: &str) {
-        self.registered.rcu(|registered| {
-            let mut registered = (**registered).clone();
-            registered.remove(plugin);
-            registered
-        });
-    }
-
     #[must_use]
-    pub fn is_translated(&self, version: JavaMinecraftVersion) -> bool {
-        self.registered
-            .load()
-            .values()
-            .any(|versions| versions.contains(&version))
+    pub fn new() -> Self {
+        Self::default()
     }
 
+    /// Registers the supported versions for a plugin.
+    ///
+    /// Any previous version registration for this plugin name is replaced.
+    pub fn register(
+        &self,
+        plugin_name: &str,
+        versions: impl IntoIterator<Item = JavaMinecraftVersion>,
+    ) {
+        let mut guard = self
+            .versions
+            .write()
+            .unwrap_or_else(PoisonError::into_inner);
+        let set = guard.entry(plugin_name.to_string()).or_default();
+        set.clear();
+        for version in versions {
+            if version != JavaMinecraftVersion::Unknown {
+                set.insert(version);
+            }
+        }
+    }
+
+    /// Unregisters all versions for a plugin (e.g. on plugin unload).
+    pub fn unregister(&self, plugin_name: &str) {
+        let mut guard = self
+            .versions
+            .write()
+            .unwrap_or_else(PoisonError::into_inner);
+        guard.remove(plugin_name);
+    }
+
+    /// Returns whether any plugin has explicitly registered this version.
+    #[must_use]
+    pub fn is_registered(&self, version: JavaMinecraftVersion) -> bool {
+        if version == JavaMinecraftVersion::Unknown {
+            return false;
+        }
+        let guard = self.versions.read().unwrap_or_else(PoisonError::into_inner);
+        guard.values().any(|set| set.contains(&version))
+    }
+
+    /// Checks if a client version is admitted by either the server's current version
+    /// or any loaded translation plugin.
     #[must_use]
     pub fn admits(&self, version: JavaMinecraftVersion) -> bool {
-        version == CURRENT_MC_VERSION || self.is_translated(version)
+        if version == JavaMinecraftVersion::Unknown {
+            return false;
+        }
+        if version == CURRENT_MC_VERSION {
+            return true;
+        }
+        self.is_registered(version)
     }
 
-    /// The oldest admitted version.
+    /// Oldest admitted version.
     #[must_use]
     pub fn oldest(&self) -> JavaMinecraftVersion {
-        self.registered
-            .load()
+        let guard = self.versions.read().unwrap_or_else(PoisonError::into_inner);
+        guard
             .values()
-            .flat_map(|versions| versions.iter().copied())
+            .filter_map(|set| set.first().copied())
             .fold(CURRENT_MC_VERSION, Ord::min)
+    }
+
+    /// Checks if a client protocol number is admitted by either the server's current version
+    /// or any loaded translation plugin.
+    #[must_use]
+    pub fn admits_protocol(&self, protocol: u32) -> bool {
+        let version = JavaMinecraftVersion::from_protocol(protocol);
+        if version != JavaMinecraftVersion::Unknown && self.admits(version) {
+            return true;
+        }
+
+        let guard = self.versions.read().unwrap_or_else(PoisonError::into_inner);
+        guard.values().any(|set| {
+            set.iter().any(|v| {
+                let p = v.protocol_version();
+                p >= 0 && (p as u32) == protocol
+            })
+        })
     }
 }
 
@@ -63,21 +103,57 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registered_versions_are_admitted_until_unregistered() {
-        let versions = JavaVersions::default();
-        assert!(versions.admits(CURRENT_MC_VERSION));
-        assert!(!versions.admits(JavaMinecraftVersion::V_1_8));
-        assert_eq!(versions.oldest(), CURRENT_MC_VERSION);
+    fn admits_current_mc_version() {
+        let registry = JavaVersions::new();
+        assert!(registry.admits(CURRENT_MC_VERSION));
+        assert!(registry.admits_protocol(CURRENT_MC_VERSION.protocol_version() as u32));
+    }
 
-        versions.register(
-            "multiversion",
-            [JavaMinecraftVersion::V_1_8, JavaMinecraftVersion::Unknown],
+    #[test]
+    fn admits_registered_version() {
+        let registry = JavaVersions::new();
+        assert!(!registry.admits(JavaMinecraftVersion::V_1_20_2));
+        assert!(
+            !registry.admits_protocol(JavaMinecraftVersion::V_1_20_2.protocol_version() as u32)
         );
-        assert!(versions.admits(JavaMinecraftVersion::V_1_8));
-        assert!(!versions.admits(JavaMinecraftVersion::Unknown));
-        assert_eq!(versions.oldest(), JavaMinecraftVersion::V_1_8);
 
-        versions.unregister("multiversion");
-        assert!(!versions.admits(JavaMinecraftVersion::V_1_8));
+        registry.register(
+            "multiversion",
+            vec![JavaMinecraftVersion::V_1_20_2, JavaMinecraftVersion::V_1_8],
+        );
+        assert!(registry.admits(JavaMinecraftVersion::V_1_20_2));
+        assert!(registry.admits(JavaMinecraftVersion::V_1_8));
+        assert!(registry.admits_protocol(JavaMinecraftVersion::V_1_20_2.protocol_version() as u32));
+        assert!(registry.admits_protocol(JavaMinecraftVersion::V_1_8.protocol_version() as u32));
+
+        // Unknown is never admitted
+        assert!(!registry.admits(JavaMinecraftVersion::Unknown));
+
+        // Unregister plugin
+        registry.unregister("multiversion");
+        assert!(!registry.admits(JavaMinecraftVersion::V_1_20_2));
+        assert!(!registry.admits(JavaMinecraftVersion::V_1_8));
+        assert!(registry.admits(CURRENT_MC_VERSION));
+    }
+
+    #[test]
+    fn oldest_follows_registrations() {
+        let registry = JavaVersions::new();
+        assert_eq!(registry.oldest(), CURRENT_MC_VERSION);
+        registry.register("multiversion", vec![JavaMinecraftVersion::V_1_8]);
+        assert_eq!(registry.oldest(), JavaMinecraftVersion::V_1_8);
+        registry.unregister("multiversion");
+        assert_eq!(registry.oldest(), CURRENT_MC_VERSION);
+    }
+
+    #[test]
+    fn register_replaces_previous_list() {
+        let registry = JavaVersions::new();
+        registry.register("test_plugin", vec![JavaMinecraftVersion::V_1_8]);
+        assert!(registry.admits(JavaMinecraftVersion::V_1_8));
+
+        registry.register("test_plugin", vec![JavaMinecraftVersion::V_1_20_2]);
+        assert!(!registry.admits(JavaMinecraftVersion::V_1_8));
+        assert!(registry.admits(JavaMinecraftVersion::V_1_20_2));
     }
 }

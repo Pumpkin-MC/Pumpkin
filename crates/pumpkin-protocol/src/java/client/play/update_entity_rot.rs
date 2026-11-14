@@ -56,3 +56,17 @@ impl<'a> ServerPacket<'a> for CUpdateEntityRot {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn round_trips() {
+        let packet = CUpdateEntityRot::new(VarInt(9), 64, 200, true);
+        let mut buf = Vec::new();
+        packet.write_packet_data(&mut buf).unwrap();
+        let read = CUpdateEntityRot::read(&mut buf.as_slice()).unwrap();
+        assert_eq!(read, packet);
+    }
+}

@@ -65,7 +65,7 @@ impl<'a> CPlayerInfoUpdate<'a> {
 impl CPlayerInfoUpdate<'_> {
     /// Writes `flags`, then each player's matching actions in flag order, the order the client
     /// reads them. Actions without their flag are skipped; a flag without its action is an error.
-    pub(crate) fn write_flagged<W: Write>(
+    pub fn write_flagged<W: Write>(
         &self,
         mut write: W,
         flags: PlayerInfoFlags,

@@ -20,11 +20,11 @@ type Entities = BTreeMap<String, BTreeMap<String, RawTrackedField>>;
 
 /// Generates the `TokenStream` for `TrackedId`, `TrackedData`, and all per-entity tracking modules.
 pub(crate) fn build() -> TokenStream {
-    let path = "../../assets/tracked_data.json";
-    let content = fs::read_to_string(path)
-        .unwrap_or_else(|_| panic!("Failed to read tracked data file: {path}"));
-    let entities: Entities =
-        serde_json::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse {path}: {e}"));
+    let path = crate::asset_path("tracked_data.json");
+    let content = fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("Failed to read tracked data file: {}", path.display()));
+    let entities: Entities = serde_json::from_str(&content)
+        .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", path.display()));
 
     let tracked_id_struct = generate_tracked_id_struct();
     let tracked_data_struct = generate_tracked_data_struct();

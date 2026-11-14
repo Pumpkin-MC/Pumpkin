@@ -2,17 +2,24 @@ use crate::{
     events::{ToFromWasmEvent, cleanup_event, consume_text_component},
     generated_packets,
     pumpkin::plugin::event::{
-        ClientboundPacket, Event, MapInitializeEventData, PacketReceivedEventData,
-        PacketSentEventData, ServerBroadcastEventData, ServerCommandEventData,
-        ServerListPingAddress, ServerListPingEventData, ServerLoadEventData, ServerLoadType,
-        ServerTickEndEventData, ServerTickStartEventData, ServerboundPacket,
+        BedrockConnectionPacketReceivedEventData, BedrockConnectionPacketSentEventData,
+        ClientboundPacket, Event, JavaConnectionPacketReceivedEventData,
+        JavaConnectionPacketSentEventData, JavaConnectionState, MapInitializeEventData,
+        PacketReceivedEventData, PacketSentEventData, RawPacket, ServerBroadcastEventData,
+        ServerCommandEventData, ServerListPingAddress, ServerListPingEventData,
+        ServerLoadEventData, ServerLoadType, ServerTickEndEventData, ServerTickStartEventData,
+        ServerboundPacket,
     },
 };
 use pumpkin_core::net::ClientPlatform;
 use pumpkin_core::plugin::server::{
     list_ping::ServerListPingEvent,
     map_initialize::MapInitializeEvent,
-    packet::{PacketReceivedEvent, PacketSentEvent},
+    packet::{
+        BedrockConnectionPacketReceivedEvent, BedrockConnectionPacketSentEvent,
+        JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent, PacketReceivedEvent,
+        PacketSentEvent,
+    },
     server_broadcast::ServerBroadcastEvent,
     server_command::ServerCommandEvent,
     server_load::{LoadType, ServerLoadEvent},
@@ -20,6 +27,7 @@ use pumpkin_core::plugin::server::{
     server_tick_start::ServerTickStartEvent,
 };
 use pumpkin_data::packet::CURRENT_MC_VERSION;
+use pumpkin_protocol::ConnectionState;
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
@@ -32,6 +40,7 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             ClientPlatform::Java(client) => {
                 if client.version.load() == CURRENT_MC_VERSION {
                     generated_packets::deserialize_java_serverbound_packet(
+                        ConnectionState::Play,
                         self.packet_id,
                         &self.payload,
                     )
@@ -102,6 +111,14 @@ impl ToFromWasmEvent for PacketSentEvent {
             packet,
             packet_id: self.packet_id,
             raw_payload: self.payload.iter().copied().collect(),
+            extra_packets: self
+                .extra_packets
+                .iter()
+                .map(|(id, payload)| RawPacket {
+                    packet_id: *id,
+                    payload: payload.to_vec(),
+                })
+                .collect(),
             cancelled: self.cancelled,
         })
     }
@@ -111,6 +128,11 @@ impl ToFromWasmEvent for PacketSentEvent {
         if let Event::PacketSentEvent(data) = event {
             self.packet_id = data.packet_id;
             self.payload = data.raw_payload.into();
+            self.extra_packets = data
+                .extra_packets
+                .into_iter()
+                .map(|p| (p.packet_id, p.payload.into()))
+                .collect();
             self.cancelled = data.cancelled;
         }
     }
@@ -118,6 +140,178 @@ impl ToFromWasmEvent for PacketSentEvent {
         match event {
             Event::PacketSentEvent(_) => {
                 panic!("Modifying packets from WASM is not yet supported.");
+            }
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+const fn to_wasm_java_connection_state(
+    state: pumpkin_protocol::ConnectionState,
+) -> JavaConnectionState {
+    match state {
+        pumpkin_protocol::ConnectionState::HandShake => JavaConnectionState::Handshake,
+        pumpkin_protocol::ConnectionState::Status => JavaConnectionState::Status,
+        pumpkin_protocol::ConnectionState::Login | pumpkin_protocol::ConnectionState::Transfer => {
+            JavaConnectionState::Login
+        }
+        pumpkin_protocol::ConnectionState::Config => JavaConnectionState::Config,
+        pumpkin_protocol::ConnectionState::Play => JavaConnectionState::Play,
+    }
+}
+
+impl ToFromWasmEvent for JavaConnectionPacketReceivedEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::JavaConnectionPacketReceivedEvent(JavaConnectionPacketReceivedEventData {
+            connection_id: self.connection_id,
+            version: crate::player::to_wasm_java_version(self.version),
+            state: to_wasm_java_connection_state(self.state),
+            packet_id: self.packet_id,
+            raw_payload: self.payload.to_vec(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
+        if let Event::JavaConnectionPacketReceivedEvent(data) = event {
+            self.packet_id = data.packet_id;
+            self.payload = data.raw_payload.into();
+            self.cancelled = data.cancelled;
+        }
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::JavaConnectionPacketReceivedEvent(_) => {
+                panic!(
+                    "Modifying packets from WASM is not yet supported in this simple implementation."
+                );
+            }
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for JavaConnectionPacketSentEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::JavaConnectionPacketSentEvent(JavaConnectionPacketSentEventData {
+            connection_id: self.connection_id,
+            version: crate::player::to_wasm_java_version(self.version),
+            state: to_wasm_java_connection_state(self.state),
+            packet_id: self.packet_id,
+            raw_payload: self.payload.to_vec(),
+            extra_packets: self
+                .extra_packets
+                .iter()
+                .map(|(id, payload)| RawPacket {
+                    packet_id: *id,
+                    payload: payload.to_vec(),
+                })
+                .collect(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
+        if let Event::JavaConnectionPacketSentEvent(data) = event {
+            self.packet_id = data.packet_id;
+            self.payload = data.raw_payload.into();
+            self.extra_packets = data
+                .extra_packets
+                .into_iter()
+                .map(|p| (p.packet_id, p.payload.into()))
+                .collect();
+            self.cancelled = data.cancelled;
+        }
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::JavaConnectionPacketSentEvent(_) => {
+                panic!(
+                    "Modifying packets from WASM is not yet supported in this simple implementation."
+                );
+            }
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for BedrockConnectionPacketReceivedEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BedrockConnectionPacketReceivedEvent(BedrockConnectionPacketReceivedEventData {
+            connection_id: self.connection_id,
+            protocol_version: self.protocol_version,
+            version: crate::player::to_wasm_bedrock_version(self.version),
+            packet_id: self.packet_id,
+            raw_payload: self.payload.to_vec(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
+        if let Event::BedrockConnectionPacketReceivedEvent(data) = event {
+            self.packet_id = data.packet_id;
+            self.payload = data.raw_payload.into();
+            self.cancelled = data.cancelled;
+        }
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BedrockConnectionPacketReceivedEvent(_) => {
+                panic!(
+                    "Modifying packets from WASM is not yet supported in this simple implementation."
+                );
+            }
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for BedrockConnectionPacketSentEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BedrockConnectionPacketSentEvent(BedrockConnectionPacketSentEventData {
+            connection_id: self.connection_id,
+            protocol_version: self.protocol_version,
+            version: crate::player::to_wasm_bedrock_version(self.version),
+            packet_id: self.packet_id,
+            raw_payload: self.payload.to_vec(),
+            extra_packets: self
+                .extra_packets
+                .iter()
+                .map(|(id, payload)| RawPacket {
+                    packet_id: *id,
+                    payload: payload.to_vec(),
+                })
+                .collect(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
+        if let Event::BedrockConnectionPacketSentEvent(data) = event {
+            self.packet_id = data.packet_id;
+            self.payload = data.raw_payload.into();
+            self.extra_packets = data
+                .extra_packets
+                .into_iter()
+                .map(|p| (p.packet_id, p.payload.into()))
+                .collect();
+            self.cancelled = data.cancelled;
+        }
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BedrockConnectionPacketSentEvent(_) => {
+                panic!(
+                    "Modifying packets from WASM is not yet supported in this simple implementation."
+                );
             }
             _ => panic!("unexpected event type"),
         }
@@ -297,6 +491,7 @@ impl ToFromWasmEvent for MapInitializeEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_protocol::packet::JavaPacket;
     use pumpkin_util::text::TextComponent;
     use wasmtime::component::Resource;
 
@@ -346,5 +541,37 @@ mod tests {
                 .get::<TextComponent>(&Resource::new_own(motd_rep))
                 .is_err()
         );
+    }
+
+    const ACCEPT_TELEPORTATION_26_3: [u8; 33] = [
+        0x01, 0x3F, 0xE0, 0, 0, 0, 0, 0, 0, 0x40, 0x52, 0x40, 0, 0, 0, 0, 0, 0x3F, 0xE0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0xC2, 0xB4, 0, 0,
+    ];
+
+    #[test]
+    fn play_packet_is_not_decoded_as_config_packet_with_the_same_id() {
+        let id = pumpkin_protocol::java::server::play::SConfirmTeleport::PACKET_ID;
+
+        let packet = generated_packets::deserialize_java_serverbound_packet(
+            ConnectionState::Play,
+            id,
+            &ACCEPT_TELEPORTATION_26_3,
+        );
+
+        assert!(packet.is_none());
+    }
+
+    #[test]
+    fn out_of_range_field_leaves_packet_undecoded() {
+        let id = pumpkin_protocol::java::server::play::SClientInformationPlay::PACKET_ID;
+        let view_distance_minus_one = [5, b'e', b'n', b'_', b'u', b's', 0xFF, 0, 1, 0x7F, 1, 0, 1];
+
+        let packet = generated_packets::deserialize_java_serverbound_packet(
+            ConnectionState::Play,
+            id,
+            &view_distance_minus_one,
+        );
+
+        assert!(packet.is_none());
     }
 }

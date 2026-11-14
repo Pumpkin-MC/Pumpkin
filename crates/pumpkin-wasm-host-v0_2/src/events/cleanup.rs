@@ -5,7 +5,7 @@ use crate::pumpkin::plugin::{
 use pumpkin_wasm_host_common::state::PluginHostState;
 use wasmtime::component::Resource;
 
-pub fn cleanup_player(state: &mut PluginHostState, player: &Resource<Player>) {
+fn cleanup_player(state: &mut PluginHostState, player: &Resource<Player>) {
     state.discard_to_be_removed(player);
 }
 
@@ -211,6 +211,16 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         }
         Event::ServerTickStartEvent(_) => {}
         Event::ServerTickEndEvent(_) => {}
+        Event::PacketReceivedEvent(data) => {
+            cleanup_player(state, &data.player);
+        }
+        Event::PacketSentEvent(data) => {
+            cleanup_player(state, &data.player);
+        }
+        Event::JavaConnectionPacketReceivedEvent(_)
+        | Event::JavaConnectionPacketSentEvent(_)
+        | Event::BedrockConnectionPacketReceivedEvent(_)
+        | Event::BedrockConnectionPacketSentEvent(_) => {}
         Event::ChunkLoadEvent(data) => {
             cleanup_world(state, &data.target_world);
         }
@@ -702,7 +712,5 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::RaidStopEvent(_) => {}
         Event::RaidTriggerEvent(_) => {}
         Event::LightningStrikeEvent(_) => {}
-        Event::ConnectionPacketReceivedEvent(_) => {}
-        Event::ConnectionPacketSentEvent(_) => {}
     }
 }

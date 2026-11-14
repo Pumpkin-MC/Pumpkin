@@ -26,12 +26,11 @@ impl PendingConnection {
             .await;
             return;
         }
-        if self.connection_state.load() != ConnectionState::Status
-            && !server
-                .plugin_manager
-                .java_versions
-                .admits(JavaMinecraftVersion::from_protocol(version))
-        {
+        if self.connection_state.load() != ConnectionState::Status {
+            // A plugin translating this version (see `register_java_versions`) admits it.
+            if server.plugin_manager.java_versions.admits_protocol(version) {
+                return;
+            }
             if version < CURRENT_MC_VERSION.protocol_version() as u32 {
                 self.kick(TextComponent::translate_cross(
                     translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,

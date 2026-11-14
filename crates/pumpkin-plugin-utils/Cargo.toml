@@ -3,7 +3,28 @@ name = "pumpkin-plugin-utils"
 version.workspace = true
 edition.workspace = true
 license = "MIT OR Apache-2.0"
-description = "Utilities for Pumpkin plugins: licensing, lease caching, and update checks."
+description = "Utilities for Pumpkin plugins: licensing, lease caching, update checks, and crashlytics."
+
+[features]
+default = ["license", "updater", "crashlytics"]
+full = ["license", "updater", "crashlytics"]
+
+# Internal shared HTTP transport feature
+http = ["dep:reqwest", "dep:rustls", "dep:webpki-root-certs"]
+
+# Online/offline license verification & lease caching (`license_lease.json`)
+license = ["http"]
+
+# Marketplace release update checker (`/api/v1/rest/check-update`)
+updater = ["http"]
+
+# Automatic panic hook, error reporting, and Ed25519 telemetry signing (`/api/v1/rest/telemetry/crash`)
+crashlytics = [
+    "http",
+    "dep:ed25519-dalek",
+    "dep:hex",
+    "dep:sha2",
+]
 
 [dependencies]
 pumpkin-plugin-api = { workspace = true }
@@ -11,9 +32,14 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
-reqwest = { workspace = true, features = ["blocking", "json"] }
-rustls.workspace = true
-webpki-root-certs = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "json"], optional = true }
+rustls = { workspace = true, optional = true }
+ed25519-dalek = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+webpki-root-certs = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

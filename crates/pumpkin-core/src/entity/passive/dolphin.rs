@@ -172,13 +172,7 @@ impl CustomSound for DolphinEntity {
 impl Mob for DolphinEntity {
     fn has_global_tick_reach(&self) -> bool {
         let entity = self.get_entity();
-        entity.has_vehicle()
-            || entity.has_passengers()
-            || entity
-                .leashed_to
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_some()
+        entity.has_vehicle() || entity.has_passengers() || entity.is_leashed()
     }
 
     fn additional_tick_movement(&self) -> f64 {
@@ -395,13 +389,7 @@ impl Mob for DolphinEntity {
         );
         living.make_move(caller);
         let mut velocity = entity.velocity.load() * 0.9;
-        if self
-            .mob_entity
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_none()
-        {
+        if self.mob_entity.get_target().is_none() {
             velocity.y -= 0.005;
         }
         entity.velocity.store(velocity);

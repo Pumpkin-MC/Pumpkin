@@ -1,78 +1,121 @@
-use super::{EventHandler, FromIntoEvent, PluginEvent};
-use crate::Server;
+use super::FromIntoEvent;
 use crate::wit::pumpkin::plugin::event::{
-    ConnectionPacketReceivedEventData, ConnectionPacketSentEventData, Event, EventType,
+    BedrockConnectionPacketReceivedEventData, BedrockConnectionPacketSentEventData, Event,
+    EventType, JavaConnectionPacketReceivedEventData, JavaConnectionPacketSentEventData,
     PacketReceivedEventData, PacketSentEventData,
 };
+pub use crate::wit::pumpkin::plugin::event::{JavaConnectionState, RawPacket};
 
 /// An event fired when a packet is received from a client
 pub struct PacketReceivedEvent;
 
-impl PluginEvent for PacketReceivedEvent {
+impl FromIntoEvent for PacketReceivedEvent {
     const EVENT_TYPE: EventType = EventType::PacketReceivedEvent;
     type Data = PacketReceivedEventData;
 
-    fn route_packet_received<H: EventHandler<Self>>(
-        handler: &H,
-        server: Server,
-        event: PacketReceivedEventData,
-    ) -> PacketReceivedEventData {
-        handler.handle(server, event)
+    fn data_from_event(event: Event) -> Self::Data {
+        match event {
+            Event::PacketReceivedEvent(data) => data,
+            _ => panic!("unexpected event"),
+        }
+    }
+
+    fn data_into_event(data: Self::Data) -> Event {
+        Event::PacketReceivedEvent(data)
     }
 }
 
 /// An event fired when a packet is sent to a client
 pub struct PacketSentEvent;
 
-impl PluginEvent for PacketSentEvent {
+impl FromIntoEvent for PacketSentEvent {
     const EVENT_TYPE: EventType = EventType::PacketSentEvent;
     type Data = PacketSentEventData;
 
-    fn route_packet_sent<H: EventHandler<Self>>(
-        handler: &H,
-        server: Server,
-        event: PacketSentEventData,
-    ) -> PacketSentEventData {
-        handler.handle(server, event)
-    }
-}
-
-/// fired before play for a packet from a client below the server's
-/// protocol, in the client's format
-pub struct ConnectionPacketReceivedEvent;
-
-impl FromIntoEvent for ConnectionPacketReceivedEvent {
-    const EVENT_TYPE: EventType = EventType::ConnectionPacketReceivedEvent;
-    type Data = ConnectionPacketReceivedEventData;
-
     fn data_from_event(event: Event) -> Self::Data {
         match event {
-            Event::ConnectionPacketReceivedEvent(data) => data,
+            Event::PacketSentEvent(data) => data,
             _ => panic!("unexpected event"),
         }
     }
 
     fn data_into_event(data: Self::Data) -> Event {
-        Event::ConnectionPacketReceivedEvent(data)
+        Event::PacketSentEvent(data)
     }
 }
 
-/// fired before play for a packet to a client below the server's
-/// protocol, in the server's format
-pub struct ConnectionPacketSentEvent;
+/// An event fired when a packet is received from a Java connection prior to play.
+pub struct JavaConnectionPacketReceivedEvent;
 
-impl FromIntoEvent for ConnectionPacketSentEvent {
-    const EVENT_TYPE: EventType = EventType::ConnectionPacketSentEvent;
-    type Data = ConnectionPacketSentEventData;
+impl FromIntoEvent for JavaConnectionPacketReceivedEvent {
+    const EVENT_TYPE: EventType = EventType::JavaConnectionPacketReceivedEvent;
+    type Data = JavaConnectionPacketReceivedEventData;
 
     fn data_from_event(event: Event) -> Self::Data {
         match event {
-            Event::ConnectionPacketSentEvent(data) => data,
+            Event::JavaConnectionPacketReceivedEvent(data) => data,
             _ => panic!("unexpected event"),
         }
     }
 
     fn data_into_event(data: Self::Data) -> Event {
-        Event::ConnectionPacketSentEvent(data)
+        Event::JavaConnectionPacketReceivedEvent(data)
+    }
+}
+
+/// An event fired when a packet is sent to a Java connection prior to play.
+pub struct JavaConnectionPacketSentEvent;
+
+impl FromIntoEvent for JavaConnectionPacketSentEvent {
+    const EVENT_TYPE: EventType = EventType::JavaConnectionPacketSentEvent;
+    type Data = JavaConnectionPacketSentEventData;
+
+    fn data_from_event(event: Event) -> Self::Data {
+        match event {
+            Event::JavaConnectionPacketSentEvent(data) => data,
+            _ => panic!("unexpected event"),
+        }
+    }
+
+    fn data_into_event(data: Self::Data) -> Event {
+        Event::JavaConnectionPacketSentEvent(data)
+    }
+}
+
+/// An event fired when a packet is received from a Bedrock connection prior to play.
+pub struct BedrockConnectionPacketReceivedEvent;
+
+impl FromIntoEvent for BedrockConnectionPacketReceivedEvent {
+    const EVENT_TYPE: EventType = EventType::BedrockConnectionPacketReceivedEvent;
+    type Data = BedrockConnectionPacketReceivedEventData;
+
+    fn data_from_event(event: Event) -> Self::Data {
+        match event {
+            Event::BedrockConnectionPacketReceivedEvent(data) => data,
+            _ => panic!("unexpected event"),
+        }
+    }
+
+    fn data_into_event(data: Self::Data) -> Event {
+        Event::BedrockConnectionPacketReceivedEvent(data)
+    }
+}
+
+/// An event fired when a packet is sent to a Bedrock connection prior to play.
+pub struct BedrockConnectionPacketSentEvent;
+
+impl FromIntoEvent for BedrockConnectionPacketSentEvent {
+    const EVENT_TYPE: EventType = EventType::BedrockConnectionPacketSentEvent;
+    type Data = BedrockConnectionPacketSentEventData;
+
+    fn data_from_event(event: Event) -> Self::Data {
+        match event {
+            Event::BedrockConnectionPacketSentEvent(data) => data,
+            _ => panic!("unexpected event"),
+        }
+    }
+
+    fn data_into_event(data: Self::Data) -> Event {
+        Event::BedrockConnectionPacketSentEvent(data)
     }
 }

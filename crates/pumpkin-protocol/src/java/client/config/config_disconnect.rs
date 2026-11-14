@@ -1,5 +1,6 @@
 use pumpkin_data::packet::clientbound::config::DISCONNECT;
 use pumpkin_macros::java_packet;
+use pumpkin_util::text::TextComponent;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
@@ -21,7 +22,7 @@ impl ClientPacket for CConfigDisconnect<'_> {
         &self,
         mut write: impl std::io::Write,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_string(self.reason)?;
-        Ok(())
+        // Text component, not a plain string.
+        write.write_component(&TextComponent::text(self.reason.to_string()))
     }
 }

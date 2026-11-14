@@ -13,6 +13,7 @@ pub fn build_java_mapping() -> String {
         "use crate::pumpkin::plugin::java_packets::{ClientboundPacket, ServerboundPacket};\n",
     );
     output.push_str("use pumpkin_protocol::codec::var_int::VarInt;\n");
+    output.push_str("use pumpkin_protocol::ConnectionState;\n");
     output.push_str("use bytes::Bytes;\n");
     output.push_str("use std::io::Cursor;\n");
     output.push_str("use std::any::Any;\n");
@@ -25,9 +26,6 @@ pub fn build_java_mapping() -> String {
     output.push_str("    match packet {\n");
 
     let client_states = &["config", "login", "play", "status"];
-    // Play first: packet ids are per state, and `PacketReceivedEvent` is play-only.
-    // Config `client_information` and play `accept_teleportation` both use id 0.
-    let server_states = &["play", "config", "handshake", "login", "status"];
 
     for state in client_states {
         process_packets(
@@ -46,22 +44,40 @@ pub fn build_java_mapping() -> String {
     output.push_str("}\n\n");
 
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, mut payload: &[u8]) -> Option<ServerboundPacket> {\n");
-    output.push_str("    match id {\n");
+    output.push_str("pub fn deserialize_java_serverbound_packet(state: ConnectionState, id: i32, mut payload: &[u8]) -> Option<ServerboundPacket> {\n");
+    output.push_str("    match state {\n");
 
-    for state in server_states {
+    let server_state_variants = &[
+        ("config", "Config"),
+        ("handshake", "HandShake"),
+        ("login", "Login"),
+        ("play", "Play"),
+        ("status", "Status"),
+    ];
+    for (state, variant) in server_state_variants {
+        let mut arms = String::new();
         process_packets(
             &format!("../../crates/pumpkin-protocol/src/java/server/{}", state),
             state,
-            &mut output,
+            &mut arms,
             "java_packet",
             "ServerboundPacket",
             &format!("pumpkin_protocol::java::server::{}", state),
             MappingMode::Deserialize,
         );
+        if arms.is_empty() {
+            output.push_str(&format!("        ConnectionState::{variant} => None,\n"));
+        } else {
+            output.push_str(&format!(
+                "        ConnectionState::{variant} => match id {{\n"
+            ));
+            output.push_str(&arms);
+            output.push_str("            _ => None,\n");
+            output.push_str("        },\n");
+        }
     }
 
-    output.push_str("        _ => None,\n");
+    output.push_str("        ConnectionState::Transfer => None,\n");
     output.push_str("    }\n");
     output.push_str("}\n\n");
 
@@ -174,6 +190,14 @@ pub fn build_bedrock_mapping() -> String {
     output.push_str("}\n\n");
 
     output
+}
+
+fn narrow(mode: MappingMode) -> &'static str {
+    if mode == MappingMode::Deserialize {
+        "ok()?"
+    } else {
+        "unwrap()"
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -294,7 +318,7 @@ fn convert_value(
                 )
             }
             MappingMode::Deserialize | MappingMode::ToWit => {
-                format!("{}.0.try_into().unwrap()", src)
+                format!("{}.0.try_into().{}", src, narrow(mode))
             }
             MappingMode::Downcast => String::new(),
         },
@@ -333,7 +357,7 @@ fn convert_value(
                 if is_slice {
                     format!("{}.iter().map(|v| v.0 as _).collect()", src)
                 } else {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0.try_into().{}", src, narrow(mode))
                 }
             } else {
                 // ToWit
@@ -540,7 +564,7 @@ fn convert_value(
                         format!("{}.iter().map(|v| *v as _).collect()", src)
                     }
                 } else if type_ident == "VarInt" {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0.try_into().{}", src, narrow(mode))
                 } else if type_ident == "i8" {
                     if is_ref {
                         format!("*{}", src)
@@ -548,7 +572,7 @@ fn convert_value(
                         src.to_string()
                     }
                 } else {
-                    format!("{}.try_into().unwrap()", src)
+                    format!("{}.try_into().{}", src, narrow(mode))
                 }
             }
             MappingMode::Downcast => String::new(),

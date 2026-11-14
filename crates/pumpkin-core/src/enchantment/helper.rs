@@ -97,11 +97,22 @@ impl EnchantmentHelper {
         });
     }
 
-    /// Applies the weapon's post-attack enchantment effects to the victim (e.g. Fire Aspect ignites it).
+    /// Applies the weapon's post-attack enchantment effects (e.g. Fire Aspect igniting the victim,
+    /// Wind Burst triggering an explosion at the attacker).
     ///
-    /// Only `Ignite` is applied: the effect data carries no `requirements`, so conditional effects
-    /// such as Thorns or Bane of Arthropods cannot be told apart from unconditional ones.
-    pub fn on_post_attack(victim: &Entity, weapon: &ItemStack) {
+    /// Only `Ignite` and `Explode` are applied: the effect data carries no `requirements`, so
+    /// conditional effects such as Thorns or Bane of Arthropods cannot be told apart from
+    /// unconditional ones without their specific predicate checks.
+    pub fn on_post_attack(
+        attacker: &dyn crate::entity::EntityBase,
+        victim: &Entity,
+        weapon: &ItemStack,
+    ) {
+        let attacker_entity = attacker.get_entity();
+        let world = attacker_entity.world.load_full();
+        let owner = attacker
+            .get_player()
+            .and_then(|player| world.get_player_by_id(player.entity_id()));
         Self::run_iteration_on_item(weapon, |enchantment, level| {
             for targeted_effect in enchantment.get_post_attack_effects() {
                 if targeted_effect.enchanted == Some(EnchantmentTarget::Attacker)
@@ -109,6 +120,28 @@ impl EnchantmentHelper {
                     && let EnchantmentEntityEffect::Ignite { duration } = &targeted_effect.effect
                 {
                     victim.set_on_fire_for_ticks((duration.calculate(level) * 20.0) as u32);
+                } else if targeted_effect.enchanted == Some(EnchantmentTarget::Attacker)
+                    && targeted_effect.affected == Some(EnchantmentTarget::Attacker)
+                    && let EnchantmentEntityEffect::Explode { .. } = &targeted_effect.effect
+                {
+                    // Vanilla `Enchantments.WIND_BURST` requires `DIRECT_ATTACKER` to have
+                    // `isFlying == false` (`!isFallFlying() && !abilities.flying`) and `fallDistance >= 1.5`.
+                    let is_flying = attacker_entity.is_fall_flying()
+                        || attacker
+                            .get_player()
+                            .is_some_and(crate::entity::player::Player::is_flying);
+                    let fall_distance = attacker
+                        .get_living_entity()
+                        .map_or(0.0, |living| living.fall_distance.load());
+                    if !is_flying && fall_distance >= 1.5 {
+                        targeted_effect.effect.apply(
+                            &world,
+                            level,
+                            owner.as_ref(),
+                            Some(attacker_entity),
+                            attacker_entity.pos.load(),
+                        );
+                    }
                 }
             }
         });

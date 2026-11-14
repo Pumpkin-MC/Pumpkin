@@ -46,6 +46,11 @@ pub trait PluginLoader: Send + Sync {
     fn in_plugin_call(&self) -> bool {
         false
     }
+
+    /// Returns the guest binding language or runtime for a loaded plugin, if known.
+    fn binding_language(&self, _data: &(dyn Any + Send + Sync)) -> Option<String> {
+        None
+    }
 }
 
 /// Unified loader error type

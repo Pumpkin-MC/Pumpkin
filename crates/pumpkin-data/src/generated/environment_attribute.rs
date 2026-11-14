@@ -655,6 +655,12 @@ impl BoolKeyframe {
 pub struct DayTimeline;
 impl DayTimeline {
     pub const PERIOD_TICKS: i32 = 24000i32;
+    pub const DAY_TIME_MARKER: i32 = 1000i32;
+    pub const MIDNIGHT_TIME_MARKER: i32 = 18000i32;
+    pub const NIGHT_TIME_MARKER: i32 = 13000i32;
+    pub const NOON_TIME_MARKER: i32 = 6000i32;
+    pub const ROLL_VILLAGE_SIEGE_TIME_MARKER: i32 = 18000i32;
+    pub const WAKE_UP_FROM_SLEEP_TIME_MARKER: i32 = 0i32;
     pub const SKY_LIGHT_LEVEL_KEYFRAMES: &'static [FloatKeyframe] = &[
         FloatKeyframe::new(133i32, 1f32),
         FloatKeyframe::new(11867i32, 1f32),

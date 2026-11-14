@@ -33,6 +33,9 @@ pub struct PluginInfo {
     pub name: String,
     /// The version of the plugin.
     pub version: String,
+    /// The guest binding language or runtime used by the plugin (e.g. "rust", "go", "javascript", "python", "native").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 /// Type alias for plugin telemetry information.
@@ -402,15 +405,7 @@ pub fn build_heartbeat_payload(
         },
     );
 
-    let plugins = server
-        .plugin_manager
-        .active_plugins()
-        .into_iter()
-        .map(|p| PluginInfo {
-            name: p.name,
-            version: p.version,
-        })
-        .collect();
+    let plugins = server.plugin_manager.active_plugins_telemetry();
 
     let is_public = telemetry_config.public;
     let public_name = if is_public {
@@ -584,10 +579,12 @@ mod tests {
                 PluginInfo {
                     name: "Essential Admin Tools".to_string(),
                     version: "1.0.0".to_string(),
+                    language: Some("rust".to_string()),
                 },
                 PluginInfo {
                     name: "PumpkinAuth".to_string(),
                     version: "1.2.0".to_string(),
+                    language: Some("go".to_string()),
                 },
             ],
             is_public: true,
@@ -615,6 +612,8 @@ mod tests {
         assert_eq!(parsed["is_public"], true);
         assert_eq!(parsed["public_name"], "My High-Performance Pumpkin SMP");
         assert_eq!(parsed["plugins"].as_array().unwrap().len(), 2);
+        assert_eq!(parsed["plugins"][0]["language"], "rust");
+        assert_eq!(parsed["plugins"][1]["language"], "go");
     }
 
     #[test]

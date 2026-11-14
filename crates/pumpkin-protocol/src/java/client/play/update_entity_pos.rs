@@ -73,3 +73,29 @@ impl<'a> ServerPacket<'a> for CUpdateEntityPos {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn round_trips() {
+        let packet = CUpdateEntityPos::new(VarInt(9), Vector3::new(4096, -128, 256), true);
+        let mut buf = Vec::new();
+        packet.write_packet_data(&mut buf).unwrap();
+        let read = CUpdateEntityPos::read(&mut buf.as_slice()).unwrap();
+        assert_eq!(read, packet);
+    }
+
+    #[test]
+    fn stepped_delta_is_rejected() {
+        let mut buf = Vec::new();
+        buf.write_var_int(&VarInt(9)).unwrap();
+        // on ground false, one step
+        buf.write_var_int(&VarInt(2)).unwrap();
+        buf.write_i16_be(1).unwrap();
+        buf.write_i16_be(2).unwrap();
+        buf.write_i16_be(3).unwrap();
+        assert!(CUpdateEntityPos::read(&mut buf.as_slice()).is_err());
+    }
+}

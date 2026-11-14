@@ -53,6 +53,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:lever_toggles_power",
     "pumpkin:pressure_plate_entity_activation",
     "pumpkin:target_block_projectile_hit",
+    "pumpkin:arrow_falls_onto_block_below",
     "pumpkin:copper_bulb_toggles_and_comparator",
     "pumpkin:redstone_lamp_delayed_off",
     "pumpkin:piston_and_sticky_piston",
@@ -69,6 +70,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:hopper_transfers_to_chest",
     "pumpkin:tnt_redstone_ignites",
     "pumpkin:furnace_ignites_and_smelts",
+    "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
     "pumpkin:powered_rail_propagation",
     "pumpkin:activator_rail_propagation",
     "pumpkin:detector_rail_minecart",
@@ -341,6 +343,13 @@ pub fn ensure_builtin_game_tests_registered() {
             target_and_projectiles::test_target_block_projectile_hit,
         );
         register_function_test(
+            "pumpkin:arrow_falls_onto_block_below",
+            "pumpkin:empty_5x4x5",
+            100,
+            0,
+            target_and_projectiles::test_arrow_falls_onto_block_below,
+        );
+        register_function_test(
             "pumpkin:copper_bulb_toggles_and_comparator",
             "pumpkin:empty_5x4x5",
             30,
@@ -451,6 +460,13 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             furnace_smelting::test_furnace_ignites_and_smelts,
+        );
+        register_function_test(
+            "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
+            "pumpkin:empty_3x4x3",
+            30,
+            0,
+            furnace_smelting::test_furnace_returns_empty_bucket_from_lava_bucket_fuel,
         );
         register_function_test(
             "pumpkin:powered_rail_propagation",

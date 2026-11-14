@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
 
@@ -17,7 +17,7 @@ const REPUTATION_TO_DEFEND: i32 = -100;
 
 pub struct DefendVillageTargetGoal {
     track_target_goal: TrackTargetGoal,
-    potential_target: Option<Arc<dyn EntityBase>>,
+    potential_target: Option<Weak<dyn EntityBase>>,
     attack_targeting: TargetPredicate,
 }
 
@@ -62,16 +62,20 @@ impl Goal for DefendVillageTargetGoal {
                     .test(&world, Some(mob), player.as_ref())
             }) {
                 if villager.get_player_reputation(player) <= REPUTATION_TO_DEFEND {
-                    self.potential_target = Some(player.clone());
+                    let player_base: Arc<dyn EntityBase> = player.clone();
+                    self.potential_target = Some(Arc::downgrade(&player_base));
                 }
             }
         }
 
-        self.potential_target.as_ref().is_some_and(|target| {
-            target
-                .get_player()
-                .is_none_or(|player| !player.is_spectator() && !player.is_creative())
-        })
+        self.potential_target
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .is_some_and(|target| {
+                target
+                    .get_player()
+                    .is_none_or(|player| !player.is_spectator() && !player.is_creative())
+            })
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
@@ -81,13 +85,14 @@ impl Goal for DefendVillageTargetGoal {
     fn start(&mut self, mob: &dyn Mob) {
         self.track_target_goal.start_targeting(
             mob,
-            self.potential_target.clone(),
+            self.potential_target.as_ref().and_then(Weak::upgrade),
             TargetReason::Unknown,
         );
         self.track_target_goal.start(mob);
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
+        self.potential_target = None;
         self.track_target_goal.stop(mob);
     }
 

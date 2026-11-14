@@ -5,6 +5,7 @@
 #![allow(unused_variables)]
 use crate::pumpkin::plugin::java_packets::{ClientboundPacket, ServerboundPacket};
 use bytes::Bytes;
+use pumpkin_protocol::ConnectionState;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::packet::JavaPacket;
 use pumpkin_protocol::packet::Packet;
@@ -999,625 +1000,649 @@ pub fn serialize_java_packet(packet: &ClientboundPacket) -> Option<Bytes> {
 
 #[must_use]
 pub fn deserialize_java_serverbound_packet(
+    state: ConnectionState,
     id: i32,
     mut payload: &[u8],
 ) -> Option<ServerboundPacket> {
-    match id {
-        id if id == pumpkin_protocol::java::server::play::SAttack::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SAttack as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SAttack(
-                crate::pumpkin::plugin::java_packets::SAttack {
-                    entity_id: p.entity_id.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SBlockEntityTagQuery::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SBlockEntityTagQuery as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SBlockEntityTagQuery(
-                crate::pumpkin::plugin::java_packets::SBlockEntityTagQuery {
-                    transaction_id: p.transaction_id.0.try_into().ok()?,
-                    location: (p.location.0.x, p.location.0.y, p.location.0.z),
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SBundleItemSelected::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SBundleItemSelected as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SBundleItemSelected(
-                crate::pumpkin::plugin::java_packets::SBundleItemSelected {
-                    slot_id: p.slot_id.0.try_into().ok()?,
-                    selected_item_index: p.selected_item_index.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SChatAck::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SChatAck as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SChatAck(
-                crate::pumpkin::plugin::java_packets::SChatAck {
-                    offset: p.offset.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SChatCommand::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SChatCommand as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SChatCommand(
-                crate::pumpkin::plugin::java_packets::SChatCommand {
-                    command: p.command.into(),
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SChunkBatch::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SChunkBatch as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SChunkBatch(
-                crate::pumpkin::plugin::java_packets::SChunkBatch {
-                    chunks_per_tick: p.chunks_per_tick.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SClientCommand::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SClientCommand as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SClientCommand(
-                crate::pumpkin::plugin::java_packets::SClientCommand {
-                    action_id: p.action_id.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SClientInformationPlay::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SClientInformationPlay as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SClientInformationPlay(
-                crate::pumpkin::plugin::java_packets::SClientInformationPlay {
-                    locale: p.locale.into(),
-                    view_distance: p.view_distance.try_into().ok()?,
-                    chat_mode: p.chat_mode.0.try_into().ok()?,
-                    chat_colors: p.chat_colors.try_into().ok()?,
-                    skin_parts: p.skin_parts.try_into().ok()?,
-                    main_hand: p.main_hand.0.try_into().ok()?,
-                    text_filtering: p.text_filtering.try_into().ok()?,
-                    server_listing: p.server_listing.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SCloseContainer::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SCloseContainer as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SCloseContainer(
-                crate::pumpkin::plugin::java_packets::SCloseContainer {
-                    window_id: p.window_id.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SCommandSuggestion::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SCommandSuggestion as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SCommandSuggestion(
-                crate::pumpkin::plugin::java_packets::SCommandSuggestion {
-                    id: p.id.0.try_into().ok()?,
-                    command: p.command.into(),
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SContainerButtonClick::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SContainerButtonClick as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SContainerButtonClick(
-                crate::pumpkin::plugin::java_packets::SContainerButtonClick {
-                    window_id: p.window_id.0.try_into().ok()?,
-                    button_id: p.button_id.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SContainerSlotStateChanged::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SContainerSlotStateChanged as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SContainerSlotStateChanged(
-                crate::pumpkin::plugin::java_packets::SContainerSlotStateChanged {
-                    slot_id: p.slot_id.0.try_into().ok()?,
-                    container_id: p.container_id.0.try_into().ok()?,
-                    new_state: p.new_state.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SCustomPayload::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SCustomPayload as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SCustomPayload(
-                crate::pumpkin::plugin::java_packets::SCustomPayload {
-                    channel: p.channel.into(),
-                    data: p.data.iter().map(|v| *v as _).collect(),
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SDebugSampleSubscription::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SDebugSampleSubscription as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SDebugSampleSubscription(
-                crate::pumpkin::plugin::java_packets::SDebugSampleSubscription {
-                    sample_type: p.sample_type.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SDebugSubscriptionRequest::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SDebugSubscriptionRequest as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SDebugSubscriptionRequest(
-                crate::pumpkin::plugin::java_packets::SDebugSubscriptionRequest {
-                    sample_type: p.sample_type.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SEntityTagQuery::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SEntityTagQuery as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SEntityTagQuery(
-                crate::pumpkin::plugin::java_packets::SEntityTagQuery {
-                    transaction_id: p.transaction_id.0.try_into().ok()?,
-                    entity_id: p.entity_id.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SJigsawGenerate::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SJigsawGenerate as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SJigsawGenerate(
-                crate::pumpkin::plugin::java_packets::SJigsawGenerate {
-                    pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
-                    levels: p.levels.0.try_into().ok()?,
-                    keep_jigsaws: p.keep_jigsaws.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SKeepAlive::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SKeepAlive(
-                crate::pumpkin::plugin::java_packets::SKeepAlive {
-                    keep_alive_id: p.keep_alive_id.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SLockDifficulty::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SLockDifficulty as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SLockDifficulty(
-                crate::pumpkin::plugin::java_packets::SLockDifficulty {
-                    locked: p.locked.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SMoveVehicle::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SMoveVehicle as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SMoveVehicle(
-                crate::pumpkin::plugin::java_packets::SMoveVehicle {
-                    x: p.x.try_into().ok()?,
-                    y: p.y.try_into().ok()?,
-                    z: p.z.try_into().ok()?,
-                    yaw: p.yaw.try_into().ok()?,
-                    pitch: p.pitch.try_into().ok()?,
-                    on_ground: p.on_ground.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPaddleBoat::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPaddleBoat as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPaddleBoat(
-                crate::pumpkin::plugin::java_packets::SPaddleBoat {
-                    left_paddle: p.left_paddle.try_into().ok()?,
-                    right_paddle: p.right_paddle.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPickItemFromBlock::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPickItemFromBlock as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPickItemFromBlock(
-                crate::pumpkin::plugin::java_packets::SPickItemFromBlock {
-                    pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
-                    include_data: p.include_data.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPickItemFromEntity::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPickItemFromEntity as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPickItemFromEntity(
-                crate::pumpkin::plugin::java_packets::SPickItemFromEntity {
-                    id: p.id.0.try_into().ok()?,
-                    include_data: p.include_data.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlayPingRequest::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayPingRequest as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlayPingRequest(
-                crate::pumpkin::plugin::java_packets::SPlayPingRequest {
-                    payload: p.payload.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlaceRecipe::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlaceRecipe as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlaceRecipe(
-                crate::pumpkin::plugin::java_packets::SPlaceRecipe {
-                    container_id: p.container_id.try_into().ok()?,
-                    recipe_display_id: p.recipe_display_id.0.try_into().ok()?,
-                    use_max_items: p.use_max_items.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlayerAction::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerAction as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlayerAction(
-                crate::pumpkin::plugin::java_packets::SPlayerAction {
-                    status: p.status.0.try_into().ok()?,
-                    position: (p.position.0.x, p.position.0.y, p.position.0.z),
-                    face: p.face.try_into().ok()?,
-                    sequence: p.sequence.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SSetPlayerGround::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetPlayerGround as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SSetPlayerGround(
-                crate::pumpkin::plugin::java_packets::SSetPlayerGround {
-                    on_ground: p.on_ground.try_into().ok()?,
-                    horizontal_collision: p.horizontal_collision.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlayerInput::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerInput as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlayerInput(
-                crate::pumpkin::plugin::java_packets::SPlayerInput {
-                    input: p.input.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlayerPosition::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerPosition as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlayerPosition(
-                crate::pumpkin::plugin::java_packets::SPlayerPosition {
-                    position: (p.position.x as _, p.position.y as _, p.position.z as _),
-                    collision: p.collision.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlayerPositionRotation::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerPositionRotation as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlayerPositionRotation(
-                crate::pumpkin::plugin::java_packets::SPlayerPositionRotation {
-                    position: (p.position.x as _, p.position.y as _, p.position.z as _),
-                    yaw: p.yaw.try_into().ok()?,
-                    pitch: p.pitch.try_into().ok()?,
-                    collision: p.collision.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlayerRotation::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerRotation as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlayerRotation(
-                crate::pumpkin::plugin::java_packets::SPlayerRotation {
-                    yaw: p.yaw.try_into().ok()?,
-                    pitch: p.pitch.try_into().ok()?,
-                    ground: p.ground.try_into().ok()?,
-                    horizontal_collision: p.horizontal_collision.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlayerSession::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerSession as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlayerSession(
-                crate::pumpkin::plugin::java_packets::SPlayerSession {
-                    session_id: crate::pumpkin::plugin::uuid::Uuid {
-                        high: p.session_id.as_u64_pair().1,
-                        low: p.session_id.as_u64_pair().0,
+    match state {
+        ConnectionState::Config => match id {
+            id if id
+                == pumpkin_protocol::java::server::config::SClientInformationConfig::PACKET_ID =>
+            {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::config::SClientInformationConfig as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::ConfigSClientInformationConfig(
+                    crate::pumpkin::plugin::java_packets::ConfigSClientInformationConfig {
+                        locale: p.locale.into(),
+                        view_distance: p.view_distance.try_into().ok()?,
+                        chat_mode: p.chat_mode.0.try_into().ok()?,
+                        chat_colors: p.chat_colors.try_into().ok()?,
+                        skin_parts: p.skin_parts.try_into().ok()?,
+                        main_hand: p.main_hand.0.try_into().ok()?,
+                        text_filtering: p.text_filtering.try_into().ok()?,
+                        server_listing: p.server_listing.try_into().ok()?,
                     },
-                    expires_at: p.expires_at.try_into().ok()?,
-                    public_key: p.public_key.to_vec(),
-                    key_signature: p.key_signature.to_vec(),
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlayPong::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayPong as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlayPong(
-                crate::pumpkin::plugin::java_packets::SPlayPong {
-                    id: p.id.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SRecipeBookChangeSettings::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SRecipeBookChangeSettings as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SRecipeBookChangeSettings(
-                crate::pumpkin::plugin::java_packets::SRecipeBookChangeSettings {
-                    book_type: p.book_type.0.try_into().ok()?,
-                    is_open: p.is_open.try_into().ok()?,
-                    is_filtering: p.is_filtering.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SRecipeBookSeenRecipe::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SRecipeBookSeenRecipe as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SRecipeBookSeenRecipe(
-                crate::pumpkin::plugin::java_packets::SRecipeBookSeenRecipe {
-                    recipe_display_id: p.recipe_display_id.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SRenameItem::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SRenameItem as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SRenameItem(
-                crate::pumpkin::plugin::java_packets::SRenameItem {
-                    item_name: p.item_name.into(),
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SPlayResourcePack::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayResourcePack as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SPlayResourcePack(
-                crate::pumpkin::plugin::java_packets::SPlayResourcePack {
-                    uuid: crate::pumpkin::plugin::uuid::Uuid {
-                        high: p.uuid.as_u64_pair().1,
-                        low: p.uuid.as_u64_pair().0,
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::config::SKeepAlive::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::config::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::ConfigSKeepAlive(
+                    crate::pumpkin::plugin::java_packets::ConfigSKeepAlive {
+                        keep_alive_id: p.keep_alive_id.try_into().ok()?,
                     },
-                    result: p.result.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SSeenAdvancement::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSeenAdvancement as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(match p {
-                pumpkin_protocol::java::server::play::SSeenAdvancement::OpenTab(identifier) => {
-                    ServerboundPacket::SSeenAdvancement(
-                        crate::pumpkin::plugin::java_packets::SSeenAdvancement::OpenTab(
-                            identifier.to_string(),
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::config::SPluginMessage::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::config::SPluginMessage as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::ConfigSPluginMessage(
+                    crate::pumpkin::plugin::java_packets::ConfigSPluginMessage {
+                        channel: p.channel.into(),
+                        data: p.data.iter().map(|v| *v as _).collect(),
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::config::SConfigPong::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::config::SConfigPong as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::ConfigSConfigPong(
+                    crate::pumpkin::plugin::java_packets::ConfigSConfigPong {
+                        id: p.id.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::config::SConfigResourcePack::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::config::SConfigResourcePack as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::ConfigSConfigResourcePack(
+                    crate::pumpkin::plugin::java_packets::ConfigSConfigResourcePack {
+                        uuid: crate::pumpkin::plugin::uuid::Uuid {
+                            high: p.uuid.as_u64_pair().1,
+                            low: p.uuid.as_u64_pair().0,
+                        },
+                        result: p.result.0.try_into().ok()?,
+                    },
+                ))
+            }
+            _ => None,
+        },
+        ConnectionState::HandShake => None,
+        ConnectionState::Login => None,
+        ConnectionState::Play => match id {
+            id if id == pumpkin_protocol::java::server::play::SAttack::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SAttack as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SAttack(
+                    crate::pumpkin::plugin::java_packets::SAttack {
+                        entity_id: p.entity_id.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SBlockEntityTagQuery::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SBlockEntityTagQuery as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SBlockEntityTagQuery(
+                    crate::pumpkin::plugin::java_packets::SBlockEntityTagQuery {
+                        transaction_id: p.transaction_id.0.try_into().ok()?,
+                        location: (p.location.0.x, p.location.0.y, p.location.0.z),
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SBundleItemSelected::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SBundleItemSelected as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SBundleItemSelected(
+                    crate::pumpkin::plugin::java_packets::SBundleItemSelected {
+                        slot_id: p.slot_id.0.try_into().ok()?,
+                        selected_item_index: p.selected_item_index.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SChatAck::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SChatAck as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SChatAck(
+                    crate::pumpkin::plugin::java_packets::SChatAck {
+                        offset: p.offset.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SChatCommand::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SChatCommand as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SChatCommand(
+                    crate::pumpkin::plugin::java_packets::SChatCommand {
+                        command: p.command.into(),
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SChunkBatch::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SChunkBatch as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SChunkBatch(
+                    crate::pumpkin::plugin::java_packets::SChunkBatch {
+                        chunks_per_tick: p.chunks_per_tick.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SClientCommand::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SClientCommand as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SClientCommand(
+                    crate::pumpkin::plugin::java_packets::SClientCommand {
+                        action_id: p.action_id.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SClientInformationPlay::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SClientInformationPlay as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SClientInformationPlay(
+                    crate::pumpkin::plugin::java_packets::SClientInformationPlay {
+                        locale: p.locale.into(),
+                        view_distance: p.view_distance.try_into().ok()?,
+                        chat_mode: p.chat_mode.0.try_into().ok()?,
+                        chat_colors: p.chat_colors.try_into().ok()?,
+                        skin_parts: p.skin_parts.try_into().ok()?,
+                        main_hand: p.main_hand.0.try_into().ok()?,
+                        text_filtering: p.text_filtering.try_into().ok()?,
+                        server_listing: p.server_listing.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SCloseContainer::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SCloseContainer as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SCloseContainer(
+                    crate::pumpkin::plugin::java_packets::SCloseContainer {
+                        window_id: p.window_id.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SCommandSuggestion::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SCommandSuggestion as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SCommandSuggestion(
+                    crate::pumpkin::plugin::java_packets::SCommandSuggestion {
+                        id: p.id.0.try_into().ok()?,
+                        command: p.command.into(),
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SContainerButtonClick::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SContainerButtonClick as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SContainerButtonClick(
+                    crate::pumpkin::plugin::java_packets::SContainerButtonClick {
+                        window_id: p.window_id.0.try_into().ok()?,
+                        button_id: p.button_id.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id
+                == pumpkin_protocol::java::server::play::SContainerSlotStateChanged::PACKET_ID =>
+            {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SContainerSlotStateChanged as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SContainerSlotStateChanged(
+                    crate::pumpkin::plugin::java_packets::SContainerSlotStateChanged {
+                        slot_id: p.slot_id.0.try_into().ok()?,
+                        container_id: p.container_id.0.try_into().ok()?,
+                        new_state: p.new_state.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SCustomPayload::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SCustomPayload as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SCustomPayload(
+                    crate::pumpkin::plugin::java_packets::SCustomPayload {
+                        channel: p.channel.into(),
+                        data: p.data.iter().map(|v| *v as _).collect(),
+                    },
+                ))
+            }
+            id if id
+                == pumpkin_protocol::java::server::play::SDebugSampleSubscription::PACKET_ID =>
+            {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SDebugSampleSubscription as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SDebugSampleSubscription(
+                    crate::pumpkin::plugin::java_packets::SDebugSampleSubscription {
+                        sample_type: p.sample_type.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id
+                == pumpkin_protocol::java::server::play::SDebugSubscriptionRequest::PACKET_ID =>
+            {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SDebugSubscriptionRequest as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SDebugSubscriptionRequest(
+                    crate::pumpkin::plugin::java_packets::SDebugSubscriptionRequest {
+                        sample_type: p.sample_type.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SEntityTagQuery::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SEntityTagQuery as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SEntityTagQuery(
+                    crate::pumpkin::plugin::java_packets::SEntityTagQuery {
+                        transaction_id: p.transaction_id.0.try_into().ok()?,
+                        entity_id: p.entity_id.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SJigsawGenerate::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SJigsawGenerate as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SJigsawGenerate(
+                    crate::pumpkin::plugin::java_packets::SJigsawGenerate {
+                        pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
+                        levels: p.levels.0.try_into().ok()?,
+                        keep_jigsaws: p.keep_jigsaws.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SKeepAlive::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SKeepAlive(
+                    crate::pumpkin::plugin::java_packets::SKeepAlive {
+                        keep_alive_id: p.keep_alive_id.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SLockDifficulty::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SLockDifficulty as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SLockDifficulty(
+                    crate::pumpkin::plugin::java_packets::SLockDifficulty {
+                        locked: p.locked.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SMoveVehicle::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SMoveVehicle as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SMoveVehicle(
+                    crate::pumpkin::plugin::java_packets::SMoveVehicle {
+                        x: p.x.try_into().ok()?,
+                        y: p.y.try_into().ok()?,
+                        z: p.z.try_into().ok()?,
+                        yaw: p.yaw.try_into().ok()?,
+                        pitch: p.pitch.try_into().ok()?,
+                        on_ground: p.on_ground.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPaddleBoat::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPaddleBoat as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPaddleBoat(
+                    crate::pumpkin::plugin::java_packets::SPaddleBoat {
+                        left_paddle: p.left_paddle.try_into().ok()?,
+                        right_paddle: p.right_paddle.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPickItemFromBlock::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPickItemFromBlock as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPickItemFromBlock(
+                    crate::pumpkin::plugin::java_packets::SPickItemFromBlock {
+                        pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
+                        include_data: p.include_data.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPickItemFromEntity::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPickItemFromEntity as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPickItemFromEntity(
+                    crate::pumpkin::plugin::java_packets::SPickItemFromEntity {
+                        id: p.id.0.try_into().ok()?,
+                        include_data: p.include_data.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPlayPingRequest::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlayPingRequest as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlayPingRequest(
+                    crate::pumpkin::plugin::java_packets::SPlayPingRequest {
+                        payload: p.payload.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPlaceRecipe::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlaceRecipe as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlaceRecipe(
+                    crate::pumpkin::plugin::java_packets::SPlaceRecipe {
+                        container_id: p.container_id.try_into().ok()?,
+                        recipe_display_id: p.recipe_display_id.0.try_into().ok()?,
+                        use_max_items: p.use_max_items.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPlayerAction::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlayerAction as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlayerAction(
+                    crate::pumpkin::plugin::java_packets::SPlayerAction {
+                        status: p.status.0.try_into().ok()?,
+                        position: (p.position.0.x, p.position.0.y, p.position.0.z),
+                        face: p.face.try_into().ok()?,
+                        sequence: p.sequence.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SSetPlayerGround::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SSetPlayerGround as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SSetPlayerGround(
+                    crate::pumpkin::plugin::java_packets::SSetPlayerGround {
+                        on_ground: p.on_ground.try_into().ok()?,
+                        horizontal_collision: p.horizontal_collision.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPlayerInput::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlayerInput as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlayerInput(
+                    crate::pumpkin::plugin::java_packets::SPlayerInput {
+                        input: p.input.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPlayerPosition::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlayerPosition as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlayerPosition(
+                    crate::pumpkin::plugin::java_packets::SPlayerPosition {
+                        position: (p.position.x as _, p.position.y as _, p.position.z as _),
+                        collision: p.collision.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id
+                == pumpkin_protocol::java::server::play::SPlayerPositionRotation::PACKET_ID =>
+            {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlayerPositionRotation as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlayerPositionRotation(
+                    crate::pumpkin::plugin::java_packets::SPlayerPositionRotation {
+                        position: (p.position.x as _, p.position.y as _, p.position.z as _),
+                        yaw: p.yaw.try_into().ok()?,
+                        pitch: p.pitch.try_into().ok()?,
+                        collision: p.collision.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPlayerRotation::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlayerRotation as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlayerRotation(
+                    crate::pumpkin::plugin::java_packets::SPlayerRotation {
+                        yaw: p.yaw.try_into().ok()?,
+                        pitch: p.pitch.try_into().ok()?,
+                        ground: p.ground.try_into().ok()?,
+                        horizontal_collision: p.horizontal_collision.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPlayerSession::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlayerSession as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlayerSession(
+                    crate::pumpkin::plugin::java_packets::SPlayerSession {
+                        session_id: crate::pumpkin::plugin::uuid::Uuid {
+                            high: p.session_id.as_u64_pair().1,
+                            low: p.session_id.as_u64_pair().0,
+                        },
+                        expires_at: p.expires_at.try_into().ok()?,
+                        public_key: p.public_key.to_vec(),
+                        key_signature: p.key_signature.to_vec(),
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPlayPong::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlayPong as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlayPong(
+                    crate::pumpkin::plugin::java_packets::SPlayPong {
+                        id: p.id.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id
+                == pumpkin_protocol::java::server::play::SRecipeBookChangeSettings::PACKET_ID =>
+            {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SRecipeBookChangeSettings as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SRecipeBookChangeSettings(
+                    crate::pumpkin::plugin::java_packets::SRecipeBookChangeSettings {
+                        book_type: p.book_type.0.try_into().ok()?,
+                        is_open: p.is_open.try_into().ok()?,
+                        is_filtering: p.is_filtering.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SRecipeBookSeenRecipe::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SRecipeBookSeenRecipe as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SRecipeBookSeenRecipe(
+                    crate::pumpkin::plugin::java_packets::SRecipeBookSeenRecipe {
+                        recipe_display_id: p.recipe_display_id.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SRenameItem::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SRenameItem as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SRenameItem(
+                    crate::pumpkin::plugin::java_packets::SRenameItem {
+                        item_name: p.item_name.into(),
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SPlayResourcePack::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SPlayResourcePack as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SPlayResourcePack(
+                    crate::pumpkin::plugin::java_packets::SPlayResourcePack {
+                        uuid: crate::pumpkin::plugin::uuid::Uuid {
+                            high: p.uuid.as_u64_pair().1,
+                            low: p.uuid.as_u64_pair().0,
+                        },
+                        result: p.result.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SSeenAdvancement::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SSeenAdvancement as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(match p {
+                    pumpkin_protocol::java::server::play::SSeenAdvancement::OpenTab(identifier) => {
+                        ServerboundPacket::SSeenAdvancement(
+                            crate::pumpkin::plugin::java_packets::SSeenAdvancement::OpenTab(
+                                identifier.to_string(),
+                            ),
+                        )
+                    }
+                    pumpkin_protocol::java::server::play::SSeenAdvancement::CloseTab => {
+                        ServerboundPacket::SSeenAdvancement(
+                            crate::pumpkin::plugin::java_packets::SSeenAdvancement::CloseTab,
+                        )
+                    }
+                })
+            }
+            id if id == pumpkin_protocol::java::server::play::SSelectTrade::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SSelectTrade as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SSelectTrade(
+                    crate::pumpkin::plugin::java_packets::SSelectTrade {
+                        selected_slot: p.selected_slot.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SSetCommandBlock::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SSetCommandBlock as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SSetCommandBlock(
+                    crate::pumpkin::plugin::java_packets::SSetCommandBlock {
+                        pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
+                        command: p.command.into(),
+                        mode: p.mode.0.try_into().ok()?,
+                        flags: p.flags.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SSetCommandMinecart::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SSetCommandMinecart as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SSetCommandMinecart(
+                    crate::pumpkin::plugin::java_packets::SSetCommandMinecart {
+                        entity_id: p.entity_id.0.try_into().ok()?,
+                        command: p.command.into(),
+                        track_output: p.track_output.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SSetHeldItem::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SSetHeldItem as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SSetHeldItem(
+                    crate::pumpkin::plugin::java_packets::SSetHeldItem {
+                        slot: p.slot.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SSetJigsawBlock::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SSetJigsawBlock as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SSetJigsawBlock(
+                    crate::pumpkin::plugin::java_packets::SSetJigsawBlock {
+                        pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
+                        name: p.name.into(),
+                        target: p.target.into(),
+                        pool: p.pool.into(),
+                        final_state: p.final_state.into(),
+                        joint: p.joint.into(),
+                        selection_priority: p.selection_priority.0.try_into().ok()?,
+                        placement_priority: p.placement_priority.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SSetStructureBlock::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SSetStructureBlock as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SSetStructureBlock(
+                    crate::pumpkin::plugin::java_packets::SSetStructureBlock {
+                        location: (p.location.0.x, p.location.0.y, p.location.0.z),
+                        action: p.action.0.try_into().ok()?,
+                        mode: p.mode.0.try_into().ok()?,
+                        name: p.name.into(),
+                        offset_x: p.offset_x.try_into().ok()?,
+                        offset_y: p.offset_y.try_into().ok()?,
+                        offset_z: p.offset_z.try_into().ok()?,
+                        size_x: p.size_x.try_into().ok()?,
+                        size_y: p.size_y.try_into().ok()?,
+                        size_z: p.size_z.try_into().ok()?,
+                        mirror: p.mirror.0.try_into().ok()?,
+                        rotation: p.rotation.0.try_into().ok()?,
+                        metadata: p.metadata.into(),
+                        integrity: p.integrity.try_into().ok()?,
+                        seed: p.seed.0.try_into().ok()?,
+                        flags: p.flags.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SSpectateEntity::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SSpectateEntity as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SSpectateEntity(
+                    crate::pumpkin::plugin::java_packets::SSpectateEntity {
+                        target: p.target.0.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::STeleportToEntity::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::STeleportToEntity as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::STeleportToEntity(
+                    crate::pumpkin::plugin::java_packets::STeleportToEntity {
+                        target: crate::pumpkin::plugin::uuid::Uuid {
+                            high: p.target.as_u64_pair().1,
+                            low: p.target.as_u64_pair().0,
+                        },
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SUpdateSign::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SUpdateSign as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SUpdateSign(
+                    crate::pumpkin::plugin::java_packets::SUpdateSign {
+                        location: (p.location.0.x, p.location.0.y, p.location.0.z),
+                        is_front_text: p.is_front_text.try_into().ok()?,
+                        line_1: p.line_1.into(),
+                        line_2: p.line_2.into(),
+                        line_3: p.line_3.into(),
+                        line_4: p.line_4.into(),
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SUseItem::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SUseItem as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SUseItem(
+                    crate::pumpkin::plugin::java_packets::SUseItem {
+                        hand: p.hand.0.try_into().ok()?,
+                        sequence: p.sequence.0.try_into().ok()?,
+                        yaw: p.yaw.try_into().ok()?,
+                        pitch: p.pitch.try_into().ok()?,
+                    },
+                ))
+            }
+            id if id == pumpkin_protocol::java::server::play::SUseItemOn::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::play::SUseItemOn as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::SUseItemOn(
+                    crate::pumpkin::plugin::java_packets::SUseItemOn {
+                        hand: p.hand.0.try_into().ok()?,
+                        position: (p.position.0.x, p.position.0.y, p.position.0.z),
+                        face: p.face.0.try_into().ok()?,
+                        cursor_pos: (
+                            p.cursor_pos.x as _,
+                            p.cursor_pos.y as _,
+                            p.cursor_pos.z as _,
                         ),
-                    )
-                }
-                pumpkin_protocol::java::server::play::SSeenAdvancement::CloseTab => {
-                    ServerboundPacket::SSeenAdvancement(
-                        crate::pumpkin::plugin::java_packets::SSeenAdvancement::CloseTab,
-                    )
-                }
-            })
-        }
-        id if id == pumpkin_protocol::java::server::play::SSelectTrade::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSelectTrade as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SSelectTrade(
-                crate::pumpkin::plugin::java_packets::SSelectTrade {
-                    selected_slot: p.selected_slot.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SSetCommandBlock::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetCommandBlock as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SSetCommandBlock(
-                crate::pumpkin::plugin::java_packets::SSetCommandBlock {
-                    pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
-                    command: p.command.into(),
-                    mode: p.mode.0.try_into().ok()?,
-                    flags: p.flags.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SSetCommandMinecart::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetCommandMinecart as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SSetCommandMinecart(
-                crate::pumpkin::plugin::java_packets::SSetCommandMinecart {
-                    entity_id: p.entity_id.0.try_into().ok()?,
-                    command: p.command.into(),
-                    track_output: p.track_output.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SSetHeldItem::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetHeldItem as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SSetHeldItem(
-                crate::pumpkin::plugin::java_packets::SSetHeldItem {
-                    slot: p.slot.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SSetJigsawBlock::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetJigsawBlock as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SSetJigsawBlock(
-                crate::pumpkin::plugin::java_packets::SSetJigsawBlock {
-                    pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
-                    name: p.name.into(),
-                    target: p.target.into(),
-                    pool: p.pool.into(),
-                    final_state: p.final_state.into(),
-                    joint: p.joint.into(),
-                    selection_priority: p.selection_priority.0.try_into().ok()?,
-                    placement_priority: p.placement_priority.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SSetStructureBlock::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetStructureBlock as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SSetStructureBlock(
-                crate::pumpkin::plugin::java_packets::SSetStructureBlock {
-                    location: (p.location.0.x, p.location.0.y, p.location.0.z),
-                    action: p.action.0.try_into().ok()?,
-                    mode: p.mode.0.try_into().ok()?,
-                    name: p.name.into(),
-                    offset_x: p.offset_x.try_into().ok()?,
-                    offset_y: p.offset_y.try_into().ok()?,
-                    offset_z: p.offset_z.try_into().ok()?,
-                    size_x: p.size_x.try_into().ok()?,
-                    size_y: p.size_y.try_into().ok()?,
-                    size_z: p.size_z.try_into().ok()?,
-                    mirror: p.mirror.0.try_into().ok()?,
-                    rotation: p.rotation.0.try_into().ok()?,
-                    metadata: p.metadata.into(),
-                    integrity: p.integrity.try_into().ok()?,
-                    seed: p.seed.0.try_into().unwrap(),
-                    flags: p.flags.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SSpectateEntity::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSpectateEntity as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SSpectateEntity(
-                crate::pumpkin::plugin::java_packets::SSpectateEntity {
-                    target: p.target.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::STeleportToEntity::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::STeleportToEntity as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::STeleportToEntity(
-                crate::pumpkin::plugin::java_packets::STeleportToEntity {
-                    target: crate::pumpkin::plugin::uuid::Uuid {
-                        high: p.target.as_u64_pair().1,
-                        low: p.target.as_u64_pair().0,
+                        inside_block: p.inside_block.try_into().ok()?,
+                        is_against_world_border: p.is_against_world_border.try_into().ok()?,
+                        sequence: p.sequence.0.try_into().ok()?,
                     },
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SUpdateSign::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SUpdateSign as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SUpdateSign(
-                crate::pumpkin::plugin::java_packets::SUpdateSign {
-                    location: (p.location.0.x, p.location.0.y, p.location.0.z),
-                    is_front_text: p.is_front_text.try_into().ok()?,
-                    line_1: p.line_1.into(),
-                    line_2: p.line_2.into(),
-                    line_3: p.line_3.into(),
-                    line_4: p.line_4.into(),
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SUseItem::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SUseItem as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SUseItem(
-                crate::pumpkin::plugin::java_packets::SUseItem {
-                    hand: p.hand.0.try_into().ok()?,
-                    sequence: p.sequence.0.try_into().ok()?,
-                    yaw: p.yaw.try_into().ok()?,
-                    pitch: p.pitch.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::play::SUseItemOn::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SUseItemOn as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::SUseItemOn(
-                crate::pumpkin::plugin::java_packets::SUseItemOn {
-                    hand: p.hand.0.try_into().ok()?,
-                    position: (p.position.0.x, p.position.0.y, p.position.0.z),
-                    face: p.face.0.try_into().ok()?,
-                    cursor_pos: (
-                        p.cursor_pos.x as _,
-                        p.cursor_pos.y as _,
-                        p.cursor_pos.z as _,
-                    ),
-                    inside_block: p.inside_block.try_into().ok()?,
-                    is_against_world_border: p.is_against_world_border.try_into().ok()?,
-                    sequence: p.sequence.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::config::SClientInformationConfig::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::config::SClientInformationConfig as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::ConfigSClientInformationConfig(
-                crate::pumpkin::plugin::java_packets::ConfigSClientInformationConfig {
-                    locale: p.locale.into(),
-                    view_distance: p.view_distance.try_into().ok()?,
-                    chat_mode: p.chat_mode.0.try_into().ok()?,
-                    chat_colors: p.chat_colors.try_into().ok()?,
-                    skin_parts: p.skin_parts.try_into().ok()?,
-                    main_hand: p.main_hand.0.try_into().ok()?,
-                    text_filtering: p.text_filtering.try_into().ok()?,
-                    server_listing: p.server_listing.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::config::SKeepAlive::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::config::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::ConfigSKeepAlive(
-                crate::pumpkin::plugin::java_packets::ConfigSKeepAlive {
-                    keep_alive_id: p.keep_alive_id.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::config::SPluginMessage::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::config::SPluginMessage as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::ConfigSPluginMessage(
-                crate::pumpkin::plugin::java_packets::ConfigSPluginMessage {
-                    channel: p.channel.into(),
-                    data: p.data.iter().map(|v| *v as _).collect(),
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::config::SConfigPong::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::config::SConfigPong as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::ConfigSConfigPong(
-                crate::pumpkin::plugin::java_packets::ConfigSConfigPong {
-                    id: p.id.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::config::SConfigResourcePack::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::config::SConfigResourcePack as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::ConfigSConfigResourcePack(
-                crate::pumpkin::plugin::java_packets::ConfigSConfigResourcePack {
-                    uuid: crate::pumpkin::plugin::uuid::Uuid {
-                        high: p.uuid.as_u64_pair().1,
-                        low: p.uuid.as_u64_pair().0,
+                ))
+            }
+            _ => None,
+        },
+        ConnectionState::Status => match id {
+            id if id == pumpkin_protocol::java::server::status::SStatusPingRequest::PACKET_ID => {
+                use pumpkin_protocol::ServerPacket;
+                let p = <pumpkin_protocol::java::server::status::SStatusPingRequest as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
+                Some(ServerboundPacket::StatusSStatusPingRequest(
+                    crate::pumpkin::plugin::java_packets::StatusSStatusPingRequest {
+                        payload: p.payload.try_into().ok()?,
                     },
-                    result: p.result.0.try_into().ok()?,
-                },
-            ))
-        }
-        id if id == pumpkin_protocol::java::server::status::SStatusPingRequest::PACKET_ID => {
-            use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::status::SStatusPingRequest as pumpkin_protocol::ServerPacket>::read(&mut payload).ok()?;
-            Some(ServerboundPacket::StatusSStatusPingRequest(
-                crate::pumpkin::plugin::java_packets::StatusSStatusPingRequest {
-                    payload: p.payload.try_into().ok()?,
-                },
-            ))
-        }
-        _ => None,
+                ))
+            }
+            _ => None,
+        },
+        ConnectionState::Transfer => None,
     }
 }
 
@@ -3368,7 +3393,7 @@ pub fn deserialize_bedrock_serverbound_packet(
             use pumpkin_protocol::BServerPacket;
             let p = <pumpkin_protocol::bedrock::server::SPlayerHotbar as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
             Some(BServerboundPacket::SPlayerHotbar(crate::pumpkin::plugin::bedrock_packets::SPlayerHotbar {
-                selected_slot: p.selected_slot.0.try_into().unwrap(),
+                selected_slot: p.selected_slot.0.try_into().ok()?,
                 container_id: p.container_id.try_into().ok()?,
                 should_select_slot: p.should_select_slot.try_into().ok()?,
             }))
@@ -3400,7 +3425,7 @@ pub fn deserialize_bedrock_serverbound_packet(
             use pumpkin_protocol::BServerPacket;
             let p = <pumpkin_protocol::bedrock::server::SSetLocalPlayerAsInitialized as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
             Some(BServerboundPacket::SSetLocalPlayerAsInitialized(crate::pumpkin::plugin::bedrock_packets::SSetLocalPlayerAsInitialized {
-                player_id: p.player_id.0.try_into().unwrap(),
+                player_id: p.player_id.0.try_into().ok()?,
             }))
         }
         id if id == <pumpkin_protocol::bedrock::server::SSetPlayerInventoryOptions as pumpkin_protocol::Packet>::PACKET_ID as i32 => {

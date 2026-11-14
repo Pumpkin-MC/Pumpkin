@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
+use std::sync::{Arc, Weak};
 
 use pumpkin_data::BlockState;
 use pumpkin_data::data_component::DataComponent;
@@ -108,24 +108,18 @@ impl TraderLlamaEntity {
 }
 
 fn wandering_trader_holder(entity: &Entity) -> Option<Arc<dyn EntityBase>> {
-    entity
-        .leashed_to
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .as_ref()
-        .filter(|holder| {
-            holder
-                .cast_any()
-                .downcast_ref::<WanderingTraderEntity>()
-                .is_some()
-        })
-        .cloned()
+    entity.get_leash_holder().filter(|holder| {
+        holder
+            .cast_any()
+            .downcast_ref::<WanderingTraderEntity>()
+            .is_some()
+    })
 }
 
 /// Targets whatever last hurt the wandering trader holding this llama's leash.
 struct DefendWanderingTraderGoal {
     track_target_goal: TrackTargetGoal,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     target_predicate: TargetPredicate,
     timestamp: i32,
 }
@@ -162,7 +156,7 @@ impl Goal for DefendWanderingTraderGoal {
         {
             return false;
         }
-        self.target = Some(attacker);
+        self.target = Some(Arc::downgrade(&attacker));
         true
     }
 
@@ -173,7 +167,7 @@ impl Goal for DefendWanderingTraderGoal {
     fn start(&mut self, mob: &dyn Mob) {
         self.track_target_goal.start_targeting(
             mob,
-            self.target.clone(),
+            self.target.as_ref().and_then(Weak::upgrade),
             TargetReason::TargetAttackedOwner,
         );
         if let Some(owner) = wandering_trader_holder(mob.get_entity())

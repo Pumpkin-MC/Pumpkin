@@ -10,7 +10,6 @@ use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::{
     ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
-    codec::var_int::VarInt,
     java::{
         client::config::CConfigDisconnect,
         client::login::CLoginDisconnect,
@@ -19,11 +18,12 @@ use pumpkin_protocol::{
         packet_encoder::TCPNetworkEncoder,
         server::config::{
             SAcceptCodeOfConduct, SAcknowledgeFinishConfig, SClientInformationConfig,
-            SConfigCookieResponse, SConfigPong, SConfigResourcePack, SKnownPacks, SPluginMessage,
+            SConfigCookieResponse, SConfigPong, SConfigResourcePack, SKeepAlive, SKnownPacks,
+            SPluginMessage,
         },
     },
     packet::JavaPacket,
-    ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
+    ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
 use tokio::{
@@ -39,11 +39,11 @@ use crate::{
         EncryptionError, GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig,
         can_not_join,
     },
-    plugin::server::packet::{ConnectionPacketReceivedEvent, ConnectionPacketSentEvent},
+    plugin::server::packet::{JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent},
     server::Server,
 };
 
-use super::{JavaClient, JavaReadHalf, JavaWriteHalf, features::JavaConnectionFeatures};
+use super::{JavaClient, JavaReadHalf, JavaWriteHalf};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 
@@ -62,8 +62,6 @@ pub struct PendingConnection {
     pub address: SocketAddr,
     pub server_address: String,
     pub version: AtomicCell<JavaMinecraftVersion>,
-    /// Set by the multiversion plugin for older clients.
-    pub features: AtomicCell<JavaConnectionFeatures>,
     pub connection_state: AtomicCell<ConnectionState>,
     pub close_token: CancellationToken,
     pub network_writer: TCPNetworkEncoder<BufWriter<JavaWriteHalf>>,
@@ -74,6 +72,7 @@ pub struct PendingConnection {
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
     pub vine_challenge: Option<[u8; 16]>,
+    pub velocity_message_id: Option<i32>,
     /// Whether a login was started. Used to reject a second `SLoginStart`, which
     /// would otherwise replace an already authenticated profile.
     pub login_started: bool,
@@ -119,7 +118,6 @@ impl PendingConnection {
             address,
             server_address: String::new(),
             version: AtomicCell::new(CURRENT_MC_VERSION),
-            features: AtomicCell::new(JavaConnectionFeatures::CURRENT),
             connection_state: AtomicCell::new(ConnectionState::HandShake),
             close_token: CancellationToken::new(),
             network_writer: TCPNetworkEncoder::new(BufWriter::new(write)),
@@ -132,6 +130,7 @@ impl PendingConnection {
             login_success_sent: false,
             verify_token: None,
             vine_challenge: None,
+            velocity_message_id: None,
             server,
         }
     }
@@ -214,7 +213,7 @@ impl PendingConnection {
         self.server.upgrade()
     }
 
-    /// Encoded as `CURRENT_MC_VERSION`. `ConnectionPacketSentEvent` can rewrite it.
+    /// Encoded as `CURRENT_MC_VERSION`. `JavaConnectionPacketSentEvent` can rewrite it.
     /// `false` when a handler cancelled the packet.
     pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) -> bool {
         let mut packet_buf = Vec::new();
@@ -222,34 +221,41 @@ impl PendingConnection {
             error!("Failed to write packet: {err:?}");
             return false;
         }
-        let Some(payload) = self.translate_outgoing(Bytes::from(packet_buf)).await else {
-            return false;
-        };
-        if let Err(err) = self.network_writer.write_packet(payload).await {
+        let (payload, extras) = self.translate_outgoing(Bytes::from(packet_buf)).await;
+        let sent = payload.is_some();
+        if let Some(payload) = payload
+            && let Err(err) = self.network_writer.write_packet(payload).await
+        {
             warn!("Failed to send packet to client {}: {}", self.id, err);
         }
+        for extra in extras {
+            if let Err(err) = self.network_writer.write_packet(extra).await {
+                warn!("Failed to send extra packet to client {}: {}", self.id, err);
+            }
+        }
         let _ = self.network_writer.flush().await;
-        true
+        sent
     }
 
-    /// `ConnectionPacketSentEvent` in the server's `CURRENT_MC_VERSION` format. `None` when cancelled.
-    async fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
+    /// `JavaConnectionPacketSentEvent` in the server's `CURRENT_MC_VERSION` format.
+    /// `(None, extras)` when cancelled.
+    async fn translate_outgoing(&self, packet_data: Bytes) -> (Option<Bytes>, Vec<Bytes>) {
         let Some(server) = self.multiversion_server() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         if !server
             .plugin_manager
-            .has_handlers::<ConnectionPacketSentEvent>()
+            .has_handlers::<JavaConnectionPacketSentEvent>()
         {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         }
 
         let mut reader = &packet_data[..];
         let Ok(packet_id) = reader.get_var_int() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         let payload = packet_data.slice(packet_data.len() - reader.len()..);
-        let mut event = ConnectionPacketSentEvent::new(
+        let mut event = JavaConnectionPacketSentEvent::new(
             self.id,
             self.version.load(),
             self.connection_state.load(),
@@ -257,17 +263,19 @@ impl PendingConnection {
             payload,
         );
         server.plugin_manager.fire(&server, &mut event).await;
+        let extras = event
+            .extra_packets
+            .iter()
+            .filter_map(|(id, payload)| super::frame_packet(*id, payload))
+            .collect();
         if event.cancelled {
-            return None;
+            return (None, extras);
         }
 
-        let mut framed = Vec::with_capacity(5 + event.payload.len());
-        framed.write_var_int(&VarInt(event.packet_id)).ok()?;
-        framed.extend_from_slice(&event.payload);
-        Some(framed.into())
+        (super::frame_packet(event.packet_id, &event.payload), extras)
     }
 
-    /// `ConnectionPacketReceivedEvent` in the client's format; handlers rewrite to `CURRENT_MC_VERSION`.
+    /// `JavaConnectionPacketReceivedEvent` in the client's format; handlers rewrite to `CURRENT_MC_VERSION`.
     /// `None` when cancelled.
     async fn translate_incoming(&self, packet: &RawPacket) -> Option<RawPacket> {
         let Some(server) = self.multiversion_server() else {
@@ -278,7 +286,7 @@ impl PendingConnection {
         };
         if !server
             .plugin_manager
-            .has_handlers::<ConnectionPacketReceivedEvent>()
+            .has_handlers::<JavaConnectionPacketReceivedEvent>()
         {
             return Some(RawPacket {
                 id: packet.id,
@@ -286,16 +294,14 @@ impl PendingConnection {
             });
         }
 
-        let mut event = ConnectionPacketReceivedEvent::new(
+        let mut event = JavaConnectionPacketReceivedEvent::new(
             self.id,
             self.version.load(),
             self.connection_state.load(),
             packet.id,
             packet.payload.clone(),
-            self.features.load(),
         );
         server.plugin_manager.fire(&server, &mut event).await;
-        self.features.store(event.features);
         (!event.cancelled).then(|| RawPacket {
             id: event.packet_id,
             payload: event.payload,
@@ -323,7 +329,52 @@ impl PendingConnection {
         self.close();
     }
 
+    async fn read_haproxy_header(&mut self) -> bool {
+        let Some(reader) = self.network_reader.reader_mut() else {
+            return false;
+        };
+        let close_token = self.close_token.clone();
+        let result = tokio::select! {
+            () = close_token.cancelled() => {
+                debug!("Canceling pending connection HAProxy header read");
+                return false;
+            },
+            () = tokio::time::sleep(HANDSHAKE_IDLE_TIMEOUT) => {
+                debug!(
+                    "Client {} sent no HAProxy header for {}s, dropping it",
+                    self.id,
+                    HANDSHAKE_IDLE_TIMEOUT.as_secs()
+                );
+                return false;
+            },
+            res = crate::net::proxy::haproxy::read_header(reader) => res,
+        };
+
+        match result {
+            Ok(Some(address)) => {
+                debug!("Updated address from HAProxy header for client {}", self.id);
+                self.address = address;
+                true
+            }
+            Ok(None) => true,
+            Err(err) => {
+                debug!(
+                    "Failed to read HAProxy header from client {}: {}",
+                    self.id, err
+                );
+                false
+            }
+        }
+    }
+
     pub async fn handle_login_sequence(&mut self, server: &Arc<Server>) -> PacketHandlerResult {
+        if server.advanced_config.networking.proxy.enabled
+            && server.advanced_config.networking.proxy.haproxy.enabled
+            && !self.read_haproxy_header().await
+        {
+            return PacketHandlerResult::Stop;
+        }
+
         while let Some(packet) = self.get_packet().await {
             if !self.packet_limiter.check_packet() {
                 warn!(
@@ -524,6 +575,10 @@ impl PendingConnection {
                 self.handle_known_packs(server).await;
                 Ok(None)
             }
+            id if id == SKeepAlive::PACKET_ID => {
+                let _keep_alive = SKeepAlive::read(&mut payload)?;
+                Ok(None)
+            }
             id if id == SConfigResourcePack::PACKET_ID => {
                 self.handle_resource_pack_response(
                     server,
@@ -556,14 +611,6 @@ impl PendingConnection {
         client_information: SClientInformationConfig<'_>,
     ) {
         debug!("Handling client settings");
-        if client_information.view_distance <= 0 {
-            self.kick(TextComponent::text(
-                "Cannot have zero or negative view distance!",
-            ))
-            .await;
-            return;
-        }
-
         if let (Ok(main_hand), Ok(chat_mode)) = (
             Hand::try_from(client_information.main_hand.0),
             ChatMode::try_from(client_information.chat_mode.0),
@@ -609,7 +656,7 @@ impl PendingConnection {
                 | ResourcePackResponseResult::DownloadSuccess
                 | ResourcePackResponseResult::Discarded
                 | ResourcePackResponseResult::Unknown(_) => {
-                    self.send_known_packs(server).await;
+                    self.start_known_packs(server).await;
                 }
                 ResourcePackResponseResult::Accepted => {}
                 ResourcePackResponseResult::Declined => {
@@ -617,7 +664,7 @@ impl PendingConnection {
                         self.kick(TextComponent::text("Required resource pack was declined"))
                             .await;
                     } else {
-                        self.send_known_packs(server).await;
+                        self.start_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::DownloadFail => {
@@ -625,7 +672,7 @@ impl PendingConnection {
                         self.kick(TextComponent::text("Failed to download resource pack"))
                             .await;
                     } else {
-                        self.send_known_packs(server).await;
+                        self.start_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::InvalidUrl => {

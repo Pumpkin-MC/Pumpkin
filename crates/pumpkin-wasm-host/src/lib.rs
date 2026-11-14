@@ -102,10 +102,15 @@ impl PluginLoader for WasmPluginLoader {
                 .await
                 .map_err(|error| LoaderError::WasmInitializationError(Box::new(error)))?;
 
+            let language = plugin
+                .binding_language
+                .clone()
+                .unwrap_or_else(|| "wasm".to_string());
+
             Ok((
                 Arc::new(WasmPluginHandle(plugin)) as Arc<dyn Plugin>,
                 metadata,
-                Box::new(()) as Box<dyn Any + Send + Sync>,
+                Box::new(language) as Box<dyn Any + Send + Sync>,
             ))
         })
     }
@@ -135,5 +140,9 @@ impl PluginLoader for WasmPluginLoader {
 
     fn in_plugin_call(&self) -> bool {
         pumpkin_plugin_runtime::in_plugin_call()
+    }
+
+    fn binding_language(&self, data: &(dyn Any + Send + Sync)) -> Option<String> {
+        data.downcast_ref::<String>().cloned()
     }
 }

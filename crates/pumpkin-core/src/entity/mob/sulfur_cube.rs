@@ -1400,7 +1400,7 @@ impl LookControlTrait for SulfurCubeLookControl {
 
 struct SulfurCubeSearchForItemsGoal {
     cube: Weak<SulfurCubeEntity>,
-    target_item: Option<Arc<dyn EntityBase>>,
+    target_item: Option<Weak<dyn EntityBase>>,
 }
 
 impl Goal for SulfurCubeSearchForItemsGoal {
@@ -1438,7 +1438,9 @@ impl Goal for SulfurCubeSearchForItemsGoal {
                     .load()
                     .squared_distance_to_vec(&pos)
                     .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
-            });
+            })
+            .as_ref()
+            .map(Arc::downgrade);
         self.target_item.is_some()
     }
 
@@ -1447,7 +1449,7 @@ impl Goal for SulfurCubeSearchForItemsGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(target) = &self.target_item else {
+        let Some(target) = self.target_item.as_ref().and_then(Weak::upgrade) else {
             return;
         };
         mob.get_mob_entity()

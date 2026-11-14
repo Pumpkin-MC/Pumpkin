@@ -522,7 +522,7 @@ impl Placer {
                                     self.placing.add(
                                         PieceState {
                                             piece_idx: target_piece_idx,
-                                            free: children_free.clone(),
+                                            free: children_free,
                                             depth: depth + 1,
                                         },
                                         placement_priority,
