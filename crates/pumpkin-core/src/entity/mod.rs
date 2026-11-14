@@ -4885,10 +4885,13 @@ impl Entity {
         clippy::needless_pass_by_value,
         reason = "callers pass owned or cast Arc<dyn EntityBase>"
     )]
-    pub fn leash_to(&self, holder: Arc<dyn EntityBase>) {
-        if self.fire_leash_event(&holder) {
+    /// Returns false if a plugin cancelled the leash event.
+    pub fn leash_to(&self, holder: Arc<dyn EntityBase>) -> bool {
+        let allowed = self.fire_leash_event(&holder);
+        if allowed {
             self.attach_leash(&holder);
         }
+        allowed
     }
 
     /// Moves the leash to `holder` only while `expected_holder_id` still holds it. The check and
