@@ -582,9 +582,26 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperBedrock<D> {
         Ok(f64::from_le_bytes(buf))
     }
 
+    /// Reads a UTF-8 string, borrowing its payload when the data source permits.
     fn get_string(&mut self) -> Result<Cow<'a, str>> {
         let len = self.get_string_len()? as usize;
-        self.reader.read_string(len)
+        match self.reader.read_byte_array(len)? {
+            Cow::Borrowed(bytes) => {
+                // SAFETY: i8 and u8 have identical size and alignment, and all bit
+                // patterns are valid. The shared slice keeps the source lifetime.
+                let bytes =
+                    unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<u8>(), bytes.len()) };
+                std::str::from_utf8(bytes)
+                    .map(Cow::Borrowed)
+                    .map_err(|_| Error::Utf8DecodingError)
+            }
+            Cow::Owned(bytes) => {
+                let bytes = bytes.into_iter().map(|byte| byte as u8).collect();
+                String::from_utf8(bytes)
+                    .map(Cow::Owned)
+                    .map_err(|_| Error::Utf8DecodingError)
+            }
+        }
     }
 
     fn get_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>> {
@@ -594,11 +611,69 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperBedrock<D> {
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
     use std::io::Cursor;
 
     use crate::serializer::{NbtWriteHelper, NbtWriteHelperBedrock};
 
     use super::{NbtReadHelper, NbtReadHelperBedrock, NbtReadHelperJava};
+
+    /// Checks byte-exact UTF-8 decoding and ownership across NBT data sources.
+    #[test]
+    fn bedrock_strings_preserve_utf8_and_null_bytes() {
+        // VarUInt byte length, UTF-8 payload, then a separate byte.
+        let bytes = b"\x08a\0\xf0\x9f\x98\x80\xc3\xa9\x2a";
+        let expected = "a\0\u{1f600}\u{e9}";
+        let mut borrowed = NbtReadHelperBedrock::new(Cursor::new(bytes.as_slice()));
+        let decoded = borrowed.get_string().unwrap();
+        assert!(matches!(decoded, Cow::Borrowed(_)));
+        assert_eq!(decoded.as_ptr(), bytes[1..].as_ptr());
+        assert_eq!(decoded, expected);
+        assert_eq!(borrowed.get_u8().unwrap(), 42);
+
+        let mut owned = NbtReadHelperBedrock::new(Cursor::new(bytes.to_vec()));
+        let decoded = owned.get_string().unwrap();
+        assert!(matches!(decoded, Cow::Owned(_)));
+        assert_eq!(decoded, expected);
+        assert_eq!(owned.get_u8().unwrap(), 42);
+
+        let mut stream = NbtReadHelperBedrock::new(super::NbtStreamReader(Cursor::new(bytes)));
+        let decoded = stream.get_string().unwrap();
+        assert!(matches!(decoded, Cow::Owned(_)));
+        assert_eq!(decoded, expected);
+        assert_eq!(stream.get_u8().unwrap(), 42);
+
+        let mut encoded = Vec::new();
+        NbtWriteHelperBedrock::new(&mut encoded)
+            .write_string(expected)
+            .unwrap();
+        assert_eq!(encoded, bytes[..bytes.len() - 1]);
+    }
+
+    /// Rejects Java modified UTF-8 encodings in Bedrock string payloads.
+    #[test]
+    fn bedrock_strings_reject_modified_utf8() {
+        for bytes in [
+            b"\x02\xc0\x80".as_slice(),
+            b"\x06\xed\xa0\xbd\xed\xb8\x80".as_slice(),
+        ] {
+            let mut reader = NbtReadHelperBedrock::new(Cursor::new(bytes));
+            assert!(matches!(
+                reader.get_string(),
+                Err(crate::Error::Utf8DecodingError)
+            ));
+            let mut owned = NbtReadHelperBedrock::new(Cursor::new(bytes.to_vec()));
+            assert!(matches!(
+                owned.get_string(),
+                Err(crate::Error::Utf8DecodingError)
+            ));
+            let mut stream = NbtReadHelperBedrock::new(super::NbtStreamReader(Cursor::new(bytes)));
+            assert!(matches!(
+                stream.get_string(),
+                Err(crate::Error::Utf8DecodingError)
+            ));
+        }
+    }
 
     #[test]
     fn java_numeric_arrays_decode_big_endian_values() {
