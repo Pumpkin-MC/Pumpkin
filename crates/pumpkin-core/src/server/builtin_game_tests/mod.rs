@@ -1,3 +1,4 @@
+mod brewing_stand;
 mod bubble_columns;
 mod buttons_levers_plates_variants;
 mod commands_and_entities_extended;
@@ -61,6 +62,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:dispenser_honeycomb_beehive_and_shulker",
     "pumpkin:crafter_crafts_into_chest",
     "pumpkin:crafter_dispenses_crafting_remainders",
+    "pumpkin:brewing_returns_glass_bottle_from_dragon_breath",
     "pumpkin:doors_trapdoors_fence_gates_redstone",
     "pumpkin:water_lava_interactions",
     "pumpkin:sponge_absorbs_water",
@@ -398,6 +400,13 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             dispensers_and_crafters::test_crafter_dispenses_crafting_remainders,
+        );
+        register_function_test(
+            "pumpkin:brewing_returns_glass_bottle_from_dragon_breath",
+            "pumpkin:empty_3x4x3",
+            450,
+            0,
+            brewing_stand::test_brewing_returns_glass_bottle_from_dragon_breath,
         );
         register_function_test(
             "pumpkin:doors_trapdoors_fence_gates_redstone",
