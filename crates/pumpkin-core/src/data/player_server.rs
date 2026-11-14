@@ -6,7 +6,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_world::data::player_data::{PlayerDataError, PlayerDataStorage};
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
@@ -52,11 +52,21 @@ impl ServerPlayerData {
             .on_closed(player.as_ref());
         player.on_handled_screen_closed();
 
+        self.extract_data_and_save_player(player)
+    }
+
+    /// Builds the NBT snapshot saved for a player.
+    ///
+    /// A player who has not been placed yet keeps no `Pos`, so the next join retries world spawn.
+    fn snapshot(player: &Player) -> NbtCompound {
+        let has_position = player.has_played_before.load(Ordering::Acquire);
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt);
-
-        self.storage.save_player_data(&player.gameprofile.id, nbt)?;
-        Ok(())
+        // A save before login placement finishes must retry world spawn on the next join.
+        if !has_position {
+            nbt.child_tags.remove("Pos");
+        }
+        nbt
     }
 
     /// Performs periodic maintenance tasks.
@@ -76,9 +86,7 @@ impl ServerPlayerData {
             let mut snapshots = Vec::new();
             for world in server.worlds.load().iter() {
                 for player in world.players.load().iter() {
-                    let mut nbt = NbtCompound::new();
-                    player.write_nbt(&mut nbt);
-                    snapshots.push((player.gameprofile.id, nbt));
+                    snapshots.push((player.gameprofile.id, Self::snapshot(player)));
                 }
             }
 
@@ -172,12 +180,8 @@ impl ServerPlayerData {
             return Ok(());
         }
 
-        let uuid = player.gameprofile.id;
-        let mut nbt = NbtCompound::new();
-        player.write_nbt(&mut nbt);
-
-        self.storage.save_player_data(&uuid, nbt)?;
-        Ok(())
+        self.storage
+            .save_player_data(&player.gameprofile.id, Self::snapshot(player))
     }
 }
 
