@@ -34,7 +34,11 @@ pub async fn run_commands_and_gamemode_tests(
         (bot1.position.y.floor() as i32) + 10,
         bot1.position.z.floor() as i32,
     );
-    let _ = world.get_block(&marker_pos);
+    // The command requires a loaded chunk; a synchronous block read does not load it.
+    world
+        .level
+        .get_or_fetch_chunk(marker_pos.chunk_position(), |_| ())
+        .await;
     bot1.send_command(&format!(
         "setblock {} {} {} minecraft:emerald_block",
         marker_pos.0.x, marker_pos.0.y, marker_pos.0.z
