@@ -980,3 +980,20 @@ fn time_check_and_predicate_reference_evaluation() {
         &params_stick
     ));
 }
+
+#[test]
+fn loot_fill_skips_occupied_slots() {
+    let mut slots = vec![
+        ItemStack::new(8, &Item::DIAMOND),
+        ItemStack::EMPTY.clone(),
+        ItemStack::EMPTY.clone(),
+    ];
+    place_items_in_slots(&mut slots, vec![ItemStack::new(1, &Item::STONE)], 1);
+    assert_eq!(slots[0].item.id, Item::DIAMOND.id);
+    assert_eq!(slots[0].item_count, 8);
+    let placed = slots
+        .iter()
+        .filter(|stack| stack.item.id == Item::STONE.id)
+        .count();
+    assert_eq!(placed, 1);
+}

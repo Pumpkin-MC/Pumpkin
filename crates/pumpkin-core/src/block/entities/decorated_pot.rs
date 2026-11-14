@@ -45,9 +45,8 @@ impl BlockEntity for DecoratedPotBlockEntity {
         }
         if let Ok(item) = self.item.lock()
             && let Some(it) = item.as_ref()
+            && let Some(it_nbt) = it.to_nbt()
         {
-            let mut it_nbt = NbtCompound::new();
-            it.write_item_stack(&mut it_nbt);
             nbt.put_compound("item", it_nbt);
         }
     }
@@ -61,9 +60,8 @@ impl BlockEntity for DecoratedPotBlockEntity {
         }
         if let Ok(item) = self.item.try_lock()
             && let Some(ref it) = *item
+            && let Some(it_nbt) = it.to_nbt()
         {
-            let mut it_nbt = NbtCompound::new();
-            it.write_item_stack(&mut it_nbt);
             nbt.put_compound("item", it_nbt);
         }
         Some(nbt)

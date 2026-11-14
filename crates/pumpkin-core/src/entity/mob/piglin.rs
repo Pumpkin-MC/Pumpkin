@@ -985,9 +985,7 @@ impl Mob for PiglinEntity {
         if !inv.is_empty() {
             let mut items_tag = Vec::new();
             for item in inv.iter() {
-                if !item.is_empty() {
-                    let mut item_nbt = NbtCompound::new();
-                    item.write_item_stack(&mut item_nbt);
+                if let Some(item_nbt) = item.to_nbt() {
                     items_tag.push(NbtTag::Compound(item_nbt));
                 }
             }

@@ -562,13 +562,7 @@ impl Mob for AllayEntity {
             .inventory
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let items = if stack.is_empty() {
-            Vec::new()
-        } else {
-            let mut item = NbtCompound::new();
-            stack.write_item_stack(&mut item);
-            vec![NbtTag::Compound(item)]
-        };
+        let items = stack.to_nbt().map(NbtTag::Compound).into_iter().collect();
         nbt.put_list("Inventory", items);
         nbt.put_compound(
             "listener",

@@ -3452,9 +3452,7 @@ impl LivingEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut compound = NbtCompound::new();
             for (slot, stack) in &guard.equipment {
-                if !stack.is_empty() {
-                    let mut item_nbt = NbtCompound::new();
-                    stack.write_item_stack(&mut item_nbt);
+                if let Some(item_nbt) = stack.to_nbt() {
                     compound.put(slot.to_name(), NbtTag::Compound(item_nbt));
                 }
             }

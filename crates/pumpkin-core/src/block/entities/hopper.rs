@@ -279,6 +279,7 @@ impl HopperBlockEntity {
                         return true;
                     }
                     if let Some(leftover) = Self::put_back(container.as_ref(), i, one_item) {
+                        // Concurrent insert filled the slot, drop the item, never void it.
                         let pos = pos_up.to_centered_f64();
                         world.scatter_stack(pos.x, pos.y, pos.z, leftover);
                     }
@@ -415,7 +416,7 @@ impl HopperBlockEntity {
                     return true;
                 }
                 if let Some(leftover) = Self::put_back(self, slot, one_item) {
-                    // Slot is someone else's now and full -> dropping beats overwriting or voiding.
+                    // Slot is someone else's now and full -> drop as an item entity, never void.
                     let pos = self.position.to_centered_f64();
                     world.scatter_stack(pos.x, pos.y, pos.z, leftover);
                 }

@@ -1567,22 +1567,21 @@ impl Mob for VillagerEntity {
         if !offers.is_empty() {
             let mut recipes = Vec::new();
             for offer in offers.iter() {
+                // Unsaveable item: offer not saved.
+                let (Some(buy), Some(sell), Some(buy_b)) = (
+                    offer.base_cost_a.0.to_nbt(),
+                    offer.output.0.to_nbt(),
+                    offer
+                        .cost_b
+                        .as_ref()
+                        .map_or(Some(None), |cost_b| cost_b.0.to_nbt().map(Some)),
+                ) else {
+                    continue;
+                };
                 let mut recipe = NbtCompound::new();
-                let mut buy = NbtCompound::new();
-                let mut sell = NbtCompound::new();
-
-                let item_stack: &ItemStack = offer.base_cost_a.0.as_ref();
-                item_stack.write_item_stack(&mut buy);
                 recipe.put_compound("buy", buy);
-
-                let item_stack: &ItemStack = offer.output.0.as_ref();
-                item_stack.write_item_stack(&mut sell);
                 recipe.put_compound("sell", sell);
-
-                if let Some(cost_b) = &offer.cost_b {
-                    let mut buy_b = NbtCompound::new();
-                    let item_stack: &ItemStack = cost_b.0.as_ref();
-                    item_stack.write_item_stack(&mut buy_b);
+                if let Some(buy_b) = buy_b {
                     recipe.put_compound("buyB", buy_b);
                 }
 
@@ -1607,9 +1606,7 @@ impl Mob for VillagerEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !inventory.is_empty() {
             let mut inventory_list = Vec::new();
-            for item in inventory.iter() {
-                let mut item_compound = NbtCompound::new();
-                item.write_item_stack(&mut item_compound);
+            for item_compound in inventory.iter().filter_map(ItemStack::to_nbt) {
                 inventory_list.push(NbtTag::Compound(item_compound));
             }
             nbt.put("Inventory", NbtTag::List(inventory_list));

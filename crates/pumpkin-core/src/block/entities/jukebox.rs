@@ -65,9 +65,7 @@ impl BlockEntity for JukeboxBlockEntity {
             .record_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !record.is_empty() {
-            let mut record_nbt = NbtCompound::new();
-            record.write_item_stack(&mut record_nbt);
+        if let Some(record_nbt) = record.to_nbt() {
             nbt.put(RECORD_ITEM_NBT_KEY, record_nbt);
         }
 
@@ -114,10 +112,8 @@ impl BlockEntity for JukeboxBlockEntity {
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
         if let Ok(record) = self.record_stack.try_lock()
-            && !record.is_empty()
+            && let Some(record_nbt) = record.to_nbt()
         {
-            let mut record_nbt = NbtCompound::new();
-            record.write_item_stack(&mut record_nbt);
             nbt.put("RecordItem", NbtTag::Compound(record_nbt));
         }
         nbt.put_long(

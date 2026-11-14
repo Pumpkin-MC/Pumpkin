@@ -6,6 +6,7 @@ use crate::block::entities::chest::ChestBlockEntity;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
 use pumpkin_data::entity::EntityPose;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::Inventory;
@@ -35,7 +36,7 @@ use crate::entity::passive::tamable::TamableAnimal;
 use crate::entity::player::Player;
 use crate::plugin::api::events::world::loot_generate::LootGenerateEvent;
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, fill_chest_inventory_handle};
+use crate::world::loot::{LootContextParameters, generate_loot_from_handle, place_items_in_slots};
 use pumpkin_data::BlockState;
 
 // TODO vanilla `BaseContainerBlockEntity.canOpen`: the `lock` component, with `container.isLocked` and the
@@ -216,10 +217,10 @@ fn unpack_loot_table(world: &World, entity: &Arc<dyn BlockEntity>, player: Optio
         world.cancelled_by_plugin(|| LootGenerateEvent::new(key.clone()))
     });
     let mut unpacked = None;
-    entity.unpack_loot_table_with(&mut |loot_key, seed| {
+    entity.unpack_loot_table_with(&mut |loot_key, seed, slots| {
         // The cancel only covers the key the event saw.
         if cancelled_key.as_deref() != Some(loot_key.as_str()) {
-            fill_loot_table(world, entity, player, &loot_key, seed);
+            fill_loot_into_slots(world, entity, player, &loot_key, seed, slots);
         }
         unpacked = Some(loot_key);
     });
@@ -233,39 +234,32 @@ fn unpack_loot_table(world: &World, entity: &Arc<dyn BlockEntity>, player: Optio
     }
 }
 
-fn fill_loot_table(
+fn fill_loot_into_slots(
     world: &World,
     entity: &Arc<dyn BlockEntity>,
     player: Option<&Player>,
     loot_key: &str,
     seed: i64,
+    slots: &mut [ItemStack],
 ) {
     // Vanilla resolves an unknown key to `LootTable.EMPTY`: the key is cleared, nothing is placed.
-    let (Some(table), Some(inventory)) = (
-        world.get_loot_table(loot_key),
-        entity.clone().get_inventory(),
-    ) else {
+    let Some(table) = world.get_loot_table(loot_key) else {
         return;
     };
-    fill_chest_inventory_handle(
-        &inventory,
-        &table,
-        seed,
-        &LootContextParameters {
-            world: Some(world),
-            // Vanilla `ORIGIN` is `Vec3.atCenterOf` of the half being unpacked.
-            position: Some(entity.get_position().to_centered_f64()),
-            this_entity: player.map(|player| player as &dyn EntityBase),
-            luck: player.map_or(0.0, |player| {
-                player
-                    .living_entity
-                    .get_attribute_value(&pumpkin_data::attributes::Attributes::LUCK)
-                    as f32
-            }),
-            ..Default::default()
-        },
-    );
-    inventory.mark_dirty();
+    let params = LootContextParameters {
+        world: Some(world),
+        // Vanilla `ORIGIN` is `Vec3.atCenterOf` of the half being unpacked.
+        position: Some(entity.get_position().to_centered_f64()),
+        this_entity: player.map(|player| player as &dyn EntityBase),
+        luck: player.map_or(0.0, |player| {
+            player
+                .living_entity
+                .get_attribute_value(&pumpkin_data::attributes::Attributes::LUCK) as f32
+        }),
+        ..Default::default()
+    };
+    let items = generate_loot_from_handle(&table, seed, &params);
+    place_items_in_slots(slots, items, seed);
 }
 
 /// Vanilla `ChestBlock.getContainer` with `ignoreBeingBlocked = true`: a double chest is one container.

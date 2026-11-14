@@ -138,14 +138,22 @@ macro_rules! impl_block_entity_for_chest {
                 self
             }
 
-            fn unpack_loot_table_with(&self, fill: &mut dyn FnMut(String, i64)) {
-                let mut guard = self
+            fn unpack_loot_table_with(&self, fill: &mut dyn FnMut(String, i64, &mut [ItemStack])) {
+                let mut loot = self
                     .loot_table
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if let Some(key) = guard.take() {
-                    fill(key, self.loot_table_seed);
-                }
+                let Some(key) = loot.take() else {
+                    return;
+                };
+                // Items lock under loot lock: same order everywhere.
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                fill(key, self.loot_table_seed, &mut *items);
+                drop(items);
+                pumpkin_inventory::Inventory::mark_dirty(self);
             }
 
             fn loot_table_key(&self) -> Option<String> {

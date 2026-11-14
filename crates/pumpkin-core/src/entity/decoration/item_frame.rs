@@ -275,9 +275,7 @@ impl EntityBase for ItemFrameEntity {
             .item_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !item.is_empty() {
-            let mut item_compound = NbtCompound::new();
-            item.write_item_stack(&mut item_compound);
+        if let Some(item_compound) = item.to_nbt() {
             nbt.put_compound("Item", item_compound);
         }
         nbt.put_float("ItemDropChance", self.item_drop_chance.load());

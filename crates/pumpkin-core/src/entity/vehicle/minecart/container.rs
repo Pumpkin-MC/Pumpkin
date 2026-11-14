@@ -81,10 +81,8 @@ impl MinecartInventory {
         } else if let Ok(items) = self.items.try_read() {
             let mut list: Vec<pumpkin_nbt::tag::NbtTag> = Vec::new();
             for (slot, stack) in items.iter().enumerate() {
-                if !stack.is_empty() {
-                    let mut compound = NbtCompound::new();
+                if let Some(mut compound) = stack.to_nbt() {
                     compound.put_byte("Slot", slot as i8);
-                    stack.write_item_stack(&mut compound);
                     list.push(pumpkin_nbt::tag::NbtTag::Compound(compound));
                 }
             }

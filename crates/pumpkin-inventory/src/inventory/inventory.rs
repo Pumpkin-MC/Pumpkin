@@ -77,10 +77,8 @@ pub trait Inventory: Send + Sync + Clearable {
         for i in 0..size {
             let stack = self.get_stack(i);
 
-            if !stack.is_empty() {
-                let mut item_compound = NbtCompound::new();
+            if let Some(mut item_compound) = stack.to_nbt() {
                 item_compound.put_byte("Slot", i as i8);
-                stack.write_item_stack(&mut item_compound);
                 slots.push(NbtTag::Compound(item_compound));
             }
         }
@@ -140,10 +138,8 @@ pub fn sync_read_items_from_nbt(nbt: &NbtCompound, stacks: &mut [ItemStack]) {
 pub fn sync_write_items_to_nbt(items: &[ItemStack], nbt: &mut NbtCompound) {
     let mut slots = Vec::new();
     for (i, stack) in items.iter().enumerate() {
-        if !stack.is_empty() {
-            let mut item_nbt = NbtCompound::new();
+        if let Some(mut item_nbt) = stack.to_nbt() {
             item_nbt.put_byte("Slot", i as i8);
-            stack.write_item_stack(&mut item_nbt);
             slots.push(NbtTag::Compound(item_nbt));
         }
     }

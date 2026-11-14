@@ -679,20 +679,23 @@ impl Mob for WanderingTraderEntity {
         if !offers.is_empty() {
             let mut recipes = Vec::with_capacity(offers.len());
             for offer in offers.iter() {
+                // Unsaveable item: offer not saved.
+                let (Some(buy), Some(sell), Some(buy_b)) = (
+                    offer.base_cost_a.0.to_nbt(),
+                    offer.output.0.to_nbt(),
+                    offer
+                        .cost_b
+                        .as_ref()
+                        .map_or(Some(None), |cost_b| cost_b.0.to_nbt().map(Some)),
+                ) else {
+                    continue;
+                };
                 let mut recipe = NbtCompound::new();
-                let mut buy = NbtCompound::new();
-                offer.base_cost_a.0.write_item_stack(&mut buy);
                 recipe.put_compound("buy", buy);
-
-                if let Some(cost_b) = &offer.cost_b {
-                    let mut buy_b = NbtCompound::new();
-                    cost_b.0.write_item_stack(&mut buy_b);
+                if let Some(buy_b) = buy_b {
                     recipe.put_compound("buyB", buy_b);
                 }
-
-                let mut sell_item = NbtCompound::new();
-                offer.output.0.write_item_stack(&mut sell_item);
-                recipe.put_compound("sell", sell_item);
+                recipe.put_compound("sell", sell);
 
                 recipe.put_int("uses", offer.uses);
                 recipe.put_int("maxUses", offer.max_uses);

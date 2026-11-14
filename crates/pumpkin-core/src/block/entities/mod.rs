@@ -78,12 +78,12 @@ pub trait BlockEntity: Any + Send + Sync {
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
 
-    /// Clears the pending loot-table key and runs `fill` with it and the seed. The loot lock is held
-    /// until `fill` returns, so a concurrent access waits until the loot is placed instead of
-    /// inserting into a slot the loot then overwrites. Does nothing without a pending table.
+    /// Clears the pending loot-table key and runs `fill` with it, the seed, and the item slots.
+    /// Implementations hold the loot lock and the items write lock until `fill` returns, so a hopper
+    /// cannot insert into a slot the loot then overwrites. Does nothing without a pending table.
     // TODO vanilla `RandomizableContainerBlockEntity`: barrels, shulker boxes, dispensers, droppers, hoppers,
     // crafters and decorated pots hold loot tables too. Only chests implement this.
-    fn unpack_loot_table_with(&self, _fill: &mut dyn FnMut(String, i64)) {}
+    fn unpack_loot_table_with(&self, _fill: &mut dyn FnMut(String, i64, &mut [ItemStack])) {}
 
     /// Returns `true` if this block entity has a pending deferred loot table that has
     /// not yet been unpacked. Does not consume the loot table.

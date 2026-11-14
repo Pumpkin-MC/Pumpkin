@@ -244,10 +244,8 @@ impl CampfireBlockEntity {
             let stack = item
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !stack.is_empty() {
-                let mut item_nbt = NbtCompound::new();
+            if let Some(mut item_nbt) = stack.to_nbt() {
                 item_nbt.put_byte("Slot", slot as i8);
-                stack.write_item_stack(&mut item_nbt);
                 items.push(NbtTag::Compound(item_nbt));
             }
         }
