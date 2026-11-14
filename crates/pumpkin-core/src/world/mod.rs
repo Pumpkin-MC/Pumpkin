@@ -1673,8 +1673,16 @@ impl World {
 
         self.flush_block_updates();
         self.flush_synced_block_events();
-        self.update_active_chunks();
+        // Scan newly loaded chunks for POIs before the packets, so `/locate poi` finds them.
         self.process_poi_chunks();
+        // Vanilla `processPacketsAndTick` handles every player's queued packets before the level
+        // tick advances time and runs scheduled ticks, and so before any player ticks.
+        let t_packets = std::time::Instant::now();
+        self.players.load().par_iter().for_each(|player| {
+            player.process_inbound_packets();
+        });
+        let packet_elapsed = t_packets.elapsed();
+        self.update_active_chunks();
         self.tick_environment();
         let mut raids = {
             let mut guard = self
@@ -1704,10 +1712,6 @@ impl World {
         let player_count = players.len();
 
         let t_players = std::time::Instant::now();
-        // Vanilla handles all packets before any player ticks
-        players.par_iter().for_each(|player| {
-            player.process_inbound_packets();
-        });
         players.par_iter().for_each(|player| {
             player.tick(server);
         });
@@ -1898,8 +1902,9 @@ impl World {
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
             debug!(
-                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
+                "Slow Tick [{}ms]: Packets: {:?} | Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
                 total_elapsed.as_millis(),
+                packet_elapsed,
                 chunk_elapsed,
                 player_count,
                 player_elapsed,
