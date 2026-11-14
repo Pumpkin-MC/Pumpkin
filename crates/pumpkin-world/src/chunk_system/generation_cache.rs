@@ -22,6 +22,9 @@ pub struct Cache {
     pub z: i32,
     pub size: i32,
     pub chunks: Vec<Chunk>,
+    /// The center chunk failed to read from disk. Its placeholder must not spawn entities that
+    /// would then be saved in place of the unreadable chunk.
+    pub read_failed: bool,
     surface_biomes: Option<Box<SurfaceBiomeNeighborhood>>,
 }
 
@@ -604,6 +607,7 @@ impl Cache {
             z,
             size,
             chunks: Vec::with_capacity((size * size) as usize),
+            read_failed: false,
             surface_biomes: None,
         }
     }
@@ -772,7 +776,11 @@ impl Cache {
                 }
             }
             StagedChunkEnum::Spawn => {
-                ProtoChunk::spawn_mobs(self, block_registry);
+                if self.read_failed {
+                    self.chunks[mid].get_proto_chunk_mut().stage = StagedChunkEnum::Spawn;
+                } else {
+                    ProtoChunk::spawn_mobs(self, block_registry);
+                }
             }
             StagedChunkEnum::Full => {
                 let chunk = self.chunks[mid].get_proto_chunk_mut();

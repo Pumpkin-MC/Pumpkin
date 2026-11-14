@@ -1225,7 +1225,7 @@ impl Dirtiable for ChunkEntityData {
 
     #[inline]
     fn is_dirty(&self) -> bool {
-        self.dirty.load(Ordering::Relaxed)
+        !self.read_failed.load(Ordering::Relaxed) && self.dirty.load(Ordering::Relaxed)
     }
 }
 
@@ -1305,6 +1305,7 @@ impl ChunkEntityData {
             data: std::sync::Mutex::new(entities),
             live: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            read_failed: AtomicBool::new(false),
         })
     }
 
