@@ -282,6 +282,17 @@ impl ARGBColor {
         }
     }
 
+    /// Creates a color from 0..1 float channels, like vanilla `ARGB.colorFromFloat`.
+    #[must_use]
+    pub fn from_float(alpha: f32, red: f32, green: f32, blue: f32) -> Self {
+        Self::new(
+            as_8_bit_channel(alpha),
+            as_8_bit_channel(red),
+            as_8_bit_channel(green),
+            as_8_bit_channel(blue),
+        )
+    }
+
     /// Converts this ARGB color to a 32-bit signed integer (as used by Minecraft text `shadow_color`).
     #[must_use]
     pub const fn to_argb_int(&self) -> i32 {
@@ -316,6 +327,16 @@ impl ARGBColor {
     pub const fn from_argb_int(val: i32) -> Self {
         Self::from_argb_u32(val as u32)
     }
+}
+
+/// Vanilla `ARGB.as8BitChannel`: out-of-range values wrap through the `& 0xFF` mask instead of clamping.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "vanilla masks the floored channel to 8 bits"
+)]
+fn as_8_bit_channel(value: f32) -> u8 {
+    (value * 255.0).floor() as i32 as u8
 }
 
 impl Serialize for ARGBColor {
