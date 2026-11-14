@@ -291,9 +291,11 @@ impl BedrockClient {
                         }
                         // vanilla shrinks the stack it started with, a listener's hand change stands
                         let inventory = player.inventory();
-                        if inventory.get_selected_slot() == slot_index
-                            && inventory.held_item().are_equal(&before)
-                        {
+                        let hand_unchanged = || {
+                            inventory.get_selected_slot() == slot_index
+                                && inventory.held_item().are_equal(&before)
+                        };
+                        if hand_unchanged() {
                             if before.is_damageable() && stack.is_empty() {
                                 player.increment_stat(
                                     pumpkin_data::statistic::StatisticCategory::Broken,
@@ -308,7 +310,10 @@ impl BedrockClient {
                                     ActorEventID::None,
                                 );
                             }
-                            player.inventory().set_held_item(stack);
+                            // the Broken statistic event may change the hand
+                            if hand_unchanged() {
+                                inventory.set_held_item(stack);
+                            }
                         }
                     }
                 } else if data.action_type.0 == 1 {
@@ -513,6 +518,7 @@ impl BedrockClient {
                                 );
                             }
                         }
+                        // TODO: interaction and statistic listeners may change the hand, this write-back overwrites it
                         player.inventory().set_held_item(stack);
                     }
                     ActionType::Attack => player.attack(&event.target),

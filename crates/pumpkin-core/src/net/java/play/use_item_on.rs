@@ -285,10 +285,11 @@ impl JavaClient {
         }
 
         // vanilla shrinks the stack it started with, a listener's hand change stands
-        let hand_unchanged = (matches!(hand, Hand::Left)
-            || inventory.get_selected_slot() as usize == slot_index)
-            && inventory.get_stack_in_hand(hand).are_equal(&before);
-        if !hand_unchanged {
+        let hand_unchanged = || {
+            (matches!(hand, Hand::Left) || inventory.get_selected_slot() as usize == slot_index)
+                && inventory.get_stack_in_hand(hand).are_equal(&before)
+        };
+        if !hand_unchanged() {
             return Ok(());
         }
 
@@ -310,7 +311,8 @@ impl JavaClient {
             );
         }
 
-        if !after.are_equal(&before) {
+        // the Broken statistic event may change the hand
+        if !after.are_equal(&before) && hand_unchanged() {
             player.sync_hand_slot(slot_index, after.clone());
             inventory.set_stack_in_hand(hand, after);
         }
