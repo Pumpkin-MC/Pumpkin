@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
@@ -8,12 +9,21 @@ use crate::command::argument_types::core::integer::IntegerArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::item::ItemStackArgumentType;
 use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 
 const DESCRIPTION: &str = "Give items to player(s).";
 const PERMISSION: &str = "minecraft:command.give";
+
+const ERROR_TOO_MANY_ITEMS: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_GIVE_FAILED_TOOMANYITEMS,
+    translation::java::COMMANDS_GIVE_FAILED_TOOMANYITEMS,
+);
+
+/// `GiveCommand.MAX_ALLOWED_ITEMSTACKS`
+const MAX_ALLOWED_ITEMSTACKS: i32 = 100;
 
 struct GiveExecutor {
     has_count: bool,
@@ -31,8 +41,19 @@ impl CommandExecutor for GiveExecutor {
             1
         };
 
+        let max_stack = i32::from(parsed_stack.get_max_stack_size());
+        // Without the cap a count like i32::MAX would drop billions of item entities.
+        let max_count = max_stack * MAX_ALLOWED_ITEMSTACKS;
+        if item_count > max_count {
+            return Err(ERROR_TOO_MANY_ITEMS.create_without_context_args_slice(&[
+                TextComponent::text(max_count.to_string()),
+                TextComponent::text("[")
+                    .add_child(item.translated_name())
+                    .add_child(TextComponent::text("]")),
+            ]));
+        }
+
         for target in &targets {
-            let max_stack = i32::from(parsed_stack.get_max_stack_size());
             let mut remaining = item_count;
 
             while remaining > 0 {
