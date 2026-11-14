@@ -1,3 +1,4 @@
+use crate::identifier::Identifier;
 use crate::text::color::{ARGBColor, hsv_to_rgb};
 use crate::translation::{
     Locale, get_translation, get_translation_text, reorder_substitutions, translation_to_pretty,
@@ -114,20 +115,14 @@ impl TextComponentBase {
                     compound.put_list("with", list);
                 }
             }
-            TextContent::PlayerSprite {
-                type_name,
-                profile,
-                hat,
-            } => {
+            TextContent::PlayerSprite { profile, hat } => {
                 if *version >= JavaMinecraftVersion::V_26_1 {
-                    let full_type = if type_name.contains(':') {
-                        type_name.to_string()
-                    } else {
-                        format!("minecraft:{type_name}")
-                    };
-                    compound.put_string("type", full_type);
+                    // Like vanilla: no `type`, the client finds the object by its
+                    // `player` key, and `hat` only when it is off.
                     compound.put_compound("player", profile.0.clone());
-                    compound.put_byte("hat", i8::from(*hat));
+                    if !hat {
+                        compound.put_bool("hat", false);
+                    }
                 } else {
                     let name = profile.0.get_string("name").unwrap_or("player_sprite");
                     compound.put_string("text", name.to_string());
@@ -488,20 +483,12 @@ impl TextComponentBase {
                     map.insert("with".to_string(), serde_json::Value::Array(list));
                 }
             }
-            TextContent::PlayerSprite {
-                type_name,
-                profile,
-                hat,
-            } => {
+            TextContent::PlayerSprite { profile, hat } => {
                 if *version >= JavaMinecraftVersion::V_26_1 {
-                    let full_type = if type_name.contains(':') {
-                        type_name.to_string()
-                    } else {
-                        format!("minecraft:{type_name}")
-                    };
-                    map.insert("type".to_string(), serde_json::Value::String(full_type));
                     map.insert("player".to_string(), nbt_compound_to_json(&profile.0));
-                    map.insert("hat".to_string(), serde_json::Value::Bool(*hat));
+                    if !hat {
+                        map.insert("hat".to_string(), serde_json::Value::Bool(false));
+                    }
                 } else {
                     let name = profile.0.get_string("name").unwrap_or("player_sprite");
                     map.insert(
@@ -1600,7 +1587,6 @@ impl TextComponent {
     pub fn player_sprite(profile: pumpkin_nbt::NbtCompound, hat: bool) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::PlayerSprite {
-                type_name: Cow::Borrowed("minecraft:player_sprite"),
                 profile: ProfileNbt(profile),
                 hat,
             }),
@@ -2034,6 +2020,105 @@ impl std::hash::Hash for ProfileNbt {
     }
 }
 
+impl Serialize for ProfileNbt {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        nbt_compound_to_json(&self.0).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ProfileNbt {
+    /// Reads what vanilla's `ResolvableProfile` codec reads: a player name, or a
+    /// compound with `name`, `id`, `properties` or skin overrides.
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut profile = pumpkin_nbt::NbtCompound::new();
+        match serde_json::Value::deserialize(deserializer)? {
+            serde_json::Value::String(name) if is_valid_player_name(&name) => {
+                profile.put_string("name", name);
+            }
+            serde_json::Value::Object(fields) => {
+                for (key, value) in fields {
+                    let tag = if key == "id" {
+                        // A UUID is four ints, sent as an int array.
+                        let Ok(id) = serde_json::from_value::<[i32; 4]>(value) else {
+                            return Err(serde::de::Error::custom("a profile id is four ints"));
+                        };
+                        pumpkin_nbt::tag::NbtTag::IntArray(id.to_vec())
+                    } else if !is_valid_profile_field(&key, &value) {
+                        return Err(serde::de::Error::custom(format!("invalid profile {key}")));
+                    } else {
+                        hover::json_to_nbt(&value)
+                    };
+                    profile.put(&key, tag);
+                }
+            }
+            _ => return Err(serde::de::Error::custom("expected a name or a compound")),
+        }
+        // The profile is sent on as it is, and NBT can't hold a string over 65535 bytes.
+        let mut writer = pumpkin_nbt::serializer::NbtWriteHelperJava::new(std::io::sink());
+        if profile.clone().serialize_content(&mut writer).is_err() {
+            return Err(serde::de::Error::custom("the profile doesn't fit in NBT"));
+        }
+        Ok(Self(profile))
+    }
+}
+
+/// Vanilla's `StringUtil.isValidPlayerName`, which its `PLAYER_NAME` codec checks:
+/// at most 16 characters, each from `!` to `~`.
+fn is_valid_player_name(name: &str) -> bool {
+    name.len() <= 16 && name.as_bytes().iter().all(u8::is_ascii_graphic)
+}
+
+/// What vanilla's `ResolvableProfile` codec takes in a profile field other than
+/// `id`. It ignores the fields it doesn't know.
+fn is_valid_profile_field(key: &str, value: &serde_json::Value) -> bool {
+    match key {
+        "name" => value.as_str().is_some_and(is_valid_player_name),
+        "properties" => is_valid_property_map(value),
+        // `PlayerSkin.Patch`: three texture identifiers and the model.
+        "texture" | "cape" | "elytra" => value
+            .as_str()
+            .is_some_and(|texture| Identifier::parse(texture).is_ok()),
+        "model" => matches!(value.as_str(), Some("slim" | "wide")),
+        _ => true,
+    }
+}
+
+const MAX_PROPERTY_NAME_LENGTH: usize = 64;
+const MAX_PROPERTY_VALUE_LENGTH: usize = 32767;
+const MAX_PROPERTY_SIGNATURE_LENGTH: usize = 1024;
+const MAX_PROPERTIES: usize = 16;
+
+/// Vanilla's `ExtraCodecs.PROPERTY_MAP`: a list of properties, or a map of names
+/// to values. Vanilla writes the map back as the list, and a client hashes an
+/// item that way when it's clicked, so the list's limits hold for the map too.
+fn is_valid_property_map(properties: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    // Vanilla counts a string's length in UTF-16 units.
+    let fits = |text: &str, max| text.encode_utf16().nth(max).is_none();
+    let string_fits = |text: &Value, max| text.as_str().is_some_and(|text| fits(text, max));
+    match properties {
+        Value::Array(list) => {
+            list.len() <= MAX_PROPERTIES
+                && list.iter().all(|property| {
+                    let field = |name, max| property.get(name).map(|text| string_fits(text, max));
+                    field("name", MAX_PROPERTY_NAME_LENGTH) == Some(true)
+                        && field("value", MAX_PROPERTY_VALUE_LENGTH) == Some(true)
+                        // A property doesn't need a signature.
+                        && field("signature", MAX_PROPERTY_SIGNATURE_LENGTH) != Some(false)
+                })
+        }
+        Value::Object(map) => {
+            let values = || map.values().filter_map(Value::as_array).flatten();
+            map.len() <= MAX_PROPERTIES
+                && map.keys().all(|name| fits(name, MAX_PROPERTY_NAME_LENGTH))
+                && map.values().all(Value::is_array)
+                && values().count() <= MAX_PROPERTIES
+                && values().all(|value| string_fits(value, MAX_PROPERTY_VALUE_LENGTH))
+        }
+        _ => false,
+    }
+}
+
 /// The content type of the text component.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
@@ -2083,13 +2168,30 @@ pub enum TextContent {
         /// Substitution parameters for the translation.
         with: Vec<TextComponentBase>,
     },
-    /// A player sprite object component.
-    #[serde(skip)]
+    /// A player's head: vanilla's `object` component with `object: "player"`.
+    /// Clients before 26.1 get the player's name as text instead.
     PlayerSprite {
-        type_name: Cow<'static, str>,
+        #[serde(rename = "player")]
         profile: ProfileNbt,
+        /// Whether the hat layer is drawn over the head.
+        #[serde(default = "default_hat", deserialize_with = "bool_or_byte")]
         hat: bool,
     },
+}
+
+/// Vanilla draws the hat layer unless `hat` turns it off.
+const fn default_hat() -> bool {
+    true
+}
+
+/// NBT has no booleans, so [`TextComponent::from_nbt`] hands over `hat` as a
+/// byte, which vanilla's `NbtOps` also reads as a boolean.
+fn bool_or_byte<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    value
+        .as_bool()
+        .or_else(|| value.as_i64().map(|byte| byte != 0))
+        .ok_or_else(|| serde::de::Error::custom("expected a boolean"))
 }
 
 /// Tests for the text component implementations.
@@ -2271,6 +2373,131 @@ mod test {
         let component = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(styled));
         assert_eq!(component.0.style.color, Some(Color::Named(NamedColor::Red)));
         assert_eq!(component.get_text(), "hi");
+    }
+
+    /// Each form of a player head that vanilla 26.3 reads goes out to a 26.3
+    /// client as the bytes vanilla writes for it, and to older ones as the name.
+    #[test]
+    fn player_sprite_reads_vanilla_json_and_writes_vanilla_nbt() {
+        // `{player:{name:"Steve"}}`, as vanilla 26.3 encodes all three.
+        let vanilla = b"\x0a\x0a\x00\x06player\x08\x00\x04name\x00\x05Steve\x00\x00";
+        for json in [
+            r#"{"type":"object","object":"player","player":{"name":"Steve"},"hat":true}"#,
+            r#"{"player":{"name":"Steve"}}"#,
+            r#"{"player":"Steve"}"#,
+        ] {
+            let head: TextComponent = serde_json::from_str(json).unwrap();
+            assert_eq!(
+                &*head.encode_for_version(&JavaMinecraftVersion::V_26_3),
+                vanilla,
+                "{json}"
+            );
+            let old = head.to_nbt_compound_for_version(&JavaMinecraftVersion::V_1_21_11);
+            assert_eq!(old.get_string("text"), Some("Steve"));
+        }
+    }
+
+    /// A head keeps its whole profile and `hat` through a plugin's `to-json` and
+    /// `from-json` and through NBT, and the profile's `id` goes out as an int array.
+    #[test]
+    fn player_sprite_keeps_its_profile_and_hat() {
+        let json = r#"{"type":"object","object":"player","player":{"name":"Steve","id":[1,2,3,4],"properties":[{"name":"textures","value":"e30="}],"texture":"entity/player/wide/steve","model":"slim"},"hat":false}"#;
+        let head: TextComponent = serde_json::from_str(json).unwrap();
+        let back: TextComponent =
+            serde_json::from_str(&serde_json::to_string(&head).unwrap()).unwrap();
+        assert_eq!(back, head);
+
+        let nbt = head.to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+        assert_eq!(nbt.get_bool("hat"), Some(false));
+        let profile = nbt.get_compound("player").unwrap();
+        assert_eq!(profile.get_int_array("id"), Some(&[1, 2, 3, 4][..]));
+        assert_eq!(profile.get_list("properties").map(<[_]>::len), Some(1));
+
+        // NBT has no booleans, so `hat` comes back from it as the byte 0.
+        for component in [head.clone(), TextComponent::text("a").add_child(head)] {
+            let nbt = component.to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+            let from_nbt = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(nbt));
+            assert_eq!(from_nbt, component);
+        }
+    }
+
+    /// Vanilla rejects these profiles too, so they never reach a client.
+    #[test]
+    fn malformed_player_profiles_are_rejected() {
+        for json in [
+            r#"{"player":5}"#,
+            r#"{"player":"abcdefghijklmnopq"}"#,
+            r#"{"player":{"name":5}}"#,
+            r#"{"player":{"name":"a b"}}"#,
+            r#"{"player":{"id":[1,2,3]}}"#,
+            r#"{"player":{"id":"00000001-0000-0002-0000-000300000004"}}"#,
+            r#"{"player":{"name":"a","properties":5}}"#,
+            r#"{"player":{"properties":{"textures":"e30="}}}"#,
+            r#"{"player":{"properties":[{"name":"textures"}]}}"#,
+            r#"{"player":{"properties":[{"name":"textures","value":"e30=","signature":5}]}}"#,
+            r#"{"player":{"texture":5}}"#,
+            r#"{"player":{"cape":"A"}}"#,
+            r#"{"player":{"elytra":"..:a"}}"#,
+            r#"{"player":{"model":"default"}}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<TextComponent>(json).is_err(),
+                "{json}"
+            );
+        }
+
+        // From NBT, as a creative client sends it in an item's lore.
+        let mut profile = pumpkin_nbt::NbtCompound::new();
+        profile.put_byte("properties", 5);
+        let nbt = TextComponent::player_sprite(profile, true)
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+        let from_nbt = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(nbt));
+        assert_eq!(from_nbt, TextComponent::empty());
+    }
+
+    /// Vanilla 26.3 takes properties up to these sizes. It counts a string in
+    /// UTF-16 units, and a map past them is one it reads but can't write back.
+    #[test]
+    fn player_profile_properties_have_vanilla_limits() {
+        let head = |properties: &str| {
+            let json = format!(r#"{{"player":{{"properties":{properties}}}}}"#);
+            serde_json::from_str::<TextComponent>(&json)
+        };
+        let list = |count: usize, name: usize, value: usize, signature: usize| {
+            let property = format!(
+                r#"{{"name":"{}","value":"{}","signature":"{}"}}"#,
+                "😀".repeat(name / 2),
+                "v".repeat(value),
+                "s".repeat(signature)
+            );
+            format!("[{}]", vec![property; count].join(","))
+        };
+        let map = |names: usize, values: usize, name: usize, value: usize| {
+            let values = vec![format!(r#""{}""#, "v".repeat(value)); values].join(",");
+            let names: Vec<_> = (0..names)
+                .map(|i| format!(r#""{i:n>name$}":[{values}]"#))
+                .collect();
+            format!("{{{}}}", names.join(","))
+        };
+        assert!(head(&list(16, 64, 32767, 1024)).is_ok());
+        assert!(head(&map(16, 1, 64, 32767)).is_ok());
+        for (form, over) in [
+            ("17 properties", list(17, 64, 32767, 1024)),
+            ("name", list(16, 66, 32767, 1024)),
+            ("value", list(16, 64, 32768, 1024)),
+            ("signature", list(16, 64, 32767, 1025)),
+            ("17 names", map(17, 0, 64, 32767)),
+            ("17 values", map(1, 17, 64, 32767)),
+            ("map name", map(16, 1, 65, 32767)),
+            ("map value", map(16, 1, 64, 32768)),
+        ] {
+            assert!(head(&over).is_err(), "{form}");
+        }
+
+        // Vanilla can't write a string over 65535 bytes to NBT, and "界" takes three.
+        let value = |length| format!(r#"[{{"name":"a","value":"{}"}}]"#, "界".repeat(length));
+        assert!(head(&value(21845)).is_ok());
+        assert!(head(&value(21846)).is_err());
     }
 }
 

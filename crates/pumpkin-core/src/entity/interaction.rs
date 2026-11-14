@@ -258,6 +258,10 @@ impl EntityBase for InteractionEntity {
         true
     }
 
+    fn can_be_hit_by_projectile(&self) -> bool {
+        false
+    }
+
     fn is_immune_to_explosion(&self) -> bool {
         true
     }
