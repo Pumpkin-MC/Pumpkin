@@ -188,6 +188,7 @@ pub mod entity_tracker;
 pub mod environment;
 pub mod natural_spawner;
 mod player_touch;
+pub(crate) use player_touch::pickup_area;
 pub mod scoreboard;
 pub mod weather;
 
@@ -4513,22 +4514,20 @@ impl World {
 
         // Vanilla `restartClientLoadTimerAfterRespawn`: invulnerable and still until loaded
         player.set_client_loaded(false);
-        player.living_entity.reset_state();
-
-        player.send_permission_lvl_update();
-
-        player.hunger_manager.restart();
-
         if !keep_inventory {
             player.set_experience(0, 0.0, 0);
             player.inventory.clear();
         }
 
-        // Set entity position BEFORE loading chunks, so chunks load at the right location
-        // This mirrors the initial spawn flow where update_position is called before teleport
         player.get_entity().set_pos(position);
         player.get_entity().set_rotation(yaw, pitch);
         player.get_entity().last_pos.store(position);
+        // Restore health last so pickups only resume at the respawn position.
+        player.living_entity.reset_state();
+
+        player.send_permission_lvl_update();
+
+        player.hunger_manager.restart();
 
         // TODO: difficulty, exp bar, status effect
 
