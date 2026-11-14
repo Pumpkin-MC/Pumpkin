@@ -3052,7 +3052,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         plugin
             .store
             .pump_blocking(&mut host, move || {
-                runtime.block_on(player.teleport_world(world, position, yaw, pitch));
+                runtime.block_on(player.teleport_world(world, position, yaw, pitch, false));
             })
             .await
     }

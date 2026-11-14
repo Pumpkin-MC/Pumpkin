@@ -3370,7 +3370,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         let runtime = tokio::runtime::Handle::current();
 
         run_blocking(accessor, move || {
-            runtime.block_on(player.teleport_world(world, position, yaw, pitch));
+            runtime.block_on(player.teleport_world(world, position, yaw, pitch, false));
         })
         .await
     }
