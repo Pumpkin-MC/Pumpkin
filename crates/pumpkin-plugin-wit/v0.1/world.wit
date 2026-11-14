@@ -788,7 +788,9 @@ interface %world {
 
     /// Represents a Minecraft world (dimension).
     resource %world {
-        /// Returns the unique identifier of this world.
+        /// Returns the name of the level folder this world belongs to (e.g., \"world\").
+        /// All dimensions of a level share it, so pair it with `get-dimension` to
+        /// identify a specific world.
         get-id: func() -> string;
 
         /// Gets the world border associated with this world (alias for get-world-border).
