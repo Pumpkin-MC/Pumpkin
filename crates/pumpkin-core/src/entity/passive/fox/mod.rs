@@ -7,7 +7,6 @@ use std::sync::{
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
@@ -41,8 +40,6 @@ use crate::world::World;
 use goals::{
     DefendTrustedTargetGoal, FaceplantGoal, FoxGoal, PounceGoal, StalkPreyGoal, melee_attack,
 };
-
-pub const FOX_FOOD: &[&Item] = &[&Item::SWEET_BERRIES, &Item::GLOW_BERRIES];
 
 const FOX_FLEES: &[Flee] = &[
     Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 1.6, 1.4)
@@ -397,7 +394,6 @@ impl Animal for FoxEntity {
 
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_FOX_FOOD)
-            || FOX_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 
     /// Vanilla `Fox.getBreedOffspring`: the cub takes either parent's variant.

@@ -284,7 +284,7 @@ impl<S: CommandSource> Tree<S> {
                 }
                 for input in self[child].examples() {
                     if self[sibling].is_valid_input(&input) {
-                        matches.insert(input.clone());
+                        matches.insert(input);
                     }
                 }
 

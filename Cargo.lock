@@ -2997,7 +2997,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codegen"
-version = "0.1.0-dev+26.1"
+version = "0.2.2+26.3-26.60"
 dependencies = [
  "heck",
  "indexmap",
@@ -3226,11 +3226,14 @@ dependencies = [
 name = "pumpkin-plugin-utils"
 version = "0.2.2+26.3-26.60"
 dependencies = [
+ "ed25519-dalek",
+ "hex",
  "pumpkin-plugin-api",
  "reqwest",
  "rustls",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "tempfile",
  "thiserror 2.0.21",
  "tracing",

@@ -64,7 +64,7 @@ impl World {
         let center = BlockPos::floored_v(position);
         let (section_min, section_max) = notified_sections(center, radius);
         let area = notified_area(position, radius);
-        for entity in self.entity_index.query(self.entities.load_full(), area) {
+        for entity in self.entity_index.listeners(self.entities.load_full(), area) {
             let Some(mob) = entity.get_mob() else {
                 continue;
             };

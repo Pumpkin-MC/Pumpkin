@@ -124,13 +124,48 @@ fn parse_category(value: Option<&Value>) -> RecipeCategoryTypes {
     }
 }
 
+/// Vanilla `ShapedRecipePattern.MAX_SIZE`.
+const MAX_SIZE: usize = 3;
+
+/// Vanilla `ShapedRecipePattern.shrink`. Returns `None` for patterns vanilla rejects: more than
+/// three rows or columns, rows of different widths, or no ingredients.
+fn shrink(pattern: &[&str]) -> Option<Vec<String>> {
+    if pattern.len() > MAX_SIZE {
+        return None;
+    }
+    let rows: Vec<Vec<char>> = pattern.iter().map(|row| row.chars().collect()).collect();
+    let width = rows.first()?.len();
+    if width > MAX_SIZE || rows.iter().any(|row| row.len() != width) {
+        return None;
+    }
+
+    let is_filled = |c: &char| *c != ' ';
+    let top = rows.iter().position(|row| row.iter().any(is_filled))?;
+    let bottom = rows.iter().rposition(|row| row.iter().any(is_filled))?;
+    let left = rows
+        .iter()
+        .filter_map(|row| row.iter().position(is_filled))
+        .min()?;
+    let right = rows
+        .iter()
+        .filter_map(|row| row.iter().rposition(is_filled))
+        .max()?;
+    Some(
+        rows[top..=bottom]
+            .iter()
+            .map(|row| row[left..=right].iter().collect())
+            .collect(),
+    )
+}
+
 fn parse_shaped(recipe_id: String, value: &Value) -> Option<OwnedCraftingRecipe> {
     let pattern = value
         .get("pattern")?
         .as_array()?
         .iter()
-        .map(|v| v.as_str().map(ToString::to_string))
+        .map(Value::as_str)
         .collect::<Option<Vec<_>>>()?;
+    let pattern = shrink(&pattern)?;
 
     let key_map = value.get("key")?.as_object()?;
     let mut key = Vec::new();
@@ -383,7 +418,7 @@ mod tests {
         let json = r##"{
             "type": "minecraft:crafting_shaped",
             "group": "sword",
-            "pattern": ["X", "X", "#"],
+            "pattern": [" X ", " X ", " # "],
             "key": {
                 "#": "minecraft:stick",
                 "X": "minecraft:diamond"
@@ -405,10 +440,31 @@ mod tests {
         {
             assert_eq!(recipe_id.as_deref(), Some("test:diamond_sword"));
             assert_eq!(result.item_id, "minecraft:diamond_sword");
-            assert_eq!(pattern.len(), 3);
+            assert_eq!(pattern, ["X", "X", "#"]);
         } else {
             panic!("Expected shaped recipe");
         }
+    }
+
+    #[test]
+    fn shaped_pattern_is_shrunk_like_vanilla() {
+        assert_eq!(
+            shrink(&[" # ", " I "]),
+            Some(vec!["#".to_string(), "I".to_string()])
+        );
+        assert_eq!(
+            shrink(&["###", "   ", "###"]),
+            Some(vec![
+                "###".to_string(),
+                "   ".to_string(),
+                "###".to_string()
+            ])
+        );
+        assert_eq!(shrink(&["   ", "  #"]), Some(vec!["#".to_string()]));
+        assert_eq!(shrink(&["##", "#"]), None);
+        assert_eq!(shrink(&["   "]), None);
+        assert_eq!(shrink(&["  # "]), None);
+        assert_eq!(shrink(&["#", "#", "#", "#"]), None);
     }
 
     #[test]

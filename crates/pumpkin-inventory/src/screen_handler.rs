@@ -427,8 +427,7 @@ pub trait ScreenHandler: Send + Sync {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let other_behaviour = other_binding.get_behaviour();
 
-        for i in 0..other_behaviour.slots.len() {
-            let other_slot = other_behaviour.slots[i].clone();
+        for (i, other_slot) in other_behaviour.slots.iter().enumerate() {
             let mut hash_map = HashMap::new();
             hash_map.insert(other_slot.get_index(), i);
             table.insert(
@@ -913,7 +912,7 @@ pub trait ScreenHandler: Send + Sync {
                             ))
                             .min(cursor_stack.item_count);
                         if inserting_count > 0 {
-                            let mut new_stack = stack.clone();
+                            let mut new_stack = stack;
                             if new_stack.is_empty() {
                                 new_stack = cursor_stack.copy_with_count(0);
                             }

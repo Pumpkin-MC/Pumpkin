@@ -175,45 +175,17 @@ impl PiglinAi {
     }
 
     #[must_use]
-    pub fn get_barter_response_items() -> Vec<ItemStack> {
-        let roll = rand::random_range(0..459);
-        match roll {
-            0..5 => vec![ItemStack::new(1, &Item::ENCHANTED_BOOK)],
-            5..13 => vec![ItemStack::new(1, &Item::IRON_BOOTS)],
-            13..21 => vec![ItemStack::new(1, &Item::SPLASH_POTION)],
-            21..39 => vec![ItemStack::new(1, &Item::POTION)],
-            39..49 => vec![ItemStack::new(
-                rand::random_range(10..=36),
-                &Item::IRON_NUGGET,
-            )],
-            49..59 => vec![ItemStack::new(
-                rand::random_range(2..=4),
-                &Item::ENDER_PEARL,
-            )],
-            59..79 => vec![ItemStack::new(rand::random_range(3..=9), &Item::STRING)],
-            79..99 => vec![ItemStack::new(rand::random_range(5..=12), &Item::QUARTZ)],
-            99..139 => vec![ItemStack::new(1, &Item::OBSIDIAN)],
-            139..179 => vec![ItemStack::new(
-                rand::random_range(1..=3),
-                &Item::CRYING_OBSIDIAN,
-            )],
-            179..219 => vec![ItemStack::new(1, &Item::FIRE_CHARGE)],
-            219..259 => vec![ItemStack::new(rand::random_range(2..=4), &Item::LEATHER)],
-            259..299 => vec![ItemStack::new(rand::random_range(2..=8), &Item::SOUL_SAND)],
-            299..339 => vec![ItemStack::new(
-                rand::random_range(2..=8),
-                &Item::NETHER_BRICK,
-            )],
-            339..379 => vec![ItemStack::new(
-                rand::random_range(6..=12),
-                &Item::SPECTRAL_ARROW,
-            )],
-            379..419 => vec![ItemStack::new(rand::random_range(8..=16), &Item::GRAVEL)],
-            _ => vec![ItemStack::new(
-                rand::random_range(8..=16),
-                &Item::BLACKSTONE,
-            )],
-        }
+    pub fn get_barter_response_items(piglin: &PiglinEntity) -> Vec<ItemStack> {
+        let world = piglin.mob_entity.living_entity.entity.world.load();
+        let Some(table) = world.get_loot_table("minecraft:gameplay/piglin_bartering") else {
+            return Vec::new();
+        };
+        let params = crate::world::loot::LootContextParameters {
+            world: Some(&world),
+            this_entity: Some(piglin),
+            ..Default::default()
+        };
+        crate::world::loot::generate_loot_from_handle(&table, rand::random(), &params)
     }
 
     #[must_use]
