@@ -1275,13 +1275,13 @@ impl ProtoChunk {
                 let mut fluid_height = i32::MIN;
                 for y in (min_y as i32..=top_block).rev() {
                     let pos = Vector3::new(x, y, z);
-                    let state_id = self.get_block_state(&pos);
-                    if state_id == BlockStateId::AIR {
+                    let raw_state = self.get_block_state(&pos);
+                    if raw_state == BlockStateId::AIR {
                         stone_depth_above = 0;
                         fluid_height = i32::MIN;
                         continue;
                     }
-                    let state = state_id.to_state();
+                    let state = raw_state.to_state();
                     if state.is_air() {
                         stone_depth_above = 0;
                         fluid_height = i32::MIN;
@@ -1291,6 +1291,16 @@ impl ProtoChunk {
                         if fluid_height == i32::MIN {
                             fluid_height = y + 1;
                         }
+                        continue;
+                    }
+                    // Surface rules should only replace uncarved base noise terrain
+                    // (dimension default block such as stone/netherrack, or deepslate).
+                    // If neighbor chunk features (tree canopies, fallen logs) are
+                    // already written into this column, leave untouched and do not
+                    // increment stone depth.
+                    let is_base_terrain = state.id == settings.default_block.id
+                        || raw_state.to_block_id() == Block::DEEPSLATE;
+                    if !is_base_terrain {
                         continue;
                     }
                     if min >= y {
