@@ -60,6 +60,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:dispenser_and_dropper",
     "pumpkin:dispenser_honeycomb_beehive_and_shulker",
     "pumpkin:crafter_crafts_into_chest",
+    "pumpkin:crafter_dispenses_crafting_remainders",
     "pumpkin:doors_trapdoors_fence_gates_redstone",
     "pumpkin:water_lava_interactions",
     "pumpkin:sponge_absorbs_water",
@@ -390,6 +391,13 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             dispensers_and_crafters::test_crafter_crafts_into_chest,
+        );
+        register_function_test(
+            "pumpkin:crafter_dispenses_crafting_remainders",
+            "pumpkin:empty_5x4x5",
+            30,
+            0,
+            dispensers_and_crafters::test_crafter_dispenses_crafting_remainders,
         );
         register_function_test(
             "pumpkin:doors_trapdoors_fence_gates_redstone",
