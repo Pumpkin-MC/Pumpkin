@@ -1,25 +1,22 @@
 use std::sync::Arc;
 
 use pumpkin_data::game_event::GameEvent;
-use pumpkin_data::item_stack::{DamageResult, ItemStack};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_util::GameMode;
 
 use crate::entity::Entity;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
+use crate::world::game_event::GameEventContext;
 use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
 /// Vanilla `Shearable`: a mob that players and dispensers can shear.
 pub trait Shearable: Mob {
-    /// Shears this mob. Returns `false` if it was already sheared or a plugin stopped it.
+    /// Shears this mob. Returns `false` if it was already sheared.
     ///
-    /// Vanilla's `shear` returns nothing, but because Pumpkin handles players' interactions in parallel, so
-    /// two of them can pass [`Self::ready_for_shearing`] at once.
-    /// IMPORTANT: Implementations must claim their shear state
-    /// with a single atomic swap so only one of them goes on to drop loot.
-    /// See [`SnowGolemEntity::shear`]
+    /// Player interactions run in parallel, so two shears can pass [`Self::ready_for_shearing`] at once.
+    /// Implementations claim their shear state with one atomic swap so only one of them drops loot.
     fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool;
 
     fn ready_for_shearing(&self) -> bool;
@@ -52,15 +49,15 @@ pub fn shear_by_player(
     if !shearable.shear(SoundCategory::Players, tool) {
         return false;
     }
-    world.emit_game_event(GameEvent::Shear.name(), pos);
-    if player.gamemode.load() != GameMode::Creative {
-        let item: &pumpkin_data::item::Item = tool.item;
-        let result = tool.damage_item(1);
-        if result != DamageResult::Untouched {
-            // Not `damage_item_in_slot`: the interact handler writes `tool` back to the hand and counts the break.
-            player.fire_item_damage_events(item, 1, result == DamageResult::Broken);
-        }
-    }
+    world.emit_game_event_with_context(
+        GameEvent::Shear.name(),
+        pos,
+        &GameEventContext {
+            source_entity: Some(player.as_ref()),
+        },
+    );
+    // The interact handler writes `tool` back to the hand and counts the break.
+    let _ = player.damage_item_stack(tool, 1);
     true
 }
 

@@ -300,7 +300,7 @@ impl EntityBase for AreaEffectCloudEntity {
         let mut candidates = world.get_entities_at_box(&aabb);
         let players = world.get_players_at_box(&aabb);
         for p in players {
-            candidates.push(p.clone() as Arc<dyn EntityBase>);
+            candidates.push(p as Arc<dyn EntityBase>);
         }
 
         for cand in candidates {
@@ -385,6 +385,10 @@ impl EntityBase for AreaEffectCloudEntity {
                     effs_clone,
                     scale,
                     crate::item::potion::PotionApplicationSource::AreaEffectCloud,
+                    Some(crate::entity::living::EffectSource {
+                        direct: self,
+                        owner: None,
+                    }),
                 );
             }
 

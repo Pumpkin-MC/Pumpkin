@@ -98,6 +98,25 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
         self.dirty.store(false, Ordering::Relaxed);
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let items = self.items.try_read().ok()?;
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("ChiseledBookshelf", self.position)
+                .put_list(
+                    "Items",
+                    super::bedrock::build_bedrock_slot_items(items.as_slice()),
+                )
+                .put_int(
+                    "LastInteractedSlot",
+                    i32::from(self.last_interacted_slot.load(Ordering::Relaxed)),
+                )
+                .finish(),
+        )
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -149,6 +168,9 @@ impl ChiseledBookshelfBlockEntity {
                 properties.to_state_id(&Block::CHISELED_BOOKSHELF),
                 BlockFlags::NOTIFY_LISTENERS,
             );
+            if let Some(be) = world.get_block_entity(&self.position) {
+                world.update_block_entity(&be);
+            }
         } else {
             warn!(
                 "Invalid interacted slot: {} for chiseled bookshelf at position {:?}",

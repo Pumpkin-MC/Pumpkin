@@ -109,6 +109,34 @@ impl BlockEntity for EndGatewayBlockEntity {
         }
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let age = self.age.try_lock().map_or(0, |g| *g);
+        let exact = self.exact_teleport.try_lock().is_ok_and(|g| *g);
+        let exit = self.exit_portal.try_lock().ok().and_then(|g| *g);
+        let mut builder =
+            super::bedrock::BedrockBlockActorBuilder::new("EndGateway", self.position)
+                .movable(false)
+                .put_int(
+                    "Age",
+                    age.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+                )
+                .put_bool("ExactTeleport", exact);
+        if let Some(exit) = exit {
+            builder = builder.put_list(
+                "ExitPortal",
+                vec![
+                    pumpkin_nbt::tag::NbtTag::Int(exit.0.x),
+                    pumpkin_nbt::tag::NbtTag::Int(exit.0.y),
+                    pumpkin_nbt::tag::NbtTag::Int(exit.0.z),
+                ],
+            );
+        }
+        Some(builder.finish())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

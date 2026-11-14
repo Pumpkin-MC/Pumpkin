@@ -25,7 +25,7 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::combat::{Modifier, Operation};
 use pumpkin_data::data_component_impl::{
-    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl,
+    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl, MAX_ENCHANTMENT_LEVEL,
 };
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
@@ -75,7 +75,38 @@ pub const fn to_wit_item_operation(op: Operation) -> WitModifierOperation {
     }
 }
 
-impl ItemStackInterfaceHost for PluginHostState {}
+impl ItemStackInterfaceHost for PluginHostState {
+    fn is_item_in_tag(&mut self, item_name: String, tag: String) -> wasmtime::Result<bool> {
+        use pumpkin_data::tag::Taggable;
+        let key = item_name.strip_prefix("minecraft:").unwrap_or(&item_name);
+        let Some(item) = pumpkin_data::item::Item::from_registry_key(key) else {
+            return Ok(false);
+        };
+        Ok(item.is_tagged_with(&tag).unwrap_or(false))
+    }
+
+    fn get_items_in_tag(&mut self, tag: String) -> wasmtime::Result<Vec<String>> {
+        use pumpkin_data::tag::Taggable;
+        Ok(pumpkin_data::item::Item::get_tag_values(&tag)
+            .map(|vals| vals.iter().map(|s| (*s).to_string()).collect())
+            .unwrap_or_default())
+    }
+
+    fn get_item_tags(&mut self, item_name: String) -> wasmtime::Result<Vec<String>> {
+        let key = item_name.strip_prefix("minecraft:").unwrap_or(&item_name);
+        let Some(item) = pumpkin_data::item::Item::from_registry_key(key) else {
+            return Ok(Vec::new());
+        };
+        let item_id = item.id;
+        Ok(
+            pumpkin_data::tag::get_latest_map(pumpkin_data::tag::RegistryKey::Item)
+                .entries()
+                .filter(|(_, tag)| tag.1.contains(&item_id))
+                .map(|(name, _)| (*name).to_string())
+                .collect(),
+        )
+    }
+}
 
 impl HostItemStack for PluginHostState {
     fn new(
@@ -185,6 +216,16 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         Ok(())
     }
 
+    async fn damage_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ItemStackHandle>,
+        amount: i32,
+    ) -> wasmtime::Result<bool> {
+        let stack = accessor.get_res(&res)?;
+        let mut stack = stack.lock().await;
+        Ok(stack.damage_item(amount) == pumpkin_data::item_stack::DamageResult::Broken)
+    }
+
     async fn get_max_damage(
         accessor: &Accessor<PluginHostState, Self>,
         res: Resource<ItemStackHandle>,
@@ -225,6 +266,59 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
             stack.remove_data_component(pumpkin_data::data_component::DataComponent::Unbreakable);
         }
         Ok(())
+    }
+
+    async fn has_tag(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ItemStackHandle>,
+        tag: String,
+    ) -> wasmtime::Result<bool> {
+        use pumpkin_data::tag::Taggable;
+        let stack = accessor.get_res(&res)?;
+        let stack = stack.lock().await;
+        Ok(stack.item.is_tagged_with(&tag).unwrap_or(false))
+    }
+
+    async fn get_tags(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ItemStackHandle>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let stack = accessor.get_res(&res)?;
+        let stack = stack.lock().await;
+        let item_id = stack.item.id;
+        Ok(
+            pumpkin_data::tag::get_latest_map(pumpkin_data::tag::RegistryKey::Item)
+                .entries()
+                .filter(|(_, tag)| tag.1.contains(&item_id))
+                .map(|(name, _)| (*name).to_string())
+                .collect(),
+        )
+    }
+
+    async fn is_correct_for_drops(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ItemStackHandle>,
+        block_name: String,
+    ) -> wasmtime::Result<bool> {
+        let Some(block) = pumpkin_data::Block::from_name(&block_name) else {
+            return Ok(false);
+        };
+        let stack = accessor.get_res(&res)?;
+        let stack = stack.lock().await;
+        Ok(stack.is_correct_for_drops(block))
+    }
+
+    async fn get_mining_speed(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ItemStackHandle>,
+        block_name: String,
+    ) -> wasmtime::Result<f32> {
+        let Some(block) = pumpkin_data::Block::from_name(&block_name) else {
+            return Ok(1.0);
+        };
+        let stack = accessor.get_res(&res)?;
+        let stack = stack.lock().await;
+        Ok(stack.get_speed(block))
     }
 
     async fn get_repair_cost(
@@ -352,7 +446,9 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         };
 
         current_encs.retain(|(e, _)| e.id != enc.id);
-        current_encs.push((enc, level as i32));
+        if level > 0 {
+            current_encs.push((enc, level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32));
+        }
 
         if let Some((_, data)) = stack
             .patch
@@ -446,11 +542,15 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         let stack = accessor.get_res(&res)?;
         let mut stack = stack.lock().await;
 
-        stack.set_custom_data(
-            "pumpkin:enchantments",
-            &enchantment_id,
-            NbtTag::Int(level as i32),
-        );
+        if level == 0 {
+            stack.remove_custom_data("pumpkin:enchantments", &enchantment_id);
+        } else {
+            stack.set_custom_data(
+                "pumpkin:enchantments",
+                &enchantment_id,
+                NbtTag::Int(level as i32),
+            );
+        }
 
         if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id) {
             let mut current_encs = if let Some((_, Some(data))) = stack
@@ -467,7 +567,9 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
             };
 
             current_encs.retain(|(e, _)| e.id != vanilla.id);
-            current_encs.push((vanilla, level as i32));
+            if level > 0 {
+                current_encs.push((vanilla, level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32));
+            }
 
             if let Some((_, data)) = stack
                 .patch

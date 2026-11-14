@@ -636,7 +636,12 @@ mod tests {
 
         fn enqueue_cursor_packet(&self, _packet: &CSetCursorItem) {}
 
-        fn enqueue_property_packet(&self, _packet: &CSetContainerProperty) {}
+        fn enqueue_property_packet(
+            &self,
+            _packet: &CSetContainerProperty,
+            _window_type: Option<WindowType>,
+        ) {
+        }
 
         fn enqueue_slot_set_packet(&self, _packet: &CSetPlayerInventory) {}
 

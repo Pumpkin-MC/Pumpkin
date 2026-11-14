@@ -1,5 +1,6 @@
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
+use crate::entity::mob::equipment::equip_on_target;
 use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::Block;
@@ -79,9 +80,14 @@ impl ItemRegistry {
         }
     }
 
-    pub fn on_use_tick(&self, stack: &ItemStack, player: &Player, remaining_use_ticks: i32) {
+    pub fn on_use_tick(
+        &self,
+        stack: &ItemStack,
+        user: &dyn crate::entity::EntityBase,
+        remaining_use_ticks: i32,
+    ) {
         if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
-            behaviour.on_use_tick(stack, player, remaining_use_ticks);
+            behaviour.on_use_tick(stack, user, remaining_use_ticks);
         }
     }
 
@@ -137,6 +143,12 @@ impl ItemRegistry {
         player: &Player,
         entity: Arc<dyn EntityBase>,
     ) {
+        if let Some(mob) = entity.get_mob()
+            && equip_on_target(mob, player, stack)
+        {
+            return;
+        }
+
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
         if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item.use_on_entity(stack, player, entity);

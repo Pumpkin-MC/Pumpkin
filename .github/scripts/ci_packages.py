@@ -299,6 +299,19 @@ def run_for_packages(args: argparse.Namespace) -> None:
     ):
         raise ValueError("CI_AFFECTED_PACKAGES contains an invalid package name")
 
+    if "--doc" in args.command:
+        # Cargo rejects `--doc` when none of the selected packages has a library.
+        _, metadata_packages = cargo_metadata()
+        doctested = {
+            package["name"]
+            for package in metadata_packages
+            if any(target.get("doctest") for target in package["targets"])
+        }
+        packages = [package for package in packages if package in doctested]
+        if not packages:
+            print("No affected packages have doctests, skipping")
+            return
+
     package_arguments = [
         argument for package in packages for argument in ("-p", package)
     ]

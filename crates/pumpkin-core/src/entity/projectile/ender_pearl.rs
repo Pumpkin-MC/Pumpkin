@@ -1,4 +1,7 @@
-use std::sync::atomic::AtomicBool;
+use crate::block::blocks::bubble_column;
+use crate::entity::mob::spawn::{EntitySpawnReason, finalize_spawn};
+use crate::entity::projectile::owner::ProjectileOwner;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
@@ -29,9 +32,7 @@ impl EnderPearlEntity {
 
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
+            owner: ProjectileOwner::none(),
             gravity: GRAVITY,
         };
 
@@ -46,12 +47,23 @@ impl EnderPearlEntity {
 }
 
 impl EntityBase for EnderPearlEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    /// Pearls take the regular entity push, not the projectile one.
+    fn on_above_bubble_column(&self, drag_down: bool, pos: &BlockPos) {
+        let entity = self.get_entity();
+        bubble_column::push_entity(entity, drag_down, true);
+        bubble_column::send_bubble_column_particles(&entity.world.load(), pos);
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn on_inside_bubble_column(&self, drag_down: bool) {
+        bubble_column::push_entity(self.get_entity(), drag_down, false);
+    }
+
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
+    }
+
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -69,10 +81,7 @@ impl EntityBase for EnderPearlEntity {
         let entity = self.get_entity();
         let world = entity.world.load();
 
-        let attacker = self
-            .thrown
-            .owner_id
-            .and_then(|id| world.get_entity_by_id(id));
+        let attacker = self.get_owner_entity();
 
         // Spawn portal particles at hit position
         let hit_pos = hit.hit_pos();
@@ -97,45 +106,53 @@ impl EntityBase for EnderPearlEntity {
             );
         }
 
-        let owner_id = self.thrown.owner_id;
         let teleport_pos = entity.last_pos.load();
 
-        if let (
-            ProjectileHit::Entity {
-                entity: hit_entity,
-                hit_pos,
-                ..
-            },
-            Some(owner),
-        ) = (&hit, attacker)
+        // Like vanilla, a zero hit from the pearl, credited to its thrower if any.
+        if let ProjectileHit::Entity {
+            entity: hit_entity,
+            hit_pos,
+            ..
+        } = &hit
         {
-            let victim_ref = &**hit_entity;
             hit_entity.damage_with_context(
-                victim_ref,
+                &**hit_entity,
                 0.0,
                 DamageType::THROWN,
                 Some(*hit_pos),
-                Some(owner.get_entity()),
-                Some(victim_ref),
+                Some(self),
+                attacker.as_deref(),
             );
         }
 
-        if let Some(owner_id) = owner_id
-            && let Some(owner) = world.get_entity_by_id(owner_id)
+        if let Some(owner) = attacker
             && owner.get_entity().is_alive()
             && owner.get_living_entity().is_none_or(|living| {
                 living.health.load() > 0.0 && owner.get_entity().pose.load() != EntityPose::Sleeping
             })
         {
-            let should_spawn_endermite = rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE;
-            if world.should_spawn_monsters() && should_spawn_endermite {
-                let entity = Entity::new(
-                    world.clone(),
-                    owner.get_entity().pos.load(),
-                    &EntityType::ENDERMITE,
-                );
-                let endermite = EndermiteEntity::new(entity);
-                world.spawn_entity(endermite);
+            let is_player = owner.get_player().is_some();
+            if is_player {
+                let should_spawn_endermite = rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE;
+                if world.should_spawn_monsters() && should_spawn_endermite {
+                    let entity = Entity::new(
+                        world.clone(),
+                        owner.get_entity().pos.load(),
+                        &EntityType::ENDERMITE,
+                    );
+                    entity.set_rotation(
+                        owner.get_entity().yaw.load(),
+                        owner.get_entity().pitch.load(),
+                    );
+                    let endermite = EndermiteEntity::new(entity);
+                    finalize_spawn(
+                        &(endermite.clone() as std::sync::Arc<dyn EntityBase>),
+                        &world,
+                        EntitySpawnReason::Triggered,
+                        None,
+                    );
+                    world.spawn_entity(endermite);
+                }
             }
 
             // In vanilla, teleport handles everything including sound
@@ -153,14 +170,19 @@ impl EntityBase for EnderPearlEntity {
                 &teleport_pos,
             );
 
-            // Deal 5 damage to owner
-            owner.damage(
-                owner.as_ref(),
-                5.0,
-                pumpkin_data::damage::DamageType::ENDER_PEARL,
-            );
+            if let Some(living) = owner.get_living_entity() {
+                living.fall_distance.store(0.0);
+                living.reset_current_impulse_context();
+            }
+            if is_player {
+                owner.damage(
+                    owner.as_ref(),
+                    5.0,
+                    pumpkin_data::damage::DamageType::ENDER_PEARL,
+                );
+            }
         }
 
-        world.send_entity_status(entity, EntityStatus::Death, Some(ActorEventID::Death));
+        world.send_entity_status(entity, EntityStatus::Death, ActorEventID::Death);
     }
 }

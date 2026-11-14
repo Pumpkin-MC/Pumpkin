@@ -78,10 +78,7 @@ impl BlockEntity for CampfireBlockEntity {
                 .lock()
                 .map_or_else(|_| ItemStack::EMPTY.clone(), |g| g.clone())
         });
-        Some(crate::block::entities::bedrock::build_campfire_actor(
-            self.position,
-            &items,
-        ))
+        Some(build_campfire_actor(self.position, &items))
     }
 
     fn tick(&self, world: &Arc<World>) {
@@ -309,5 +306,63 @@ impl CampfireBlockEntity {
         );
         let entity = Entity::new(world.clone(), spawn_position, &EntityType::ITEM);
         world.spawn_entity(Arc::new(ItemEntity::new(entity, stack)));
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for campfires.
+#[must_use]
+pub fn build_campfire_actor(position: BlockPos, items: &[ItemStack; 4]) -> NbtCompound {
+    let mut builder = super::bedrock::BedrockBlockActorBuilder::new("Campfire", position);
+    for (i, item) in items.iter().enumerate() {
+        if !item.is_empty() {
+            let mut item_comp = NbtCompound::new();
+            item_comp.put_string(
+                "Name",
+                super::bedrock::bedrock_item_name(item.item.registry_key),
+            );
+            item_comp.put_byte("Count", item.item_count as i8);
+            item_comp.put_short("Damage", 0);
+            item_comp.put_byte("Slot", i as i8);
+            let key = match i {
+                0 => "Item1",
+                1 => "Item2",
+                2 => "Item3",
+                _ => "Item4",
+            };
+            builder = builder.put_compound(key, item_comp);
+        }
+    }
+    builder.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn campfire_actor_builder() {
+        let pos = BlockPos::new(5, 65, 5);
+        let beef = ItemStack::new(1, &Item::BEEF);
+        let pork = ItemStack::new(1, &Item::PORKCHOP);
+        let items = [
+            beef,
+            ItemStack::EMPTY.clone(),
+            pork,
+            ItemStack::EMPTY.clone(),
+        ];
+        let nbt = build_campfire_actor(pos, &items);
+
+        assert_eq!(nbt.get_string("id"), Some("Campfire"));
+        let item1 = nbt.get_compound("Item1").expect("Item1 missing");
+        assert_eq!(item1.get_string("Name"), Some("minecraft:beef"));
+        assert_eq!(item1.get_byte("Count"), Some(1));
+        assert_eq!(item1.get_byte("Slot"), Some(0));
+
+        assert!(nbt.get_compound("Item2").is_none());
+
+        let item3 = nbt.get_compound("Item3").expect("Item3 missing");
+        assert_eq!(item3.get_string("Name"), Some("minecraft:porkchop"));
+        assert_eq!(item3.get_byte("Count"), Some(1));
+        assert_eq!(item3.get_byte("Slot"), Some(2));
     }
 }

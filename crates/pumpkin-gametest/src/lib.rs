@@ -36,7 +36,7 @@ mod tests {
     use pumpkin_nbt::{NbtCompound, tag::NbtTag};
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::text::TextComponent;
-    use pumpkin_world::world::BlockFlags;
+    use pumpkin_world::{CURRENT_MC_DATA_VERSION, world::BlockFlags};
 
     use super::*;
 
@@ -197,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_modern_and_legacy_structure_palette_nbt_and_empty_ids() {
+    fn parses_modern_structure_palette_nbt_and_empty_ids() {
         let mut modern_entry = NbtCompound::new();
         modern_entry.put_string("id", "minecraft:test_block".to_string());
         let mut props = NbtCompound::new();
@@ -212,6 +212,7 @@ mod tests {
         block.put_int("state", 0);
 
         let mut root = NbtCompound::new();
+        root.put_int("DataVersion", CURRENT_MC_DATA_VERSION);
         root.put(
             "size",
             NbtTag::List(vec![NbtTag::Int(1), NbtTag::Int(1), NbtTag::Int(1)]),

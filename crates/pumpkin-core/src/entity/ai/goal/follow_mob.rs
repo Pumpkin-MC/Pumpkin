@@ -2,15 +2,18 @@ use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
-use std::sync::Arc;
+use pumpkin_util::math::vector3::Vector3;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Weak};
 
 pub struct FollowMobGoal {
     goal_control: Controls,
-    following_mob: Option<Arc<dyn EntityBase>>,
+    following_mob: Option<Weak<dyn EntityBase>>,
     speed_modifier: f64,
     time_to_recalc_path: i32,
     stop_distance_sq: f64,
     area_size: f64,
+    old_water_cost: f32,
 }
 
 impl FollowMobGoal {
@@ -23,37 +26,38 @@ impl FollowMobGoal {
             time_to_recalc_path: 0,
             stop_distance_sq: f64::from(stop_distance * stop_distance),
             area_size: f64::from(area_size),
+            old_water_cost: 0.0,
         }
     }
 }
 
 impl Goal for FollowMobGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        let my_type = mob.get_entity().entity_type;
-        let my_uuid = mob.get_entity().entity_uuid;
-        let pos = mob.get_entity().pos.load();
-        let world = mob.get_entity().world.load();
+        let entity = mob.get_entity();
+        let world = entity.world.load();
+        let area =
+            entity
+                .bounding_box
+                .load()
+                .expand(self.area_size, self.area_size, self.area_size);
 
-        let nearby = world.get_nearby_entities(pos, self.area_size);
-        for candidate in nearby.values() {
-            let c_entity = candidate.get_entity();
-            if c_entity.entity_uuid == my_uuid {
-                continue;
-            }
-            if c_entity.entity_type == my_type {
-                continue;
-            }
-            if candidate.get_living_entity().is_some() {
-                self.following_mob = Some(candidate.clone());
-                return true;
-            }
-        }
-
-        false
+        // The first visible mob of another type in list order
+        self.following_mob = world
+            .get_entities_at_box(&area)
+            .into_iter()
+            .find(|candidate| {
+                let candidate_entity = candidate.get_entity();
+                candidate_entity.entity_type != entity.entity_type
+                    && candidate.get_mob().is_some()
+                    && !candidate_entity.invisible.load(Ordering::Relaxed)
+            })
+            .as_ref()
+            .map(Arc::downgrade);
+        self.following_mob.is_some()
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let Some(following) = &self.following_mob else {
+        let Some(following) = self.following_mob.as_ref().and_then(Weak::upgrade) else {
             return false;
         };
 
@@ -70,8 +74,16 @@ impl Goal for FollowMobGoal {
         !is_idle && dist_sq > self.stop_distance_sq
     }
 
-    fn start(&mut self, _mob: &dyn Mob) {
+    fn start(&mut self, mob: &dyn Mob) {
         self.time_to_recalc_path = 0;
+        let mut navigator = mob
+            .get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.old_water_cost =
+            navigator.get_pathfinding_malus(crate::entity::ai::pathfinder::node::PathType::Water);
+        navigator.set_pathfinding_malus(crate::entity::ai::pathfinder::node::PathType::Water, 0.0);
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
@@ -82,10 +94,17 @@ impl Goal for FollowMobGoal {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         navigator.stop();
+        navigator.set_pathfinding_malus(
+            crate::entity::ai::pathfinder::node::PathType::Water,
+            self.old_water_cost,
+        );
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(following) = &self.following_mob else {
+        if mob.get_entity().is_leashed() {
+            return;
+        }
+        let Some(following) = self.following_mob.as_ref().and_then(Weak::upgrade) else {
             return;
         };
 
@@ -97,7 +116,7 @@ impl Goal for FollowMobGoal {
             .look_control
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .look_at_entity(mob, following);
+            .look_at_entity(mob, &following);
 
         self.time_to_recalc_path -= 1;
         if self.time_to_recalc_path <= 0 {
@@ -117,6 +136,26 @@ impl Goal for FollowMobGoal {
                 ));
             } else {
                 navigator.stop();
+                let looking_at_us = following.get_mob().and_then(|target| {
+                    target
+                        .get_mob_entity()
+                        .look_control
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .wanted_position()
+                }) == Some(mob_pos);
+                if dist_sq <= self.stop_distance_sq.sqrt() || looking_at_us {
+                    let target = Vector3::new(
+                        mob_pos.x - (follow_pos.x - mob_pos.x),
+                        mob_pos.y,
+                        mob_pos.z - (follow_pos.z - mob_pos.z),
+                    );
+                    navigator.set_progress(NavigatorGoal::new(
+                        mob_pos,
+                        target,
+                        self.speed_modifier,
+                    ));
+                }
             }
         }
     }

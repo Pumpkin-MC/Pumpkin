@@ -3,10 +3,10 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::Hand;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
 use crate::entity::{
@@ -20,26 +20,20 @@ use crate::entity::{
     },
     item::ItemEntity,
     mob::{Mob, MobEntity, spawn::SpawnGroupData},
-    passive::animal::{Animal, get_dye_color_from_item},
+    passive::animal::{Animal, get_mixed_color},
     player::Player,
-    shearable::{Shearable, shear_by_player, shearing_loot},
+    shearable::{Shearable, shear_by_player},
 };
 use crate::world::World;
+use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable, WorldgenBiome};
-use pumpkin_inventory::Inventory;
-use pumpkin_inventory::crafting::crafting_inventory::CraftingInventory;
-use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
-use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
-/// The dye color bits in vanilla's `DATA_WOOL_ID` byte.
-const COLOR_MASK: u8 = 0x0F;
-/// The sheared flag in vanilla's `DATA_WOOL_ID` byte.
+/// The sheared flag in the synced wool byte.
 const SHEARED_BIT: u8 = 0x10;
 
 #[derive(Clone, Copy)]
@@ -73,37 +67,6 @@ const COLD_SPAWN_CONFIGURATION: SheepColorSpawnConfiguration = [
 ];
 const COMMON_COLOR_WEIGHT: u32 = 499;
 
-fn find_color_mix_in_recipes(
-    world: &World,
-    color1: DyeColor,
-    color2: DyeColor,
-) -> Option<DyeColor> {
-    let dye_items = |color: DyeColor| {
-        tag::Item::C_DYES
-            .1
-            .iter()
-            .filter_map(|id| Item::from_id(*id))
-            .filter(move |item| get_dye_color_from_item(item) == Some(color.id()))
-    };
-    let server = world.server.upgrade();
-    let provider = server
-        .as_ref()
-        .map(|server| server.recipe_manager.as_ref() as &dyn RecipeProvider);
-    for dye1 in dye_items(color1) {
-        for dye2 in dye_items(color2) {
-            let input = CraftingInventory::new(2, 1);
-            input.set_stack(0, ItemStack::new(1, dye1));
-            input.set_stack(1, ItemStack::new(1, dye2));
-            if let Some(result) = match_crafting_recipe(&input, provider)
-                && let Some(item) = Item::from_registry_key(&result.item_id)
-                && let Some(color) = get_dye_color_from_item(item)
-            {
-                return Some(DyeColor::from(color));
-            }
-        }
-    }
-    None
-}
 const PINK_WEIGHT: u32 = 1;
 
 pub struct SheepEntity {
@@ -132,7 +95,14 @@ impl SheepEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.1,
+                    &tag::Item::MINECRAFT_SHEEP_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(5, Box::new(EatGrassGoal::default()));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::water_avoiding(1.0)));
@@ -151,31 +121,25 @@ impl SheepEntity {
     }
 
     pub fn get_color(&self) -> u8 {
-        self.get_packed_byte() & COLOR_MASK
+        self.get_packed_byte() & 0x0F
     }
 
     pub fn is_sheared(&self) -> bool {
         (self.get_packed_byte() & SHEARED_BIT) != 0
     }
 
-    // No races due to atomic byte setters
-    fn sync_packed_byte(&self) {
+    fn set_packed_and_sync(&self, byte: u8) {
+        self.color_and_sheared.store(byte, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::sheep::WOOL_ID,
-            self.get_packed_byte() as i8,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::sheep::WOOL_ID, byte as i8);
         if let Some(meta) = self.mob_metadata() {
             entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
         }
     }
 
     pub fn set_color(&self, color: u8) {
-        self.color_and_sheared
-            .update(Ordering::Relaxed, Ordering::Relaxed, |byte| {
-                (byte & !COLOR_MASK) | (color & COLOR_MASK)
-            });
-        self.sync_packed_byte();
+        let byte = (self.get_packed_byte() & 0xF0) | (color & 0x0F);
+        self.set_packed_and_sync(byte);
     }
 
     fn get_random_sheep_color(&self, biome: &Biome) -> DyeColor {
@@ -210,30 +174,19 @@ impl SheepEntity {
         }
     }
 
-    fn get_mixed_color(&self, world: &World, color1: DyeColor, color2: DyeColor) -> DyeColor {
-        find_color_mix_in_recipes(world, color1, color2).unwrap_or_else(|| {
-            if self.get_random().random::<bool>() {
-                color1
-            } else {
-                color2
-            }
-        })
-    }
-
     pub fn set_sheared(&self, sheared: bool) {
-        if sheared {
-            self.color_and_sheared
-                .fetch_or(SHEARED_BIT, Ordering::Relaxed);
+        let byte = if sheared {
+            self.get_packed_byte() | SHEARED_BIT
         } else {
-            self.color_and_sheared
-                .fetch_and(!SHEARED_BIT, Ordering::Relaxed);
-        }
-        self.sync_packed_byte();
+            self.get_packed_byte() & !SHEARED_BIT
+        };
+        self.set_packed_and_sync(byte);
     }
 }
 
 impl Shearable for SheepEntity {
-    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool {
+    fn shear(&self, category: SoundCategory, tool: &ItemStack) -> bool {
+        // Claim the wool first so two shears landing at once drop it only once.
         if self
             .color_and_sheared
             .fetch_or(SHEARED_BIT, Ordering::Relaxed)
@@ -242,37 +195,38 @@ impl Shearable for SheepEntity {
         {
             return false;
         }
-
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
-        world.play_sound(Sound::EntitySheepShear, sound_category, &pos);
-
-        let color = DyeColor::by_id(self.get_color()).unwrap_or(DyeColor::White);
-        let loot_key = format!("minecraft:shearing/sheep/{}", color.name()); // is there a better way to do this
-        let drop_pos = Vector3::new(pos.x, pos.y + 1.0, pos.z);
-        let mut rng = rand::rng();
-        for drop in shearing_loot(entity, &loot_key, tool) {
-            for _ in 0..drop.item_count {
-                let item_entity = ItemEntity::new(
-                    Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
-                    drop.copy_with_count(1),
-                );
-                let item_base = item_entity.get_entity();
-                item_base.velocity.store(
-                    item_base.velocity.load()
-                        + Vector3::new(
-                            // magic numbers from vanilla
-                            f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
-                            f64::from(rng.random::<f32>() * 0.05),
-                            f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
-                        ),
-                );
-                world.spawn_entity(Arc::new(item_entity));
+        world.play_sound(Sound::EntitySheepShear, category, &pos);
+        let color = DyeColor::from(self.get_color());
+        if let Some(table) =
+            world.get_loot_table(&format!("minecraft:shearing/sheep/{}", color.name()))
+        {
+            let params = LootContextParameters {
+                world: Some(&world),
+                position: Some(pos),
+                this_entity: Some(self),
+                tool: Some(tool.clone()),
+                ..Default::default()
+            };
+            let mut rng = self.get_random();
+            for stack in generate_loot_from_handle(&table, rng.random(), &params) {
+                for _ in 0..stack.item_count {
+                    let item_entity = ItemEntity::new(
+                        Entity::new(world.clone(), pos.add_raw(0.0, 1.0, 0.0), &EntityType::ITEM),
+                        stack.copy_with_count(1),
+                    );
+                    let velocity = &item_entity.get_entity().velocity;
+                    velocity.store(velocity.load().add_raw(
+                        f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
+                        f64::from(rng.random::<f32>() * 0.05),
+                        f64::from((rng.random::<f32>() - rng.random::<f32>()) * 0.1),
+                    ));
+                    world.spawn_entity(Arc::new(item_entity));
+                }
             }
         }
-
-        // Bit is set, send change to clients
         self.set_sheared(true);
         true
     }
@@ -290,10 +244,7 @@ impl AgeableMob for SheepEntity {
 
 impl Animal for SheepEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        item_stack
-            .item
-            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_SHEEP_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
+        item_stack.item.has_tag(&tag::Item::MINECRAFT_SHEEP_FOOD)
     }
 
     fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
@@ -305,7 +256,7 @@ impl Animal for SheepEntity {
             &EntityType::SHEEP,
         ));
         if let Some(partner) = partner.cast_any().downcast_ref::<Self>() {
-            let color = self.get_mixed_color(
+            let color = get_mixed_color(
                 &world,
                 DyeColor::from(self.get_color()),
                 DyeColor::from(partner.get_color()),
@@ -317,6 +268,10 @@ impl Animal for SheepEntity {
 }
 
 impl Mob for SheepEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntitySheepStep, 0.15, 1.0);
+    }
+
     fn mob_get_component(
         &self,
         component: pumpkin_data::data_component::DataComponent,
@@ -340,11 +295,11 @@ impl Mob for SheepEntity {
         Some(self)
     }
 
-    fn as_animal(&self) -> Option<&dyn Animal> {
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
         Some(self)
     }
 
-    fn as_shearable(&self) -> Option<&dyn Shearable> {
+    fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
 
@@ -379,7 +334,7 @@ impl Mob for SheepEntity {
             .or_else(|| nbt.get_byte("Sheared").map(|b| b == 1))
             .unwrap_or(false);
         let color = nbt.get_byte("Color").unwrap_or(0) as u8;
-        let byte = (color & COLOR_MASK) | if sheared { SHEARED_BIT } else { 0 };
+        let byte = (color & 0x0F) | if sheared { SHEARED_BIT } else { 0 };
         self.color_and_sheared.store(byte, Ordering::Relaxed);
     }
 
@@ -397,6 +352,7 @@ impl Mob for SheepEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let biome = world.get_biome(&self.get_entity().block_pos.load());
@@ -411,14 +367,9 @@ impl Mob for SheepEntity {
             if !self.ready_for_shearing() {
                 return true;
             }
-            if !shear_by_player(self, player, item_stack) {
-                return false;
-            }
-            // Vanilla returns `SUCCESS_SERVER` here, so the client waits for the server to swing its arm.
-            player.swing_hand(Hand::Right, true);
-            return true;
+            return shear_by_player(self, player, item_stack);
         }
 
-        self.animal_interact(player, item_stack, Sound::EntitySheepAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

@@ -4,16 +4,25 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::cow_variant::CowVariant;
+use pumpkin_data::BlockState;
+use pumpkin_data::cow_sound_variant::CowSoundVariant;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{
+    DataComponentImpl, MooshroomVariantImpl, SuspiciousStewEffect, SuspiciousStewEffectsImpl,
+};
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity_variant::MooshroomVariant;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::suspicious_effects::get_suspicious_effects;
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 use uuid::Uuid;
 
 use crate::entity::{
@@ -24,74 +33,41 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     item::ItemEntity,
+    lightning::LightningBoltEntity,
+    mob::conversion::{ConversionParams, convert_to},
     mob::{Mob, MobEntity},
-    passive::{animal::Animal, cow::CowEntity},
+    passive::animal::Animal,
     player::Player,
-    shearable::{Shearable, shear_by_player, shearing_loot},
+    shearable::{Shearable, shear_by_player},
 };
+use crate::item::items::bucket::{create_filled_result, fill_bucket_stack};
+use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[repr(i32)]
-pub enum MooshroomVariant {
-    #[default]
-    Red = 0,
-    Brown = 1,
-}
-
-impl MooshroomVariant {
-    #[must_use]
-    pub const fn from_id(id: i32) -> Self {
-        match id {
-            1 => Self::Brown,
-            _ => Self::Red,
-        }
-    }
-
-    #[must_use]
-    pub const fn id(self) -> i32 {
-        self as i32
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Red => "red",
-            Self::Brown => "brown",
-        }
-    }
-
-    #[must_use]
-    pub fn from_name(name: &str) -> Self {
-        match name {
-            "brown" => Self::Brown,
-            _ => Self::Red,
-        }
-    }
-}
+const MUTATE_CHANCE: i32 = 1024;
+const SOUND_VOLUME: f32 = 0.4;
+const SHEAR_MOOSHROOM_LOOT_TABLE: &str = "minecraft:shearing/mooshroom";
 
 pub struct MooshroomEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
-    pub variant: AtomicI32,
-    pub stew_effect: AtomicCell<Option<u32>>,
-    pub last_lightning_bolt_uuid: AtomicCell<Option<Uuid>>,
-    /// Claimed by the first shear, so two players shearing at once can't both convert this mooshroom.
-    converting: AtomicBool,
+    variant: AtomicI32,
+    stew_effects: std::sync::Mutex<Option<SuspiciousStewEffectsImpl>>,
+    last_lightning_bolt_uuid: AtomicCell<Option<Uuid>>,
+    /// Claimed by the first shear, so two shears landing at once convert it only once.
+    sheared: AtomicBool,
 }
 
 impl MooshroomEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
         let mooshroom = Self {
-            mob_entity,
+            mob_entity: MobEntity::new(entity),
             ageable_data: AgeableData::default(),
-            variant: AtomicI32::new(MooshroomVariant::Red.id()),
-            stew_effect: AtomicCell::new(None),
+            variant: AtomicI32::new(MooshroomVariant::DEFAULT.id()),
+            stew_effects: std::sync::Mutex::new(None),
             last_lightning_bolt_uuid: AtomicCell::new(None),
-            converting: AtomicBool::new(false),
+            sheared: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(mooshroom);
         let mob_weak: Weak<dyn Mob> = {
@@ -105,9 +81,16 @@ impl MooshroomEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.25,
+                    &pumpkin_data::tag::Item::MINECRAFT_COW_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(1.0)));
             goal_selector.add_goal(
                 6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
@@ -120,221 +103,182 @@ impl MooshroomEntity {
 
     #[must_use]
     pub fn get_variant(&self) -> MooshroomVariant {
-        MooshroomVariant::from_id(self.variant.load(Ordering::Relaxed))
+        MooshroomVariant::by_id(self.variant.load(Ordering::Relaxed))
     }
 
     pub fn set_variant(&self, variant: MooshroomVariant) {
         self.variant.store(variant.id(), Ordering::Relaxed);
-        let entity = self.get_entity();
-        entity.set_synced_data(
+        self.get_entity().set_synced_data(
             pumpkin_data::tracked_data::mooshroom::DATA_TYPE,
             VarInt(variant.id()),
         );
     }
 
-    fn fill_item_stack(
-        player: &Player,
-        world: &Arc<crate::world::World>,
-        item_stack: &mut ItemStack,
-        mut filled: ItemStack,
-    ) {
-        let gamemode = player.gamemode.load();
-        if gamemode != pumpkin_util::GameMode::Creative && item_stack.item_count == 1 {
-            *item_stack = filled;
-        } else {
-            item_stack.decrement_unless_creative(gamemode, 1);
-            if !player.inventory.insert_stack_anywhere(&mut filled) && !filled.is_empty() {
-                world.drop_stack(&player.position().to_block_pos(), filled);
+    fn take_stew_effects(&self) -> Option<SuspiciousStewEffectsImpl> {
+        self.stew_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+    }
+
+    fn has_stew_effects(&self) -> bool {
+        self.stew_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+    }
+
+    fn get_effects_from_item_stack(item_stack: &ItemStack) -> Option<SuspiciousStewEffectsImpl> {
+        get_suspicious_effects(item_stack.item.id).map(|effects| SuspiciousStewEffectsImpl {
+            effects: effects
+                .iter()
+                .map(|effect| SuspiciousStewEffect {
+                    effect: effect.effect.minecraft_name.into(),
+                    duration: effect.duration,
+                })
+                .collect(),
+        })
+    }
+
+    fn offspring_variant(&self, mate: &Self) -> MooshroomVariant {
+        let variant = self.get_variant();
+        let mate_variant = mate.get_variant();
+        let mut rng = self.get_random();
+        if variant == mate_variant && rng.random_range(0..MUTATE_CHANCE) == 0 {
+            if variant == MooshroomVariant::Brown {
+                MooshroomVariant::Red
+            } else {
+                MooshroomVariant::Brown
             }
+        } else if rng.random::<bool>() {
+            variant
+        } else {
+            mate_variant
         }
     }
 
-    /// Vanilla `Mob.convertTo`
-    fn convert_to_cow(&self) -> Arc<CowEntity> {
+    fn spawn_feeding_particles(&self, particle: Particle, count: usize) {
         let entity = self.get_entity();
-        let cow = CowEntity::new(Entity::new(
-            entity.world.load_full(),
-            entity.pos.load(),
-            &EntityType::COW,
-        ));
-        // No cow.finalize_spawn(...), vanilla omits this likely to stop a 'biomed' cow being created
-        cow.set_variant(CowVariant::default());
-
-        let cow_entity = cow.get_entity();
-        cow_entity.set_rotation(entity.yaw.load(), entity.pitch.load());
-        cow_entity.head_yaw.store(entity.head_yaw.load());
-        cow_entity.body_yaw.store(entity.body_yaw.load());
-        cow_entity.velocity.store(entity.velocity.load());
-        cow_entity
-            .on_ground
-            .store(entity.on_ground.load(Ordering::Relaxed), Ordering::Relaxed);
-        cow.mob_entity
-            .living_entity
-            .fall_distance
-            .store(self.mob_entity.living_entity.fall_distance.load());
-
-        cow.set_age(self.get_age());
-        let (data, cow_data) = (self.get_ageable_data(), cow.get_ageable_data());
-        cow_data
-            .forced_age
-            .store(data.forced_age.load(Ordering::Relaxed), Ordering::Relaxed);
-        cow_data.forced_age_timer.store(
-            data.forced_age_timer.load(Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
-
-        cow.mob_entity.set_no_ai(self.mob_entity.is_no_ai());
-        cow.mob_entity.persistence_required.store(
-            self.mob_entity.persistence_required.load(Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
-
-        if let Some(custom_name) = &**entity.custom_name.load() {
-            cow_entity.set_custom_name(custom_name.clone());
-        }
-        cow_entity.set_custom_name_visible(entity.custom_name_visible.load(Ordering::Relaxed));
-        cow_entity.set_on_fire(entity.is_on_fire());
-        cow_entity.invulnerable.store(
-            entity.invulnerable.load(Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
-        cow_entity.set_has_no_gravity(entity.has_no_gravity());
-        cow_entity.portal_cooldown.store(
-            entity.portal_cooldown.load(Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
-        cow_entity.set_silent(entity.is_silent());
-        cow_entity
-            .scoreboard_tags
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone_from(
-                &entity
-                    .scoreboard_tags
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        let y = entity.get_y(0.5);
+        let mut rng = self.get_random();
+        for _ in 0..count {
+            world.spawn_particle(
+                Vector3::new(
+                    pos.x + rng.random::<f64>() / 2.0,
+                    y,
+                    pos.z + rng.random::<f64>() / 2.0,
+                ),
+                Vector3::new(0.0, (rng.random::<f64>() / 5.0) as f32, 0.0),
+                1.0,
+                0,
+                particle,
             );
+        }
+    }
 
-        cow
+    fn milk_stew(&self, player: &Player, item_stack: &mut ItemStack) {
+        let (stew, sound) = self.take_stew_effects().map_or_else(
+            || {
+                (
+                    ItemStack::new(1, &Item::MUSHROOM_STEW),
+                    Sound::EntityMooshroomMilk,
+                )
+            },
+            |effects| {
+                let mut stew = ItemStack::new(1, &Item::SUSPICIOUS_STEW);
+                stew.patch
+                    .push((DataComponent::SuspiciousStewEffects, Some(effects.to_dyn())));
+                (stew, Sound::EntityMooshroomSuspiciousMilk)
+            },
+        );
+        create_filled_result(item_stack, player, stew, false);
+        self.play_entity_sound(sound, 1.0, 1.0);
+    }
+
+    fn feed_flower(&self, player: &Player, item_stack: &mut ItemStack) -> bool {
+        let Some(effects) = Self::get_effects_from_item_stack(item_stack) else {
+            return false;
+        };
+        if self.has_stew_effects() {
+            self.spawn_feeding_particles(Particle::Smoke, 2);
+        } else {
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            *self
+                .stew_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(effects);
+            self.play_entity_sound(Sound::EntityMooshroomEat, 2.0, 1.0);
+        }
+        true
     }
 }
 
 impl Shearable for MooshroomEntity {
-    /// Vanilla `MushroomCow.shear`: converts this mooshroom into a cow and drops its mushrooms.
-    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool {
-        if self.converting.swap(true, Ordering::Relaxed) {
+    fn shear(&self, category: SoundCategory, tool: &ItemStack) -> bool {
+        if self.sheared.swap(true, Ordering::Relaxed) {
             return false;
         }
-
-        let mooshroom_entity = self.get_entity();
-        let world = mooshroom_entity.world.load();
-        let pos = mooshroom_entity.pos.load();
-        world.play_sound(Sound::EntityMooshroomShear, sound_category, &pos);
-
-        if mooshroom_entity.is_removed() {
-            return false;
-        }
-
-        let cow = self.convert_to_cow();
-        // Vanilla discards the mooshroom even if the cow fails to spawn, but here that only happens when a
-        // plugin cancels the conversion or the spawn. Keep the mooshroom then, so it neither vanishes nor
-        // drops free mushrooms.
-        if !self.transform(cow.get_entity().entity_id, "sheared".to_string())
-            || !world.spawn_entity(cow.clone())
-        {
-            self.converting.store(false, Ordering::Relaxed);
-            return false;
-        }
-
-        let height = f64::from(mooshroom_entity.height());
-        world.spawn_particle(
-            Vector3::new(pos.x, height.mul_add(0.5, pos.y), pos.z),
-            Vector3::new(0.0, 0.0, 0.0),
-            0.0,
-            1,
-            Particle::Explosion,
+        let entity = self.get_entity();
+        let world = entity.world.load_full();
+        world.play_sound(Sound::EntityMooshroomShear, category, &entity.pos.load());
+        convert_to(
+            self,
+            &EntityType::COW,
+            ConversionParams::single(false, false),
+            |_| {
+                let pos = entity.pos.load();
+                world.spawn_particle(
+                    Vector3::new(pos.x, entity.get_y(0.5), pos.z),
+                    Vector3::new(0.0, 0.0, 0.0),
+                    0.0,
+                    1,
+                    Particle::Explosion,
+                );
+                let Some(table) = world.get_loot_table(SHEAR_MOOSHROOM_LOOT_TABLE) else {
+                    return;
+                };
+                let params = LootContextParameters {
+                    world: Some(&world),
+                    position: Some(pos),
+                    this_entity: Some(self),
+                    tool: Some(tool.clone()),
+                    ..Default::default()
+                };
+                let drop_pos = Vector3::new(pos.x, entity.get_y(1.0), pos.z);
+                for stack in generate_loot_from_handle(&table, self.get_random().random(), &params)
+                {
+                    for _ in 0..stack.item_count {
+                        let item_entity = ItemEntity::new(
+                            Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                            stack.copy_with_count(1),
+                        );
+                        item_entity.set_pickup_delay(0);
+                        world.spawn_entity(Arc::new(item_entity));
+                    }
+                }
+            },
         );
-
-        let loot_key = match self.get_variant() {
-            MooshroomVariant::Red => "minecraft:shearing/mooshroom/red",
-            MooshroomVariant::Brown => "minecraft:shearing/mooshroom/brown",
-        };
-        let drop_pos = Vector3::new(pos.x, pos.y + height, pos.z);
-        for drop in shearing_loot(mooshroom_entity, loot_key, tool) {
-            for _ in 0..drop.item_count {
-                let item_entity = Arc::new(ItemEntity::new(
-                    Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
-                    drop.copy_with_count(1),
-                ));
-                world.spawn_entity(item_entity);
-            }
-        }
-
-        // These send packets about the cow, so they wait until clients know it exists.
-        let cow_living = &cow.mob_entity.living_entity;
-        cow_living.set_absorption(self.mob_entity.living_entity.get_absorption());
-        let effects: Vec<_> = self
-            .mob_entity
-            .living_entity
-            .active_effects
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .values()
-            .cloned()
-            .collect();
-        for effect in effects {
-            cow_living.add_effect(effect);
-        }
-        // This is not vanilla: the leash should be removed on the first shear, only once
-        // the leash is removed does the mooshroom get sheared. I left this out because leashing
-        // is currently very broken
-        // TODO fix when leashing works properly
-        let holder = mooshroom_entity
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if let Some(holder) = holder {
-            cow_living.entity.leash_to(holder);
-        }
-
-        // Vanilla `ConversionType.SINGLE` moves the first passenger and the vehicle over to the cow.
-        let cow_base: Arc<dyn EntityBase> = cow.clone();
-        let passenger = mooshroom_entity
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .first()
-            .cloned();
-        if let Some(passenger) = passenger {
-            mooshroom_entity.remove_passenger_sync(passenger.get_entity().entity_id);
-            cow_living.entity.add_passenger(cow_base.clone(), passenger);
-        }
-        if let Some(vehicle) = mooshroom_entity.get_vehicle() {
-            vehicle
-                .get_entity()
-                .remove_passenger_sync(mooshroom_entity.entity_id);
-            vehicle
-                .get_entity()
-                .add_passenger(vehicle.clone(), cow_base);
-        }
-
-        // Vanilla `convertCommon` moves the team over to the cow.
-        if let Some(team_name) = self.get_team_name() {
-            let mut scoreboard = world
-                .scoreboard
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            scoreboard.add_player_to_team(&*world, &team_name, cow.get_scoreboard_name());
-            scoreboard.remove_player_from_team(&*world, &team_name, &self.get_scoreboard_name());
-        }
-
-        mooshroom_entity.remove();
         true
     }
 
     fn ready_for_shearing(&self) -> bool {
         !self.is_baby()
+    }
+}
+
+impl CustomSound for MooshroomEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        Some(CowSoundVariant::Classic.death_sound(self.is_baby()))
+    }
+
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(CowSoundVariant::Classic.hurt_sound(self.is_baby()))
+    }
+
+    fn sound_volume(&self) -> f32 {
+        SOUND_VOLUME
     }
 }
 
@@ -346,24 +290,72 @@ impl AgeableMob for MooshroomEntity {
 
 impl Animal for MooshroomEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        item_stack.item.has_tag(&tag::Item::MINECRAFT_COW_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
+        item_stack
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_COW_FOOD)
+    }
+
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let baby = Self::new(Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            &EntityType::MOOSHROOM,
+        ));
+        if let Some(partner) = partner.cast_any().downcast_ref::<Self>() {
+            baby.set_variant(self.offspring_variant(partner));
+        }
+        baby
+    }
+
+    fn animal_walk_target_value(&self, pos: &BlockPos) -> f32 {
+        let world = self.get_entity().world.load();
+        if world.get_block(&pos.down()) == &pumpkin_data::Block::MYCELIUM {
+            10.0
+        } else {
+            world.get_pathfinding_cost_from_light_levels(pos)
+        }
     }
 }
 
 impl Mob for MooshroomEntity {
-    fn mob_get_component(
-        &self,
-        component: pumpkin_data::data_component::DataComponent,
-    ) -> Option<Box<dyn pumpkin_data::data_component_impl::DataComponentImpl>> {
-        use pumpkin_data::{
-            data_component::DataComponent, data_component_impl::MooshroomVariantImpl,
-        };
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(
+            CowSoundVariant::Classic.step_sound(self.is_baby()),
+            0.15,
+            1.0,
+        );
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(CowSoundVariant::Classic.ambient_sound(self.is_baby()))
+    }
+
+    fn mob_on_lightning_strike(&self, _caller: &dyn EntityBase, lightning: &LightningBoltEntity) {
+        let lightning_uuid = lightning.get_entity().entity_uuid;
+        if self.last_lightning_bolt_uuid.load() != Some(lightning_uuid) {
+            self.set_variant(if self.get_variant() == MooshroomVariant::Red {
+                MooshroomVariant::Brown
+            } else {
+                MooshroomVariant::Red
+            });
+            self.last_lightning_bolt_uuid.store(Some(lightning_uuid));
+            self.play_entity_sound(Sound::EntityMooshroomConvert, 2.0, 1.0);
+        }
+    }
+
+    fn mob_get_component(&self, component: DataComponent) -> Option<Box<dyn DataComponentImpl>> {
         match component {
             DataComponent::MooshroomVariant => Some(Box::new(MooshroomVariantImpl {
-                value: self.get_variant().as_str().into(),
+                value: self.get_variant().name().into(),
             })),
             _ => None,
+        }
+    }
+
+    fn mob_set_variant_name(&self, name: &str) {
+        if let Some(variant) = MooshroomVariant::from_name(name) {
+            self.set_variant(variant);
         }
     }
 
@@ -371,7 +363,7 @@ impl Mob for MooshroomEntity {
         Some(self)
     }
 
-    fn as_animal(&self) -> Option<&dyn Animal> {
+    fn as_custom_sound(&self) -> Option<&dyn CustomSound> {
         Some(self)
     }
 
@@ -379,14 +371,33 @@ impl Mob for MooshroomEntity {
         Some(self)
     }
 
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_string("Type", self.get_variant().as_str().to_string());
+        nbt.put_string("Type", self.get_variant().name().to_string());
+        if let Some(effects) = &*self
+            .stew_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
+            nbt.put("stew_effects", effects.write_data());
+        }
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(variant_str) = nbt.get_string("Type") {
-            self.set_variant(MooshroomVariant::from_name(variant_str));
-        }
+        self.set_variant(
+            nbt.get_string("Type")
+                .and_then(MooshroomVariant::from_name)
+                .unwrap_or(MooshroomVariant::DEFAULT),
+        );
+        *self
+            .stew_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = nbt
+            .get("stew_effects")
+            .and_then(SuspiciousStewEffectsImpl::read_data);
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -395,8 +406,7 @@ impl Mob for MooshroomEntity {
 
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
-        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
-        if is_baby {
+        if self.is_baby() {
             entity.set_synced_data(pumpkin_data::tracked_data::mooshroom::DATA_BABY_ID, true);
         }
         entity.set_synced_data(
@@ -407,41 +417,8 @@ impl Mob for MooshroomEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         let item = item_stack.get_item();
-
         if item == &Item::BOWL && !self.is_baby() {
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            let pos = entity.pos.load();
-            let is_suspicious = self.stew_effect.swap(None).is_some();
-            let stew_item = if is_suspicious {
-                &Item::SUSPICIOUS_STEW
-            } else {
-                &Item::MUSHROOM_STEW
-            };
-            Self::fill_item_stack(player, &world, item_stack, ItemStack::new(1, stew_item));
-            let sound = if is_suspicious {
-                Sound::EntityMooshroomSuspiciousMilk
-            } else {
-                Sound::EntityMooshroomMilk
-            };
-            world.play_sound(sound, SoundCategory::Neutral, &pos);
-            return true;
-        }
-
-        if item == &Item::BUCKET && !self.is_baby() {
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            Self::fill_item_stack(
-                player,
-                &world,
-                item_stack,
-                ItemStack::new(1, &Item::MILK_BUCKET),
-            );
-            world.play_sound(
-                Sound::EntityCowMilk,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            );
+            self.milk_stew(player, item_stack);
             return true;
         }
 
@@ -451,24 +428,22 @@ impl Mob for MooshroomEntity {
 
         if self.get_variant() == MooshroomVariant::Brown
             && !self.is_baby()
-            && item.has_tag(&tag::Item::MINECRAFT_SMALL_FLOWERS)
+            && self.feed_flower(player, item_stack)
         {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            let pos = entity.pos.load();
-            self.stew_effect.store(Some(1));
-            world.play_sound(Sound::EntityMooshroomEat, SoundCategory::Neutral, &pos);
-            world.spawn_particle(
-                pos + Vector3::new(0.0, 0.5, 0.0),
-                Vector3::new(0.5, 0.5, 0.5),
-                0.0,
-                4,
-                Particle::Effect,
-            );
             return true;
         }
 
-        self.animal_interact(player, item_stack, Sound::EntityCowAmbient)
+        if item == &Item::BUCKET && !self.is_baby() {
+            self.get_entity().world.load().play_sound_expect(
+                player,
+                Sound::EntityCowMilk,
+                SoundCategory::Players,
+                &player.position(),
+            );
+            fill_bucket_stack(item_stack, player, &Item::MILK_BUCKET);
+            return true;
+        }
+
+        self.animal_interact(player, item_stack)
     }
 }

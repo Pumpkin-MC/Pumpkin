@@ -165,7 +165,13 @@ impl BlockEntity for MobSpawnerBlockEntity {
                     spawn_pos.x,
                     spawn_pos.y,
                     spawn_pos.z,
-                )) {
+                )) || !crate::entity::r#type::check_spawn_rules(
+                    entity_type,
+                    world,
+                    &BlockPos::floored_v(spawn_pos),
+                    world.is_thundering(),
+                    crate::entity::mob::spawn::EntitySpawnReason::Spawner,
+                ) {
                     continue;
                 }
                 let entity = crate::entity::r#type::from_type(
@@ -194,7 +200,12 @@ impl BlockEntity for MobSpawnerBlockEntity {
                 }
 
                 // TODO: support SpawnData NBT (`entity` tag, custom_spawn_rules, equipment).
-                finalize_spawn(&entity, world, None);
+                finalize_spawn(
+                    &entity,
+                    world,
+                    crate::entity::mob::spawn::EntitySpawnReason::Spawner,
+                    None,
+                );
                 world.spawn_entity(entity);
                 world.sync_world_event(WorldEvent::ParticlesMobblockSpawn, self.position, 0);
                 spawned_any = true;
@@ -293,6 +304,31 @@ impl BlockEntity for MobSpawnerBlockEntity {
             final_nbt.put_compound("SpawnData", spawn_entry);
         }
         Some(final_nbt)
+    }
+
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let entity_id = self.entity_type.load().map_or_else(String::new, |et| {
+            super::bedrock::bedrock_item_name(et.resource_name)
+        });
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("MobSpawner", self.position)
+                .movable(false)
+                .put_string("EntityIdentifier", entity_id)
+                .put_short("Delay", self.delay.load(Ordering::Relaxed) as i16)
+                .put_short("MinSpawnDelay", self.min_delay as i16)
+                .put_short("MaxSpawnDelay", self.max_delay as i16)
+                .put_short("SpawnCount", self.spawn_count as i16)
+                .put_short("MaxNearbyEntities", self.max_nearby_entities as i16)
+                .put_short("RequiredPlayerRange", self.required_player_range as i16)
+                .put_short("SpawnRange", self.spawn_range as i16)
+                .put_float("DisplayEntityWidth", 0.8)
+                .put_float("DisplayEntityHeight", 1.8)
+                .put_float("DisplayEntityScale", 1.0)
+                .finish(),
+        )
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

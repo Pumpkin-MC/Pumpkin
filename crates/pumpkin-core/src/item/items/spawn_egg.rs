@@ -220,9 +220,10 @@ pub(crate) fn prepare_egg_mob(
     item: &ItemStack,
     mob: &Arc<dyn EntityBase>,
     world: &Arc<World>,
+    reason: crate::entity::mob::spawn::EntitySpawnReason,
     user: Option<&Player>,
 ) {
-    finalize_spawn(mob, world, None);
+    finalize_spawn(mob, world, reason, None);
     apply_entity_variant(item, mob.as_ref(), user);
 }
 
@@ -270,7 +271,13 @@ impl ItemBehaviour for SpawnEggItem {
             let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
             mob.get_entity().set_rotation(spawn_yaw, 0.0);
 
-            prepare_egg_mob(&stack, &mob, &world, Some(player));
+            prepare_egg_mob(
+                &stack,
+                &mob,
+                &world,
+                crate::entity::mob::spawn::EntitySpawnReason::SpawnItemUse,
+                Some(player),
+            );
             if !world.spawn_creature(
                 mob,
                 CreatureSpawnReason::SpawnerEgg,
@@ -348,7 +355,13 @@ impl ItemBehaviour for SpawnEggItem {
 
             mob.get_entity().set_rotation(yaw, 0.0);
 
-            prepare_egg_mob(item, &mob, &world, Some(player));
+            prepare_egg_mob(
+                item,
+                &mob,
+                &world,
+                crate::entity::mob::spawn::EntitySpawnReason::SpawnItemUse,
+                Some(player),
+            );
 
             if world.spawn_creature(
                 mob,
@@ -385,12 +398,15 @@ impl ItemBehaviour for SpawnEggItem {
                 .set_rotation(rand::random::<f32>() * 360.0, 0.0);
             apply_entity_variant(item, mob.as_ref(), Some(player));
             if world.spawn_creature(
-                mob,
+                mob.clone(),
                 CreatureSpawnReason::SpawnerEgg,
                 world.get_player_by_uuid(player.gameprofile.id),
             ) {
                 item.decrement_unless_creative(player.gamemode.load(), 1);
                 world.emit_game_event(GameEvent::EntityPlace.name(), pos);
+                if let (Some(parent), Some(offspring)) = (entity.get_mob(), mob.get_mob()) {
+                    parent.on_offspring_spawned_from_egg(player, offspring);
+                }
             }
         }
     }

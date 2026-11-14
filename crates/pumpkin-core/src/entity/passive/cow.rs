@@ -3,13 +3,17 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use pumpkin_data::BlockState;
 use pumpkin_data::cow_sound_variant::CowSoundVariant;
 use pumpkin_data::cow_variant::CowVariant;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{CowSoundVariantImpl, CowVariantImpl, DataComponentImpl};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
 
 use crate::entity::{
@@ -28,7 +32,7 @@ use crate::entity::{
 use crate::item::items::bucket::fill_bucket_stack;
 use crate::world::World;
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
+const SOUND_VOLUME: f32 = 0.4;
 
 /// Represents a Cow, a common passive mob that provides milk, leather, and beef.
 ///
@@ -61,7 +65,14 @@ impl CowEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.25,
+                    &pumpkin_data::tag::Item::MINECRAFT_COW_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(1.0)));
             goal_selector.add_goal(
@@ -75,12 +86,28 @@ impl CowEntity {
     }
 
     pub fn set_variant(&self, variant: CowVariant) {
-        self.variant.store(variant.id(), Ordering::Relaxed);
+        self.set_variant_id(variant.id());
+    }
+
+    pub fn set_variant_id(&self, raw_id: u8) {
+        self.variant.store(raw_id, Ordering::Relaxed);
         let entity = self.get_entity();
         entity.set_synced_data(
             pumpkin_data::tracked_data::cow::DATA_VARIANT_ID,
-            VarInt(variant.id() as i32),
+            VarInt(i32::from(raw_id)),
         );
+    }
+
+    fn variant_name(&self) -> String {
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        self.resolve_dynamic_entry_id("minecraft:cow_variant", variant_id, |id| {
+            let variant = CowVariant::from_id(id as u8).unwrap_or_default();
+            format!("minecraft:{}", variant.to_name())
+        })
+    }
+
+    fn sound_variant(&self) -> CowSoundVariant {
+        CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed)).unwrap_or_default()
     }
 
     pub fn set_sound_variant(&self, sound_variant: CowSoundVariant) {
@@ -96,17 +123,15 @@ impl CowEntity {
 
 impl CustomSound for CowEntity {
     fn death_sound(&self) -> Option<Sound> {
-        let is_baby = self.is_baby();
-        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        Some(sound_variant.death_sound(is_baby))
+        Some(self.sound_variant().death_sound(self.is_baby()))
     }
 
     fn hurt_sound(&self) -> Option<Sound> {
-        let is_baby = self.is_baby();
-        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        Some(sound_variant.hurt_sound(is_baby))
+        Some(self.sound_variant().hurt_sound(self.is_baby()))
+    }
+
+    fn sound_volume(&self) -> f32 {
+        SOUND_VOLUME
     }
 }
 
@@ -122,7 +147,6 @@ impl Animal for CowEntity {
         item_stack
             .item
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_COW_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
 
     fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
@@ -146,9 +170,30 @@ impl Animal for CowEntity {
 }
 
 impl Mob for CowEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(self.sound_variant().step_sound(self.is_baby()), 0.15, 1.0);
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(self.sound_variant().ambient_sound(self.is_baby()))
+    }
+
+    fn mob_get_component(&self, component: DataComponent) -> Option<Box<dyn DataComponentImpl>> {
+        match component {
+            DataComponent::CowVariant => Some(Box::new(CowVariantImpl {
+                value: self.variant_name().into(),
+            })),
+            DataComponent::CowSoundVariant => Some(Box::new(CowSoundVariantImpl {
+                value: format!("minecraft:{}", self.sound_variant().to_name()).into(),
+            })),
+            _ => None,
+        }
+    }
+
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let biome = world.get_biome(&self.get_entity().block_pos.load());
@@ -197,8 +242,11 @@ impl Mob for CowEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        if let Some(v) = CowVariant::from_name(name) {
-            self.set_variant(v);
+        if let Some(id) = self.resolve_dynamic_raw_id("minecraft:cow_variant", name, |n| {
+            CowVariant::from_name(n).map(|v| u32::from(v.id()))
+        }) && let Ok(variant_id) = u8::try_from(id)
+        {
+            self.set_variant_id(variant_id);
         }
     }
 
@@ -209,21 +257,22 @@ impl Mob for CowEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let variant = CowVariant::from_id(self.variant.load(Ordering::Relaxed)).unwrap_or_default();
-        nbt.put_string("variant", format!("minecraft:{}", variant.to_name()));
-        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
+        nbt.put_string("variant", self.variant_name());
         nbt.put_string(
             "sound_variant",
-            format!("minecraft:{}", sound_variant.to_name()),
+            format!("minecraft:{}", self.sound_variant().to_name()),
         );
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(variant_str) = nbt.get_string("variant")
-            && let Some(variant) = CowVariant::from_name(variant_str)
+            && let Some(id) =
+                self.resolve_dynamic_raw_id("minecraft:cow_variant", variant_str, |n| {
+                    CowVariant::from_name(n).map(|v| u32::from(v.id()))
+                })
+            && let Ok(variant_id) = u8::try_from(id)
         {
-            self.variant.store(variant.id(), Ordering::Relaxed);
+            self.variant.store(variant_id, Ordering::Relaxed);
         }
         if let Some(sound_str) = nbt.get_string("sound_variant")
             && let Some(sound_variant) = CowSoundVariant::from_name(sound_str)
@@ -244,12 +293,6 @@ impl Mob for CowEntity {
             fill_bucket_stack(item_stack, player, &Item::MILK_BUCKET);
             return true;
         }
-        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        self.animal_interact(
-            player,
-            item_stack,
-            sound_variant.ambient_sound(self.is_baby()),
-        )
+        self.animal_interact(player, item_stack)
     }
 }

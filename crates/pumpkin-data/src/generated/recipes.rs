@@ -93,10 +93,23 @@ pub struct StonecutterRecipe {
     pub ingredient: RecipeIngredientTypes,
     pub result: RecipeResultStruct,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct RecipeResultStruct {
     pub id: &'static str,
     pub count: u8,
+    #[serde(skip)]
+    pub components: &'static [(
+        crate::data_component::DataComponent,
+        &'static dyn crate::data_component_impl::DataComponentImpl,
+    )],
+}
+impl std::fmt::Debug for RecipeResultStruct {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RecipeResultStruct")
+            .field("id", &self.id)
+            .field("count", &self.count)
+            .finish_non_exhaustive()
+    }
 }
 #[derive(Clone, Debug, Serialize)]
 pub enum RecipeIngredientTypes {
@@ -144,6 +157,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -153,6 +167,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -165,6 +180,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -179,6 +195,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -196,6 +213,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -213,6 +231,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -230,6 +249,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -239,6 +259,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -253,6 +274,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -267,6 +289,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -284,6 +307,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -298,6 +322,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -312,6 +337,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -326,6 +352,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -337,6 +364,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:acacia_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -355,6 +383,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:activator_rail",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -369,6 +398,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:amethyst_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -381,6 +411,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:andesite",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -392,6 +423,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:andesite_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -403,6 +435,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:andesite_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -414,6 +447,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:andesite_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -428,6 +462,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:anvil",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -445,6 +480,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:armor_stand",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -460,6 +496,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:arrow",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -479,6 +516,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -488,6 +526,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -500,6 +539,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_chest_raft",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -514,6 +554,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -531,6 +572,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -548,6 +590,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -565,6 +608,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -576,6 +620,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_mosaic",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -590,6 +635,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_mosaic_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -604,6 +650,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_mosaic_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -613,6 +660,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_planks",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -627,6 +675,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -641,6 +690,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_raft",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -655,6 +705,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -672,6 +723,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -686,6 +738,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -700,6 +753,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -714,6 +768,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bamboo_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -731,6 +786,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:barrel",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -746,6 +802,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:beacon",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -760,6 +817,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:beehive",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -777,6 +835,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:beetroot_soup",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -788,6 +847,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -797,6 +857,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -809,6 +870,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -820,6 +882,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -834,6 +897,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -848,6 +912,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -865,6 +930,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -874,6 +940,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -885,6 +952,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -899,6 +967,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -913,6 +982,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -924,6 +994,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -935,6 +1006,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -946,6 +1018,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -957,6 +1030,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:birch_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -971,6 +1045,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -985,6 +1060,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -995,6 +1071,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1007,6 +1084,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1018,6 +1096,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1037,6 +1116,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1051,6 +1131,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1065,6 +1146,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1079,6 +1161,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1088,6 +1171,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1097,6 +1181,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1112,6 +1197,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -1122,6 +1208,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1136,6 +1223,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1150,6 +1238,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1164,6 +1253,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1178,6 +1268,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1189,6 +1280,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1200,6 +1292,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1211,6 +1304,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blackstone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1222,6 +1316,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blackstone_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1233,6 +1328,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blackstone_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1248,6 +1344,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blast_furnace",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1257,6 +1354,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blaze_powder",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1271,6 +1369,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1285,6 +1384,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -1295,6 +1395,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1307,6 +1408,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1318,6 +1420,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1337,6 +1440,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1351,6 +1455,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1365,6 +1470,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1379,6 +1485,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1388,6 +1495,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1397,6 +1505,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1412,6 +1521,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1431,6 +1541,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_ice",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -1441,6 +1552,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1455,6 +1567,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1469,6 +1582,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1483,6 +1597,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1497,6 +1612,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1508,6 +1624,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1519,6 +1636,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1543,6 +1661,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bolt_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1554,6 +1673,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bone_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1563,6 +1683,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bone_meal",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1572,6 +1693,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bone_meal",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1586,6 +1708,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:book",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1600,6 +1723,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bookshelf",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1612,6 +1736,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bordure_indented_banner_pattern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1626,6 +1751,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bow",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1637,6 +1763,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bowl",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1648,6 +1775,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bread",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1665,6 +1793,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brewing_stand",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1676,6 +1805,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1687,6 +1817,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1698,6 +1829,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1709,6 +1841,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1723,6 +1856,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1737,6 +1871,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -1747,6 +1882,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1759,6 +1895,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1770,6 +1907,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1789,6 +1927,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1803,6 +1942,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1817,6 +1957,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1831,6 +1972,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -1840,6 +1982,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1855,6 +1998,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -1865,6 +2009,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1879,6 +2024,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1893,6 +2039,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1907,6 +2054,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1921,6 +2069,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1932,6 +2081,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1943,6 +2093,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1958,6 +2109,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brush",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1969,6 +2121,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bucket",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1983,6 +2136,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -1999,6 +2153,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cake",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2016,6 +2171,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:calibrated_sculk_sensor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2031,6 +2187,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:campfire",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2045,6 +2202,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2059,6 +2217,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:carrot_on_a_stick",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2073,6 +2232,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cartography_table",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2084,6 +2244,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cauldron",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2098,6 +2259,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -2107,6 +2269,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -2119,6 +2282,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2133,6 +2297,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2150,6 +2315,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2167,6 +2333,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2184,6 +2351,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -2193,6 +2361,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2207,6 +2376,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2221,6 +2391,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2238,6 +2409,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2252,6 +2424,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2266,6 +2439,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2280,6 +2454,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2291,6 +2466,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cherry_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2302,6 +2478,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chest",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -2314,6 +2491,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chest_minecart",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2331,6 +2509,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_bookshelf",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2345,6 +2524,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_cinnabar",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2359,6 +2539,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2373,6 +2554,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_deepslate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2387,6 +2569,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_nether_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2401,6 +2584,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_polished_blackstone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2412,6 +2596,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_quartz_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2426,6 +2611,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_red_sandstone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2440,6 +2626,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_resin_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2454,6 +2641,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_sandstone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2468,6 +2656,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_stone_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2479,6 +2668,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_sulfur",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2490,6 +2680,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_tuff",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2504,6 +2695,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_tuff_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2518,6 +2710,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2532,6 +2725,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2546,6 +2740,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2560,6 +2755,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_bricks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2571,6 +2767,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2582,6 +2779,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2593,6 +2791,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2604,6 +2803,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:clay",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2618,6 +2818,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:clock",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -2627,6 +2828,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:coal",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2638,6 +2840,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:coal_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2652,6 +2855,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:coarse_dirt",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2670,6 +2874,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:coast_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2684,6 +2889,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2698,6 +2904,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2712,6 +2919,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2723,6 +2931,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2734,6 +2943,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2745,6 +2955,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2763,6 +2974,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:comparator",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2777,6 +2989,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:compass",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2791,6 +3004,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:composter",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2811,6 +3025,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:conduit",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2825,6 +3040,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cookie",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2842,6 +3058,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_axe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2853,6 +3070,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_bars",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2864,6 +3082,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2875,6 +3094,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_boots",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2890,6 +3110,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_bulb",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2907,6 +3128,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_chain",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2921,6 +3143,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_chest",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2932,6 +3155,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_chestplate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2943,6 +3167,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2954,6 +3179,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2965,6 +3191,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_helmet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -2982,6 +3209,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_hoe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -2991,6 +3219,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_ingot",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3005,6 +3234,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_ingot",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3016,6 +3246,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_ingot",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3033,6 +3264,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_lantern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3044,6 +3276,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_leggings",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3053,6 +3286,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_nugget",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3070,6 +3304,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_pickaxe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3087,6 +3322,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_shovel",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3104,6 +3340,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_spear",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3121,6 +3358,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_sword",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3142,6 +3380,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_torch",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3153,6 +3392,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_trapdoor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3172,6 +3412,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crafter",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3183,6 +3424,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crafting_table",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3193,10 +3435,11 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             ('L', RecipeIngredientTypes::Simple("minecraft:pale_oak_log")),
             ('R', RecipeIngredientTypes::Simple("minecraft:resin_block")),
         ],
-        pattern: &[" L ", " R ", " L "],
+        pattern: &["L", "R", "L"],
         result: RecipeResultStruct {
             id: "minecraft:creaking_heart",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3209,6 +3452,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:creeper_banner_pattern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3218,6 +3462,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3232,6 +3477,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3249,6 +3495,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3266,6 +3513,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3283,6 +3531,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3294,6 +3543,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_hyphae",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3303,6 +3553,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3317,6 +3568,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3331,6 +3583,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3348,6 +3601,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3362,6 +3616,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3376,6 +3631,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3390,6 +3646,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crimson_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3409,6 +3666,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:crossbow",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3420,6 +3678,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3431,6 +3690,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_copper_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3442,6 +3702,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3456,6 +3717,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_red_sandstone",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3470,6 +3732,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_red_sandstone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3481,6 +3744,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_sandstone",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3495,6 +3759,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_sandstone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3509,6 +3774,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3523,6 +3789,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -3533,6 +3800,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3545,6 +3813,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3556,6 +3825,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3575,6 +3845,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3589,6 +3860,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3603,6 +3875,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3617,6 +3890,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3629,6 +3903,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3638,6 +3913,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3653,6 +3929,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -3663,6 +3940,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3677,6 +3955,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3691,6 +3970,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3705,6 +3985,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3719,6 +4000,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3730,6 +4012,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3741,6 +4024,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3755,6 +4039,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3764,6 +4049,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3776,6 +4062,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3790,6 +4077,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3807,6 +4095,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3824,6 +4113,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3841,6 +4131,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -3850,6 +4141,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3864,6 +4156,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3878,6 +4171,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3895,6 +4189,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3909,6 +4204,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3923,6 +4219,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3937,6 +4234,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3948,6 +4246,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_oak_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3965,6 +4264,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_prismarine",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3979,6 +4279,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_prismarine_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -3993,6 +4294,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_prismarine_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4011,6 +4313,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:daylight_detector",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingDecoratedPot {
@@ -4025,6 +4328,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:decorated_pot",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4039,6 +4343,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4053,6 +4358,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4067,6 +4373,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4081,6 +4388,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_bricks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4095,6 +4403,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4109,6 +4418,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4123,6 +4433,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4137,6 +4448,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tiles",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4155,6 +4467,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:detector_rail",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4164,6 +4477,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4181,6 +4495,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_axe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4192,6 +4507,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4203,6 +4519,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_boots",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4214,6 +4531,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_chestplate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4225,6 +4543,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_helmet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4242,6 +4561,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_hoe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4253,6 +4573,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_leggings",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4270,6 +4591,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_pickaxe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4287,6 +4609,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_shovel",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4304,6 +4627,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_spear",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4321,6 +4645,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond_sword",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4335,6 +4660,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diorite",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4346,6 +4672,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diorite_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4357,6 +4684,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diorite_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4368,6 +4696,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:diorite_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4383,6 +4712,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dispenser",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4397,6 +4727,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dried_ghast",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4406,6 +4737,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dried_kelp",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4417,6 +4749,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dried_kelp_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4431,6 +4764,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dripstone_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4445,6 +4779,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dropper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -4463,6 +4798,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:dune_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4491,6 +4827,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4519,6 +4856,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4547,6 +4885,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4575,6 +4914,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4603,6 +4943,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4631,6 +4972,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4659,6 +5001,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4687,6 +5030,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4715,6 +5059,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4743,6 +5088,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4771,6 +5117,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4799,6 +5146,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4827,6 +5175,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4855,6 +5204,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4883,6 +5233,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4911,6 +5262,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4939,6 +5291,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4967,6 +5320,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -4995,6 +5349,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5023,6 +5378,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5051,6 +5407,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5079,6 +5436,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5107,6 +5465,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5135,6 +5494,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5163,6 +5523,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5191,6 +5552,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5219,6 +5581,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5247,6 +5610,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5275,6 +5639,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5303,6 +5668,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5331,6 +5697,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5359,6 +5726,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5387,6 +5755,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5415,6 +5784,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5443,6 +5813,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5471,6 +5842,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5499,6 +5871,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5527,6 +5900,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5555,6 +5929,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5583,6 +5958,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5611,6 +5987,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5639,6 +6016,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5667,6 +6045,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5695,6 +6074,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5723,6 +6103,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5751,6 +6132,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5779,6 +6161,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5807,6 +6190,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5835,6 +6219,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5863,6 +6248,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5891,6 +6277,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5919,6 +6306,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5947,6 +6335,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -5975,6 +6364,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6003,6 +6393,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6031,6 +6422,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6059,6 +6451,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6087,6 +6480,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6115,6 +6509,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6143,6 +6538,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6171,6 +6567,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6199,6 +6596,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6227,6 +6625,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6255,6 +6654,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6283,6 +6683,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6311,6 +6712,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6339,6 +6741,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6367,6 +6770,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6395,6 +6799,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6423,6 +6828,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6451,6 +6857,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6479,6 +6886,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6507,6 +6915,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6535,6 +6944,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6563,6 +6973,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6591,6 +7002,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6619,6 +7031,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6647,6 +7060,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6675,6 +7089,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6703,6 +7118,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6731,6 +7147,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6759,6 +7176,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6787,6 +7205,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6815,6 +7234,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6843,6 +7263,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6871,6 +7292,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6899,6 +7321,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6927,6 +7350,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6955,6 +7379,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -6983,6 +7408,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7011,6 +7437,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7039,6 +7466,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7067,6 +7495,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7095,6 +7524,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7123,6 +7553,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7151,6 +7582,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7179,6 +7611,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7207,6 +7640,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7235,6 +7669,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7263,6 +7698,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7291,6 +7727,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7319,6 +7756,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7347,6 +7785,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7375,6 +7814,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7403,6 +7843,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7431,6 +7872,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7459,6 +7901,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_carpet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7487,6 +7930,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7515,6 +7959,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7543,6 +7988,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7571,6 +8017,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_wool_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7599,6 +8046,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_wool_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7608,6 +8056,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:emerald",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7619,6 +8068,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:emerald_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7634,6 +8084,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:enchanting_table",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7649,6 +8100,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_crystal",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7666,6 +8118,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_rod",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7680,6 +8133,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7694,6 +8148,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7708,6 +8163,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7719,6 +8175,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_bricks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7733,6 +8190,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:ender_chest",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7745,6 +8203,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:ender_eye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7759,6 +8218,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7777,6 +8237,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_copper_bulb",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7791,6 +8252,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7805,6 +8267,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7819,6 +8282,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_cut_copper_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7833,6 +8297,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7851,6 +8316,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:eye_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7864,6 +8330,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:fermented_spider_eye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7876,6 +8343,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:field_masoned_banner_pattern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7889,6 +8357,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:fire_charge",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7901,6 +8370,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:firework_rocket",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7915,6 +8385,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:fishing_rod",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7929,6 +8400,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:fletching_table",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7941,6 +8413,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:flint_and_steel",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7959,6 +8432,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:flow_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -7971,6 +8445,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:flower_banner_pattern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7982,6 +8457,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:flower_pot",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -7996,6 +8472,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:furnace",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8008,6 +8485,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:furnace_minecart",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8019,6 +8497,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:glass_bottle",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8030,6 +8509,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8044,6 +8524,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:glistering_melon_slice",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8056,6 +8537,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:glow_item_frame",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8070,6 +8552,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:glowstone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8081,6 +8564,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8090,6 +8574,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8101,6 +8586,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8110,6 +8596,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_nugget",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8124,6 +8611,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_apple",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8141,6 +8629,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_axe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8152,6 +8641,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_boots",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8166,6 +8656,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_carrot",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8177,6 +8668,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_chestplate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8191,6 +8683,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_dandelion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8202,6 +8695,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_helmet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8219,6 +8713,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_hoe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8230,6 +8725,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_leggings",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8247,6 +8743,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_pickaxe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8264,6 +8761,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_shovel",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8281,6 +8779,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_spear",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8298,6 +8797,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:golden_sword",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8310,6 +8810,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:granite",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8321,6 +8822,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:granite_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8332,6 +8834,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:granite_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8343,6 +8846,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:granite_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8357,6 +8861,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8371,6 +8876,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -8381,6 +8887,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8393,6 +8900,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8404,6 +8912,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8423,6 +8932,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8437,6 +8947,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8451,6 +8962,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8465,6 +8977,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8477,6 +8990,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8486,6 +9000,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8501,6 +9016,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -8511,6 +9027,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8525,6 +9042,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8539,6 +9057,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8553,6 +9072,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8567,6 +9087,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8578,6 +9099,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8589,6 +9111,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8603,6 +9126,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8617,6 +9141,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -8627,6 +9152,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8639,6 +9165,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8650,6 +9177,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8669,6 +9197,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8683,6 +9212,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8697,6 +9227,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8711,6 +9242,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8726,6 +9258,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -8736,6 +9269,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8750,6 +9284,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8764,6 +9299,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8778,6 +9314,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8792,6 +9329,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8803,6 +9341,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8814,6 +9353,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8829,6 +9369,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:grindstone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8848,6 +9389,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:hay_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8859,6 +9401,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:heavy_weighted_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8870,6 +9413,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:honey_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8885,6 +9429,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:honey_bottle",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8896,6 +9441,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:honeycomb_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8910,6 +9456,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:hopper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -8922,6 +9469,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:hopper_minecart",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8940,6 +9488,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:host_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8957,6 +9506,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_axe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8968,6 +9518,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_bars",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8979,6 +9530,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -8990,6 +9542,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_boots",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9004,6 +9557,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_chain",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9015,6 +9569,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_chestplate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9026,6 +9581,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9037,6 +9593,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_helmet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9054,6 +9611,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_hoe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9063,6 +9621,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_ingot",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9074,6 +9633,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_ingot",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9085,6 +9645,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_leggings",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9094,6 +9655,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_nugget",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9111,6 +9673,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_pickaxe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9128,6 +9691,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_shovel",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9145,6 +9709,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_spear",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9162,6 +9727,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_sword",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9173,6 +9739,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_trapdoor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9187,6 +9754,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:item_frame",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9204,6 +9772,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jack_o_lantern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9218,6 +9787,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jukebox",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9232,6 +9802,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9241,6 +9812,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9253,6 +9825,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9267,6 +9840,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9284,6 +9858,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9301,6 +9876,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9318,6 +9894,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9327,6 +9904,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9341,6 +9919,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9355,6 +9934,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9372,6 +9952,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9386,6 +9967,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9400,6 +9982,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9414,6 +9997,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9425,6 +10009,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:jungle_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9436,6 +10021,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:ladder",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9450,6 +10036,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lantern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9461,6 +10048,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lapis_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9470,6 +10058,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lapis_lazuli",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9481,6 +10070,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lead",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9492,6 +10082,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:leather",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9503,6 +10094,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:leather_boots",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9514,6 +10106,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:leather_chestplate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9525,6 +10118,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:leather_helmet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9536,6 +10130,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:leather_horse_armor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9547,6 +10142,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:leather_leggings",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9564,6 +10160,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lectern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9578,6 +10175,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lever",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9595,6 +10193,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9612,6 +10211,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -9622,6 +10222,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9634,6 +10235,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9648,6 +10250,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9667,6 +10270,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9681,6 +10285,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9695,6 +10300,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9709,6 +10315,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9718,6 +10325,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9730,6 +10338,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9748,6 +10357,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -9758,6 +10368,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9775,6 +10386,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9789,6 +10401,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9806,6 +10419,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9823,6 +10437,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9837,6 +10452,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9851,6 +10467,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9868,6 +10485,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9885,6 +10503,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -9895,6 +10514,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9907,6 +10527,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9921,6 +10542,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9940,6 +10562,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9954,6 +10577,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9968,6 +10592,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -9982,6 +10607,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -9991,6 +10617,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10004,6 +10631,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_dye",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10016,6 +10644,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10025,6 +10654,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10034,6 +10664,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10052,6 +10683,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -10062,6 +10694,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10079,6 +10712,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10093,6 +10727,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10110,6 +10745,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10127,6 +10763,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10141,6 +10778,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10155,6 +10793,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10166,6 +10805,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_weighted_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10177,6 +10817,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lightning_rod",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10191,6 +10832,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10205,6 +10847,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -10215,6 +10858,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10227,6 +10871,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10238,6 +10883,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10257,6 +10903,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10271,6 +10918,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10285,6 +10933,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10299,6 +10948,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10311,6 +10961,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10326,6 +10977,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -10336,6 +10988,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10350,6 +11003,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10364,6 +11018,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10378,6 +11033,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10392,6 +11048,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10403,6 +11060,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10414,6 +11072,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10431,6 +11090,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:lodestone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10445,6 +11105,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:loom",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10455,10 +11116,11 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             ('#', RecipeIngredientTypes::Simple("minecraft:heavy_core")),
             ('I', RecipeIngredientTypes::Simple("minecraft:breeze_rod")),
         ],
-        pattern: &[" # ", " I "],
+        pattern: &["#", "I"],
         result: RecipeResultStruct {
             id: "minecraft:mace",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10473,6 +11135,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10487,6 +11150,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -10497,6 +11161,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10509,6 +11174,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10520,6 +11186,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10539,6 +11206,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10553,6 +11221,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10567,6 +11236,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10581,6 +11251,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10590,6 +11261,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10603,6 +11275,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_dye",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10617,6 +11290,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_dye",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10626,6 +11300,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10638,6 +11313,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10653,6 +11329,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -10663,6 +11340,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10677,6 +11355,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10691,6 +11370,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10705,6 +11385,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10719,6 +11400,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10730,6 +11412,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10741,6 +11424,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10752,6 +11436,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magma_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10764,6 +11449,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:magma_cream",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10778,6 +11464,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10787,6 +11474,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10799,6 +11487,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10813,6 +11502,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10830,6 +11520,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10847,6 +11538,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10864,6 +11556,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -10873,6 +11566,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10887,6 +11581,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10901,6 +11596,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10918,6 +11614,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10932,6 +11629,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10946,6 +11644,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10960,6 +11659,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10971,6 +11671,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mangrove_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -10985,6 +11686,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:map",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -10995,6 +11697,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:air",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11014,6 +11717,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:melon",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11023,6 +11727,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:melon_seeds",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11034,6 +11739,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:minecart",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11046,6 +11752,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mojang_banner_pattern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11057,6 +11764,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:moss_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11069,6 +11777,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_cobblestone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11081,6 +11790,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_cobblestone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11095,6 +11805,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_cobblestone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11109,6 +11820,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_cobblestone_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11123,6 +11835,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_cobblestone_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11137,6 +11850,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_stone_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11151,6 +11865,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_stone_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11165,6 +11880,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_stone_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11177,6 +11893,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_stone_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11189,6 +11906,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_stone_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11200,6 +11918,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mud_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11211,6 +11930,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mud_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11222,6 +11942,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mud_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11233,6 +11954,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mud_bricks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11245,6 +11967,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:muddy_mangrove_roots",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11258,6 +11981,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:mushroom_stew",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11277,6 +12001,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:music_disc_5",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11294,6 +12019,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:name_tag",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11311,6 +12037,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_brick_fence",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11325,6 +12052,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11339,6 +12067,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11353,6 +12082,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11364,6 +12094,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11383,6 +12114,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_wart_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11397,6 +12129,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11415,6 +12148,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_ingot",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11424,6 +12158,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_ingot",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11442,6 +12177,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_upgrade_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11456,6 +12192,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:note_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11467,6 +12204,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11476,6 +12214,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11488,6 +12227,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11499,6 +12239,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11513,6 +12254,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11527,6 +12269,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11544,6 +12287,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11553,6 +12297,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11564,6 +12309,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11578,6 +12324,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11592,6 +12339,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11603,6 +12351,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11614,6 +12363,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11625,6 +12375,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11636,6 +12387,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oak_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11651,6 +12403,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:observer",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11665,6 +12418,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11679,6 +12433,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -11689,6 +12444,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11701,6 +12457,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11712,6 +12469,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11731,6 +12489,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11745,6 +12504,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11759,6 +12519,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11773,6 +12534,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11782,6 +12544,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11791,6 +12554,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11803,6 +12567,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -11812,6 +12577,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11827,6 +12593,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -11837,6 +12604,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11851,6 +12619,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11865,6 +12634,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11879,6 +12649,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11893,6 +12664,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11904,6 +12676,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11915,6 +12688,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11929,6 +12703,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11947,6 +12722,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_copper_bulb",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11961,6 +12737,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11975,6 +12752,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -11989,6 +12767,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_cut_copper_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12003,6 +12782,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12022,6 +12802,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:packed_ice",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12034,6 +12815,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:packed_mud",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12048,6 +12830,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:painting",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12062,6 +12845,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_moss_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12076,6 +12860,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12085,6 +12870,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12097,6 +12883,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12111,6 +12898,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12128,6 +12916,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12145,6 +12934,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12162,6 +12952,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12171,6 +12962,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12185,6 +12977,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12199,6 +12992,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12216,6 +13010,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12230,6 +13025,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12244,6 +13040,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12258,6 +13055,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12269,6 +13067,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pale_oak_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12280,6 +13079,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:paper",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12294,6 +13094,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12308,6 +13109,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -12318,6 +13120,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12330,6 +13133,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12341,6 +13145,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12360,6 +13165,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12374,6 +13180,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12388,6 +13195,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12402,6 +13210,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12411,6 +13220,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12420,6 +13230,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12429,6 +13240,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12438,6 +13250,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12450,6 +13263,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12465,6 +13279,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -12475,6 +13290,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12489,6 +13305,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12503,6 +13320,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12517,6 +13335,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12531,6 +13350,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12542,6 +13362,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12553,6 +13374,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12569,6 +13391,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:piston",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12580,6 +13403,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_andesite",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12594,6 +13418,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_andesite_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12608,6 +13433,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_andesite_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12619,6 +13445,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_basalt",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12630,6 +13457,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12644,6 +13472,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12658,6 +13487,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12672,6 +13502,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12686,6 +13517,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_bricks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -12697,6 +13529,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12711,6 +13544,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12725,6 +13559,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12739,6 +13574,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12753,6 +13589,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12764,6 +13601,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12778,6 +13616,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12792,6 +13631,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12806,6 +13646,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12820,6 +13661,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12834,6 +13676,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12848,6 +13691,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12862,6 +13706,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12873,6 +13718,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_diorite",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12887,6 +13733,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_diorite_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12901,6 +13748,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_diorite_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12912,6 +13760,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_granite",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12926,6 +13775,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_granite_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12940,6 +13790,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_granite_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12951,6 +13802,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12965,6 +13817,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12979,6 +13832,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -12993,6 +13847,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13004,6 +13859,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13018,6 +13874,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13032,6 +13889,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13046,6 +13904,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13060,6 +13919,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13069,6 +13929,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13081,6 +13942,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13095,6 +13957,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13112,6 +13975,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13129,6 +13993,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13146,6 +14011,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13155,6 +14021,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13169,6 +14036,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13183,6 +14051,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13200,6 +14069,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13214,6 +14084,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13228,6 +14099,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13242,6 +14114,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13253,6 +14126,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:poplar_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13272,6 +14146,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:potent_sulfur",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13287,6 +14162,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:powered_rail",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13301,6 +14177,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13315,6 +14192,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13329,6 +14207,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13348,6 +14227,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13359,6 +14239,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13370,6 +14251,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13381,6 +14263,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13394,6 +14277,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pumpkin_pie",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13403,6 +14287,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:pumpkin_seeds",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13417,6 +14302,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13431,6 +14317,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -13441,6 +14328,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13453,6 +14341,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13464,6 +14353,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13483,6 +14373,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13497,6 +14388,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13511,6 +14403,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13525,6 +14418,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13537,6 +14431,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13552,6 +14447,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -13562,6 +14458,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13576,6 +14473,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13590,6 +14488,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13604,6 +14503,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13618,6 +14518,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13629,6 +14530,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13640,6 +14542,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13654,6 +14557,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purpur_block",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13665,6 +14569,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purpur_pillar",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13679,6 +14584,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purpur_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13693,6 +14599,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:purpur_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13704,6 +14611,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13715,6 +14623,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz_bricks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13726,6 +14635,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz_pillar",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13744,6 +14654,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13762,6 +14673,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13777,6 +14689,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:rabbit_stew",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13792,6 +14705,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:rabbit_stew",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13807,6 +14721,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:rabbit_stew",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13821,6 +14736,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:rail",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13839,6 +14755,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:raiser_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13848,6 +14765,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:raw_copper",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13859,6 +14777,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:raw_copper_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13868,6 +14787,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:raw_gold",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13879,6 +14799,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:raw_gold_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13888,6 +14809,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:raw_iron",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13899,6 +14821,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:raw_iron_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13913,6 +14836,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:recovery_compass",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13927,6 +14851,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13941,6 +14866,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -13951,6 +14877,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13963,6 +14890,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -13974,6 +14902,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -13993,6 +14922,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14004,6 +14934,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14015,6 +14946,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14029,6 +14961,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14038,6 +14971,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14047,6 +14981,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14056,6 +14991,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14065,6 +15001,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14080,6 +15017,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14094,6 +15032,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_nether_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14108,6 +15047,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_nether_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14122,6 +15062,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_nether_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14136,6 +15077,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_nether_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14147,6 +15089,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_sandstone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14164,6 +15107,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_sandstone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14182,6 +15126,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_sandstone_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14196,6 +15141,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_sandstone_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -14206,6 +15152,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14220,6 +15167,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14234,6 +15182,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14248,6 +15197,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14262,6 +15212,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14273,6 +15224,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14284,6 +15236,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14293,6 +15246,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:redstone",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14304,6 +15258,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:redstone_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14318,6 +15273,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:redstone_lamp",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14332,6 +15288,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:redstone_torch",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14350,6 +15307,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:repeater",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14361,6 +15319,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14372,6 +15331,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14383,6 +15343,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14394,6 +15355,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14405,6 +15367,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14414,6 +15377,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_clump",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14431,6 +15395,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:respawn_anchor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14449,6 +15414,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:rib_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14463,6 +15429,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:saddle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14474,6 +15441,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sandstone",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14488,6 +15456,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sandstone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14506,6 +15475,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sandstone_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14517,6 +15487,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sandstone_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14531,6 +15502,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:scaffolding",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14551,6 +15523,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sea_lantern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14569,6 +15542,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sentry_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14587,6 +15561,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:shaper_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14598,6 +15573,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:shears",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14615,6 +15591,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:shield",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14632,6 +15609,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14653,6 +15631,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:silence_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14665,6 +15644,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:skull_banner_pattern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14674,6 +15654,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:slime_ball",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14685,6 +15666,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:slime_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14699,6 +15681,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:smithing_table",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14713,6 +15696,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:smoker",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14727,6 +15711,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_quartz_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14741,6 +15726,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_quartz_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14755,6 +15741,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_red_sandstone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14769,6 +15756,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_red_sandstone_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14783,6 +15771,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_sandstone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14797,6 +15786,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_sandstone_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14808,6 +15798,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_stone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14826,6 +15817,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:snout_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14837,6 +15829,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:snow",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14848,6 +15841,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:snow_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14866,6 +15860,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:soul_campfire",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14880,6 +15875,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:soul_lantern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14901,6 +15897,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:soul_torch",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14918,6 +15915,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spectral_arrow",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14936,6 +15934,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spire_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14950,6 +15949,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14959,6 +15959,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -14971,6 +15972,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_chest_boat",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -14985,6 +15987,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15002,6 +16005,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15019,6 +16023,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15036,6 +16041,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15045,6 +16051,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15059,6 +16066,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15073,6 +16081,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15090,6 +16099,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15104,6 +16114,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15118,6 +16129,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15132,6 +16144,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15143,6 +16156,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:spruce_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15156,10 +16170,11 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             ),
             ('X', RecipeIngredientTypes::Simple("minecraft:copper_ingot")),
         ],
-        pattern: &[" # ", " X ", " X "],
+        pattern: &["#", "X", "X"],
         result: RecipeResultStruct {
             id: "minecraft:spyglass",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15171,6 +16186,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stick",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15182,6 +16198,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stick",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15196,6 +16213,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sticky_piston",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15213,6 +16231,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_axe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15224,6 +16243,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15235,6 +16255,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15246,6 +16267,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15257,6 +16279,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_bricks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15266,6 +16289,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15283,6 +16307,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_hoe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15300,6 +16325,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_pickaxe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15311,6 +16337,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15328,6 +16355,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_shovel",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15339,6 +16367,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15356,6 +16385,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_spear",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15367,6 +16397,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15384,6 +16415,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_sword",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15398,6 +16430,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stonecutter",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15409,6 +16442,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:straw_bed",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15423,6 +16457,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_acacia_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15437,6 +16472,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_birch_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15451,6 +16487,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_cherry_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15465,6 +16502,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_crimson_hyphae",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15479,6 +16517,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_dark_oak_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15493,6 +16532,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_jungle_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15507,6 +16547,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_mangrove_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15521,6 +16562,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_oak_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15535,6 +16577,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_pale_oak_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15549,6 +16592,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_poplar_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15563,6 +16607,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_spruce_wood",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15577,6 +16622,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:stripped_warped_hyphae",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15586,6 +16632,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sugar",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15595,6 +16642,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sugar",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15609,6 +16657,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15623,6 +16672,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15637,6 +16687,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15651,6 +16702,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_bricks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15662,6 +16714,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15673,6 +16726,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15684,6 +16738,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15695,6 +16750,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15709,6 +16765,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:fire_resistance"),
+                            duration: 60i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15723,6 +16790,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:blindness"),
+                            duration: 220i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15737,6 +16815,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:saturation"),
+                            duration: 7i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15751,6 +16840,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:nausea"),
+                            duration: 140i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15765,6 +16865,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:jump_boost"),
+                            duration: 100i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15779,6 +16890,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:saturation"),
+                            duration: 7i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15793,6 +16915,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:saturation"),
+                            duration: 7i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15807,6 +16940,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:poison"),
+                            duration: 220i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15821,6 +16965,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:blindness"),
+                            duration: 220i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15835,6 +16990,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:weakness"),
+                            duration: 140i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15849,6 +17015,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:regeneration"),
+                            duration: 140i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15863,6 +17040,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:weakness"),
+                            duration: 140i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15877,6 +17065,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:night_vision"),
+                            duration: 100i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15891,6 +17090,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:weakness"),
+                            duration: 140i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15905,6 +17115,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:night_vision"),
+                            duration: 100i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15919,6 +17140,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:weakness"),
+                            duration: 140i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -15933,6 +17165,17 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:suspicious_stew",
             count: 1u8,
+            components: &[(
+                crate::data_component::DataComponent::SuspiciousStewEffects,
+                &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                    effects: std::borrow::Cow::Borrowed(&[
+                        crate::data_component_impl::SuspiciousStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:wither"),
+                            duration: 140i32,
+                        },
+                    ]),
+                },
+            )],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15947,6 +17190,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:target",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15965,6 +17209,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tide_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15982,6 +17227,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tinted_glass",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -15999,6 +17245,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tnt",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16011,6 +17258,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tnt_minecart",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16028,6 +17276,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:torch",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16040,6 +17289,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:trapped_chest",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16055,6 +17305,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tripwire_hook",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16066,6 +17317,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16077,6 +17329,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16088,6 +17341,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16102,6 +17356,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_bricks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16113,6 +17368,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16124,6 +17380,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16135,6 +17392,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_wall",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16146,6 +17404,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:turtle_helmet",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16164,6 +17423,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:vex_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16185,6 +17445,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:ward_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16194,6 +17455,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_button",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16208,6 +17470,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_door",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16225,6 +17488,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_fence",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16242,6 +17506,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_fence_gate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16259,6 +17524,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_fungus_on_a_stick",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16276,6 +17542,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_hanging_sign",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16287,6 +17554,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_hyphae",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16296,6 +17564,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_planks",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16310,6 +17579,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_pressure_plate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16324,6 +17594,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_shelf",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16341,6 +17612,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_sign",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16355,6 +17627,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16369,6 +17642,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16383,6 +17657,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:warped_trapdoor",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16393,10 +17668,11 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             'M',
             RecipeIngredientTypes::Simple("minecraft:waxed_cut_copper_slab"),
         )],
-        pattern: &[" M ", " M "],
+        pattern: &["M", "M"],
         result: RecipeResultStruct {
             id: "minecraft:waxed_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16409,6 +17685,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16421,6 +17698,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_bars",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16433,6 +17711,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_block",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16451,6 +17730,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_bulb",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16463,6 +17743,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_bulb",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16475,6 +17756,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_chain",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16487,6 +17769,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_chest",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16499,6 +17782,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_door",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16511,6 +17795,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_golem_statue",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16525,6 +17810,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16537,6 +17823,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_grate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16549,6 +17836,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_lantern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16561,6 +17849,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_trapdoor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16575,6 +17864,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16587,6 +17877,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16601,6 +17892,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16613,6 +17905,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16627,6 +17920,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16639,6 +17933,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16649,10 +17944,11 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             'M',
             RecipeIngredientTypes::Simple("minecraft:waxed_exposed_cut_copper_slab"),
         )],
-        pattern: &[" M ", " M "],
+        pattern: &["M", "M"],
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16665,6 +17961,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16677,6 +17974,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_bars",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16695,6 +17993,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_bulb",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16707,6 +18006,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_bulb",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16719,6 +18019,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_chain",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16731,6 +18032,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_chest",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16743,6 +18045,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_door",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16755,6 +18058,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16767,6 +18071,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_golem_statue",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16781,6 +18086,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16793,6 +18099,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_grate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16805,6 +18112,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_lantern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16817,6 +18125,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_trapdoor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16831,6 +18140,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16843,6 +18153,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16857,6 +18168,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16869,6 +18181,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16883,6 +18196,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16895,6 +18209,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16907,6 +18222,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_lightning_rod",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16919,6 +18235,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_lightning_rod",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16929,10 +18246,11 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             'M',
             RecipeIngredientTypes::Simple("minecraft:waxed_oxidized_cut_copper_slab"),
         )],
-        pattern: &[" M ", " M "],
+        pattern: &["M", "M"],
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16945,6 +18263,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16957,6 +18276,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_bars",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -16975,6 +18295,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_bulb",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16987,6 +18308,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_bulb",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -16999,6 +18321,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_chain",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17011,6 +18334,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_chest",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17023,6 +18347,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_door",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17035,6 +18360,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17047,6 +18373,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_golem_statue",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17061,6 +18388,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17073,6 +18401,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_grate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17085,6 +18414,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_lantern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17097,6 +18427,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_trapdoor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17111,6 +18442,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17123,6 +18455,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17137,6 +18470,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17149,6 +18483,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17163,6 +18498,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17175,6 +18511,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17187,6 +18524,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_lightning_rod",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17197,10 +18535,11 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             'M',
             RecipeIngredientTypes::Simple("minecraft:waxed_weathered_cut_copper_slab"),
         )],
-        pattern: &[" M ", " M "],
+        pattern: &["M", "M"],
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17213,6 +18552,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17225,6 +18565,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_bars",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17243,6 +18584,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_bulb",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17255,6 +18597,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_bulb",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17267,6 +18610,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_chain",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17279,6 +18623,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_chest",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17291,6 +18636,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_door",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17303,6 +18649,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17315,6 +18662,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_golem_statue",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17329,6 +18677,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17341,6 +18690,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_grate",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17353,6 +18703,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_lantern",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17365,6 +18716,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_trapdoor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17379,6 +18731,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17391,6 +18744,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17405,6 +18759,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17417,6 +18772,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper_slab",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17431,6 +18787,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17443,6 +18800,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17455,6 +18813,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_lightning_rod",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17473,6 +18832,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wayfinder_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17487,6 +18847,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17505,6 +18866,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_copper_bulb",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17519,6 +18881,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17533,6 +18896,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17547,6 +18911,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_cut_copper_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17561,6 +18926,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17570,6 +18936,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wheat",
             count: 9u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17584,6 +18951,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17598,6 +18966,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -17608,6 +18977,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17620,6 +18990,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17631,6 +19002,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17650,6 +19022,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17664,6 +19037,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17678,6 +19052,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17692,6 +19067,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17701,6 +19077,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17712,6 +19089,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17727,6 +19105,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -17737,6 +19116,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17751,6 +19131,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17765,6 +19146,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17779,6 +19161,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17793,6 +19176,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17804,6 +19188,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_wool",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17815,6 +19200,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17826,6 +19212,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17847,6 +19234,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wild_armor_trim_smithing_template",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17856,6 +19244,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wind_charge",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17870,6 +19259,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wolf_armor",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17887,6 +19277,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wooden_axe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17904,6 +19295,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wooden_hoe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17921,6 +19313,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wooden_pickaxe",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17938,6 +19331,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wooden_shovel",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17955,6 +19349,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wooden_spear",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17972,6 +19367,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:wooden_sword",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -17985,6 +19381,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:writable_book",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -17999,6 +19396,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_banner",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18013,6 +19411,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_bed",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -18023,6 +19422,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_bundle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -18035,6 +19435,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_candle",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18046,6 +19447,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_carpet",
             count: 3u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -18065,6 +19467,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_concrete_powder",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18079,6 +19482,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_concrete_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18093,6 +19497,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_concrete_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18107,6 +19512,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_cushion",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -18116,6 +19522,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -18125,6 +19532,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -18134,6 +19542,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_dye",
             count: 2u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShapeless {
@@ -18143,6 +19552,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_dye",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18158,6 +19568,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_harness",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingTransmute {
@@ -18168,6 +19579,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_shulker_box",
             count: 1u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18182,6 +19594,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_stained_glass",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18196,6 +19609,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_stained_glass_pane",
             count: 16u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18210,6 +19624,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_stained_glass_pane",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18224,6 +19639,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_terracotta",
             count: 8u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18235,6 +19651,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_wool_slab",
             count: 6u8,
+            components: &[],
         },
     },
     CraftingRecipeTypes::CraftingShaped {
@@ -18246,6 +19663,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_wool_stairs",
             count: 4u8,
+            components: &[],
         },
     },
 ];
@@ -18260,6 +19678,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:baked_potato",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::CampfireCooking(CookingRecipe {
@@ -18272,6 +19691,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:baked_potato",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smoking(CookingRecipe {
@@ -18284,6 +19704,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:baked_potato",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18296,6 +19717,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18308,6 +19730,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18320,6 +19743,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:brick",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18332,6 +19756,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18344,6 +19769,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:charcoal",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18356,6 +19782,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:coal",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18368,6 +19795,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:coal",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18380,6 +19808,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:coal",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18392,6 +19821,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:coal",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18404,6 +19834,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_beef",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::CampfireCooking(CookingRecipe {
@@ -18416,6 +19847,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_beef",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smoking(CookingRecipe {
@@ -18428,6 +19860,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_beef",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18440,6 +19873,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_chicken",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::CampfireCooking(CookingRecipe {
@@ -18452,6 +19886,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_chicken",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smoking(CookingRecipe {
@@ -18464,6 +19899,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_chicken",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18476,6 +19912,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_cod",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::CampfireCooking(CookingRecipe {
@@ -18488,6 +19925,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_cod",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smoking(CookingRecipe {
@@ -18500,6 +19938,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_cod",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18512,6 +19951,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_mutton",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::CampfireCooking(CookingRecipe {
@@ -18524,6 +19964,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_mutton",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smoking(CookingRecipe {
@@ -18536,6 +19977,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_mutton",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18548,6 +19990,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_porkchop",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::CampfireCooking(CookingRecipe {
@@ -18560,6 +20003,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_porkchop",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smoking(CookingRecipe {
@@ -18572,6 +20016,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_porkchop",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18584,6 +20029,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_rabbit",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::CampfireCooking(CookingRecipe {
@@ -18596,6 +20042,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_rabbit",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smoking(CookingRecipe {
@@ -18608,6 +20055,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_rabbit",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18620,6 +20068,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_salmon",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::CampfireCooking(CookingRecipe {
@@ -18632,6 +20081,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_salmon",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smoking(CookingRecipe {
@@ -18644,6 +20094,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cooked_salmon",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18656,6 +20107,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18668,6 +20120,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18680,6 +20133,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18692,6 +20146,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18704,6 +20159,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18716,6 +20172,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18741,6 +20198,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_nugget",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18766,6 +20224,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_nugget",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18778,6 +20237,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cracked_deepslate_bricks",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18790,6 +20250,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cracked_deepslate_tiles",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18802,6 +20263,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cracked_nether_bricks",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18814,6 +20276,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cracked_polished_blackstone_bricks",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18826,6 +20289,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cracked_stone_bricks",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18838,6 +20302,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18850,6 +20315,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18862,6 +20328,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18874,6 +20341,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18886,6 +20354,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18898,6 +20367,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:diamond",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::CampfireCooking(CookingRecipe {
@@ -18910,6 +20380,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:dried_kelp",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18922,6 +20393,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:dried_kelp",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smoking(CookingRecipe {
@@ -18934,6 +20406,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:dried_kelp",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18946,6 +20419,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:emerald",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -18958,6 +20432,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:emerald",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18970,6 +20445,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:emerald",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18982,6 +20458,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:emerald",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -18994,6 +20471,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:glass",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19006,6 +20484,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19018,6 +20497,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19030,6 +20510,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19042,6 +20523,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19054,6 +20536,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19066,6 +20549,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19078,6 +20562,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19090,6 +20575,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19115,6 +20601,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_nugget",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19140,6 +20627,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gold_nugget",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19152,6 +20640,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19164,6 +20653,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_dye",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19176,6 +20666,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19188,6 +20679,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19200,6 +20692,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19212,6 +20705,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19224,6 +20718,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19236,6 +20731,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19248,6 +20744,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_ingot",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19277,6 +20774,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_nugget",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19306,6 +20804,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:iron_nugget",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19318,6 +20817,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:lapis_lazuli",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19330,6 +20830,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:lapis_lazuli",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19342,6 +20843,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:lapis_lazuli",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19354,6 +20856,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:lapis_lazuli",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19366,6 +20869,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:leaf_litter",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19378,6 +20882,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19390,6 +20895,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19402,6 +20908,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_dye",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19414,6 +20921,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19426,6 +20934,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19438,6 +20947,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_brick",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19450,6 +20960,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_scrap",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19462,6 +20973,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_scrap",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19474,6 +20986,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19486,6 +20999,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19498,6 +21012,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:popped_chorus_fruit",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19510,6 +21025,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19522,6 +21038,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19534,6 +21051,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19546,6 +21064,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19558,6 +21077,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:redstone",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Blasting(CookingRecipe {
@@ -19570,6 +21090,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:redstone",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19582,6 +21103,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:redstone",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19594,6 +21116,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:redstone",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19606,6 +21129,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_brick",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19618,6 +21142,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_basalt",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19630,6 +21155,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_quartz",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19642,6 +21168,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_red_sandstone",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19654,6 +21181,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_sandstone",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19666,6 +21194,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_stone",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19678,6 +21207,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:sponge",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19690,6 +21220,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19702,6 +21233,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19714,6 +21246,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
     CookingRecipeType::Smelting(CookingRecipe {
@@ -19726,6 +21259,7 @@ pub static RECIPES_COOKING: &[CookingRecipeType] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_glazed_terracotta",
             count: 1u8,
+            components: &[],
         },
     }),
 ];
@@ -19736,6 +21270,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:andesite_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19744,6 +21279,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:andesite_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19752,6 +21288,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:andesite_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19760,6 +21297,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19768,6 +21306,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:black_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19776,6 +21315,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:blackstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19784,6 +21324,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:blackstone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19792,6 +21333,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:blackstone_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19800,6 +21342,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19808,6 +21351,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:blue_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19816,6 +21360,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19824,6 +21369,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19832,6 +21378,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19840,6 +21387,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19848,6 +21396,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:brown_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19856,6 +21405,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_cinnabar",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19864,6 +21414,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19872,6 +21423,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19880,6 +21432,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_deepslate",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19888,6 +21441,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_deepslate",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19896,6 +21450,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_nether_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19904,6 +21459,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_polished_blackstone",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19912,6 +21468,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_polished_blackstone",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19920,6 +21477,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_quartz_block",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19928,6 +21486,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_red_sandstone",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19936,6 +21495,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_resin_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19944,6 +21504,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_sandstone",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19952,6 +21513,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_stone_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19960,6 +21522,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_stone_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19968,6 +21531,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_sulfur",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19976,6 +21540,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_tuff_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19984,6 +21549,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_tuff_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -19992,6 +21558,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_tuff_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20000,6 +21567,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:chiseled_tuff",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20008,6 +21576,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20016,6 +21585,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20024,6 +21594,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20032,6 +21603,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20040,6 +21612,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20048,6 +21621,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20056,6 +21630,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20064,6 +21639,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20072,6 +21648,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20080,6 +21657,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20088,6 +21666,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20096,6 +21675,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20104,6 +21684,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20112,6 +21693,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cinnabar_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20120,6 +21702,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20128,6 +21711,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20136,6 +21720,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20144,6 +21729,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20152,6 +21738,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20160,6 +21747,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20168,6 +21756,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobbled_deepslate_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20176,6 +21765,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20184,6 +21774,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20192,6 +21783,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20200,6 +21792,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20208,6 +21801,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20216,6 +21810,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20224,6 +21819,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cobblestone_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20232,6 +21828,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20240,6 +21837,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20248,6 +21846,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_copper_slab",
             count: 8u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20256,6 +21855,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_copper_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20264,6 +21864,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20272,6 +21873,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20280,6 +21882,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_red_sandstone",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20288,6 +21891,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_red_sandstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20296,6 +21900,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_red_sandstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20304,6 +21909,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_sandstone",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20312,6 +21918,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_sandstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20320,6 +21927,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cut_sandstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20328,6 +21936,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20336,6 +21945,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:cyan_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20344,6 +21954,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_prismarine_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20352,6 +21963,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:dark_prismarine_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20360,6 +21972,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20368,6 +21981,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20376,6 +21990,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20384,6 +21999,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20392,6 +22008,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20400,6 +22017,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20408,6 +22026,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20416,6 +22035,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20424,6 +22044,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20432,6 +22053,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20440,6 +22062,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20448,6 +22071,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20456,6 +22080,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20464,6 +22089,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20472,6 +22098,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20480,6 +22107,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20488,6 +22116,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20496,6 +22125,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20504,6 +22134,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20512,6 +22143,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20520,6 +22152,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20528,6 +22161,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20536,6 +22170,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20544,6 +22179,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20552,6 +22188,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20560,6 +22197,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20568,6 +22206,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20576,6 +22215,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20584,6 +22224,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20592,6 +22233,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tile_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20600,6 +22242,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tiles",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20608,6 +22251,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tiles",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20616,6 +22260,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tiles",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20624,6 +22269,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:deepslate_tiles",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20632,6 +22278,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:diorite_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20640,6 +22287,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:diorite_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20648,6 +22296,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:diorite_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20656,6 +22305,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20664,6 +22314,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20672,6 +22323,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20680,6 +22332,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20688,6 +22341,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20696,6 +22350,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20704,6 +22359,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:end_stone_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20712,6 +22368,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_chiseled_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20720,6 +22377,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20728,6 +22386,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20736,6 +22395,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20744,6 +22404,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_cut_copper_slab",
             count: 8u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20752,6 +22413,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_cut_copper_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20760,6 +22422,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20768,6 +22431,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:exposed_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20776,6 +22440,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:granite_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20784,6 +22449,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:granite_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20792,6 +22458,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:granite_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20800,6 +22467,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20808,6 +22476,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:gray_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20816,6 +22485,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20824,6 +22494,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:green_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20832,6 +22503,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20840,6 +22512,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_blue_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20848,6 +22521,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20856,6 +22530,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:light_gray_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20864,6 +22539,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20872,6 +22548,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:lime_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20880,6 +22557,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20888,6 +22566,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:magenta_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20896,6 +22575,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_cobblestone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20904,6 +22584,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_cobblestone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20912,6 +22593,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_cobblestone_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20920,6 +22602,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_stone_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20928,6 +22611,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_stone_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20936,6 +22620,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:mossy_stone_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20944,6 +22629,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:mud_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20952,6 +22638,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:mud_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20960,6 +22647,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:mud_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20968,6 +22656,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20976,6 +22665,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20984,6 +22674,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:nether_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -20992,6 +22683,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21000,6 +22692,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:orange_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21008,6 +22701,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_chiseled_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21016,6 +22710,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21024,6 +22719,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21032,6 +22728,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21040,6 +22737,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_cut_copper_slab",
             count: 8u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21048,6 +22746,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_cut_copper_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21056,6 +22755,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21064,6 +22764,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:oxidized_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21072,6 +22773,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21080,6 +22782,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:pink_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21088,6 +22791,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_andesite",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21096,6 +22800,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_andesite_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21104,6 +22809,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_andesite_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21112,6 +22818,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_andesite_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21120,6 +22827,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_andesite_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21128,6 +22836,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_basalt",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21136,6 +22845,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21144,6 +22854,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21152,6 +22863,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21160,6 +22872,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21168,6 +22881,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21176,6 +22890,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21184,6 +22899,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21192,6 +22908,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21200,6 +22917,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21208,6 +22926,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21216,6 +22935,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21224,6 +22944,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21232,6 +22953,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21240,6 +22962,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21248,6 +22971,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21256,6 +22980,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21264,6 +22989,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21272,6 +22998,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_blackstone_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21280,6 +23007,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21288,6 +23016,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21296,6 +23025,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21304,6 +23034,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21312,6 +23043,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21320,6 +23052,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21328,6 +23061,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_cinnabar_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21336,6 +23070,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21344,6 +23079,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21352,6 +23088,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21360,6 +23097,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21368,6 +23106,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21376,6 +23115,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21384,6 +23124,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21392,6 +23133,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21400,6 +23142,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21408,6 +23151,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21416,6 +23160,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_deepslate_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21424,6 +23169,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_diorite",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21432,6 +23178,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_diorite_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21440,6 +23187,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_diorite_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21448,6 +23196,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_diorite_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21456,6 +23205,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_diorite_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21464,6 +23214,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_granite",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21472,6 +23223,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_granite_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21480,6 +23232,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_granite_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21488,6 +23241,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_granite_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21496,6 +23250,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_granite_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21504,6 +23259,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21512,6 +23268,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21520,6 +23277,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21528,6 +23286,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21536,6 +23295,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21544,6 +23304,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21552,6 +23313,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_sulfur_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21560,6 +23322,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21568,6 +23331,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21576,6 +23340,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21584,6 +23349,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21592,6 +23358,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21600,6 +23367,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21608,6 +23376,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:polished_tuff_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21616,6 +23385,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21624,6 +23394,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21632,6 +23403,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21640,6 +23412,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21648,6 +23421,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:prismarine_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21656,6 +23430,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21664,6 +23439,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:purple_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21672,6 +23448,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:purpur_pillar",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21680,6 +23457,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:purpur_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21688,6 +23466,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:purpur_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21696,6 +23475,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21704,6 +23484,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz_pillar",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21712,6 +23493,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21720,6 +23502,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:quartz_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21728,6 +23511,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21736,6 +23520,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21744,6 +23529,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_nether_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21752,6 +23538,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_nether_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21760,6 +23547,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_nether_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21768,6 +23556,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_sandstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21776,6 +23565,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_sandstone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21784,6 +23574,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:red_sandstone_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21792,6 +23583,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21800,6 +23592,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21808,6 +23601,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:resin_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21816,6 +23610,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sandstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21824,6 +23619,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sandstone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21832,6 +23628,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sandstone_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21840,6 +23637,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_quartz_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21848,6 +23646,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_quartz_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21856,6 +23655,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_red_sandstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21864,6 +23664,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_red_sandstone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21872,6 +23673,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_sandstone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21880,6 +23682,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_sandstone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21888,6 +23691,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:smooth_stone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21896,6 +23700,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21904,6 +23709,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21912,6 +23718,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21920,6 +23727,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21928,6 +23736,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21936,6 +23745,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21944,6 +23754,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21952,6 +23763,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21960,6 +23772,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:stone_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21968,6 +23781,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21976,6 +23790,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21984,6 +23799,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -21992,6 +23808,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22000,6 +23817,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22008,6 +23826,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22016,6 +23835,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22024,6 +23844,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22032,6 +23853,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22040,6 +23862,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22048,6 +23871,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22056,6 +23880,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22064,6 +23889,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22072,6 +23898,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:sulfur_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22080,6 +23907,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22088,6 +23916,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22096,6 +23925,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22104,6 +23934,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22112,6 +23943,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22120,6 +23952,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22128,6 +23961,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22136,6 +23970,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22144,6 +23979,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_brick_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22152,6 +23988,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22160,6 +23997,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_bricks",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22168,6 +24006,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22176,6 +24015,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22184,6 +24024,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:tuff_wall",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22192,6 +24033,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_chiseled_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22200,6 +24042,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22208,6 +24051,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22216,6 +24060,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22224,6 +24069,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper_slab",
             count: 8u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22232,6 +24078,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22240,6 +24087,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22248,6 +24096,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22256,6 +24105,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_chiseled_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22264,6 +24114,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22272,6 +24123,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22280,6 +24132,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22288,6 +24141,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper_slab",
             count: 8u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22296,6 +24150,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22304,6 +24159,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22312,6 +24168,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_exposed_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22320,6 +24177,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_chiseled_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22328,6 +24186,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22336,6 +24195,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22344,6 +24204,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22352,6 +24213,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper_slab",
             count: 8u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22360,6 +24222,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22368,6 +24231,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22376,6 +24240,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_oxidized_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22384,6 +24249,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_chiseled_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22392,6 +24258,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22400,6 +24267,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22408,6 +24276,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22416,6 +24285,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper_slab",
             count: 8u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22424,6 +24294,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22432,6 +24303,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22440,6 +24312,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:waxed_weathered_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22448,6 +24321,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_chiseled_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22456,6 +24330,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_chiseled_copper",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22464,6 +24339,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_copper_grate",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22472,6 +24348,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_cut_copper",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22480,6 +24357,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_cut_copper_slab",
             count: 8u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22488,6 +24366,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_cut_copper_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22496,6 +24375,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_cut_copper_stairs",
             count: 4u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22504,6 +24384,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:weathered_cut_copper_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22512,6 +24393,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22520,6 +24402,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:white_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22528,6 +24411,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_concrete_slab",
             count: 2u8,
+            components: &[],
         },
     },
     StonecutterRecipe {
@@ -22536,6 +24420,7 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:yellow_concrete_stairs",
             count: 1u8,
+            components: &[],
         },
     },
 ];
@@ -22657,6 +24542,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_axe",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22666,6 +24552,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_boots",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22675,6 +24562,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_chestplate",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22684,6 +24572,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_helmet",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22693,6 +24582,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_hoe",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22702,6 +24592,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_horse_armor",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22711,6 +24602,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_leggings",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22720,6 +24612,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_nautilus_armor",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22729,6 +24622,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_pickaxe",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22738,6 +24632,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_shovel",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22747,6 +24642,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_spear",
             count: 1u8,
+            components: &[],
         },
     },
     SmithingTransformRecipe {
@@ -22756,6 +24652,7 @@ pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
         result: RecipeResultStruct {
             id: "minecraft:netherite_sword",
             count: 1u8,
+            components: &[],
         },
     },
 ];

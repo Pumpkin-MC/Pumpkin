@@ -324,6 +324,13 @@ impl ConsumableImpl {
     pub fn consume_ticks(&self) -> i32 {
         (self.consume_seconds * 20.0) as i32
     }
+
+    #[must_use]
+    pub fn should_emit_particles_and_sounds(&self, use_item_remaining_ticks: i32) -> bool {
+        let item_used_for_ticks = self.consume_ticks() - use_item_remaining_ticks;
+        let wait_ticks_before_use_effects = (self.consume_ticks() as f32 * 0.218_75) as i32;
+        item_used_for_ticks > wait_ticks_before_use_effects && use_item_remaining_ticks % 4 == 0
+    }
     pub fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
         let consume_seconds = compound.get_float("consume_seconds")?;

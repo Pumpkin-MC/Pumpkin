@@ -133,7 +133,7 @@ impl BlockEntity for JukeboxBlockEntity {
     ) -> Option<NbtCompound> {
         let record_guard = self.record_stack.lock().ok();
         let record = record_guard.as_deref();
-        Some(crate::block::entities::bedrock::build_jukebox_actor(
+        Some(build_jukebox_actor(
             self.position,
             record,
             self.ticks_since_song_started.load(Ordering::Relaxed),
@@ -299,12 +299,48 @@ impl Clearable for JukeboxBlockEntity {
     }
 }
 
+/// Builds the Bedrock block-actor NBT for jukeboxes.
+#[must_use]
+pub fn build_jukebox_actor(
+    position: BlockPos,
+    record: Option<&ItemStack>,
+    ticks_since_song_started: u64,
+) -> NbtCompound {
+    let mut builder = super::bedrock::BedrockBlockActorBuilder::new("Jukebox", position)
+        .put_long("TicksSinceSongStarted", ticks_since_song_started as i64);
+
+    if let Some(record_stack) = record
+        && !record_stack.is_empty()
+    {
+        let mut rec_nbt = NbtCompound::new();
+        rec_nbt.put_string(
+            "Name",
+            super::bedrock::bedrock_item_name(record_stack.item.registry_key),
+        );
+        rec_nbt.put_byte("Count", 1);
+        builder = builder.put_compound("RecordItem", rec_nbt);
+    }
+
+    builder.finish()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::entity::{Entity, ai::test_support::world, passive::allay::AllayEntity};
-    use pumpkin_data::entity::EntityType;
+    use pumpkin_data::{entity::EntityType, item::Item};
     use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+
+    #[test]
+    fn jukebox_actor_builder() {
+        let pos = BlockPos::new(8, 64, 8);
+        let record = ItemStack::new(1, &Item::MUSIC_DISC_CAT);
+        let nbt = build_jukebox_actor(pos, Some(&record), 100);
+        assert_eq!(nbt.get_string("id"), Some("Jukebox"));
+        assert_eq!(nbt.get_long("TicksSinceSongStarted"), Some(100));
+        let rec = nbt.get_compound("RecordItem").expect("RecordItem missing");
+        assert_eq!(rec.get_string("Name"), Some("minecraft:music_disc_cat"));
+    }
 
     #[tokio::test]
     async fn removing_the_record_through_inventory_stops_allay_dancing()

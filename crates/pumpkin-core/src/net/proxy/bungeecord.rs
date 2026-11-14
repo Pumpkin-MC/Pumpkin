@@ -1,11 +1,10 @@
 use arc_swap::ArcSwap;
-use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::{net::IpAddr, net::SocketAddr};
 use thiserror::Error;
 use tracing::warn;
 
-use crate::net::{GameProfile, offline_uuid};
+use crate::net::{GameProfile, management::auth::is_valid_secret, offline_uuid};
 use pumpkin_protocol::Property;
 
 /// The property name the `BungeeGuard` plugin uses to forward its shared
@@ -91,7 +90,7 @@ pub fn bungeecord_login(
             .collect();
 
         match token_props.as_slice() {
-            [token] if token.value.as_ref() == secret => {
+            [token] if is_valid_secret(token.value.as_ref(), secret) => {
                 properties.retain(|property| property.name.as_ref() != BUNGEEGUARD_TOKEN_PROPERTY);
             }
             [] => {
@@ -108,19 +107,11 @@ pub fn bungeecord_login(
                 return Err(BungeeCordError::MissingToken);
             }
             _ => {
-                // Log only SHA-256 hashes: one-way, so the secret never leaks,
-                // but enough to tell a mismatch from duplicated tokens apart.
-                let token_hashes: Vec<String> = token_props
-                    .iter()
-                    .map(|property| hex::encode(Sha256::digest(property.value.as_bytes())))
-                    .collect();
+                // Not even a hash of the secret: an unsalted one confirms a guess offline.
                 warn!(
-                    "Rejecting login: expected exactly one matching `{}` property, \
-                     found {} (token hashes: {token_hashes:?}, configured secret \
-                     hash: {})",
+                    "Rejecting login: expected exactly one `{}` property, found {}",
                     BUNGEEGUARD_TOKEN_PROPERTY,
-                    token_props.len(),
-                    hex::encode(Sha256::digest(secret.as_bytes()))
+                    token_props.len()
                 );
                 return Err(BungeeCordError::InvalidToken);
             }

@@ -1,3 +1,6 @@
+use crate::entity::EntityBase;
+use crate::entity::projectile_deflection::{ProjectileDeflection, default_deflection};
+use pumpkin_data::sound::Sound;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
@@ -48,7 +51,36 @@ impl BreezeEntity {
 }
 
 impl Mob for BreezeEntity {
+    fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        if fall_distance > 3.0 {
+            caller.play_entity_sound(Sound::EntityBreezeLand, 1.0, 1.0);
+        }
+        self.mob_entity
+            .living_entity
+            .cause_fall_damage(caller, fall_distance, damage_modifier)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn deflection(&self, projectile: &dyn EntityBase) -> ProjectileDeflection {
+        let projectile_type = projectile.get_entity().entity_type;
+        if projectile_type == &EntityType::WIND_CHARGE
+            || projectile_type == &EntityType::BREEZE_WIND_CHARGE
+        {
+            ProjectileDeflection::None
+        } else if default_deflection(&self.mob_entity.living_entity.entity)
+            == ProjectileDeflection::Reverse
+        {
+            ProjectileDeflection::Breeze
+        } else {
+            ProjectileDeflection::None
+        }
     }
 }

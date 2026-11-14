@@ -46,6 +46,20 @@ impl BlockEntity for EnchantingTableBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let custom_name = self.custom_name.try_lock().ok().and_then(|g| g.clone());
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("EnchantTable", self.position)
+                .movable(false)
+                .custom_name(custom_name.as_deref())
+                .put_float("rott", 0.0)
+                .finish(),
+        )
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

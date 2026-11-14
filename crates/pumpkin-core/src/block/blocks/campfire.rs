@@ -11,6 +11,7 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::tick::TickPriority;
 
 use crate::block::entities::campfire::CampfireBlockEntity;
+use crate::entity::projectile::may_interact;
 use crate::{
     block::{
         BlockBehaviour, BlockIsReplacing, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
@@ -117,7 +118,11 @@ impl BlockBehaviour for CampfireBlock {
 
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
         let props = CampfireLikeProperties::from_state_id(args.state.id);
-        if !args.projectile.get_entity().is_on_fire() || props.lit || props.waterlogged {
+        if !args.projectile.get_entity().is_on_fire()
+            || !may_interact(args.projectile, args.world, args.position)
+            || props.lit
+            || props.waterlogged
+        {
             return;
         }
 

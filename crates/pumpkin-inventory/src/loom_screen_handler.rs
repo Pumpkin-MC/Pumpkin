@@ -222,6 +222,11 @@ impl LoomScreenHandler {
         }
     }
 
+    pub fn select_pattern(&mut self, pattern: &str) {
+        let clean_pattern = pattern.strip_prefix("minecraft:").unwrap_or(pattern);
+        self.setup_result_slot(clean_pattern);
+    }
+
     fn setup_result_slot(&self, pattern: &str) {
         let mut banner_stack = self.input_inventory.get_stack(0);
         let dye_stack = self.input_inventory.get_stack(1);

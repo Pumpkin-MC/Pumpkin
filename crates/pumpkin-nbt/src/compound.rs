@@ -193,16 +193,7 @@ impl NbtCompound {
     /// Stores a UUID as a 4-element int array, most significant bits first
     /// (the vanilla `UUID` layout).
     pub fn put_uuid(&mut self, name: &str, value: Uuid) {
-        let value = value.as_u128();
-        self.put(
-            name,
-            NbtTag::IntArray(vec![
-                (value >> 96) as i32,
-                ((value >> 64) & 0xFFFF_FFFF) as i32,
-                ((value >> 32) & 0xFFFF_FFFF) as i32,
-                (value & 0xFFFF_FFFF) as i32,
-            ]),
-        );
+        self.put(name, NbtTag::uuid(value));
     }
 
     /// Copies `other`'s tags into this compound, merging nested compounds (vanilla `CompoundTag.merge`).
@@ -327,15 +318,7 @@ impl NbtCompound {
     /// first (the vanilla `UUID` layout written by [`Self::put_uuid`]).
     #[must_use]
     pub fn get_uuid(&self, name: &str) -> Option<Uuid> {
-        let &[a, b, c, d] = self.get_int_array(name)? else {
-            return None;
-        };
-        Some(Uuid::from_u128(
-            ((a as u32 as u128) << 96)
-                | ((b as u32 as u128) << 64)
-                | ((c as u32 as u128) << 32)
-                | (d as u32 as u128),
-        ))
+        self.get(name).and_then(NbtTag::extract_uuid)
     }
 }
 

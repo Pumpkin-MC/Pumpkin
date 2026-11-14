@@ -21,6 +21,8 @@ use syn::{Ident, LitBool, LitByteStr, LitFloat, LitInt, LitStr};
 pub struct Item {
     /// Numeric protocol ID for this item.
     pub id: u16,
+    /// Item left behind when this item is consumed, from `Item.Properties.craftRemainder`.
+    pub crafting_remainder: Option<ItemStackTemplateComponent>,
     /// All data components attached to this item.
     pub components: ItemComponents,
 }
@@ -180,7 +182,7 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:use_effects")]
     pub use_effects: Option<UseEffectsComponent>,
     #[serde(rename = "minecraft:use_remainder")]
-    pub use_remainder: Option<UseRemainderComponent>,
+    pub use_remainder: Option<ItemStackTemplateComponent>,
     #[serde(rename = "minecraft:villager_food")]
     pub villager_food: Option<VillagerFoodComponent>,
     #[serde(rename = "minecraft:waxed")]
@@ -216,7 +218,7 @@ pub struct CompostableComponent {
 }
 
 #[derive(Deserialize, Clone)]
-pub struct UseRemainderComponent {
+pub struct ItemStackTemplateComponent {
     pub id: String,
 }
 
@@ -708,46 +710,13 @@ impl ToTokens for ItemComponents {
                     quote! { Some(Cow::Borrowed(#camera_overlay)) }
                 })
                 .unwrap_or(quote! { None });
-            let mut entities_option = TokenStream::new();
-            if let Some(entities) = equippable.allowed_entities.clone() {
-                let mut allowed_entities = TokenStream::new();
-                match entities {
-                    StringOrList::String(str) => {
-                        if str.starts_with("#") {
-                            let formatted = str.strip_prefix("#minecraft:").unwrap();
-                            allowed_entities.extend(quote! {
-                                IDSet::Tag(Cow::Borrowed(#formatted))
-                            });
-                        } else {
-                            let ident = format_ident!(
-                                "{}",
-                                str.strip_prefix("minecraft:").unwrap().to_uppercase()
-                            );
-                            allowed_entities.extend(quote! {
-                                IDSet::IDs(Cow::Borrowed(&[&crate::entity_type::EntityType::#ident]))
-                            });
-                        }
-                    }
-                    StringOrList::List(items) => {
-                        let mut ids = TokenStream::new();
-                        for x in items {
-                            let entity = format_ident!(
-                                "{}",
-                                x.strip_prefix("minecraft:").unwrap().to_uppercase()
-                            );
-                            ids.extend(quote! { &crate::entity_type::EntityType::#entity, });
-                        }
-
-                        allowed_entities.extend(quote! {
-                            IDSet::IDs(Cow::Borrowed(&[#ids]))
-                        });
-                    }
-                }
-
-                entities_option.extend(quote! { Some(#allowed_entities) });
-            } else {
-                entities_option.extend(quote! { None });
-            }
+            let entities_option = equippable.allowed_entities.as_ref().map_or_else(
+                || quote! { None },
+                |entities| {
+                    let allowed_entities = entity_idset_tokens(entities);
+                    quote! { Some(#allowed_entities) }
+                },
+            );
             let dispensable = LitBool::new(equippable.dispensable, Span::call_site());
             let swappable = LitBool::new(equippable.swappable, Span::call_site());
             let damage_on_hurt = LitBool::new(equippable.damage_on_hurt, Span::call_site());
@@ -1070,41 +1039,7 @@ impl ToTokens for ItemComponents {
             );
         }
         if let Some(mob_vis) = &self.mob_visibility {
-            let mut targeting_tokens = TokenStream::new();
-            match &mob_vis.targeting_entity_types {
-                StringOrList::String(str) => {
-                    if let Some(formatted) = str.strip_prefix("#minecraft:") {
-                        targeting_tokens.extend(quote! {
-                            IDSet::Tag(Cow::Borrowed(#formatted))
-                        });
-                    } else if let Some(formatted) = str.strip_prefix('#') {
-                        targeting_tokens.extend(quote! {
-                            IDSet::Tag(Cow::Borrowed(#formatted))
-                        });
-                    } else {
-                        let ident = format_ident!(
-                            "{}",
-                            str.strip_prefix("minecraft:").unwrap_or(str).to_uppercase()
-                        );
-                        targeting_tokens.extend(quote! {
-                            IDSet::IDs(Cow::Borrowed(&[&crate::entity_type::EntityType::#ident]))
-                        });
-                    }
-                }
-                StringOrList::List(items) => {
-                    let mut ids = TokenStream::new();
-                    for x in items {
-                        let entity = format_ident!(
-                            "{}",
-                            x.strip_prefix("minecraft:").unwrap_or(x).to_uppercase()
-                        );
-                        ids.extend(quote! { &crate::entity_type::EntityType::#entity, });
-                    }
-                    targeting_tokens.extend(quote! {
-                        IDSet::IDs(Cow::Borrowed(&[#ids]))
-                    });
-                }
-            }
+            let targeting_tokens = entity_idset_tokens(&mob_vis.targeting_entity_types);
             let visibility = float_literal(mob_vis.visibility);
             tokens.extend(quote! {
                 (MobVisibility, &MobVisibilityImpl {
@@ -1549,6 +1484,34 @@ pub enum StringOrList {
     List(Vec<String>),
 }
 
+/// An entity type `IDSet`: one type, a list, or a `#tag`; `minecraft:` is optional.
+fn entity_idset_tokens(entities: &StringOrList) -> TokenStream {
+    let entity = |name: &str| {
+        let ident = format_ident!(
+            "{}",
+            name.strip_prefix("minecraft:")
+                .unwrap_or(name)
+                .to_uppercase()
+        );
+        quote! { &crate::entity_type::EntityType::#ident, }
+    };
+    match entities {
+        StringOrList::String(str) => {
+            if let Some(tag) = str.strip_prefix('#') {
+                let tag = tag.strip_prefix("minecraft:").unwrap_or(tag);
+                quote! { IDSet::Tag(Cow::Borrowed(#tag)) }
+            } else {
+                let ids = entity(str);
+                quote! { IDSet::IDs(Cow::Borrowed(&[#ids])) }
+            }
+        }
+        StringOrList::List(items) => {
+            let ids: TokenStream = items.iter().map(|name| entity(name)).collect();
+            quote! { IDSet::IDs(Cow::Borrowed(&[#ids])) }
+        }
+    }
+}
+
 #[derive(Deserialize, Clone)]
 pub struct CookingFuelComponent {
     pub burn_time: serde_json::Value,
@@ -1928,12 +1891,26 @@ pub fn build() -> TokenStream {
         let components = &item.components;
         let components_tokens = components.to_token_stream();
 
+        let crafting_remainder = item
+            .crafting_remainder
+            .as_ref()
+            .map(|remainder| {
+                let name = remainder
+                    .id
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(&remainder.id);
+                let ident = format_ident!("{}", name.to_shouty_snake_case());
+                quote! { Some(&Self::#ident) }
+            })
+            .unwrap_or_else(|| quote! { None });
+
         let id_lit = LitInt::new(&item.id.to_string(), Span::call_site());
 
         constants.extend(quote! {
             pub const #const_ident: Self = Self {
                 id: #id_lit,
                 registry_key: #name,
+                crafting_remainder: #crafting_remainder,
                 components: &[#components_tokens],
             };
         });
@@ -2077,6 +2054,7 @@ pub fn build() -> TokenStream {
         pub struct Item {
             pub id: u16,
             pub registry_key: &'static str,
+            pub crafting_remainder: Option<&'static Item>,
             pub components: &'static [(DataComponent, &'static dyn DataComponentImpl)],
         }
 

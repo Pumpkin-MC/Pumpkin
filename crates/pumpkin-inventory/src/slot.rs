@@ -336,12 +336,15 @@ impl Slot for ArmorSlot {
             | EquipmentSlot::Legs(_)
             | EquipmentSlot::Feet(_)
             | EquipmentSlot::Saddle(_)
-            | EquipmentSlot::Body(_) => stack
-                .get_data_component::<pumpkin_data::data_component_impl::EquippableImpl>()
-                .is_some_and(|equippable| {
-                    std::mem::discriminant(equippable.slot)
-                        == std::mem::discriminant(&self.equipment_slot)
-                }),
+            | EquipmentSlot::Body(_) => {
+                stack
+                    .get_data_component::<pumpkin_data::data_component_impl::EquippableImpl>()
+                    .is_some_and(|equippable| {
+                        std::mem::discriminant(equippable.slot)
+                            == std::mem::discriminant(&self.equipment_slot)
+                    })
+                    && self.inventory.is_valid_slot_for(self.index, stack)
+            }
             _ => true,
         }
     }

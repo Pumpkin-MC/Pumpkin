@@ -14,7 +14,6 @@ use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
 use pumpkin_data::block_properties::{CrafterLikeProperties, HorizontalFacing, Orientation};
-use pumpkin_data::data_component_impl::UseRemainderImpl;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -149,16 +148,24 @@ impl CrafterBlock {
             }
             Self::dispense_item(world, pos, crafter, &mut result_stack, props.orientation);
 
+            let recipe_id = format!("minecraft:{}", result_stack.item.registry_key);
+            let check_pos = pos.to_f64();
+            let players = world.players.load();
+            for player in players.iter() {
+                if player.position().squared_distance_to_vec(&check_pos) <= 25.0 {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::CrafterRecipeCrafted {
+                            recipe_id: recipe_id.clone(),
+                        },
+                    );
+                }
+            }
+
             for i in 0..CrafterBlockEntity::INVENTORY_SIZE {
                 let stack = crafter.get_stack(i);
                 if !stack.is_empty()
-                    && let Some(remainder) = stack.get_data_component::<UseRemainderImpl>()
-                    && let Some(remainder_item) = remainder
-                        .remainder
-                        .as_deref()
-                        .and_then(Item::from_registry_key)
+                    && let Some(mut remainder_stack) = stack.crafting_remainder()
                 {
-                    let mut remainder_stack = ItemStack::new(1, remainder_item);
                     Self::dispense_item(
                         world,
                         pos,

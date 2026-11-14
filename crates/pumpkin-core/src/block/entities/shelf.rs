@@ -88,6 +88,25 @@ impl BlockEntity for ShelfBlockEntity {
         Some(nbt)
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let items = self.items.try_read().ok()?;
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("Shelf", self.position)
+                .put_list(
+                    "Items",
+                    super::bedrock::build_bedrock_slot_items(items.as_slice()),
+                )
+                .put_bool(
+                    "align_items_to_bottom",
+                    self.align_items_to_bottom.load(Ordering::Relaxed),
+                )
+                .finish(),
+        )
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

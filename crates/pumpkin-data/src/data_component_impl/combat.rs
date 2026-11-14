@@ -58,26 +58,39 @@ impl DataComponentImpl for AttributeModifiersImpl {
     default_impl!(AttributeModifiers);
 }
 
+/// Vanilla `ItemEnchantments.LEVEL_CODEC` bounds encoded levels to 1..=255.
+pub const MAX_ENCHANTMENT_LEVEL: i32 = 255;
+
+/// Reads the `ItemEnchantments` map shared by `enchantments` and
+/// `stored_enchantments`, rejecting levels the client refuses to decode.
+fn read_enchantment_levels(data: &NbtTag) -> Option<Vec<(&'static Enchantment, i32)>> {
+    let compound = data.extract_compound()?;
+    let levels = if let Some(NbtTag::Compound(levels)) = compound.child_tags.get("levels") {
+        &levels.child_tags
+    } else {
+        &compound.child_tags
+    };
+    let mut enchantments = Vec::with_capacity(levels.len());
+    for (name, level) in levels {
+        let enchantment = Enchantment::from_name(name.as_ref())
+            .or_else(|| Enchantment::from_name(&format!("minecraft:{name}")))?;
+        let level = level.extract_int()?;
+        if !(1..=MAX_ENCHANTMENT_LEVEL).contains(&level) {
+            return None;
+        }
+        enchantments.push((enchantment, level));
+    }
+    Some(enchantments)
+}
+
 #[derive(Clone, Hash, PartialEq, Eq, Default)]
 pub struct EnchantmentsImpl {
     pub enchantment: Cow<'static, [(&'static Enchantment, i32)]>,
 }
 impl EnchantmentsImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let compound = data.extract_compound()?;
-        let data = if let Some(NbtTag::Compound(levels)) = compound.child_tags.get("levels") {
-            &levels.child_tags
-        } else {
-            &compound.child_tags
-        };
-        let mut enc = Vec::with_capacity(data.len());
-        for (name, level) in data {
-            let enchantment = Enchantment::from_name(name.as_ref())
-                .or_else(|| Enchantment::from_name(&format!("minecraft:{name}")))?;
-            enc.push((enchantment, level.extract_int()?));
-        }
         Some(Self {
-            enchantment: Cow::from(enc),
+            enchantment: Cow::from(read_enchantment_levels(data)?),
         })
     }
 }
@@ -881,10 +894,17 @@ pub struct KineticConditionImpl {
     pub min_relative_speed: f32,
 }
 impl KineticConditionImpl {
-    pub fn test(&self, ticks_used: i32, attacker_speed: f64, relative_speed: f64) -> bool {
+    /// `entity_factor` scales both speed thresholds: 1 for players, 0.2 for mobs.
+    pub fn test(
+        &self,
+        ticks_used: i32,
+        attacker_speed: f64,
+        relative_speed: f64,
+        entity_factor: f64,
+    ) -> bool {
         ticks_used <= self.max_duration_ticks
-            && attacker_speed >= f64::from(self.min_speed)
-            && relative_speed >= f64::from(self.min_relative_speed)
+            && attacker_speed >= f64::from(self.min_speed) * entity_factor
+            && relative_speed >= f64::from(self.min_relative_speed) * entity_factor
     }
     fn read(compound: &NbtCompound, key: &str) -> Option<Self> {
         let condition = compound.get_compound(key)?;
@@ -1158,6 +1178,7 @@ impl DataComponentImpl for AdditionalTradeCostImpl {
     default_impl!(AdditionalTradeCost);
 }
 
+/// Scales how far the listed mobs notice the wearer, vanilla `MobVisibility`. Mob heads.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MobVisibilityImpl {
     pub targeting_entity_types: IDSet<EntityType>,
@@ -1170,12 +1191,20 @@ impl Hash for MobVisibilityImpl {
     }
 }
 impl MobVisibilityImpl {
+    pub const MAX_VISIBILITY: f32 = 10.0;
+
+    /// Vanilla `floatRange(0, MAX_VISIBILITY)`, which also rejects NaN.
+    #[must_use]
+    pub fn is_valid_visibility(visibility: f32) -> bool {
+        (0.0..=Self::MAX_VISIBILITY).contains(&visibility)
+    }
+
     pub fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
         let targeting_entity_types =
             IDSet::<EntityType>::read(compound.get("targeting_entity_types")?)?;
         let visibility = compound.get_float("visibility")?;
-        Some(Self {
+        Self::is_valid_visibility(visibility).then_some(Self {
             targeting_entity_types,
             visibility,
         })
@@ -1204,20 +1233,8 @@ pub struct StoredEnchantmentsImpl {
 }
 impl StoredEnchantmentsImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let compound = data.extract_compound()?;
-        let data = if let Some(NbtTag::Compound(levels)) = compound.child_tags.get("levels") {
-            &levels.child_tags
-        } else {
-            &compound.child_tags
-        };
-        let mut enc = Vec::with_capacity(data.len());
-        for (name, level) in data {
-            let enchantment = Enchantment::from_name(name.as_ref())
-                .or_else(|| Enchantment::from_name(&format!("minecraft:{name}")))?;
-            enc.push((enchantment, level.extract_int()?));
-        }
         Some(Self {
-            enchantment: Cow::from(enc),
+            enchantment: Cow::from(read_enchantment_levels(data)?),
         })
     }
 }

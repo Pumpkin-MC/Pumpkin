@@ -126,7 +126,7 @@ impl BlockEntity for CommandBlockEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        Some(crate::block::entities::bedrock::build_command_block_actor(
+        Some(build_command_block_actor(
             self.position,
             &command,
             None,
@@ -146,5 +146,65 @@ impl BlockEntity for CommandBlockEntity {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for command blocks.
+#[expect(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
+#[must_use]
+pub fn build_command_block_actor(
+    position: BlockPos,
+    command: &str,
+    custom_name: Option<&str>,
+    auto: bool,
+    condition_met: bool,
+    conditional: bool,
+    powered: bool,
+    success_count: u32,
+    track_output: bool,
+    last_output: &str,
+) -> NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new("CommandBlock", position)
+        .movable(false)
+        .custom_name(custom_name)
+        .put_string("Command", command)
+        .put_bool("auto", auto)
+        .put_bool("conditionMet", condition_met)
+        .put_bool("conditionalMode", conditional)
+        .put_bool("powered", powered)
+        .put_int("SuccessCount", success_count as i32)
+        .put_bool("TrackOutput", track_output)
+        .put_string("LastOutput", last_output)
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_block_actor_builder() {
+        let pos = BlockPos::new(6, 64, 6);
+        let nbt = build_command_block_actor(
+            pos,
+            "say hi",
+            Some("Cmd"),
+            true,
+            true,
+            false,
+            false,
+            1,
+            true,
+            "hi",
+        );
+        assert_eq!(nbt.get_string("id"), Some("CommandBlock"));
+        assert_eq!(nbt.get_string("Command"), Some("say hi"));
+        assert_eq!(nbt.get_string("CustomName"), Some("Cmd"));
+        assert_eq!(nbt.get_bool("auto"), Some(true));
+        assert_eq!(nbt.get_bool("conditionMet"), Some(true));
+        assert_eq!(nbt.get_bool("conditionalMode"), Some(false));
+        assert_eq!(nbt.get_bool("powered"), Some(false));
+        assert_eq!(nbt.get_int("SuccessCount"), Some(1));
+        assert_eq!(nbt.get_bool("isMovable"), Some(false));
     }
 }

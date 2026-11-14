@@ -23,7 +23,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, BlockStateId, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxBuildHasher, FxHashSet};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
 use std::{
@@ -78,9 +78,9 @@ pub struct Level {
 
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
-    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk, FxBuildHasher>>,
     pub(crate) loaded_chunk_changes: Arc<SegQueue<LoadedChunkChange>>,
-    loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
+    loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk, FxBuildHasher>>,
     pub chunks_with_scheduled_ticks: Arc<dashmap::DashSet<Vector2<i32>>>,
     pub chunk_loading: Mutex<ChunkLoading>,
 
@@ -302,9 +302,9 @@ impl Level {
             chunk_saver,
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
-            loaded_chunks: Arc::new(DashMap::new()),
+            loaded_chunks: Arc::default(),
             loaded_chunk_changes: Arc::new(SegQueue::new()),
-            loaded_entity_chunks: Arc::new(DashMap::new()),
+            loaded_entity_chunks: Arc::default(),
             chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
             chunk_watchers: Arc::new(DashMap::new()),
@@ -685,6 +685,30 @@ impl Level {
         f(&chunk)
     }
 
+    /// Returns whether the chunk at `pos` is currently loaded in memory or exists on disk.
+    pub async fn is_chunk_generated(&self, pos: Vector2<i32>) -> bool {
+        if self.is_chunk_loaded(&pos) {
+            return true;
+        }
+        self.chunk_saver
+            .is_chunk_generated(&self.level_folder, pos)
+            .await
+    }
+
+    /// Deletes an unloaded chunk (and its entity chunk) from disk storage.
+    /// Returns `false` if the chunk is currently loaded or did not exist on disk.
+    pub async fn delete_chunk(&self, pos: Vector2<i32>) -> bool {
+        if self.is_chunk_loaded(&pos) {
+            return false;
+        }
+        let chunk_deleted = self.chunk_saver.delete_chunk(&self.level_folder, pos).await;
+        let entity_deleted = self
+            .entity_saver
+            .delete_chunk(&self.level_folder, pos)
+            .await;
+        chunk_deleted || entity_deleted
+    }
+
     pub fn loaded_chunk_changes(&self) -> impl Iterator<Item = LoadedChunkChange> + '_ {
         std::iter::from_fn(|| self.loaded_chunk_changes.pop())
     }
@@ -697,7 +721,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+            lock.add_force_ticket(pos);
             lock.send_change();
         };
 
@@ -710,7 +734,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
+            lock.remove_force_ticket(pos);
             lock.send_change();
         };
 

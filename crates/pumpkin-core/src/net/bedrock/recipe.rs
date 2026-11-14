@@ -27,7 +27,21 @@ const NATIVE_WOOD_TAGS: &[&str] = &[
     "minecraft:wooden_slabs",
 ];
 
-pub fn crafting_data() -> &'static [BedrockRecipe] {
+pub fn crafting_data(recipe_manager: &crate::server::RecipeManager) -> Vec<BedrockRecipe> {
+    let mut recipes = static_recipes().to_vec();
+    let dynamic = recipe_manager.get_dynamic_recipes_internal();
+    if !dynamic.is_empty() {
+        let mut network_id = (recipes.len() + 1) as u32;
+        for recipe in dynamic {
+            if let pumpkin_protocol::codec::recipe::DynamicRecipe::Crafting(crafting) = recipe {
+                append_dynamic_crafting_recipe(&mut recipes, &crafting, &mut network_id);
+            }
+        }
+    }
+    recipes
+}
+
+pub fn static_recipes() -> &'static [BedrockRecipe] {
     static RECIPES: OnceLock<Vec<BedrockRecipe>> = OnceLock::new();
     RECIPES.get_or_init(build).as_slice()
 }
@@ -210,7 +224,158 @@ fn build() -> Vec<BedrockRecipe> {
         }
     }
 
+    for recipe in pumpkin_data::recipes::RECIPES_STONECUTTING {
+        let options = ingredient_options(&recipe.ingredient);
+        let Some(output) = output_descriptor(&recipe.result) else {
+            continue;
+        };
+        for input in ingredient_variants(&[options]) {
+            recipes.push(BedrockRecipe::Shapeless(BedrockShapelessRecipe {
+                recipe_id: format!("pumpkin:stonecutter_{network_id}"),
+                input,
+                output: vec![output.clone()],
+                uuid: Uuid::from_u128(u128::from(network_id)),
+                block: "stonecutter".to_string(),
+                priority: VarInt(1),
+                unlock_requirement: RecipeUnlockRequirement { context: 1 },
+                recipe_network_id: VarUInt(network_id),
+            }));
+            network_id += 1;
+        }
+    }
+
     recipes
+}
+
+fn owned_ingredient_options(
+    ingredient: &pumpkin_protocol::codec::recipe::OwnedRecipeIngredient,
+) -> Vec<ItemDescriptorCount> {
+    match ingredient {
+        pumpkin_protocol::codec::recipe::OwnedRecipeIngredient::Simple(identifier) => {
+            item_descriptor(identifier).into_iter().collect()
+        }
+        pumpkin_protocol::codec::recipe::OwnedRecipeIngredient::Tagged(tag) => {
+            let tag = tag.strip_prefix('#').unwrap_or(tag);
+            if NATIVE_WOOD_TAGS.contains(&tag) {
+                return vec![ItemDescriptorCount::tag(tag.to_string())];
+            }
+
+            pumpkin_data::tag::get_tag_ids(pumpkin_data::tag::RegistryKey::Item, tag)
+                .into_iter()
+                .flatten()
+                .filter_map(|&id| Item::from_id(id))
+                .filter_map(|item| item_descriptor(item.registry_key))
+                .fold(Vec::new(), push_unique)
+        }
+        pumpkin_protocol::codec::recipe::OwnedRecipeIngredient::OneOf(identifiers) => identifiers
+            .iter()
+            .filter_map(|identifier| item_descriptor(identifier))
+            .fold(Vec::new(), push_unique),
+    }
+}
+
+fn owned_output_descriptor(
+    result: &pumpkin_protocol::codec::recipe::OwnedRecipeResult,
+) -> Option<NetworkItemDescriptor> {
+    let item = Item::from_registry_key(&result.item_id)?;
+    let mapping = JavaToBedrockItemMapping::from_java_item_id(item.id)?;
+    Some(NetworkItemDescriptor {
+        id: VarInt::from(mapping.bedrock_item.id),
+        stack_size: result.count as u16,
+        aux_value: VarUInt(mapping.bedrock_data),
+        block_runtime_id: VarInt::from(mapping.bedrock_block_state),
+        nbt_data: pumpkin_nbt::Nbt::default(),
+        place_on_blocks: Vec::new(),
+        destroy_blocks: Vec::new(),
+        shield_blocking_tick: 0,
+    })
+}
+
+fn append_dynamic_crafting_recipe(
+    recipes: &mut Vec<BedrockRecipe>,
+    recipe: &pumpkin_protocol::codec::recipe::OwnedCraftingRecipe,
+    network_id: &mut u32,
+) {
+    match recipe {
+        pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shaped {
+            recipe_id,
+            key,
+            pattern,
+            result,
+            ..
+        } => {
+            let height = pattern.len() as i32;
+            let width = pattern.iter().map(String::len).max().unwrap_or(0) as i32;
+            let mut options = Vec::new();
+            for row in pattern {
+                for column in 0..width as usize {
+                    let symbol = row.chars().nth(column).unwrap_or(' ');
+                    options.push(if symbol == ' ' {
+                        vec![ItemDescriptorCount::empty()]
+                    } else {
+                        key.iter()
+                            .find(|(k, _)| *k == symbol)
+                            .map_or_else(Vec::new, |(_, ingredient)| {
+                                owned_ingredient_options(ingredient)
+                            })
+                    });
+                }
+            }
+
+            let Some(output) = owned_output_descriptor(result) else {
+                return;
+            };
+            for input in ingredient_variants(&options) {
+                let id_str = recipe_id
+                    .clone()
+                    .unwrap_or_else(|| format!("pumpkin:dynamic_{network_id}"));
+                recipes.push(BedrockRecipe::Shaped(BedrockShapedRecipe {
+                    recipe_id: id_str,
+                    width: VarInt(width),
+                    height: VarInt(height),
+                    input,
+                    output: vec![output.clone()],
+                    uuid: Uuid::from_u128(u128::from(*network_id)),
+                    block: "crafting_table".to_string(),
+                    priority: VarInt(1),
+                    assume_symmetry: true,
+                    unlock_requirement: RecipeUnlockRequirement { context: 1 },
+                    recipe_network_id: VarUInt(*network_id),
+                }));
+                *network_id += 1;
+            }
+        }
+        pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shapeless {
+            recipe_id,
+            ingredients,
+            result,
+            ..
+        } => {
+            let options = ingredients
+                .iter()
+                .map(owned_ingredient_options)
+                .collect::<Vec<_>>();
+            let Some(output) = owned_output_descriptor(result) else {
+                return;
+            };
+            for input in ingredient_variants(&options) {
+                let id_str = recipe_id
+                    .clone()
+                    .unwrap_or_else(|| format!("pumpkin:dynamic_{network_id}"));
+                recipes.push(BedrockRecipe::Shapeless(BedrockShapelessRecipe {
+                    recipe_id: id_str,
+                    input,
+                    output: vec![output.clone()],
+                    uuid: Uuid::from_u128(u128::from(*network_id)),
+                    block: "crafting_table".to_string(),
+                    priority: VarInt(1),
+                    unlock_requirement: RecipeUnlockRequirement { context: 1 },
+                    recipe_network_id: VarUInt(*network_id),
+                }));
+                *network_id += 1;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
