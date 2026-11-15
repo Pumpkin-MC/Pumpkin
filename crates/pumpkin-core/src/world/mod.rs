@@ -2307,7 +2307,12 @@ impl World {
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
         let spawn_list = spawn_list_for_tick(self, &spawn_state, spawn_mobs, spawn_enemies);
 
-        // 5. Sequential Chunk Spawners (vanilla `tickSpawningChunks`)
+        // 5. Chunk Weather (thunder, ice, snow, cauldron precipitation)
+        for &chunk_pos in active_chunks.iter() {
+            self.tick_chunk_weather(chunk_pos, random_tick_speed);
+        }
+
+        // 6. Sequential Chunk Spawners (vanilla `tickSpawningChunks`)
         if !spawn_list.is_empty() {
             let mut spawning_chunks = Vec::new();
             for pos in active_chunks.iter() {
@@ -2734,13 +2739,6 @@ impl World {
         spawn_list: &Vec<&'static MobCategory>,
         spawn_state: &Arc<SpawnState>,
     ) {
-        //TODO check in simulation distance
-        let (is_raining, is_thundering) = (self.is_raining(), self.is_thundering());
-
-        if is_raining && is_thundering && rng().random_range(0..100_000) == 0 {
-            self.tick_thunder(chunk_pos);
-        }
-
         if spawn_list.is_empty() {
             return;
         }
@@ -2751,8 +2749,170 @@ impl World {
             chunk,
             spawn_state,
             spawn_list,
-            is_thundering,
+            self.is_thundering(),
         );
+    }
+
+    fn tick_chunk_weather(self: &Arc<Self>, chunk_pos: Vector2<i32>, random_tick_speed: i64) {
+        if !self.level.is_chunk_loaded(&chunk_pos) {
+            return;
+        }
+        let mut rand_gen = rng();
+        if self.is_raining() && self.is_thundering() && rand_gen.random_range(0..100_000) == 0 {
+            self.tick_thunder(chunk_pos);
+        }
+        let samples = random_tick_speed.max(0);
+        let min_x = chunk_pos.x << 4;
+        let min_z = chunk_pos.y << 4;
+        for _ in 0..samples {
+            if rand_gen.random_range(0..48) == 0 {
+                let rand_val = rand_gen.random::<i32>() >> 2;
+                let random_pos =
+                    BlockPos::new(min_x + (rand_val & 15), 0, min_z + ((rand_val >> 8) & 15));
+                self.tick_precipitation(random_pos);
+            }
+        }
+    }
+
+    pub fn tick_precipitation(self: &Arc<Self>, pos: BlockPos) {
+        let top_pos = BlockPos::new(
+            pos.0.x,
+            self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1,
+            pos.0.z,
+        );
+        let below_pos = top_pos.down();
+        let biome = self.get_biome(&top_pos);
+
+        if self.should_freeze_at(biome, &below_pos) {
+            let allow = self.server.upgrade().is_none_or(|server| {
+                let mut event = crate::plugin::api::events::block::block_form::BlockFormEvent::new(
+                    below_pos,
+                    &Block::ICE,
+                );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                !event.cancelled
+            });
+            if allow {
+                self.set_block_state(
+                    &below_pos,
+                    Block::ICE.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
+            }
+        }
+
+        if !self.is_raining() {
+            return;
+        }
+
+        let max_snow_height = self
+            .level_info
+            .load()
+            .game_rules
+            .max_snow_accumulation_height;
+        if max_snow_height > 0 && self.should_snow_at(biome, &top_pos) {
+            let (top_block, top_state_id) = self.get_block_and_state_id(&top_pos);
+            let next_snow_state = if top_block == &Block::SNOW {
+                let mut props =
+                    pumpkin_data::block_properties::SnowLikeProperties::from_state_id(top_state_id);
+                let cap = max_snow_height.min(8) as u8;
+                (props.layers < cap).then(|| {
+                    props.layers += 1;
+                    props.to_state_id(&Block::SNOW)
+                })
+            } else {
+                Some(Block::SNOW.default_state.id)
+            };
+            if let Some(new_state_id) = next_snow_state {
+                let allow = self.server.upgrade().is_none_or(|server| {
+                    let mut event =
+                        crate::plugin::api::events::block::block_form::BlockFormEvent::new(
+                            top_pos,
+                            &Block::SNOW,
+                        );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    !event.cancelled
+                });
+                if allow {
+                    self.set_block_state(&top_pos, new_state_id, BlockFlags::NOTIFY_ALL);
+                }
+            }
+        }
+
+        let below_biome = self.get_biome(&below_pos);
+        if below_biome.weather.has_precipitation() {
+            let is_rain = below_biome.weather.warm_enough_to_rain(
+                below_pos.0.x,
+                below_pos.0.y,
+                below_pos.0.z,
+                self.sea_level,
+            );
+            let (below_block, below_state_id) = self.get_block_and_state_id(&below_pos);
+            if matches!(
+                below_block.id,
+                pumpkin_data::BlockId::CAULDRON
+                    | pumpkin_data::BlockId::WATER_CAULDRON
+                    | pumpkin_data::BlockId::POWDER_SNOW_CAULDRON
+            ) {
+                crate::block::blocks::cauldron::CauldronBlock::handle_precipitation(
+                    self,
+                    &below_pos,
+                    below_block.id,
+                    below_state_id,
+                    is_rain,
+                );
+            }
+        }
+    }
+
+    fn should_freeze_at(&self, biome: &pumpkin_data::biome::Biome, pos: &BlockPos) -> bool {
+        if biome
+            .weather
+            .warm_enough_to_rain(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+        {
+            return false;
+        }
+        let max_y = self.dimension.min_y + self.dimension.height;
+        if pos.0.y < self.dimension.min_y || pos.0.y >= max_y {
+            return false;
+        }
+        if self.get_block_light_level(pos).unwrap_or(0) >= 10 {
+            return false;
+        }
+        if self.get_block_state_id(pos) != Block::WATER.default_state.id {
+            return false;
+        }
+        let is_water = |neighbor: BlockPos| {
+            !self.level.is_chunk_loaded(&neighbor.chunk_position())
+                || pumpkin_data::tag::Taggable::has_tag(
+                    self.get_fluid(&neighbor),
+                    &pumpkin_data::tag::Fluid::MINECRAFT_WATER,
+                )
+        };
+        !(is_water(pos.west())
+            && is_water(pos.east())
+            && is_water(pos.north())
+            && is_water(pos.south()))
+    }
+
+    fn should_snow_at(&self, biome: &pumpkin_data::biome::Biome, pos: &BlockPos) -> bool {
+        if !biome.weather.has_precipitation()
+            || biome
+                .weather
+                .warm_enough_to_rain(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+        {
+            return false;
+        }
+        let max_y = self.dimension.min_y + self.dimension.height;
+        if pos.0.y < self.dimension.min_y || pos.0.y >= max_y {
+            return false;
+        }
+        if self.get_block_light_level(pos).unwrap_or(0) >= 10 {
+            return false;
+        }
+        let (block, state) = self.get_block_and_state(pos);
+        (state.is_air() || block == &Block::SNOW)
+            && crate::block::blocks::snow::can_place_at(self, pos)
     }
 
     fn tick_thunder(self: &Arc<Self>, chunk_pos: Vector2<i32>) {
