@@ -434,7 +434,8 @@ impl WitherEntity {
             if new_count <= 0 {
                 let pos = entity.pos.load();
                 let eye_y = pos.y + entity.get_eye_height();
-                world.explode(
+                world.explode_from(
+                    self,
                     Vector3::new(pos.x, eye_y, pos.z),
                     7.0,
                     ExplosionInteraction::Mob,

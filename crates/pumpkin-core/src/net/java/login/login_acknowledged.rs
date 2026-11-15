@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 impl PendingConnection {
     pub async fn handle_login_acknowledged(
@@ -96,10 +97,22 @@ impl PendingConnection {
 
             self.send_packet_now(&resource_pack).await;
         } else {
-            self.send_known_packs(server).await;
+            self.start_known_packs(server).await;
         }
         debug!("login acknowledged");
         None
+    }
+
+    /// Starts the known packs exchange. Clients before 1.20.5 have no known packs, so
+    /// the registries follow right away.
+    pub async fn start_known_packs(&mut self, server: &Server) {
+        if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
+            self.send_known_packs(server).await;
+        } else {
+            let features = server.get_enabled_features();
+            self.send_packet_now(&CFeatureFlags::new(&features)).await;
+            self.handle_known_packs(server).await;
+        }
     }
 
     pub async fn send_known_packs(&mut self, server: &Server) {

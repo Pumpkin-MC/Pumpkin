@@ -285,7 +285,8 @@ impl Identifier {
             }
             i += 1;
         }
-        true
+        // Vanilla's `isValidNamespace` also refuses `..`.
+        !matches!(bytes, b"..")
     }
 
     /// Returns whether the given path would be valid if
@@ -433,6 +434,7 @@ mod test {
         assert!(Identifier::parse("a:b:c").is_err());
         assert!(Identifier::parse("he/llo:bye").is_err());
         assert!(Identifier::parse("1234+567:89").is_err());
+        assert!(Identifier::parse("..:bye").is_err());
 
         Ok(())
     }

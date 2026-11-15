@@ -59,9 +59,17 @@ impl<'a> ServerPacket<'a> for CUpdateEntityRot {
         } else {
             bytebuf.get_var_int()?
         };
+        // The on ground flag moved in front of the rotation in 26.3.
+        let on_ground_before_rotation = if *version >= JavaMinecraftVersion::V_26_3 {
+            Some(bytebuf.get_bool()?)
+        } else {
+            None
+        };
         let yaw = bytebuf.get_u8()?;
         let pitch = bytebuf.get_u8()?;
-        let on_ground = if *version >= JavaMinecraftVersion::V_1_8 {
+        let on_ground = if let Some(on_ground) = on_ground_before_rotation {
+            on_ground
+        } else if *version >= JavaMinecraftVersion::V_1_8 {
             bytebuf.get_bool()?
         } else {
             false
@@ -72,5 +80,39 @@ impl<'a> ServerPacket<'a> for CUpdateEntityRot {
             pitch,
             on_ground,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn round_trip(version: JavaMinecraftVersion) {
+        let packet = CUpdateEntityRot::new(VarInt(9), 64, 200, true);
+        let mut buf = Vec::new();
+        packet.write_packet_data(&mut buf, &version).unwrap();
+        let read = CUpdateEntityRot::read(&mut buf.as_slice(), &version).unwrap();
+        assert_eq!(read, packet);
+    }
+
+    #[test]
+    fn round_trips_at_26_3() {
+        round_trip(JavaMinecraftVersion::V_26_3);
+    }
+
+    #[test]
+    fn round_trips_before_26_3() {
+        round_trip(JavaMinecraftVersion::V_1_21_11);
+    }
+
+    #[test]
+    fn round_trips_before_1_8() {
+        // Versions before 1.8 have no on ground flag for this packet; it always reads as false.
+        let packet = CUpdateEntityRot::new(VarInt(9), 64, 200, false);
+        let version = JavaMinecraftVersion::V_1_7_6;
+        let mut buf = Vec::new();
+        packet.write_packet_data(&mut buf, &version).unwrap();
+        let read = CUpdateEntityRot::read(&mut buf.as_slice(), &version).unwrap();
+        assert_eq!(read, packet);
     }
 }

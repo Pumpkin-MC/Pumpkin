@@ -1,14 +1,21 @@
 use super::{Entity, EntityBase, living::LivingEntity};
+use crate::block::blocks::bubble_column;
+use crate::entity::projectile_deflection::{ProjectileDeflection, deflect};
+use crate::server::Server;
 use crate::world::World;
+use crate::world::game_event::GameEventContext;
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use std::{
-    sync::Arc,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use pumpkin_world::clip::{ClipBlock, ClipContext, ClipFluid};
+use std::{sync::Arc, sync::atomic::Ordering};
+pub mod abstract_arrow;
 pub mod arrow;
 pub mod egg;
 pub mod ender_pearl;
@@ -30,26 +37,6 @@ pub mod wind_charge;
 pub mod wither_skull;
 
 use pumpkin_data::item_stack::ItemStack;
-
-#[must_use]
-pub fn is_projectile(entity_type: &EntityType) -> bool {
-    *entity_type == EntityType::ARROW
-        || *entity_type == EntityType::TRIDENT
-        || *entity_type == EntityType::EGG
-        || *entity_type == EntityType::EXPERIENCE_BOTTLE
-        || *entity_type == EntityType::SNOWBALL
-        || *entity_type == EntityType::FIREWORK_ROCKET
-        || *entity_type == EntityType::WIND_CHARGE
-        || *entity_type == EntityType::SPLASH_POTION
-        || *entity_type == EntityType::LINGERING_POTION
-        || *entity_type == EntityType::ENDER_PEARL
-        || *entity_type == EntityType::SHULKER_BULLET
-        || *entity_type == EntityType::FIREBALL
-        || *entity_type == EntityType::SMALL_FIREBALL
-        || *entity_type == EntityType::FISHING_BOBBER
-        || *entity_type == EntityType::WITHER_SKULL
-        || *entity_type == EntityType::LLAMA_SPIT
-}
 
 /// Helper to apply projectile spawned enchantment effects matching vanilla `Projectile::applyOnProjectileSpawned`.
 pub fn apply_on_projectile_spawned(
@@ -78,21 +65,24 @@ pub fn apply_on_projectile_spawned(
 pub struct ThrownItemEntity {
     pub entity: Entity,
     pub owner: owner::ProjectileOwner,
-    pub collides_with_projectiles: bool,
-    pub has_hit: AtomicBool,
     pub gravity: f64,
 }
 
 impl ThrownItemEntity {
+    /// Starts at the shooter's eye.
     pub fn new(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         let mut owner_pos = owner.pos.load();
         owner_pos.y += owner.get_eye_height() - 0.1;
         entity.set_pos(owner_pos);
+        Self::owned(entity, owner, gravity)
+    }
+
+    /// Keeps the position `entity` already has.
+    #[must_use]
+    pub fn owned(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         Self {
             entity,
             owner: owner::ProjectileOwner::new(Some(owner)),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity,
         }
     }
@@ -138,170 +128,57 @@ impl ThrownItemEntity {
 }
 
 impl ThrownItemEntity {
-    /// Process a tick for projectile movement and collisions
-    pub fn process_tick(&self, caller: &dyn EntityBase) {
+    /// Moves the projectile one tick and handles what it hits.
+    pub fn process_tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = self.get_entity();
+        let first_tick = entity.first_tick.load(Ordering::Relaxed);
+        // The base tick stores the last position, so it has to run before the move.
+        entity.tick(caller, server);
+        if entity.is_removed() {
+            return;
+        }
         let world = entity.world.load();
 
-        self.owner.check_left_owner(entity);
-        entity.update_last_pos();
+        self.owner.tick(entity);
+        if first_tick {
+            handle_first_tick_bubble_column(caller, &world);
+        }
 
-        // Apply gravity and inertia
         let mut velocity = entity.velocity.load();
         velocity.y -= self.get_gravity();
-
         let inertia = if entity.touching_water.load(Ordering::Relaxed) {
-            0.8
+            WATER_INERTIA
         } else {
-            0.99
+            AIR_INERTIA
         };
-        velocity = velocity.multiply(inertia, inertia, inertia);
-
-        // Store velocity
+        velocity = velocity * inertia;
         entity.velocity.store(velocity);
 
-        let start_pos = entity.pos.load();
-        let delta = velocity;
-
-        // Update position
-        let new_pos = start_pos.add(&delta);
-        entity.set_pos(new_pos);
-
-        // Send updated velocity to clients
-        let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-        let chunk_pos = entity.chunk_pos.load();
-        world.broadcast_to_chunk(chunk_pos, &packet);
-
-        // Calculate search box for collisions
-        let search_box = BoundingBox::new(
-            Vector3::new(
-                start_pos.x.min(new_pos.x),
-                start_pos.y.min(new_pos.y),
-                start_pos.z.min(new_pos.z),
-            ),
-            Vector3::new(
-                start_pos.x.max(new_pos.x),
-                start_pos.y.max(new_pos.y),
-                start_pos.z.max(new_pos.z),
-            ),
-        )
-        .expand(0.3, 0.3, 0.3);
-
-        let mut closest_t = 1.0f64;
-        let mut hit = None;
-
-        // Block collisions
-        let (block_cols, block_positions) = world.get_block_collisions(search_box, caller);
-        for (idx, bb) in block_cols.iter().enumerate() {
-            if let Some(t) = calculate_ray_intersection(&start_pos, &delta, bb)
-                && t < closest_t
-            {
-                closest_t = t;
-                // Map back to block pos
-                for (len, pos) in &block_positions {
-                    if idx < *len {
-                        let hit_pos = start_pos.add(&delta.multiply(t, t, t));
-                        hit = Some(ProjectileHit::Block {
-                            pos: *pos,
-                            face: get_hit_face(hit_pos, *pos),
-                            hit_pos,
-                            normal: delta.normalize().multiply(-1.0, -1.0, -1.0),
-                        });
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Entity collisions
-        let mut candidates = world.get_entities_at_box(&search_box);
-        candidates.extend(
-            world
-                .get_players_at_box(&search_box)
-                .into_iter()
-                .map(|player| player as Arc<dyn EntityBase>),
+        let hit = get_hit_result_on_move_vector(
+            caller,
+            |other| self.can_hit_entity(&world, other),
+            ClipBlock::Collider,
         );
-        for cand in candidates {
-            if self.should_skip_collision(&world, entity, &cand) {
-                continue;
-            }
+        let new_pos = hit
+            .as_ref()
+            .map_or_else(|| entity.pos.load() + velocity, ProjectileHit::hit_pos);
+        entity.set_pos(new_pos);
+        update_rotation(entity, false);
+        entity.tick_block_collisions(caller);
 
-            let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
-            if skips_hit_from_inside(cand.as_ref(), &ebb, &start_pos) {
-                continue;
-            }
-            if let Some(t) = calculate_ray_intersection(&start_pos, &delta, &ebb)
-                && t < closest_t
-            {
-                closest_t = t;
-                let hit_pos = start_pos.add(&delta.multiply(t, t, t));
-                hit = Some(ProjectileHit::Entity {
-                    entity: cand.clone(),
-                    hit_pos,
-                    normal: delta.normalize().multiply(-1.0, -1.0, -1.0),
-                });
-            }
-        }
+        let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
+        world.broadcast_to_chunk(entity.chunk_pos.load(), &packet);
 
-        // Handle hit or continue
-        if let Some(h) = hit {
-            // Ensure hit is only processed once per projectile
-            if self.has_hit.swap(true, Ordering::SeqCst) {
-                return;
-            }
-
-            if let ProjectileHit::Block { pos, hit_pos, .. } = &h {
-                let block = world.get_block(pos);
-                let state = world.get_block_state(pos);
-                if let Some(server) = world.server.upgrade() {
-                    world
-                        .block_registry
-                        .on_projectile_hit(block, &world, caller, pos, state, hit_pos, &server);
-                }
-            }
-
-            // Just trigger hit effects and remove
-            caller.on_hit(h);
+        if let Some(hit) = hit
+            && entity.is_alive()
+            && hit_target_or_deflect_self(caller, hit, server) == HitOutcome::Hit
+        {
             entity.remove();
         }
     }
 
-    /// Returns if collision should be skipped (e.g. owner or projectile vs projectile)
-    fn should_skip_collision(
-        &self,
-        world: &World,
-        self_ent: &Entity,
-        other: &Arc<dyn EntityBase>,
-    ) -> bool {
-        let other_ent = other.get_entity();
-        if other_ent.entity_id == self_ent.entity_id {
-            return true;
-        }
-
-        if other.is_spectator() {
-            return true;
-        }
-
-        if !self.owner.can_hit(world, other_ent) {
-            return true;
-        }
-
-        // Not pickable in vanilla: projectiles pass through these
-        // TODO: replace with `!can_hit()` once Player, TNT, falling blocks, end crystals, item
-        // frames, shulker bullets and redirectable projectiles override it like vanilla `isPickable`
-        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD
-            || *other_ent.entity_type == EntityType::EXPERIENCE_ORB
-            || *other_ent.entity_type == EntityType::ITEM
-        {
-            return true;
-        }
-
-        // Projectile vs projectile logic
-        if !self.collides_with_projectiles && is_projectile(other_ent.entity_type) {
-            return true;
-        }
-
-        false
+    fn can_hit_entity(&self, world: &World, other: &dyn EntityBase) -> bool {
+        other.can_be_hit_by_projectile() && self.owner.can_hit(world, other.get_entity())
     }
 
     const fn get_entity(&self) -> &Entity {
@@ -317,64 +194,470 @@ impl ThrownItemEntity {
     }
 }
 
-/// Ray intersection algorithm for AABBs, returning a t value
-/// Whether a ray starting inside `bb` skips this entity, for mobs that opt out of inside hits.
-fn skips_hit_from_inside(entity: &dyn EntityBase, bb: &BoundingBox, start: &Vector3<f64>) -> bool {
-    (bb.min.x..bb.max.x).contains(&start.x)
-        && (bb.min.y..bb.max.y).contains(&start.y)
-        && (bb.min.z..bb.max.z).contains(&start.z)
-        && entity
-            .get_mob()
-            .is_some_and(|mob| !mob.can_be_picked_from_inside())
+/// A thrown projectile spawned inside a bubble column feels it right
+/// away instead of a tick late.
+fn handle_first_tick_bubble_column(projectile: &dyn EntityBase, world: &World) {
+    let bounding_box = projectile.get_entity().bounding_box.load();
+    let min = bounding_box.min.floor_to_i32();
+    let max = bounding_box.max.floor_to_i32();
+    for x in min.x..=max.x {
+        for y in min.y..=max.y {
+            for z in min.z..=max.z {
+                let pos = BlockPos::new(x, y, z);
+                let (block, state) = world.get_block_and_state(&pos);
+                if block == &pumpkin_data::Block::BUBBLE_COLUMN {
+                    bubble_column::entity_inside(world, &pos, state.id, projectile);
+                }
+            }
+        }
+    }
 }
 
-fn calculate_ray_intersection(
-    start: &Vector3<f64>,
-    dir: &Vector3<f64>,
-    bb: &BoundingBox,
-) -> Option<f64> {
-    let mut t_min = 0.0f64;
-    let mut t_max = 1.0f64;
+const WATER_INERTIA: f64 = 0.8;
+const AIR_INERTIA: f64 = 0.99;
 
-    let b_min = [bb.min.x, bb.min.y, bb.min.z];
-    let b_max = [bb.max.x, bb.max.y, bb.max.z];
-    let s = [start.x, start.y, start.z];
-    let d = [dir.x, dir.y, dir.z];
+/// What became of a hit handed to [`hit_target_or_deflect_self`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HitOutcome {
+    /// The projectile hit its target.
+    Hit,
+    /// The target turned the projectile away instead.
+    Deflected,
+    /// The block was gone by the time the projectile got there.
+    Ignored,
+}
 
-    for i in 0..3 {
-        if d[i].abs() < 1e-9 {
-            if s[i] < b_min[i] || s[i] > b_max[i] {
-                return None;
+/// Deflects the projectile off an entity that deflects projectiles, otherwise hits the target.
+pub fn hit_target_or_deflect_self(
+    projectile: &dyn EntityBase,
+    hit: ProjectileHit,
+    server: &Server,
+) -> HitOutcome {
+    let world = projectile.get_entity().world.load();
+    match &hit {
+        ProjectileHit::Entity { entity, .. } => {
+            let deflection = entity.deflection(projectile);
+            if deflection != ProjectileDeflection::None {
+                if let Some(owner) = projectile.get_projectile_owner()
+                    && owner.last_deflected_by() != Some(entity.get_entity().entity_id)
+                    && deflect(
+                        projectile,
+                        deflection,
+                        Some(entity.as_ref()),
+                        owner.uuid(),
+                        false,
+                        Vector3::new(1.0, 1.0, 1.0),
+                    )
+                {
+                    owner.set_last_deflected_by(entity.get_entity());
+                }
+                return HitOutcome::Deflected;
             }
-        } else {
-            let t1 = (b_min[i] - s[i]) / d[i];
-            let t2 = (b_max[i] - s[i]) / d[i];
-            t_min = t_min.max(t1.min(t2));
-            t_max = t_max.min(t1.max(t2));
+        }
+        ProjectileHit::Block {
+            pos, world_border, ..
+        } => {
+            if !world_border {
+                if world.get_block_state(pos).is_air() {
+                    return HitOutcome::Ignored;
+                }
+            } else if projectile.should_bounce_on_world_border()
+                && deflect(
+                    projectile,
+                    ProjectileDeflection::Reverse,
+                    None,
+                    projectile
+                        .get_projectile_owner()
+                        .and_then(|owner| owner.uuid()),
+                    false,
+                    Vector3::new(0.2, 0.2, 0.2),
+                )
+            {
+                return HitOutcome::Deflected;
+            }
+        }
+    }
+    on_hit(projectile, hit, server);
+    HitOutcome::Hit
+}
+
+fn on_hit(projectile: &dyn EntityBase, hit: ProjectileHit, server: &Server) {
+    let world = projectile.get_entity().world.load();
+    let land_pos = match &hit {
+        ProjectileHit::Entity {
+            entity, hit_pos, ..
+        } => {
+            if is_redirectable(entity.get_entity())
+                && let Some(owner) = projectile.get_projectile_owner()
+            {
+                let shooter = owner.get(&world);
+                deflect(
+                    entity.as_ref(),
+                    ProjectileDeflection::AimDeflect,
+                    shooter.as_deref(),
+                    owner.uuid(),
+                    true,
+                    Vector3::new(1.0, 1.0, 1.0),
+                );
+            }
+            *hit_pos
+        }
+        ProjectileHit::Block { pos, hit_pos, .. } => {
+            let (block, state) = world.get_block_and_state(pos);
+            world
+                .block_registry
+                .on_projectile_hit(block, &world, projectile, pos, state, hit_pos, server);
+            pos.to_centered_f64()
+        }
+    };
+    projectile.on_hit(hit);
+    world.emit_game_event_with_context(
+        GameEvent::ProjectileLand.name(),
+        land_pos,
+        &GameEventContext {
+            source_entity: Some(projectile),
+        },
+    );
+}
+
+/// A projectile that speeds itself up along its direction instead of falling: fireballs, wither
+/// skulls and wind charges.
+pub struct HurtingProjectile {
+    pub projectile: ThrownItemEntity,
+    acceleration_power: AtomicCell<f64>,
+}
+
+impl std::ops::Deref for HurtingProjectile {
+    type Target = ThrownItemEntity;
+
+    fn deref(&self) -> &ThrownItemEntity {
+        &self.projectile
+    }
+}
+
+impl HurtingProjectile {
+    pub const DEFAULT_ACCELERATION_POWER: f64 = 0.1;
+    /// Inertia of fireballs and wither skulls that aren't dangerous.
+    pub const INERTIA: f64 = 0.95;
+    pub const LIQUID_INERTIA: f64 = 0.8;
+
+    #[must_use]
+    pub const fn new(projectile: ThrownItemEntity, acceleration_power: f64) -> Self {
+        Self {
+            projectile,
+            acceleration_power: AtomicCell::new(acceleration_power),
         }
     }
 
-    (t_min <= t_max && (0.0..=1.0).contains(&t_min)).then_some(t_min)
+    /// Points the projectile along `direction` at its acceleration speed.
+    pub fn assign_directional_movement(&self, direction: Vector3<f64>) {
+        let speed = self.acceleration_power();
+        self.entity.velocity.store(direction.normalize() * speed);
+        self.entity.velocity_dirty.store(true, Ordering::Relaxed);
+    }
+
+    #[must_use]
+    pub fn acceleration_power(&self) -> f64 {
+        self.acceleration_power.load()
+    }
+
+    pub fn set_acceleration_power(&self, power: f64) {
+        self.acceleration_power.store(power);
+    }
+
+    /// A player's hit resets the acceleration, any other deflection halves it.
+    pub fn on_deflection(&self, by_attack: bool) {
+        if by_attack {
+            self.set_acceleration_power(Self::DEFAULT_ACCELERATION_POWER);
+        } else {
+            self.set_acceleration_power(self.acceleration_power() * 0.5);
+        }
+    }
+
+    pub fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_double("acceleration_power", self.acceleration_power());
+    }
+
+    pub fn read_nbt(&self, nbt: &NbtCompound) {
+        self.set_acceleration_power(
+            nbt.get_double("acceleration_power")
+                .unwrap_or(Self::DEFAULT_ACCELERATION_POWER),
+        );
+    }
+
+    /// Moves the projectile one tick and handles what it hits. `should_burn` keeps it on fire,
+    /// `can_hit` narrows down the entities it can hit.
+    pub fn process_tick(
+        &self,
+        caller: &dyn EntityBase,
+        server: &Server,
+        inertia: f64,
+        liquid_inertia: f64,
+        should_burn: bool,
+        can_hit: impl Fn(&dyn EntityBase) -> bool,
+    ) {
+        let entity = self.get_entity();
+        entity.tick(caller, server);
+        if entity.is_removed() {
+            return;
+        }
+        self.owner.tick(entity);
+
+        let velocity = entity.velocity.load();
+        let inertia = if entity.touching_water.load(Ordering::Relaxed) {
+            liquid_inertia
+        } else {
+            inertia
+        };
+        let velocity = (velocity + velocity.normalize() * self.acceleration_power()) * inertia;
+        entity.velocity.store(velocity);
+
+        let world = entity.world.load();
+        if !world.is_loaded(&entity.block_pos.load()) {
+            entity.remove();
+            return;
+        }
+
+        let hit = get_hit_result_on_move_vector(
+            caller,
+            |other| {
+                self.can_hit_entity(&world, other)
+                    && !other.get_entity().no_physics.load(Ordering::Relaxed)
+                    && can_hit(other)
+            },
+            ClipBlock::Collider,
+        );
+        let new_pos = hit
+            .as_ref()
+            .map_or_else(|| entity.pos.load() + velocity, ProjectileHit::hit_pos);
+        rotate_towards_movement(entity, 0.2);
+        entity.set_pos(new_pos);
+        entity.tick_block_collisions(caller);
+        if should_burn {
+            entity.set_on_fire_for(1.0);
+        }
+
+        let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
+        world.broadcast_to_chunk(entity.chunk_pos.load(), &packet);
+
+        if let Some(hit) = hit
+            && entity.is_alive()
+            && hit_target_or_deflect_self(caller, hit, server) == HitOutcome::Hit
+        {
+            entity.remove();
+        }
+    }
 }
 
-/// Get the face of the block that was hit
-fn get_hit_face(hit_pos: Vector3<f64>, block_pos: BlockPos) -> BlockDirection {
-    let local = hit_pos.sub(&block_pos.0.to_f64());
-    let eps = 1.0e-4;
-
-    if local.x <= eps {
-        BlockDirection::West
-    } else if local.x >= 1.0 - eps {
-        BlockDirection::East
-    } else if local.y <= eps {
-        BlockDirection::Down
-    } else if local.y >= 1.0 - eps {
-        BlockDirection::Up
-    } else if local.z <= eps {
-        BlockDirection::North
-    } else {
-        BlockDirection::South
+/// Turns the projectile part of the way towards its movement.
+fn rotate_towards_movement(entity: &Entity, speed: f32) {
+    let velocity = entity.velocity.load();
+    if velocity.length_squared() == 0.0 {
+        return;
     }
+    let yaw = velocity.z.atan2(velocity.x).to_degrees() as f32 + 90.0;
+    let pitch = velocity.horizontal_length().atan2(velocity.y).to_degrees() as f32 - 90.0;
+    let previous_yaw = wrap_towards(entity.yaw.load(), yaw);
+    let previous_pitch = wrap_towards(entity.pitch.load(), pitch);
+    entity.set_rotation(
+        speed.mul_add(yaw - previous_yaw, previous_yaw),
+        speed.mul_add(pitch - previous_pitch, previous_pitch),
+    );
+}
+
+/// Shifts `previous` by whole turns until it is within half a turn of `rotation`.
+fn wrap_towards(mut previous: f32, rotation: f32) -> f32 {
+    while rotation - previous < -180.0 {
+        previous -= 360.0;
+    }
+    while rotation - previous >= 180.0 {
+        previous += 360.0;
+    }
+    previous
+}
+
+/// Knocks `hurt` straight away from the projectile instead of along its flight, for projectiles
+/// that burst.
+#[must_use]
+pub fn knockback_away_from(projectile: &Entity, hurt: &Entity) -> Option<(f64, f64)> {
+    let offset = hurt.pos.load() - projectile.pos.load();
+    Some((offset.x, offset.z))
+}
+
+/// Only redirectable projectiles can be hit by other projectiles.
+#[must_use]
+pub fn is_redirectable(entity: &Entity) -> bool {
+    entity
+        .entity_type
+        .has_tag(&tag::EntityType::MINECRAFT_REDIRECTABLE_PROJECTILE)
+}
+
+/// Whether the projectile may change the block at `pos`. A player's projectile follows spawn protection and the world border, a mob's needs
+/// the `mobGriefing` game rule.
+#[must_use]
+pub fn may_interact(projectile: &dyn EntityBase, world: &World, pos: &BlockPos) -> bool {
+    let Some(owner) = projectile.get_projectile_owner() else {
+        return true;
+    };
+    if let Some(player) = owner.get_player(world) {
+        let x = f64::from(pos.0.x);
+        let z = f64::from(pos.0.z);
+        return !world.is_in_spawn_protection(&player, pos)
+            && world
+                .worldborder
+                .lock()
+                .is_ok_and(|border| border.is_within_bounds(x, z, 0.0));
+    }
+    owner.uuid().is_none()
+        || owner.get(world).is_none()
+        || world.level_info.load().game_rules.mob_griefing
+}
+
+/// Whether the projectile may break blocks it hits. Projectiles carry no `can_break` predicate, so an adventure mode owner can't break anything.
+#[must_use]
+pub fn may_break(projectile: &dyn EntityBase, world: &World) -> bool {
+    if !projectile
+        .get_entity()
+        .entity_type
+        .has_tag(&tag::EntityType::MINECRAFT_IMPACT_PROJECTILES)
+        || !world
+            .level_info
+            .load()
+            .game_rules
+            .projectiles_can_break_blocks
+    {
+        return false;
+    }
+    let owner = projectile
+        .get_projectile_owner()
+        .and_then(|owner| owner.get(world));
+    let adventure = match owner.as_ref().map(|owner| owner.get_player()) {
+        Some(Some(player)) => player.gamemode.load() == GameMode::Adventure,
+        Some(None) => false,
+        None => world.server.upgrade().is_some_and(|server| {
+            server
+                .defaultgamemode
+                .lock()
+                .is_ok_and(|default| default.gamemode == GameMode::Adventure)
+        }),
+    };
+    !adventure
+}
+
+/// Entity boxes grow by up to 0.3 as the projectile ages.
+fn compute_margin(entity: &Entity) -> f64 {
+    let ticks = entity.tick_count.load(Ordering::Relaxed);
+    f64::from(((ticks - 2) as f32 / 20.0).clamp(0.0, 0.3))
+}
+
+/// The first block along this tick's movement, or the nearest entity before it.
+pub fn get_hit_result_on_move_vector(
+    projectile: &dyn EntityBase,
+    can_hit_entity: impl Fn(&dyn EntityBase) -> bool,
+    clip_block: ClipBlock,
+) -> Option<ProjectileHit> {
+    let entity = projectile.get_entity();
+    let world = entity.world.load();
+    let delta = entity.velocity.load();
+    let from = entity.pos.load();
+    let mut to = from + delta;
+    let normal = delta.normalize() * -1.0;
+
+    let (block_hit, world_border) =
+        world.clip_including_border(&ClipContext::new(from, to, clip_block, ClipFluid::None));
+    let mut hit = block_hit.is_hit().then(|| {
+        to = block_hit.location;
+        ProjectileHit::Block {
+            pos: block_hit.block_pos,
+            face: block_hit.direction,
+            hit_pos: block_hit.location,
+            normal,
+            world_border,
+        }
+    });
+
+    let search_box = entity
+        .bounding_box
+        .load()
+        .expand_towards(delta.x, delta.y, delta.z)
+        .expand_all(1.0);
+    if let Some((entity, hit_pos)) =
+        nearest_entity_hit(entity, &world, &search_box, from, to, can_hit_entity)
+    {
+        hit = Some(ProjectileHit::Entity {
+            entity,
+            hit_pos,
+            normal,
+        });
+    }
+    hit
+}
+
+/// Every entity and player whose box touches `search_box`.
+fn entities_in(world: &World, search_box: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
+    let mut candidates = world.get_entities_at_box(search_box);
+    candidates.extend(
+        world
+            .get_players_at_box(search_box)
+            .into_iter()
+            .map(|player| player as Arc<dyn EntityBase>),
+    );
+    candidates
+}
+
+/// The entity in `search_box` the segment enters first, its box grown by the projectile's age.
+fn nearest_entity_hit(
+    projectile: &Entity,
+    world: &World,
+    search_box: &BoundingBox,
+    from: Vector3<f64>,
+    to: Vector3<f64>,
+    can_hit: impl Fn(&dyn EntityBase) -> bool,
+) -> Option<(Arc<dyn EntityBase>, Vector3<f64>)> {
+    let margin = compute_margin(projectile);
+    let mut nearest = None;
+    let mut nearest_distance = f64::MAX;
+    for candidate in entities_in(world, search_box) {
+        if candidate.get_entity().entity_id == projectile.entity_id || !can_hit(candidate.as_ref())
+        {
+            continue;
+        }
+        let bounding_box = candidate
+            .get_entity()
+            .bounding_box
+            .load()
+            .expand_all(margin);
+        if let Some(location) = bounding_box.clip(from, to) {
+            let distance = from.squared_distance_to_vec(&location);
+            if distance < nearest_distance {
+                nearest_distance = distance;
+                nearest = Some((candidate, location));
+            }
+        }
+    }
+    nearest
+}
+
+/// Turns a fifth of the way towards the movement. `reversed` faces backwards, for a returning
+/// trident.
+pub fn update_rotation(entity: &Entity, reversed: bool) {
+    let velocity = entity.velocity.load();
+    let pitch = velocity.y.atan2(velocity.horizontal_length()).to_degrees() as f32;
+    let yaw = if reversed {
+        (-velocity.x).atan2(-velocity.z)
+    } else {
+        velocity.x.atan2(velocity.z)
+    }
+    .to_degrees() as f32;
+    entity.set_rotation(
+        lerp_rotation(entity.yaw.load(), yaw),
+        lerp_rotation(entity.pitch.load(), pitch),
+    );
+}
+
+fn lerp_rotation(previous: f32, rotation: f32) -> f32 {
+    let previous = wrap_towards(previous, rotation);
+    0.2f32.mul_add(rotation - previous, previous)
 }
 
 pub enum ProjectileHit {
@@ -383,6 +666,8 @@ pub enum ProjectileHit {
         face: BlockDirection,
         hit_pos: Vector3<f64>,
         normal: Vector3<f64>,
+        /// The ray stopped at the world border, not at a block.
+        world_border: bool,
     },
     Entity {
         entity: Arc<dyn EntityBase>,

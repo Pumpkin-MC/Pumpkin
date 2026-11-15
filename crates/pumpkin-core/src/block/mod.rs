@@ -295,6 +295,7 @@ pub struct ExplodeArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub position: &'a BlockPos,
+    pub explosion: &'a crate::world::Explosion<'a>,
 }
 
 pub struct OnSyncedBlockEventArgs<'a> {
@@ -429,6 +430,8 @@ pub struct OnStateReplacedArgs<'a> {
     pub old_state_id: BlockStateId,
     pub position: &'a BlockPos,
     pub moved: bool,
+    /// The flags of the change that removed the block.
+    pub flags: BlockFlags,
 }
 
 pub struct EmitsRedstonePowerArgs<'a> {
