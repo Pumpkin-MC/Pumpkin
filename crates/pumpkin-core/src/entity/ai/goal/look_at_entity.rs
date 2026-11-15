@@ -45,6 +45,10 @@ impl LookTargetSlot {
 pub struct LookAtEntityGoal {
     goal_control: Controls,
     target: Option<Weak<dyn EntityBase>>,
+    // The slot hands over sole ownership of its target, so the goal keeps the
+    // strong reference alive while the target is set; a bare Weak would drop
+    // the entity before the next tick.
+    slot_keep_alive: Option<Arc<dyn EntityBase>>,
     range: f32,
     look_time: i32,
     chance: f32,
@@ -90,6 +94,7 @@ impl LookAtEntityGoal {
             look_forward,
             target_match,
             target_predicate,
+            slot_keep_alive: None,
             target_slot: None,
         }
     }
@@ -107,6 +112,7 @@ impl LookAtEntityGoal {
         if let Some(PendingTarget::Set(target)) = self.target_slot.as_ref().map(|slot| slot.take())
         {
             self.target = target.as_ref().map(Arc::downgrade);
+            self.slot_keep_alive = target;
         }
     }
 
@@ -224,6 +230,7 @@ impl Goal for LookAtEntityGoal {
 
     fn stop(&mut self, _mob: &dyn Mob) {
         self.target = None;
+        self.slot_keep_alive = None;
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
