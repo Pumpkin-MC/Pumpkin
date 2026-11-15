@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 /// Default Pumpkin Marketplace URL.
 pub const DEFAULT_MARKETPLACE_URL: &str = "https://market.pumpkinmc.org";
 
+/// Default Pumpkin Telemetry & Crashlytics URL.
+pub const DEFAULT_TELEMETRY_URL: &str = "https://telemetry.pumpkinmc.org";
+
 /// Metadata embedded in a Pumpkin WASM plugin by the marketplace or developer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PumpkinMetadata {
@@ -157,7 +160,7 @@ pub struct CrashBacktraceFrame {
     pub wasm_offset: Option<u64>,
 }
 
-/// Payload transmitted to `POST /api/v1/rest/telemetry/crash` on Pumpkin Marketplace.
+/// Payload transmitted to `POST /v1/crash` on Pumpkin Telemetry.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CrashReportPayload {
     /// Verified `pumpkin.metadata` extracted from the WASM binary.
@@ -197,7 +200,7 @@ pub struct CrashReportPayload {
     pub occurrence_count: Option<u32>,
 }
 
-/// Response returned by `POST /api/v1/rest/telemetry/crash`.
+/// Response returned by `POST /v1/crash`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CrashReportResponse {
     /// Processing status (`"recorded"`, `"throttled"`, `"ignored_license"`, `"ignored_unlicensed"`).

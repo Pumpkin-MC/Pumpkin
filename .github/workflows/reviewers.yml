@@ -16,6 +16,7 @@ permissions:
 jobs:
   request-reviewers:
     name: Request reviewers
+    if: github.repository == 'Pumpkin-MC/Pumpkin'
     runs-on: ubuntu-latest
     steps:
       - name: Notify reviewers based on changed files

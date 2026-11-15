@@ -1,6 +1,5 @@
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::TargetProperties;
-use pumpkin_data::entity::EntityType;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::tick::TickPriority;
@@ -10,6 +9,7 @@ use crate::block::{
     BlockBehaviour, EmitsRedstonePowerArgs, GetRedstonePowerArgs, OnProjectileHitArgs,
     OnScheduledTickArgs, PlacedArgs,
 };
+use crate::entity::projectile::abstract_arrow::is_abstract_arrow;
 
 fn get_redstone_strength(hit_pos: &Vector3<f64>) -> u8 {
     let dist_x = ((hit_pos.x - hit_pos.x.floor()) - 0.5).abs();
@@ -69,10 +69,7 @@ impl BlockBehaviour for TargetBlock {
                 BlockFlags::NOTIFY_ALL,
             );
             let entity_type = args.projectile.get_entity().entity_type;
-            let delay = if entity_type == &EntityType::ARROW
-                || entity_type == &EntityType::SPECTRAL_ARROW
-                || entity_type == &EntityType::TRIDENT
-            {
+            let delay = if is_abstract_arrow(entity_type) {
                 20
             } else {
                 8

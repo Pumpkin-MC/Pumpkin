@@ -25,7 +25,7 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::combat::{Modifier, Operation};
 use pumpkin_data::data_component_impl::{
-    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl,
+    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl, MAX_ENCHANTMENT_LEVEL,
 };
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
@@ -446,7 +446,9 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         };
 
         current_encs.retain(|(e, _)| e.id != enc.id);
-        current_encs.push((enc, level as i32));
+        if level > 0 {
+            current_encs.push((enc, level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32));
+        }
 
         if let Some((_, data)) = stack
             .patch
@@ -540,11 +542,15 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         let stack = accessor.get_res(&res)?;
         let mut stack = stack.lock().await;
 
-        stack.set_custom_data(
-            "pumpkin:enchantments",
-            &enchantment_id,
-            NbtTag::Int(level as i32),
-        );
+        if level == 0 {
+            stack.remove_custom_data("pumpkin:enchantments", &enchantment_id);
+        } else {
+            stack.set_custom_data(
+                "pumpkin:enchantments",
+                &enchantment_id,
+                NbtTag::Int(level as i32),
+            );
+        }
 
         if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id) {
             let mut current_encs = if let Some((_, Some(data))) = stack
@@ -561,7 +567,9 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
             };
 
             current_encs.retain(|(e, _)| e.id != vanilla.id);
-            current_encs.push((vanilla, level as i32));
+            if level > 0 {
+                current_encs.push((vanilla, level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32));
+            }
 
             if let Some((_, data)) = stack
                 .patch

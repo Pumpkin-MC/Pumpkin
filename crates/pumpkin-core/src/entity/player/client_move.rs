@@ -152,11 +152,7 @@ impl Player {
         let entity = self.get_entity();
         let position = entity.pos.load();
         let teleport_id = self.next_teleport_id();
-        *self
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Some((teleport_id.into(), position));
+        self.expect_teleport_confirm(teleport_id, position);
         match self.client.as_ref() {
             ClientPlatform::Java(_) => {
                 self.try_send_client_packet(&CPlayerPosition::new(

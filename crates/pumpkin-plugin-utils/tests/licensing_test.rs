@@ -197,4 +197,14 @@ fn crashlytics_reporter_key_persistence_pii_scrubbing_and_signature_guard() {
     };
     let res = reporter.send_payload(&unsigned_meta, &dummy_payload);
     assert!(matches!(res, Err(CrashlyticsError::MissingSignatureProof)));
+
+    // 6. Verify official Marketplace URL maps crash reports to telemetry.pumpkinmc.org/v1/crash
+    assert_eq!(
+        CrashReporter::resolve_crash_endpoint("https://market.pumpkinmc.org"),
+        "https://telemetry.pumpkinmc.org/v1/crash"
+    );
+    assert_eq!(
+        CrashReporter::resolve_crash_endpoint("http://127.0.0.1:5000"),
+        "http://127.0.0.1:5000/v1/crash"
+    );
 }

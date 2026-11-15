@@ -20,7 +20,7 @@ impl Default for TelemetryConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            endpoint: "https://market.pumpkinmc.org/api/v1/rest/telemetry/heartbeat".to_string(),
+            endpoint: "https://telemetry.pumpkinmc.org/v1/heartbeat".to_string(),
             interval_secs: 300,
             public: false,
             server_name: None,
@@ -43,7 +43,7 @@ mod tests {
         assert!(default_config.enabled);
         assert_eq!(
             default_config.endpoint,
-            "https://market.pumpkinmc.org/api/v1/rest/telemetry/heartbeat"
+            "https://telemetry.pumpkinmc.org/v1/heartbeat"
         );
         assert_eq!(default_config.interval_secs, 300);
         assert!(!default_config.public);
@@ -54,7 +54,7 @@ mod tests {
     fn telemetry_toml_deserialization() {
         let toml_str = r#"
             enabled = false
-            endpoint = "http://localhost:5000/api/v1/rest/telemetry/heartbeat"
+            endpoint = "http://localhost:5000/v1/heartbeat"
             interval_secs = 60
             public = true
             server_name = "Test SMP"
@@ -62,10 +62,7 @@ mod tests {
 
         let config: TelemetryConfig = toml::from_str(toml_str).unwrap();
         assert!(!config.enabled);
-        assert_eq!(
-            config.endpoint,
-            "http://localhost:5000/api/v1/rest/telemetry/heartbeat"
-        );
+        assert_eq!(config.endpoint, "http://localhost:5000/v1/heartbeat");
         assert_eq!(config.interval_secs, 60);
         assert!(config.public);
         assert_eq!(config.server_name.as_deref(), Some("Test SMP"));

@@ -1,3 +1,4 @@
+mod brewing_stand;
 mod bubble_columns;
 mod buttons_levers_plates_variants;
 mod commands_and_entities_extended;
@@ -60,6 +61,8 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:dispenser_and_dropper",
     "pumpkin:dispenser_honeycomb_beehive_and_shulker",
     "pumpkin:crafter_crafts_into_chest",
+    "pumpkin:crafter_dispenses_crafting_remainders",
+    "pumpkin:brewing_returns_glass_bottle_from_dragon_breath",
     "pumpkin:doors_trapdoors_fence_gates_redstone",
     "pumpkin:water_lava_interactions",
     "pumpkin:sponge_absorbs_water",
@@ -70,6 +73,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:hopper_transfers_to_chest",
     "pumpkin:tnt_redstone_ignites",
     "pumpkin:furnace_ignites_and_smelts",
+    "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
     "pumpkin:powered_rail_propagation",
     "pumpkin:activator_rail_propagation",
     "pumpkin:detector_rail_minecart",
@@ -391,6 +395,20 @@ pub fn ensure_builtin_game_tests_registered() {
             dispensers_and_crafters::test_crafter_crafts_into_chest,
         );
         register_function_test(
+            "pumpkin:crafter_dispenses_crafting_remainders",
+            "pumpkin:empty_5x4x5",
+            30,
+            0,
+            dispensers_and_crafters::test_crafter_dispenses_crafting_remainders,
+        );
+        register_function_test(
+            "pumpkin:brewing_returns_glass_bottle_from_dragon_breath",
+            "pumpkin:empty_3x4x3",
+            450,
+            0,
+            brewing_stand::test_brewing_returns_glass_bottle_from_dragon_breath,
+        );
+        register_function_test(
             "pumpkin:doors_trapdoors_fence_gates_redstone",
             "pumpkin:empty_7x4x4",
             30,
@@ -459,6 +477,13 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             furnace_smelting::test_furnace_ignites_and_smelts,
+        );
+        register_function_test(
+            "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
+            "pumpkin:empty_3x4x3",
+            30,
+            0,
+            furnace_smelting::test_furnace_returns_empty_bucket_from_lava_bucket_fuel,
         );
         register_function_test(
             "pumpkin:powered_rail_propagation",
