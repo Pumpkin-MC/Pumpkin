@@ -57,9 +57,9 @@ impl ApplyEntityImpulse {
 
     pub fn apply(
         &self,
-        _world: &Arc<World>,
+        world: &Arc<World>,
         enchantment_level: i32,
-        _owner: Option<&Arc<Player>>,
+        owner: Option<&Arc<Player>>,
         entity: Option<&Entity>,
     ) {
         let Some(entity) = entity else {
@@ -81,6 +81,15 @@ impl ApplyEntityImpulse {
 
         // A player's goes through `PlayerVelocityEvent`
         entity.add_velocity(impulse);
+        if let Some(owner) = owner
+            && owner.entity_id() == entity.entity_id
+        {
+            owner.living_entity.apply_post_impulse_grace_time(10);
+        } else if let Some(entity_base) = world.get_entity_by_id(entity.entity_id)
+            && let Some(living) = entity_base.get_living_entity()
+        {
+            living.apply_post_impulse_grace_time(10);
+        }
     }
 }
 

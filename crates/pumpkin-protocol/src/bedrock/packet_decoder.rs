@@ -8,6 +8,7 @@ use crate::{
 /// Decodes incoming Bedrock game packets and decompresses batched network frames.
 pub struct BedrockBatchDecoder {
     compression: Option<CompressionThreshold>,
+    prefixed_compression: bool,
 }
 
 impl Default for BedrockBatchDecoder {
@@ -20,12 +21,20 @@ impl BedrockBatchDecoder {
     /// Creates a new uncompressed batch decoder.
     #[must_use]
     pub const fn new() -> Self {
-        Self { compression: None }
+        Self {
+            compression: None,
+            prefixed_compression: true,
+        }
     }
 
     /// Sets the decompression threshold for incoming batch frames.
     pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
+    }
+
+    /// Sets whether compressed batch frames include the 1-byte compression method prefix (`1.20.60+`).
+    pub const fn set_prefixed_compression(&mut self, prefixed: bool) {
+        self.prefixed_compression = prefixed;
     }
 
     /// Validates the frame header, handles decompression if active, and extracts the raw batch payload.
@@ -61,7 +70,20 @@ impl BedrockBatchDecoder {
             return Ok(payload.to_vec());
         }
 
-        // If compression IS enabled, Bedrock expects a compression method byte at index 0 of full_packet_payload.
+        if !self.prefixed_compression {
+            let mut decoder = flate2::read::DeflateDecoder::new(full_packet_payload)
+                .take(MAX_PACKET_DATA_SIZE as u64 + 1);
+            let mut decompressed = Vec::new();
+            decoder
+                .read_to_end(&mut decompressed)
+                .map_err(|e| PacketDecodeError::FailedDecompression(e.to_string()))?;
+            if decompressed.len() > MAX_PACKET_DATA_SIZE {
+                return Err(PacketDecodeError::TooLong);
+            }
+            return Ok(decompressed);
+        }
+
+        // If prefixed compression IS enabled, Bedrock expects a compression method byte at index 0 of full_packet_payload.
         let compression_method = full_packet_payload.first().ok_or_else(|| {
             PacketDecodeError::MalformedLength("Missing Bedrock compression method".into())
         })?;

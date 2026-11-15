@@ -12,7 +12,7 @@ use std::sync::{Arc, Weak};
 
 pub struct LookAtEntityGoal {
     goal_control: Controls,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     range: f32,
     look_time: i32,
     chance: f32,
@@ -102,8 +102,10 @@ impl Goal for LookAtEntityGoal {
             },
             links: self
                 .target
-                .iter()
+                .as_ref()
+                .and_then(Weak::upgrade)
                 .map(|target| target.get_entity().entity_id)
+                .into_iter()
                 .collect(),
             ..GoalReach::default()
         })
@@ -133,16 +135,20 @@ impl Goal for LookAtEntityGoal {
 
         // The conditions filter the candidates instead of being applied to the nearest one.
         let predicate = &self.target_predicate;
-        self.target = self.target_match.find_nearest(&world, &area, |candidate| {
-            predicate.test(&world, Some(mob), candidate)
-        });
+        self.target = self
+            .target_match
+            .find_nearest(&world, &area, |candidate| {
+                predicate.test(&world, Some(mob), candidate)
+            })
+            .as_ref()
+            .map(Arc::downgrade);
 
         self.target.is_some()
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
-        if let Some(target) = &self.target {
+        if let Some(target) = self.target.as_ref().and_then(Weak::upgrade) {
             if !target.get_entity().is_alive() {
                 return false;
             }
@@ -166,7 +172,7 @@ impl Goal for LookAtEntityGoal {
 
     fn tick(&mut self, mob: &dyn Mob) {
         let mob_entity = mob.get_mob_entity();
-        if let Some(target) = &self.target
+        if let Some(target) = self.target.as_ref().and_then(Weak::upgrade)
             && target.get_entity().is_alive()
         {
             let target_entity = target.get_entity();

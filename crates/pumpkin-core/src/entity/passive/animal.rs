@@ -39,6 +39,15 @@ pub trait Animal: Mob {
     fn on_bred_without_offspring(&self, _brain: Option<&mut crate::entity::ai::brain::BrainState>) {
     }
 
+    fn can_fall_in_love(&self) -> bool {
+        !self.get_mob_entity().is_in_love()
+    }
+
+    /// Whether breeding broadcasts the love hearts entity event.
+    fn shows_breeding_hearts(&self) -> bool {
+        true
+    }
+
     /// Extra partner checks on top of the type and love checks in `BreedGoal`.
     fn can_mate(&self, _partner: &dyn EntityBase) -> bool {
         true
@@ -98,7 +107,7 @@ pub trait Animal: Mob {
                 .age
                 .load(std::sync::atomic::Ordering::Relaxed);
 
-            if age >= 0 && mob_entity.is_breeding_ready() && !mob_entity.is_in_love() {
+            if age >= 0 && mob_entity.is_breeding_ready() && self.can_fall_in_love() {
                 item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                 if self.set_in_love(player) {
                     self.play_eating_sound();

@@ -102,10 +102,15 @@ impl PluginLoader for WasmPluginLoader {
                 .await
                 .map_err(|error| LoaderError::WasmInitializationError(Box::new(error)))?;
 
+            let language = plugin
+                .binding_language
+                .clone()
+                .unwrap_or_else(|| "wasm".to_string());
+
             Ok((
                 Arc::new(WasmPluginHandle(plugin)) as Arc<dyn Plugin>,
                 metadata,
-                Box::new(()) as Box<dyn Any + Send + Sync>,
+                Box::new(language) as Box<dyn Any + Send + Sync>,
             ))
         })
     }
@@ -131,5 +136,9 @@ impl PluginLoader for WasmPluginLoader {
 
     fn on_tick(&self, server: &Arc<Server>) {
         scheduler::tick(&self.task_scheduler, server);
+    }
+
+    fn binding_language(&self, data: &(dyn Any + Send + Sync)) -> Option<String> {
+        data.downcast_ref::<String>().cloned()
     }
 }

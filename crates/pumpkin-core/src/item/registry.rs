@@ -80,9 +80,14 @@ impl ItemRegistry {
         }
     }
 
-    pub fn on_use_tick(&self, stack: &ItemStack, player: &Player, remaining_use_ticks: i32) {
+    pub fn on_use_tick(
+        &self,
+        stack: &ItemStack,
+        user: &dyn crate::entity::EntityBase,
+        remaining_use_ticks: i32,
+    ) {
         if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
-            behaviour.on_use_tick(stack, player, remaining_use_ticks);
+            behaviour.on_use_tick(stack, user, remaining_use_ticks);
         }
     }
 

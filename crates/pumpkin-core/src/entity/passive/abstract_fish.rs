@@ -106,12 +106,7 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
         );
         living.make_move(caller);
         let mut velocity = entity.velocity.load() * WATER_FRICTION;
-        if mob
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_none()
-        {
+        if mob.get_target().is_none() {
             velocity.y -= SINK_SPEED;
         }
         entity.velocity.store(velocity);
@@ -170,17 +165,7 @@ pub trait AbstractFish: WaterAnimal + crate::entity::bucketable::Bucketable {
 
     fn fish_requires_custom_persistence(&self) -> bool {
         let entity = self.get_entity();
-        self.is_from_bucket()
-            || entity
-                .vehicle
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_some()
-            || entity
-                .leashed_to
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_some()
+        self.is_from_bucket() || entity.has_vehicle() || entity.is_leashed()
     }
 }
 

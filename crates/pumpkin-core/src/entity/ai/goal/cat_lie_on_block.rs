@@ -1,4 +1,4 @@
-use std::sync::{Arc, Weak};
+use std::sync::Weak;
 
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
@@ -17,7 +17,7 @@ struct CatLieOnBlockTarget;
 static TARGET: CatLieOnBlockTarget = CatLieOnBlockTarget;
 
 impl MoveToTargetPos for CatLieOnBlockTarget {
-    fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool {
+    fn is_target_pos(&self, world: &World, block_pos: BlockPos) -> bool {
         world.get_block_state(&block_pos.up()).is_air()
             && world
                 .get_block(&block_pos)

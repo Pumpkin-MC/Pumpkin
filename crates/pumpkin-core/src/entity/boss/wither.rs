@@ -434,7 +434,8 @@ impl WitherEntity {
             if new_count <= 0 {
                 let pos = entity.pos.load();
                 let eye_y = pos.y + entity.get_eye_height();
-                world.explode(
+                world.explode_from(
+                    self,
                     Vector3::new(pos.x, eye_y, pos.z),
                     7.0,
                     ExplosionInteraction::Mob,
@@ -660,13 +661,8 @@ impl Mob for WitherEntity {
             }
         }
 
-        if self.get_invulnerable_ticks() > 0
-            && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
-        {
-            return false;
-        }
-
-        true
+        self.get_invulnerable_ticks() <= 0
+            || damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
     }
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {

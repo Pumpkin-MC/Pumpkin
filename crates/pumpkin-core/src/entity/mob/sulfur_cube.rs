@@ -510,7 +510,8 @@ impl SulfurCubeEntity {
                 ExplosionInteraction::None
             };
             let pos = entity.pos.load();
-            world.explode(
+            world.explode_from(
+                self,
                 Vector3::new(pos.x, entity.get_y(0.0625), pos.z),
                 explosion.power as f32,
                 interaction,
@@ -1050,10 +1051,6 @@ impl Mob for SulfurCubeEntity {
         true
     }
 
-    fn can_be_picked_from_inside(&self) -> bool {
-        !self.has_body_item()
-    }
-
     fn is_invulnerable_to_piercing_weapon(&self) -> bool {
         self.get_entity().invulnerable.load(Ordering::Relaxed) && !self.is_primed()
     }
@@ -1400,7 +1397,7 @@ impl LookControlTrait for SulfurCubeLookControl {
 
 struct SulfurCubeSearchForItemsGoal {
     cube: Weak<SulfurCubeEntity>,
-    target_item: Option<Arc<dyn EntityBase>>,
+    target_item: Option<Weak<dyn EntityBase>>,
 }
 
 impl Goal for SulfurCubeSearchForItemsGoal {
@@ -1438,7 +1435,9 @@ impl Goal for SulfurCubeSearchForItemsGoal {
                     .load()
                     .squared_distance_to_vec(&pos)
                     .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
-            });
+            })
+            .as_ref()
+            .map(Arc::downgrade);
         self.target_item.is_some()
     }
 
@@ -1447,7 +1446,7 @@ impl Goal for SulfurCubeSearchForItemsGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(target) = &self.target_item else {
+        let Some(target) = self.target_item.as_ref().and_then(Weak::upgrade) else {
             return;
         };
         mob.get_mob_entity()

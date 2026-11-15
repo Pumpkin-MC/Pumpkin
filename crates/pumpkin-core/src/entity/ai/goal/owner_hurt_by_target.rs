@@ -4,11 +4,11 @@ use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::plugin::api::events::entity::entity_target::TargetReason;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 pub struct OwnerHurtByTargetGoal {
     track_target_goal: TrackTargetGoal,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     target_predicate: TargetPredicate,
     timestamp: i32,
 }
@@ -58,7 +58,7 @@ impl Goal for OwnerHurtByTargetGoal {
             return false;
         }
 
-        self.target = Some(other);
+        self.target = Some(Arc::downgrade(&other));
         true
     }
 
@@ -69,7 +69,7 @@ impl Goal for OwnerHurtByTargetGoal {
     fn start(&mut self, mob: &dyn Mob) {
         self.track_target_goal.start_targeting(
             mob,
-            self.target.clone(),
+            self.target.as_ref().and_then(Weak::upgrade),
             TargetReason::TargetAttackedOwner,
         );
 
