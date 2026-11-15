@@ -12,6 +12,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
@@ -27,7 +28,6 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         ranged_attack::RangedAttackGoal, wander_around::WanderAroundGoal,
     },
-    item::ItemEntity,
     mob::{Mob, MobEntity, RangedAttackMob},
     player::Player,
     projectile::snowball::SnowballEntity,
@@ -169,15 +169,10 @@ impl SnowGolemEntity {
                 ..Default::default()
             };
             for stack in generate_loot_from_handle(&table, self.get_random().random(), &params) {
-                let item = ItemEntity::new(
-                    Entity::new(
-                        world.clone(),
-                        pos.add_raw(0.0, entity.get_eye_height(), 0.0),
-                        &EntityType::ITEM,
-                    ),
+                entity.spawn_at_location_with_offset(
                     stack,
+                    Vector3::new(0.0, entity.get_eye_height(), 0.0),
                 );
-                world.spawn_entity(Arc::new(item));
             }
         }
     }
@@ -222,6 +217,10 @@ impl SnowGolemEntity {
 }
 
 impl Mob for SnowGolemEntity {
+    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("Pumpkin", self.has_pumpkin());
     }
@@ -349,5 +348,15 @@ impl Mob for SnowGolemEntity {
 impl RangedAttackMob for SnowGolemEntity {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
         self.throw_snowball(target);
+    }
+}
+
+impl crate::entity::shearable::Shearable for SnowGolemEntity {
+    fn ready_for_shearing(&self) -> bool {
+        Self::ready_for_shearing(self)
+    }
+
+    fn shear(&self, category: SoundCategory, tool: &ItemStack) {
+        Self::shear(self, category, tool);
     }
 }

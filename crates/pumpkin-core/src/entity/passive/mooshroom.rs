@@ -335,6 +335,10 @@ impl Animal for MooshroomEntity {
 }
 
 impl Mob for MooshroomEntity {
+    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
+        Some(self)
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(
             CowSoundVariant::Classic.step_sound(self.is_baby()),
@@ -457,5 +461,15 @@ impl Mob for MooshroomEntity {
         }
 
         self.animal_interact(player, item_stack)
+    }
+}
+
+impl crate::entity::shearable::Shearable for MooshroomEntity {
+    fn ready_for_shearing(&self) -> bool {
+        !self.is_baby()
+    }
+
+    fn shear(&self, category: SoundCategory, tool: &ItemStack) {
+        Self::shear(self, category, tool);
     }
 }

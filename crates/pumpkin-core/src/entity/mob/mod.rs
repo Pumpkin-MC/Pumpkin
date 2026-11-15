@@ -2284,6 +2284,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
+        None
+    }
+
     fn as_bucketable(&self) -> Option<&dyn crate::entity::bucketable::Bucketable> {
         None
     }

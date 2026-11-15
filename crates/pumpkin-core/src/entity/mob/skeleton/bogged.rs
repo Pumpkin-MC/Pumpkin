@@ -94,6 +94,10 @@ impl CustomSound for BoggedSkeletonEntity {
 }
 
 impl Mob for BoggedSkeletonEntity {
+    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
+        Some(self)
+    }
+
     fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
         super::wants_to_pick_up(self, stack)
     }
@@ -160,5 +164,15 @@ impl Mob for BoggedSkeletonEntity {
     fn populate_default_equipment_enchantments(&self, difficulty: &RegionalDifficulty) {
         self.entity
             .populate_default_equipment_enchantments(difficulty);
+    }
+}
+
+impl crate::entity::shearable::Shearable for BoggedSkeletonEntity {
+    fn ready_for_shearing(&self) -> bool {
+        Self::ready_for_shearing(self)
+    }
+
+    fn shear(&self, category: SoundCategory, tool: &ItemStack) {
+        Self::shear(self, category, tool);
     }
 }

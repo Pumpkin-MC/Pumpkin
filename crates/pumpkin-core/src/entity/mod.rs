@@ -102,6 +102,7 @@ pub mod passive;
 pub mod player;
 pub mod projectile;
 pub mod projectile_deflection;
+pub mod shearable;
 pub mod spawn_util;
 pub mod synched_entity_data;
 pub mod tnt;
@@ -5048,9 +5049,7 @@ impl Entity {
         player: Option<&Arc<Player>>,
     ) -> Option<bool> {
         let world = self.world.load();
-        let bounds = self.bounding_box.load();
-        let center = (bounds.min + bounds.max) * 0.5;
-        let area = BoundingBox::of_size(center, 32.0, 32.0, 32.0);
+        let area = self.leash_connections_box();
         let connections = world
             .get_entities_at_box(&area)
             .into_iter()
@@ -5061,6 +5060,20 @@ impl Entity {
                     .is_some_and(|holder| holder.get_entity().entity_id == self.entity_id)
             })
             .collect::<Vec<_>>();
+        self.shear_leash_connections(caller, player, &connections)
+    }
+
+    pub(crate) fn leash_connections_box(&self) -> BoundingBox {
+        BoundingBox::of_size(self.bounding_box.load().get_center(), 32.0, 32.0, 32.0)
+    }
+
+    pub(crate) fn shear_leash_connections(
+        &self,
+        caller: &(impl EntityBase + ?Sized),
+        player: Option<&Arc<Player>>,
+        connections: &[Arc<dyn EntityBase>],
+    ) -> Option<bool> {
+        let world = self.world.load();
         if self.get_leash_holder().is_none() && connections.is_empty() {
             return None;
         }

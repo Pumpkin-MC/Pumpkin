@@ -1,5 +1,6 @@
 use crate::entity::projectile::owner::ProjectileOwner;
 use rand::{Rng, RngExt, rng};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -13,17 +14,12 @@ use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
     OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
-use crate::entity::ageable::AgeableMob;
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::item::ItemEntity;
-use crate::entity::mob::skeleton::bogged::BoggedSkeletonEntity;
 use crate::entity::mob::sulfur_cube::{SulfurCubeEntity, is_swallowable_item};
 use crate::entity::passive::abstract_horse::try_equip_dispenser_chest;
 use crate::entity::passive::armadillo::ArmadilloEntity;
 use crate::entity::passive::copper_golem::CopperGolemEntity;
-use crate::entity::passive::mooshroom::MooshroomEntity;
-use crate::entity::passive::sheep::SheepEntity;
-use crate::entity::passive::snow_golem::SnowGolemEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::projectile::egg::EggEntity;
@@ -1097,14 +1093,50 @@ impl DispenserBlock {
         let target = Self::target_position(ctx);
         let target_box = BoundingBox::from_block(&target);
 
-        for entity in ctx.world.get_entities_at_box(&target_box) {
+        let candidates = ctx.world.get_entities_at_box(&target_box);
+        let mut connections: HashMap<i32, (BoundingBox, Vec<Arc<dyn EntityBase>>)> = candidates
+            .iter()
+            .filter(|entity| !entity.is_spectator())
+            .map(|entity| {
+                let entity = entity.get_entity();
+                (
+                    entity.entity_id,
+                    (entity.leash_connections_box(), Vec::new()),
+                )
+            })
+            .collect();
+        let Some(search_box) = connections
+            .values()
+            .map(|(area, _)| *area)
+            .reduce(|a, b| a.minmax(&b))
+        else {
+            return false;
+        };
+        for attached in ctx.world.get_entities_at_box(&search_box) {
+            let Some(holder) = attached.get_entity().get_leash_holder() else {
+                continue;
+            };
+            if let Some((area, attached_entities)) =
+                connections.get_mut(&holder.get_entity().entity_id)
+                && attached.get_entity().bounding_box.load().intersects(area)
+            {
+                attached_entities.push(attached);
+            }
+        }
+
+        for entity in candidates {
             if entity.is_spectator() {
                 continue;
             }
 
-            if let Some(sheared) = entity
-                .get_entity()
-                .shear_off_all_leash_connections(entity.as_ref(), None)
+            let attached = connections
+                .remove(&entity.get_entity().entity_id)
+                .map(|(_, attached)| attached)
+                .unwrap_or_default();
+            if let Some(sheared) =
+                entity
+                    .get_entity()
+                    .shear_leash_connections(entity.as_ref(), None, &attached)
             {
                 return sheared;
             }
@@ -1114,18 +1146,9 @@ impl DispenserBlock {
             }
 
             let any = entity.cast_any();
-            let sheared = if let Some(sheep) = any.downcast_ref::<SheepEntity>()
-                && sheep.ready_for_shearing()
-            {
-                sheep.shear(SoundCategory::Blocks, tool);
-                true
-            } else if let Some(mooshroom) = any.downcast_ref::<MooshroomEntity>()
-                && !mooshroom.is_baby()
-            {
-                mooshroom.shear(SoundCategory::Blocks, tool);
-                true
-            } else if let Some(snow_golem) = any.downcast_ref::<SnowGolemEntity>()
-                && snow_golem.ready_for_shearing()
+            let sheared = if let Some(shearable) =
+                entity.get_mob().and_then(|mob| mob.as_shearable())
+                && shearable.ready_for_shearing()
             {
                 if let Some(server) = ctx.world.server.upgrade() {
                     let mut event = crate::plugin::api::events::block::BlockShearEntityEvent::new(
@@ -1139,7 +1162,7 @@ impl DispenserBlock {
                         continue;
                     }
                 }
-                snow_golem.shear(SoundCategory::Blocks, tool);
+                shearable.shear(SoundCategory::Blocks, tool);
                 true
             } else if let Some(sulfur_cube) = any.downcast_ref::<SulfurCubeEntity>()
                 && sulfur_cube.has_body_item()
@@ -1150,11 +1173,6 @@ impl DispenserBlock {
                 && copper_golem.ready_for_shearing()
             {
                 copper_golem.shear(SoundCategory::Blocks);
-                true
-            } else if let Some(bogged) = any.downcast_ref::<BoggedSkeletonEntity>()
-                && bogged.ready_for_shearing()
-            {
-                bogged.shear(SoundCategory::Blocks, tool);
                 true
             } else {
                 false
@@ -1483,7 +1501,10 @@ impl DispenserBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity::ageable::AgeableMob;
     use crate::entity::ai::test_support::world;
+    use crate::entity::mob::skeleton::bogged::BoggedSkeletonEntity;
+    use crate::entity::passive::snow_golem::SnowGolemEntity;
 
     #[tokio::test]
     async fn dispenser_cuts_leash_connections_before_shearing_the_pumpkin()
@@ -1507,10 +1528,17 @@ mod tests {
         ));
         let outside = SnowGolemEntity::new(Entity::new(
             world.clone(),
-            Vector3::new(40.5, 64.0, 0.5),
+            Vector3::new(17.9, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        // This candidate widens the shared query, but not the first golem's leash range.
+        let neighbor = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(1.9, 64.0, 0.5),
             &EntityType::SNOW_GOLEM,
         ));
         world.spawn_entity(golem.clone());
+        world.spawn_entity(neighbor);
         world.spawn_entity(holder.clone());
         world.spawn_entity(attached.clone());
         world.spawn_entity(outside.clone());
