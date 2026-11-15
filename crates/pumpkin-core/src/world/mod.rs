@@ -3316,7 +3316,7 @@ impl World {
 
         let crafting_data = pumpkin_protocol::bedrock::client::CCraftingData {
             recipes: crate::net::bedrock::recipe::crafting_data(&server.recipe_manager),
-            clean_recipes: false,
+            clean_recipes: true,
         };
         if let Ok(data) = client.serialize_packet(&crafting_data) {
             client.send_game_packet(data).await;
@@ -4138,7 +4138,21 @@ impl World {
         power: f32,
         interaction: ExplosionInteraction,
     ) {
-        self.explode_with_calculator(position, power, interaction, None);
+        let explosion = Explosion::new(power, position, self.get_block_interaction(interaction));
+        self.run_explosion(&explosion);
+    }
+
+    /// Explodes at `position` with `source` as the entity that exploded.
+    pub fn explode_from(
+        self: &Arc<Self>,
+        source: &dyn EntityBase,
+        position: Vector3<f64>,
+        power: f32,
+        interaction: ExplosionInteraction,
+    ) {
+        let explosion = Explosion::new(power, position, self.get_block_interaction(interaction))
+            .with_source(source);
+        self.run_explosion(&explosion);
     }
 
     pub fn explode_with_calculator(
@@ -4148,18 +4162,12 @@ impl World {
         interaction: ExplosionInteraction,
         damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
     ) {
-        let block_interaction = self.get_block_interaction(interaction);
-        let mut explosion = Explosion::new(power, position, block_interaction);
+        let mut explosion =
+            Explosion::new(power, position, self.get_block_interaction(interaction));
         if let Some(calc) = damage_calculator {
             explosion = explosion.with_damage_calculator(calc);
         }
-        self.run_explosion(&explosion, position, power);
-    }
-
-    pub fn explode_tnt_minecart(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        let block_interaction = self.get_block_interaction(ExplosionInteraction::Tnt);
-        let explosion = Explosion::new(power, position, block_interaction).preserving_rails();
-        self.run_explosion(&explosion, position, power);
+        self.run_explosion(&explosion);
     }
 
     #[must_use]
@@ -4193,14 +4201,15 @@ impl World {
         }
     }
 
-    pub fn run_explosion(
-        self: &Arc<Self>,
-        explosion: &Explosion,
-        position: Vector3<f64>,
-        power: f32,
-    ) {
+    pub fn run_explosion(self: &Arc<Self>, explosion: &Explosion<'_>) {
+        let position = explosion.center();
+        let power = explosion.power();
         let mut event = crate::plugin::api::events::entity::entity_explode::EntityExplodeEvent::new(
-            0, position, power,
+            explosion
+                .source()
+                .map_or(0, |source| source.get_entity().entity_id),
+            position,
+            power,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
@@ -5695,6 +5704,7 @@ impl World {
                 position,
                 replaced_block_state_id,
                 block_moved,
+                flags,
             );
         }
 
@@ -7292,6 +7302,33 @@ impl World {
         context: &pumpkin_world::clip::ClipContext,
     ) -> pumpkin_world::clip::BlockHitResult {
         pumpkin_world::clip::clip(self, context)
+    }
+
+    /// Like [`Self::clip`], but a ray leaving the world border stops at it. The flag says whether
+    /// the hit is the border rather than a block.
+    pub fn clip_including_border(
+        &self,
+        context: &pumpkin_world::clip::ClipContext,
+    ) -> (pumpkin_world::clip::BlockHitResult, bool) {
+        let hit = self.clip(context);
+        let Ok(border) = self.worldborder.lock() else {
+            return (hit, false);
+        };
+        let from = context.from;
+        if !border.is_within_bounds(from.x, from.z, 0.0)
+            || border.is_within_bounds(hit.location.x, hit.location.z, 0.0)
+        {
+            return (hit, false);
+        }
+        let delta = hit.location - from;
+        let location = border.clamp_to_bounds(hit.location);
+        let border_hit = pumpkin_world::clip::BlockHitResult::hit(
+            location,
+            BlockDirection::get_nearest(delta.x, delta.y, delta.z),
+            BlockPos::floored(location.x, location.y, location.z),
+            false,
+        );
+        (border_hit, true)
     }
 
     pub fn ray_trace_block(

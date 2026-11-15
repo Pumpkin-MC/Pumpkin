@@ -4,9 +4,9 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering},
 };
 
+use pumpkin_data::BlockId;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, BlockId};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -89,7 +89,10 @@ impl LightningBoltEntity {
     fn power_lightning_rod(&self, world: &Arc<World>) {
         let strike_pos = self.get_strike_position();
         let block = world.get_block(&strike_pos);
-        if block == &Block::LIGHTNING_ROD {
+        if pumpkin_data::tag::Taggable::has_tag(
+            block,
+            &pumpkin_data::tag::Block::MINECRAFT_LIGHTNING_RODS,
+        ) {
             crate::block::blocks::redstone::lightning_rod::LightningRodBlock::trigger(
                 world,
                 &strike_pos,

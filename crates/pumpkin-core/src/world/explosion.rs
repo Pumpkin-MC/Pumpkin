@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockState, BlockStateId,
+    attributes::Attributes,
     damage::DamageType,
     entity::EntityType,
     fluid::Fluid,
@@ -15,7 +16,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     block::{ExplodeArgs, drop_loot},
-    entity::{Entity, EntityBase},
+    entity::{Entity, EntityBase, projectile::is_redirectable, tnt::TNTEntity},
     world::loot::LootContextParameters,
 };
 
@@ -176,21 +177,24 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
     }
 }
 
-pub struct Explosion {
+pub struct Explosion<'a> {
     power: f32,
     pos: Vector3<f64>,
     block_interaction: BlockInteraction,
     damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
     preserve_rails: bool,
-    source_entity_id: Option<i32>,
-    damage_type: DamageType,
+    source: Option<&'a dyn EntityBase>,
+    /// The entity credited with the explosion when it isn't the source itself.
+    indirect_source: Option<Arc<dyn EntityBase>>,
+    source_is_indirect: bool,
+    damage_type: Option<DamageType>,
     small_particle: Particle,
     large_particle: Particle,
     sound: Sound,
     from_wind_charge: bool,
 }
 
-impl Explosion {
+impl<'a> Explosion<'a> {
     #[must_use]
     pub const fn new(power: f32, pos: Vector3<f64>, block_interaction: BlockInteraction) -> Self {
         Self {
@@ -199,8 +203,10 @@ impl Explosion {
             block_interaction,
             damage_calculator: None,
             preserve_rails: false,
-            source_entity_id: None,
-            damage_type: DamageType::EXPLOSION,
+            source: None,
+            indirect_source: None,
+            source_is_indirect: false,
+            damage_type: None,
             small_particle: Particle::Explosion,
             large_particle: Particle::ExplosionEmitter,
             sound: Sound::EntityGenericExplode,
@@ -223,16 +229,77 @@ impl Explosion {
         self
     }
 
+    /// Sets the entity that exploded and who gets the credit for it:
+    /// primed TNT credits whoever lit it, a living entity itself and a projectile its living owner.
     #[must_use]
-    pub const fn with_source_entity_id(mut self, source_entity_id: i32) -> Self {
-        self.source_entity_id = Some(source_entity_id);
+    pub fn with_source(mut self, source: &'a dyn EntityBase) -> Self {
+        self.source = Some(source);
+        self.source_is_indirect = source.get_living_entity().is_some();
+        self.indirect_source = if self.source_is_indirect {
+            None
+        } else {
+            let world = source.get_entity().world.load();
+            let owner = source.cast_any().downcast_ref::<TNTEntity>().map_or_else(
+                || {
+                    source
+                        .get_projectile_owner()
+                        .and_then(|owner| owner.get(&world))
+                },
+                |tnt| tnt.owner.get(&world),
+            );
+            owner.filter(|owner| owner.get_living_entity().is_some())
+        };
+        self
+    }
+
+    /// Credits the explosion to `cause` instead of the source's owner, for sources that pass their own damage source.
+    #[must_use]
+    pub fn with_indirect_source(mut self, cause: Option<Arc<dyn EntityBase>>) -> Self {
+        self.source_is_indirect = false;
+        self.indirect_source = cause;
         self
     }
 
     #[must_use]
     pub const fn with_damage_type(mut self, damage_type: DamageType) -> Self {
-        self.damage_type = damage_type;
+        self.damage_type = Some(damage_type);
         self
+    }
+
+    #[must_use]
+    pub const fn center(&self) -> Vector3<f64> {
+        self.pos
+    }
+
+    #[must_use]
+    pub const fn power(&self) -> f32 {
+        self.power
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> Option<&'a dyn EntityBase> {
+        self.source
+    }
+
+    #[must_use]
+    pub fn indirect_source(&self) -> Option<&dyn EntityBase> {
+        if self.source_is_indirect {
+            self.source
+        } else {
+            self.indirect_source.as_deref()
+        }
+    }
+
+    /// Credited explosions with a source deal `player_explosion` damage, which changes the death message.
+    #[must_use]
+    pub fn damage_type(&self) -> DamageType {
+        self.damage_type.unwrap_or(
+            if self.source.is_some() && self.indirect_source().is_some() {
+                DamageType::PLAYER_EXPLOSION
+            } else {
+                DamageType::EXPLOSION
+            },
+        )
     }
 
     #[must_use]
@@ -384,6 +451,13 @@ impl Explosion {
                                 )
                             };
 
+                            // The exploding entity adjusts resistance
+                            // unless the explosion brought its own calculator.
+                            let resistance = match (self.source, &self.damage_calculator) {
+                                (Some(source), None) => resistance
+                                    .map(|r| source.get_block_explosion_resistance(block, r)),
+                                _ => resistance,
+                            };
                             if let Some(resistance) = resistance {
                                 h -= (resistance + 0.3) * 0.3;
                             }
@@ -445,7 +519,10 @@ impl Explosion {
             }
 
             let entity = entity_base.get_entity();
-            if self.source_entity_id == Some(entity.entity_id) {
+            if self
+                .source
+                .is_some_and(|source| source.get_entity().entity_id == entity.entity_id)
+            {
                 continue;
             }
 
@@ -467,10 +544,21 @@ impl Explosion {
                 continue;
             }
 
-            if should_damage {
+            if should_damage
+                && self
+                    .source
+                    .is_none_or(|source| source.do_teams_allow_damage(entity_base.as_ref()))
+            {
                 let damage =
                     calc.get_entity_damage_amount(self, entity_base.as_ref(), exposure as f32);
-                entity.damage(entity_base.as_ref(), damage, self.damage_type);
+                entity_base.damage_with_context(
+                    entity_base.as_ref(),
+                    damage,
+                    self.damage_type(),
+                    None,
+                    self.source,
+                    self.indirect_source(),
+                );
             }
 
             // Calculate and apply knockback
@@ -481,7 +569,11 @@ impl Explosion {
             };
             let direction = (dir_pos - self.pos).normalize();
 
-            let knockback_power = (1.0 - distance) * exposure * knockback_multiplier;
+            let knockback_resistance = entity_base.get_living_entity().map_or(0.0, |living| {
+                living.get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE)
+            });
+            let knockback_power =
+                (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
             let knockback = direction * knockback_power;
             // Vanilla `ServerExplosion.hurtEntities`: creative flyers get no knockback.
             if !entity_base
@@ -499,14 +591,27 @@ impl Explosion {
                 }
             }
 
-            if let Some(player) = entity_base.get_player() {
-                player
-                    .living_entity
-                    .set_ignore_fall_damage_from_current_impulse(
-                        self.from_wind_charge,
-                        player.position(),
-                    );
-            }
+            self.on_explosion_hit(entity_base.as_ref());
+        }
+    }
+
+    /// A pushed redirectable projectile now belongs to whoever caused the explosion, and a player remembers the
+    /// impulse for fall damage.
+    fn on_explosion_hit(&self, entity_base: &dyn EntityBase) {
+        if is_redirectable(entity_base.get_entity())
+            && let Some(owner) = entity_base.get_projectile_owner()
+        {
+            owner.set_uuid(
+                self.indirect_source()
+                    .map(|cause| cause.get_entity().entity_uuid),
+            );
+        } else if let Some(player) = entity_base.get_player() {
+            player
+                .living_entity
+                .set_ignore_fall_damage_from_current_impulse(
+                    self.from_wind_charge,
+                    player.position(),
+                );
         }
     }
 
@@ -585,6 +690,7 @@ impl Explosion {
                             world,
                             block,
                             position: pos,
+                            explosion: self,
                         });
                     }
                 }
@@ -642,6 +748,7 @@ impl Explosion {
                             world,
                             block,
                             position: pos,
+                            explosion: self,
                         });
                     }
                 }

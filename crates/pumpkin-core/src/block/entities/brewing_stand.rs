@@ -146,6 +146,7 @@ impl BrewingStandBlockEntity {
 
         // Brew potion slots
         let mut ingredient_used = false;
+        let mut dropped_remainder = None;
         {
             let Ok(mut items) = self.items.write() else {
                 return;
@@ -246,8 +247,20 @@ impl BrewingStandBlockEntity {
 
             // Consume one ingredient
             if ingredient_used {
+                let remainder = items[3].crafting_remainder();
                 items[3].decrement(1);
+                if let Some(remainder) = remainder {
+                    if items[3].is_empty() {
+                        items[3] = remainder;
+                    } else {
+                        dropped_remainder = Some(remainder);
+                    }
+                }
             }
+        }
+
+        if let Some(remainder) = dropped_remainder {
+            world.drop_stack(&self.position, remainder);
         }
 
         if !ingredient_used {
@@ -329,19 +342,34 @@ impl BrewingStandBlockEntity {
             20
         };
 
-        if self.fuel.load(Ordering::Relaxed) <= 0
+        let mut dropped_remainder = None;
+        let refilled = if self.fuel.load(Ordering::Relaxed) <= 0
             && let Ok(mut items) = self.items.try_write()
             && !items[4].is_empty()
             && items[4].are_equal(&expected_fuel)
         {
+            let remainder = items[4].crafting_remainder();
             self.fuel.store(i32::from(fuel_power), Ordering::Relaxed);
             items[4].decrement(1);
+            if let Some(remainder) = remainder {
+                if items[4].is_empty() {
+                    items[4] = remainder;
+                } else {
+                    dropped_remainder = Some(remainder);
+                }
+            }
             // The fuel slot shrank, comparators needs an update.
             self.comparator_dirty.store(true, Ordering::Relaxed);
             true
         } else {
             false
+        };
+
+        if let Some(remainder) = dropped_remainder {
+            world.drop_stack(&self.position, remainder);
         }
+
+        refilled
     }
 }
 

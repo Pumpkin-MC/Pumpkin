@@ -510,7 +510,8 @@ impl SulfurCubeEntity {
                 ExplosionInteraction::None
             };
             let pos = entity.pos.load();
-            world.explode(
+            world.explode_from(
+                self,
                 Vector3::new(pos.x, entity.get_y(0.0625), pos.z),
                 explosion.power as f32,
                 interaction,
@@ -1048,10 +1049,6 @@ impl Mob for SulfurCubeEntity {
         entity.velocity_dirty.store(true, Ordering::SeqCst);
         self.play_sound(hit_sound);
         true
-    }
-
-    fn can_be_picked_from_inside(&self) -> bool {
-        !self.has_body_item()
     }
 
     fn is_invulnerable_to_piercing_weapon(&self) -> bool {

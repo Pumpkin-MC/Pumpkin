@@ -496,7 +496,29 @@ impl Slot for ResultSlot {
         );
         player.on_recipe_crafted(stack);
         for i in 0..self.inventory.size() {
+            let ingredient = self.inventory.get_stack(i);
+            if ingredient.is_empty() {
+                continue;
+            }
+            let remainder = ingredient.crafting_remainder();
             self.inventory.remove_stack_specific(i, 1);
+            let Some(remainder) = remainder else {
+                continue;
+            };
+
+            let remaining = self.inventory.get_stack(i);
+            if remaining.is_empty() {
+                self.inventory.set_stack(i, remainder);
+            } else if remaining.are_items_and_components_equal(&remainder) {
+                let mut merged = remaining;
+                merged.increment(remainder.item_count);
+                self.inventory.set_stack(i, merged);
+            } else {
+                let mut leftover = remainder;
+                if !player.get_inventory().insert_stack_anywhere(&mut leftover) {
+                    player.drop_item(leftover, false);
+                }
+            }
         }
         self.mark_dirty();
     }
@@ -690,7 +712,138 @@ impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_data::data_component_impl::EquipmentSlot;
     use pumpkin_data::item::Item;
+    use pumpkin_data::sound::Sound;
+    use pumpkin_protocol::java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory, CSetSelectedSlot,
+    };
+    use pumpkin_protocol::java::server::play::SlotActionType;
+
+    use crate::entity_equipment::EntityEquipment;
+    use crate::screen_handler::InventoryPlayer;
+
+    struct TestPlayer {
+        inventory: Arc<PlayerInventory>,
+        drops: Mutex<Vec<ItemStack>>,
+    }
+
+    impl TestPlayer {
+        fn new(inventory: Arc<PlayerInventory>) -> Self {
+            Self {
+                inventory,
+                drops: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl InventoryPlayer for TestPlayer {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn drop_item(&self, item: ItemStack, _retain_ownership: bool) {
+            self.drops
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(item);
+        }
+
+        fn get_inventory(&self) -> Arc<PlayerInventory> {
+            self.inventory.clone()
+        }
+
+        fn has_infinite_materials(&self) -> bool {
+            false
+        }
+
+        fn is_creative(&self) -> bool {
+            false
+        }
+
+        fn experience_level(&self) -> i32 {
+            0
+        }
+
+        fn add_experience_levels(&self, _levels: i32) {}
+
+        fn enchantment_seed(&self) -> i32 {
+            0
+        }
+
+        fn set_enchantment_seed(&self, _seed: i32) {}
+
+        fn enqueue_inventory_packet(
+            &self,
+            _packet: &CSetContainerContent,
+            _window_type: Option<WindowType>,
+        ) {
+        }
+
+        fn enqueue_slot_packet(
+            &self,
+            _packet: &CSetContainerSlot,
+            _window_type: Option<WindowType>,
+            _total_slots: usize,
+        ) {
+        }
+
+        fn enqueue_cursor_packet(&self, _packet: &CSetCursorItem) {}
+
+        fn enqueue_property_packet(
+            &self,
+            _packet: &CSetContainerProperty,
+            _window_type: Option<WindowType>,
+        ) {
+        }
+
+        fn enqueue_slot_set_packet(&self, _packet: &CSetPlayerInventory) {}
+
+        fn enqueue_set_held_item_packet(&self, _packet: &CSetSelectedSlot) {}
+
+        fn enqueue_equipment_change(&self, _slot: &EquipmentSlot, _stack: &ItemStack) {}
+
+        fn award_experience(&self, _amount: i32) {}
+
+        fn increment_stat(&self, _category: StatisticCategory, _stat_id: i32, _amount: i32) {}
+
+        fn play_block_sound(&self, _sound: Sound, _pitch: f32) {}
+    }
+
+    fn test_handler() -> (CraftingTableScreenHandler, Arc<PlayerInventory>, TestPlayer) {
+        let player_inventory = Arc::new(PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(rustc_hash::FxHashMap::default()),
+        ));
+        let player = TestPlayer::new(player_inventory.clone());
+        let handler = CraftingTableScreenHandler::new(1, &player_inventory, None);
+        (handler, player_inventory, player)
+    }
+
+    fn set_slot(handler: &CraftingTableScreenHandler, slot: usize, stack: ItemStack) {
+        handler.get_behaviour().slots[slot].set_stack(stack);
+    }
+
+    fn grid_stack(handler: &CraftingTableScreenHandler, slot: usize) -> ItemStack {
+        handler.get_behaviour().slots[slot].get_stack()
+    }
+
+    fn refresh_result(handler: &CraftingTableScreenHandler) {
+        handler.get_behaviour().slots[0].set_stack(ItemStack::EMPTY.clone());
+    }
+
+    fn place_cake(handler: &CraftingTableScreenHandler) {
+        for slot in 1..=3 {
+            set_slot(handler, slot, ItemStack::new(1, &Item::MILK_BUCKET));
+        }
+        set_slot(handler, 4, ItemStack::new(1, &Item::SUGAR));
+        set_slot(handler, 5, ItemStack::new(1, &Item::EGG));
+        set_slot(handler, 6, ItemStack::new(1, &Item::SUGAR));
+        for slot in 7..=9 {
+            set_slot(handler, slot, ItemStack::new(1, &Item::WHEAT));
+        }
+    }
 
     fn mace_result(grid_size: u8, top_slot: usize) -> Option<String> {
         let inventory = CraftingInventory::new(grid_size, grid_size);
@@ -710,6 +863,99 @@ mod tests {
                 Some("minecraft:mace"),
                 "grid {grid_size}x{grid_size}, top slot {top_slot}"
             );
+        }
+    }
+
+    #[test]
+    fn taking_cake_returns_empty_buckets_and_consumes_other_ingredients() {
+        let (mut handler, _, player) = test_handler();
+        place_cake(&handler);
+        refresh_result(&handler);
+        assert_eq!(grid_stack(&handler, 0).item.id, Item::CAKE.id);
+
+        handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
+
+        for slot in 1..=3 {
+            assert_eq!(grid_stack(&handler, slot).item.id, Item::BUCKET.id);
+        }
+        for slot in 4..=9 {
+            assert!(grid_stack(&handler, slot).is_empty());
+        }
+    }
+
+    #[test]
+    fn taking_honey_block_returns_glass_bottles() {
+        let (mut handler, _, player) = test_handler();
+        for slot in [1, 2, 4, 5] {
+            set_slot(&handler, slot, ItemStack::new(1, &Item::HONEY_BOTTLE));
+        }
+        refresh_result(&handler);
+        assert_eq!(grid_stack(&handler, 0).item.id, Item::HONEY_BLOCK.id);
+
+        handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
+
+        for slot in [1, 2, 4, 5] {
+            assert_eq!(grid_stack(&handler, slot).item.id, Item::GLASS_BOTTLE.id);
+        }
+    }
+
+    #[test]
+    fn taking_sugar_returns_the_honey_bottle_remainder() {
+        let (mut handler, _, player) = test_handler();
+        set_slot(&handler, 1, ItemStack::new(1, &Item::HONEY_BOTTLE));
+        refresh_result(&handler);
+        assert_eq!(grid_stack(&handler, 0).item.id, Item::SUGAR.id);
+
+        handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
+
+        assert_eq!(grid_stack(&handler, 1).item.id, Item::GLASS_BOTTLE.id);
+    }
+
+    #[test]
+    fn taking_a_recipe_without_remainders_still_consumes_the_grid() {
+        let (mut handler, _, player) = test_handler();
+        set_slot(&handler, 1, ItemStack::new(1, &Item::OAK_LOG));
+        refresh_result(&handler);
+        assert_eq!(grid_stack(&handler, 0).item.id, Item::OAK_PLANKS.id);
+
+        handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
+
+        assert!(grid_stack(&handler, 1).is_empty());
+    }
+
+    #[test]
+    fn occupied_input_slot_drops_the_remainder() {
+        let (mut handler, player_inventory, player) = test_handler();
+        place_cake(&handler);
+        set_slot(&handler, 1, ItemStack::new(2, &Item::MILK_BUCKET));
+        for slot in 0..player_inventory.size() {
+            player_inventory.set_stack(slot, ItemStack::new(64, &Item::DIRT));
+        }
+        refresh_result(&handler);
+
+        handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
+
+        let milk = grid_stack(&handler, 1);
+        assert_eq!(milk.item.id, Item::MILK_BUCKET.id);
+        assert_eq!(milk.item_count, 1);
+        let drops = player
+            .drops
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(drops.len(), 1);
+        assert_eq!(drops[0].item.id, Item::BUCKET.id);
+    }
+
+    #[test]
+    fn shift_clicking_the_result_returns_remainders() {
+        let (mut handler, _, player) = test_handler();
+        place_cake(&handler);
+        refresh_result(&handler);
+
+        handler.on_slot_click(0, 0, SlotActionType::QuickMove, &player);
+
+        for slot in 1..=3 {
+            assert_eq!(grid_stack(&handler, slot).item.id, Item::BUCKET.id);
         }
     }
 }
