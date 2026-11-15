@@ -462,10 +462,12 @@ impl ItemEntity {
 
     fn decrement_pickup_delay(&self) {
         // Vanilla: decrement when `pickupDelay > 0 && pickupDelay != INFINITE_PICKUP_DELAY`.
-        let delay = self.pickup_delay.load(Ordering::Relaxed);
-        if delay > 0 && delay != INFINITE_PICKUP_DELAY {
-            self.pickup_delay.store(delay - 1, Ordering::Relaxed);
-        }
+        // Atomic, a merge raising the delay concurrently must not be overwritten.
+        let _ = self
+            .pickup_delay
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |delay| {
+                (delay > 0 && delay != INFINITE_PICKUP_DELAY).then_some(delay - 1)
+            });
     }
 
     fn apply_fluid_drag_or_gravity(&self, mut velo: Vector3<f64>) -> Vector3<f64> {
@@ -841,6 +843,8 @@ impl EntityBase for ItemEntity {
         if inserted || player.is_creative() {
             player.inventory_changed.store(true, Ordering::Relaxed);
 
+            // TODO: vanilla `playerTouch` reports the full original count (stat and pickup animation) even when
+            // only part fit, so the rest is counted again on the next touch. Here only the removed part counts.
             // A creative stack that fit nowhere is voided, so `count_after` is already 0.
             let amount_picked_up = count_before - count_after;
 
