@@ -101,6 +101,9 @@ impl FallingEntity {
             Block::AIR.default_state.id
         };
 
+        // `block_state` can differ from the world's (scaffolding passes its recomputed state), so the
+        // write below compares against the cell as it was before the event.
+        let observed = world.get_block_state_id(&position);
         let spawn_pos = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
         let entity = Entity::new(world.clone(), spawn_pos, &EntityType::FALLING_BLOCK);
         if world.cancelled_by_plugin(|| {
@@ -113,7 +116,10 @@ impl FallingEntity {
             return None;
         }
 
-        world.set_block_state(&position, leftover, BlockFlags::NOTIFY_ALL);
+        // An event handler may have run long enough for another task to change the source block.
+        world.set_block_state_if(&position, leftover, BlockFlags::NOTIFY_ALL, |current| {
+            current == observed
+        })?;
         entity
             .data
             .store(i32::from(falling_state.as_u16()), Ordering::Relaxed);
@@ -232,11 +238,15 @@ impl EntityBase for FallingEntity {
                             landing_pos,
                             Block::from_state_id(state_id).to_resource_location(),
                         )
-                    }) {
-                        // Vanilla drops the block when `setBlock` refuses.
+                    }) || world
+                        .set_block_state_if(&landing_pos, state_id, BlockFlags::NOTIFY_ALL, |now| {
+                            now == current_state.id
+                        })
+                        .is_none()
+                    {
+                        // Vanilla drops the block when `setBlock` refuses; here also when the cell changed under the event.
                         self.drop_as_item();
                     } else {
-                        world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
                         self.apply_block_data(&world, landing_pos);
                         // block updates to watchers before the despawn, else a invisible block gap until the tick flush.
                         let placed = world.get_block_state_id(&landing_pos);

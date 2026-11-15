@@ -963,7 +963,7 @@ impl LivingEntity {
         if emptied {
             item.get_entity().remove();
         } else {
-            item.init_data_tracker();
+            item.on_count_changed();
         }
         Some(kept)
     }

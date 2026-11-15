@@ -733,6 +733,8 @@ impl<'a> Explosion<'a> {
                     world_time: world.level_info.load().day_time as u64,
                     is_raining: Some(world.is_raining()),
                     is_thundering: Some(world.is_thundering()),
+                    // Vanilla `THIS_ENTITY` is the explosion's direct source.
+                    this_entity: self.source,
                     ..Default::default()
                 };
                 let mut drops: Vec<(BlockPos, ItemStack)> = Vec::new();
@@ -745,8 +747,7 @@ impl<'a> Explosion<'a> {
                     }
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
-                    // TODO vanilla `onExplosionHit`: loot `THIS_ENTITY` is the direct source, and blocks drop XP
-                    // (`spawnAfterBreak`) when the indirect source is a player. `Explosion` has no source yet.
+                    // TODO vanilla `onExplosionHit`: blocks drop XP (`spawnAfterBreak`) when the indirect source is a player.
                     if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
                         let params = LootContextParameters {
                             block_state: Some(state),

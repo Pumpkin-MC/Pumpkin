@@ -440,7 +440,7 @@ impl ItemEntity {
 
     /// Resends the stack after its count changed. Bedrock item actors ignore the `ITEM`
     /// metadata, so they get the count as `UpdateStackSize`
-    fn on_count_changed(&self) {
+    pub(crate) fn on_count_changed(&self) {
         self.init_data_tracker();
 
         let count = self
