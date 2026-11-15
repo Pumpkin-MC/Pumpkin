@@ -17,6 +17,7 @@ use crate::entity::decoration::{
     end_crystal::EndCrystalEntity,
     item_frame::ItemFrameEntity,
     leash_knot::LeashKnotEntity,
+    mannequin::MannequinEntity,
     painting::PaintingEntity,
 };
 use crate::entity::experience_orb::ExperienceOrbEntity;
@@ -64,6 +65,7 @@ use crate::entity::mob::zoglin::ZoglinEntity;
 use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
 use crate::entity::mob::zombie::{drowned::DrownedEntity, husk::HuskEntity, zombie::ZombieEntity};
 use crate::entity::mob::zombified_piglin::ZombifiedPiglinEntity;
+use crate::entity::ominous_item_spawner::OminousItemSpawnerEntity;
 use crate::entity::passive::allay::AllayEntity;
 use crate::entity::passive::armadillo::ArmadilloEntity;
 use crate::entity::passive::axolotl::AxolotlEntity;
@@ -109,8 +111,10 @@ use crate::entity::passive::villager::VillagerEntity;
 use crate::entity::passive::wandering_trader::WanderingTraderEntity;
 use crate::entity::passive::wolf::WolfEntity;
 use crate::entity::passive::zombie_horse::ZombieHorseEntity;
+use crate::entity::passive::zombie_nautilus::ZombieNautilusEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::ArrowEntity;
+use crate::entity::projectile::dragon_fireball::DragonFireballEntity;
 use crate::entity::projectile::egg::EggEntity;
 use crate::entity::projectile::ender_pearl::EnderPearlEntity;
 use crate::entity::projectile::experience_bottle::ExperienceBottleEntity;
@@ -232,6 +236,7 @@ pub fn from_type(
         id if id == EntityType::TADPOLE.id => TadpoleEntity::new(entity),
         id if id == EntityType::DOLPHIN.id => DolphinEntity::new(entity),
         id if id == EntityType::NAUTILUS.id => NautilusEntity::new(entity),
+        id if id == EntityType::ZOMBIE_NAUTILUS.id => ZombieNautilusEntity::new(entity),
 
         id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity),
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity),
@@ -243,6 +248,7 @@ pub fn from_type(
             crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)
         }
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
+        id if id == EntityType::MANNEQUIN.id => MannequinEntity::new(entity),
         id if id == EntityType::CUSHION.id => Arc::new(CushionEntity::new(entity, 0)),
         id if id == EntityType::BLOCK_DISPLAY.id => BlockDisplayEntity::new(entity),
         id if id == EntityType::ITEM_DISPLAY.id => ItemDisplayEntity::new(entity),
@@ -292,6 +298,7 @@ pub fn from_type(
             Arc::new(MinecartEntity::new(entity))
         }
         id if id == EntityType::FIREBALL.id => Arc::new(FireballEntity::new(entity)),
+        id if id == EntityType::DRAGON_FIREBALL.id => Arc::new(DragonFireballEntity::new(entity)),
         id if id == EntityType::SMALL_FIREBALL.id => Arc::new(SmallFireballEntity::new(entity)),
         id if id == EntityType::WITHER_SKULL.id => Arc::new(WitherSkullEntity::new(entity)),
         id if id == EntityType::WIND_CHARGE.id => {
@@ -312,6 +319,7 @@ pub fn from_type(
         }
         id if id == EntityType::LIGHTNING_BOLT.id => Arc::new(LightningBoltEntity::new(entity)),
         id if id == EntityType::MARKER.id => MarkerEntity::new(entity),
+        id if id == EntityType::OMINOUS_ITEM_SPAWNER.id => OminousItemSpawnerEntity::new(entity),
         id if id == EntityType::INTERACTION.id => InteractionEntity::new(entity),
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),

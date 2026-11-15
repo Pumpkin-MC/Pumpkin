@@ -97,6 +97,7 @@ pub mod lightning;
 pub mod living;
 pub mod marker;
 pub mod mob;
+pub mod ominous_item_spawner;
 pub mod passive;
 pub mod player;
 pub mod projectile;
@@ -652,6 +653,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     fn is_immobile(&self) -> bool {
         self.get_living_entity()
             .is_some_and(LivingEntity::is_dead_or_dying)
+    }
+
+    fn is_effective_ai(&self) -> bool {
+        self.get_mob()
+            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai())
     }
 
     fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
