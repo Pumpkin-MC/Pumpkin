@@ -1684,19 +1684,15 @@ impl Mob for VillagerEntity {
                         .and_then(ItemStack::read_item_stack);
                     // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
                     // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
-                    // Bug: a `buyB` that is present but fails to decode (unknown item id,
-                    // count above the limit) reads as `None` here, which means "no second
-                    // cost", so the trade loads without its second payment. Reject the
-                    // recipe when `buyB` is present but invalid; keep `None` only when the
-                    // key is absent.
-                    let buy_b = recipe
-                        .get_compound("buyB")
-                        .and_then(ItemStack::read_item_stack);
+                    // A `buyB` that is present but invalid rejects the recipe, like a failed vanilla codec decode.
+                    let buy_b = recipe.get_compound("buyB").map_or(Some(None), |cost_b| {
+                        ItemStack::read_item_stack(cost_b).map(Some)
+                    });
                     let sell_item = recipe
                         .get_compound("sell")
                         .and_then(ItemStack::read_item_stack);
 
-                    if let (Some(buy), Some(sell_item)) = (buy, sell_item)
+                    if let (Some(buy), Some(sell_item), Some(buy_b)) = (buy, sell_item, buy_b)
                         && !buy.is_empty()
                         && !sell_item.is_empty()
                         && buy_b.as_ref().is_none_or(|stack| !stack.is_empty())
