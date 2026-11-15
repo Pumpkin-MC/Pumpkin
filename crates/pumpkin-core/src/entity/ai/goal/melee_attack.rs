@@ -11,6 +11,8 @@ use rand::RngExt;
 
 const MAX_ATTACK_TIME: i64 = 20;
 
+type AttackCheck = fn(&mut MeleeAttackGoal, &dyn Mob, &dyn EntityBase);
+
 pub struct MeleeAttackGoal {
     goal_control: Controls,
     speed: f64,
@@ -26,6 +28,9 @@ pub struct MeleeAttackGoal {
     last_target_position: Option<Vector3<f64>>,
     gate: Option<MobFilter>,
     attack: Option<fn(&dyn Mob, &dyn EntityBase)>,
+    // A goal with `check` or `attack` can do anything in its hook, so its `tick_reach` must stay `None`.
+    check: Option<AttackCheck>,
+    on_stop: Option<fn(&dyn Mob)>,
 }
 
 impl MeleeAttackGoal {
@@ -43,6 +48,8 @@ impl MeleeAttackGoal {
             last_target_position: None,
             gate: None,
             attack: None,
+            check: None,
+            on_stop: None,
         }
     }
 
@@ -60,9 +67,61 @@ impl MeleeAttackGoal {
         self
     }
 
+    /// Replaces the whole `checkAndPerformAttack`, which runs every tick once the target is set.
+    /// When set, `performing` is ignored.
+    #[must_use]
+    pub const fn checking(mut self, check: AttackCheck) -> Self {
+        self.check = Some(check);
+        self
+    }
+
+    /// Runs at the start of `stop`, for subclasses that override it.
+    #[must_use]
+    pub const fn on_stop(mut self, step: fn(&dyn Mob)) -> Self {
+        self.on_stop = Some(step);
+        self
+    }
+
     #[must_use]
     pub fn get_max_cooldown(&self) -> i32 {
         self.get_tick_count(20)
+    }
+
+    pub fn reset_attack_cooldown(&mut self) {
+        self.cooldown = self.get_max_cooldown();
+    }
+
+    #[must_use]
+    pub const fn is_time_to_attack(&self) -> bool {
+        self.cooldown <= 0
+    }
+
+    #[must_use]
+    pub fn can_perform_attack(&self, mob: &dyn Mob, target: &dyn EntityBase) -> bool {
+        self.is_time_to_attack()
+            && mob.is_in_attack_range(target)
+            && mob.has_line_of_sight(target.get_entity())
+    }
+
+    fn check_and_perform_attack(&mut self, mob: &dyn Mob, target: &dyn EntityBase) {
+        if let Some(check) = self.check {
+            check(self, mob, target);
+            return;
+        }
+        if !self.can_perform_attack(mob, target) {
+            return;
+        }
+        self.reset_attack_cooldown();
+        if let Some(attack) = self.attack {
+            attack(mob, target);
+            return;
+        }
+
+        mob.get_mob_entity().living_entity.swing_hand();
+        let damaged = mob.do_hurt_target(target);
+        if damaged {
+            mob.on_attack(target);
+        }
     }
 }
 
@@ -139,6 +198,9 @@ impl Goal for MeleeAttackGoal {
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
+        if let Some(on_stop) = self.on_stop {
+            on_stop(mob);
+        }
         // Only clear target if they switched to creative/spectator
         let should_clear = mob
             .get_mob_entity()
@@ -203,23 +265,7 @@ impl Goal for MeleeAttackGoal {
         }
 
         self.cooldown = (self.cooldown - 1).max(0);
-
-        if self.cooldown <= 0
-            && mob.is_in_attack_range(target.as_ref())
-            && mob.has_line_of_sight(target.get_entity())
-        {
-            self.cooldown = self.get_max_cooldown();
-            if let Some(attack) = self.attack {
-                attack(mob, target.as_ref());
-                return;
-            }
-
-            mob.get_mob_entity().living_entity.swing_hand();
-            let damaged = mob.do_hurt_target(target.as_ref());
-            if damaged {
-                mob.on_attack(target.as_ref());
-            }
-        }
+        self.check_and_perform_attack(mob, target.as_ref());
     }
 
     fn should_run_every_tick(&self) -> bool {

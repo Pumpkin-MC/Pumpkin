@@ -15,6 +15,9 @@ const WATER_SEARCH_Y: i32 = 1;
 const HORIZONTAL_RANGE: i32 = 5;
 const VERTICAL_RANGE: i32 = 4;
 
+/// Vanilla `PanicGoal`'s `Function<PathfinderMob, TagKey<DamageType>>`.
+type PanicTagFn = fn(&dyn Mob) -> &'static tag::Tag;
+
 pub struct EscapeDangerGoal {
     speed: f64,
     goal_control: Controls,
@@ -23,11 +26,18 @@ pub struct EscapeDangerGoal {
     calm_while_mob_controlled: bool,
     teleport_to_owner: bool,
     water_search_xz: Option<i32>,
+    panic_causes: PanicTagFn,
 }
 
 impl EscapeDangerGoal {
     #[must_use]
     pub fn new(speed: f64) -> Box<Self> {
+        Self::new_with_tag(speed, |_| &tag::DamageType::MINECRAFT_PANIC_CAUSES)
+    }
+
+    /// For mobs whose panic damage tag depends on the mob, like the polar bear's age.
+    #[must_use]
+    pub fn new_with_tag(speed: f64, panic_causes: PanicTagFn) -> Box<Self> {
         Box::new(Self {
             speed,
             goal_control: Controls::MOVE,
@@ -36,6 +46,7 @@ impl EscapeDangerGoal {
             calm_while_mob_controlled: false,
             teleport_to_owner: false,
             water_search_xz: None,
+            panic_causes,
         })
     }
 
@@ -67,15 +78,14 @@ impl EscapeDangerGoal {
         self.running
     }
 
-    /// Only `#minecraft:panic_causes` damage makes a mob flee, and only while the source is still
+    /// Only damage in the mob's panic tag makes it flee, and only while the source is still
     /// remembered.
-    fn should_panic(mob: &dyn Mob) -> bool {
+    fn should_panic(&self, mob: &dyn Mob) -> bool {
+        let panic_causes = (self.panic_causes)(mob);
         mob.get_mob_entity()
             .living_entity
             .get_last_damage_type()
-            .is_some_and(|damage_type| {
-                damage_type.has_tag(&tag::DamageType::MINECRAFT_PANIC_CAUSES)
-            })
+            .is_some_and(|damage_type| damage_type.has_tag(panic_causes))
     }
 
     /// Nearest water within `xz_dist` blocks horizontally, only when the mob is not stuck in a block.
@@ -124,7 +134,7 @@ impl Goal for EscapeDangerGoal {
         let living = &mob.get_mob_entity().living_entity;
         let entity = &living.entity;
         let may_flee = running
-            || Self::should_panic(mob)
+            || self.should_panic(mob)
             || entity.fire_ticks.load(Relaxed) > 0
             || entity.frozen_ticks.load(Relaxed) > 0
             || entity.touching_lava.load(Relaxed)
@@ -137,7 +147,7 @@ impl Goal for EscapeDangerGoal {
     }
 
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if !Self::should_panic(mob)
+        if !self.should_panic(mob)
             || (self.calm_while_mob_controlled
                 && mob
                     .as_abstract_horse()
