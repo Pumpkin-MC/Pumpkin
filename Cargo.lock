@@ -2999,6 +2999,8 @@ dependencies = [
 name = "pumpkin-codegen"
 version = "0.2.2+26.3-26.63"
 dependencies = [
+ "base64 0.23.1",
+ "flate2",
  "heck",
  "indexmap",
  "md5",
@@ -3012,6 +3014,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "syn 3.0.10",
+ "uuid",
  "wit-encoder",
 ]
 

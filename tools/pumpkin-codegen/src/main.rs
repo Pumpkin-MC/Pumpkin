@@ -30,6 +30,7 @@ mod attributes;
 mod banner_pattern;
 mod bedrock_biome;
 mod bedrock_creative;
+mod bedrock_recipe;
 mod biome;
 mod bitsets;
 mod block;
@@ -154,6 +155,7 @@ pub fn main() {
         (advancement::build, "advancement.rs"),
         (bedrock_biome::build, "bedrock_biome.rs"),
         (bedrock_creative::build, "bedrock_creative.rs"),
+        (bedrock_recipe::build, "bedrock_recipe.rs"),
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),

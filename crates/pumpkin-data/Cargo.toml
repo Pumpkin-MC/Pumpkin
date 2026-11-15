@@ -52,6 +52,7 @@ default = [
     "slot_ranges",
     "bedrock_creative",
     "bedrock_biome",
+    "bedrock_recipe",
     "map_color",
     "map_decoration",
     "dye_color",
@@ -117,6 +118,7 @@ entity_variant = ["dye_color"]
 advancement = []
 bedrock_creative = []
 bedrock_biome = []
+bedrock_recipe = []
 item = []
 packet = []
 jukebox_song = []

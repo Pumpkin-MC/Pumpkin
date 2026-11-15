@@ -263,6 +263,11 @@ pub mod bedrock_creative;
 #[path = "generated/bedrock_biome.rs"]
 pub mod bedrock_biome;
 
+#[cfg(feature = "bedrock_recipe")]
+#[rustfmt::skip]
+#[path = "generated/bedrock_recipe.rs"]
+pub mod bedrock_recipe;
+
 #[cfg(feature = "tag")]
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]

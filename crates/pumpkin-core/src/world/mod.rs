@@ -3316,7 +3316,7 @@ impl World {
 
         let crafting_data = pumpkin_protocol::bedrock::client::CCraftingData {
             recipes: crate::net::bedrock::recipe::crafting_data(&server.recipe_manager),
-            clean_recipes: false,
+            clean_recipes: true,
         };
         if let Ok(data) = client.serialize_packet(&crafting_data) {
             client.send_game_packet(data).await;
