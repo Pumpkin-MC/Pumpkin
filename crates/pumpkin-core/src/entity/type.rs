@@ -111,6 +111,7 @@ use crate::entity::passive::wolf::WolfEntity;
 use crate::entity::passive::zombie_horse::ZombieHorseEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::ArrowEntity;
+use crate::entity::projectile::dragon_fireball::DragonFireballEntity;
 use crate::entity::projectile::egg::EggEntity;
 use crate::entity::projectile::ender_pearl::EnderPearlEntity;
 use crate::entity::projectile::experience_bottle::ExperienceBottleEntity;
@@ -292,6 +293,7 @@ pub fn from_type(
             Arc::new(MinecartEntity::new(entity))
         }
         id if id == EntityType::FIREBALL.id => Arc::new(FireballEntity::new(entity)),
+        id if id == EntityType::DRAGON_FIREBALL.id => Arc::new(DragonFireballEntity::new(entity)),
         id if id == EntityType::SMALL_FIREBALL.id => Arc::new(SmallFireballEntity::new(entity)),
         id if id == EntityType::WITHER_SKULL.id => Arc::new(WitherSkullEntity::new(entity)),
         id if id == EntityType::WIND_CHARGE.id => {

@@ -17,6 +17,7 @@ use pumpkin_world::clip::{ClipBlock, ClipContext, ClipFluid};
 use std::{sync::Arc, sync::atomic::Ordering};
 pub mod abstract_arrow;
 pub mod arrow;
+pub mod dragon_fireball;
 pub mod egg;
 pub mod ender_pearl;
 pub mod evoker_fangs;
