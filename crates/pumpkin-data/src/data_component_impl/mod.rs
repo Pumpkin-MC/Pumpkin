@@ -1005,4 +1005,86 @@ mod tests {
         );
         assert_round_trip(SwingAnimationImpl::DEFAULT, SwingAnimationImpl::read_data);
     }
+
+    fn sword_modifiers() -> AttributeModifiersImpl {
+        AttributeModifiersImpl {
+            attribute_modifiers: Cow::Owned(vec![
+                Modifier {
+                    r#type: &crate::attributes::Attributes::ATTACK_DAMAGE,
+                    id: Cow::Borrowed("minecraft:base_attack_damage"),
+                    amount: 11.0,
+                    operation: Operation::AddValue,
+                    slot: crate::AttributeModifierSlot::MainHand,
+                },
+                Modifier {
+                    r#type: &crate::attributes::Attributes::MOVEMENT_SPEED,
+                    id: Cow::Borrowed("example:speed"),
+                    amount: 0.1,
+                    operation: Operation::AddMultipliedBase,
+                    slot: crate::AttributeModifierSlot::Any,
+                },
+            ]),
+        }
+    }
+
+    #[test]
+    fn attribute_modifiers_round_trip() {
+        assert_round_trip(sword_modifiers(), AttributeModifiersImpl::read_data);
+        assert_round_trip(
+            AttributeModifiersImpl {
+                attribute_modifiers: Cow::Borrowed(&[]),
+            },
+            AttributeModifiersImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn attribute_modifiers_write_vanilla_format() {
+        // The default `write_data` returns `NbtTag::End`, which breaks the
+        // rest of the player or chunk NBT.
+        let NbtTag::List(list) = sword_modifiers().write_data() else {
+            panic!("attribute_modifiers must be written as a list");
+        };
+        let first = list[0].extract_compound().unwrap();
+        assert_eq!(first.get_string("type"), Some("minecraft:attack_damage"));
+        assert_eq!(first.get_string("id"), Some("minecraft:base_attack_damage"));
+        assert_eq!(first.get_double("amount"), Some(11.0));
+        assert_eq!(first.get_string("operation"), Some("add_value"));
+        assert_eq!(first.get_string("slot"), Some("mainhand"));
+        let second = list[1].extract_compound().unwrap();
+        assert_eq!(second.get_string("slot"), None);
+    }
+
+    #[test]
+    fn attribute_modifiers_read_vanilla_nbt() {
+        // The `minecraft:` prefix is optional, any numeric `amount` works (as
+        // from `/give`), a missing slot means `any`, and unknown attributes
+        // are skipped.
+        let entry = |ty: &str, slot: Option<&str>| {
+            let mut c = NbtCompound::new();
+            c.put_string("type", ty.to_string());
+            c.put_string("id", "example:bonus".to_string());
+            c.put_int("amount", 2);
+            c.put_string("operation", "add_multiplied_total".to_string());
+            if let Some(slot) = slot {
+                c.put_string("slot", slot.to_string());
+            }
+            NbtTag::Compound(c)
+        };
+        let data = NbtTag::List(vec![
+            entry("minecraft:armor", Some("chest")),
+            entry("max_health", None),
+            entry("minecraft:not_an_attribute", Some("head")),
+        ]);
+        let read = AttributeModifiersImpl::read_data(&data).unwrap();
+        let mods = &read.attribute_modifiers;
+        assert_eq!(mods.len(), 2);
+        assert_eq!(mods[0].r#type, &crate::attributes::Attributes::ARMOR);
+        assert_eq!(mods[0].slot, crate::AttributeModifierSlot::Chest);
+        assert_eq!(mods[0].operation, Operation::AddMultipliedTotal);
+        assert_eq!(mods[0].amount, 2.0);
+        assert_eq!(mods[1].r#type, &crate::attributes::Attributes::MAX_HEALTH);
+        assert_eq!(mods[1].slot, crate::AttributeModifierSlot::Any);
+        assert_eq!(mods[1].id, "example:bonus");
+    }
 }
