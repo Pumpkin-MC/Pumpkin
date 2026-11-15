@@ -1,6 +1,7 @@
+use crate::block::blocks::bubble_column;
 use crate::entity::mob::spawn::{EntitySpawnReason, finalize_spawn};
 use crate::entity::projectile::owner::ProjectileOwner;
-use std::sync::atomic::AtomicBool;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
@@ -32,8 +33,6 @@ impl EnderPearlEntity {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
         };
 
@@ -48,12 +47,23 @@ impl EnderPearlEntity {
 }
 
 impl EntityBase for EnderPearlEntity {
+    /// Pearls take the regular entity push, not the projectile one.
+    fn on_above_bubble_column(&self, drag_down: bool, pos: &BlockPos) {
+        let entity = self.get_entity();
+        bubble_column::push_entity(entity, drag_down, true);
+        bubble_column::send_bubble_column_particles(&entity.world.load(), pos);
+    }
+
+    fn on_inside_bubble_column(&self, drag_down: bool) {
+        bubble_column::push_entity(self.get_entity(), drag_down, false);
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.thrown.owner)
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {

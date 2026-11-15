@@ -1069,13 +1069,20 @@ impl BlockRegistry {
         None
     }
 
-    pub fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {
+    pub fn explode(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        position: &BlockPos,
+        explosion: &crate::world::Explosion<'_>,
+    ) {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block.explode(ExplodeArgs {
                 world,
                 block,
                 position,
+                explosion,
             });
         }
     }
@@ -1358,6 +1365,7 @@ impl BlockRegistry {
         position: &BlockPos,
         old_state_id: BlockStateId,
         moved: bool,
+        flags: BlockFlags,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -1367,6 +1375,7 @@ impl BlockRegistry {
                 old_state_id,
                 position,
                 moved,
+                flags,
             });
         }
     }

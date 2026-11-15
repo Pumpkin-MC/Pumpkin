@@ -11,6 +11,7 @@ use std::sync::atomic::Ordering;
 use pumpkin_protocol::java::server::play::SPlayerInput;
 use rand::RngExt;
 
+use crate::entity::projectile::abstract_arrow::is_abstract_arrow;
 use crate::{
     entity::{Entity, EntityBase, living::LivingEntity, player::Player},
     server::Server,
@@ -280,7 +281,7 @@ impl EntityBase for MinecartEntity {
         }
 
         if let MinecartKind::Tnt(minecart) = &self.kind
-            && minecart.tick(&self.vehicle.entity)
+            && minecart.tick(self)
         {
             return;
         }
@@ -447,8 +448,9 @@ impl EntityBase for MinecartEntity {
                 && velocity.x.mul_add(velocity.x, velocity.z * velocity.z) >= 0.01
             {
                 minecart.explode(
-                    &self.vehicle.entity,
+                    self,
                     velocity.x.mul_add(velocity.x, velocity.z * velocity.z),
+                    None,
                 );
                 return;
             }
@@ -681,13 +683,18 @@ impl EntityBase for MinecartEntity {
             .is_some_and(|player| player.gamemode.load() == GameMode::Creative);
 
         if let MinecartKind::Tnt(minecart) = &self.kind
-            && damage_type == DamageType::ARROW
-            && self.vehicle.entity.fire_ticks.load(Ordering::Relaxed) > 0
+            && let Some(projectile) = source
+            && is_abstract_arrow(projectile.get_entity().entity_type)
+            && projectile.get_entity().is_on_fire()
         {
-            let projectile_speed_squared = cause
-                .map(|entity| entity.get_entity().velocity.load().length_squared())
-                .unwrap_or_default();
-            minecart.explode(&self.vehicle.entity, projectile_speed_squared);
+            let world = self.vehicle.entity.world.load();
+            let cause =
+                cause.and_then(|cause| world.get_entity_by_id(cause.get_entity().entity_id));
+            minecart.explode(
+                self,
+                projectile.get_entity().velocity.load().length_squared(),
+                cause,
+            );
             if self.vehicle.entity.is_removed() {
                 return true;
             }

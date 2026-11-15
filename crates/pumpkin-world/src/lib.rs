@@ -33,7 +33,7 @@ pub use clip::{BlockHitResult, ClipBlock, ClipContext, ClipFluid};
 
 pub const CURRENT_MC_VERSION: &str = "26.3";
 pub const CURRENT_MC_DATA_VERSION: i32 = 5023;
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.60";
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.63";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 2225;
 
 #[macro_export]
