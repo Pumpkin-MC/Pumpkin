@@ -207,7 +207,11 @@ impl ChiseledBookshelfBlockEntity {
             world.set_block_state(
                 &self.position,
                 properties.to_state_id(&Block::CHISELED_BOOKSHELF),
-                BlockFlags::NOTIFY_LISTENERS,
+                BlockFlags::NOTIFY_ALL,
+            );
+            world.emit_game_event(
+                pumpkin_data::game_event::GameEvent::BlockChange.name(),
+                self.position.to_centered_f64(),
             );
             if let Some(be) = world.get_block_entity(&self.position) {
                 world.update_block_entity(&be);
