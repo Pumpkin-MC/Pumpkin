@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    entity::{Entity, EntityBase},
+    entity::{Entity, EntityBase, projectile::owner::EntityReference},
     server::Server,
 };
 use pumpkin_data::effect::StatusEffect;
@@ -52,9 +52,16 @@ pub struct AreaEffectCloudEntity {
     pub duration_on_use: Mutex<i32>,
     /// ticks to wait before the cloud becomes active and applies effects (grace period)
     pub wait_time: Mutex<i32>,
+    pub owner: EntityReference,
 }
 
 impl AreaEffectCloudEntity {
+    pub const DRAGON_BREATH_RADIUS: f32 = 3.0;
+    pub const DRAGON_BREATH_END_RADIUS: f32 = 7.0;
+    pub const DRAGON_BREATH_DURATION: i32 = 600;
+    const MAX_RADIUS: f32 = 32.0;
+    const MINIMAL_RADIUS: f32 = 0.5;
+
     #[allow(clippy::new_ret_no_self)]
     pub fn new(entity: Entity) -> Arc<dyn EntityBase> {
         entity
@@ -73,6 +80,7 @@ impl AreaEffectCloudEntity {
             radius_on_use: Mutex::new(0.0),
             duration_on_use: Mutex::new(0),
             wait_time: Mutex::new(20),
+            owner: EntityReference::none(),
         };
 
         Arc::new(cloud)
@@ -106,9 +114,42 @@ impl AreaEffectCloudEntity {
             radius_on_use: Mutex::new(radius_on_use_in),
             duration_on_use: Mutex::new(duration_on_use_in),
             wait_time: Mutex::new(wait_time_in),
+            owner: EntityReference::none(),
         };
 
         Arc::new(cloud)
+    }
+
+    /// Creates a Dragon's Breath cloud matching `DragonFireball.onHit`:
+    /// radius grows from `3.0` to `7.0` over `600` ticks and applies Instant Damage II.
+    pub fn create_dragon_breath(entity: Entity, owner: Option<&Entity>) -> Arc<dyn EntityBase> {
+        entity
+            .no_physics
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        let radius_per_tick = (Self::DRAGON_BREATH_END_RADIUS - Self::DRAGON_BREATH_RADIUS)
+            / Self::DRAGON_BREATH_DURATION as f32;
+        Arc::new(Self {
+            entity,
+            item_stack: Mutex::new(ItemStack::new(0, &pumpkin_data::item::Item::DRAGON_BREATH)),
+            effects: Mutex::new(vec![(
+                &StatusEffect::INSTANT_DAMAGE,
+                1,
+                1,
+                false,
+                true,
+                true,
+            )]),
+            radius: Mutex::new(Self::DRAGON_BREATH_RADIUS),
+            duration: Mutex::new(Self::DRAGON_BREATH_DURATION),
+            age: Mutex::new(0),
+            reapplication_delay: Mutex::new(20),
+            reapplication_map: Mutex::new(HashMap::new()),
+            radius_on_tick: Mutex::new(radius_per_tick),
+            radius_on_use: Mutex::new(0.0),
+            duration_on_use: Mutex::new(0),
+            wait_time: Mutex::new(20),
+            owner: EntityReference::new(owner),
+        })
     }
 }
 
@@ -173,14 +214,22 @@ impl EntityBase for AreaEffectCloudEntity {
             color = (0xFFi32 << 24) | (r << 16) | (g << 8) | b;
         }
 
-        // Build raw particle option bytes for ENTITY_EFFECT
-        let data_bytes = color.to_be_bytes();
-
-        let meta = ParticleMeta {
-            particle_id: pumpkin_protocol::codec::var_int::VarInt(
-                pumpkin_data::particle::Particle::EntityEffect as i32,
-            ),
-            data: Box::new(data_bytes),
+        let meta = if stack.item.id == pumpkin_data::item::Item::DRAGON_BREATH.id {
+            ParticleMeta {
+                particle_id: pumpkin_protocol::codec::var_int::VarInt(
+                    pumpkin_data::particle::Particle::DragonBreath as i32,
+                ),
+                data: Box::new(1.0f32.to_be_bytes()),
+            }
+        } else {
+            // Build raw particle option bytes for ENTITY_EFFECT
+            let data_bytes = color.to_be_bytes();
+            ParticleMeta {
+                particle_id: pumpkin_protocol::codec::var_int::VarInt(
+                    pumpkin_data::particle::Particle::EntityEffect as i32,
+                ),
+                data: Box::new(data_bytes),
+            }
         };
 
         self.entity.set_synced_data(
@@ -259,9 +308,9 @@ impl EntityBase for AreaEffectCloudEntity {
                 .radius_on_tick
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *radius += delta;
+            *radius = (*radius + delta).min(Self::MAX_RADIUS);
             let current_radius = *radius;
-            if current_radius <= 0.0 {
+            if current_radius < Self::MINIMAL_RADIUS {
                 self.entity.remove();
                 return;
             }
@@ -312,6 +361,10 @@ impl EntityBase for AreaEffectCloudEntity {
             }
             if *cand_clone.get_entity().entity_type
                 == pumpkin_data::entity::EntityType::AREA_EFFECT_CLOUD
+                || *cand_clone.get_entity().entity_type
+                    == pumpkin_data::entity::EntityType::ENDER_DRAGON
+                || !cand_clone.get_entity().is_alive()
+                || cand_clone.is_spectator()
             {
                 continue;
             }
@@ -378,8 +431,9 @@ impl EntityBase for AreaEffectCloudEntity {
                 continue;
             }
 
-            // Apply scaled effects inside a spawned task
+            // Apply scaled effects
             if let Some(living) = cand_clone.get_living_entity() {
+                let owner = self.owner.get(&world);
                 crate::item::potion::PotionContents::apply_effects_to(
                     living,
                     effs_clone,
@@ -387,7 +441,7 @@ impl EntityBase for AreaEffectCloudEntity {
                     crate::item::potion::PotionApplicationSource::AreaEffectCloud,
                     Some(crate::entity::living::EffectSource {
                         direct: self,
-                        owner: None,
+                        owner: owner.as_deref(),
                     }),
                 );
             }

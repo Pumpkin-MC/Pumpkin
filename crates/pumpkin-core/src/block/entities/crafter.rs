@@ -3,7 +3,9 @@ use crate::world::World;
 use pumpkin_data::block_properties::CrafterLikeProperties;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_inventory::crafting::recipes::RecipeInputInventory;
-use pumpkin_inventory::{Clearable, Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
+use pumpkin_inventory::{
+    Clearable, Inventory, PropertyDelegate, sync_read_items_from_nbt, sync_write_items_to_nbt,
+};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
@@ -195,6 +197,10 @@ impl BlockEntity for CrafterBlockEntity {
 
 impl CrafterBlockEntity {
     pub const INVENTORY_SIZE: usize = 9;
+    pub const SLOT_DISABLED: i32 = 1;
+    pub const SLOT_ENABLED: i32 = 0;
+    pub const DATA_TRIGGERED: i32 = 9;
+    pub const NUM_DATA: i32 = 10;
     pub const ID: &'static str = "minecraft:crafter";
 
     #[must_use]
@@ -355,25 +361,36 @@ impl Inventory for CrafterBlockEntity {
     /// Vanilla `CrafterBlockEntity.canPlaceItem`: hoppers spread items, a slot only takes more while
     /// no later slot is empty or holds fewer of the same item.
     fn is_valid_slot_for(&self, slot: usize, _stack: &ItemStack) -> bool {
-        if self.is_slot_disabled(slot) {
+        if slot >= Self::INVENTORY_SIZE || self.is_slot_disabled(slot) {
             return false;
         }
-        let current = self.get_stack(slot);
-        if current.is_empty() {
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let existing = &items[slot];
+        let count = existing.item_count;
+        if count >= existing.get_max_stack_size() {
+            return false;
+        }
+        if existing.is_empty() {
             return true;
         }
-        if current.item_count >= current.get_max_stack_size() {
-            return false;
-        }
-        !(slot + 1..self.size()).any(|other| {
-            if self.is_slot_disabled(other) {
-                return false;
+        let disabled = self
+            .disabled_slots
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for other_slot in (slot + 1)..Self::INVENTORY_SIZE {
+            if !disabled[other_slot] {
+                let other = &items[other_slot];
+                if other.is_empty()
+                    || (other.item_count < count && other.are_items_and_components_equal(existing))
+                {
+                    return false;
+                }
             }
-            let other = self.get_stack(other);
-            other.is_empty()
-                || (other.item_count < current.item_count
-                    && other.are_items_and_components_equal(&current))
-        })
+        }
+        true
     }
 
     fn mark_dirty(&self) {
@@ -394,6 +411,34 @@ impl Clearable for CrafterBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         items.fill_with(|| ItemStack::EMPTY.clone());
         self.mark_dirty();
+    }
+}
+
+impl PropertyDelegate for CrafterBlockEntity {
+    fn get_property(&self, index: i32) -> i32 {
+        if index == Self::DATA_TRIGGERED {
+            i32::from(self.is_triggered())
+        } else if (0..Self::INVENTORY_SIZE as i32).contains(&index) {
+            if self.is_slot_disabled(index as usize) {
+                Self::SLOT_DISABLED
+            } else {
+                Self::SLOT_ENABLED
+            }
+        } else {
+            0
+        }
+    }
+
+    fn set_property(&self, index: i32, value: i32) {
+        if index == Self::DATA_TRIGGERED {
+            self.set_triggered(value != 0);
+        } else if (0..Self::INVENTORY_SIZE as i32).contains(&index) {
+            self.set_slot_state(index as usize, value == Self::SLOT_ENABLED);
+        }
+    }
+
+    fn get_properties_size(&self) -> i32 {
+        Self::NUM_DATA
     }
 }
 
@@ -426,5 +471,23 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner)[4] = true;
         assert!(crafter.is_valid_slot_for(0, &diamond));
         assert!(!crafter.is_valid_slot_for(4, &diamond));
+    }
+
+    #[test]
+    fn crafter_property_delegate_and_slot_distribution() {
+        let crafter = CrafterBlockEntity::new(BlockPos::new(0, 64, 0));
+        assert_eq!(crafter.get_properties_size(), 10);
+        assert_eq!(crafter.get_property(0), CrafterBlockEntity::SLOT_ENABLED);
+
+        crafter.set_slot_state(1, false);
+        assert_eq!(crafter.get_property(1), CrafterBlockEntity::SLOT_DISABLED);
+        assert!(!crafter.is_valid_slot_for(1, &ItemStack::new(1, &Item::OAK_LOG)));
+
+        // Once slot 0 has 1 log and slot 2 is empty and enabled, hopper placement
+        // skips slot 0 so items spread across enabled slots like vanilla CrafterBlockEntity.canPlaceItem.
+        let log = ItemStack::new(1, &Item::OAK_LOG);
+        crafter.set_stack(0, log.clone());
+        assert!(!crafter.is_valid_slot_for(0, &log));
+        assert!(crafter.is_valid_slot_for(2, &log));
     }
 }

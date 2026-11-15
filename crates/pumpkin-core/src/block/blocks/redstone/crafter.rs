@@ -20,13 +20,15 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, BlockStateId, FacingExt};
-use pumpkin_inventory::Inventory;
+use pumpkin_inventory::crafter_screen_handler::CrafterScreenHandler;
 use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
-use pumpkin_inventory::generic_container_screen_handler::create_crafter_3x3;
+use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
+use pumpkin_inventory::crafting::recipes::RecipeInputInventory;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
+use pumpkin_inventory::{Inventory, PropertyDelegate};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -34,7 +36,10 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
-struct CrafterScreenFactory(Arc<dyn Inventory>);
+struct CrafterScreenFactory {
+    crafter: Arc<CrafterBlockEntity>,
+    recipe_manager: Arc<crate::server::RecipeManager>,
+}
 
 impl ScreenHandlerFactory for CrafterScreenFactory {
     fn create_screen_handler(
@@ -43,7 +48,17 @@ impl ScreenHandlerFactory for CrafterScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let handler = create_crafter_3x3(sync_id, player_inventory, self.0.clone(), player);
+        let container: Arc<dyn RecipeInputInventory> = self.crafter.clone();
+        let property_delegate: Arc<dyn PropertyDelegate> = self.crafter.clone();
+        let recipe_provider: Arc<dyn RecipeProvider> = self.recipe_manager.clone();
+        let handler = CrafterScreenHandler::new(
+            sync_id,
+            player_inventory,
+            container,
+            property_delegate,
+            Some(recipe_provider),
+            player.is_spectator(),
+        );
         let screen_handler_arc = Arc::new(Mutex::new(handler));
 
         Some(screen_handler_arc as SharedScreenHandler)
@@ -114,7 +129,13 @@ impl CrafterBlock {
             return;
         };
 
-        let recipe = match_crafting_recipe(crafter, None);
+        let server = world.server.upgrade();
+        let recipe = match_crafting_recipe(
+            crafter,
+            server
+                .as_deref()
+                .map(|s| &*s.recipe_manager as &dyn RecipeProvider),
+        );
         if let Some(recipe_result) = recipe
             && Item::from_registry_key(
                 recipe_result
@@ -133,7 +154,7 @@ impl CrafterBlock {
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_LISTENERS);
 
             let mut result_stack = recipe_result.to_item_stack();
-            if let Some(server) = world.server.upgrade() {
+            if let Some(server) = server {
                 let mut event =
                     crate::plugin::api::events::block::crafter_craft::CrafterCraftEvent::new(
                         *pos,
@@ -263,8 +284,11 @@ impl BlockBehaviour for CrafterBlock {
         args: GetScreenHandlerFactoryArgs<'_>,
     ) -> Option<Box<dyn ScreenHandlerFactory>> {
         let block_entity = args.world.get_block_entity(args.position)?;
-        let inventory = block_entity.get_inventory()?;
-        Some(Box::new(CrafterScreenFactory(inventory)))
+        let crafter = Arc::downcast::<CrafterBlockEntity>(block_entity).ok()?;
+        Some(Box::new(CrafterScreenFactory {
+            crafter,
+            recipe_manager: args.server.recipe_manager.clone(),
+        }))
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {

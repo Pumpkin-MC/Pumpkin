@@ -13,7 +13,7 @@ query = []
 
 [dependencies]
 pumpkin-nbt.workspace = true
-pumpkin-data = { workspace = true, features = ["default", "bedrock_creative", "bedrock_biome"] }
+pumpkin-data = { workspace = true, features = ["default", "bedrock_creative", "bedrock_biome", "bedrock_jigsaw", "bedrock_recipe", "bedrock_voxel_shape"] }
 pumpkin-macros.workspace = true
 pumpkin-util.workspace = true
 serde = { workspace = true, features = ["derive"] }

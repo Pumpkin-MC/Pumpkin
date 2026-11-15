@@ -1,7 +1,9 @@
+use pumpkin_data::block_properties::TestBlockLikeProperties;
 use pumpkin_data::{Block, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::BlockFlags;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tracing::info;
@@ -37,6 +39,16 @@ impl TestBlockMode {
             Self::Log => "log",
             Self::Fail => "fail",
             Self::Accept => "accept",
+        }
+    }
+
+    #[must_use]
+    pub const fn to_block_property(self) -> pumpkin_data::block_properties::TestBlockMode {
+        match self {
+            Self::Start => pumpkin_data::block_properties::TestBlockMode::Start,
+            Self::Log => pumpkin_data::block_properties::TestBlockMode::Log,
+            Self::Fail => pumpkin_data::block_properties::TestBlockMode::Fail,
+            Self::Accept => pumpkin_data::block_properties::TestBlockMode::Accept,
         }
     }
 
@@ -178,6 +190,35 @@ impl TestBlockBlockEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    pub fn set_mode(&self, world: &Arc<World>, mode: TestBlockMode) {
+        *self
+            .mode
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            mode.serialized_name().to_string();
+
+        if world.get_block(&self.position) == &Block::TEST_BLOCK {
+            let state_id = world.get_block_state_id(&self.position);
+            let mut props = TestBlockLikeProperties::from_state_id(state_id);
+            props.mode = mode.to_block_property();
+            let new_state_id = props.to_state_id(&Block::TEST_BLOCK);
+            if new_state_id != state_id {
+                world.set_block_state(&self.position, new_state_id, BlockFlags::NOTIFY_LISTENERS);
+            }
+        }
+    }
+
+    pub fn set_message(&self, message: String) {
+        *self
+            .message
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = message;
+    }
+
+    pub fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Release);
     }
 
     #[must_use]

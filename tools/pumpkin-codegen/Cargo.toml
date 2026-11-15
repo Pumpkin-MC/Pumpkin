@@ -7,6 +7,9 @@ rust-version.workspace = true
 [dependencies]
 indexmap = { version = "2.14", features = ["serde"] }
 heck = "0.5"
+base64.workspace = true
+flate2.workspace = true
+uuid.workspace = true
 
 # For random pre calc
 md5 = "0.8"
