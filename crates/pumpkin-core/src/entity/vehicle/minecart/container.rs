@@ -16,7 +16,7 @@ use pumpkin_util::text::TextComponent;
 
 use crate::entity::{Entity, player::Player};
 
-pub(super) struct MinecartInventory {
+pub struct MinecartInventory {
     items: RwLock<Vec<ItemStack>>,
     size: usize,
     loot_table: Mutex<Option<(String, i64)>>,
@@ -24,7 +24,7 @@ pub(super) struct MinecartInventory {
 }
 
 impl MinecartInventory {
-    pub(super) fn new(size: usize) -> Self {
+    pub fn new(size: usize) -> Self {
         Self {
             items: RwLock::new(vec![ItemStack::EMPTY.clone(); size]),
             size,
@@ -45,11 +45,11 @@ impl MinecartInventory {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    pub(super) fn claim_drops(&self) -> bool {
+    pub fn claim_drops(&self) -> bool {
         !self.drops_claimed.swap(true, Ordering::AcqRel)
     }
 
-    pub(super) fn read_nbt(&self, nbt: &NbtCompound) {
+    pub fn read_nbt(&self, nbt: &NbtCompound) {
         let loot_table = nbt.get_string("LootTable").map(|loot_table| {
             (
                 loot_table.to_owned(),
@@ -67,7 +67,7 @@ impl MinecartInventory {
         }
     }
 
-    pub(super) fn write_nbt(&self, nbt: &mut NbtCompound) {
+    pub fn write_nbt(&self, nbt: &mut NbtCompound) {
         let loot_table = self
             .loot_table
             .try_lock()
@@ -90,17 +90,14 @@ impl MinecartInventory {
         }
     }
 
-    pub(super) fn has_loot_table(&self) -> bool {
+    pub fn has_loot_table(&self) -> bool {
         self.loot_table
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_some()
     }
 
-    pub(super) fn unpack_loot(
-        self: &Arc<Self>,
-        params: &crate::world::loot::LootContextParameters<'_>,
-    ) {
+    pub fn unpack_loot(self: &Arc<Self>, params: &crate::world::loot::LootContextParameters<'_>) {
         let loot_table = self
             .loot_table
             .lock()
@@ -203,7 +200,7 @@ impl ScreenHandlerFactory for MinecartScreenFactory {
     }
 }
 
-pub(super) fn open(
+pub fn open(
     entity: &Entity,
     player: &Arc<Player>,
     inventory: &Arc<MinecartInventory>,
@@ -334,10 +331,11 @@ mod tests {
         let inventory = MinecartInventory::new(5);
         inventory.set_stack(0, ItemStack::new(60, &Item::STONE));
 
-        let rest = crate::block::entities::hopper::HopperBlockEntity::add_stack(
+        let rest = crate::block::entities::hopper::HopperBlockEntity::add_item(
             None,
             &inventory,
             ItemStack::new(10, &Item::STONE),
+            None,
         );
 
         assert!(rest.is_empty());

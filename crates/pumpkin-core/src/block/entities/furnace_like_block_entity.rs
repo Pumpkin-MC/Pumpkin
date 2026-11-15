@@ -268,9 +268,7 @@ macro_rules! impl_experience_container_for_cooking {
 
 #[macro_export]
 macro_rules! impl_inventory_for_cooking {
-    ($struct_name:ty) => {
-        // TODO vanilla `WorldlyContainer`: hoppers fill the input from above, fuel from the sides, and take only the
-        // result (or `furnace_fuel_bottom_takeable` fuel, e.g. a bucket) from below. Without it they use any slot from any side.
+    ($struct_name:ty, $recipe_kind:expr) => {
         impl pumpkin_inventory::Inventory for $struct_name {
             fn size(&self) -> usize {
                 Self::INVENTORY_SIZE
@@ -359,6 +357,49 @@ macro_rules! impl_inventory_for_cooking {
                 self.comparator_dirty.store(true, Ordering::Relaxed);
             }
 
+            fn is_valid_slot_for(&self, slot: usize, stack: &ItemStack) -> bool {
+                match slot {
+                    2 => false,
+                    1 => stack
+                        .get_data_component::<pumpkin_data::data_component_impl::CookingFuelImpl>()
+                        .is_some()
+                        || (stack.item.id == pumpkin_data::item::Item::BUCKET.id
+                            && self.get_stack(1).item.id != pumpkin_data::item::Item::BUCKET.id),
+                    _ => slot < Self::INVENTORY_SIZE,
+                }
+            }
+
+            fn is_sided(&self) -> bool {
+                true
+            }
+
+            fn get_slots_for_face(
+                &self,
+                direction: pumpkin_data::BlockDirection,
+            ) -> &'static [usize] {
+                match direction {
+                    pumpkin_data::BlockDirection::Down => &[2, 1],
+                    pumpkin_data::BlockDirection::Up => &[0],
+                    _ => &[1],
+                }
+            }
+
+            fn can_take_item_through_face(
+                &self,
+                slot: usize,
+                stack: &ItemStack,
+                direction: pumpkin_data::BlockDirection,
+            ) -> bool {
+                use pumpkin_data::tag::Taggable;
+                if direction == pumpkin_data::BlockDirection::Down && slot == 1 {
+                    stack
+                        .item
+                        .has_tag(&pumpkin_data::tag::Item::MINECRAFT_FURNACE_FUEL_BOTTOM_TAKEABLE)
+                } else {
+                    true
+                }
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }
@@ -370,7 +411,7 @@ macro_rules! impl_inventory_for_cooking {
                 if slot == 0 && !is_same_item {
                     if let Some(recipe) = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
                         stack.item,
-                        CookingRecipeKind::Smelting,
+                        $recipe_kind,
                     ) {
                         self.set_cooking_total_time(recipe.cookingtime as u16);
                     } else {

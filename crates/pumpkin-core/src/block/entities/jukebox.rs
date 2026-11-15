@@ -136,6 +136,10 @@ impl BlockEntity for JukeboxBlockEntity {
         ))
     }
 
+    fn set_world(&self, world: Weak<World>) {
+        let _ = self.world.set(world);
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -253,12 +257,39 @@ impl Inventory for JukeboxBlockEntity {
 
     fn remove_stack(&self, _slot: usize) -> ItemStack {
         self.stop_playing();
-        let mut record = self
-            .record_stack
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let taken = record.clone();
-        *record = ItemStack::EMPTY.clone();
+        let taken = {
+            let mut record = self
+                .record_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let taken = record.clone();
+            *record = ItemStack::EMPTY.clone();
+            taken
+        };
+        if !taken.is_empty()
+            && let Some(world) = self.world.get().and_then(Weak::upgrade)
+        {
+            let (block, _) = world.get_block_and_state(&self.position);
+            if block == &pumpkin_data::Block::JUKEBOX {
+                let state_id =
+                    pumpkin_data::block_properties::JukeboxLikeProperties { has_record: false }
+                        .to_state_id(block);
+                world.set_block_state(
+                    &self.position,
+                    state_id,
+                    pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                );
+                world.sync_world_event(
+                    pumpkin_data::world::WorldEvent::SoundStopJukeboxSong,
+                    self.position,
+                    0,
+                );
+                world.emit_game_event(
+                    pumpkin_data::game_event::GameEvent::BlockChange.name(),
+                    self.position.to_centered_f64(),
+                );
+            }
+        }
         self.mark_dirty();
         taken
     }
@@ -269,10 +300,52 @@ impl Inventory for JukeboxBlockEntity {
     }
 
     fn set_stack(&self, _slot: usize, stack: ItemStack) {
+        let inserted = !stack.is_empty();
+        let playable_song = stack
+            .get_data_component::<pumpkin_data::data_component_impl::JukeboxPlayableImpl>()
+            .and_then(|playable| playable.song.rsplit(':').next())
+            .and_then(pumpkin_data::jukebox_song::JukeboxSong::from_name);
         *self
             .record_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+        if let Some(world) = self.world.get().and_then(Weak::upgrade) {
+            let (block, _) = world.get_block_and_state(&self.position);
+            if block == &pumpkin_data::Block::JUKEBOX {
+                let state_id = pumpkin_data::block_properties::JukeboxLikeProperties {
+                    has_record: inserted,
+                }
+                .to_state_id(block);
+                world.set_block_state(
+                    &self.position,
+                    state_id,
+                    pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                );
+                world.emit_game_event(
+                    pumpkin_data::game_event::GameEvent::BlockChange.name(),
+                    self.position.to_centered_f64(),
+                );
+                if inserted && let Some(song) = playable_song {
+                    self.start_playing(song.length_in_ticks());
+                    world.sync_world_event(
+                        pumpkin_data::world::WorldEvent::SoundPlayJukeboxSong,
+                        self.position,
+                        song.get_id() as i32,
+                    );
+                } else {
+                    self.stop_playing();
+                    world.sync_world_event(
+                        pumpkin_data::world::WorldEvent::SoundStopJukeboxSong,
+                        self.position,
+                        0,
+                    );
+                }
+            }
+        } else if inserted && let Some(song) = playable_song {
+            self.start_playing(song.length_in_ticks());
+        } else {
+            self.stop_playing();
+        }
         self.mark_dirty();
     }
 
@@ -294,6 +367,18 @@ impl Inventory for JukeboxBlockEntity {
             self.stop_playing();
         }
         updated
+    }
+
+    fn get_max_count_per_stack(&self) -> u8 {
+        1
+    }
+
+    fn is_valid_slot_for(&self, slot: usize, stack: &ItemStack) -> bool {
+        slot == 0
+            && stack
+                .get_data_component::<pumpkin_data::data_component_impl::JukeboxPlayableImpl>()
+                .is_some()
+            && self.is_empty()
     }
 
     /// Vanilla `canTakeItem`: only into a container with an empty slot, so a pulled record always fits.

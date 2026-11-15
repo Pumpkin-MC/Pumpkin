@@ -1,5 +1,8 @@
 use crate::block::blocks::chests::chest_container;
+use crate::block::blocks::composter::ComposterBlock;
 use crate::block::entities::BlockEntity;
+use crate::entity::EntityBase;
+use crate::entity::item::ItemEntity;
 use crate::plugin::api::events::inventory::hopper_inventory_search::HopperInventorySearchEvent;
 use crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent;
 use crate::plugin::api::events::inventory::inventory_pickup_item::InventoryPickupItemEvent;
@@ -10,13 +13,14 @@ use pumpkin_data::block_properties::{
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{BlockId, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockStateId};
 use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 use std::any::Any;
 use std::array::from_fn;
 use std::sync::Arc;
@@ -37,15 +41,19 @@ pub struct HopperBlockEntity {
 }
 
 #[must_use]
-pub fn to_offset(facing: &FacingHopper) -> Vector3<i32> {
+pub const fn to_direction(facing: FacingHopper) -> BlockDirection {
     match facing {
-        FacingHopper::Down => (0, -1, 0),
-        FacingHopper::North => (0, 0, -1),
-        FacingHopper::South => (0, 0, 1),
-        FacingHopper::West => (-1, 0, 0),
-        FacingHopper::East => (1, 0, 0),
+        FacingHopper::Down => BlockDirection::Down,
+        FacingHopper::North => BlockDirection::North,
+        FacingHopper::South => BlockDirection::South,
+        FacingHopper::West => BlockDirection::West,
+        FacingHopper::East => BlockDirection::East,
     }
-    .into()
+}
+
+#[must_use]
+pub fn to_offset(facing: &FacingHopper) -> Vector3<i32> {
+    to_direction(*facing).to_offset()
 }
 
 /// Properties of one state snapshot, `None` for any other block. `from_state_id` parses whatever
@@ -192,10 +200,37 @@ impl HopperBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// Vanilla `HopperBlockEntity.getBlockContainer`: the container hoppers, droppers and crafters see.
-    // TODO vanilla `WorldlyContainerHolder` (composter) and sided slots (`WorldlyContainer`).
-    pub fn get_container_at(world: &World, pos: &BlockPos) -> Option<Arc<dyn Inventory>> {
+    /// Vanilla `HopperBlockEntity.getContainerAt`: the container hoppers, droppers and crafters see.
+    #[must_use]
+    pub fn get_container_at(world: &Arc<World>, pos: &BlockPos) -> Option<Arc<dyn Inventory>> {
+        Self::get_container_at_coords(
+            world,
+            pos,
+            f64::from(pos.0.x) + 0.5,
+            f64::from(pos.0.y) + 0.5,
+            f64::from(pos.0.z) + 0.5,
+        )
+    }
+
+    /// The block container at `pos`, else a random container entity around `x`, `y`, `z`.
+    #[must_use]
+    pub fn get_container_at_coords(
+        world: &Arc<World>,
+        pos: &BlockPos,
+        x: f64,
+        y: f64,
+        z: f64,
+    ) -> Option<Arc<dyn Inventory>> {
+        Self::get_block_container(world, pos).or_else(|| Self::get_entity_container(world, x, y, z))
+    }
+
+    /// Vanilla `HopperBlockEntity.getBlockContainer`.
+    fn get_block_container(world: &Arc<World>, pos: &BlockPos) -> Option<Arc<dyn Inventory>> {
         let (block, state) = world.get_block_and_state(pos);
+        // `WorldlyContainerHolder`: the composter has no block entity.
+        if block == &Block::COMPOSTER {
+            return Some(ComposterBlock::get_container(state.id, world, pos));
+        }
         // Checked first like vanilla, a miss here skips the block entity lookup.
         if !state.has_block_entity() {
             return None;
@@ -206,6 +241,116 @@ impl HopperBlockEntity {
         } else {
             entity.get_container()
         }
+    }
+
+    /// Vanilla `HopperBlockEntity.getEntityContainer`: a random one of the container entities
+    /// (chest boat, chest or hopper minecart) in the box around the point.
+    fn get_entity_container(world: &World, x: f64, y: f64, z: f64) -> Option<Arc<dyn Inventory>> {
+        let search_box = BoundingBox::new(
+            Vector3::new(x - 0.5, y - 0.5, z - 0.5),
+            Vector3::new(x + 0.5, y + 0.5, z + 0.5),
+        );
+        let candidates: Vec<Arc<dyn EntityBase>> = world
+            .get_entities_at_box(&search_box)
+            .into_iter()
+            .filter(|entity| entity.get_entity().is_alive() && entity.has_container_inventory())
+            .collect();
+        if candidates.is_empty() {
+            return None;
+        }
+        let index = rand::rng().random_range(0..candidates.len());
+        candidates[index].get_container_inventory()
+    }
+
+    /// Vanilla `getSlots`: a `WorldlyContainer` names the slots of a face, any other container
+    /// offers all of its slots.
+    fn slot_count(container: &dyn Inventory, direction: BlockDirection) -> usize {
+        if container.is_sided() {
+            container.get_slots_for_face(direction).len()
+        } else {
+            container.size()
+        }
+    }
+
+    /// The `n`th slot of [`Self::slot_count`].
+    fn slot_at(container: &dyn Inventory, direction: BlockDirection, n: usize) -> usize {
+        if container.is_sided() {
+            container.get_slots_for_face(direction)[n]
+        } else {
+            n
+        }
+    }
+
+    /// Vanilla `isFullContainer`.
+    fn is_full_container(container: &dyn Inventory, direction: BlockDirection) -> bool {
+        (0..Self::slot_count(container, direction)).all(|n| {
+            let item = container.get_stack(Self::slot_at(container, direction, n));
+            item.item_count >= item.get_max_stack_size()
+        })
+    }
+
+    /// Vanilla `canPlaceItemInContainer`.
+    fn can_place_item_in_container(
+        container: &dyn Inventory,
+        stack: &ItemStack,
+        slot: usize,
+        direction: Option<BlockDirection>,
+    ) -> bool {
+        container.is_valid_slot_for(slot, stack)
+            && (!container.is_sided()
+                || container.can_place_item_through_face(slot, stack, direction))
+    }
+
+    /// Vanilla `canTakeItemFromContainer`.
+    fn can_take_item_from_container(
+        into: &dyn Inventory,
+        from: &dyn Inventory,
+        stack: &ItemStack,
+        slot: usize,
+        direction: BlockDirection,
+    ) -> bool {
+        from.can_transfer_to(into, slot, stack)
+            && (!from.is_sided() || from.can_take_item_through_face(slot, stack, direction))
+    }
+
+    /// Vanilla `suckInItems` from a container: the first slot of its bottom face that gives an item.
+    ///
+    /// `Err` is an item that could not go back into a full slot after a failed offer, the caller
+    /// drops it so it is never lost.
+    pub fn try_take_from_source(
+        into: &dyn Inventory,
+        source: &dyn Inventory,
+    ) -> Result<bool, ItemStack> {
+        let direction = BlockDirection::Down;
+        for n in 0..Self::slot_count(source, direction) {
+            let slot = Self::slot_at(source, direction, n);
+            let item = source.get_stack(slot);
+            if !item.is_empty()
+                && Self::can_take_item_from_container(into, source, &item, slot, direction)
+                && Self::transfer_one(source, slot, &item, into)?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Takes one `approved` item out of `source` and offers it to `into`, restoring it on failure.
+    fn transfer_one(
+        source: &dyn Inventory,
+        slot: usize,
+        approved: &ItemStack,
+        into: &dyn Inventory,
+    ) -> Result<bool, ItemStack> {
+        let Some(one_item) = Self::take_one(source, slot, approved) else {
+            return Ok(false);
+        };
+        if Self::add_one_item(source, into, &one_item) {
+            // Furnace XP stays stored: vanilla only pays it out to a player or on break.
+            source.mark_dirty();
+            return Ok(true);
+        }
+        Self::put_back(source, slot, one_item).map_or(Ok(false), Err)
     }
 
     fn try_move_items(&self, state: HopperLikeProperties, world: &Arc<World>) {
@@ -233,7 +378,6 @@ impl HopperBlockEntity {
 
     #[allow(clippy::too_many_lines)]
     fn suck_in_items(&self, world: &Arc<World>) -> bool {
-        // TODO vanilla `getEntityContainer`: with no block container above, pull from a random container entity (chest or hopper minecart) there.
         let pos_up = &self.position.up();
         if world.cancelled_by_plugin(|| HopperInventorySearchEvent::new(self.position, *pos_up)) {
             return false;
@@ -244,33 +388,46 @@ impl HopperBlockEntity {
             if container.is_empty() {
                 return false;
             }
-            // TODO check WorldlyContainer
-            for i in 0..container.size() {
+            let direction = BlockDirection::Down;
+            for n in 0..Self::slot_count(container.as_ref(), direction) {
+                let i = Self::slot_at(container.as_ref(), direction, n);
                 let item = container.get_stack(i);
-                if !item.is_empty() && container.can_transfer_to(self, i, &item) {
-                    if world.cancelled_by_plugin(|| {
-                        InventoryMoveItemEvent::new(
-                            *pos_up,
-                            self.position,
-                            item.item.registry_key.to_string(),
-                            1,
-                        )
-                    }) {
-                        continue;
-                    }
-                    // Again after the event: a handler may have filled this hopper, and taking a
-                    // record that can't fit would stop the song for nothing.
-                    if !container.can_transfer_to(self, i, &item) {
-                        continue;
-                    }
-                    let Some(one_item) = Self::take_one(container.as_ref(), i, &item) else {
-                        continue;
-                    };
-                    if Self::add_one_item(container.as_ref(), self, &one_item) {
-                        // Furnace XP stays stored: vanilla only pays it out to a player or on break.
-                        return true;
-                    }
-                    if let Some(leftover) = Self::put_back(container.as_ref(), i, one_item) {
+                if item.is_empty()
+                    || !Self::can_take_item_from_container(
+                        self,
+                        container.as_ref(),
+                        &item,
+                        i,
+                        direction,
+                    )
+                {
+                    continue;
+                }
+                if world.cancelled_by_plugin(|| {
+                    InventoryMoveItemEvent::new(
+                        *pos_up,
+                        self.position,
+                        item.item.registry_key.to_string(),
+                        1,
+                    )
+                }) {
+                    continue;
+                }
+                // Again after the event: a handler may have filled this hopper, and taking a
+                // record that can't fit would stop the song for nothing.
+                if !Self::can_take_item_from_container(
+                    self,
+                    container.as_ref(),
+                    &item,
+                    i,
+                    direction,
+                ) {
+                    continue;
+                }
+                match Self::transfer_one(container.as_ref(), i, &item, self) {
+                    Ok(true) => return true,
+                    Ok(false) => {}
+                    Err(leftover) => {
                         // Concurrent insert filled the slot, drop the item, never void it.
                         let pos = pos_up.to_centered_f64();
                         world.scatter_stack(pos.x, pos.y, pos.z, leftover);
@@ -304,7 +461,7 @@ impl HopperBlockEntity {
                 {
                     continue;
                 }
-                if item_entity.insert_into(|stack| Self::add_stack(None, self, stack)) {
+                if Self::pickup_item_entity(self, item_entity) {
                     return true;
                 }
             }
@@ -363,70 +520,81 @@ impl HopperBlockEntity {
 
     /// `facing` comes from the live block state, the block entity keeps no copy that could go stale.
     fn eject_items(&self, world: &Arc<World>, facing: FacingHopper) -> bool {
-        // TODO vanilla `getEntityContainer`: with no block container in front, push into a random container entity (chest or hopper minecart) there.
-        let target_pos = self.position.offset(to_offset(&facing));
-        if let Some(container) = Self::get_container_at(world, &target_pos) {
-            // TODO check WorldlyContainer
-            let mut is_full = true;
-            for i in 0..container.size() {
-                let item = container.get_stack(i);
-                if item.item_count < item.get_max_stack_size() {
-                    is_full = false;
-                    break;
-                }
+        let direction = to_direction(facing);
+        let opposite_dir = direction.opposite();
+        let target_pos = self.position.offset(direction.to_offset());
+        let Some(container) = Self::get_container_at(world, &target_pos) else {
+            return false;
+        };
+        if Self::is_full_container(container.as_ref(), opposite_dir) {
+            return false;
+        }
+        for slot in 0..Self::INVENTORY_SIZE {
+            let item = self.get_stack(slot);
+            if item.is_empty() {
+                continue;
             }
-            if is_full {
-                return false;
+            if world.cancelled_by_plugin(|| {
+                InventoryMoveItemEvent::new(
+                    self.position,
+                    target_pos,
+                    item.item.registry_key.to_string(),
+                    1,
+                )
+            }) {
+                continue;
             }
-            for slot in 0..Self::INVENTORY_SIZE {
-                let item = self.get_stack(slot);
-                if item.is_empty() {
-                    continue;
-                }
-                if world.cancelled_by_plugin(|| {
-                    InventoryMoveItemEvent::new(
-                        self.position,
-                        target_pos,
-                        item.item.registry_key.to_string(),
-                        1,
-                    )
-                }) {
-                    continue;
-                }
-                // Vanilla `HopperBlockEntity.ejectItems`: actually remove the item from the
-                // hopper before offering it to the target, restoring it on failure. Reading a
-                // clone and never writing back left the source stack untouched, duplicating
-                // the item into the target while the hopper kept its full stack.
-                let Some(one_item) = Self::take_one(self, slot, &item) else {
-                    continue;
-                };
-                if Self::add_one_item(self, container.as_ref(), &one_item) {
-                    return true;
-                }
-                if let Some(leftover) = Self::put_back(self, slot, one_item) {
-                    // Slot is someone else's now and full -> drop as an item entity, never void.
-                    let pos = self.position.to_centered_f64();
-                    world.scatter_stack(pos.x, pos.y, pos.z, leftover);
-                }
+            // Vanilla `HopperBlockEntity.ejectItems`: actually remove the item from the
+            // hopper before offering it to the target, restoring it on failure. Reading a
+            // clone and never writing back left the source stack untouched, duplicating
+            // the item into the target while the hopper kept its full stack.
+            let Some(one_item) = Self::take_one(self, slot, &item) else {
+                continue;
+            };
+            if Self::add_item(
+                Some(self),
+                container.as_ref(),
+                one_item.clone(),
+                Some(opposite_dir),
+            )
+            .is_empty()
+            {
+                return true;
+            }
+            if let Some(leftover) = Self::put_back(self, slot, one_item) {
+                // Slot is someone else's now and full -> drop as an item entity, never void.
+                let pos = self.position.to_centered_f64();
+                world.scatter_stack(pos.x, pos.y, pos.z, leftover);
             }
         }
         false
     }
+
     pub fn add_one_item(from: &dyn Inventory, to: &dyn Inventory, item: &ItemStack) -> bool {
-        Self::add_stack(Some(from), to, item.copy_with_count(1)).is_empty()
+        Self::add_item(Some(from), to, item.copy_with_count(1), None).is_empty()
     }
 
-    /// Vanilla `HopperBlockEntity.addItem(from, container, stack, null)`: returns what did not fit.
-    pub fn add_stack(
+    /// Moves a whole item stack of an item entity into `into`, true once all of it moved.
+    pub fn pickup_item_entity(into: &dyn Inventory, item_entity: &ItemEntity) -> bool {
+        item_entity.insert_into(|stack| Self::add_item(None, into, stack, None))
+    }
+
+    /// Vanilla `HopperBlockEntity.addItem(from, container, stack, direction)`: returns what did
+    /// not fit. A `WorldlyContainer` only offers the slots of the face `direction` names.
+    pub fn add_item(
         from: Option<&dyn Inventory>,
         to: &dyn Inventory,
         mut stack: ItemStack,
+        direction: Option<BlockDirection>,
     ) -> ItemStack {
-        for slot in 0..to.size() {
+        let face = direction.filter(|_| to.is_sided());
+        let count = face.map_or_else(|| to.size(), |face| Self::slot_count(to, face));
+        for n in 0..count {
             if stack.is_empty() {
                 break;
             }
-            Self::try_move_in_item(from, to, &mut stack, slot);
+            let slot = face.map_or(n, |face| Self::slot_at(to, face, n));
+            Self::try_move_in_item(from, to, &mut stack, slot, direction);
         }
         stack
     }
@@ -437,8 +605,9 @@ impl HopperBlockEntity {
         to: &dyn Inventory,
         stack: &mut ItemStack,
         slot: usize,
+        direction: Option<BlockDirection>,
     ) {
-        if !to.is_valid_slot_for(slot, stack) {
+        if !Self::can_place_item_in_container(to, stack, slot, direction) {
             return;
         }
         // Vanilla `wasEmpty` only matters for a hopper target. Read under the same lock as the
@@ -449,13 +618,15 @@ impl HopperBlockEntity {
             let Some(dst) = items.get_mut(slot) else {
                 return;
             };
-            if !Self::merge_into_slot(dst, stack) {
+            if !Self::merge_into_slot(dst, stack, hopper.get_max_count_per_stack()) {
                 return;
             }
             if was_empty {
                 hopper.set_cooldown_after_insert(from);
             }
-        } else if !to.update_stack(slot, &mut |dst| Self::merge_into_slot(dst, stack)) {
+        } else if !to.update_stack(slot, &mut |dst| {
+            Self::merge_into_slot(dst, stack, to.get_max_count_per_stack())
+        }) {
             // One lock for read and write: a parallel write would otherwise be overwritten by a stale copy.
             return;
         }
@@ -484,9 +655,16 @@ impl HopperBlockEntity {
     }
 
     /// The slot half of vanilla `tryMoveInItem`. Returns whether anything moved.
-    fn merge_into_slot(dst: &mut ItemStack, stack: &mut ItemStack) -> bool {
+    ///
+    /// An empty slot takes at most `max_count` items, what the container allows per slot. Vanilla
+    /// `setItem` would cut the excess off, here it stays in `stack`.
+    fn merge_into_slot(dst: &mut ItemStack, stack: &mut ItemStack, max_count: u8) -> bool {
         if dst.is_empty() {
-            *dst = std::mem::replace(stack, ItemStack::EMPTY.clone());
+            *dst = if stack.item_count > max_count {
+                stack.split(max_count)
+            } else {
+                std::mem::replace(stack, ItemStack::EMPTY.clone())
+            };
             return true;
         }
         if !dst.are_items_and_components_equal(stack) {
@@ -576,7 +754,7 @@ impl Clearable for HopperBlockEntity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_data::{Block, item::Item};
+    use pumpkin_data::{Block, BlockDirection, item::Item};
 
     #[test]
     fn hopper_state_yields_its_properties() {
@@ -747,11 +925,11 @@ mod tests {
 
     /// A dropped stack goes in whole, like vanilla `addItem(Container, ItemEntity)`.
     #[test]
-    fn add_stack_moves_a_whole_stack_into_one_slot() {
+    fn add_item_moves_a_whole_stack_into_one_slot() {
         let hopper = hopper_holding(ItemStack::EMPTY.clone());
 
         let leftover =
-            HopperBlockEntity::add_stack(None, &hopper, ItemStack::new(64, &Item::DIAMOND));
+            HopperBlockEntity::add_item(None, &hopper, ItemStack::new(64, &Item::DIAMOND), None);
 
         assert!(leftover.is_empty());
         assert_eq!(hopper.get_stack(0).item_count, 64);
@@ -760,17 +938,238 @@ mod tests {
 
     /// Tops up the partial stack, and what's left comes back when every other slot is taken.
     #[test]
-    fn add_stack_returns_what_does_not_fit() {
+    fn add_item_returns_what_does_not_fit() {
         let hopper = hopper_holding(ItemStack::new(60, &Item::DIAMOND));
         for slot in 1..HopperBlockEntity::INVENTORY_SIZE {
             hopper.set_stack(slot, ItemStack::new(64, &Item::DIRT));
         }
 
         let leftover =
-            HopperBlockEntity::add_stack(None, &hopper, ItemStack::new(10, &Item::DIAMOND));
+            HopperBlockEntity::add_item(None, &hopper, ItemStack::new(10, &Item::DIAMOND), None);
 
         assert_eq!(hopper.get_stack(0).item_count, 64);
         assert_eq!(leftover.get_item().id, Item::DIAMOND.id);
         assert_eq!(leftover.item_count, 6);
+    }
+
+    #[test]
+    fn furnace_worldly_container_respects_faces_fuel_and_empty_bucket() {
+        use crate::block::entities::furnace::FurnaceBlockEntity;
+        let furnace = FurnaceBlockEntity::new(BlockPos::new(0, 64, 0));
+        let dest_hopper = HopperBlockEntity::new(BlockPos::new(0, 63, 0));
+
+        // UP inserts into input slot 0
+        let leftover = HopperBlockEntity::add_item(
+            None,
+            &furnace,
+            ItemStack::new(2, &Item::RAW_IRON),
+            Some(BlockDirection::Up),
+        );
+        assert!(leftover.is_empty());
+        assert_eq!(furnace.get_stack(0).item_count, 2);
+
+        // NORTH (side) rejects non-fuel in slot 1, accepts coal and empty bucket
+        let rejected = HopperBlockEntity::add_item(
+            None,
+            &furnace,
+            ItemStack::new(1, &Item::RAW_IRON),
+            Some(BlockDirection::North),
+        );
+        assert_eq!(rejected.item_count, 1);
+
+        let fuel = HopperBlockEntity::add_item(
+            None,
+            &furnace,
+            ItemStack::new(3, &Item::COAL),
+            Some(BlockDirection::North),
+        );
+        assert!(fuel.is_empty());
+        assert_eq!(furnace.get_stack(1).item_count, 3);
+
+        // DOWN does NOT pull coal out of fuel slot 1
+        assert!(matches!(
+            HopperBlockEntity::try_take_from_source(&dest_hopper, &furnace),
+            Ok(false)
+        ));
+
+        // DOWN DOES pull an empty bucket out of fuel slot 1 (after lava bucket consumed)
+        furnace.set_stack(1, ItemStack::new(1, &Item::BUCKET));
+        assert!(matches!(
+            HopperBlockEntity::try_take_from_source(&dest_hopper, &furnace),
+            Ok(true)
+        ));
+        assert!(furnace.get_stack(1).is_empty());
+        assert_eq!(dest_hopper.get_stack(0).item.id, Item::BUCKET.id);
+    }
+
+    #[test]
+    fn brewing_stand_worldly_container_sides_and_glass_bottle_extraction() {
+        use crate::block::entities::brewing_stand::BrewingStandBlockEntity;
+        let stand = BrewingStandBlockEntity::new(BlockPos::new(0, 64, 0));
+        let dest_hopper = HopperBlockEntity::new(BlockPos::new(0, 63, 0));
+
+        // UP accepts brewing reagent (Nether Wart) in slot 3, rejects non-reagents (Oak Planks)
+        let bad_top = HopperBlockEntity::add_item(
+            None,
+            &stand,
+            ItemStack::new(1, &Item::OAK_PLANKS),
+            Some(BlockDirection::Up),
+        );
+        assert_eq!(bad_top.item_count, 1);
+
+        let good_top = HopperBlockEntity::add_item(
+            None,
+            &stand,
+            ItemStack::new(2, &Item::NETHER_WART),
+            Some(BlockDirection::Up),
+        );
+        assert!(good_top.is_empty());
+        assert_eq!(stand.get_stack(3).item_count, 2);
+
+        // EAST accepts Blaze Powder into slot 4 and 1x Glass Bottle per bottle slot 0..=2
+        let blaze = HopperBlockEntity::add_item(
+            None,
+            &stand,
+            ItemStack::new(4, &Item::BLAZE_POWDER),
+            Some(BlockDirection::East),
+        );
+        assert!(blaze.is_empty());
+        assert_eq!(stand.get_stack(4).item_count, 4);
+
+        for expected_slot in 0..3 {
+            let leftover = HopperBlockEntity::add_item(
+                None,
+                &stand,
+                ItemStack::new(1, &Item::GLASS_BOTTLE),
+                Some(BlockDirection::East),
+            );
+            assert!(leftover.is_empty());
+            assert_eq!(stand.get_stack(expected_slot).item_count, 1);
+        }
+        let fourth_bottle = HopperBlockEntity::add_item(
+            None,
+            &stand,
+            ItemStack::new(1, &Item::GLASS_BOTTLE),
+            Some(BlockDirection::East),
+        );
+        assert_eq!(fourth_bottle.item_count, 1);
+
+        // Clear bottle slots; DOWN does NOT extract Nether Wart from slot 3,
+        // but DOES extract leftover Glass Bottle from slot 3 (e.g. after Dragon's Breath).
+        stand.set_stack(0, ItemStack::EMPTY.clone());
+        stand.set_stack(1, ItemStack::EMPTY.clone());
+        stand.set_stack(2, ItemStack::EMPTY.clone());
+        assert!(matches!(
+            HopperBlockEntity::try_take_from_source(&dest_hopper, &stand),
+            Ok(false)
+        ));
+
+        stand.set_stack(3, ItemStack::new(1, &Item::GLASS_BOTTLE));
+        assert!(matches!(
+            HopperBlockEntity::try_take_from_source(&dest_hopper, &stand),
+            Ok(true)
+        ));
+        assert!(stand.get_stack(3).is_empty());
+        assert_eq!(dest_hopper.get_stack(0).item.id, Item::GLASS_BOTTLE.id);
+    }
+
+    #[test]
+    fn single_item_and_filtered_containers_enforce_26_3_rules() {
+        use crate::block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity;
+        use crate::block::entities::jukebox::JukeboxBlockEntity;
+        use crate::block::entities::lectern::LecternBlockEntity;
+        use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
+
+        // Shulker box rejects nested shulker boxes
+        let shulker = ShulkerBoxBlockEntity::new(BlockPos::new(0, 64, 0));
+        let nested = HopperBlockEntity::add_item(
+            None,
+            &shulker,
+            ItemStack::new(1, &Item::SHULKER_BOX),
+            Some(BlockDirection::Up),
+        );
+        assert_eq!(nested.item_count, 1);
+
+        // Chiseled bookshelf rejects non-books and caps each slot at 1 book
+        let shelf = ChiseledBookshelfBlockEntity::new(BlockPos::new(0, 64, 0));
+        assert_eq!(
+            HopperBlockEntity::add_item(None, &shelf, ItemStack::new(1, &Item::DIAMOND), None)
+                .item_count,
+            1
+        );
+        let books_left =
+            HopperBlockEntity::add_item(None, &shelf, ItemStack::new(7, &Item::BOOK), None);
+        assert_eq!(books_left.item_count, 1);
+        for slot in 0..6 {
+            assert_eq!(shelf.get_stack(slot).item_count, 1);
+        }
+
+        // Jukebox accepts 1 music disc, rejects non-discs
+        let jukebox = JukeboxBlockEntity::new(BlockPos::new(0, 64, 0));
+        assert_eq!(
+            HopperBlockEntity::add_item(None, &jukebox, ItemStack::new(1, &Item::STONE), None)
+                .item_count,
+            1
+        );
+        assert!(
+            HopperBlockEntity::add_item(
+                None,
+                &jukebox,
+                ItemStack::new(1, &Item::MUSIC_DISC_CAT),
+                None,
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            HopperBlockEntity::add_item(
+                None,
+                &jukebox,
+                ItemStack::new(1, &Item::MUSIC_DISC_13),
+                None,
+            )
+            .item_count,
+            1
+        );
+
+        // Lectern is NOT exposed as a world container (`BlockEntity::get_inventory` == None)
+        let lectern: Arc<dyn BlockEntity> =
+            Arc::new(LecternBlockEntity::new(BlockPos::new(0, 64, 0)));
+        assert!(lectern.get_inventory().is_none());
+    }
+
+    #[test]
+    fn empty_hopper_transfer_cooldown_uses_ticked_game_time() {
+        let src = HopperBlockEntity::new(BlockPos::new(0, 65, 0));
+        let dst_already_ticked = HopperBlockEntity::new(BlockPos::new(0, 64, 0));
+        src.ticked_game_time.store(100, Ordering::Relaxed);
+        dst_already_ticked
+            .ticked_game_time
+            .store(100, Ordering::Relaxed);
+
+        assert!(
+            HopperBlockEntity::add_item(
+                Some(&src),
+                &dst_already_ticked,
+                ItemStack::new(1, &Item::IRON_INGOT),
+                Some(BlockDirection::Up),
+            )
+            .is_empty()
+        );
+        assert_eq!(dst_already_ticked.cooldown_time.load(Ordering::Relaxed), 7);
+
+        let dst_not_yet_ticked = HopperBlockEntity::new(BlockPos::new(0, 64, 0));
+        dst_not_yet_ticked
+            .ticked_game_time
+            .store(99, Ordering::Relaxed);
+        assert!(
+            HopperBlockEntity::add_item(
+                Some(&src),
+                &dst_not_yet_ticked,
+                ItemStack::new(1, &Item::IRON_INGOT),
+                Some(BlockDirection::Up),
+            )
+            .is_empty()
+        );
+        assert_eq!(dst_not_yet_ticked.cooldown_time.load(Ordering::Relaxed), 8);
     }
 }

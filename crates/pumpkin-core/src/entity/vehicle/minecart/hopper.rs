@@ -35,7 +35,7 @@ impl HopperMinecart {
     }
 
     pub(super) fn tick(&self, entity: &Entity) {
-        if !self.enabled.load(Ordering::Relaxed) {
+        if !self.enabled.load(Ordering::Relaxed) || !entity.is_alive() {
             return;
         }
 
@@ -45,21 +45,20 @@ impl HopperMinecart {
         let inventory = &self.inventory;
         let cart_box = entity.bounding_box.load().expand(0.25, 0.0, 0.25);
 
-        if let Some(source) = HopperBlockEntity::get_container_at(&world, &source_pos) {
-            for slot in 0..source.size() {
-                let stack = source.get_stack(slot);
-                if stack.is_empty() || !source.can_transfer_to(inventory.as_ref(), slot, &stack) {
-                    continue;
-                }
-                let Some(one) = HopperBlockEntity::take_one(source.as_ref(), slot, &stack) else {
-                    continue;
-                };
-                if HopperBlockEntity::add_one_item(source.as_ref(), inventory.as_ref(), &one) {
-                    return;
-                }
-                if let Some(leftover) = HopperBlockEntity::put_back(source.as_ref(), slot, one) {
-                    let pos = source_pos.to_centered_f64();
-                    world.scatter_stack(pos.x, pos.y, pos.z, leftover);
+        if let Some(source) = HopperBlockEntity::get_container_at_coords(
+            &world,
+            &source_pos,
+            pos.x,
+            pos.y + 1.5,
+            pos.z,
+        ) {
+            match HopperBlockEntity::try_take_from_source(inventory.as_ref(), source.as_ref()) {
+                Ok(true) => return,
+                Ok(false) => {}
+                Err(leftover) => {
+                    // A concurrent insert filled the slot, drop the item, never void it.
+                    let drop_pos = source_pos.to_centered_f64();
+                    world.scatter_stack(drop_pos.x, drop_pos.y, drop_pos.z, leftover);
                 }
             }
         } else {
@@ -82,12 +81,13 @@ impl HopperMinecart {
         search_box: &BoundingBox,
     ) -> bool {
         for entity in world.get_entities_at_box(search_box) {
+            if !entity.get_entity().is_alive() {
+                continue;
+            }
             let Some(item) = entity.get_item_entity() else {
                 continue;
             };
-            if item
-                .insert_into(|stack| HopperBlockEntity::add_stack(None, inventory.as_ref(), stack))
-            {
+            if HopperBlockEntity::pickup_item_entity(inventory.as_ref(), item) {
                 return true;
             }
         }
