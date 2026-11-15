@@ -20,8 +20,8 @@ This directory contains a number of different data files used to help support co
     - downloaded from [GeyserMC/mappings](https://github.com/GeyserMC/mappings/blob/ba81ded46ea9920a206847e51e0a939fb3dbbdda/biomes.json)
     - Maps Java Edition biome identifiers to their corresponding Bedrock Edition biome ID. Used in code generation to translate Java biomes to Bedrock counterparts.
 - `biome_definitions.nbt`
-    - downloaded from [Kaooot/bedrock-network-data](https://github.com/Kaooot/bedrock-network-data/blob/master/release/1.26.40/biome_definitions.nbt)
-    - Contains the gzip-compressed vanilla biome registry extracted from Bedrock Dedicated Server 1.26.40.
+    - downloaded from [Kaooot/bedrock-network-data](https://github.com/Kaooot/bedrock-network-data/blob/427acba7044a75fb9ee884ec347704927968098f/release/1.26.60/biome_definitions.nbt)
+    - Contains the gzip-compressed vanilla biome registry extracted from Bedrock Dedicated Server 1.26.60 (unchanged through 1.26.63).
     - Validated and converted by `pumpkin-codegen` into the static `BiomeDefinitionList` wire payload used during Bedrock world initialization.
 - `player_geometry.json`
     - adapted from [GeyserMC/Geyser](https://github.com/GeyserMC/Geyser/blob/master/core/src/main/resources/bedrock/geometries/geo.json) (MIT License)
