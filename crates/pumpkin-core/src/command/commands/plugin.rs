@@ -50,19 +50,30 @@ impl SuggestionProvider for PluginSuggestions {
             Suggested::Loadable => manager.inactive_names(),
         };
 
-        // The argument is a quotable phrase, so anything with a space has to come back quoted
-        // Typed input is matched against the bare name, not the quoted suggestion
+        let opened_quote = builder.remaining().starts_with('"');
         builder
-            .filter_and_suggest_matching(candidates.into_iter().map(|candidate| {
-                let quoted = if candidate.contains(' ') {
-                    format!("\"{candidate}\"")
-                } else {
-                    candidate.clone()
-                };
-                (candidate, quoted)
-            }))
+            .filter_and_suggest_matching(name_suggestions(candidates, opened_quote))
             .build()
     }
+}
+
+/// `(text to match, text to suggest)` for each name.
+///
+/// The argument is a quotable phrase, so a name with a space has to come back quoted. Input is
+/// matched against the bare name, or against the quoted one once it opens a quote.
+fn name_suggestions(
+    candidates: Vec<String>,
+    opened_quote: bool,
+) -> impl Iterator<Item = (String, String)> {
+    candidates.into_iter().map(move |candidate| {
+        let quoted = format!("\"{candidate}\"");
+        let suggestion = if candidate.contains(' ') {
+            quoted.clone()
+        } else {
+            candidate.clone()
+        };
+        (if opened_quote { quoted } else { candidate }, suggestion)
+    })
 }
 
 /// Green while running, yellow while starting, red for everything that is not.
@@ -597,4 +608,28 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     .then(literal("disable").executes(HotReloadExecutor(false))),
             ),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn suggest(input: &str) -> Vec<String> {
+        let names = vec!["My Plugin".to_string(), "other".to_string()];
+        let opened_quote = input.starts_with('"');
+        SuggestionsBuilder::new(input, 0)
+            .filter_and_suggest_matching(name_suggestions(names, opened_quote))
+            .build()
+            .suggestions
+            .iter()
+            .map(pumpkin_command::suggestion::Suggestion::text_as_string)
+            .collect()
+    }
+
+    #[test]
+    fn names_with_spaces_complete_inside_an_opened_quote() {
+        assert_eq!(suggest("my"), ["\"My Plugin\""]);
+        assert_eq!(suggest("\"my pl"), ["\"My Plugin\""]);
+        assert_eq!(suggest("\"oth"), ["other"]);
+    }
 }
