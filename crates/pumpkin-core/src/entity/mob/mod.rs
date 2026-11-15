@@ -1114,6 +1114,13 @@ impl MobEntity {
     ) -> bool {
         let entity = &self.living_entity.entity;
 
+        if item_stack.item.id == pumpkin_data::item::Item::SHEARS.id
+            && entity.shear_off_all_leash_connections(true)
+        {
+            let _ = player.damage_item_stack(item_stack, 1);
+            return true;
+        }
+
         // If already leashed to player, right-clicking unleashes the mob
         let currently_leashed = entity.is_leashed();
 

@@ -177,6 +177,42 @@ impl CopperGolemEntity {
             WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedStep,
         }
     }
+
+    #[must_use]
+    pub fn ready_for_shearing(&self) -> bool {
+        self.mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&EQUIPMENT_SLOT_ANTENNA)
+            .item
+            .has_tag(&tag::Item::MINECRAFT_SHEARABLE_FROM_COPPER_GOLEM)
+    }
+
+    pub fn shear(&self, category: SoundCategory) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        world.play_sound(Sound::EntityCopperGolemShear, category, &pos);
+        let antenna_item = self
+            .mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&EQUIPMENT_SLOT_ANTENNA);
+        self.mob_entity
+            .set_item_slot(&EQUIPMENT_SLOT_ANTENNA, ItemStack::EMPTY.clone());
+        if !antenna_item.is_empty() {
+            let drop_pos = pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y + 1.5, pos.z);
+            let item_entity = Arc::new(crate::entity::item::ItemEntity::new(
+                Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                antenna_item,
+            ));
+            world.spawn_entity(item_entity);
+        }
+    }
 }
 
 impl CustomSound for CopperGolemEntity {
@@ -250,9 +286,31 @@ impl Mob for CopperGolemEntity {
         );
     }
 
-    fn mob_interact(&self, _player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         let entity = self.get_entity();
         let world = entity.world.load();
+
+        if item_stack.item.id == Item::SHEARS.id && self.ready_for_shearing() {
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                    player: player.clone(),
+                    entity_id: entity.entity_id,
+                    hand: 0,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
+            self.shear(SoundCategory::Players);
+            world.emit_game_event(
+                pumpkin_data::game_event::GameEvent::Shear.name(),
+                entity.pos.load(),
+            );
+            let _ = player.damage_item_stack(item_stack, 1);
+            return true;
+        }
 
         // Honeycomb waxing
         if item_stack.item.id == Item::HONEYCOMB.id

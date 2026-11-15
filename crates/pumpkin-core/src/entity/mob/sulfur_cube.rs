@@ -188,7 +188,7 @@ fn apply_vertical_position_angle_power_rotation(
     }
 }
 
-fn is_swallowable_item(stack: &ItemStack) -> bool {
+pub(crate) fn is_swallowable_item(stack: &ItemStack) -> bool {
     stack
         .item
         .has_tag(&pumpkin_data::tag::Item::MINECRAFT_SULFUR_CUBE_SWALLOWABLE)
@@ -378,7 +378,7 @@ impl SulfurCubeEntity {
         world.spawn_entity(Arc::new(item_entity));
     }
 
-    fn detect_body_item_change(&self) {
+    pub(crate) fn detect_body_item_change(&self) {
         let current = self.body_item();
         let previous = {
             let mut last = self
@@ -467,7 +467,7 @@ impl SulfurCubeEntity {
         }
     }
 
-    fn can_explode(&self) -> bool {
+    pub(crate) fn can_explode(&self) -> bool {
         let has_explosion = self
             .archetype
             .lock()
@@ -533,7 +533,7 @@ impl SulfurCubeEntity {
         }
     }
 
-    fn prime_time(&self, imminent: bool) -> bool {
+    pub(crate) fn prime_time(&self, imminent: bool) -> bool {
         let explosion = self
             .archetype
             .lock()
@@ -567,7 +567,7 @@ impl SulfurCubeEntity {
         true
     }
 
-    fn equip_item(&self, held_item: &ItemStack) -> bool {
+    pub(crate) fn equip_item(&self, held_item: &ItemStack) -> bool {
         if AgeableMob::is_baby(self) {
             return false;
         }
@@ -581,14 +581,16 @@ impl SulfurCubeEntity {
 
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::BODY, held_item.copy_with_count(1));
+        self.detect_body_item_change();
         self.play_sound(Sound::EntitySulfurCubeAbsorb);
         true
     }
 
-    fn shear(&self) {
+    pub(crate) fn shear(&self) {
         let body_item = self.body_item();
         self.mob_entity
             .set_item_slot(&EquipmentSlot::BODY, ItemStack::EMPTY.clone());
+        self.detect_body_item_change();
         self.spawn_at_attachment(body_item);
         self.play_sound(Sound::EntitySulfurCubeEject);
         self.pickup_timer

@@ -5014,6 +5014,64 @@ impl Entity {
         }
     }
 
+    pub fn drop_leash(&self) -> bool {
+        if !self.is_leashed() {
+            return false;
+        }
+        self.unleash();
+        if self.is_leashed() {
+            return false;
+        }
+        self.spawn_at_location(ItemStack::new(1, &pumpkin_data::item::Item::LEAD));
+        true
+    }
+
+    pub fn drop_all_leash_connections(&self) -> bool {
+        let world = self.world.load();
+        let center = self.bounding_box.load().get_center();
+        let half = Vector3::new(16.0, 16.0, 16.0);
+        let scan_area = BoundingBox::new(center - half, center + half);
+
+        let mut dropped = self.drop_leash();
+        for other in world.get_entities_at_box(&scan_area) {
+            let other_entity = other.get_entity();
+            let leashed_to_self = other_entity
+                .get_leash_holder()
+                .is_some_and(|holder| holder.get_entity().entity_id == self.entity_id);
+            if leashed_to_self && other_entity.drop_leash() {
+                dropped = true;
+            }
+        }
+
+        if dropped {
+            if self.entity_type == &EntityType::LEASH_KNOT {
+                self.remove();
+            }
+            world.emit_game_event(
+                pumpkin_data::game_event::GameEvent::Shear.name(),
+                self.pos.load(),
+            );
+        }
+        dropped
+    }
+
+    pub fn shear_off_all_leash_connections(&self, by_player: bool) -> bool {
+        let dropped = self.drop_all_leash_connections();
+        if dropped {
+            let category = if by_player {
+                SoundCategory::Players
+            } else {
+                SoundCategory::Neutral
+            };
+            self.world.load().play_block_sound(
+                Sound::ItemShearsSnip,
+                category,
+                self.block_pos.load(),
+            );
+        }
+        dropped
+    }
+
     fn send_leash_removed(&self) {
         let je_packet =
             pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1, true);
