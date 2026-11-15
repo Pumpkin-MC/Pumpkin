@@ -8,12 +8,16 @@ use futures::channel::oneshot;
 
 use crate::{SchedulerError, SchedulerTaskId, TaskContext, TaskFuture, TaskWork};
 
-/// Type-erased task with result delivery independent of its future
+/// Lets the driver poll tasks with different result types through one queue.
 ///
-/// Retaining the result sender separately allows cancellation to resolve the
-/// result without polling the future again
+/// Result delivery remains separate from the future so cancellation can settle
+/// a task without polling it again.
 pub trait ScheduledTask: Send {
     fn poll(&mut self, cx: &mut Context<'_>) -> Poll<()>;
+    /// Drops the future and prepares its result for delivery.
+    ///
+    /// A supplied error overrides the poll's result unless cleanup panics.
+    /// Call outside the queue lock because destructors may submit more work.
     fn finish(self: Box<Self>, error: Option<SchedulerError>) -> Completion;
 }
 
@@ -82,7 +86,7 @@ impl<T: Send + 'static> ScheduledTask for Task<T> {
         .unwrap_or_else(|payload| Err(panic_error(id, payload.as_ref())));
         let outcome = match &result {
             Ok(_) => Outcome::Completed,
-            Err(SchedulerError::Cancelled { .. }) => Outcome::Cancelled,
+            Err(SchedulerError::Cancelled { task }) if *task == id => Outcome::Cancelled,
             Err(_) => Outcome::Failed,
         };
         Completion {

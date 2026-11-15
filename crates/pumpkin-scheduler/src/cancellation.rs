@@ -8,19 +8,17 @@ use std::{
 
 use crate::{SchedulerTaskId, global::Shared};
 
-/// Requests cancellation of a task and its active descendants
+/// Allows cancellation of one task and its active descendants.
 ///
-/// Accepted work continues when result or cancellation handles are dropped
-/// Clones share the request flag and hold a weak reference to the scheduler
+/// Obtain a handle from the task's [`TaskHandle`](crate::TaskHandle) or
+/// [`TaskContext`](crate::TaskContext). Clones share the same cancellation flag,
+/// but do not keep the scheduler alive. Dropping a handle does not cancel work.
 ///
-/// Cancellation propagates through the selected task's active descendants
-/// Parents and siblings remain unaffected
-/// Cancellation requires the selected task to remain active
-///
-/// The driver drops cancelled futures between polls
-/// A running poll continues until it returns and existing side effects remain
-/// External work requires cancellation through its own executor
-/// Task state must remain valid when a future is dropped at a suspension point
+/// Cancellation leaves parents, siblings, and unrelated task chains running.
+/// The driver drops cancelled futures between polls; it cannot interrupt a
+/// running poll, undo committed effects, or stop work on another executor.
+/// Task code must therefore leave shared state valid when its future is dropped
+/// at a suspension point.
 #[derive(Clone)]
 pub struct CancellationHandle {
     shared: Weak<Shared>,
@@ -37,21 +35,19 @@ impl CancellationHandle {
         }
     }
 
-    /// Requests cancellation and wakes the driver without waiting for cleanup
+    /// Requests cancellation without waiting for the task to stop.
     ///
-    /// Returns `true` for the first accepted request while the task is admitted
-    /// and the driver is accepting work
-    /// New child submissions are then rejected and active descendants are cancelled
+    /// Returns `true` when this request marks an active task for cancellation.
+    /// Its active descendants are marked too, child submissions are rejected,
+    /// and the driver is woken to process cleanup. Returns `false` if cancellation
+    /// was already requested, the task has finished, or the scheduler has stopped.
     ///
-    /// Cancellation and completion are ordered by the queue lock
-    /// Cancellation accepted before completion produces
-    /// [`SchedulerError::Cancelled`](crate::SchedulerError::Cancelled), even if
-    /// the current poll returns a value
-    /// A cleanup panic produces a failure
-    /// Returns `false` if completion has already been committed
+    /// An accepted request takes precedence over the current poll's result,
+    /// even if that poll returns successfully. Dropping the future can still
+    /// fail with [`SchedulerError::TaskPanicked`](crate::SchedulerError::TaskPanicked).
     ///
-    /// Awaiting the result handle observes cleanup of this task
-    /// Descendant cleanup can be observed through each descendant's result handle
+    /// Await the task's result handle to observe its cleanup. This does not wait
+    /// for descendant cleanup; each descendant has its own result handle.
     #[must_use]
     pub fn cancel(&self) -> bool {
         self.shared
@@ -59,10 +55,10 @@ impl CancellationHandle {
             .is_some_and(|shared| shared.cancel(self.task))
     }
 
-    /// Checks whether this task or an active ancestor requested cancellation
+    /// Reports whether this task has been marked for cancellation.
     ///
-    /// The flag remains `true` after completion
-    /// Cleanup completion is observed through the result handle
+    /// A request on an active ancestor also sets this flag. Once set, it stays
+    /// `true` after completion; it does not indicate that cleanup has finished.
     #[must_use]
     pub fn is_requested(&self) -> bool {
         self.requested.load(Ordering::Acquire)

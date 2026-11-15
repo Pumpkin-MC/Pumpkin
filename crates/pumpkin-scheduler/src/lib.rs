@@ -1,24 +1,38 @@
-//! Stackless task scheduling for Pumpkin execution domains
+//! Runs owned async tasks through a bounded Global scheduler.
 //!
-//! The application supplies the runtime and executor that poll the scheduler driver.
-//! Currently only the [`ExecutionDomain::Global`] is currently supported.
+//! The application supplies a [`TaskExecutor`] to poll the scheduler's driver;
+//! this crate does not create a runtime or worker threads. Only
+//! [`ExecutionDomain::Global`] is supported. Other domain variants describe
+//! future routing targets.
 //!
-//! Task polls are serialized and suspended tasks allow other work to run.
-//! Callers must revalidate state after suspension because call chains can interleave.
-//! CPU-heavy work must run on a separate CPU executor.
+//! Ready tasks receive one poll at a time in FIFO order. When a task suspends,
+//! another ready task can run, including a child whose result the parent awaits.
+//! This orders individual polls, not complete operations. Release locks needed
+//! by other tasks before awaiting, and revalidate shared state after resuming.
+//! Blocking I/O and long CPU jobs must run outside the driver because it cannot
+//! interrupt a task while that task is being polled.
 //!
-//! [`TaskContext`] preserves parent and root chain identities across suspension.
-//! State locking, Wasm store access, plugin routing, and tick execution remain
-//! the responsibility of the caller.
+//! # Task lifetime
 //!
-//! Dropping a [`TaskHandle`] leaves accepted work running.
-//! Explicit cancellation through [`CancellationHandle`] affects the task and
-//! its active descendants.
+//! Submission either reserves a slot immediately or returns an error. Ready,
+//! running, and suspended tasks all count against the same capacity, including
+//! child tasks. [`TaskContext`] preserves task ancestry across suspension, but
+//! does not grant access to game state or Wasm stores; callers manage that access.
 //!
-//! # Examples
+//! Dropping a [`TaskHandle`] stops observing its result and leaves the work
+//! running. Use a [`CancellationHandle`] to cancel a task and its active
+//! descendants. Cancellation takes effect between polls and does not undo side
+//! effects or stop work started on another executor. Await the task's handle to
+//! observe its cleanup and result. Descendants have their own completion handles.
 //!
-//! A parent can await a child submitted with its context.
-//! Suspending the parent allows the same driver to poll the child.
+//! The application's executor owns the driver. Dropping the driver stops new
+//! submissions and settles outstanding tasks; graceful draining is not provided.
+//!
+//! # Nested work
+//!
+//! Submit children with the parent's context to preserve the call chain and
+//! cancellation relationship. A suspended parent still occupies a slot, so
+//! child submission can fail when the scheduler is full.
 //!
 //! ```
 //! use pumpkin_scheduler::{ExecutionDomain, GlobalScheduler, SchedulerError, TaskRequest};

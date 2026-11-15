@@ -129,7 +129,7 @@ impl Shared {
         true
     }
 
-    /// Releases admission and resolves the result through a shared completion path
+    /// Removes a task once, then runs cleanup and delivers its result outside the queue lock.
     fn finish(&self, id: SchedulerTaskId, work: Option<Work>, error: Option<SchedulerError>) {
         let (entry, error) = {
             let mut queue = self.lock();
@@ -174,41 +174,40 @@ impl ArcWake for TaskSignal {
     }
 }
 
-/// Schedules the Global domain through one driver with bounded admission
+/// Runs Global tasks through a single driver with bounded admission.
 ///
-/// Admission and wakeups append to a FIFO ready queue
-/// Each turn polls one future once
-/// Pending tasks release their turn until woken, allowing children to run while
-/// their parents await results
-/// Duplicate wakeups are coalesced
+/// Submissions and wakeups join a FIFO ready queue. Each turn polls one future
+/// once, and duplicate wakeups are coalesced. Suspended tasks keep their admission
+/// slots but let other ready work run, including children they are awaiting.
 ///
-/// Polls are serialized and call chains may interleave during suspension
-/// Callers must release domain locks and borrows before suspension and
-/// revalidate state when they resume
-/// CPU-heavy work belongs on the application's CPU executor
-/// Turn budgets yield between polls and a running poll continues until it returns
+/// Polls run one at a time; whole operations can interleave across suspension.
+/// Release locks needed by dependent work before awaiting and revalidate shared
+/// state on resumption. The driver yields after its configured turn budget, but
+/// cannot interrupt a poll. Blocking or CPU-heavy work needs a separate executor.
 ///
-/// Admission limits include ready, running, and pending tasks
-/// Child requests share the root admission limit
-/// Cancelled tasks retain admission until processed by the driver
+/// Roots and children share the same task limit. Cancellation retains a slot
+/// until the driver processes it. Completion removes the task from admission
+/// before dropping its future and publishing its result, so another submission
+/// may acquire that slot while cleanup is still running.
 ///
-/// The injected executor owns the driver's lifetime
-/// Dropping the driver closes admission and fails outstanding work
-/// Graceful draining requires a separate lifecycle operation
-/// Explicit cancellation affects the selected task and its active descendants
-/// Existing side effects remain after cancellation or driver loss
+/// The application's executor owns the driver. Dropping it stops admission and
+/// settles outstanding tasks. There is no graceful-drain operation. Cancellation
+/// and driver shutdown do not undo side effects or stop work on other executors.
 #[derive(Clone)]
 pub struct GlobalScheduler {
     shared: Arc<Shared>,
 }
 
 impl GlobalScheduler {
-    /// Starts a single driver on the application's executor
+    /// Starts the scheduler's driver on the supplied executor.
+    ///
+    /// The executor must retain and poll the driver for as long as work should
+    /// be accepted. Cloning the returned scheduler does not create another driver.
     ///
     /// # Errors
     ///
-    /// Returns the executor's error if it rejects the driver, or
-    /// [`SchedulerError::Stopped`] if it immediately drops the driver
+    /// Returns the executor's error if spawning fails, or
+    /// [`SchedulerError::Stopped`] if the executor immediately drops the driver.
     pub fn start(
         config: SchedulerConfig,
         executor: &dyn TaskExecutor,
@@ -238,14 +237,23 @@ impl GlobalScheduler {
         Ok(Self { shared })
     }
 
-    /// Admits work without running its factory or waiting for a free slot
+    /// Queues owned work and returns a handle to its eventual result.
+    ///
+    /// Submission does not invoke the work factory or wait for capacity. Once
+    /// accepted, the task occupies a slot until the driver removes it for
+    /// completion. Dropping the returned handle leaves the task running.
     ///
     /// # Errors
     ///
-    /// Rejects unsupported domains, stopped schedulers, full admission, and
-    /// exhausted task IDs
-    /// A child also requires an active, uncancelled parent from this scheduler
-    /// Execution failures are reported through the result handle
+    /// Returns [`SchedulerError::UnsupportedDomain`] for a non-Global request,
+    /// [`SchedulerError::Stopped`] after driver shutdown,
+    /// [`SchedulerError::QueueFull`] when all slots are occupied, or
+    /// [`SchedulerError::TaskIdsExhausted`] when no further IDs can be assigned.
+    ///
+    /// Child requests also fail with [`SchedulerError::ForeignContext`] for a
+    /// parent from another scheduler, [`SchedulerError::InactiveParent`] for a
+    /// completed parent, or [`SchedulerError::Cancelled`] for a cancelled parent.
+    /// Failures after admission are delivered through the task handle instead.
     pub fn submit<T: Send + 'static>(
         &self,
         request: TaskRequest<T>,

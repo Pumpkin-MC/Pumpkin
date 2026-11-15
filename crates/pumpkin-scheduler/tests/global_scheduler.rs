@@ -463,6 +463,48 @@ fn cancellation_settles_once_and_releases_admission() -> TestResult {
 }
 
 #[test]
+fn child_cancellation_counts_the_propagating_parent_as_failed() -> TestResult {
+    let executor = ControlledExecutor::default();
+    let scheduler = GlobalScheduler::start(config(2, 8), &executor)?;
+    let mut driver = executor.take()?;
+    let child_scheduler = scheduler.clone();
+    let (sender, mut receiver) = oneshot::channel();
+    let parent = scheduler.submit(TaskRequest::new(
+        ExecutionDomain::Global,
+        move |context| async move {
+            let child = child_scheduler.submit(TaskRequest::child(&context, |_| {
+                std::future::pending::<Result<(), SchedulerError>>()
+            }))?;
+            sender
+                .send((child.id(), child.cancellation_handle()))
+                .map_err(|_| SchedulerError::Stopped)?;
+            child.await?;
+            Ok(())
+        },
+    ))?;
+    let parent_cancellation = parent.cancellation_handle();
+    drive(&mut driver);
+    let (child_id, child_cancellation) = receiver.try_recv()?;
+    assert!(child_cancellation.cancel());
+    drive(&mut driver);
+
+    assert!(matches!(
+        parent.now_or_never().ok_or("parent did not settle")?,
+        Err(SchedulerError::Cancelled { task }) if task == child_id
+    ));
+    assert!(!parent_cancellation.is_requested());
+    let snapshot = scheduler.snapshot();
+    assert_eq!(snapshot.completed(), 0);
+    assert_eq!(snapshot.cancelled(), 1);
+    assert_eq!(snapshot.failed(), 1);
+    assert_eq!(
+        snapshot.ready() + snapshot.running() + snapshot.pending(),
+        0
+    );
+    Ok(())
+}
+
+#[test]
 fn cancellation_follows_active_descendants_without_touching_other_chains() -> TestResult {
     let executor = ControlledExecutor::default();
     let scheduler = GlobalScheduler::start(config(8, 16), &executor)?;
