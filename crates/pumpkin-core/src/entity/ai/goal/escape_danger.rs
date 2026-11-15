@@ -68,6 +68,14 @@ impl EscapeDangerGoal {
         goal
     }
 
+    /// Heads for water up to `xz_dist` blocks away whenever it panics, burning or not.
+    #[must_use]
+    pub fn seeking_water(speed: f64, xz_dist: i32) -> Box<Self> {
+        let mut goal = Self::new(speed);
+        goal.water_search_xz = Some(xz_dist);
+        goal
+    }
+
     /// The damage type tag that makes this mob panic, from the mob itself.
     #[must_use]
     pub const fn with_panic_tag(mut self: Box<Self>, panic_tag: PanicTag) -> Box<Self> {

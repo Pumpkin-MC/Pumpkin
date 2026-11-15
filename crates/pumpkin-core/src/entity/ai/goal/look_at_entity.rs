@@ -106,7 +106,7 @@ impl LookAtEntityGoal {
     fn take_slot_target(&mut self) {
         if let Some(PendingTarget::Set(target)) = self.target_slot.as_ref().map(|slot| slot.take())
         {
-            self.target = target;
+            self.target = target.as_ref().map(Arc::downgrade);
         }
     }
 
@@ -155,6 +155,7 @@ impl Goal for LookAtEntityGoal {
                 .as_ref()
                 .and_then(Weak::upgrade)
                 .map(|target| target.get_entity().entity_id)
+                .into_iter()
                 .chain(self.target_slot.as_ref().and_then(|slot| slot.pending_id()))
                 .collect(),
             ..GoalReach::default()
