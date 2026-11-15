@@ -401,8 +401,9 @@ mod tests {
             .inventory
             .set_stack(0, ItemStack::new(8, &Item::DIAMOND));
         let mut bundle = ItemStack::new(1, &Item::BUNDLE);
-        bundle.set_data_component(BundleContentsImpl { items: Vec::new() });
+        bundle.set_data_component(BundleContentsImpl::EMPTY);
         set_cursor(&handler, bundle);
+        handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
         handler.on_slot_click(0, 1, SlotActionType::Pickup, &player);
         assert_eq!(handler.inventory.get_stack(0).item_count, 8);
         assert_eq!(cursor(&handler).item.id, Item::BUNDLE.id);
@@ -502,5 +503,51 @@ mod tests {
         handler.on_slot_click(0, 0, SlotActionType::QuickMove, &player);
         assert_eq!(handler.inventory.get_stack(0).item.id, Item::BOOK.id);
         assert_eq!(player.0.get_stack(9).item_count, 2);
+    }
+
+    #[test]
+    fn bundle_item_selection_extracts_selected_entry_and_resets_on_left_pickup() {
+        let (player, mut handler) = handler(WindowType::Generic9x1, true, true);
+        let mut bundle = ItemStack::new(1, &Item::BUNDLE);
+        bundle.set_data_component(BundleContentsImpl::EMPTY);
+        handler.inventory.set_stack(0, bundle);
+
+        // 26.3 left-click (`button = 0`) inserts cursor item into bundle in slot.
+        set_cursor(&handler, ItemStack::new(2, &Item::DIAMOND));
+        handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
+        assert!(cursor(&handler).is_empty());
+
+        set_cursor(&handler, ItemStack::new(3, &Item::EMERALD));
+        handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
+        assert!(cursor(&handler).is_empty());
+        // Bundle items order: [EMERALD(3), DIAMOND(2)]
+
+        // Select index 1 (DIAMOND) via `set_selected_bundle_item_index`, then right-click (`button = 1`) with empty cursor to extract.
+        handler.set_selected_bundle_item_index(0, 1);
+        handler.on_slot_click(0, 1, SlotActionType::Pickup, &player);
+        assert_eq!(cursor(&handler).item.id, Item::DIAMOND.id);
+        assert_eq!(cursor(&handler).item_count, 2);
+
+        // Select index 0 (EMERALD), then left-click (`button = 0`) with empty cursor: picks up bundle AND resets selected_item to -1.
+        set_cursor(&handler, ItemStack::EMPTY.clone());
+        handler.set_selected_bundle_item_index(0, 0);
+        assert_eq!(
+            handler
+                .inventory
+                .get_stack(0)
+                .get_data_component::<BundleContentsImpl>()
+                .unwrap()
+                .get_selected_item_index(),
+            0
+        );
+        handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
+        assert_eq!(cursor(&handler).item.id, Item::BUNDLE.id);
+        assert_eq!(
+            cursor(&handler)
+                .get_data_component::<BundleContentsImpl>()
+                .unwrap()
+                .get_selected_item_index(),
+            BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+        );
     }
 }

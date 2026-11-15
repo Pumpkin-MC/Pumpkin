@@ -49,6 +49,7 @@ const DROWNED_HUNTS: &[Hunt] = &[
 ];
 
 pub const NAUTILUS_SHELL_CHANCE: f32 = 0.03;
+const ZOMBIE_NAUTILUS_JOCKEY_CHANCE: f32 = 0.5;
 const TRIDENT_ROLL: f32 = 0.9;
 const TRIDENT_WEIGHT: i32 = 10;
 const WEAPON_WEIGHTS: i32 = 16;
@@ -271,18 +272,50 @@ impl Mob for DrownedEntity {
             .entity
             .finalize_zombie_spawn(self, world, reason, group_data);
         let mob_entity = self.get_mob_entity();
-        let offhand_empty = mob_entity
-            .living_entity
-            .entity_equipment
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&EquipmentSlot::OFF_HAND)
-            .is_empty();
+        let (offhand_empty, main_hand_trident) = {
+            let equipment = mob_entity
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (
+                equipment.get(&EquipmentSlot::OFF_HAND).is_empty(),
+                equipment.get(&EquipmentSlot::MAIN_HAND).item == &Item::TRIDENT,
+            )
+        };
         if offhand_empty && rand::random::<f32>() < NAUTILUS_SHELL_CHANCE {
             mob_entity.set_item_slot_and_drop_when_killed(
                 &EquipmentSlot::OFF_HAND,
                 ItemStack::new(1, &Item::NAUTILUS_SHELL),
             );
+        }
+        let entity = self.get_entity();
+        if (reason == EntitySpawnReason::Natural || reason == EntitySpawnReason::Structure)
+            && main_hand_trident
+            && self.get_random().random::<f32>() < ZOMBIE_NAUTILUS_JOCKEY_CHANCE
+            && !self.entity.is_baby()
+            && !world
+                .get_biome(&entity.block_pos.load())
+                .has_tag(&tag::WorldgenBiome::MINECRAFT_MORE_FREQUENT_DROWNED_SPAWNS)
+        {
+            let zombie_nautilus = crate::entity::r#type::from_type(
+                &EntityType::ZOMBIE_NAUTILUS,
+                entity.pos.load(),
+                world,
+                uuid::Uuid::new_v4(),
+            );
+            if reason == EntitySpawnReason::Structure
+                && let Some(mob) = zombie_nautilus.get_mob()
+            {
+                mob.get_mob_entity()
+                    .persistence_required
+                    .store(true, Ordering::Relaxed);
+            }
+            zombie_nautilus
+                .get_entity()
+                .set_rotation(entity.yaw.load(), 0.0);
+            crate::entity::mob::spawn::finalize_spawn(&zombie_nautilus, world, reason, None);
+            mob_entity.set_pending_vehicle(zombie_nautilus);
         }
         group_data
     }

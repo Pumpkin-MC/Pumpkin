@@ -3,9 +3,9 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, CustomDataImpl, DamageImpl, DamageResistantImpl,
-    DataComponentImpl, EnchantmentsImpl, IDSet, MAX_ENCHANTMENT_LEVEL, MaxDamageImpl,
-    MaxStackSizeImpl, Rarity, RarityImpl, SwingAnimationImpl, ToolImpl, UnbreakableImpl,
-    UseCooldownImpl, get, get_mut, read_data,
+    DataComponentImpl, EnchantmentGlintOverrideImpl, EnchantmentsImpl, IDSet,
+    MAX_ENCHANTMENT_LEVEL, MaxDamageImpl, MaxStackSizeImpl, Rarity, RarityImpl, SwingAnimationImpl,
+    ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut, read_data,
 };
 
 use crate::item::Item;
@@ -205,9 +205,20 @@ impl ItemStack {
         false
     }
 
+    #[must_use]
     pub fn has_enchantments(&self) -> bool {
         self.get_data_component::<EnchantmentsImpl>()
             .is_some_and(|e| !e.enchantment.is_empty())
+    }
+
+    /// Vanilla `ItemStack.hasFoil`.
+    #[must_use]
+    pub fn has_foil(&self) -> bool {
+        self.get_data_component::<EnchantmentGlintOverrideImpl>()
+            .map_or_else(
+                || self.has_enchantments(),
+                |override_glint| override_glint.glint,
+            )
     }
 
     pub fn add_enchantment(&mut self, enchantment: &'static Enchantment, level: u16) {
@@ -283,6 +294,12 @@ impl ItemStack {
     pub fn get_max_stack_size(&self) -> u8 {
         self.get_data_component::<MaxStackSizeImpl>()
             .map_or(1, |value| value.size)
+    }
+
+    /// The stack returned to the crafting input after one item is consumed.
+    #[must_use]
+    pub fn crafting_remainder(&self) -> Option<Self> {
+        self.item.crafting_remainder.map(|item| Self::new(1, item))
     }
 
     #[must_use]
@@ -383,20 +400,14 @@ impl ItemStack {
         damage > 0.0
     }
 
-    /// Apply durability damage to this item and return the outcome.
-    /// Callers must check the return value to handle break broadcasts and item stack updates.
-    /// TODO: Restore `#[must_use]` once all callsites (esp. tool/mob block-hit/damage sites)
-    /// implement proper `DamageResult::Broken` handling instead of suppressing with `let _ =`.
-    /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
-    #[must_use]
-    pub fn damage_item(&mut self, amount: i32) -> DamageResult {
+    fn compute_durability_damage_applied(&self, amount: i32) -> Option<(i32, i32)> {
         if amount <= 0 || !self.is_damageable() || self.is_unbreakable() {
-            return DamageResult::Untouched;
+            return None;
         }
 
         let max_damage = self.get_max_damage().unwrap_or(0);
         if max_damage <= 0 {
-            return DamageResult::Untouched;
+            return None;
         }
 
         // Hoist armor check and enchantment level outside loop to avoid repeated lookups.
@@ -411,9 +422,19 @@ impl ItemStack {
             }
         }
 
-        if applied <= 0 {
+        (applied > 0).then_some((applied, max_damage))
+    }
+
+    /// Apply durability damage to this item and return the outcome.
+    /// Callers must check the return value to handle break broadcasts and item stack updates.
+    /// TODO: Restore `#[must_use]` once all callsites (esp. tool/mob block-hit/damage sites)
+    /// implement proper `DamageResult::Broken` handling instead of suppressing with `let _ =`.
+    /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
+    #[must_use]
+    pub fn damage_item(&mut self, amount: i32) -> DamageResult {
+        let Some((applied, max_damage)) = self.compute_durability_damage_applied(amount) else {
             return DamageResult::Untouched;
-        }
+        };
 
         let new_damage = self.get_damage().saturating_add(applied);
         if new_damage >= max_damage {
@@ -429,6 +450,25 @@ impl ItemStack {
             return DamageResult::Broken;
         }
 
+        self.set_damage(new_damage);
+        DamageResult::Damaged
+    }
+
+    /// Vanilla `ItemStack.hurtWithoutBreaking`: applies durability damage after Unbreaking,
+    /// clamping at `max_damage - 1` so the item never breaks from this call.
+    #[must_use]
+    pub fn damage_item_without_breaking(&mut self, amount: i32) -> DamageResult {
+        let Some((applied, max_damage)) = self.compute_durability_damage_applied(amount) else {
+            return DamageResult::Untouched;
+        };
+
+        let old_damage = self.get_damage();
+        let new_damage = old_damage
+            .saturating_add(applied)
+            .min((max_damage - 1).max(0));
+        if new_damage == old_damage {
+            return DamageResult::Untouched;
+        }
         self.set_damage(new_damage);
         DamageResult::Damaged
     }
@@ -1634,5 +1674,25 @@ mod tests {
         let loaded = ItemStack::read_item_stack(&compound).expect("failed to load item stack");
         assert_eq!(loaded.patch.len(), 1);
         assert_eq!(loaded.patch[0].0, DataComponent::Damage);
+    }
+
+    #[test]
+    fn damage_item_without_breaking_clamps_before_break() {
+        let mut trident = ItemStack::new(1, &Item::TRIDENT);
+        assert_eq!(trident.get_max_damage(), Some(250));
+
+        assert_eq!(
+            trident.damage_item_without_breaking(300),
+            DamageResult::Damaged
+        );
+        assert_eq!(trident.get_damage(), 249);
+        assert_eq!(trident.item_count, 1);
+        assert!(trident.next_damage_will_break());
+
+        assert_eq!(
+            trident.damage_item_without_breaking(1),
+            DamageResult::Untouched
+        );
+        assert_eq!(trident.get_damage(), 249);
     }
 }
