@@ -24,10 +24,24 @@ impl JavaVersions {
         plugin_name: &str,
         versions: impl IntoIterator<Item = JavaMinecraftVersion>,
     ) {
+        self.register_if(plugin_name, versions, || true);
+    }
+
+    /// `register`, skipped once `open` returns false.
+    pub(crate) fn register_if(
+        &self,
+        plugin_name: &str,
+        versions: impl IntoIterator<Item = JavaMinecraftVersion>,
+        open: impl FnOnce() -> bool,
+    ) {
         let mut guard = self
             .versions
             .write()
             .unwrap_or_else(PoisonError::into_inner);
+        // Checked under the lock, so an unload sweep can't miss the insert
+        if !open() {
+            return;
+        }
         let set = guard.entry(plugin_name.to_string()).or_default();
         set.clear();
         for version in versions {

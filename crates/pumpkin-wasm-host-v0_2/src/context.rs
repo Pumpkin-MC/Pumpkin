@@ -1763,10 +1763,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .into_iter()
             .map(crate::player::from_wasm_java_version)
             .collect();
-        context_res
-            .plugin_manager
-            .java_versions
-            .register(&context_res.get_metadata().name, native_versions);
+        context_res.register_java_versions(native_versions);
         Ok(())
     }
 
@@ -1776,10 +1773,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         protocols: Vec<u32>,
     ) -> wasmtime::Result<()> {
         let context_res = self.get(&context)?;
-        context_res
-            .plugin_manager
-            .bedrock_versions
-            .register(&context_res.get_metadata().name, protocols);
+        context_res.register_bedrock_versions(protocols);
         Ok(())
     }
 

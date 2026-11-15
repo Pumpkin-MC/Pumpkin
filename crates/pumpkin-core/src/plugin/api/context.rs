@@ -176,6 +176,23 @@ impl Context {
         services.insert(name.into(), service);
     }
 
+    /// Admits these Java client versions for this plugin, replacing its earlier set.
+    pub fn register_java_versions(
+        &self,
+        versions: impl IntoIterator<Item = pumpkin_util::version::JavaMinecraftVersion>,
+    ) {
+        self.plugin_manager
+            .java_versions
+            .register_if(&self.metadata.name, versions, || !self.is_closed());
+    }
+
+    /// Admits these Bedrock protocol numbers for this plugin, replacing its earlier set.
+    pub fn register_bedrock_versions(&self, protocols: impl IntoIterator<Item = u32>) {
+        self.plugin_manager
+            .bedrock_versions
+            .register_if(&self.metadata.name, protocols, || !self.is_closed());
+    }
+
     /// Retrieves a registered service by name and type.
     ///
     /// This method attempts to fetch a service previously registered under the given name,

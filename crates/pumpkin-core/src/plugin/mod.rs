@@ -56,7 +56,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 6;
+pub const PLUGIN_API_VERSION: u32 = 7;
 
 const PLUGIN_DIR: &str = "./plugins";
 
@@ -2407,8 +2407,6 @@ impl PluginManager {
         let children_unloading = !self.unload_children(name).await;
         let owner = self.loader_owner(&loader).await;
         let mut registrations = self.take_registrations(name).await;
-        self.java_versions.unregister(name);
-        self.bedrock_versions.unregister(name);
         context.unregister_commands();
         context.unregister_permissions();
 
@@ -2588,8 +2586,12 @@ impl PluginManager {
         .is_ok()
     }
 
-    /// Takes a plugin's handlers, services and loaders off and returns them.
+    /// Takes a plugin's handlers, services and loaders off and returns them, and drops its
+    /// client version registrations.
     async fn take_registrations(&self, source: &str) -> Registrations {
+        // Plain data, nothing to hold back for the library
+        self.java_versions.unregister(source);
+        self.bedrock_versions.unregister(source);
         let services = self.services.write().await.take_owned(source);
         let mut loaders = Vec::new();
         self.loaders.write().await.retain(|registered| {
