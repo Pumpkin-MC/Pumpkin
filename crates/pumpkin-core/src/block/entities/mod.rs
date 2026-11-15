@@ -355,7 +355,7 @@ pub fn create_block_entity_for_state(
     position: BlockPos,
 ) -> Option<Arc<dyn BlockEntity>> {
     use pumpkin_data::BlockState;
-    use pumpkin_data::block_properties::{HopperLikeProperties, StructureblockMode};
+    use pumpkin_data::block_properties::StructureblockMode;
 
     let state = BlockState::from_id(state_id);
     if state.block_entity_type == u16::MAX {
@@ -364,10 +364,6 @@ pub fn create_block_entity_for_state(
     let block = Block::from_state_id(state_id);
     let name = BLOCK_ENTITY_TYPES.get(state.block_entity_type as usize)?;
     match *name {
-        "hopper" if block == &Block::HOPPER => {
-            let facing = HopperLikeProperties::from_state_id(state_id).facing;
-            Some(Arc::new(hopper::HopperBlockEntity::new(position, facing)))
-        }
         "structure_block" => {
             let mode = structure_block::StructureBlockBlockEntity::mode_from_block_state(state_id)
                 .unwrap_or(StructureblockMode::Load);

@@ -405,8 +405,6 @@ impl BrewingStandBlockEntity {
     }
 }
 
-// TODO vanilla `WorldlyContainer`: hoppers fill the ingredient from above, bottles and fuel from the sides, and take
-// bottles from below (the ingredient only as a glass bottle). Without it they use any slot from any side.
 impl pumpkin_inventory::Inventory for BrewingStandBlockEntity {
     fn size(&self) -> usize {
         Self::INVENTORY_SIZE
