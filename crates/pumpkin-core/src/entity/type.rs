@@ -64,6 +64,7 @@ use crate::entity::mob::zoglin::ZoglinEntity;
 use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
 use crate::entity::mob::zombie::{drowned::DrownedEntity, husk::HuskEntity, zombie::ZombieEntity};
 use crate::entity::mob::zombified_piglin::ZombifiedPiglinEntity;
+use crate::entity::ominous_item_spawner::OminousItemSpawnerEntity;
 use crate::entity::passive::allay::AllayEntity;
 use crate::entity::passive::armadillo::ArmadilloEntity;
 use crate::entity::passive::axolotl::AxolotlEntity;
@@ -314,6 +315,7 @@ pub fn from_type(
         }
         id if id == EntityType::LIGHTNING_BOLT.id => Arc::new(LightningBoltEntity::new(entity)),
         id if id == EntityType::MARKER.id => MarkerEntity::new(entity),
+        id if id == EntityType::OMINOUS_ITEM_SPAWNER.id => OminousItemSpawnerEntity::new(entity),
         id if id == EntityType::INTERACTION.id => InteractionEntity::new(entity),
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
