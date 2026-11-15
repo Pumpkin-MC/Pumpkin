@@ -188,6 +188,10 @@ impl Mob for PufferfishEntity {
         }
     }
 
+    fn mob_receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn mob_player_collision(&self, player: &Arc<Player>) {
         let this: &dyn EntityBase = self;
         if !this.do_teams_allow_damage(player.as_ref()) {

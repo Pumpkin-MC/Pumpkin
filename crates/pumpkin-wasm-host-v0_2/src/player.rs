@@ -107,7 +107,7 @@ pub(crate) fn from_wit_server_link(
     Ok((label, link.url))
 }
 
-const fn to_wasm_java_version(
+pub(crate) const fn to_wasm_java_version(
     version: JavaMinecraftVersion,
 ) -> pumpkin::plugin::player::JavaMinecraftVersion {
     match version {
@@ -167,14 +167,76 @@ const fn to_wasm_java_version(
     }
 }
 
-const fn to_wasm_bedrock_version(
+pub(crate) const fn from_wasm_java_version(
+    version: pumpkin::plugin::player::JavaMinecraftVersion,
+) -> JavaMinecraftVersion {
+    match version {
+        pumpkin::plugin::player::JavaMinecraftVersion::V172 => JavaMinecraftVersion::V_1_7_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V176 => JavaMinecraftVersion::V_1_7_6,
+        pumpkin::plugin::player::JavaMinecraftVersion::V18 => JavaMinecraftVersion::V_1_8,
+        pumpkin::plugin::player::JavaMinecraftVersion::V19 => JavaMinecraftVersion::V_1_9,
+        pumpkin::plugin::player::JavaMinecraftVersion::V191 => JavaMinecraftVersion::V_1_9_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V192 => JavaMinecraftVersion::V_1_9_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V193 => JavaMinecraftVersion::V_1_9_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V110 => JavaMinecraftVersion::V_1_10,
+        pumpkin::plugin::player::JavaMinecraftVersion::V111 => JavaMinecraftVersion::V_1_11,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1111 => JavaMinecraftVersion::V_1_11_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V112 => JavaMinecraftVersion::V_1_12,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1121 => JavaMinecraftVersion::V_1_12_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1122 => JavaMinecraftVersion::V_1_12_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V113 => JavaMinecraftVersion::V_1_13,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1131 => JavaMinecraftVersion::V_1_13_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1132 => JavaMinecraftVersion::V_1_13_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V114 => JavaMinecraftVersion::V_1_14,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1141 => JavaMinecraftVersion::V_1_14_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1142 => JavaMinecraftVersion::V_1_14_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1143 => JavaMinecraftVersion::V_1_14_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1144 => JavaMinecraftVersion::V_1_14_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V115 => JavaMinecraftVersion::V_1_15,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1151 => JavaMinecraftVersion::V_1_15_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1152 => JavaMinecraftVersion::V_1_15_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V116 => JavaMinecraftVersion::V_1_16,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1161 => JavaMinecraftVersion::V_1_16_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1162 => JavaMinecraftVersion::V_1_16_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1163 => JavaMinecraftVersion::V_1_16_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1164 => JavaMinecraftVersion::V_1_16_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V117 => JavaMinecraftVersion::V_1_17,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1171 => JavaMinecraftVersion::V_1_17_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V118 => JavaMinecraftVersion::V_1_18,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1182 => JavaMinecraftVersion::V_1_18_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V119 => JavaMinecraftVersion::V_1_19,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1191 => JavaMinecraftVersion::V_1_19_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1193 => JavaMinecraftVersion::V_1_19_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1194 => JavaMinecraftVersion::V_1_19_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V120 => JavaMinecraftVersion::V_1_20,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1202 => JavaMinecraftVersion::V_1_20_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1203 => JavaMinecraftVersion::V_1_20_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1205 => JavaMinecraftVersion::V_1_20_5,
+        pumpkin::plugin::player::JavaMinecraftVersion::V121 => JavaMinecraftVersion::V_1_21,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1212 => JavaMinecraftVersion::V_1_21_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1214 => JavaMinecraftVersion::V_1_21_4,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1215 => JavaMinecraftVersion::V_1_21_5,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1216 => JavaMinecraftVersion::V_1_21_6,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1217 => JavaMinecraftVersion::V_1_21_7,
+        pumpkin::plugin::player::JavaMinecraftVersion::V1219 => JavaMinecraftVersion::V_1_21_9,
+        pumpkin::plugin::player::JavaMinecraftVersion::V12111 => JavaMinecraftVersion::V_1_21_11,
+        pumpkin::plugin::player::JavaMinecraftVersion::V261 => JavaMinecraftVersion::V_26_1,
+        pumpkin::plugin::player::JavaMinecraftVersion::V262 => JavaMinecraftVersion::V_26_2,
+        pumpkin::plugin::player::JavaMinecraftVersion::V263 => JavaMinecraftVersion::V_26_3,
+        pumpkin::plugin::player::JavaMinecraftVersion::Unknown => JavaMinecraftVersion::Unknown,
+    }
+}
+
+pub(crate) const fn to_wasm_bedrock_version(
     version: BedrockMinecraftVersion,
 ) -> pumpkin::plugin::player::BedrockMinecraftVersion {
     match version {
         BedrockMinecraftVersion::V_1_21 => pumpkin::plugin::player::BedrockMinecraftVersion::V121,
-        BedrockMinecraftVersion::V_1_26_51 | BedrockMinecraftVersion::V_1_26_60 => {
-            // The v0.1 ABI does not define this Bedrock version.
-            pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
+        BedrockMinecraftVersion::V_1_26_51 => {
+            pumpkin::plugin::player::BedrockMinecraftVersion::V12651
+        }
+        BedrockMinecraftVersion::V_1_26_60 => {
+            pumpkin::plugin::player::BedrockMinecraftVersion::V12660
         }
         BedrockMinecraftVersion::Unknown => {
             pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
@@ -1467,6 +1529,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    fn stop_all_sounds(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.stop_sound(None, None);
+        Ok(())
+    }
+
     fn spawn_particles(
         &mut self,
         player: Resource<Player>,
@@ -2106,6 +2174,29 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         }))
     }
 
+    fn get_last_death_location(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<(String, pumpkin::plugin::common::BlockPos)>> {
+        let player = self.get(&player)?;
+        let guard = player.last_death_location.lock_ignore_poison();
+        Ok(guard.as_ref().map(|(dim, pos)| {
+            (
+                dim.clone(),
+                pumpkin::plugin::common::BlockPos {
+                    x: pos.0.x,
+                    y: pos.0.y,
+                    z: pos.0.z,
+                },
+            )
+        }))
+    }
+
+    fn get_client_view_distance(&mut self, player: Resource<Player>) -> wasmtime::Result<u8> {
+        let player = self.get(&player)?;
+        Ok(player.config.load().view_distance.get())
+    }
+
     fn hide_player(
         &mut self,
         player: Resource<Player>,
@@ -2478,6 +2569,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.experience_points.load(Ordering::Relaxed))
     }
 
+    fn get_exp_to_level(&mut self, player: Resource<Player>) -> wasmtime::Result<i32> {
+        let player = self.get(&player)?;
+        let level = player.experience_level.load(Ordering::Relaxed);
+        Ok(pumpkin_util::math::experience::points_in_level(level))
+    }
+
     fn is_flying(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
         let player = self.get(&player)?;
         Ok(player.is_flying())
@@ -2793,6 +2890,28 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         }
     }
 
+    fn can_harvest_block(
+        &mut self,
+        player: Resource<Player>,
+        pos: pumpkin::plugin::world::BlockPos,
+    ) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        let internal_pos = pumpkin_util::math::position::BlockPos::new(pos.x, pos.y, pos.z);
+        let (block, state) = player.world().get_block_and_state(&internal_pos);
+        Ok(player.can_harvest(state, block))
+    }
+
+    fn get_mining_speed(
+        &mut self,
+        player: Resource<Player>,
+        pos: pumpkin::plugin::world::BlockPos,
+    ) -> wasmtime::Result<f32> {
+        let player = self.get(&player)?;
+        let internal_pos = pumpkin_util::math::position::BlockPos::new(pos.x, pos.y, pos.z);
+        let block = player.world().get_block(&internal_pos);
+        Ok(player.get_mining_speed(block))
+    }
+
     fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
@@ -2923,6 +3042,88 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         Ok(())
     }
 
+    async fn damage_item_in_slot(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        slot: pumpkin::plugin::world::EquipmentSlot,
+        amount: i32,
+    ) -> wasmtime::Result<bool> {
+        let player = accessor.get_res(&player)?;
+        let internal_slot = crate::living_entity::from_wit_equipment_slot(slot);
+        run_blocking(accessor, move || {
+            let Some(slot_index) = player.inventory().equipment_slot_index(&internal_slot) else {
+                return false;
+            };
+            let was_empty = player.inventory().get_slot(slot_index).is_empty();
+            if was_empty {
+                return false;
+            }
+            player.damage_item_in_slot(&internal_slot, amount);
+            player.inventory().get_slot(slot_index).is_empty()
+        })
+        .await
+    }
+
+    async fn damage_held_item(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        amount: i32,
+    ) -> wasmtime::Result<bool> {
+        let player = accessor.get_res(&player)?;
+        run_blocking(accessor, move || {
+            let slot_index = player.inventory().get_selected_slot() as usize;
+            if player.inventory().get_slot(slot_index).is_empty() {
+                return false;
+            }
+            player.damage_held_item(amount);
+            player.inventory().get_slot(slot_index).is_empty()
+        })
+        .await
+    }
+
+    async fn damage_item_stack(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        item: Resource<WitHostItemStack>,
+        amount: i32,
+    ) -> wasmtime::Result<bool> {
+        let stack_arc = accessor.get_res(&item)?;
+        let mut stack_clone = stack_arc.lock().await.clone();
+        let player = accessor.get_res(&player)?;
+        let (result, updated_stack) = run_blocking(accessor, move || {
+            let res = player.damage_item_stack(&mut stack_clone, amount);
+            (res, stack_clone)
+        })
+        .await?;
+        if result != pumpkin_data::item_stack::DamageResult::Untouched {
+            *stack_arc.lock().await = updated_stack;
+        }
+        Ok(result == pumpkin_data::item_stack::DamageResult::Broken)
+    }
+
+    async fn break_block(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        pos: pumpkin::plugin::world::BlockPos,
+    ) -> wasmtime::Result<bool> {
+        let player = accessor.get_res(&player)?;
+        let internal_pos = pumpkin_util::math::position::BlockPos::new(pos.x, pos.y, pos.z);
+        run_blocking(accessor, move || player.break_block(&internal_pos)).await
+    }
+
+    async fn swing_hand(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        hand: pumpkin::plugin::common::Hand,
+    ) -> wasmtime::Result<()> {
+        let player = accessor.get_res(&player)?;
+        let internal_hand = from_wasm_hand(hand);
+        run_blocking(accessor, move || {
+            player.swing_hand(internal_hand, true);
+        })
+        .await
+    }
+
     async fn set_ender_chest_item(
         accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
@@ -3006,7 +3207,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         if let Some(client) = player.client.java() {
             let packet =
                 pumpkin_protocol::java::client::play::CDeleteChat::from_signature(&signature);
-            client.send_packet(&packet).await;
+            client.try_send_packet(&packet);
         }
         Ok(())
     }
@@ -3020,7 +3221,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         if let Some(client) = player.client.java() {
             let packet =
                 pumpkin_protocol::java::client::play::CDeleteChat::from_cache_id(signature_id);
-            client.send_packet(&packet).await;
+            client.try_send_packet(&packet);
         }
         Ok(())
     }
@@ -3033,12 +3234,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let player = accessor.get_res(&player)?;
         if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
-            client
-                .send_packet(&pumpkin_protocol::java::client::play::CTransfer::new(
-                    &host,
-                    pumpkin_protocol::codec::var_int::VarInt(i32::from(port)),
-                ))
-                .await;
+            client.try_send_packet(&pumpkin_protocol::java::client::play::CTransfer::new(
+                &host,
+                pumpkin_protocol::codec::var_int::VarInt(i32::from(port)),
+            ));
         }
         Ok(())
     }
@@ -3551,6 +3750,35 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         Ok(to_wasm_java_version(client.version.load()))
     }
 
+    fn get_connection_id(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<u64> {
+        let player = self.get(&player)?.clone();
+
+        let client = player
+            .client
+            .java()
+            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+        Ok(client.id)
+    }
+
+    fn send_raw_packet(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+        packet_id: i32,
+        payload: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?.clone();
+
+        let client = player
+            .client
+            .java()
+            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+        client.try_enqueue_raw_packet_direct(packet_id, &payload);
+        Ok(())
+    }
+
     fn get_brand(
         &mut self,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
@@ -3687,7 +3915,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         packet: pumpkin::plugin::java_packets::ClientboundPacket,
     ) -> wasmtime::Result<()> {
-        let player = accessor.get_res(&player)?.clone();
+        let player = accessor.get_res(&player)?;
 
         let client = player
             .client
@@ -3697,7 +3925,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             &packet,
             pumpkin_data::packet::CURRENT_MC_VERSION,
         ) {
-            client.send_packet_now_data(bytes).await;
+            client.try_enqueue_packet_data(bytes);
         }
         Ok(())
     }
@@ -3725,7 +3953,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         pack: pumpkin::plugin::player::JavaResourcePack,
     ) -> wasmtime::Result<()> {
-        let player = accessor.get_res(&player)?.clone();
+        let player = accessor.get_res(&player)?;
 
         let uuid = Uuid::from_wit(&pack.id);
         let prompt_message = pack
@@ -3734,17 +3962,15 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             .transpose()?;
 
         if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
-            client
-                .send_packet(
-                    &pumpkin_protocol::java::client::play::CAddResourcePack::new(
-                        &uuid,
-                        &pack.url,
-                        &pack.hash,
-                        pack.forced,
-                        prompt_message,
-                    ),
-                )
-                .await;
+            client.try_send_packet(
+                &pumpkin_protocol::java::client::play::CAddResourcePack::new(
+                    &uuid,
+                    &pack.url,
+                    &pack.hash,
+                    pack.forced,
+                    prompt_message,
+                ),
+            );
         }
         Ok(())
     }
@@ -3754,16 +3980,14 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         id: pumpkin::plugin::uuid::Uuid,
     ) -> wasmtime::Result<()> {
-        let player = accessor.get_res(&player)?.clone();
+        let player = accessor.get_res(&player)?;
 
         let uuid = Uuid::from_wit(&id);
 
         if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
-            client
-                .send_packet(
-                    &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(Some(&uuid)),
-                )
-                .await;
+            client.try_send_packet(
+                &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(Some(&uuid)),
+            );
         }
         Ok(())
     }
@@ -3772,12 +3996,12 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
         accessor: &Accessor<PluginHostState, Self>,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<()> {
-        let player = accessor.get_res(&player)?.clone();
+        let player = accessor.get_res(&player)?;
 
         if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
-            client
-                .send_packet(&pumpkin_protocol::java::client::play::CRemoveResourcePack::new(None))
-                .await;
+            client.try_send_packet(
+                &pumpkin_protocol::java::client::play::CRemoveResourcePack::new(None),
+            );
         }
         Ok(())
     }
@@ -3811,26 +4035,22 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
                 match client.connection_state.load() {
                     pumpkin_protocol::ConnectionState::Config => {
-                        client
-                            .send_packet(
-                                &pumpkin_protocol::java::client::config::CConfigShowDialog::new(
-                                    pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
-                                        &protocol_dialog,
-                                    )),
-                                ),
-                            )
-                            .await;
+                        client.try_send_packet(
+                            &pumpkin_protocol::java::client::config::CConfigShowDialog::new(
+                                pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
+                                    &protocol_dialog,
+                                )),
+                            ),
+                        );
                     }
                     pumpkin_protocol::ConnectionState::Play => {
-                        client
-                            .send_packet(
-                                &pumpkin_protocol::java::client::play::CPlayShowDialog::new(
-                                    pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
-                                        &protocol_dialog,
-                                    )),
-                                ),
-                            )
-                            .await;
+                        client.try_send_packet(
+                            &pumpkin_protocol::java::client::play::CPlayShowDialog::new(
+                                pumpkin_protocol::IdOr::Value(DialogNBT::from_dialog(
+                                    &protocol_dialog,
+                                )),
+                            ),
+                        );
                     }
                     _ => {}
                 }
@@ -3867,18 +4087,14 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             if let pumpkin_core::net::ClientPlatform::Java(client) = player.client.as_ref() {
                 match client.connection_state.load() {
                     pumpkin_protocol::ConnectionState::Config => {
-                        client
-                            .send_packet(
-                                &pumpkin_protocol::java::client::config::CConfigClearDialog::new(),
-                            )
-                            .await;
+                        client.try_send_packet(
+                            &pumpkin_protocol::java::client::config::CConfigClearDialog::new(),
+                        );
                     }
                     pumpkin_protocol::ConnectionState::Play => {
-                        client
-                            .send_packet(
-                                &pumpkin_protocol::java::client::play::CPlayClearDialog::new(),
-                            )
-                            .await;
+                        client.try_send_packet(
+                            &pumpkin_protocol::java::client::play::CPlayClearDialog::new(),
+                        );
                     }
                     _ => {}
                 }
@@ -3951,6 +4167,46 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         } else {
             Ok(pumpkin::plugin::player::BedrockMinecraftVersion::Unknown)
         }
+    }
+
+    fn get_protocol_version(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<u32> {
+        let player = self.get(&player)?;
+
+        if let pumpkin_core::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+            Ok(client.protocol_version.load(Ordering::Relaxed))
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn get_connection_id(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<u64> {
+        let player = self.get(&player)?;
+
+        if let pumpkin_core::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+            Ok(client.id)
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn send_raw_packet(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        packet_id: u16,
+        payload: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?.clone();
+
+        if let pumpkin_core::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
+            client.try_enqueue_raw_packet_direct(packet_id, &payload);
+        }
+        Ok(())
     }
 
     fn get_ability(

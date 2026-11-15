@@ -30,6 +30,9 @@ mod attributes;
 mod banner_pattern;
 mod bedrock_biome;
 mod bedrock_creative;
+mod bedrock_jigsaw;
+mod bedrock_recipe;
+mod bedrock_voxel_shape;
 mod biome;
 mod bitsets;
 mod block;
@@ -92,6 +95,7 @@ mod statistic;
 mod structure_metadata;
 mod structure_template;
 mod structures;
+mod sulfur_cube_archetype;
 mod suspicious_effects;
 mod tag;
 mod template_pool;
@@ -109,6 +113,19 @@ mod world_event;
 
 /// Output directory where all generated Rust source files are written.
 pub const OUT_DIR: &str = "../../crates/pumpkin-data/src/generated";
+
+/// Finds assets beside the executable, falling back to the source checkout.
+fn asset_path(path: &str) -> std::path::PathBuf {
+    let assets = std::env::current_exe()
+        .expect("Failed to locate codegen executable")
+        .with_file_name("assets");
+    let assets = if assets.is_dir() {
+        assets
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets")
+    };
+    assets.join(path)
+}
 
 /// Entry point for the code generator. Runs all registered builder functions in parallel
 /// and writes their output to [`OUT_DIR`].
@@ -140,6 +157,9 @@ pub fn main() {
         (advancement::build, "advancement.rs"),
         (bedrock_biome::build, "bedrock_biome.rs"),
         (bedrock_creative::build, "bedrock_creative.rs"),
+        (bedrock_jigsaw::build, "bedrock_jigsaw.rs"),
+        (bedrock_recipe::build, "bedrock_recipe.rs"),
+        (bedrock_voxel_shape::build, "bedrock_voxel_shape.rs"),
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),
@@ -216,6 +236,7 @@ pub fn main() {
         (chat_type::build, "chat_type.rs"),
         (decorated_pot_pattern::build, "decorated_pot_pattern.rs"),
         (frog_variant::build, "frog_variant.rs"),
+        (sulfur_cube_archetype::build, "sulfur_cube_archetype.rs"),
         (instrument::build, "instrument.rs"),
         (trim_material::build, "trim_material.rs"),
         (trim_pattern::build, "trim_pattern.rs"),

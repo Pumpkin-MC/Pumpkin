@@ -55,6 +55,7 @@ use crate::entity::mob::skeleton::{
 };
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::mob::spider::SpiderEntity;
+use crate::entity::mob::sulfur_cube::SulfurCubeEntity;
 use crate::entity::mob::vex::VexEntity;
 use crate::entity::mob::vindicator::VindicatorEntity;
 use crate::entity::mob::warden::WardenEntity;
@@ -132,7 +133,6 @@ use crate::entity::{Entity, EntityBase, mob};
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_nbt::compound::NbtCompound;
-use std::sync::atomic::AtomicBool;
 use tracing::{debug, warn};
 
 #[expect(clippy::too_many_lines)]
@@ -261,6 +261,7 @@ pub fn from_type(
         id if id == EntityType::EGG.id => Arc::new(EggEntity::new(entity)),
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity),
         id if id == EntityType::SLIME.id => SlimeEntity::new(entity),
+        id if id == EntityType::SULFUR_CUBE.id => SulfurCubeEntity::new(entity),
         id if id == EntityType::SHULKER.id => ShulkerEntity::new(entity),
         id if id == EntityType::SHULKER_BULLET.id => {
             // Shulker bullets are normally spawned by ShulkerEntity directly;
@@ -297,8 +298,6 @@ pub fn from_type(
             let thrown = ThrownItemEntity {
                 entity,
                 owner: ProjectileOwner::none(),
-                collides_with_projectiles: false,
-                has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new_normal(thrown))
@@ -307,8 +306,6 @@ pub fn from_type(
             let thrown = ThrownItemEntity {
                 entity,
                 owner: ProjectileOwner::none(),
-                collides_with_projectiles: false,
-                has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new_breeze(thrown))

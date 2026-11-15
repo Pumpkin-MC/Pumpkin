@@ -694,6 +694,51 @@ impl RegionFile for AnvilRegion {
         Ok(this)
     }
 
+    fn has_chunk(&self, index: usize) -> bool {
+        self.staged.contains_key(&index) || self.locations[index] != 0
+    }
+
+    fn delete_chunk(&mut self, index: usize) -> std::io::Result<bool> {
+        let was_staged = self.staged.remove(&index).is_some();
+        let location = self.locations[index];
+        if location == 0 {
+            return Ok(was_staged);
+        }
+
+        let is_external = self.is_external_stub(location)?;
+        let old_location = self.locations[index];
+        let old_timestamp = self.timestamps[index];
+        self.locations[index] = 0;
+        self.timestamps[index] = 0;
+
+        if self.file.is_some() {
+            let header = self.header_bytes();
+            let file = self.file()?;
+            if let Err(err) = write_all_at(file, &header, 0) {
+                self.locations[index] = old_location;
+                self.timestamps[index] = old_timestamp;
+                return Err(err);
+            }
+            self.used_sectors
+                .set(sector_offset(location), sector_count(location), false);
+            if is_external {
+                let ext_path = self.external_path(index);
+                if let Err(err) = std::fs::remove_file(&ext_path)
+                    && err.kind() != std::io::ErrorKind::NotFound
+                {
+                    warn!("Failed to remove {}: {err}", ext_path.display());
+                }
+            }
+            self.truncate_unused_tail();
+            self.unsynced = true;
+        } else {
+            self.used_sectors
+                .set(sector_offset(location), sector_count(location), false);
+        }
+
+        Ok(true)
+    }
+
     fn read_chunk(&self, index: usize) -> Result<Option<AnvilChunkData>, ChunkReadingError> {
         if let Some(staged) = self.staged.get(&index) {
             return Ok(Some(staged.clone()));

@@ -981,13 +981,7 @@ fn execute_on_leasher_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let mut sources = Vec::new();
     if let Some(ref entity) = context.source.entity {
-        if let Some(leasher) = entity
-            .get_entity()
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
-        {
+        if let Some(leasher) = entity.get_entity().get_leash_holder() {
             let mut source = context.source.as_ref().clone();
             let name = leasher.get_name().get_text();
             let display_name = leasher.get_display_name();
@@ -1045,13 +1039,7 @@ fn execute_on_vehicle_modifier(
 ) -> crate::command::node::RedirectModifierResult {
     let mut sources = Vec::new();
     if let Some(ref entity) = context.source.entity {
-        if let Some(vehicle) = entity
-            .get_entity()
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
-        {
+        if let Some(vehicle) = entity.get_entity().get_vehicle() {
             let mut source = context.source.as_ref().clone();
             let name = vehicle.get_name().get_text();
             let display_name = vehicle.get_display_name();

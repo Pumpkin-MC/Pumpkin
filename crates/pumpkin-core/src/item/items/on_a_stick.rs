@@ -29,7 +29,7 @@ fn boost_vehicle(
         .vehicle
         .try_lock()
         .ok()
-        .and_then(|guard| guard.clone());
+        .and_then(|guard| guard.as_ref().and_then(std::sync::Weak::upgrade));
     if let Some(vehicle) = vehicle_opt
         && vehicle.get_entity().entity_type.id == entity_type_id
         && let Some(steerable) = vehicle.get_item_steerable()

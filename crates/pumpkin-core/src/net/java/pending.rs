@@ -19,11 +19,12 @@ use pumpkin_protocol::{
         packet_encoder::TCPNetworkEncoder,
         server::config::{
             SAcceptCodeOfConduct, SAcknowledgeFinishConfig, SClientInformationConfig,
-            SConfigCookieResponse, SConfigPong, SConfigResourcePack, SKnownPacks, SPluginMessage,
+            SConfigCookieResponse, SConfigPong, SConfigResourcePack, SKeepAlive, SKnownPacks,
+            SPluginMessage,
         },
     },
     packet::MultiVersionJavaPacket,
-    ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
+    ser::{NetworkReadExt, NetworkReadSliceExt, NetworkWriteExt, ReadingError},
 };
 use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
 use tokio::{
@@ -39,7 +40,7 @@ use crate::{
         EncryptionError, GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig,
         can_not_join,
     },
-    plugin::server::packet::{ConnectionPacketReceivedEvent, ConnectionPacketSentEvent},
+    plugin::server::packet::{JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent},
     server::Server,
 };
 
@@ -72,6 +73,7 @@ pub struct PendingConnection {
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
     pub vine_challenge: Option<[u8; 16]>,
+    pub velocity_message_id: Option<i32>,
     /// Whether a login was started. Used to reject a second `SLoginStart`, which
     /// would otherwise replace an already authenticated profile.
     pub login_started: bool,
@@ -129,6 +131,7 @@ impl PendingConnection {
             login_success_sent: false,
             verify_token: None,
             vine_challenge: None,
+            velocity_message_id: None,
             server,
         }
     }
@@ -211,7 +214,7 @@ impl PendingConnection {
         self.server.upgrade()
     }
 
-    /// Encoded as 26.3. `ConnectionPacketSentEvent` can rewrite it.
+    /// Encoded as 26.3. `JavaConnectionPacketSentEvent` can rewrite it.
     pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) {
         let mut packet_buf = Vec::new();
         if let Err(err) =
@@ -220,33 +223,45 @@ impl PendingConnection {
             error!("Failed to write packet: {err:?}");
             return;
         }
-        let Some(payload) = self.translate_outgoing(Bytes::from(packet_buf)).await else {
-            return;
-        };
-        if let Err(err) = self.network_writer.write_packet(payload).await {
+        let (payload, extras) = self.translate_outgoing(Bytes::from(packet_buf)).await;
+        if let Some(payload) = payload
+            && let Err(err) = self.network_writer.write_packet(payload).await
+        {
             warn!("Failed to send packet to client {}: {}", self.id, err);
+        }
+        for extra in extras {
+            if let Err(err) = self.network_writer.write_packet(extra).await {
+                warn!("Failed to send extra packet to client {}: {}", self.id, err);
+            }
         }
         let _ = self.network_writer.flush().await;
     }
 
-    /// `ConnectionPacketSentEvent` with the 26.3 packet. `None` when cancelled.
-    async fn translate_outgoing(&self, packet_data: Bytes) -> Option<Bytes> {
+    fn frame_raw_packet(packet_id: i32, payload: &[u8]) -> Option<Bytes> {
+        let mut framed = Vec::with_capacity(5 + payload.len());
+        framed.write_var_int(&VarInt(packet_id)).ok()?;
+        framed.extend_from_slice(payload);
+        Some(framed.into())
+    }
+
+    /// `JavaConnectionPacketSentEvent` with the 26.3 packet. `(None, extras)` when cancelled.
+    async fn translate_outgoing(&self, packet_data: Bytes) -> (Option<Bytes>, Vec<Bytes>) {
         let Some(server) = self.translating_server() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         if !server
             .plugin_manager
-            .has_handlers::<ConnectionPacketSentEvent>()
+            .has_handlers::<JavaConnectionPacketSentEvent>()
         {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         }
 
         let mut reader = &packet_data[..];
         let Ok(packet_id) = reader.get_var_int() else {
-            return Some(packet_data);
+            return (Some(packet_data), Vec::new());
         };
         let payload = packet_data.slice(packet_data.len() - reader.len()..);
-        let mut event = ConnectionPacketSentEvent::new(
+        let mut event = JavaConnectionPacketSentEvent::new(
             self.id,
             self.version.load(),
             self.connection_state.load(),
@@ -254,17 +269,22 @@ impl PendingConnection {
             payload,
         );
         server.plugin_manager.fire(&server, &mut event).await;
+        let extras = event
+            .extra_packets
+            .iter()
+            .filter_map(|(id, payload)| Self::frame_raw_packet(*id, payload))
+            .collect();
         if event.cancelled {
-            return None;
+            return (None, extras);
         }
 
-        let mut framed = Vec::with_capacity(5 + event.payload.len());
-        framed.write_var_int(&VarInt(event.packet_id)).ok()?;
-        framed.extend_from_slice(&event.payload);
-        Some(framed.into())
+        (
+            Self::frame_raw_packet(event.packet_id, &event.payload),
+            extras,
+        )
     }
 
-    /// `ConnectionPacketReceivedEvent` with the client's packet; handlers rewrite it to 26.3.
+    /// `JavaConnectionPacketReceivedEvent` with the client's packet; handlers rewrite it to 26.3.
     /// `None` when cancelled.
     async fn translate_incoming(&self, packet: &RawPacket) -> Option<RawPacket> {
         let unchanged = || RawPacket {
@@ -276,12 +296,12 @@ impl PendingConnection {
         };
         if !server
             .plugin_manager
-            .has_handlers::<ConnectionPacketReceivedEvent>()
+            .has_handlers::<JavaConnectionPacketReceivedEvent>()
         {
             return Some(unchanged());
         }
 
-        let mut event = ConnectionPacketReceivedEvent::new(
+        let mut event = JavaConnectionPacketReceivedEvent::new(
             self.id,
             self.version.load(),
             self.connection_state.load(),
@@ -316,7 +336,52 @@ impl PendingConnection {
         self.close();
     }
 
+    async fn read_haproxy_header(&mut self) -> bool {
+        let Some(reader) = self.network_reader.reader_mut() else {
+            return false;
+        };
+        let close_token = self.close_token.clone();
+        let result = tokio::select! {
+            () = close_token.cancelled() => {
+                debug!("Canceling pending connection HAProxy header read");
+                return false;
+            },
+            () = tokio::time::sleep(HANDSHAKE_IDLE_TIMEOUT) => {
+                debug!(
+                    "Client {} sent no HAProxy header for {}s, dropping it",
+                    self.id,
+                    HANDSHAKE_IDLE_TIMEOUT.as_secs()
+                );
+                return false;
+            },
+            res = crate::net::proxy::haproxy::read_header(reader) => res,
+        };
+
+        match result {
+            Ok(Some(address)) => {
+                debug!("Updated address from HAProxy header for client {}", self.id);
+                self.address = address;
+                true
+            }
+            Ok(None) => true,
+            Err(err) => {
+                debug!(
+                    "Failed to read HAProxy header from client {}: {}",
+                    self.id, err
+                );
+                false
+            }
+        }
+    }
+
     pub async fn handle_login_sequence(&mut self, server: &Arc<Server>) -> PacketHandlerResult {
+        if server.advanced_config.networking.proxy.enabled
+            && server.advanced_config.networking.proxy.haproxy.enabled
+            && !self.read_haproxy_header().await
+        {
+            return PacketHandlerResult::Stop;
+        }
+
         while let Some(packet) = self.get_packet().await {
             if !self.packet_limiter.check_packet() {
                 warn!(
@@ -545,6 +610,10 @@ impl PendingConnection {
                 self.handle_known_packs(server).await;
                 Ok(None)
             }
+            id if id == SKeepAlive::to_id(version) => {
+                let _keep_alive = SKeepAlive::read(&mut payload, &version)?;
+                Ok(None)
+            }
             id if id == SConfigResourcePack::to_id(version) => {
                 self.handle_resource_pack_response(
                     server,
@@ -580,14 +649,6 @@ impl PendingConnection {
         client_information: SClientInformationConfig<'_>,
     ) {
         debug!("Handling client settings");
-        if client_information.view_distance <= 0 {
-            self.kick(TextComponent::text(
-                "Cannot have zero or negative view distance!",
-            ))
-            .await;
-            return;
-        }
-
         if let (Ok(main_hand), Ok(chat_mode)) = (
             Hand::try_from(client_information.main_hand.0),
             ChatMode::try_from(client_information.chat_mode.0),
@@ -613,7 +674,8 @@ impl PendingConnection {
         debug!("Handling plugin message");
         if plugin_message.channel.starts_with(BRAND_CHANNEL_PREFIX) {
             debug!("Got a client brand");
-            match core::str::from_utf8(plugin_message.data) {
+            let mut brand_slice = plugin_message.data;
+            match brand_slice.get_str_bounded_borrowed(256) {
                 Ok(brand) => self.brand = Some(brand.to_string()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
             }
@@ -633,7 +695,7 @@ impl PendingConnection {
                 | ResourcePackResponseResult::DownloadSuccess
                 | ResourcePackResponseResult::Discarded
                 | ResourcePackResponseResult::Unknown(_) => {
-                    self.send_known_packs(server).await;
+                    self.start_known_packs(server).await;
                 }
                 ResourcePackResponseResult::Accepted => {}
                 ResourcePackResponseResult::Declined => {
@@ -641,7 +703,7 @@ impl PendingConnection {
                         self.kick(TextComponent::text("Required resource pack was declined"))
                             .await;
                     } else {
-                        self.send_known_packs(server).await;
+                        self.start_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::DownloadFail => {
@@ -649,7 +711,7 @@ impl PendingConnection {
                         self.kick(TextComponent::text("Failed to download resource pack"))
                             .await;
                     } else {
-                        self.send_known_packs(server).await;
+                        self.start_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::InvalidUrl => {

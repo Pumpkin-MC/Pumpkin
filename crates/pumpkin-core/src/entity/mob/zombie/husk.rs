@@ -1,9 +1,13 @@
 use pumpkin_data::BlockState;
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
+use crate::entity::mob::equipment::RegionalDifficulty;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
     Entity, EntityBase,
@@ -31,35 +35,42 @@ impl HuskEntity {
         let zombie = Self { entity };
         Arc::new(zombie)
     }
-
-    #[must_use]
-    pub fn with_can_break_doors(entity: Entity, can_break_doors: bool) -> Arc<Self> {
-        let entity = ZombieEntityBase::with_can_break_doors(entity, can_break_doors);
-        let zombie = Self { entity };
-        Arc::new(zombie)
-    }
 }
 
 const CAMEL_HUSK_JOCKEY_CHANCE: f32 = 0.1;
+const HUNGER_TICKS_PER_DIFFICULTY: i32 = 140;
 
 impl Mob for HuskEntity {
+    crate::zombie_mob_hooks!(entity);
+
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
         reason: EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
-        let group_data = self.default_finalize_spawn(world, group_data);
+        let group_data = self
+            .entity
+            .finalize_zombie_spawn(self, world, reason, group_data);
+        let mut rng = self.get_random();
+        let difficulty_modifier =
+            RegionalDifficulty::at(world, self.get_entity().pos.load()).special_multiplier;
+        if reason != EntitySpawnReason::Conversion {
+            self.get_mob_entity().set_can_pick_up_loot(
+                rng.random::<f32>() < MobEntity::MAX_PICKUP_LOOT_CHANCE * difficulty_modifier,
+            );
+        }
         let entity = self.get_entity();
         let pos = entity.pos.load();
         let block_pos = entity.block_pos.load();
-        if reason == EntitySpawnReason::Natural
+        if group_data.is_some()
+            && reason == EntitySpawnReason::Natural
             && world.is_space_empty(EntityType::CAMEL_HUSK.get_spawn_aabb(
                 f64::from(block_pos.0.x) + 0.5,
                 f64::from(block_pos.0.y),
                 f64::from(block_pos.0.z) + 0.5,
             ))
-            && self.get_random().random::<f32>() < CAMEL_HUSK_JOCKEY_CHANCE
+            && rng.random::<f32>() < CAMEL_HUSK_JOCKEY_CHANCE
         {
             self.get_mob_entity().set_item_slot(
                 &EquipmentSlot::MAIN_HAND,
@@ -78,35 +89,66 @@ impl Mob for HuskEntity {
         group_data
     }
 
-    fn xp_reward(&self) -> u32 {
-        self.entity.xp_reward()
-    }
-
-    fn can_hold_item(&self, stack: &ItemStack) -> bool {
-        self.entity.can_hold_item(stack)
-    }
-
     fn wants_to_pick_up(&self, stack: &ItemStack) -> bool {
         super::wants_to_pick_up(self, stack)
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.ambient_sound
     }
 
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityHuskStep, 0.15, 1.0);
     }
 
-    fn get_mob_entity(&self) -> &MobEntity {
-        &self.entity.mob_entity
+    fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
+        if !self.entity.do_hurt_target(self, target) {
+            return false;
+        }
+        let main_hand_empty = self
+            .get_mob_entity()
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&EquipmentSlot::MAIN_HAND)
+            .is_empty();
+        if main_hand_empty && let Some(living) = target.get_living_entity() {
+            let world = self.get_entity().world.load_full();
+            let difficulty =
+                RegionalDifficulty::at(&world, self.get_entity().pos.load()).effective_difficulty;
+            living.add_effect(Effect {
+                effect_type: &StatusEffect::HUNGER,
+                duration: HUNGER_TICKS_PER_DIFFICULTY * difficulty as i32,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            });
+        }
+        true
     }
 
-    fn spawn_as_baby(&self) -> bool {
-        self.entity.spawn_as_baby()
+    fn post_tick(&self) {
+        self.entity
+            .tick_drowning(self, &EntityType::ZOMBIE, WorldEvent::SoundHuskToZombie);
+    }
+
+    fn populate_default_equipment_slots(
+        &self,
+        world: &Arc<World>,
+        difficulty: &RegionalDifficulty,
+    ) {
+        self.entity
+            .populate_default_equipment_slots(world, difficulty);
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.entity.mob_write_nbt(nbt);
+        self.entity.write_nbt(nbt);
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.entity.mob_read_nbt(nbt);
+        self.entity.read_nbt(self, nbt);
     }
 }

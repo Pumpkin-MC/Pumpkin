@@ -136,7 +136,7 @@ impl Behavior for AnimalMakeLove {
             .load()
             .squared_distance_to_vec(&partner.get_entity().pos.load());
         if distance < BREED_RANGE * BREED_RANGE && tick.time >= self.spawn_child_at_time {
-            BreedGoal::breed(tick.mob, partner.as_ref());
+            BreedGoal::breed(tick.mob, partner.as_ref(), Some(tick.state));
             tick.state.erase(types::BREED_TARGET.id());
             if let Some(partner_mob) = partner.get_mob() {
                 partner_mob
