@@ -1255,7 +1255,7 @@ impl BlockRegistry {
         if state.block_entity_type != u16::MAX
             && world.get_block_entity(position).is_none()
             && let Some(entity) =
-                crate::block::entities::create_block_entity(state.block_entity_type, *position)
+                crate::block::entities::create_block_entity_for_state(state.id, *position)
         {
             world.add_block_entity(entity);
         }

@@ -138,6 +138,11 @@ pub trait BlockEntity: Any + Send + Sync {
     }
 
     fn set_block_state(&mut self, _block_state: BlockStateId) {}
+
+    /// Runs post-load side effects matching vanilla `BlockEntity.loadAdditional` when NBT is
+    /// applied to a live block entity in a world.
+    fn on_nbt_loaded(&self, _world: &Arc<World>, _previous: Option<&dyn BlockEntity>) {}
+
     fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
         if let Some(inventory) = self.get_inventory() {
             world.scatter_inventory(position, &inventory);
@@ -329,6 +334,41 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
 #[must_use]
 pub fn has_block_block_entity(block: &Block) -> bool {
     BLOCK_ENTITY_TYPES.contains(&block.name)
+}
+
+#[must_use]
+pub fn create_block_entity_for_state(
+    state_id: BlockStateId,
+    position: BlockPos,
+) -> Option<Arc<dyn BlockEntity>> {
+    use pumpkin_data::BlockState;
+    use pumpkin_data::block_properties::{HopperLikeProperties, StructureblockMode};
+
+    let state = BlockState::from_id(state_id);
+    if state.block_entity_type == u16::MAX {
+        return None;
+    }
+    let block = Block::from_state_id(state_id);
+    let name = BLOCK_ENTITY_TYPES.get(state.block_entity_type as usize)?;
+    match *name {
+        "hopper" if block == &Block::HOPPER => {
+            let facing = HopperLikeProperties::from_state_id(state_id).facing;
+            Some(Arc::new(hopper::HopperBlockEntity::new(position, facing)))
+        }
+        "structure_block" => {
+            let mode = structure_block::StructureBlockBlockEntity::mode_from_block_state(state_id)
+                .unwrap_or(StructureblockMode::Load);
+            Some(Arc::new(
+                structure_block::StructureBlockBlockEntity::new_with_mode(position, mode),
+            ))
+        }
+        "command_block" => Some(Arc::new(command_block::CommandBlockEntity::new(
+            position,
+            true,
+            block == &Block::CHAIN_COMMAND_BLOCK,
+        ))),
+        _ => create_block_entity(state.block_entity_type, position),
+    }
 }
 
 #[must_use]

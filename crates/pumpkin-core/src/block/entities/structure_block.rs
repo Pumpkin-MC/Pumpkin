@@ -721,6 +721,10 @@ impl BlockEntity for StructureBlockBlockEntity {
         self.dirty.store(false, Ordering::Relaxed);
     }
 
+    fn on_nbt_loaded(&self, world: &Arc<World>, _previous: Option<&dyn BlockEntity>) {
+        self.sync_block_state_mode(world);
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -785,7 +789,11 @@ impl StructureBlockBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             mode_to_legacy_name(mode).to_string();
         self.mark_dirty();
+        self.sync_block_state_mode(world);
+    }
 
+    pub fn sync_block_state_mode(&self, world: &Arc<World>) {
+        let mode = self.mode();
         let state_id = world.get_block_state_id(&self.position);
         if Block::from_state_id(state_id) == &Block::STRUCTURE_BLOCK {
             let mut props = StructureBlockLikeProperties::from_state_id(state_id);
