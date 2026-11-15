@@ -3,11 +3,17 @@
 This directory contains a number of different data files used to help support connecting via Bedrock Edition clients (including Java => Bedrock remapping).
 
 - `block_states.nbt`
-    - converted from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `block_palette.nbt` into concatenated Bedrock network NBT; the same dump supplies `runtime_item_states.json`, `item_components.nbt`, `creative_items.json`, and `recipes.json.gz`.
+    - converted from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `block_palette.nbt` into concatenated Bedrock network NBT; the same dump supplies `runtime_item_states.json`, `item_components.nbt`, `creative_items.json`, `recipes.json.gz`, `jigsaw_structure_data.nbt`, and `voxel_shapes.json.gz`.
     - Provides a listing of all blocks and block states that exist in Bedrock. Used to build a mapping from Java block states to Bedrock ones by matching (string) identifiers and data components.
 - `recipes.json.gz`
     - minified and gzip-compressed from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `recipes.json` (mined from BDS).
     - Validated and converted by `pumpkin-codegen` into the static `CCraftingData` wire sections and stonecutter lookup table.
+- `jigsaw_structure_data.nbt`
+    - downloaded from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `jigsaw_structure_data.nbt` (gzip-compressed BDS jigsaw rules, processors, structure sets, and template pools).
+    - Validated and converted by `pumpkin-codegen` into the static `CJigsawStructureData` Bedrock network NBT payload.
+- `voxel_shapes.json.gz`
+    - minified and gzip-compressed from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `voxel_shapes.json` (mined from BDS).
+    - Validated and converted by `pumpkin-codegen` into the static `CVoxelShapes` wire payload.
 - `blocks.nbt`
     - downloaded from [GeyserMC/mappings for Java 26.3 and Bedrock 26.60](https://github.com/GeyserMC/mappings/blob/b4cec82d49fe75f222e1ad6dc0fd2a23ee89626c/blocks.nbt)
     - Defines the exact Bedrock block identifier and property mappings for every Java Edition block state ID. Used in code generation to translate Java block states to Bedrock counterparts.
