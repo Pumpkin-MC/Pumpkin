@@ -7,6 +7,7 @@ use pumpkin_data::{
     fluid::Fluid,
     game_event::GameEvent,
     recipes::{CookingRecipeKind, get_cooking_recipe_with_ingredient},
+    sound::{Sound, SoundCategory},
     tag::{self, Taggable},
     world::WorldEvent,
 };
@@ -22,7 +23,8 @@ use crate::{
     block::{
         BlockBehaviour, BlockIsReplacing, GetInsideCollisionShapeArgs,
         GetStateForNeighborUpdateArgs, OnEntityCollisionArgs, OnPlaceArgs, OnProjectileHitArgs,
-        PathComputationType, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
+        PathComputationType, PlaceLiquidArgs, PlacedArgs, UseWithItemArgs,
+        registry::BlockActionResult,
     },
     entity::EntityBase,
 };
@@ -33,6 +35,13 @@ pub struct CampfireBlock;
 
 impl CampfireBlock {
     const SMOKE_DISTANCE: i32 = 5;
+
+    fn douse(args: &PlaceLiquidArgs<'_>) {
+        args.world.emit_game_event(
+            GameEvent::BlockChange.name(),
+            args.position.to_centered_f64(),
+        );
+    }
 
     #[must_use]
     pub fn is_lit_campfire(block: &Block, state_id: BlockStateId) -> bool {

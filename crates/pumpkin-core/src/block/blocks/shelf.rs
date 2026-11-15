@@ -4,7 +4,6 @@ use std::sync::Arc;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::{AcaciaShelfLikeProperties, HorizontalFacing, SideChainPart};
 use pumpkin_data::data_component_impl::{EquipmentSlot, UseEffectsImpl};
-use pumpkin_data::fluid::Fluid;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
@@ -15,15 +14,14 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::entities::shelf::ShelfBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs, OnNeighborUpdateArgs,
-    OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
+    BlockBehaviour, GetComparatorOutputArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+    OnStateReplacedArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;

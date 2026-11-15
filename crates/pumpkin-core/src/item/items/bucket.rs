@@ -18,7 +18,6 @@ use pumpkin_data::{
     item_stack::ItemStack,
     sound::{Sound, SoundCategory},
     statistic::StatisticCategory,
-    tag::{self, Taggable},
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::compound::NbtCompound;
@@ -142,7 +141,7 @@ pub(crate) fn create_filled_result(
         if player.inventory.insert_stack_anywhere(&mut filled) {
             player.sync_inventory_to_client();
         }
-    } else if stack.item_count == 1 && player.gamemode.load() != GameMode::Creative {
+    } else if stack.item_count == 1 && !player.has_infinite_materials() {
         *stack = filled;
     } else {
         stack.decrement_unless_creative(player.gamemode.load(), 1);
@@ -440,34 +439,39 @@ pub(crate) fn try_place_filled_bucket(
         return Some(place_pos);
     }
 
-    if can_waterlog_target {
-        let state_id = if target_block.has_tag(&tag::Block::MINECRAFT_CAMPFIRES) {
-            let mut props = pumpkin_data::block_properties::CampfireLikeProperties::from_state_id(
-                target_state.id,
-            );
-            if props.lit {
-                world.play_sound(
-                    Sound::EntityGenericExtinguishFire,
-                    SoundCategory::Blocks,
-                    &place_pos.to_centered_f64(),
-                );
-                world.emit_game_event(GameEvent::BlockChange.name(), place_pos.to_centered_f64());
-                props.lit = false;
-            }
-            props.waterlogged = true;
-            props.to_state_id(target_block)
-        } else {
-            target_block
-                .set_waterlogged(target_state.id, true)
-                .unwrap_or(target_state.id)
-        };
-        world.set_block_state(&place_pos, state_id, BlockFlags::NOTIFY_ALL);
-        world.schedule_fluid_tick(&Fluid::WATER, place_pos, 5, TickPriority::Normal);
-        return Some(place_pos);
-    }
-
-    if !target_state.is_air() && !target_state.is_liquid() {
-        world.break_block(&place_pos, None, BlockFlags::NOTIFY_ALL);
+    if can_place_in_container {
+        // Vanilla ignores placeLiquid's result: bucket use succeeds for kelp and full containers.
+        let _ = world.block_registry.place_liquid(PlaceLiquidArgs {
+            world,
+            block,
+            state_id: state.id,
+            position: &place_pos,
+            fluid,
+        });
+    } else {
+        let (_, previous_fluid_state) = world.get_fluid_and_fluid_state(&place_pos);
+        let cause = player.and_then(|player| world.get_player_by_uuid(player.gameprofile.id));
+        if !state.is_air()
+            && !state.is_liquid()
+            && world
+                .break_block(&place_pos, cause.as_ref(), BlockFlags::NOTIFY_ALL)
+                .is_none()
+        {
+            return None;
+        }
+        let fluid_state_id = fluid_block.default_state.id;
+        if world
+            .set_block_state_if(
+                &place_pos,
+                fluid_state_id,
+                BlockFlags::NOTIFY_ALL,
+                |current| current != fluid_state_id,
+            )
+            .is_none()
+            && !previous_fluid_state.is_source
+        {
+            return None;
+        }
     }
     Some(place_pos)
 }
@@ -541,7 +545,7 @@ pub(crate) fn dispense_filled_bucket_at(
     bucket_stack: &ItemStack,
 ) -> bool {
     let Some(place_pos) =
-        try_place_liquid(world, bucket_stack.item, dispenser_pos, direction, false)
+        try_place_filled_bucket(world, None, bucket_stack.item, dispenser_pos, direction)
     else {
         return false;
     };
