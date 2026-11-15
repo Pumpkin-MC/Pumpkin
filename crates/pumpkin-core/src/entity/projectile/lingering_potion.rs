@@ -1,6 +1,5 @@
 use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::splash_potion::extinguish_fire_if_water_potion;
 use crate::{
@@ -29,8 +28,6 @@ impl LingeringPotionEntity {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
         };
 
@@ -65,6 +62,10 @@ impl LingeringPotionEntity {
 }
 
 impl EntityBase for LingeringPotionEntity {
+    fn hurt_knockback_direction(&self, hurt: &Entity) -> Option<(f64, f64)> {
+        super::knockback_away_from(self.get_entity(), hurt)
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.thrown.owner)
     }
@@ -83,8 +84,8 @@ impl EntityBase for LingeringPotionEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {

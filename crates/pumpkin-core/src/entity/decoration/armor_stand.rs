@@ -247,6 +247,10 @@ impl ArmorStandEntity {
 }
 
 impl EntityBase for ArmorStandEntity {
+    fn can_hit(&self) -> bool {
+        !self.get_entity().is_removed() && !self.is_marker()
+    }
+
     fn can_be_seen_by_anyone(&self) -> bool {
         !self.is_invisible() && !self.is_marker()
     }

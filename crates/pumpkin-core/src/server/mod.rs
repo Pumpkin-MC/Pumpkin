@@ -75,6 +75,8 @@ pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
     pub telemetry_config: TelemetryConfig,
+    /// Tracks active and completed player session durations for anonymous telemetry.
+    pub telemetry_sessions: crate::telemetry::TelemetrySessionTracker,
 
     pub data: VanillaData,
 
@@ -327,6 +329,7 @@ impl Server {
             basic_config,
             advanced_config,
             telemetry_config,
+            telemetry_sessions: crate::telemetry::TelemetrySessionTracker::default(),
             data: vanilla_data,
             plugin_manager: Arc::new(PluginManager::new(plugin_loaders)),
             permission_manager,
@@ -736,6 +739,18 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
+    fn load_player_world(
+        &self,
+        id: &uuid::Uuid,
+    ) -> Option<(Arc<World>, Option<pumpkin_nbt::compound::NbtCompound>)> {
+        let first_world = self.worlds.load().first().cloned()?;
+        let Ok(Some(mut data)) = self.player_data_storage.load_data(id) else {
+            return Some((first_world, None));
+        };
+        let world = self.saved_login_world(&mut data).unwrap_or(first_world);
+        Some((world, Some(data)))
+    }
+
     pub fn add_player(
         self: &Arc<Self>,
         client: Arc<ClientPlatform>,
@@ -748,16 +763,7 @@ impl Server {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .gamemode;
 
-        let first_world = self.worlds.load().first().cloned()?;
-        let mut nbt = self
-            .player_data_storage
-            .load_data(&profile.id)
-            .ok()
-            .flatten();
-        let world = nbt
-            .as_mut()
-            .and_then(|data| self.saved_login_world(data))
-            .unwrap_or(first_world);
+        let (world, nbt) = self.load_player_world(&profile.id)?;
 
         let mut player = Player::new(
             client,
@@ -778,6 +784,8 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        // Joining already sends play packets, which must reach `PacketSentEvent` for translation.
+        player.client.set_player(player.clone());
         let player_clone = player.clone();
         self.spawn_task(async move {
             let properties = player_clone.gameprofile.properties.load().clone();
@@ -808,6 +816,7 @@ impl Server {
                 player.screen_handler_sync_handler.store_player(player.clone());
                 if !self.admit_player(&world, &player) {
                     player.kick(DisconnectReason::Shutdown, &TextComponent::text("Server stopped"));
+                    player.client.clear_player();
                     return None;
                 }
                 Some({
@@ -836,6 +845,9 @@ impl Server {
                         Some(player.gameprofile.name.clone()),
                     );
                     self.management_hub.broadcast_player_joined(&player_dto);
+                    if self.telemetry_config.enabled {
+                        self.telemetry_sessions.record_join(player.gameprofile.id);
+                    }
 
                     (player, world)
                 })
@@ -843,12 +855,16 @@ impl Server {
 
             'cancelled: {
                 player.kick(DisconnectReason::Kicked, &event.kick_message);
+                player.client.clear_player();
                 None
             }
         }}
     }
 
     pub fn remove_player(&self, player: &Player) {
+        if self.telemetry_config.enabled {
+            self.telemetry_sessions.record_leave(player);
+        }
         let player_dto = crate::net::management::dto::PlayerDto::new(
             Some(player.gameprofile.id),
             Some(player.gameprofile.name.clone()),
