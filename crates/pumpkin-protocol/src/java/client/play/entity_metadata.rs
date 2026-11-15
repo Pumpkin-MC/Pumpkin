@@ -570,6 +570,27 @@ mod tests {
     }
 
     #[test]
+    fn copper_golem_metadata_uses_distinct_action_and_weather_serializers() {
+        use pumpkin_data::tracked_data::copper_golem;
+
+        let version = JavaMinecraftVersion::V_26_3;
+        for (weather, action, expected) in [
+            (0, 0, [16, 38, 0, 17, 37, 0]),
+            (3, 4, [16, 38, 3, 17, 37, 4]),
+        ] {
+            let mut bytes = Vec::new();
+            Metadata::new(copper_golem::WEATHER_STATE, VarInt(weather))
+                .write(&mut bytes, &version)
+                .unwrap();
+            Metadata::new(copper_golem::COPPER_GOLEM_STATE, VarInt(action))
+                .write(&mut bytes, &version)
+                .unwrap();
+            // Java 26.3: WeatherState uses serializer 38, CopperGolemState uses 37.
+            assert_eq!(bytes, expected);
+        }
+    }
+
+    #[test]
     fn particle_metadata_id_stays_latest_for_26_3() {
         let (particle_id, data) = encoded_particle(JavaMinecraftVersion::V_26_3);
 

@@ -13,6 +13,7 @@ pub struct ChestBlockEntity {
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
+    pub(crate) golem_reserved: AtomicBool,
 
     // Viewer
     viewers: ViewerCountTracker,
