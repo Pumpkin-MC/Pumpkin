@@ -14,7 +14,7 @@ use crate::block::blocks::plant::tree_grower::TreeGrower;
 use crate::block::{
     BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
 };
-use crate::plugin::api::events::world::structure_grow::{StructureGrowEvent, TreeType};
+use crate::plugin::{StructureGrowEvent, TreeType};
 use crate::world::World;
 
 #[pumpkin_block_from_tag("minecraft:saplings")]

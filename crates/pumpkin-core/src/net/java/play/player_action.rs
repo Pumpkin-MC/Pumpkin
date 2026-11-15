@@ -35,10 +35,10 @@ impl JavaClient {
 
                     if let Some(server_arc) = world.server.upgrade() {
                         let mut interact_event = PlayerInteractEvent::new(
-                            player,
+                            player.clone(),
                             InteractAction::LeftClickBlock,
-                            block,
                             Some(position),
+                            block,
                         );
                         server_arc
                             .plugin_manager
@@ -52,13 +52,12 @@ impl JavaClient {
                             return;
                         }
 
-                        let mut event =
-                            crate::plugin::api::events::block::block_damage::BlockDamageEvent::new(
-                                player.clone(),
-                                block,
-                                position,
-                                false,
-                            );
+                        let mut event = crate::plugin::BlockDamageEvent::new(
+                            player.clone(),
+                            block,
+                            position,
+                            false,
+                        );
                         server_arc
                             .plugin_manager
                             .fire_blocking(&server_arc, &mut event);
@@ -175,7 +174,7 @@ impl JavaClient {
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
                     if let Some(server_arc) = world.server.upgrade() {
-                        let mut abort_event = crate::plugin::api::events::block::block_damage_abort::BlockDamageAbortEvent::new(
+                        let mut abort_event = crate::plugin::BlockDamageAbortEvent::new(
                             player.clone(),
                             player_action.position,
                             world.clone(),

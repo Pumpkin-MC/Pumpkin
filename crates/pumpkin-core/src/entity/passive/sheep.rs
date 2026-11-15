@@ -351,7 +351,7 @@ impl Mob for SheepEntity {
             let entity = self.get_entity();
             let world = entity.world.load();
             if let Some(server) = world.server.upgrade() {
-                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                let mut event = crate::plugin::PlayerShearEntityEvent {
                     player: player.clone(),
                     entity_id: entity.entity_id,
                     hand: 0,

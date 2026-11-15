@@ -2,7 +2,7 @@ use std::sync::{Arc, Weak};
 
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;

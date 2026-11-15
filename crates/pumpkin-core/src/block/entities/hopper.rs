@@ -223,10 +223,8 @@ impl HopperBlockEntity {
     fn suck_in_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
         let pos_up = &self.position.up();
-        let mut search_event = crate::plugin::api::events::inventory::hopper_inventory_search::HopperInventorySearchEvent::new(
-            self.position,
-            *pos_up,
-        );
+        let mut search_event =
+            crate::plugin::HopperInventorySearchEvent::new(self.position, *pos_up);
         if let Some(server) = world.server.upgrade() {
             server
                 .plugin_manager
@@ -284,12 +282,11 @@ impl HopperBlockEntity {
                         (stack.is_empty(), stack.item.registry_key.to_string())
                     };
                     if !is_empty {
-                        let mut pickup_event =
-                            crate::plugin::api::events::inventory::inventory_pickup_item::InventoryPickupItemEvent::new(
-                                self.position,
-                                item_entity.get_entity().entity_id,
-                                registry_key,
-                            );
+                        let mut pickup_event = crate::plugin::InventoryPickupItemEvent::new(
+                            self.position,
+                            item_entity.get_entity().entity_id,
+                            registry_key,
+                        );
                         if let Some(server) = world.server.upgrade() {
                             server
                                 .plugin_manager
@@ -403,7 +400,7 @@ impl HopperBlockEntity {
                 if item.is_empty() {
                     continue;
                 }
-                let mut move_event = crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent::new(
+                let mut move_event = crate::plugin::InventoryMoveItemEvent::new(
                     self.position,
                     target_pos,
                     item.item.registry_key.to_string(),

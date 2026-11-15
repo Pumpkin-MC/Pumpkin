@@ -20,7 +20,7 @@ impl JavaClient {
         let target_id = packet.recipe_display_id.0 as usize;
         let use_max = packet.use_max_items;
 
-        let mut click_event = crate::plugin::api::events::player::player_recipe_book_click::PlayerRecipeBookClickEvent::new(
+        let mut click_event = crate::plugin::PlayerRecipeBookClickEvent::new(
             player.clone(),
             format!("display_{}", packet.recipe_display_id.0),
             use_max,

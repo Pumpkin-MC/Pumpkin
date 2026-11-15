@@ -3647,11 +3647,10 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
 
         let operation = async move {
             if let Some(server) = player.world().server.upgrade() {
-                let mut event =
-                    pumpkin_core::plugin::api::events::dialog::dialog_show::DialogShowEvent::new(
-                        player.clone(),
-                        protocol_dialog.clone(),
-                    );
+                let mut event = pumpkin_core::plugin::DialogShowEvent::new(
+                    player.clone(),
+                    protocol_dialog.clone(),
+                );
                 server.plugin_manager.fire(&server, &mut event).await;
                 if event.cancelled {
                     return Ok(());
@@ -3705,10 +3704,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
 
         let operation = async move {
             if let Some(server) = player.world().server.upgrade() {
-                let mut event =
-                    pumpkin_core::plugin::api::events::dialog::dialog_clear::DialogClearEvent::new(
-                        player.clone(),
-                    );
+                let mut event = pumpkin_core::plugin::DialogClearEvent::new(player.clone());
                 server.plugin_manager.fire(&server, &mut event).await;
                 if event.cancelled {
                     return Ok(());
@@ -3767,11 +3763,10 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
             if let Some(server) = player.world().server.upgrade()
                 && let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
             {
-                let mut event =
-                    pumpkin_core::plugin::api::events::player::player_kick::PlayerKickEvent::new(
-                        player_arc,
-                        reason.clone().to_pretty_console(),
-                    );
+                let mut event = pumpkin_core::plugin::PlayerKickEvent::new(
+                    player_arc,
+                    reason.clone().to_pretty_console(),
+                );
                 server.plugin_manager.fire(&server, &mut event).await;
                 if event.cancelled {
                     return Ok(());
@@ -4179,10 +4174,7 @@ impl pumpkin::plugin::player::HostBedrockPlayerWithStore<PluginHostState>
                 && let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
             {
                 let mut event =
-                    pumpkin_core::plugin::api::events::player::player_kick::PlayerKickEvent::new(
-                        player_arc,
-                        options.message.clone(),
-                    );
+                    pumpkin_core::plugin::PlayerKickEvent::new(player_arc, options.message.clone());
                 server.plugin_manager.fire(&server, &mut event).await;
                 if event.cancelled {
                     return Ok(());

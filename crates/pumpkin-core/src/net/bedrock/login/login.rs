@@ -204,14 +204,13 @@ impl BedrockClient {
             return false;
         }
 
-        let mut pre_login_event =
-            crate::plugin::api::events::player::async_player_pre_login::AsyncPlayerPreLoginEvent {
-                player_name: profile.name.clone(),
-                player_uuid: profile.id,
-                ip_address: self.address,
-                kick_message: TextComponent::text("Disconnected"),
-                cancelled: false,
-            };
+        let mut pre_login_event = crate::plugin::AsyncPlayerPreLoginEvent {
+            player_name: profile.name.clone(),
+            player_uuid: profile.id,
+            ip_address: self.address,
+            kick_message: TextComponent::text("Disconnected"),
+            cancelled: false,
+        };
         server
             .plugin_manager
             .fire(server, &mut pre_login_event)

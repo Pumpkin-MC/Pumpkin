@@ -62,10 +62,8 @@ impl BreathManager {
             if new_air != prev {
                 let server = player.world().server.upgrade();
                 if let Some(server) = server {
-                    let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
-                        player.entity_id(),
-                        new_air,
-                    );
+                    let mut event =
+                        crate::plugin::EntityAirChangeEvent::new(player.entity_id(), new_air);
                     server.plugin_manager.fire_blocking(&server, &mut event);
                     if event.cancelled {
                         return;
@@ -91,10 +89,8 @@ impl BreathManager {
             if new_air != prev {
                 let server = player.world().server.upgrade();
                 if let Some(server) = server {
-                    let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
-                        player.entity_id(),
-                        new_air,
-                    );
+                    let mut event =
+                        crate::plugin::EntityAirChangeEvent::new(player.entity_id(), new_air);
                     server.plugin_manager.fire_blocking(&server, &mut event);
                     if event.cancelled {
                         return;

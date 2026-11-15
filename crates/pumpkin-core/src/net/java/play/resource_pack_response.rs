@@ -3,7 +3,7 @@ use super::*;
 use pumpkin_protocol::java::server::play::{PlayResourcePackResult, SPlayResourcePack};
 use pumpkin_util::text::TextComponent;
 
-use crate::plugin::api::events::player::player_resource_pack_status::PlayerResourcePackStatusEvent;
+use crate::plugin::PlayerResourcePackStatusEvent;
 
 impl JavaClient {
     pub fn handle_play_resource_pack_response(

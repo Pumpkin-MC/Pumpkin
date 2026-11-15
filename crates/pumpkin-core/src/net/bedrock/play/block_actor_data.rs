@@ -24,11 +24,7 @@ fn apply_sign_text(
     };
     let lines = parse_bedrock_sign_lines(raw_text);
     let event_lines = lines.iter().map(ToString::to_string).collect();
-    let mut event = crate::plugin::api::events::block::sign_change::SignChangeEvent::new(
-        player.clone(),
-        block_pos,
-        event_lines,
-    );
+    let mut event = crate::plugin::SignChangeEvent::new(player.clone(), block_pos, event_lines);
     if let Some(server) = world.server.upgrade() {
         server.plugin_manager.fire_blocking(&server, &mut event);
     }

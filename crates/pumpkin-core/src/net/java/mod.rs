@@ -80,9 +80,9 @@ use crate::net::{
     ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketRateLimiter, PlayerConfig,
     decrement_pending_bytes,
 };
-use crate::plugin::api::events::world::chunk_send::ChunkSend;
-use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
-use crate::plugin::server::packet::PacketSentEvent;
+use crate::plugin::ChunkSendEvent;
+use crate::plugin::PacketSentEvent;
+use crate::plugin::PlayerCustomPayloadEvent;
 use crate::{error::PumpkinError, server::Server};
 
 /// Packet id followed by its payload, as the outgoing writer expects it.
@@ -360,7 +360,7 @@ impl JavaClient {
             return outcome;
         };
 
-        let valid_chunks = ChunkSend::filter(&server, &player.world(), chunks).await;
+        let valid_chunks = ChunkSendEvent::filter(&server, &player.world(), chunks).await;
         outcome.record_cancelled(chunks, &valid_chunks);
         if valid_chunks.is_empty() {
             return outcome;
@@ -853,9 +853,9 @@ impl JavaClient {
         let event_payload;
         let (packet_id, mut payload) = if server
             .plugin_manager
-            .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>(
-        ) {
-            let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
+            .has_handlers::<crate::plugin::PacketReceivedEvent>()
+        {
+            let mut event = crate::plugin::PacketReceivedEvent::new(
                 player.clone(),
                 packet.id,
                 packet.payload.clone(),
@@ -1203,12 +1203,12 @@ impl JavaClient {
                     if let Ok(channels_data) = std::str::from_utf8(payload.data) {
                         for ch in channels_data.split('\0') {
                             if !ch.is_empty() {
-                                let mut reg_event = crate::plugin::api::events::player::player_register_channel::PlayerRegisterChannelEvent::new(
+                                let mut reg_event = crate::plugin::PlayerRegisterChannelEvent::new(
                                     player.clone(),
                                     ch.to_string(),
                                 );
                                 server.plugin_manager.fire_blocking(server, &mut reg_event);
-                                let mut ch_event = crate::plugin::api::events::player::player_channel::PlayerChannelEvent {
+                                let mut ch_event = crate::plugin::PlayerChannelEvent {
                                     player: player.clone(),
                                     channel: ch.to_string(),
                                     cancelled: false,
@@ -1222,7 +1222,7 @@ impl JavaClient {
                 {
                     for ch in channels_data.split('\0') {
                         if !ch.is_empty() {
-                            let mut unreg_event = crate::plugin::api::events::player::player_unregister_channel::PlayerUnregisterChannelEvent::new(
+                            let mut unreg_event = crate::plugin::PlayerUnregisterChannelEvent::new(
                                 player.clone(),
                                 ch.to_string(),
                             );
@@ -1267,7 +1267,7 @@ impl JavaClient {
                     &mut payload,
                     &version,
                 )?;
-                let mut event = crate::plugin::api::events::dialog::dialog_click_action::DialogClickActionEvent::new(
+                let mut event = crate::plugin::DialogClickActionEvent::new(
                     player.clone(),
                     packet.action_id.to_string(),
                     packet.payload.map(Bytes::copy_from_slice),

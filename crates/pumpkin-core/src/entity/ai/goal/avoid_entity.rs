@@ -8,7 +8,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::ai::util::default_random_pos;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::{EntityBase, mob::Mob};
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 

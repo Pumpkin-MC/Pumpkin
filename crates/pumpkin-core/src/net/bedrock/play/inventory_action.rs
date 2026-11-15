@@ -312,10 +312,10 @@ impl BedrockClient {
                     }
 
                     let event = PlayerInteractEvent::new(
-                        player,
+                        player.clone(),
                         InteractAction::RightClickAir,
-                        &pumpkin_data::Block::AIR,
                         None,
+                        &pumpkin_data::Block::AIR,
                     );
 
                     let stack_for_use = held.clone();
@@ -441,7 +441,7 @@ impl BedrockClient {
                 };
 
                 let mut event = PlayerInteractEntityEvent::new(
-                    player,
+                    player.clone(),
                     target.clone(),
                     action,
                     None,

@@ -20,10 +20,10 @@ use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
 use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult, PacketRateLimiter};
 use crate::net::{lan_broadcast::LANBroadcast, management::ManagementServer, query};
+use crate::plugin::ServerCommandEvent;
 use crate::plugin::loader::PluginLoader;
-use crate::plugin::server::server_command::ServerCommandEvent;
 use crate::server::{Server, ticker::Ticker};
-use plugin::server::server_load::{LoadType, ServerLoadEvent};
+use plugin::{ServerLoadEvent, ServerLoadType};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
@@ -542,7 +542,10 @@ impl PumpkinServer {
 
         self.server
             .plugin_manager
-            .fire(&self.server, &mut ServerLoadEvent::new(LoadType::Startup))
+            .fire(
+                &self.server,
+                &mut ServerLoadEvent::new(ServerLoadType::Startup),
+            )
             .await;
 
         self.server.start_telemetry();

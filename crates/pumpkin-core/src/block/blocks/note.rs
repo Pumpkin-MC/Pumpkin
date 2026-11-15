@@ -31,7 +31,7 @@ impl NoteBlock {
         source: Option<&dyn EntityBase>,
     ) {
         if !is_base_block(props.instrument) || world.get_block_state(&pos.up()).is_air() {
-            let mut event = crate::plugin::api::events::block::note_play::NotePlayEvent::new(
+            let mut event = crate::plugin::NotePlayEvent::new(
                 *pos,
                 format!("{:?}", props.instrument),
                 props.note,

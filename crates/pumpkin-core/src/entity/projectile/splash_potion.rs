@@ -294,13 +294,12 @@ impl EntityBase for SplashPotionEntity {
             .map(|(c, _)| c.get_entity().entity_id)
             .collect();
         if let Some(server) = world.server.upgrade() {
-            let mut event =
-                crate::plugin::api::events::entity::potion_splash::PotionSplashEvent::new(
-                    self.get_entity().entity_id,
-                    block_pos,
-                    stack.item.registry_key.to_string(),
-                    affected_ids,
-                );
+            let mut event = crate::plugin::PotionSplashEvent::new(
+                self.get_entity().entity_id,
+                block_pos,
+                stack.item.registry_key.to_string(),
+                affected_ids,
+            );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;

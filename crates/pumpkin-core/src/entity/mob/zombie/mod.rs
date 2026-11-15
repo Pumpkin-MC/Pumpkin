@@ -21,7 +21,7 @@ use crate::entity::{
     ai::goal::look_at_entity::LookAtEntityGoal,
     ai::target_match::TargetMatch,
 };
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use crate::world::World;
 use crate::world::natural_spawner::is_spawn_position_ok;
 use pumpkin_data::attributes::Attributes;

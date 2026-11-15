@@ -291,7 +291,7 @@ impl ItemEntity {
             return;
         }
 
-        let mut event = crate::plugin::api::events::entity::item_merge::ItemMergeEvent {
+        let mut event = crate::plugin::ItemMergeEvent {
             entity_id: target.entity.entity_id,
             target_id: source.entity.entity_id,
             cancelled: false,
@@ -527,8 +527,7 @@ impl ItemEntity {
         if age >= LIFETIME {
             let entity_id = entity.entity_id;
             let world = entity.world.load_full();
-            let mut despawn_event =
-                crate::plugin::api::events::entity::item_despawn::ItemDespawnEvent::new(entity_id);
+            let mut despawn_event = crate::plugin::ItemDespawnEvent::new(entity_id);
             if let Some(server) = world.server.upgrade() {
                 server
                     .plugin_manager
@@ -697,11 +696,8 @@ impl EntityBase for ItemEntity {
             return false;
         }
 
-        let mut event = crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
-            entity.entity_id,
-            damage_type,
-            amount,
-        );
+        let mut event =
+            crate::plugin::EntityDamageEvent::new(entity.entity_id, amount, damage_type);
         if let Some(server) = world.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }

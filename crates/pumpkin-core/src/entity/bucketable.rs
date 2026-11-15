@@ -91,13 +91,12 @@ pub fn bucket_mob_pickup(
     }
     let world = entity.world.load();
     if let Some(server) = world.server.upgrade() {
-        let mut event =
-            crate::plugin::api::events::player::player_bucket_entity::PlayerBucketEntityEvent {
-                player: player.clone(),
-                entity_id: entity.entity_id,
-                bucket_item: mob.bucket_item().registry_key.to_string(),
-                cancelled: false,
-            };
+        let mut event = crate::plugin::PlayerBucketEntityEvent {
+            player: player.clone(),
+            entity_id: entity.entity_id,
+            bucket_item: mob.bucket_item().registry_key.to_string(),
+            cancelled: false,
+        };
         server.plugin_manager.fire_blocking(&server, &mut event);
         if event.cancelled {
             return Some(true);

@@ -698,15 +698,14 @@ impl<'a> Explosion<'a> {
             }
             BlockInteraction::Destroy | BlockInteraction::DestroyWithDecay => {
                 let center_pos = BlockPos::floored(self.pos.x, self.pos.y, self.pos.z);
-                let mut event =
-                    crate::plugin::api::events::block::block_explode::BlockExplodeEvent::new(
-                        center_pos,
-                        if self.power > 0.0 {
-                            1.0 / self.power
-                        } else {
-                            1.0
-                        },
-                    );
+                let mut event = crate::plugin::BlockExplodeEvent::new(
+                    center_pos,
+                    if self.power > 0.0 {
+                        1.0 / self.power
+                    } else {
+                        1.0
+                    },
+                );
                 if let Some(server) = world.server.upgrade() {
                     server.plugin_manager.fire_blocking(&server, &mut event);
                 }

@@ -18,13 +18,10 @@ use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
 use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
-use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
-    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
-};
 use crate::plugin::{
-    api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
+    EntityBreedEvent, EntityTargetEvent, EntityToggleSitEvent, PigZombieAngerEvent,
 };
+use crate::plugin::{PacketSentEvent, VehicleUpdateEvent};
 use crate::server::Server;
 use crate::world::World;
 

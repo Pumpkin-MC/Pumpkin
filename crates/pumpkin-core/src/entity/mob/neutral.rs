@@ -12,7 +12,7 @@ use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use crate::world::World;
 
 /// No anger pending.

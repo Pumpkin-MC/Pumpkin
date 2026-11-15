@@ -18,9 +18,7 @@ use crate::{
         },
     },
 };
-use pumpkin_core::plugin::api::events::dialog::{
-    DialogClearEvent, DialogClickActionEvent, DialogShowEvent,
-};
+use pumpkin_core::plugin::{DialogClearEvent, DialogClickActionEvent, DialogShowEvent};
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 #[allow(clippy::too_many_lines)]

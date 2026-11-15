@@ -8,7 +8,7 @@ impl JavaClient {
         player: &Arc<Player>,
         packet: &SRecipeBookChangeSettings,
     ) {
-        let mut event = crate::plugin::api::events::player::player_recipe_book_settings_change::PlayerRecipeBookSettingsChangeEvent::new(
+        let mut event = crate::plugin::PlayerRecipeBookSettingsChangeEvent::new(
             player.clone(),
             format!("{:?}", packet.book_type),
             packet.is_open,

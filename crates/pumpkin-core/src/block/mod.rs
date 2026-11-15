@@ -492,9 +492,9 @@ pub fn drop_loot(
         };
         let items = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
         if !items.is_empty() {
-            let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
+            let mut event = crate::plugin::BlockDropItemEvent {
                 block_pos: *pos,
-                world: world.clone(),
+                target_world: world.clone(),
                 player: None,
                 items,
                 cancelled: false,
@@ -528,9 +528,9 @@ pub fn drop_loot(
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         let amount = experience.experience.get(&mut random);
         if amount > 0 {
-            let mut event = crate::plugin::block::block_exp::BlockExpEvent {
+            let mut event = crate::plugin::BlockExpEvent {
                 block_pos: *pos,
-                world: world.clone(),
+                target_world: world.clone(),
                 exp: amount,
             };
             if let Some(server) = world.server.upgrade() {

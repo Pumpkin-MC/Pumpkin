@@ -47,6 +47,21 @@ interface common {
     /// A precise coordinate in the world (floats).
     type position = tuple<f64, f64, f64>;
 
+    /// A Minecraft block registry identifier (for example `minecraft:stone`).
+    type block-name = string;
+
+    /// A raw Minecraft block state identifier.
+    type block-state-id = u16;
+
+    /// A Minecraft entity type registry identifier (for example `minecraft:chicken`).
+    type entity-type-name = string;
+
+    /// A formatted IP socket address (`ip:port`).
+    type socket-address = string;
+
+    /// An immutable byte buffer payload.
+    type raw-bytes = list<u8>;
+
     /// Represents the hands of a player.
     enum hand {
         left,

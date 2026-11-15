@@ -51,7 +51,7 @@ use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::tnt::TNTEntity;
 use crate::entity::{Entity, EntityBase};
-use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
+use crate::plugin::PlayerShearEntityEvent;
 use crate::world::ExplosionInteraction;
 use crate::world::World;
 

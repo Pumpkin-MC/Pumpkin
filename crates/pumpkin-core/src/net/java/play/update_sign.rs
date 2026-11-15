@@ -40,11 +40,8 @@ impl JavaClient {
         ];
 
         if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id) {
-            let mut event = crate::plugin::api::events::block::sign_change::SignChangeEvent::new(
-                player_arc,
-                sign_data.location,
-                lines,
-            );
+            let mut event =
+                crate::plugin::SignChangeEvent::new(player_arc, sign_data.location, lines);
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
             }

@@ -6,10 +6,7 @@ use pumpkin_protocol::{
 
 use std::sync::Arc;
 
-use crate::{
-    net::java::pending::PendingConnection, plugin::server::list_ping::ServerListPingEvent,
-    server::Server,
-};
+use crate::{net::java::pending::PendingConnection, plugin::ServerListPingEvent, server::Server};
 use tracing::debug;
 
 impl PendingConnection {
@@ -40,7 +37,7 @@ impl PendingConnection {
             .as_ref()
             .map_or((0, 0), |players| (players.max, players.online));
 
-        let mut event = ServerListPingEvent::new(
+        let mut event = ServerListPingEvent::from_socket_addr(
             self.server_address.clone(),
             self.address,
             status_response.description.clone(),

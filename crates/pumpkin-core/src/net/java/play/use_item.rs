@@ -24,11 +24,10 @@ impl JavaClient {
 
         let mut item_in_hand = inventory.get_stack_in_hand(hand);
 
-        let mut consume_event =
-            crate::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent::new(
-                player.clone(),
-                item_in_hand.item.registry_key.to_string(),
-            );
+        let mut consume_event = crate::plugin::PlayerItemConsumeEvent::new(
+            player.clone(),
+            item_in_hand.item.registry_key.to_string(),
+        );
         server
             .plugin_manager
             .fire_blocking(server, &mut consume_event);
@@ -50,14 +49,19 @@ impl JavaClient {
         ));
 
         let event = if hit.is_miss {
-            PlayerInteractEvent::new(player, InteractAction::RightClickAir, &Block::AIR, None)
+            PlayerInteractEvent::new(
+                player.clone(),
+                InteractAction::RightClickAir,
+                None,
+                &Block::AIR,
+            )
         } else {
             let hit_pos = hit.block_pos;
             PlayerInteractEvent::new(
-                player,
+                player.clone(),
                 InteractAction::RightClickBlock,
-                player.world().get_block(&hit_pos),
                 Some(hit_pos),
+                player.world().get_block(&hit_pos),
             )
         };
         let (item_for_use, stack_for_use) = (item_in_hand.item, item_in_hand.clone());
@@ -162,8 +166,8 @@ impl JavaClient {
         let mut fish_event = PlayerFishEvent::new(
             player.clone(),
             None,
-            uuid::Uuid::nil(),
             String::new(),
+            uuid::Uuid::nil(),
             PlayerFishState::Fishing,
             hand,
             0,

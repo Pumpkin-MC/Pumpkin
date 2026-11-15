@@ -37,7 +37,7 @@ use crate::entity::{
     },
     player::Player,
 };
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use crate::world::{World, natural_spawner::is_valid_empty_spawn_block};
 
 use super::water_animal;

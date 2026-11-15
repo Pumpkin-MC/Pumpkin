@@ -132,7 +132,7 @@ impl BrewingStandBlockEntity {
 
         // Fire BrewEvent before mutating items
         if let Some(server) = world.server.upgrade() {
-            let mut brew_event = crate::plugin::api::events::inventory::brew::BrewEvent::new(
+            let mut brew_event = crate::plugin::BrewEvent::new(
                 self.position,
                 self.fuel.load(Ordering::Relaxed) as u8,
             );
@@ -325,10 +325,7 @@ impl BrewingStandBlockEntity {
         };
 
         let fuel_power = if let Some(server) = world.server.upgrade() {
-            let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
-                self.position,
-                20,
-            );
+            let mut fuel_event = crate::plugin::BrewingStandFuelEvent::new(self.position, 20);
             server
                 .plugin_manager
                 .fire_blocking(&server, &mut fuel_event);
@@ -640,11 +637,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         } else if brewable && self.fuel.load(Ordering::Relaxed) > 0 {
             let brew_time = if let Some(server) = world.server.upgrade() {
                 let mut start_event =
-                    crate::plugin::api::events::block::brewing_start::BrewingStartEvent::new(
-                        self.position,
-                        world.clone(),
-                        400,
-                    );
+                    crate::plugin::BrewingStartEvent::new(self.position, world.clone(), 400);
                 server
                     .plugin_manager
                     .fire_blocking(&server, &mut start_event);

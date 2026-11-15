@@ -107,10 +107,7 @@ impl ArrowEntity {
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
         entity.set_pos(owner_pos);
         let mut launch_event =
-            crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
-                entity.entity_id,
-                Some(shooter.entity_id),
-            );
+            crate::plugin::ProjectileLaunchEvent::new(entity.entity_id, Some(shooter.entity_id));
         if let Some(server) = entity.world.load().server.upgrade() {
             server
                 .plugin_manager
@@ -513,11 +510,7 @@ impl EntityBase for ArrowEntity {
             } => (hit_pos, Some(entity.get_entity().entity_id)),
         };
         let mut hit_event =
-            crate::plugin::api::events::entity::projectile_hit::ProjectileHitEvent::new(
-                self.entity.entity_id,
-                hit_pos,
-                hit_entity,
-            );
+            crate::plugin::ProjectileHitEvent::new(self.entity.entity_id, hit_pos, hit_entity);
         if let Some(server) = self.entity.world.load().server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut hit_event);
         }
@@ -562,10 +555,8 @@ impl EntityBase for ArrowEntity {
         if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
             && let Some(server) = player.world().server.upgrade()
         {
-            let mut event = crate::plugin::api::events::player::player_pickup_arrow::PlayerPickupArrowEvent::new(
-                player_arc,
-                self.entity.entity_id,
-            );
+            let mut event =
+                crate::plugin::PlayerPickupArrowEvent::new(player_arc, self.entity.entity_id);
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;

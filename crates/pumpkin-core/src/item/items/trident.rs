@@ -220,12 +220,11 @@ impl ItemBehaviour for TridentItem {
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
             && let Some(server) = world.server.upgrade()
         {
-            let mut event =
-                crate::plugin::api::events::player::player_riptide::PlayerRiptideEvent {
-                    player: player_arc,
-                    item_name: "trident".to_string(),
-                    cancelled: false,
-                };
+            let mut event = crate::plugin::PlayerRiptideEvent {
+                player: player_arc,
+                item_name: "trident".to_string(),
+                cancelled: false,
+            };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 player.living_entity.clear_active_hand();

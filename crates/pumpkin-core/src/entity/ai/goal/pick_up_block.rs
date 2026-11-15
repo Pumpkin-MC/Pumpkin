@@ -87,12 +87,11 @@ impl Goal for PickUpBlockGoal {
             return;
         }
 
-        let mut event =
-            crate::plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent::new(
-                entity.entity_id,
-                target_pos,
-                "minecraft:air".to_string(),
-            );
+        let mut event = crate::plugin::EntityChangeBlockEvent::new(
+            entity.entity_id,
+            target_pos,
+            "minecraft:air".to_string(),
+        );
         if let Some(server) = world.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }

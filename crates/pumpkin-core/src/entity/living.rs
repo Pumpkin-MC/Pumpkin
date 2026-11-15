@@ -923,12 +923,11 @@ impl LivingEntity {
 
     /// Picks up an item entity or XP orb.
     pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
-        let mut pickup_event =
-            crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
-                self.entity.entity_id,
-                item.entity_type.id.to_string(),
-                stack_amount as u8,
-            );
+        let mut pickup_event = crate::plugin::EntityPickupItemEvent::new(
+            self.entity.entity_id,
+            item.entity_type.id.to_string(),
+            stack_amount as u8,
+        );
         if let Some(server) = self.entity.world.load().server.upgrade() {
             server
                 .plugin_manager
@@ -1128,10 +1127,7 @@ impl LivingEntity {
             return;
         }
         let mut event =
-            crate::plugin::api::events::entity::entity_regain_health::EntityRegainHealthEvent::new(
-                self.entity.entity_id,
-                additional_health,
-            );
+            crate::plugin::EntityRegainHealthEvent::new(self.entity.entity_id, additional_health);
         if let Some(server) = self.entity.world.load().server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
@@ -1435,13 +1431,12 @@ impl LivingEntity {
             return;
         }
 
-        let mut effect_event =
-            crate::plugin::api::events::entity::entity_potion_effect::EntityPotionEffectEvent::new(
-                self.entity.entity_id,
-                effect.effect_type.translation_key.to_string(),
-                effect.duration,
-                effect.amplifier,
-            );
+        let mut effect_event = crate::plugin::EntityPotionEffectEvent::new(
+            self.entity.entity_id,
+            effect.effect_type.translation_key.to_string(),
+            effect.duration,
+            effect.amplifier,
+        );
         if let Some(server) = self.entity.world.load().server.upgrade() {
             server
                 .plugin_manager
@@ -2907,12 +2902,13 @@ impl LivingEntity {
                 if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
                     && let Some(server) = world.server.upgrade()
                 {
-                    let mut event =
-                        crate::plugin::api::events::entity::entity_death::PlayerDeathEvent::new(
-                            player_arc,
-                            final_death_message.clone(),
-                            0,
-                        );
+                    let keep_inventory = world.level_info.load().game_rules.keep_inventory;
+                    let mut event = crate::plugin::PlayerDeathEvent::new(
+                        player_arc,
+                        final_death_message.clone(),
+                        0,
+                        keep_inventory,
+                    );
                     server.plugin_manager.fire_blocking(&server, &mut event);
                     if event.cancelled {
                         return;
@@ -3097,9 +3093,7 @@ impl LivingEntity {
             // Clear the stack and use the totem of undying
             if stack.get_data_component::<DeathProtectionImpl>().is_some() {
                 let mut resurrect_event =
-                    crate::plugin::api::events::entity::entity_resurrect::EntityResurrectEvent::new(
-                        self.entity.entity_id,
-                    );
+                    crate::plugin::EntityResurrectEvent::new(self.entity.entity_id);
                 if let Some(server) = self.entity.world.load().server.upgrade() {
                     server
                         .plugin_manager
@@ -3761,11 +3755,7 @@ impl LivingEntity {
         amount = amount.max(0.0);
 
         let mut damage_event =
-            crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
-                self.entity.entity_id,
-                damage_type,
-                amount,
-            );
+            crate::plugin::EntityDamageEvent::new(self.entity.entity_id, amount, damage_type);
         if let Some(server) = self.entity.world.load().server.upgrade() {
             server
                 .plugin_manager
@@ -3777,14 +3767,13 @@ impl LivingEntity {
         amount = damage_event.damage;
 
         if let Some(damager) = source.or(cause) {
-            let mut by_entity_event =
-                crate::plugin::api::events::entity::entity_damage_by_entity::EntityDamageByEntityEvent {
-                    entity_id: self.entity.entity_id,
-                    damager_id: damager.get_entity().entity_id,
-                    damage: amount,
-                    cause: format!("{damage_type:?}"),
-                    cancelled: false,
-                };
+            let mut by_entity_event = crate::plugin::EntityDamageByEntityEvent {
+                entity_id: self.entity.entity_id,
+                damager_id: damager.get_entity().entity_id,
+                damage: amount,
+                cause: format!("{damage_type:?}"),
+                cancelled: false,
+            };
             if let Some(server) = self.entity.world.load().server.upgrade() {
                 server
                     .plugin_manager
@@ -3811,14 +3800,13 @@ impl LivingEntity {
                     p.z.floor() as i32,
                 ))
             });
-            let mut by_block_event =
-                crate::plugin::api::events::entity::entity_damage_by_block::EntityDamageByBlockEvent {
-                    entity_id: self.entity.entity_id,
-                    damager_pos,
-                    damage: amount,
-                    cause: format!("{damage_type:?}"),
-                    cancelled: false,
-                };
+            let mut by_block_event = crate::plugin::EntityDamageByBlockEvent {
+                entity_id: self.entity.entity_id,
+                damager_pos,
+                damage: amount,
+                cause: format!("{damage_type:?}"),
+                cancelled: false,
+            };
             if let Some(server) = self.entity.world.load().server.upgrade() {
                 server
                     .plugin_manager
@@ -4206,11 +4194,7 @@ impl LivingEntity {
         }
 
         if new_health <= 0.0 {
-            let mut death_event =
-                crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
-                    self.entity.entity_id,
-                    0,
-                );
+            let mut death_event = crate::plugin::EntityDeathEvent::new(self.entity.entity_id, 0);
             if let Some(server) = world.server.upgrade() {
                 server
                     .plugin_manager
@@ -4923,12 +4907,11 @@ impl LivingEntity {
 
         let new_pos = Vector3::new(x, y, z);
         if let Some(server) = world.server.upgrade() {
-            let mut event =
-                crate::plugin::api::events::entity::entity_teleport::EntityTeleportEvent::new(
-                    entity.entity_id,
-                    entity.pos.load(),
-                    new_pos,
-                );
+            let mut event = crate::plugin::EntityTeleportEvent::new(
+                entity.entity_id,
+                entity.pos.load(),
+                new_pos,
+            );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return false;

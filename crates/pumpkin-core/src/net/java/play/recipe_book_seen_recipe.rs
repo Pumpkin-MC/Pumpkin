@@ -8,7 +8,7 @@ impl JavaClient {
         player: &Arc<Player>,
         packet: &SRecipeBookSeenRecipe,
     ) {
-        let mut event = crate::plugin::api::events::player::player_recipe_discover::PlayerRecipeDiscoverEvent::new(
+        let mut event = crate::plugin::PlayerRecipeDiscoverEvent::new(
             player.clone(),
             format!("display_{}", packet.recipe_display_id.0),
         );

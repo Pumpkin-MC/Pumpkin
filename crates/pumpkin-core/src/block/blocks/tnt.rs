@@ -82,10 +82,7 @@ impl TNTBlock {
         if !world.level_info.load().game_rules.tnt_explodes {
             return None;
         }
-        let mut event = crate::plugin::api::events::block::tnt_prime::TNTPrimeEvent::new(
-            *location,
-            "REDSTONE".to_string(),
-        );
+        let mut event = crate::plugin::TntPrimeEvent::new(*location, "REDSTONE".to_string());
         if let Some(server) = world.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
@@ -94,12 +91,11 @@ impl TNTBlock {
         }
 
         let tnt = TNTEntity::primed(world, location, TNTEntity::DEFAULT_FUSE, source);
-        let mut prime_event =
-            crate::plugin::api::events::entity::explosion_prime::ExplosionPrimeEvent::new(
-                tnt.get_entity().entity_id,
-                TNTEntity::DEFAULT_POWER,
-                false,
-            );
+        let mut prime_event = crate::plugin::ExplosionPrimeEvent::new(
+            tnt.get_entity().entity_id,
+            TNTEntity::DEFAULT_POWER,
+            false,
+        );
         if let Some(server) = world.server.upgrade() {
             server
                 .plugin_manager

@@ -10,18 +10,13 @@ use crate::{
         SmithItemEventData, TradeSelectEventData,
     },
 };
-use pumpkin_core::plugin::inventory::{
-    brew::BrewEvent, brewing_stand_fuel::BrewingStandFuelEvent, craft_item::CraftItemEvent,
-    furnace_burn::FurnaceBurnEvent, furnace_extract::FurnaceExtractEvent,
-    furnace_smelt::FurnaceSmeltEvent, furnace_start_smelt::FurnaceStartSmeltEvent,
-    hopper_inventory_search::HopperInventorySearchEvent,
-    inventory_creative::InventoryCreativeEvent, inventory_drag::InventoryDragEvent,
-    inventory_interact::InventoryInteractEvent, inventory_move_item::InventoryMoveItemEvent,
-    inventory_open::InventoryOpenEvent, inventory_pickup_item::InventoryPickupItemEvent,
-    prepare_anvil::PrepareAnvilEvent, prepare_grindstone::PrepareGrindstoneEvent,
-    prepare_inventory_result::PrepareInventoryResultEvent,
-    prepare_item_craft::PrepareItemCraftEvent, prepare_smithing::PrepareSmithingEvent,
-    smith_item::SmithItemEvent, trade_select::TradeSelectEvent,
+use pumpkin_core::plugin::{
+    BrewEvent, BrewingStandFuelEvent, CraftItemEvent, FurnaceBurnEvent, FurnaceExtractEvent,
+    FurnaceSmeltEvent, FurnaceStartSmeltEvent, HopperInventorySearchEvent, InventoryCreativeEvent,
+    InventoryDragEvent, InventoryInteractEvent, InventoryMoveItemEvent, InventoryOpenEvent,
+    InventoryPickupItemEvent, PrepareAnvilEvent, PrepareGrindstoneEvent,
+    PrepareInventoryResultEvent, PrepareItemCraftEvent, PrepareSmithingEvent, SmithItemEvent,
+    TradeSelectEvent,
 };
 use pumpkin_wasm_host_common::state::PluginHostState;
 

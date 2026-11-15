@@ -31,12 +31,12 @@ fn fire_cauldron_change(
     pos: pumpkin_util::math::position::BlockPos,
     old_level: i32,
     new_level: i32,
-    reason: crate::plugin::block::cauldron_level_change::CauldronChangeReason,
+    reason: crate::plugin::CauldronChangeReason,
     entity: Option<std::sync::Arc<dyn crate::entity::EntityBase>>,
 ) -> bool {
-    let mut event = crate::plugin::block::cauldron_level_change::CauldronLevelChangeEvent {
+    let mut event = crate::plugin::CauldronLevelChangeEvent {
         block_pos: pos,
-        world: world.clone(),
+        target_world: world.clone(),
         old_level,
         new_level,
         reason,
@@ -82,7 +82,7 @@ impl BlockBehaviour for CauldronBlock {
                     *args.position,
                     0,
                     3,
-                    crate::plugin::block::cauldron_level_change::CauldronChangeReason::BucketEmpty,
+                    crate::plugin::CauldronChangeReason::BucketEmpty,
                     Some(Arc::clone(args.player) as Arc<dyn crate::entity::EntityBase>),
                 ) {
                     return BlockActionResult::Pass;

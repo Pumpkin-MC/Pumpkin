@@ -122,7 +122,7 @@ impl BlockEntity for CampfireBlockEntity {
                 if *total <= 0 {
                     let mut cooking_time = recipe.cookingtime;
                     if let Some(server) = world.server.upgrade() {
-                        let mut event = crate::plugin::api::events::block::campfire_start::CampfireStartEvent::new(
+                        let mut event = crate::plugin::CampfireStartEvent::new(
                             self.position,
                             world.clone(),
                             stack.clone(),
@@ -159,7 +159,7 @@ impl BlockEntity for CampfireBlockEntity {
 
             let mut result = ItemStack::new(recipe.result.count, result_item);
             if let Some(server) = world.server.upgrade() {
-                let mut event = crate::plugin::api::events::block::block_cook::BlockCookEvent::new(
+                let mut event = crate::plugin::BlockCookEvent::new(
                     self.position,
                     world.clone(),
                     stack.clone(),

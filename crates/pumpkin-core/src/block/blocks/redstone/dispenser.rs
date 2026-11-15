@@ -41,7 +41,7 @@ use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
 use crate::item::items::minecart::MinecartItem;
 use crate::item::items::spawn_egg::prepare_egg_mob;
-use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
+use crate::plugin::CreatureSpawnReason;
 use crate::world::World;
 
 use crate::block::entities::dispenser::DispenserBlockEntity;
@@ -296,7 +296,7 @@ impl DispenserBlock {
     const FIREWORK_PROJECTILE_UNCERTAINTY: f64 = 1.0;
 
     fn dispense(ctx: &DispenseContext<'_>, dispenser: &DispenserBlockEntity, item: &mut ItemStack) {
-        let mut event = crate::plugin::api::events::block::block_dispense::BlockDispenseEvent::new(
+        let mut event = crate::plugin::BlockDispenseEvent::new(
             *ctx.position,
             item.item.registry_key.to_string(),
         );

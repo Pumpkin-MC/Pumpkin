@@ -783,11 +783,7 @@ fn fire_custom_click_action(
 ) {
     let payload = payload.map(click_payload_bytes);
     let mut event =
-        crate::plugin::api::events::dialog::dialog_click_action::DialogClickActionEvent::new(
-            player.clone(),
-            id.to_string(),
-            payload,
-        );
+        crate::plugin::DialogClickActionEvent::new(player.clone(), id.to_string(), payload);
     server.plugin_manager.fire_blocking(server, &mut event);
 }
 

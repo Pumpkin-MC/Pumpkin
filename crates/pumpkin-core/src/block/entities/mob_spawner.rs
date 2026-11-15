@@ -183,11 +183,10 @@ impl BlockEntity for MobSpawnerBlockEntity {
                 let yaw = rand::random::<f32>() * 360.0;
                 entity.get_entity().set_rotation(yaw, 0.0);
 
-                let mut event =
-                    crate::plugin::api::events::entity::spawner_spawn::SpawnerSpawnEvent::new(
-                        entity.get_entity().entity_id,
-                        self.position,
-                    );
+                let mut event = crate::plugin::SpawnerSpawnEvent::new(
+                    entity.get_entity().entity_id,
+                    self.position,
+                );
                 if let Some(server) = world.server.upgrade() {
                     server.plugin_manager.fire_blocking(&server, &mut event);
                 }

@@ -15,13 +15,12 @@ impl JavaClient {
         let item_stack = packet
             .clicked_item
             .to_stack_for_version(&pumpkin_data::packet::CURRENT_MC_VERSION);
-        let mut creative_event =
-            crate::plugin::api::events::inventory::inventory_creative::InventoryCreativeEvent::new(
-                player.clone(),
-                packet.slot,
-                item_stack.item.registry_key.to_string(),
-                item_stack.item_count,
-            );
+        let mut creative_event = crate::plugin::InventoryCreativeEvent::new(
+            player.clone(),
+            packet.slot,
+            item_stack.item.registry_key.to_string(),
+            item_stack.item_count,
+        );
         if let Some(server) = player.world().server.upgrade() {
             server
                 .plugin_manager

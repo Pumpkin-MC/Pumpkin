@@ -10,7 +10,7 @@ use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
 use crate::entity::mob::neutral::{NeutralMob, find_by_uuid};
 use crate::entity::{EntityBase, mob::MobEntity};
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use rand::RngExt;

@@ -66,8 +66,7 @@ impl SpongeBlock {
         if water_blocks.is_empty() {
             false
         } else {
-            let mut event =
-                crate::plugin::api::events::block::sponge_absorb::SpongeAbsorbEvent::new(*position);
+            let mut event = crate::plugin::SpongeAbsorbEvent::new(*position);
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
             }

@@ -26,9 +26,9 @@ pub(crate) fn ring_bell(
     hit_direction: Option<HorizontalFacing>,
     entity: Option<Arc<dyn crate::entity::EntityBase>>,
 ) -> bool {
-    let mut event = crate::plugin::block::bell_ring::BellRingEvent {
+    let mut event = crate::plugin::BellRingEvent {
         block_pos: position,
-        world: world.clone(),
+        target_world: world.clone(),
         direction: hit_direction.map(|d| d.to_block_direction()),
         entity,
         cancelled: false,

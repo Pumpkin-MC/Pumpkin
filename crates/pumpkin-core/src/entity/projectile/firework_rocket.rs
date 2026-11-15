@@ -121,11 +121,10 @@ impl FireworkRocketEntity {
     pub fn explode_and_remove(&self, world: &World) {
         let entity = self.get_entity();
         if let Some(server) = world.server.upgrade() {
-            let mut event =
-                crate::plugin::api::events::entity::firework_explode::FireworkExplodeEvent {
-                    entity_id: entity.entity_id,
-                    cancelled: false,
-                };
+            let mut event = crate::plugin::FireworkExplodeEvent {
+                entity_id: entity.entity_id,
+                cancelled: false,
+            };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;
@@ -258,7 +257,7 @@ impl EntityBase for FireworkRocketEntity {
                     if let Some(player) = self.entity.owner.get_player(&world)
                         && let Some(server) = world.server.upgrade()
                     {
-                        let mut event = crate::plugin::api::events::player::player_elytra_boost::PlayerElytraBoostEvent {
+                        let mut event = crate::plugin::PlayerElytraBoostEvent {
                             player,
                             firework_id: entity.entity_id,
                             cancelled: false,

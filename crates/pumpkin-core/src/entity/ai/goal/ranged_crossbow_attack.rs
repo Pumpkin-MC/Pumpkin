@@ -131,12 +131,11 @@ impl RangedCrossbowAttackGoal {
         let arrow: Arc<dyn EntityBase> = Arc::new(arrow);
         let entity_id = entity.entity_id;
         if let Some(server) = world_full.server.upgrade() {
-            let mut event =
-                crate::plugin::api::events::entity::entity_shoot_bow::EntityShootBowEvent::new(
-                    entity_id,
-                    "minecraft:crossbow".to_string(),
-                    1.0,
-                );
+            let mut event = crate::plugin::EntityShootBowEvent::new(
+                entity_id,
+                "minecraft:crossbow".to_string(),
+                1.0,
+            );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;

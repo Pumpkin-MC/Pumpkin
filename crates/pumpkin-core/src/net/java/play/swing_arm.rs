@@ -14,11 +14,11 @@ impl JavaClient {
             return;
         };
 
-        let mut anim_event = crate::plugin::api::events::player::player_animation::PlayerAnimationEvent::new(
+        let mut anim_event = crate::plugin::PlayerAnimationEvent::new(
             player.clone(),
             match hand {
-                Hand::Left => crate::plugin::api::events::player::player_animation::PlayerAnimationType::ArmSwingOff,
-                Hand::Right => crate::plugin::api::events::player::player_animation::PlayerAnimationType::ArmSwingMain,
+                Hand::Left => crate::plugin::PlayerAnimationType::ArmSwingOff,
+                Hand::Right => crate::plugin::PlayerAnimationType::ArmSwingMain,
             },
         );
         server.plugin_manager.fire_blocking(server, &mut anim_event);
@@ -37,8 +37,12 @@ impl JavaClient {
         ));
 
         if hit.is_miss {
-            let event =
-                PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None);
+            let event = PlayerInteractEvent::new(
+                player.clone(),
+                InteractAction::LeftClickAir,
+                None,
+                &Block::AIR,
+            );
             send_cancellable_blocking! {{
                 &server;
                 event;
