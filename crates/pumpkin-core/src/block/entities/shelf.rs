@@ -114,6 +114,43 @@ impl BlockEntity for ShelfBlockEntity {
         )
     }
 
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let entries: Vec<(u8, ItemStack)> = items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| !item.is_empty())
+            .map(|(slot, item)| (slot as u8, item.clone()))
+            .collect();
+        if !entries.is_empty() {
+            stack.set_data_component(pumpkin_data::data_component_impl::ContainerImpl {
+                items: entries,
+            });
+        }
+    }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        let Some(container) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
+        else {
+            return;
+        };
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        items.fill_with(|| ItemStack::EMPTY.clone());
+        for (slot, item) in &container.items {
+            let idx = usize::from(*slot);
+            if idx < Self::INVENTORY_SIZE {
+                items[idx] = item.clone();
+            }
+        }
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -132,6 +169,29 @@ impl ShelfBlockEntity {
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             world: OnceLock::new(),
+        }
+    }
+
+    /// Vanilla `ShelfBlockEntity.swapItemNoUpdate`.
+    pub fn swap_item_no_update(&self, slot: usize, held_item_stack: ItemStack) -> ItemStack {
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        std::mem::replace(&mut items[slot], held_item_stack)
+    }
+
+    /// Vanilla `ShelfBlockEntity.setChanged(@Nullable Holder<GameEvent>)`.
+    pub fn mark_dirty_with_event(&self, event: Option<GameEvent>) {
+        self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
+        if let Some(world) = self.world.get().and_then(Weak::upgrade) {
+            if let Some(event) = event {
+                world.emit_game_event(event.name(), self.position.to_centered_f64());
+            }
+            if let Some(entity) = world.get_block_entity(&self.position) {
+                world.update_block_entity(&entity);
+            }
         }
     }
 }
@@ -193,17 +253,7 @@ impl Inventory for ShelfBlockEntity {
     }
 
     fn mark_dirty(&self) {
-        self.dirty.store(true, Ordering::Relaxed);
-        self.comparator_dirty.store(true, Ordering::Relaxed);
-        if let Some(world) = self.world.get().and_then(Weak::upgrade) {
-            world.emit_game_event(
-                GameEvent::BlockActivate.name(),
-                self.position.to_centered_f64(),
-            );
-            if let Some(entity) = world.get_block_entity(&self.position) {
-                world.update_block_entity(&entity);
-            }
-        }
+        self.mark_dirty_with_event(Some(GameEvent::BlockActivate));
     }
 
     fn as_any(&self) -> &dyn Any {
