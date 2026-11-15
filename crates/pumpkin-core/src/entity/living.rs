@@ -1903,11 +1903,8 @@ impl LivingEntity {
             self.fall_distance.store(0.0);
         }
 
-        // Vanilla Mob.isEffectiveAi: NoAI mobs don't travel, so they neither move nor fall.
-        let effective_ai = caller
-            .get_mob()
-            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai())
-            && !client_controlled;
+        // Vanilla Mob.isEffectiveAi / Mannequin.isEffectiveAi: non-effective AI entities don't travel.
+        let effective_ai = caller.is_effective_ai() && !client_controlled;
 
         if client_controlled {
             self.entity.velocity.store(Vector3::default());
@@ -1918,7 +1915,7 @@ impl LivingEntity {
 
         let suffocating = self.entity.tick_block_collisions(caller);
 
-        if suffocating {
+        if suffocating && self.entity.pose.load() != EntityPose::Sleeping {
             caller.damage(caller, 1.0, DamageType::IN_WALL);
         }
 

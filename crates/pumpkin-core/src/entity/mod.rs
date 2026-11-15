@@ -655,6 +655,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .is_some_and(LivingEntity::is_dead_or_dying)
     }
 
+    fn is_effective_ai(&self) -> bool {
+        self.get_mob()
+            .is_none_or(|mob| !mob.get_mob_entity().is_no_ai())
+    }
+
     fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
         None
     }
