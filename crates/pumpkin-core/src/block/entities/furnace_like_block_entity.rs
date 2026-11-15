@@ -398,7 +398,7 @@ macro_rules! impl_block_entity_for_cooking {
                         let mut burn_ticks = adjusted_fuel_ticks;
                         let mut burn_cancelled = false;
                         if let Some(server) = world.server.upgrade() {
-                            let mut burn_event = $crate::plugin::api::events::inventory::furnace_burn::FurnaceBurnEvent::new(
+                            let mut burn_event = $crate::plugin::FurnaceBurnEvent::new(
                                 self.position,
                                 bottom_item.item.registry_key.to_string(),
                                 adjusted_fuel_ticks as u32,
@@ -450,7 +450,7 @@ macro_rules! impl_block_entity_for_cooking {
                         let mut start_cancelled = false;
                         if self.get_cooking_time_spent() == 0 {
                             if let Some(server) = world.server.upgrade() {
-                                let mut start_event = $crate::plugin::api::events::inventory::furnace_start_smelt::FurnaceStartSmeltEvent::new(
+                                let mut start_event = $crate::plugin::FurnaceStartSmeltEvent::new(
                                     self.position,
                                     top_item.item.registry_key.to_string(),
                                     self.get_cooking_total_time() as u32,
@@ -474,7 +474,7 @@ macro_rules! impl_block_entity_for_cooking {
 
                                     let mut smelt_cancelled = false;
                                     if let Some(server) = world.server.upgrade() {
-                                        let mut smelt_event = $crate::plugin::api::events::inventory::furnace_smelt::FurnaceSmeltEvent::new(
+                                        let mut smelt_event = $crate::plugin::FurnaceSmeltEvent::new(
                                             self.position,
                                             top_item.item.registry_key.to_string(),
                                             cooking_recipe.result.id.to_string(),

@@ -10,7 +10,7 @@ use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::passive::animal::Animal;
 use crate::entity::player::Player;
-use crate::plugin::api::events::entity::entity_toggle_sit::EntityToggleSitEvent;
+use crate::plugin::EntityToggleSitEvent;
 
 /// Gate for goals vanilla runs only on wild animals.
 pub fn is_untamed(mob: &dyn Mob) -> bool {

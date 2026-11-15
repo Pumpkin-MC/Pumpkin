@@ -135,11 +135,7 @@ impl PistonBlock {
 
         // Extend Piston
         if r#type == 0 {
-            let mut event =
-                crate::plugin::api::events::block::block_piston::BlockPistonExtendEvent::new(
-                    *pos,
-                    format!("{dir:?}"),
-                );
+            let mut event = crate::plugin::BlockPistonExtendEvent::new(*pos, format!("{dir:?}"));
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
             }
@@ -173,11 +169,7 @@ impl PistonBlock {
         }
         // Reduce Piston
 
-        let mut event =
-            crate::plugin::api::events::block::block_piston::BlockPistonRetractEvent::new(
-                *pos,
-                format!("{dir:?}"),
-            );
+        let mut event = crate::plugin::BlockPistonRetractEvent::new(*pos, format!("{dir:?}"));
         if let Some(server) = world.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }

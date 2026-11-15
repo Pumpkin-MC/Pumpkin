@@ -20,7 +20,7 @@ use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::mob::neutral::find_by_uuid;
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 
 type FoxCheck = fn(&FoxEntity) -> bool;
 

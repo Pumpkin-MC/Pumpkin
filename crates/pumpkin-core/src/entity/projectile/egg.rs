@@ -2,7 +2,7 @@ use crate::entity::projectile::owner::ProjectileOwner;
 use pumpkin_data::damage::DamageType;
 use std::sync::RwLock;
 
-use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
+use crate::plugin::PlayerEggThrowEvent;
 use crate::{
     entity::{Entity, EntityBase, projectile::ThrownItemEntity, r#type::from_type},
     server::Server,

@@ -71,7 +71,7 @@ impl MangrovePropaguleBlock {
             props.stage = 1;
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         } else {
-            use crate::plugin::api::events::world::structure_grow::{StructureGrowEvent, TreeType};
+            use crate::plugin::{StructureGrowEvent, TreeType};
             let mut event = StructureGrowEvent::new(*pos, TreeType::Mangrove, bone_meal);
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);

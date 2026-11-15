@@ -19,6 +19,7 @@ serde_repr = { version = "0.1" }
 serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"] }
 
 wit-encoder = "0.263"
+wit-parser = "0.263"
 semver = "1.0"
 rayon = "1.12.0"
 

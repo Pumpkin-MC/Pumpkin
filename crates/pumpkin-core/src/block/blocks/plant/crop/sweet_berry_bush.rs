@@ -73,7 +73,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
                 if let Some(player_arc) = args.world.get_player_by_uuid(args.player.gameprofile.id)
                     && let Some(server) = args.world.server.upgrade()
                 {
-                    let mut event = crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
+                    let mut event = crate::plugin::PlayerHarvestBlockEvent {
                         player: player_arc,
                         block_pos: *args.position,
                         harvested_items: drops.clone(),

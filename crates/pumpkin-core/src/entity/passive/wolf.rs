@@ -46,7 +46,7 @@ use crate::entity::{
     },
     player::Player,
 };
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 
 const WOLF_PREY: TargetMatch =
     TargetMatch::AnyOf(&[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX]);

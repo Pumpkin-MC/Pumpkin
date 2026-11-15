@@ -45,7 +45,7 @@ impl JavaClient {
             send_cancellable_blocking! {{
                 server;
                 PlayerInteractEntityEvent::new(
-                    player,
+                    player.clone(),
                     Arc::clone(&target),
                     action,
                     interact.target_position,
@@ -88,7 +88,7 @@ impl JavaClient {
                             if event.action == ActionType::InteractAt
                                 && let Some(pos) = interact.target_position
                             {
-                                let mut at_event = crate::plugin::api::events::player::player_interact_at_entity::PlayerInteractAtEntityEvent::new(
+                                let mut at_event = crate::plugin::PlayerInteractAtEntityEvent::new(
                                     player.clone(),
                                     entity_id.0,
                                     pos.x,
@@ -167,7 +167,7 @@ impl JavaClient {
             // Entity not found
             send_cancellable_blocking! {{
                 server;
-                PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
+                PlayerInteractUnknownEntityEvent::new(player.clone(), entity_id.0, action);
 
                 'after: {
                     if event.action == ActionType::Attack {

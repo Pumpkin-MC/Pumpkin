@@ -21,8 +21,8 @@ use crate::entity::predicate::EntityPredicate;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::projectile_deflection::{ProjectileDeflection, default_deflection};
 use crate::entity::vehicle::boat::BoatEntity;
-use crate::plugin::api::events::entity::entity_target::{EntityTargetEvent, TargetReason};
-use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
+use crate::plugin::PlayerShearEntityEvent;
+use crate::plugin::{EntityTargetEvent, TargetReason};
 use crate::server::Server;
 use crate::world::World;
 use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
@@ -1285,12 +1285,11 @@ pub(crate) fn drop_from_gift_loot_table(
         crate::world::loot::generate_loot_from_handle(&table, mob.get_random().random(), &params);
     let mut dropped = false;
     for stack in drops {
-        let mut drop_event =
-            crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent::new(
-                entity.entity_id,
-                format!("minecraft:{}", stack.item.registry_key),
-                stack.item_count,
-            );
+        let mut drop_event = crate::plugin::EntityDropItemEvent::new(
+            entity.entity_id,
+            format!("minecraft:{}", stack.item.registry_key),
+            stack.item_count,
+        );
         if let Some(server) = world.server.upgrade() {
             server
                 .plugin_manager
@@ -2541,10 +2540,8 @@ pub trait Mob: EntityBase + Send + Sync {
         let Some(server) = mob.living_entity.entity.world.load().server.upgrade() else {
             return true;
         };
-        let mut event = crate::plugin::api::events::entity::entity_tame::EntityTameEvent::new(
-            mob.living_entity.entity.entity_id,
-            player.clone(),
-        );
+        let mut event =
+            crate::plugin::EntityTameEvent::new(mob.living_entity.entity.entity_id, player.clone());
         server.plugin_manager.fire_blocking(&server, &mut event);
         !event.cancelled
     }
@@ -2559,7 +2556,7 @@ pub trait Mob: EntityBase + Send + Sync {
         let Some(server) = mob.living_entity.entity.world.load().server.upgrade() else {
             return Some(experience);
         };
-        let mut event = crate::plugin::api::events::entity::entity_breed::EntityBreedEvent::new(
+        let mut event = crate::plugin::EntityBreedEvent::new(
             father_id,
             mob.living_entity.entity.entity_id,
             child_id,
@@ -2569,13 +2566,9 @@ pub trait Mob: EntityBase + Send + Sync {
         (!event.cancelled).then_some(event.experience)
     }
 
-    fn dye(
-        &self,
-        color: crate::plugin::api::events::entity::entity_dye::DyeColor,
-        player: Option<&Arc<Player>>,
-    ) {
+    fn dye(&self, color: pumpkin_data::dye_color::DyeColor, player: Option<&Arc<Player>>) {
         let mob = self.get_mob_entity();
-        let mut event = crate::plugin::api::events::entity::entity_dye::EntityDyeEvent::new(
+        let mut event = crate::plugin::EntityDyeEvent::new(
             mob.living_entity.entity.entity_id,
             color,
             player.cloned(),
@@ -2591,7 +2584,7 @@ pub trait Mob: EntityBase + Send + Sync {
         let Some(server) = mob.living_entity.entity.world.load().server.upgrade() else {
             return Some(ticks_in_love);
         };
-        let mut event = crate::plugin::api::events::entity::entity_enter_love_mode::EntityEnterLoveModeEvent::new(
+        let mut event = crate::plugin::EntityEnterLoveModeEvent::new(
             mob.living_entity.entity.entity_id,
             human_entity_id,
             ticks_in_love,
@@ -2602,12 +2595,11 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn transform(&self, new_entity_id: i32, transform_reason: String) {
         let mob = self.get_mob_entity();
-        let mut event =
-            crate::plugin::api::events::entity::entity_transform::EntityTransformEvent::new(
-                mob.living_entity.entity.entity_id,
-                new_entity_id,
-                transform_reason,
-            );
+        let mut event = crate::plugin::EntityTransformEvent::new(
+            mob.living_entity.entity.entity_id,
+            new_entity_id,
+            transform_reason,
+        );
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
@@ -2616,10 +2608,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn break_door(&self, block_pos: BlockPos) {
         let mob = self.get_mob_entity();
         let mut event =
-            crate::plugin::api::events::entity::entity_break_door::EntityBreakDoorEvent::new(
-                mob.living_entity.entity.entity_id,
-                block_pos,
-            );
+            crate::plugin::EntityBreakDoorEvent::new(mob.living_entity.entity.entity_id, block_pos);
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
@@ -2627,11 +2616,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn enter_block(&self, block_pos: BlockPos) {
         let mob = self.get_mob_entity();
-        let mut event =
-            crate::plugin::api::events::entity::entity_enter_block::EntityEnterBlockEvent::new(
-                mob.living_entity.entity.entity_id,
-                block_pos,
-            );
+        let mut event = crate::plugin::EntityEnterBlockEvent::new(
+            mob.living_entity.entity.entity_id,
+            block_pos,
+        );
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
@@ -2640,10 +2628,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn interact(&self, block_pos: BlockPos) {
         let mob = self.get_mob_entity();
         let mut event =
-            crate::plugin::api::events::entity::entity_interact::EntityInteractEvent::new(
-                mob.living_entity.entity.entity_id,
-                block_pos,
-            );
+            crate::plugin::EntityInteractEvent::new(mob.living_entity.entity.entity_id, block_pos);
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
@@ -2651,7 +2636,7 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn place_block(&self, block_pos: BlockPos, block_name: String) {
         let mob = self.get_mob_entity();
-        let mut event = crate::plugin::api::events::entity::entity_place::EntityPlaceEvent::new(
+        let mut event = crate::plugin::EntityPlaceEvent::new(
             mob.living_entity.entity.entity_id,
             block_pos,
             block_name,

@@ -40,7 +40,7 @@ use crate::{
         EncryptionError, GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig,
         can_not_join,
     },
-    plugin::server::packet::{JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent},
+    plugin::{JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent},
     server::Server,
 };
 

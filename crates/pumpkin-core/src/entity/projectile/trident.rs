@@ -107,10 +107,7 @@ impl TridentEntity {
         entity.data.store(shooter.entity_id, Ordering::Relaxed);
 
         let mut launch_event =
-            crate::plugin::api::events::entity::projectile_launch::ProjectileLaunchEvent::new(
-                entity.entity_id,
-                Some(shooter.entity_id),
-            );
+            crate::plugin::ProjectileLaunchEvent::new(entity.entity_id, Some(shooter.entity_id));
         if let Some(server) = entity.world.load().server.upgrade() {
             server
                 .plugin_manager
@@ -649,11 +646,7 @@ impl EntityBase for TridentEntity {
             } => (*hit_pos, Some(entity.get_entity().entity_id)),
         };
         let mut hit_event =
-            crate::plugin::api::events::entity::projectile_hit::ProjectileHitEvent::new(
-                self.entity.entity_id,
-                event_pos,
-                hit_entity_id,
-            );
+            crate::plugin::ProjectileHitEvent::new(self.entity.entity_id, event_pos, hit_entity_id);
         if let Some(server) = self.entity.world.load().server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut hit_event);
         }
@@ -689,10 +682,7 @@ impl EntityBase for TridentEntity {
         }
         if let Some(server) = world.server.upgrade() {
             let mut event =
-                crate::plugin::api::events::player::player_pickup_arrow::PlayerPickupArrowEvent::new(
-                    player.clone(),
-                    self.entity.entity_id,
-                );
+                crate::plugin::PlayerPickupArrowEvent::new(player.clone(), self.entity.entity_id);
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;

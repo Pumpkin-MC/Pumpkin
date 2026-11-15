@@ -3016,6 +3016,7 @@ dependencies = [
  "syn 3.0.10",
  "uuid",
  "wit-encoder",
+ "wit-parser 0.263.0",
 ]
 
 [[package]]

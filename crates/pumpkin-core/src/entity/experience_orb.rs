@@ -340,11 +340,8 @@ impl EntityBase for ExperienceOrbEntity {
             return false;
         }
 
-        let mut event = crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
-            self.entity.entity_id,
-            damage_type,
-            amount,
-        );
+        let mut event =
+            crate::plugin::EntityDamageEvent::new(self.entity.entity_id, amount, damage_type);
         if let Some(server) = self.entity.world.load().server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }

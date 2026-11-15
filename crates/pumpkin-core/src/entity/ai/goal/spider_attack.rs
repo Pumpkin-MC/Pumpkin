@@ -3,7 +3,7 @@ use rand::RngExt;
 use super::{Controls, Goal};
 use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
 use crate::entity::mob::Mob;
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 
 /// Melee that gives up in daylight: a 1 in 100 chance per check to drop the target.
 pub struct SpiderAttackGoal {

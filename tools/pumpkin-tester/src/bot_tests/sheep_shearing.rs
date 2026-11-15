@@ -7,15 +7,7 @@ use pumpkin_core::{
     data::datapack::loot_table_loader::parse_loot_table,
     entity::{Entity, EntityBase, passive::sheep::SheepEntity},
     net::ClientPlatform,
-    plugin::{
-        BoxFuture, EventHandler,
-        api::events::{
-            EventPriority,
-            player::{
-                player_item_break::PlayerItemBreakEvent, player_item_damage::PlayerItemDamageEvent,
-            },
-        },
-    },
+    plugin::{BoxFuture, EventHandler, EventPriority, PlayerItemBreakEvent, PlayerItemDamageEvent},
     server::Server,
 };
 use pumpkin_data::{

@@ -149,10 +149,7 @@ impl Goal for BreakDoorGoal {
                 world.get_block_and_state_id(&self.door_interact_goal.door_pos);
             let door_pos = self.door_interact_goal.door_pos;
             let mut event =
-                crate::plugin::api::events::entity::entity_break_door::EntityBreakDoorEvent::new(
-                    mob.get_entity().entity_id,
-                    door_pos,
-                );
+                crate::plugin::EntityBreakDoorEvent::new(mob.get_entity().entity_id, door_pos);
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
                 if event.cancelled {

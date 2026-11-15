@@ -12,7 +12,7 @@ use crate::command::argument_types::coordinates::rotation::RotationArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
-use crate::plugin::world::spawn_change::SpawnChangeEvent;
+use crate::plugin::SpawnChangeEvent;
 
 const DESCRIPTION: &str = "Sets the world spawn point.";
 const PERMISSION: &str = "minecraft:command.setworldspawn";

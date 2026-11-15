@@ -141,13 +141,12 @@ fn handle_beehive(
     if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
         && let Some(server) = world.server.upgrade()
     {
-        let mut event =
-            crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
-                player: player_arc,
-                block_pos: *location,
-                harvested_items: drops.clone(),
-                cancelled: false,
-            };
+        let mut event = crate::plugin::PlayerHarvestBlockEvent {
+            player: player_arc,
+            block_pos: *location,
+            harvested_items: drops.clone(),
+            cancelled: false,
+        };
         server.plugin_manager.fire_blocking(&server, &mut event);
         if event.cancelled {
             return false;

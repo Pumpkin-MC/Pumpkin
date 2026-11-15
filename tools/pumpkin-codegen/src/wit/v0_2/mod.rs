@@ -6,7 +6,7 @@ pub mod data_component;
 pub mod enchantment;
 pub mod entity_status;
 pub mod entity_type;
-//pub mod event;
+pub mod event;
 pub mod game_event;
 pub mod game_rules;
 pub mod java_packet;
@@ -65,6 +65,9 @@ pub fn main() {
 
     let mapping_path = Path::new(MAPPING_OUT_DIR).join("generated_packets.rs");
     fs::write(&mapping_path, mapping).expect("Failed to write packet mapping");
+
+    println!("Generating core and WASM v0.2 event bindings from WIT");
+    event::generate();
 }
 
 fn write_generated_wit(new_code: &str, out_file: &str) {

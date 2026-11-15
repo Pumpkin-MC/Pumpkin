@@ -8,7 +8,7 @@ use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::passive::villager::VillagerEntity;
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 
 const ATTACK_TARGETING_RANGE: f64 = 64.0;
 const SCAN_RADIUS_XZ: f64 = 10.0;

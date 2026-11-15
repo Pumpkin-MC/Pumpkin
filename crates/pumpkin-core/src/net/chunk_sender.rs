@@ -26,7 +26,7 @@ const INITIAL_CHUNKS_PER_TICK: f32 = 9.0;
 const MAX_CONCURRENT_BATCHES: u16 = 10;
 /// Encode attempts per chunk before a Bedrock dispatch is given up on.
 const MAX_ENCODE_ATTEMPTS: u8 = 3;
-/// Ticks a chunk cancelled by `ChunkSend` waits before it is offered again.
+/// Ticks a chunk cancelled by `ChunkSendEvent` waits before it is offered again.
 const CANCELLED_RETRY_TICKS: u64 = 20;
 
 pub struct PreparedChunk {
@@ -44,7 +44,7 @@ pub struct DispatchedChunk {
 /// Why a committed Bedrock chunk did not reach the client.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DeliveryFailure {
-    /// Cancelled `ChunkSend` -> parked, offered again after `CANCELLED_RETRY_TICKS`.
+    /// Cancelled `ChunkSendEvent` -> parked, offered again after `CANCELLED_RETRY_TICKS`.
     Cancelled,
     /// Not queued for a passing reason (player not set, closed connection) -> retried.
     Deferred,
@@ -69,7 +69,7 @@ impl ChunkSendOutcome {
             .map_or(DeliveryFailure::Deferred, |&(_, failure)| failure)
     }
 
-    /// Marks every chunk a `ChunkSend` handler filtered out of `chunks` as cancelled.
+    /// Marks every chunk a `ChunkSendEvent` handler filtered out of `chunks` as cancelled.
     pub fn record_cancelled(&mut self, chunks: &[SyncChunk], valid: &[SyncChunk]) {
         self.failed.extend(
             chunks
@@ -123,7 +123,7 @@ pub struct ChunkSender {
     awaiting_delivery: FxHashMap<Vector2<i32>, AwaitingDelivery>,
     /// Failed Bedrock encode attempts per chunk.
     encode_failures: FxHashMap<Vector2<i32>, u8>,
-    /// Chunks cancelled by `ChunkSend`, by the tick they become pending again.
+    /// Chunks cancelled by `ChunkSendEvent`, by the tick they become pending again.
     /// Kept out of `pending_chunks` so they take no batch slots meanwhile.
     parked_chunks: FxHashMap<Vector2<i32>, u64>,
     /// `parked_chunks` entries in release order; stale ones are skipped.
@@ -201,7 +201,7 @@ impl ChunkSender {
         delivered
     }
 
-    /// Cancelled `ChunkSend` before dispatch -> the client never gets it, so it is parked.
+    /// Cancelled `ChunkSendEvent` before dispatch -> the client never gets it, so it is parked.
     pub fn cancel_pending(
         &mut self,
         batch: &PreparedBatch,

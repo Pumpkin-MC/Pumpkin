@@ -49,77 +49,28 @@ use crate::{
     uuid::UuidExt,
 };
 use bytes::Bytes;
-use pumpkin_core::plugin::player::{
-    async_player_chat::AsyncPlayerChatEvent,
-    async_player_pre_login::AsyncPlayerPreLoginEvent,
-    bedrock_form_response::BedrockFormResponseEvent,
-    changed_main_hand::PlayerChangedMainHandEvent,
-    egg_throw::PlayerEggThrowEvent,
-    exp_change::PlayerExpChangeEvent,
-    fish::{PlayerFishEvent, PlayerFishState},
-    inventory_close::InventoryCloseEvent,
-    inventory_interact::InventoryClickEvent,
-    item_held::PlayerItemHeldEvent,
-    player_advancement_done::PlayerAdvancementDoneEvent,
-    player_animation::{PlayerAnimationEvent, PlayerAnimationType},
-    player_armor_stand_manipulate::PlayerArmorStandManipulateEvent,
-    player_bucket_entity::PlayerBucketEntityEvent,
-    player_change_world::PlayerChangeWorldEvent,
-    player_changed_world::PlayerChangedWorldEvent,
-    player_channel::PlayerChannelEvent,
-    player_chat::PlayerChatEvent,
-    player_command_preprocess::PlayerCommandPreprocessEvent,
-    player_command_send::PlayerCommandSendEvent,
-    player_custom_payload::PlayerCustomPayloadEvent,
-    player_edit_book::PlayerEditBookEvent,
-    player_elytra_boost::PlayerElytraBoostEvent,
-    player_exp_cooldown_change::PlayerExpCooldownChangeEvent,
-    player_gamemode_change::PlayerGamemodeChangeEvent,
-    player_harvest_block::PlayerHarvestBlockEvent,
-    player_hide_entity::PlayerHideEntityEvent,
-    player_input::PlayerInputEvent,
-    player_interact_at_entity::PlayerInteractAtEntityEvent,
-    player_interact_entity_event::PlayerInteractEntityEvent,
-    player_interact_event::{InteractAction, PlayerInteractEvent},
-    player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
-    player_item_break::PlayerItemBreakEvent,
-    player_item_mend::PlayerItemMendEvent,
-    player_join::PlayerJoinEvent,
-    player_kick::PlayerKickEvent,
-    player_leash_entity::PlayerLeashEntityEvent,
-    player_leave::PlayerLeaveEvent,
-    player_level_change::PlayerLevelChangeEvent,
-    player_links_send::PlayerLinksSendEvent,
-    player_locale_change::PlayerLocaleChangeEvent,
-    player_login::PlayerLoginEvent,
-    player_move::PlayerMoveEvent,
-    player_name_entity::PlayerNameEntityEvent,
-    player_open_sign::PlayerOpenSignEvent,
-    player_permission_check::PlayerPermissionCheckEvent,
-    player_pickup_arrow::PlayerPickupArrowEvent,
-    player_portal::PlayerPortalEvent,
-    player_pre_login::PlayerPreLoginEvent,
-    player_recipe_book_click::PlayerRecipeBookClickEvent,
-    player_recipe_book_settings_change::PlayerRecipeBookSettingsChangeEvent,
-    player_recipe_discover::PlayerRecipeDiscoverEvent,
-    player_register_channel::PlayerRegisterChannelEvent,
-    player_resource_pack_status::PlayerResourcePackStatusEvent,
-    player_respawn::PlayerRespawnEvent,
-    player_riptide::PlayerRiptideEvent,
-    player_shear_entity::PlayerShearEntityEvent,
-    player_show_entity::PlayerShowEntityEvent,
-    player_spawn_change::PlayerSpawnChangeEvent,
-    player_spawn_location::PlayerSpawnLocationEvent,
-    player_statistic_increment::PlayerStatisticIncrementEvent,
-    player_swap_hands::PlayerSwapHandItemsEvent,
-    player_take_lectern_book::PlayerTakeLecternBookEvent,
-    player_teleport::PlayerTeleportEvent,
-    player_toggle_flight_event::PlayerToggleFlightEvent,
-    player_toggle_sneak_event::PlayerToggleSneakEvent,
-    player_toggle_sprint_event::PlayerToggleSprintEvent,
-    player_unleash_entity::PlayerUnleashEntityEvent,
-    player_unregister_channel::PlayerUnregisterChannelEvent,
-    player_velocity::PlayerVelocityEvent,
+use pumpkin_core::plugin::{
+    AsyncPlayerChatEvent, AsyncPlayerPreLoginEvent, BedrockFormResponseEvent, InteractAction,
+    InventoryClickEvent, InventoryCloseEvent, PlayerAdvancementDoneEvent, PlayerAnimationEvent,
+    PlayerAnimationType, PlayerArmorStandManipulateEvent, PlayerBucketEntityEvent,
+    PlayerChangeWorldEvent, PlayerChangedMainHandEvent, PlayerChangedWorldEvent,
+    PlayerChannelEvent, PlayerChatEvent, PlayerCommandPreprocessEvent, PlayerCommandSendEvent,
+    PlayerCustomPayloadEvent, PlayerEditBookEvent, PlayerEggThrowEvent, PlayerElytraBoostEvent,
+    PlayerExpChangeEvent, PlayerExpCooldownChangeEvent, PlayerFishEvent, PlayerFishState,
+    PlayerGamemodeChangeEvent, PlayerHarvestBlockEvent, PlayerHideEntityEvent, PlayerInputEvent,
+    PlayerInteractAtEntityEvent, PlayerInteractEntityEvent, PlayerInteractEvent,
+    PlayerInteractUnknownEntityEvent, PlayerItemBreakEvent, PlayerItemHeldEvent,
+    PlayerItemMendEvent, PlayerJoinEvent, PlayerKickEvent, PlayerLeashEntityEvent,
+    PlayerLeaveEvent, PlayerLevelChangeEvent, PlayerLinksSendEvent, PlayerLocaleChangeEvent,
+    PlayerLoginEvent, PlayerMoveEvent, PlayerNameEntityEvent, PlayerOpenSignEvent,
+    PlayerPermissionCheckEvent, PlayerPickupArrowEvent, PlayerPortalEvent, PlayerPreLoginEvent,
+    PlayerRecipeBookClickEvent, PlayerRecipeBookSettingsChangeEvent, PlayerRecipeDiscoverEvent,
+    PlayerRegisterChannelEvent, PlayerResourcePackStatusEvent, PlayerRespawnEvent,
+    PlayerRiptideEvent, PlayerShearEntityEvent, PlayerShowEntityEvent, PlayerSpawnChangeEvent,
+    PlayerSpawnLocationEvent, PlayerStatisticIncrementEvent, PlayerSwapHandsEvent,
+    PlayerTakeLecternBookEvent, PlayerTeleportEvent, PlayerToggleFlightEvent,
+    PlayerToggleSneakEvent, PlayerToggleSprintEvent, PlayerUnleashEntityEvent,
+    PlayerUnregisterChannelEvent, PlayerVelocityEvent,
 };
 use pumpkin_wasm_host_common::state::PluginHostState;
 
@@ -372,7 +323,7 @@ impl ToFromWasmEvent for PlayerPermissionCheckEvent {
         Event::PlayerPermissionCheckEvent(PlayerPermissionCheckEventData {
             player,
             permission: self.permission.clone(),
-            permission_result: self.result,
+            permission_result: self.permission_result,
         })
     }
 
@@ -381,7 +332,7 @@ impl ToFromWasmEvent for PlayerPermissionCheckEvent {
             Event::PlayerPermissionCheckEvent(data) => Self {
                 player: consume_player(state, &data.player),
                 permission: data.permission,
-                result: data.permission_result,
+                permission_result: data.permission_result,
             },
             _ => panic!("unexpected event type"),
         }
@@ -396,8 +347,8 @@ impl ToFromWasmEvent for PlayerMoveEvent {
 
         Event::PlayerMoveEvent(PlayerMoveEventData {
             player,
-            from_position: to_wasm_position(self.from),
-            to_position: to_wasm_position(self.to),
+            from_position: to_wasm_position(self.from_position),
+            to_position: to_wasm_position(self.to_position),
             cancelled: self.cancelled,
         })
     }
@@ -406,8 +357,8 @@ impl ToFromWasmEvent for PlayerMoveEvent {
         match event {
             Event::PlayerMoveEvent(data) => Self {
                 player: consume_player(state, &data.player),
-                from: from_wasm_position(data.from_position),
-                to: from_wasm_position(data.to_position),
+                from_position: from_wasm_position(data.from_position),
+                to_position: from_wasm_position(data.to_position),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -423,8 +374,8 @@ impl ToFromWasmEvent for PlayerTeleportEvent {
 
         Event::PlayerTeleportEvent(PlayerTeleportEventData {
             player,
-            from_position: to_wasm_position(self.from),
-            to_position: to_wasm_position(self.to),
+            from_position: to_wasm_position(self.from_position),
+            to_position: to_wasm_position(self.to_position),
             cancelled: self.cancelled,
         })
     }
@@ -433,8 +384,8 @@ impl ToFromWasmEvent for PlayerTeleportEvent {
         match event {
             Event::PlayerTeleportEvent(data) => Self {
                 player: consume_player(state, &data.player),
-                from: from_wasm_position(data.from_position),
-                to: from_wasm_position(data.to_position),
+                from_position: from_wasm_position(data.from_position),
+                to_position: from_wasm_position(data.to_position),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -738,7 +689,7 @@ impl ToFromWasmEvent for PlayerInteractUnknownEntityEvent {
     }
 }
 
-const fn to_wasm_interact_action(action: &InteractAction) -> WasmInteractAction {
+const fn to_wasm_interact_action(action: InteractAction) -> WasmInteractAction {
     match action {
         InteractAction::LeftClickBlock => WasmInteractAction::LeftClickBlock,
         InteractAction::LeftClickAir => WasmInteractAction::LeftClickAir,
@@ -764,7 +715,7 @@ impl ToFromWasmEvent for PlayerInteractEvent {
 
         Event::PlayerInteractEvent(PlayerInteractEventData {
             player,
-            action: to_wasm_interact_action(&self.action),
+            action: to_wasm_interact_action(self.action),
             clicked_pos: self.clicked_pos.map(to_wasm_block_position),
             block: self.block.name.to_string(),
             cancelled: self.cancelled,
@@ -922,9 +873,7 @@ impl ToFromWasmEvent for PlayerInteractEntityEvent {
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::PlayerItemConsumeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add(self.player.clone())
@@ -949,9 +898,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::PlayerItemDamageEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add(self.player.clone())
@@ -978,9 +925,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::player::player_drop_item::PlayerDropItemEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::PlayerDropItemEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add(self.player.clone())
@@ -1007,9 +952,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::player::player_bed::PlayerBedEnterEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::PlayerBedEnterEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add(self.player.clone())
@@ -1034,9 +977,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::player::player_bed::PlayerBedLeaveEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::PlayerBedLeaveEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add(self.player.clone())
@@ -1059,9 +1000,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::PlayerBucketEmptyEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add(self.player.clone())
@@ -1088,9 +1027,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::player::player_bucket::PlayerBucketFillEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::PlayerBucketFillEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add(self.player.clone())
@@ -2106,7 +2043,7 @@ impl ToFromWasmEvent for PlayerStatisticIncrementEvent {
     }
 }
 
-impl ToFromWasmEvent for PlayerSwapHandItemsEvent {
+impl ToFromWasmEvent for PlayerSwapHandsEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add(self.player.clone())

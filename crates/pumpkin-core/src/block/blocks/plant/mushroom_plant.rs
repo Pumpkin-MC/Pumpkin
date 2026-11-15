@@ -11,7 +11,7 @@ use crate::block::{
     BlockBehaviour, BlockMetadata, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     RandomTickArgs, blocks::plant::PlantBlockBase,
 };
-use crate::plugin::api::events::world::structure_grow::{StructureGrowEvent, TreeType};
+use crate::plugin::{StructureGrowEvent, TreeType};
 use crate::world::World;
 
 pub struct MushroomPlantBlock;

@@ -134,12 +134,11 @@ impl CrafterBlock {
 
             let mut result_stack = recipe_result.to_item_stack();
             if let Some(server) = world.server.upgrade() {
-                let mut event =
-                    crate::plugin::api::events::block::crafter_craft::CrafterCraftEvent::new(
-                        *pos,
-                        world.clone(),
-                        result_stack.clone(),
-                    );
+                let mut event = crate::plugin::CrafterCraftEvent::new(
+                    *pos,
+                    world.clone(),
+                    result_stack.clone(),
+                );
                 server.plugin_manager.fire_blocking(&server, &mut event);
                 if event.cancelled {
                     return;

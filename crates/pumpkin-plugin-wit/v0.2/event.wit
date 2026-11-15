@@ -1,12 +1,12 @@
 interface event {
-    use common.{block-pos, game-mode, hand, position, click-type};
+    use common.{block-name, block-pos, block-state-id, click-type, entity-type-name, game-mode, hand, position, raw-bytes, socket-address};
     use item-stack.{item-stack};
     use enchantments.{enchantment};
     use damage-types.{damage-type};
     use screens.{screen};
     use player.{player, java-minecraft-version, bedrock-minecraft-version};
     use text.{text-component};
-    use %world.{%world};
+    use %world.{%world, block-direction, dye-color, entity};
     use java-packets.{serverbound-packet as java-serverbound-packet, clientbound-packet as java-clientbound-packet};
     use bedrock-packets.{serverbound-packet as bedrock-serverbound-packet, clientbound-packet as bedrock-clientbound-packet};
     use uuid.{uuid};
@@ -131,7 +131,7 @@ interface event {
     record player-custom-payload-event-data {
         player: player,
         channel: string,
-        data: list<u8>
+        data: raw-bytes
     }
 
     enum player-fish-state {
@@ -160,7 +160,7 @@ interface event {
         egg-uuid: uuid,
         hatching: bool,
         num-hatches: u8,
-        hatching-type: string,
+        hatching-type: entity-type-name,
         cancelled: bool
     }
 
@@ -181,7 +181,7 @@ interface event {
         player: player,
         action: interact-action,
         clicked-pos: option<block-pos>,
-        block: string,
+        block: block-name,
         cancelled: bool
     }
 
@@ -229,7 +229,7 @@ interface event {
 
     record block-redstone-event-data {
         target-world: %world,
-        state-id: u16,
+        state-id: block-state-id,
         block-pos: block-pos,
         old-current: s32,
         new-current: s32,
@@ -238,7 +238,7 @@ interface event {
 
     record block-break-event-data {
         player: option<player>,
-        block: string,
+        block: block-name,
         block-pos: block-pos,
         exp: u32,
         should-drop: bool,
@@ -246,35 +246,35 @@ interface event {
     }
 
     record block-burn-event-data {
-        igniting-block: string,
-        block: string,
-        block-pos: block-pos,
         target-world: %world,
+        igniting-block: block-name,
+        block: block-name,
+        block-pos: block-pos,
         cancelled: bool
     }
 
     record block-can-build-event-data {
-        block-to-build: string,
+        block-to-build: block-name,
         buildable: bool,
         player: player,
-        block: string,
+        block: block-name,
         cancelled: bool
     }
 
     record block-grow-event-data {
         target-world: %world,
-        old-block: string,
-        old-state-id: u16,
-        new-block: string,
-        new-state-id: u16,
+        old-block: block-name,
+        old-state-id: block-state-id,
+        new-block: block-name,
+        new-state-id: block-state-id,
         block-pos: block-pos,
         cancelled: bool
     }
 
     record block-place-event-data {
         player: player,
-        block-placed: string,
-        block-placed-against: string,
+        block-placed: block-name,
+        block-placed-against: block-name,
         block-pos: block-pos,
         can-build: bool,
         cancelled: bool
@@ -289,7 +289,7 @@ interface event {
     record dialog-click-action-event-data {
         player: player,
         id: string,
-        payload: option<list<u8>>,
+        payload: option<raw-bytes>,
         cancelled: bool,
     }
 
@@ -429,8 +429,9 @@ interface event {
 
     record player-interact-entity-event-data {
         player: player,
-        entity-id: s32,
+        target: entity,
         action: entity-interaction-action,
+        target-position: option<position>,
         sneaking: bool,
         cancelled: bool
     }
@@ -518,7 +519,7 @@ interface event {
 
     record entity-dye-event-data {
         entity-id: s32,
-        color: string,
+        color: dye-color,
         player: option<player>,
         cancelled: bool
     }
@@ -616,12 +617,18 @@ interface event {
         cancelled: bool
     }
 
+    enum creature-spawn-reason {
+        spawner-egg,
+        dispense-egg,
+        bucket,
+    }
+
     record creature-spawn-event-data {
         entity-id: s32,
         entity-type: string,
         position: position,
         target-world: %world,
-        spawn-reason: string,
+        spawn-reason: creature-spawn-reason,
         player: option<player>,
         cancelled: bool
     }
@@ -1044,8 +1051,8 @@ interface event {
 
     record async-player-pre-login-event-data {
         player-name: string,
-        player-uuid: string,
-        ip-address: string,
+        player-uuid: uuid,
+        ip-address: socket-address,
         kick-message: text-component,
         cancelled: bool
     }
@@ -1056,9 +1063,15 @@ interface event {
         cancelled: bool
     }
 
+    enum player-animation-type {
+        arm-swing-main,
+        arm-swing-off,
+        leave-bed,
+    }
+
     record player-animation-event-data {
         player: player,
-        animation-type: string,
+        animation-type: player-animation-type,
         cancelled: bool
     }
 
@@ -1190,8 +1203,8 @@ interface event {
 
     record player-pre-login-event-data {
         player-name: string,
-        player-uuid: string,
-        ip-address: string,
+        player-uuid: uuid,
+        ip-address: socket-address,
         kick-message: text-component,
         cancelled: bool
     }
@@ -1350,6 +1363,7 @@ interface event {
 
     record block-damage-event-data {
         player: player,
+        block: block-name,
         block-pos: block-pos,
         insta-break: bool,
         cancelled: bool
@@ -1357,22 +1371,27 @@ interface event {
 
     record block-ignite-event-data {
         block-pos: block-pos,
+        igniting-block: block-name,
+        player: option<player>,
         cancelled: bool
     }
 
     record block-from-to-event-data {
         from-pos: block-pos,
         to-pos: block-pos,
+        block: block-name,
         cancelled: bool
     }
 
     record block-form-event-data {
         block-pos: block-pos,
+        block: block-name,
         cancelled: bool
     }
 
     record block-fade-event-data {
         block-pos: block-pos,
+        block: block-name,
         cancelled: bool
     }
 
@@ -1436,22 +1455,22 @@ interface event {
     }
 
     record hanging-break-event-data {
-        entity-id: s32,
-        remover-entity-id: option<s32>,
+        entity: entity,
+        remover: option<entity>,
         cancelled: bool
     }
 
     record hanging-break-by-entity-event-data {
-        entity-id: s32,
-        remover-entity-id: s32,
+        entity: entity,
+        remover: entity,
         cancelled: bool
     }
 
     record hanging-place-event-data {
-        entity-id: s32,
+        entity: entity,
         player: option<player>,
         block-pos: block-pos,
-        block-face: string,
+        block-face: block-direction,
         cancelled: bool
     }
 
@@ -1464,8 +1483,8 @@ interface event {
     record bell-ring-event-data {
         block-pos: block-pos,
         target-world: %world,
-        entity-id: option<s32>,
-        direction: option<string>,
+        entity: option<entity>,
+        direction: option<block-direction>,
         cancelled: bool
     }
 
@@ -1495,7 +1514,7 @@ interface event {
     record block-dispense-armor-event-data {
         block-pos: block-pos,
         target-world: %world,
-        target-entity-id: s32,
+        target: entity,
         item: item-stack,
         cancelled: bool
     }
@@ -1525,14 +1544,14 @@ interface event {
         block-pos: block-pos,
         target-world: %world,
         player: option<player>,
-        changed-blocks: list<tuple<block-pos, u16>>,
+        changed-blocks: list<tuple<block-pos, block-state-id>>,
         cancelled: bool
     }
 
     record block-multi-place-event-data {
         player: player,
         target-world: %world,
-        placed-blocks: list<tuple<block-pos, u16>>,
+        placed-blocks: list<tuple<block-pos, block-state-id>>,
         cancelled: bool
     }
 
@@ -1540,14 +1559,14 @@ interface event {
         block-pos: block-pos,
         target-world: %world,
         game-event: string,
-        source-entity-id: option<s32>,
+        source-entity: option<entity>,
         cancelled: bool
     }
 
     record block-shear-entity-event-data {
         block-pos: block-pos,
         target-world: %world,
-        target-entity-id: s32,
+        target: entity,
         item: item-stack,
         cancelled: bool
     }
@@ -1556,7 +1575,7 @@ interface event {
         source-pos: block-pos,
         target-pos: block-pos,
         target-world: %world,
-        new-state-id: u16,
+        new-state-id: block-state-id,
         cancelled: bool
     }
 
@@ -1576,13 +1595,23 @@ interface event {
         cancelled: bool
     }
 
+    enum cauldron-change-reason {
+        bucket-empty,
+        bucket-fill,
+        bottle-empty,
+        bottle-fill,
+        natural-fill,
+        extinguish,
+        unknown,
+    }
+
     record cauldron-level-change-event-data {
         block-pos: block-pos,
         target-world: %world,
         old-level: s32,
         new-level: s32,
-        reason: string,
-        entity-id: option<s32>,
+        reason: cauldron-change-reason,
+        entity: option<entity>,
         cancelled: bool
     }
 
@@ -1594,17 +1623,17 @@ interface event {
     }
 
     record entity-block-form-event-data {
-        entity-id: s32,
+        entity: entity,
         block-pos: block-pos,
         target-world: %world,
-        new-state-id: u16,
+        new-state-id: block-state-id,
         cancelled: bool
     }
 
     record fluid-level-change-event-data {
         block-pos: block-pos,
         target-world: %world,
-        new-state-id: u16,
+        new-state-id: block-state-id,
         cancelled: bool
     }
 
@@ -1712,15 +1741,37 @@ interface event {
         cancelled: bool
     }
 
+    enum portal-type {
+        nether,
+        end,
+        custom,
+    }
+
     record portal-create-event-data {
         pos: block-pos,
-        portal-type: string,
+        portal-type: portal-type,
         cancelled: bool
+    }
+
+    enum tree-type {
+        oak,
+        spruce,
+        birch,
+        jungle,
+        acacia,
+        dark-oak,
+        mangrove,
+        cherry,
+        poplar,
+        azalea,
+        brown-mushroom,
+        red-mushroom,
+        custom,
     }
 
     record structure-grow-event-data {
         pos: block-pos,
-        species: string,
+        species: tree-type,
         bone-meal: bool,
         cancelled: bool
     }
@@ -1959,6 +2010,32 @@ interface event {
     record lightning-strike-event-data {
         position: position,
         is-effect: bool,
+        cancelled: bool
+    }
+
+    record plugin-enable-event-data {
+        plugin-name: string,
+        cancelled: bool
+    }
+
+    record plugin-disable-event-data {
+        plugin-name: string,
+        cancelled: bool
+    }
+
+    record service-register-event-data {
+        service-name: string,
+        cancelled: bool
+    }
+
+    record service-unregister-event-data {
+        service-name: string,
+        cancelled: bool
+    }
+
+    record tab-complete-event-data {
+        buffer: string,
+        completions: list<string>,
         cancelled: bool
     }
 
@@ -2241,6 +2318,11 @@ interface event {
         raid-stop-event,
         raid-trigger-event,
         lightning-strike-event,
+        plugin-enable-event,
+        plugin-disable-event,
+        service-register-event,
+        service-unregister-event,
+        tab-complete-event,
     }
 
     variant event {
@@ -2522,5 +2604,10 @@ interface event {
         raid-stop-event(raid-stop-event-data),
         raid-trigger-event(raid-trigger-event-data),
         lightning-strike-event(lightning-strike-event-data),
+        plugin-enable-event(plugin-enable-event-data),
+        plugin-disable-event(plugin-disable-event-data),
+        service-register-event(service-register-event-data),
+        service-unregister-event(service-unregister-event-data),
+        tab-complete-event(tab-complete-event-data),
     }
 }

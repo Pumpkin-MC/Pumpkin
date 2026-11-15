@@ -958,10 +958,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn set_on_fire_for_ticks(&self, ticks: u32) {
         let entity = self.get_entity();
-        let mut event = crate::plugin::api::events::entity::entity_combust::EntityCombustEvent::new(
-            entity.entity_id,
-            ticks as f32 / 20.0,
-        );
+        let mut event =
+            crate::plugin::EntityCombustEvent::new(entity.entity_id, ticks as f32 / 20.0);
         if let Some(server) = entity.world.load().server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
@@ -2210,11 +2208,7 @@ impl Entity {
             return;
         }
         if let Some(server) = self.world.load().server.upgrade() {
-            let mut event =
-                crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
-                    self.entity_id,
-                    air,
-                );
+            let mut event = crate::plugin::EntityAirChangeEvent::new(self.entity_id, air);
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;
@@ -2746,18 +2740,17 @@ impl Entity {
         let Some(server) = self.world.load().server.upgrade() else {
             return Some(knockback);
         };
-        let mut event =
-            crate::plugin::api::events::entity::entity_knockback::EntityKnockbackEvent {
-                entity_id: self.entity_id,
-                hit_by_id: attacker.map(|attacker| attacker.entity_id),
-                knockback,
-                cancelled: false,
-            };
+        let mut event = crate::plugin::EntityKnockbackEvent {
+            entity_id: self.entity_id,
+            hit_by_id: attacker.map(|attacker| attacker.entity_id),
+            knockback,
+            cancelled: false,
+        };
         server.plugin_manager.fire_blocking(&server, &mut event);
         let mut knockback = event.knockback;
         let mut cancelled = event.cancelled;
         if let Some(attacker) = attacker {
-            let mut event = crate::plugin::api::events::entity::entity_knockback_by_entity::EntityKnockbackByEntityEvent::new(
+            let mut event = crate::plugin::EntityKnockbackByEntityEvent::new(
                 self.entity_id,
                 attacker.entity_id,
                 strength,
@@ -3699,11 +3692,7 @@ impl Entity {
     }
 
     pub fn try_use_portal(&self, portal_world: Arc<World>, pos: BlockPos) {
-        let mut portal_event =
-            crate::plugin::api::events::entity::entity_portal::EntityPortalEvent::new(
-                self.entity_id,
-                pos,
-            );
+        let mut portal_event = crate::plugin::EntityPortalEvent::new(self.entity_id, pos);
         if let Some(server) = self.world.load().server.upgrade() {
             server
                 .plugin_manager
@@ -4047,11 +4036,7 @@ impl Entity {
 
     pub fn set_swimming(&self, swimming: bool) {
         if self.swimming.load(Ordering::Relaxed) != swimming {
-            let mut event =
-                crate::plugin::api::events::entity::entity_toggle_swim::EntityToggleSwimEvent::new(
-                    self.entity_id,
-                    swimming,
-                );
+            let mut event = crate::plugin::EntityToggleSwimEvent::new(self.entity_id, swimming);
             if let Some(server) = self.world.load().server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
             }
@@ -4533,10 +4518,7 @@ impl Entity {
         }
 
         let mut pose_event =
-            crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent::new(
-                self.entity_id,
-                (pose as u8).to_string(),
-            );
+            crate::plugin::EntityPoseChangeEvent::new(self.entity_id, (pose as u8).to_string());
         if let Some(server) = self.world.load().server.upgrade() {
             server
                 .plugin_manager
@@ -4892,13 +4874,12 @@ impl Entity {
             && let Some(player) = holder.get_player()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
         {
-            let mut event =
-                crate::plugin::api::events::player::player_leash_entity::PlayerLeashEntityEvent {
-                    player: player_arc,
-                    entity_id: self.entity_id,
-                    holder_id: holder_entity_id,
-                    cancelled: false,
-                };
+            let mut event = crate::plugin::PlayerLeashEntityEvent {
+                player: player_arc,
+                entity_id: self.entity_id,
+                holder_id: holder_entity_id,
+                cancelled: false,
+            };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;
@@ -4954,10 +4935,7 @@ impl Entity {
         let world = self.world.load();
         if let Some(server) = world.server.upgrade() {
             let mut event =
-                crate::plugin::api::events::entity::entity_unleash::EntityUnleashEvent::new(
-                    self.entity_id,
-                    "unleashed".to_string(),
-                );
+                crate::plugin::EntityUnleashEvent::new(self.entity_id, "unleashed".to_string());
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;
@@ -4978,7 +4956,7 @@ impl Entity {
             && let Some(player) = holder.get_player()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
         {
-            let mut event = crate::plugin::api::events::player::player_unleash_entity::PlayerUnleashEntityEvent {
+            let mut event = crate::plugin::PlayerUnleashEntityEvent {
                 player: player_arc,
                 entity_id: self.entity_id,
                 cancelled: false,
@@ -5339,15 +5317,9 @@ impl Entity {
     )]
     pub fn add_passenger(&self, vehicle: Arc<dyn EntityBase>, passenger: Arc<dyn EntityBase>) {
         let mut mount_event =
-            crate::plugin::api::events::entity::entity_mount::EntityMountEvent::new(
-                passenger.get_entity().entity_id,
-                self.entity_id,
-            );
+            crate::plugin::EntityMountEvent::new(passenger.get_entity().entity_id, self.entity_id);
         let mut vehicle_enter =
-            crate::plugin::api::events::vehicle::vehicle_enter::VehicleEnterEvent::new(
-                self.entity_id,
-                passenger.get_entity().entity_id,
-            );
+            crate::plugin::VehicleEnterEvent::new(self.entity_id, passenger.get_entity().entity_id);
         if let Some(server) = self.world.load().server.upgrade() {
             server
                 .plugin_manager
@@ -5538,15 +5510,8 @@ impl Entity {
     #[allow(clippy::too_many_lines)]
     fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
         let mut dismount_event =
-            crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
-                passenger_id,
-                self.entity_id,
-            );
-        let mut vehicle_exit =
-            crate::plugin::api::events::vehicle::vehicle_exit::VehicleExitEvent::new(
-                self.entity_id,
-                passenger_id,
-            );
+            crate::plugin::EntityDismountEvent::new(passenger_id, self.entity_id);
+        let mut vehicle_exit = crate::plugin::VehicleExitEvent::new(self.entity_id, passenger_id);
         if let Some(server) = self.world.load().server.upgrade() {
             server
                 .plugin_manager

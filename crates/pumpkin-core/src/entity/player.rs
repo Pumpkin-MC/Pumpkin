@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use crate::entity::attributes::{Modifier, ModifierOperation};
 use crate::entity::passive::abstract_horse::player_jump_pending_scale;
-use crate::plugin::api::events::enchantment::{EnchantItemEvent, PrepareItemEnchantEvent};
+use crate::plugin::{EnchantItemEvent, PrepareItemEnchantEvent};
 use crate::world::scoreboard::{BedrockScoreboard, Scoreboard};
 use advancement::PlayerAdvancement;
 use arc_swap::ArcSwap;
@@ -314,15 +314,15 @@ use crate::data::SaveJSONConfiguration;
 use crate::log_at_level;
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
-use crate::plugin::api::events::entity::horse_jump::HorseJumpEvent;
-use crate::plugin::player::exp_change::PlayerExpChangeEvent;
-use crate::plugin::player::inventory_interact::InventoryClickEvent;
-use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
-use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
-use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
-use crate::plugin::player::player_teleport::PlayerTeleportEvent;
-use crate::plugin::server::packet::PacketSentEvent;
-use crate::plugin::world::chunk_send::ChunkSend;
+use crate::plugin::ChunkSendEvent;
+use crate::plugin::HorseJumpEvent;
+use crate::plugin::InventoryClickEvent;
+use crate::plugin::PacketSentEvent;
+use crate::plugin::PlayerChangeWorldEvent;
+use crate::plugin::PlayerExpChangeEvent;
+use crate::plugin::PlayerGamemodeChangeEvent;
+use crate::plugin::PlayerPermissionCheckEvent;
+use crate::plugin::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::{BlockBreakingProgress, World};
 use bytes::Bytes;
@@ -2031,12 +2031,11 @@ impl Player {
             .upgrade()
             .zip(world.get_player_by_uuid(self.gameprofile.id));
         let amount = if let Some((server, player)) = &player_context {
-            let mut event =
-                crate::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent::new(
-                    player.clone(),
-                    original_item.registry_key.to_string(),
-                    amount,
-                );
+            let mut event = crate::plugin::PlayerItemDamageEvent::new(
+                player.clone(),
+                original_item.registry_key.to_string(),
+                amount,
+            );
             server.plugin_manager.fire_blocking(server, &mut event);
             if event.cancelled {
                 return DamageResult::Untouched;
@@ -2067,11 +2066,10 @@ impl Player {
         if result == DamageResult::Broken
             && let Some((server, player)) = player_context
         {
-            let mut event =
-                crate::plugin::api::events::player::player_item_break::PlayerItemBreakEvent::new(
-                    player,
-                    original_item.registry_key.to_string(),
-                );
+            let mut event = crate::plugin::PlayerItemBreakEvent::new(
+                player,
+                original_item.registry_key.to_string(),
+            );
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         result
@@ -2198,13 +2196,12 @@ impl Player {
         if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
             && let Some(server) = self.world().server.upgrade()
         {
-            let mut event =
-                crate::plugin::api::events::player::player_spawn_change::PlayerSpawnChangeEvent {
-                    player: player_arc,
-                    new_spawn: Some(block_pos),
-                    forced,
-                    cancelled: false,
-                };
+            let mut event = crate::plugin::PlayerSpawnChangeEvent {
+                player: player_arc,
+                new_spawn: Some(block_pos),
+                forced,
+                cancelled: false,
+            };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return false;
@@ -2702,10 +2699,7 @@ impl Player {
         if let Some(server) = world.server.upgrade()
             && let Some(player_arc) = world.get_player_by_uuid(self.gameprofile.id)
         {
-            let mut event =
-                crate::plugin::api::events::player::player_bed::PlayerBedLeaveEvent::new(
-                    player_arc, bed_pos,
-                );
+            let mut event = crate::plugin::PlayerBedLeaveEvent::new(player_arc, bed_pos);
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
@@ -2945,13 +2939,12 @@ impl Player {
         if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
             && let Some(server) = self.world().server.upgrade()
         {
-            let mut event =
-                crate::plugin::api::events::player::player_open_sign::PlayerOpenSignEvent {
-                    player: player_arc,
-                    block_pos: location,
-                    is_front: is_front_text,
-                    cancelled: false,
-                };
+            let mut event = crate::plugin::PlayerOpenSignEvent {
+                player: player_arc,
+                block_pos: location,
+                is_front: is_front_text,
+                cancelled: false,
+            };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;
@@ -2989,7 +2982,7 @@ impl Player {
         ) else {
             return Some(velocity);
         };
-        let mut event = crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent {
+        let mut event = crate::plugin::PlayerVelocityEvent {
             player,
             velocity,
             cancelled: false,
@@ -3081,11 +3074,7 @@ impl Player {
             && let Some(server) = self.world().server.upgrade()
         {
             let link_strings = links.iter().map(|l| l.url.clone()).collect();
-            let mut event =
-                crate::plugin::api::events::player::player_links_send::PlayerLinksSendEvent::new(
-                    player_arc,
-                    link_strings,
-                );
+            let mut event = crate::plugin::PlayerLinksSendEvent::new(player_arc, link_strings);
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;
@@ -3147,9 +3136,9 @@ impl Player {
                 ClientPlatform::Bedrock(client) => {
                     let cancelled = if server_arc
                         .plugin_manager
-                        .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>(
-                    ) {
-                        let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
+                        .has_handlers::<crate::plugin::PacketReceivedEvent>()
+                    {
+                        let mut event = crate::plugin::PacketReceivedEvent::new(
                             player_arc.clone(),
                             packet.id,
                             packet.payload.clone(),
@@ -3295,8 +3284,8 @@ impl Player {
                 ClientPlatform::Java(_) => {
                     let mut batch = batch;
                     let cancelled = match world.server.upgrade() {
-                        Some(server) if server.plugin_manager.has_handlers::<ChunkSend>() => {
-                            ChunkSend::retain_blocking(&server, &world, &mut batch.chunks)
+                        Some(server) if server.plugin_manager.has_handlers::<ChunkSendEvent>() => {
+                            ChunkSendEvent::retain_blocking(&server, &world, &mut batch.chunks)
                         }
                         _ => Vec::new(),
                     };
@@ -3661,11 +3650,7 @@ impl Player {
         if entity.is_fall_flying() || !self.can_glide() || entity.is_in_liquid() {
             return false;
         }
-        let mut event =
-            crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
-                entity.entity_id,
-                true,
-            );
+        let mut event = crate::plugin::EntityToggleGlideEvent::new(entity.entity_id, true);
         server.plugin_manager.fire_blocking(server, &mut event);
         if event.cancelled || !event.is_gliding {
             return false;
@@ -3679,11 +3664,7 @@ impl Player {
         let Some(server) = self.world().server.upgrade() else {
             return true;
         };
-        let mut event =
-            crate::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent::new(
-                self.entity_id(),
-                false,
-            );
+        let mut event = crate::plugin::EntityToggleGlideEvent::new(self.entity_id(), false);
         server.plugin_manager.fire_blocking(&server, &mut event);
         !event.cancelled && !event.is_gliding
     }
@@ -4133,7 +4114,7 @@ impl Player {
             self.world().get_player_by_uuid(self.gameprofile.id)
             && let Some(server) = self.world().server.upgrade()
         {
-            let mut event = crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent {
+            let mut event = crate::plugin::PlayerStatisticIncrementEvent {
                 player: player_arc,
                 statistic_id: format!("{category:?}:{stat}"),
                 amount,
@@ -4934,7 +4915,7 @@ impl Player {
 
                 player.request_teleport(position, yaw, pitch);
 
-                let mut changed_world_event = crate::plugin::api::events::player::player_changed_world::PlayerChangedWorldEvent {
+                let mut changed_world_event = crate::plugin::PlayerChangedWorldEvent {
                     player: player.clone(),
                     from_world: current_world,
                     to_world: new_world,
@@ -4958,8 +4939,8 @@ impl Player {
         if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) {
             let mut event = PlayerTeleportEvent {
                 player: player_arc,
-                from: self.living_entity.entity.pos.load(),
-                to: position,
+                from_position: self.living_entity.entity.pos.load(),
+                to_position: position,
                 cancelled: false,
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
@@ -5143,7 +5124,7 @@ impl Player {
         if let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
-            let mut event = crate::plugin::api::events::player::player_kick::PlayerKickEvent::new(
+            let mut event = crate::plugin::PlayerKickEvent::new(
                 player_arc,
                 message.clone().to_pretty_console(),
             );
@@ -5226,10 +5207,7 @@ impl Player {
             return;
         }
         let mut exhaustion_event =
-            crate::plugin::api::events::entity::entity_exhaustion::EntityExhaustionEvent::new(
-                self.entity_id(),
-                exhaustion,
-            );
+            crate::plugin::EntityExhaustionEvent::new(self.entity_id(), exhaustion);
         if let Some(server) = self.world().server.upgrade() {
             server
                 .plugin_manager
@@ -5448,11 +5426,10 @@ impl Player {
     }
 
     pub fn set_food_level(&self, food_level: u8) {
-        let mut food_event =
-            crate::plugin::api::events::entity::food_level_change::FoodLevelChangeEvent::new(
-                self.living_entity.entity.entity_id,
-                food_level,
-            );
+        let mut food_event = crate::plugin::FoodLevelChangeEvent::new(
+            self.living_entity.entity.entity_id,
+            food_level,
+        );
         if let Some(server) = self.world().server.upgrade() {
             server
                 .plugin_manager
@@ -6104,12 +6081,11 @@ impl Player {
         if let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
-            let mut event =
-                crate::plugin::api::events::player::player_drop_item::PlayerDropItemEvent::new(
-                    player_arc,
-                    dropped_stack.item.registry_key.to_string(),
-                    dropped_stack.item_count,
-                );
+            let mut event = crate::plugin::PlayerDropItemEvent::new(
+                player_arc,
+                dropped_stack.item.registry_key.to_string(),
+                dropped_stack.item_count,
+            );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;
@@ -6141,7 +6117,7 @@ impl Player {
         if let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
-            let mut event = crate::plugin::api::events::player::player_swap_hands::PlayerSwapHandItemsEvent::new(player_arc);
+            let mut event = crate::plugin::PlayerSwapHandsEvent::new(player_arc);
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;
@@ -6324,11 +6300,8 @@ impl Player {
             && let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
-            let mut event = crate::plugin::api::events::player::player_level_change::PlayerLevelChangeEvent::new(
-                player_arc,
-                old_level,
-                level,
-            );
+            let mut event =
+                crate::plugin::PlayerLevelChangeEvent::new(player_arc, old_level, level);
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         // TODO: These should be atomic together, not isolated; make a struct containing these. can cause ABA issues
@@ -6596,14 +6569,13 @@ impl Player {
         if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
             && let Some(server) = self.world().server.upgrade()
         {
-            let mut event =
-                crate::plugin::api::events::player::player_item_mend::PlayerItemMendEvent {
-                    player: player_arc,
-                    item_name: stack.item.registry_key.to_string(),
-                    repair_amount: repaired,
-                    exp_consumed: xp_used,
-                    cancelled: false,
-                };
+            let mut event = crate::plugin::PlayerItemMendEvent {
+                player: player_arc,
+                item_name: stack.item.registry_key.to_string(),
+                repair_amount: repaired,
+                exp_consumed: xp_used,
+                cancelled: false,
+            };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return xp;
@@ -6689,11 +6661,7 @@ impl Player {
         if let Some(server) = server
             && let Some(player_arc) = world.get_player_by_uuid(self.gameprofile.id)
         {
-            let mut event =
-                crate::plugin::api::events::player::inventory_close::InventoryCloseEvent::new(
-                    &player_arc,
-                    window_type,
-                );
+            let mut event = crate::plugin::InventoryCloseEvent::new(player_arc, window_type);
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
@@ -6732,11 +6700,7 @@ impl Player {
         self.update_last_action_time();
 
         let mut prepare_event =
-            crate::plugin::api::events::inventory::prepare_anvil::PrepareAnvilEvent::new(
-                self.clone(),
-                packet.item_name.to_string(),
-                1,
-            );
+            crate::plugin::PrepareAnvilEvent::new(self.clone(), packet.item_name.to_string(), 1);
         if let Some(server) = self.world().server.upgrade() {
             server
                 .plugin_manager
@@ -6781,10 +6745,7 @@ impl Player {
         if let Some(server) = server
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
-            let mut event =
-                crate::plugin::api::events::inventory::inventory_open::InventoryOpenEvent::new(
-                    player_arc,
-                );
+            let mut event = crate::plugin::InventoryOpenEvent::new(player_arc);
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return None;
@@ -6903,10 +6864,7 @@ impl Player {
         if let Some(server) = world.server.upgrade()
             && let Some(player_arc) = world.get_player_by_uuid(self.gameprofile.id)
         {
-            let mut event =
-                crate::plugin::api::events::inventory::inventory_open::InventoryOpenEvent::new(
-                    player_arc,
-                );
+            let mut event = crate::plugin::InventoryOpenEvent::new(player_arc);
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return false;
@@ -7091,7 +7049,7 @@ impl Player {
             send_cancellable_blocking! {{
                 server;
                 InventoryClickEvent::new(
-                    self,
+                    self.clone(),
                     window_type,
                     click_type,
                     slot,
@@ -7150,7 +7108,7 @@ impl Player {
         send_cancellable_blocking! {{
             server;
             InventoryClickEvent::new(
-                self,
+                self.clone(),
                 window_type,
                 click_type,
                 slot,
@@ -7166,10 +7124,7 @@ impl Player {
             }
         }}
 
-        let mut interact_event =
-            crate::plugin::api::events::inventory::inventory_interact::InventoryInteractEvent::new(
-                self.clone(),
-            );
+        let mut interact_event = crate::plugin::InventoryInteractEvent::new(self.clone());
         if let Some(server) = self.world().server.upgrade() {
             server
                 .plugin_manager
@@ -7184,16 +7139,14 @@ impl Player {
             && let Some(ref stack) = clicked_item
             && !stack.is_empty()
         {
-            let mut craft_event =
-                crate::plugin::api::events::inventory::craft_item::CraftItemEvent::new(
-                    self.clone(),
-                    stack.item.registry_key.to_string(),
-                );
-            let mut prep_craft =
-                crate::plugin::api::events::inventory::prepare_item_craft::PrepareItemCraftEvent::new(
-                    self.clone(),
-                    stack.item.registry_key.to_string(),
-                );
+            let mut craft_event = crate::plugin::CraftItemEvent::new(
+                self.clone(),
+                stack.item.registry_key.to_string(),
+            );
+            let mut prep_craft = crate::plugin::PrepareItemCraftEvent::new(
+                self.clone(),
+                stack.item.registry_key.to_string(),
+            );
             if let Some(server) = self.world().server.upgrade() {
                 server
                     .plugin_manager
@@ -7213,16 +7166,14 @@ impl Player {
             && let Some(ref stack) = clicked_item
             && !stack.is_empty()
         {
-            let mut smith_event =
-                crate::plugin::api::events::inventory::smith_item::SmithItemEvent::new(
-                    self.clone(),
-                    stack.item.registry_key.to_string(),
-                );
-            let mut prep_smith =
-                crate::plugin::api::events::inventory::prepare_smithing::PrepareSmithingEvent::new(
-                    self.clone(),
-                    Some(stack.item.registry_key.to_string()),
-                );
+            let mut smith_event = crate::plugin::SmithItemEvent::new(
+                self.clone(),
+                stack.item.registry_key.to_string(),
+            );
+            let mut prep_smith = crate::plugin::PrepareSmithingEvent::new(
+                self.clone(),
+                Some(stack.item.registry_key.to_string()),
+            );
             if let Some(server) = self.world().server.upgrade() {
                 server
                     .plugin_manager
@@ -7244,14 +7195,13 @@ impl Player {
             && let Some(ref stack) = clicked_item
             && !stack.is_empty()
         {
-            let mut extract_event =
-                crate::plugin::api::events::inventory::furnace_extract::FurnaceExtractEvent::new(
-                    self.clone(),
-                    pumpkin_util::math::position::BlockPos::new(0, 0, 0),
-                    stack.item.registry_key.to_string(),
-                    stack.item_count as u32,
-                    0.0,
-                );
+            let mut extract_event = crate::plugin::FurnaceExtractEvent::new(
+                self.clone(),
+                pumpkin_util::math::position::BlockPos::new(0, 0, 0),
+                stack.item.registry_key.to_string(),
+                stack.item_count as u32,
+                0.0,
+            );
             if let Some(server) = self.world().server.upgrade() {
                 server
                     .plugin_manager
@@ -7262,11 +7212,14 @@ impl Player {
         if window_type == Some(WindowType::Grindstone)
             && let Some(ref stack) = clicked_item
         {
-            let mut prep_grindstone =
-                crate::plugin::api::events::inventory::prepare_grindstone::PrepareGrindstoneEvent::new(
-                    self.clone(),
-                    if stack.is_empty() { None } else { Some(stack.item.registry_key.to_string()) },
-                );
+            let mut prep_grindstone = crate::plugin::PrepareGrindstoneEvent::new(
+                self.clone(),
+                if stack.is_empty() {
+                    None
+                } else {
+                    Some(stack.item.registry_key.to_string())
+                },
+            );
             if let Some(server) = self.world().server.upgrade() {
                 server
                     .plugin_manager
@@ -7275,11 +7228,14 @@ impl Player {
         }
 
         if let Some(ref stack) = clicked_item {
-            let mut prep_result =
-                crate::plugin::api::events::inventory::prepare_inventory_result::PrepareInventoryResultEvent::new(
-                    self.clone(),
-                    if stack.is_empty() { None } else { Some(stack.item.registry_key.to_string()) },
-                );
+            let mut prep_result = crate::plugin::PrepareInventoryResultEvent::new(
+                self.clone(),
+                if stack.is_empty() {
+                    None
+                } else {
+                    Some(stack.item.registry_key.to_string())
+                },
+            );
             if let Some(server) = self.world().server.upgrade() {
                 server
                     .plugin_manager
@@ -7288,10 +7244,7 @@ impl Player {
         }
 
         if packet.mode == SlotActionType::QuickCraft {
-            let mut drag_event =
-                crate::plugin::api::events::inventory::inventory_drag::InventoryDragEvent::new(
-                    self.clone(),
-                );
+            let mut drag_event = crate::plugin::InventoryDragEvent::new(self.clone());
             if let Some(server) = self.world().server.upgrade() {
                 server
                     .plugin_manager
@@ -7381,7 +7334,7 @@ impl Player {
                 .plugin_manager
                 .fire_blocking(&server_arc, &mut event);
         }
-        event.result
+        event.permission_result
     }
 
     pub fn is_creative(&self) -> bool {
@@ -9277,21 +9230,26 @@ impl InventoryPlayer for Player {
         let Some(server) = self.world().server.upgrade() else {
             return false;
         };
-        let mut event = PrepareItemEnchantEvent::new(
-            player_arc,
-            item.clone(),
-            *level_requirements,
-            *enchantment_id,
-            *enchantment_level,
-            bookshelf_count,
-        );
+        let offers = (0..3)
+            .map(|i| {
+                crate::plugin::EnchantmentOffer::new(
+                    level_requirements[i],
+                    enchantment_id[i],
+                    enchantment_level[i],
+                )
+            })
+            .collect();
+        let mut event =
+            PrepareItemEnchantEvent::new(player_arc, item.clone(), offers, bookshelf_count);
         server.plugin_manager.fire_blocking(&server, &mut event);
         if event.cancelled {
             return true;
         }
-        *level_requirements = event.level_requirements;
-        *enchantment_id = event.enchantment_id;
-        *enchantment_level = event.enchantment_level;
+        for (i, offer) in event.offers.iter().enumerate().take(3) {
+            level_requirements[i] = offer.cost;
+            enchantment_id[i] = offer.enchantment_id;
+            enchantment_level[i] = offer.enchantment_level;
+        }
         false
     }
 
@@ -9308,18 +9266,26 @@ impl InventoryPlayer for Player {
         let Some(server) = self.world().server.upgrade() else {
             return false;
         };
+        let offers_to_add = enchantments_to_add
+            .iter()
+            .map(|&(enc, lvl)| crate::plugin::EnchantmentValue::new(enc, lvl.max(0) as u32))
+            .collect();
         let mut event = EnchantItemEvent::new(
             player_arc,
             item.clone(),
             option,
             exp_level_cost,
-            enchantments_to_add.clone(),
+            offers_to_add,
         );
         server.plugin_manager.fire_blocking(&server, &mut event);
         if event.cancelled {
             return true;
         }
-        *enchantments_to_add = event.enchantments_to_add;
+        *enchantments_to_add = event
+            .enchantments_to_add
+            .into_iter()
+            .map(|ev| (ev.enchantment, ev.level as i32))
+            .collect();
         false
     }
 

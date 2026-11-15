@@ -292,7 +292,7 @@ impl Mob for AxolotlEntity {
             let entity = self.get_entity();
             let world = entity.world.load();
             if let Some(server) = world.server.upgrade() {
-                let mut event = crate::plugin::api::events::player::player_bucket_entity::PlayerBucketEntityEvent {
+                let mut event = crate::plugin::PlayerBucketEntityEvent {
                     player: player.clone(),
                     entity_id: entity.entity_id,
                     bucket_item: "axolotl_bucket".to_string(),

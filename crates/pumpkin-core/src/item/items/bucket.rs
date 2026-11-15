@@ -459,12 +459,11 @@ impl ItemBehaviour for EmptyBucketItem {
         if let Some(server) = world.server.upgrade()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
         {
-            let mut event =
-                crate::plugin::api::events::player::player_bucket::PlayerBucketFillEvent::new(
-                    player_arc,
-                    block_pos,
-                    filled_item.registry_key.to_string(),
-                );
+            let mut event = crate::plugin::PlayerBucketFillEvent::new(
+                player_arc,
+                block_pos,
+                filled_item.registry_key.to_string(),
+            );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;
@@ -549,12 +548,11 @@ impl ItemBehaviour for FilledBucketItem {
         if let Some(server) = world.server.upgrade()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
         {
-            let mut event =
-                crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent::new(
-                    player_arc,
-                    pos,
-                    item.registry_key.to_string(),
-                );
+            let mut event = crate::plugin::PlayerBucketEmptyEvent::new(
+                player_arc,
+                pos,
+                item.registry_key.to_string(),
+            );
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
@@ -594,7 +592,7 @@ impl ItemBehaviour for FilledBucketItem {
                 apply_mob_bucket_components(&bucket_stack, mob.as_ref(), player);
                 if world.spawn_creature(
                     mob.clone(),
-                    crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason::Bucket,
+                    crate::plugin::CreatureSpawnReason::Bucket,
                     world.get_player_by_uuid(player.gameprofile.id),
                 ) && let Some(fish) = mob.get_mob().and_then(|mob| mob.as_fish())
                 {

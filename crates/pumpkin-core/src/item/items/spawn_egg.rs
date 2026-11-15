@@ -7,7 +7,7 @@ use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
 use crate::item::{ItemBehaviour, ItemMetadata};
-use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
+use crate::plugin::CreatureSpawnReason;
 use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::data_component::DataComponent;

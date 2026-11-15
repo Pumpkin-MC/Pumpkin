@@ -36,67 +36,23 @@ use crate::{
         WardenAngerChangeEventData,
     },
 };
-use pumpkin_core::plugin::entity::{
-    area_effect_cloud_apply::AreaEffectCloudApplyEvent,
-    arrow_body_count_change::ArrowBodyCountChangeEvent,
-    bat_toggle_sleep::BatToggleSleepEvent,
-    creature_spawn::CreatureSpawnEvent,
-    creeper_power::CreeperPowerEvent,
-    ender_dragon_change_phase::EnderDragonChangePhaseEvent,
-    entity_break_door::EntityBreakDoorEvent,
-    entity_change_block::EntityChangeBlockEvent,
-    entity_combust::EntityCombustEvent,
-    entity_combust_by_block::EntityCombustByBlockEvent,
-    entity_combust_by_entity::EntityCombustByEntityEvent,
-    entity_damage::EntityDamageEvent,
-    entity_damage_by_block::EntityDamageByBlockEvent,
-    entity_damage_by_entity::EntityDamageByEntityEvent,
-    entity_death::{EntityDeathEvent, PlayerDeathEvent},
-    entity_drop_item::EntityDropItemEvent,
-    entity_enter_block::EntityEnterBlockEvent,
-    entity_exhaustion::EntityExhaustionEvent,
-    entity_interact::EntityInteractEvent,
-    entity_knockback::EntityKnockbackEvent,
-    entity_knockback_by_entity::EntityKnockbackByEntityEvent,
-    entity_place::EntityPlaceEvent,
-    entity_portal_enter::EntityPortalEnterEvent,
-    entity_portal_exit::EntityPortalExitEvent,
-    entity_pose_change::EntityPoseChangeEvent,
-    entity_potion_effect::EntityPotionEffectEvent,
-    entity_regain_health::EntityRegainHealthEvent,
-    entity_remove::EntityRemoveEvent,
-    entity_spawn::EntitySpawnEvent,
-    entity_spell_cast::EntitySpellCastEvent,
-    entity_target_block::EntityTargetBlockEvent,
-    entity_target_living_entity::EntityTargetLivingEntityEvent,
-    entity_toggle_swim::EntityToggleSwimEvent,
-    entity_unleash::EntityUnleashEvent,
-    exp_bottle::ExpBottleEvent,
-    explosion_prime::ExplosionPrimeEvent,
-    firework_explode::FireworkExplodeEvent,
-    food_level_change::FoodLevelChangeEvent,
-    horse_jump::HorseJumpEvent,
-    item_despawn::ItemDespawnEvent,
-    item_merge::ItemMergeEvent,
-    item_spawn::ItemSpawnEvent,
-    lingering_potion_splash::LingeringPotionSplashEvent,
-    pig_zap::PigZapEvent,
-    pig_zombie_anger::PigZombieAngerEvent,
-    piglin_barter::PiglinBarterEvent,
-    potion_splash::PotionSplashEvent,
-    projectile_hit::ProjectileHitEvent,
-    projectile_launch::ProjectileLaunchEvent,
-    sheep_dye_wool::SheepDyeWoolEvent,
-    sheep_regrow_wool::SheepRegrowWoolEvent,
-    slime_split::SlimeSplitEvent,
-    spawner_spawn::SpawnerSpawnEvent,
-    strider_temperature_change::StriderTemperatureChangeEvent,
-    trial_spawner_spawn::TrialSpawnerSpawnEvent,
-    villager_acquire_trade::VillagerAcquireTradeEvent,
-    villager_career_change::VillagerCareerChangeEvent,
-    villager_replenish_trade::VillagerReplenishTradeEvent,
-    villager_reputation_change::VillagerReputationChangeEvent,
-    warden_anger_change::WardenAngerChangeEvent,
+use pumpkin_core::plugin::{
+    AreaEffectCloudApplyEvent, ArrowBodyCountChangeEvent, BatToggleSleepEvent, CreatureSpawnEvent,
+    CreeperPowerEvent, EnderDragonChangePhaseEvent, EntityBreakDoorEvent, EntityChangeBlockEvent,
+    EntityCombustByBlockEvent, EntityCombustByEntityEvent, EntityCombustEvent,
+    EntityDamageByBlockEvent, EntityDamageByEntityEvent, EntityDamageEvent, EntityDeathEvent,
+    EntityDropItemEvent, EntityEnterBlockEvent, EntityExhaustionEvent, EntityInteractEvent,
+    EntityKnockbackByEntityEvent, EntityKnockbackEvent, EntityPlaceEvent, EntityPortalEnterEvent,
+    EntityPortalExitEvent, EntityPoseChangeEvent, EntityPotionEffectEvent, EntityRegainHealthEvent,
+    EntityRemoveEvent, EntitySpawnEvent, EntitySpellCastEvent, EntityTargetBlockEvent,
+    EntityTargetLivingEntityEvent, EntityToggleSwimEvent, EntityUnleashEvent, ExpBottleEvent,
+    ExplosionPrimeEvent, FireworkExplodeEvent, FoodLevelChangeEvent, HorseJumpEvent,
+    ItemDespawnEvent, ItemMergeEvent, ItemSpawnEvent, LingeringPotionSplashEvent, PigZapEvent,
+    PigZombieAngerEvent, PiglinBarterEvent, PlayerDeathEvent, PotionSplashEvent,
+    ProjectileHitEvent, ProjectileLaunchEvent, SheepDyeWoolEvent, SheepRegrowWoolEvent,
+    SlimeSplitEvent, SpawnerSpawnEvent, StriderTemperatureChangeEvent, TrialSpawnerSpawnEvent,
+    VillagerAcquireTradeEvent, VillagerCareerChangeEvent, VillagerReplenishTradeEvent,
+    VillagerReputationChangeEvent, WardenAngerChangeEvent,
 };
 use pumpkin_wasm_host_common::state::PluginHostState;
 
@@ -177,7 +133,7 @@ impl ToFromWasmEvent for PlayerDeathEvent {
 impl ToFromWasmEvent for EntitySpawnEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add(self.world.clone())
+            .add(self.target_world.clone())
             .expect("failed to add world resource");
 
         Event::EntitySpawnEvent(EntitySpawnEventData {
@@ -192,7 +148,7 @@ impl ToFromWasmEvent for EntitySpawnEvent {
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::EntitySpawnEvent(data) => {
-                let world = consume_world(state, &data.target_world);
+                let target_world = consume_world(state, &data.target_world);
                 Self {
                     entity_id: data.entity_id,
                     entity_type: data.entity_type,
@@ -201,7 +157,7 @@ impl ToFromWasmEvent for EntitySpawnEvent {
                         data.position.1,
                         data.position.2,
                     ),
-                    world,
+                    target_world,
                     cancelled: data.cancelled,
                 }
             }
@@ -252,9 +208,7 @@ impl ToFromWasmEvent for EntityRegainHealthEvent {
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityAirChangeEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityAirChangeEvent(EntityAirChangeEventData {
             entity_id: self.entity_id,
@@ -275,7 +229,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_breed::EntityBreedEvent {
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityBreedEvent {
     fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
         if let Event::EntityBreedEvent(data) = event {
             self.cancelled = data.cancelled;
@@ -305,9 +259,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_breed
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_dismount::EntityDismountEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityDismountEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityDismountEvent(EntityDismountEventData {
             entity_id: self.entity_id,
@@ -328,7 +280,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_dye::EntityDyeEvent {
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityDyeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = self.player.as_ref().and_then(|p| state.add(p.clone()).ok());
         Event::EntityDyeEvent(EntityDyeEventData {
@@ -343,7 +295,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_dye::
         match event {
             Event::EntityDyeEvent(data) => Self {
                 entity_id: data.entity_id,
-                color: pumpkin_core::plugin::api::events::entity::entity_dye::DyeColor::White,
+                color: pumpkin_data::dye_color::DyeColor::White,
                 player: data.player.map(|p| consume_player(state, &p)),
                 cancelled: data.cancelled,
             },
@@ -352,9 +304,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_dye::
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_enter_love_mode::EntityEnterLoveModeEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityEnterLoveModeEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityEnterLoveModeEvent(EntityEnterLoveModeEventData {
             entity_id: self.entity_id,
@@ -377,9 +327,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_explode::EntityExplodeEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityExplodeEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityExplodeEvent(EntityExplodeEventData {
             entity_id: self.entity_id,
@@ -406,11 +354,11 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_mount::EntityMountEvent {
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityMountEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityMountEvent(EntityMountEventData {
             entity_id: self.entity_id,
-            mounted_id: self.mount_id,
+            mounted_id: self.mounted_id,
             cancelled: self.cancelled,
         })
     }
@@ -419,7 +367,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_mount
         match event {
             Event::EntityMountEvent(data) => Self {
                 entity_id: data.entity_id,
-                mount_id: data.mounted_id,
+                mounted_id: data.mounted_id,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -427,9 +375,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_mount
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityPickupItemEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityPickupItemEvent(EntityPickupItemEventData {
             entity_id: self.entity_id,
@@ -452,9 +398,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_portal::EntityPortalEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityPortalEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityPortalEvent(EntityPortalEventData {
             entity_id: self.entity_id,
@@ -475,9 +419,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_resurrect::EntityResurrectEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityResurrectEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityResurrectEvent(EntityResurrectEventData {
             entity_id: self.entity_id,
@@ -496,9 +438,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_shoot_bow::EntityShootBowEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityShootBowEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityShootBowEvent(EntityShootBowEventData {
             entity_id: self.entity_id,
@@ -521,7 +461,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_tame::EntityTameEvent {
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityTameEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let owner = state
             .add(self.owner.clone())
@@ -545,9 +485,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::entity::entity_tame:
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_target::EntityTargetEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityTargetEvent {
     fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
         if let Event::EntityTargetEvent(data) = event {
             self.target_id = data.target_id;
@@ -568,8 +506,7 @@ impl ToFromWasmEvent
             Event::EntityTargetEvent(data) => Self {
                 entity_id: data.entity_id,
                 target_id: data.target_id,
-                reason:
-                    pumpkin_core::plugin::api::events::entity::entity_target::TargetReason::Unknown,
+                reason: pumpkin_core::plugin::TargetReason::Unknown,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -577,9 +514,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_teleport::EntityTeleportEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityTeleportEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityTeleportEvent(EntityTeleportEventData {
             entity_id: self.entity_id,
@@ -610,9 +545,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_toggle_glide::EntityToggleGlideEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityToggleGlideEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityToggleGlideEvent(EntityToggleGlideEventData {
             entity_id: self.entity_id,
@@ -633,9 +566,7 @@ impl ToFromWasmEvent
     }
 }
 
-impl ToFromWasmEvent
-    for pumpkin_core::plugin::api::events::entity::entity_transform::EntityTransformEvent
-{
+impl ToFromWasmEvent for pumpkin_core::plugin::EntityTransformEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::EntityTransformEvent(EntityTransformEventData {
             entity_id: self.entity_id,
@@ -661,7 +592,7 @@ impl ToFromWasmEvent
 impl ToFromWasmEvent for CreatureSpawnEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add(self.world.clone())
+            .add(self.target_world.clone())
             .expect("failed to add world resource");
         let player = self.player.as_ref().map(|player| {
             state
@@ -673,7 +604,7 @@ impl ToFromWasmEvent for CreatureSpawnEvent {
             entity_type: self.entity_type.clone(),
             position: to_wasm_position(self.position),
             target_world,
-            spawn_reason: self.spawn_reason.clone(),
+            spawn_reason: self.spawn_reason.as_str().to_string(),
             player,
             cancelled: self.cancelled,
         })
@@ -692,8 +623,12 @@ impl ToFromWasmEvent for CreatureSpawnEvent {
                 entity_id: data.entity_id,
                 entity_type: data.entity_type,
                 position: from_wasm_position(data.position),
-                world: consume_world(state, &data.target_world),
-                spawn_reason: data.spawn_reason,
+                target_world: consume_world(state, &data.target_world),
+                spawn_reason: match data.spawn_reason.as_str() {
+                    "DISPENSE_EGG" => pumpkin_core::plugin::CreatureSpawnReason::DispenseEgg,
+                    "BUCKET" => pumpkin_core::plugin::CreatureSpawnReason::Bucket,
+                    _ => pumpkin_core::plugin::CreatureSpawnReason::SpawnerEgg,
+                },
                 player: data.player.map(|player| consume_player(state, &player)),
                 cancelled: data.cancelled,
             },

@@ -4,10 +4,7 @@ use crate::{
         Event, HangingBreakByEntityEventData, HangingBreakEventData, HangingPlaceEventData,
     },
 };
-use pumpkin_core::plugin::hanging::{
-    hanging_break::HangingBreakEvent, hanging_break_by_entity::HangingBreakByEntityEvent,
-    hanging_place::HangingPlaceEvent,
-};
+use pumpkin_core::plugin::{HangingBreakByEntityEvent, HangingBreakEvent, HangingPlaceEvent};
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl ToFromWasmEvent for HangingBreakEvent {

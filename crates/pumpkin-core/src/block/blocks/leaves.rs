@@ -104,10 +104,7 @@ impl BlockBehaviour for LeavesBlock {
         if !props.persistent && props.distance == DECAY_DISTANCE {
             if let Some(server) = args.world.server.upgrade() {
                 let mut event =
-                    crate::plugin::api::events::block::leaves_decay::LeavesDecayEvent::new(
-                        *args.position,
-                        args.world.clone(),
-                    );
+                    crate::plugin::LeavesDecayEvent::new(*args.position, args.world.clone());
                 server.plugin_manager.fire_blocking(&server, &mut event);
                 if event.cancelled {
                     return;

@@ -3,7 +3,7 @@ use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use std::sync::{Arc, Weak};
 
 pub struct OwnerHurtByTargetGoal {

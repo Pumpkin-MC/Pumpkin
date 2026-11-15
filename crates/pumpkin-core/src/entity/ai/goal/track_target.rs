@@ -3,7 +3,7 @@ use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::EntityBase;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::{Mob, MobEntity};
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
 use std::sync::{Arc, Weak};

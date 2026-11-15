@@ -567,12 +567,7 @@ impl BlockRegistry {
         if behaviour.is_bonemeal_success(args) {
             if let Some(server) = world.server.upgrade() {
                 let mut event =
-                    crate::plugin::api::events::block::block_fertilize::BlockFertilizeEvent::new(
-                        *position,
-                        world.clone(),
-                        None,
-                        vec![],
-                    );
+                    crate::plugin::BlockFertilizeEvent::new(*position, world.clone(), None, vec![]);
                 server.plugin_manager.fire_blocking(&server, &mut event);
                 if event.cancelled {
                     return false;
@@ -838,7 +833,7 @@ impl BlockRegistry {
             }
         }
 
-        let mut can_build_event = crate::plugin::block::block_can_build::BlockCanBuildEvent {
+        let mut can_build_event = crate::plugin::BlockCanBuildEvent {
             block_to_build: placed_block,
             buildable,
             player: player.clone(),
@@ -852,7 +847,7 @@ impl BlockRegistry {
             return Ok(None);
         }
 
-        let mut event = crate::plugin::block::block_place::BlockPlaceEvent::new(
+        let mut event = crate::plugin::BlockPlaceEvent::new(
             player.clone(),
             placed_block,
             clicked_block,

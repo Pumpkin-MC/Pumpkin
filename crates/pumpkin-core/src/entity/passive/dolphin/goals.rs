@@ -520,7 +520,7 @@ fn drop_item(mob: &dyn Mob) -> bool {
     }
     let entity = mob.get_entity();
     let world = entity.world.load();
-    let mut event = crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent::new(
+    let mut event = crate::plugin::EntityDropItemEvent::new(
         entity.entity_id,
         stack.item.registry_key.to_string(),
         stack.item_count,

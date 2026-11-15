@@ -350,11 +350,7 @@ impl BedBlock {
         }
 
         if let Some(server) = world.server.upgrade() {
-            let mut event =
-                crate::plugin::api::events::player::player_bed::PlayerBedEnterEvent::new(
-                    player.clone(),
-                    bed_head_pos,
-                );
+            let mut event = crate::plugin::PlayerBedEnterEvent::new(player.clone(), bed_head_pos);
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return BlockActionResult::SuccessServer;

@@ -5,7 +5,7 @@ use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 

@@ -11,27 +11,20 @@ use wasmtime::component::Resource;
 
 use crate::pumpkin;
 use pumpkin_core::{
-    entity::player::Player,
+    entity::{EntityBase, player::Player},
     plugin::{BoxFuture, EventHandler, Payload},
     server::Server,
     world::World,
 };
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_wasm_host_common::{plugin::WasmPlugin, state::PluginHostState};
+use tokio::sync::Mutex;
 
-pub mod block;
-pub mod cleanup;
 pub mod dialog;
-pub mod enchantment;
-pub mod entity;
-pub mod hanging;
-pub mod inventory;
-pub mod player;
-pub mod raid;
+pub mod generated;
 pub mod server;
-pub mod vehicle;
-pub mod world;
 
-pub use cleanup::*;
+pub use generated::*;
 
 impl pumpkin::plugin::event::Host for PluginHostState {}
 
@@ -219,6 +212,69 @@ pub(super) fn consume_world(
         .expect("invalid world resource handle")
 }
 
+pub(super) fn consume_entity(
+    state: &mut PluginHostState,
+    entity: &Resource<pumpkin::plugin::entity::Entity>,
+) -> Arc<dyn EntityBase> {
+    state
+        .resource_table
+        .delete::<Arc<dyn EntityBase>>(Resource::new_own(entity.rep()))
+        .expect("invalid entity resource handle")
+}
+
+pub(super) fn consume_item_stack(
+    state: &mut PluginHostState,
+    item: &Resource<pumpkin::plugin::item_stack::ItemStack>,
+) -> ItemStack {
+    let mutex = state
+        .resource_table
+        .delete::<Arc<Mutex<ItemStack>>>(Resource::new_own(item.rep()))
+        .expect("invalid item stack resource handle");
+    mutex.try_lock().expect("lock item stack").clone()
+}
+
+pub(super) fn cleanup_player(
+    state: &mut PluginHostState,
+    player: &Resource<pumpkin::plugin::player::Player>,
+) {
+    state.discard_to_be_removed(player);
+}
+
+pub(super) fn cleanup_world(
+    state: &mut PluginHostState,
+    world: &Resource<pumpkin::plugin::world::World>,
+) {
+    state.discard_to_be_removed(world);
+}
+
+pub(super) fn cleanup_text_component(
+    state: &mut PluginHostState,
+    text_component: &Resource<pumpkin::plugin::text::TextComponent>,
+) {
+    state.discard_to_be_removed(text_component);
+}
+
+pub(super) fn cleanup_item_stack(
+    state: &mut PluginHostState,
+    item: &Resource<pumpkin::plugin::item_stack::ItemStack>,
+) {
+    state.discard_to_be_removed(item);
+}
+
+pub fn cleanup_entity(
+    state: &mut PluginHostState,
+    entity: &Resource<pumpkin::plugin::entity::Entity>,
+) {
+    state.discard_to_be_removed(entity);
+}
+
+pub fn cleanup_server(
+    state: &mut PluginHostState,
+    server: &Resource<pumpkin::plugin::server::Server>,
+) {
+    state.discard_to_be_removed(server);
+}
+
 type WasmEvent = crate::pumpkin::plugin::event::Event;
 
 /// An event crossing into a guest handler and back
@@ -352,10 +408,48 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_core::plugin::server::{
-        server_broadcast::ServerBroadcastEvent, server_command::ServerCommandEvent,
+    use pumpkin_core::plugin::{
+        AsyncPlayerPreLoginEvent, PortalCreateEvent, PortalType, ServerBroadcastEvent,
+        ServerCommandEvent,
     };
     use pumpkin_util::text::TextComponent;
+
+    #[test]
+    fn generated_events_round_trip_semantic_types_and_release_resources() {
+        let mut state = PluginHostState::new();
+        let addr: std::net::SocketAddr = "198.51.100.7:25565".parse().expect("valid socket addr");
+        let uuid = uuid::Uuid::from_u128(0x1234_5678_9abc_def0_1122_3344_5566_7788);
+        let pre_login = AsyncPlayerPreLoginEvent::new(
+            "Steve".to_string(),
+            uuid,
+            addr,
+            TextComponent::text("Banned"),
+        );
+
+        let wasm_event = pre_login.to_wasm_event(&mut state);
+        let WasmEvent::AsyncPlayerPreLoginEvent(data) = &wasm_event else {
+            panic!("expected async player pre-login event");
+        };
+        let kick_rep = data.kick_message.rep();
+
+        let round_tripped = AsyncPlayerPreLoginEvent::from_wasm_event(wasm_event, &mut state);
+        assert_eq!(round_tripped.player_name, "Steve");
+        assert_eq!(round_tripped.player_uuid, uuid);
+        assert_eq!(round_tripped.ip_address, addr);
+        assert_eq!(round_tripped.kick_message, TextComponent::text("Banned"));
+        assert!(
+            state
+                .resource_table
+                .get::<TextComponent>(&Resource::new_borrow(kick_rep))
+                .is_err()
+        );
+
+        let portal = PortalCreateEvent::new(BlockPos::new(10, 64, -20), PortalType::End);
+        let wasm_portal = portal.to_wasm_event(&mut state);
+        let portal_rt = PortalCreateEvent::from_wasm_event(wasm_portal, &mut state);
+        assert_eq!(portal_rt.pos, BlockPos::new(10, 64, -20));
+        assert_eq!(portal_rt.portal_type, PortalType::End);
+    }
 
     #[test]
     fn blocking_event_validates_returned_case_and_releases_rejected_resources() {

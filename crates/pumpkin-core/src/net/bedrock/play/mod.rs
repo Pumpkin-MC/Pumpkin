@@ -65,12 +65,9 @@ use crate::{
         player::{MINE_BLOCK_EXHAUSTION, Player},
     },
     net::{DisconnectReason, bedrock::BedrockClient},
-    plugin::player::{
-        item_held::PlayerItemHeldEvent,
-        player_chat::PlayerChatEvent,
-        player_command_send::PlayerCommandSendEvent,
-        player_interact_entity_event::PlayerInteractEntityEvent,
-        player_interact_event::{InteractAction, PlayerInteractEvent},
+    plugin::{
+        InteractAction, PlayerChatEvent, PlayerCommandSendEvent, PlayerInteractEntityEvent,
+        PlayerInteractEvent, PlayerItemHeldEvent,
     },
     server::{Server, seasonal_events},
     world::{BlockBreakingProgress, chunker},

@@ -11,9 +11,7 @@ use crate::{
         PrepareItemEnchantEventData,
     },
 };
-use pumpkin_core::plugin::enchantment::{
-    enchant_item::EnchantItemEvent, prepare_item_enchant::PrepareItemEnchantEvent,
-};
+use pumpkin_core::plugin::{EnchantItemEvent, PrepareItemEnchantEvent};
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 fn consume_item_stack(
@@ -36,11 +34,13 @@ impl ToFromWasmEvent for PrepareItemEnchantEvent {
             .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
 
-        let offers = (0..3)
-            .map(|i| EnchantmentOffer {
-                cost: self.level_requirements[i],
-                enchantment_id: self.enchantment_id[i],
-                enchantment_level: self.enchantment_level[i],
+        let offers = self
+            .offers
+            .iter()
+            .map(|o| EnchantmentOffer {
+                cost: o.cost,
+                enchantment_id: o.enchantment_id,
+                enchantment_level: o.enchantment_level,
             })
             .collect();
 
@@ -56,20 +56,21 @@ impl ToFromWasmEvent for PrepareItemEnchantEvent {
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PrepareItemEnchantEvent(data) => {
-                let mut level_requirements = [0; 3];
-                let mut enchantment_id = [-1; 3];
-                let mut enchantment_level = [-1; 3];
-                for (i, offer) in data.offers.iter().enumerate().take(3) {
-                    level_requirements[i] = offer.cost;
-                    enchantment_id[i] = offer.enchantment_id;
-                    enchantment_level[i] = offer.enchantment_level;
-                }
+                let offers = data
+                    .offers
+                    .into_iter()
+                    .map(|o| {
+                        pumpkin_core::plugin::EnchantmentOffer::new(
+                            o.cost,
+                            o.enchantment_id,
+                            o.enchantment_level,
+                        )
+                    })
+                    .collect();
                 Self {
                     player: consume_player(state, &data.player),
                     item: consume_item_stack(state, &data.item),
-                    level_requirements,
-                    enchantment_id,
-                    enchantment_level,
+                    offers,
                     bookshelf_count: data.bookshelf_count,
                     cancelled: data.cancelled,
                 }
@@ -91,9 +92,9 @@ impl ToFromWasmEvent for EnchantItemEvent {
         let enchantments_to_add = self
             .enchantments_to_add
             .iter()
-            .map(|(enc, level)| WitEnchantmentValue {
-                enchantment: to_wit_enchantment(enc),
-                level: *level as u32,
+            .map(|ev| WitEnchantmentValue {
+                enchantment: to_wit_enchantment(ev.enchantment),
+                level: ev.level,
             })
             .collect();
 
@@ -101,7 +102,7 @@ impl ToFromWasmEvent for EnchantItemEvent {
             player,
             item,
             option: self.option,
-            cost: self.exp_level_cost,
+            cost: self.cost,
             enchantments_to_add,
             cancelled: self.cancelled,
         })
@@ -113,13 +114,18 @@ impl ToFromWasmEvent for EnchantItemEvent {
                 let enchantments_to_add = data
                     .enchantments_to_add
                     .into_iter()
-                    .map(|ev| (from_wit_enchantment(ev.enchantment), ev.level as i32))
+                    .map(|ev| {
+                        pumpkin_core::plugin::EnchantmentValue::new(
+                            from_wit_enchantment(ev.enchantment),
+                            ev.level,
+                        )
+                    })
                     .collect();
                 Self {
                     player: consume_player(state, &data.player),
                     item: consume_item_stack(state, &data.item),
                     option: data.option,
-                    exp_level_cost: data.cost,
+                    cost: data.cost,
                     enchantments_to_add,
                     cancelled: data.cancelled,
                 }

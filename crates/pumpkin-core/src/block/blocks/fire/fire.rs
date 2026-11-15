@@ -133,8 +133,8 @@ impl FireBlock {
         let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
             if let Some(server) = world.server.upgrade() {
-                let mut event = crate::plugin::api::events::block::block_burn::BlockBurnEvent {
-                    world: world.clone(),
+                let mut event = crate::plugin::BlockBurnEvent {
+                    target_world: world.clone(),
                     igniting_block: &Block::FIRE,
                     block,
                     block_pos: *pos,
@@ -425,7 +425,7 @@ impl BlockBehaviour for FireBlock {
                                 let new_state_id = new_fire_props.to_state_id(&Block::FIRE);
 
                                 if let Some(server) = world.server.upgrade() {
-                                    let mut event = crate::plugin::api::events::block::block_spread::BlockSpreadEvent::new(
+                                    let mut event = crate::plugin::BlockSpreadEvent::new(
                                         *pos,
                                         offset_pos,
                                         world.clone(),

@@ -70,7 +70,7 @@ impl JavaClient {
             }
 
             if locale_changed {
-                let mut event = crate::plugin::api::events::player::player_locale_change::PlayerLocaleChangeEvent {
+                let mut event = crate::plugin::PlayerLocaleChangeEvent {
                     player: player.clone(),
                     new_locale: client_information.locale.to_string(),
                     cancelled: false,

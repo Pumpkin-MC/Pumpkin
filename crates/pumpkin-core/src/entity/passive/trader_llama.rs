@@ -27,7 +27,7 @@ use crate::entity::passive::animal::Animal;
 use crate::entity::passive::llama::LlamaEntity;
 use crate::entity::passive::wandering_trader::WanderingTraderEntity;
 use crate::entity::player::Player;
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use crate::world::World;
 
 const TRADER_LLAMA_HUNTS: &[Hunt] = &[

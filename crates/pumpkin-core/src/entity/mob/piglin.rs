@@ -720,11 +720,7 @@ impl PiglinEntity {
                 let entity = &self.mob_entity.living_entity.entity;
 
                 let mut event =
-                    crate::plugin::api::events::entity::piglin_barter::PiglinBarterEvent::new(
-                        entity.entity_id,
-                        item,
-                        outcomes,
-                    );
+                    crate::plugin::PiglinBarterEvent::new(entity.entity_id, item, outcomes);
                 if let Some(server) = entity.world.load().server.upgrade() {
                     server.plugin_manager.fire_blocking(&server, &mut event);
                 }

@@ -41,10 +41,10 @@ impl JavaClient {
             let block = world.get_block(&position);
 
             let event = PlayerInteractEvent::new(
-                player,
+                player.clone(),
                 InteractAction::RightClickBlock,
-                block,
                 Some(position),
+                block,
             );
 
             send_cancellable_blocking! {{
@@ -85,10 +85,10 @@ impl JavaClient {
         let block = world.get_block(&position);
 
         let event = PlayerInteractEvent::new(
-            player,
+            player.clone(),
             InteractAction::RightClickBlock,
-            block,
             Some(position),
+            block,
         );
 
         send_cancellable_blocking! {{

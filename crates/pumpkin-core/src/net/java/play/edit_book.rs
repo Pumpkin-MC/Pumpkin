@@ -16,15 +16,14 @@ impl JavaClient {
         if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
             && let Some(server) = player.world().server.upgrade()
         {
-            let mut event =
-                crate::plugin::api::events::player::player_edit_book::PlayerEditBookEvent {
-                    player: player_arc,
-                    slot,
-                    pages: pages.clone(),
-                    title: title.clone(),
-                    signing,
-                    cancelled: false,
-                };
+            let mut event = crate::plugin::PlayerEditBookEvent {
+                player: player_arc,
+                slot,
+                pages: pages.clone(),
+                title: title.clone(),
+                signing,
+                cancelled: false,
+            };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
                 return;

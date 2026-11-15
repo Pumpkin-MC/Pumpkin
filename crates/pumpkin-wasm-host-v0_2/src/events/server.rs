@@ -1,30 +1,18 @@
 use crate::{
-    events::{ToFromWasmEvent, cleanup_event, consume_text_component},
+    events::{ToFromWasmEvent, cleanup_event},
     generated_packets,
     pumpkin::plugin::event::{
         BedrockConnectionPacketReceivedEventData, BedrockConnectionPacketSentEventData,
         ClientboundPacket, Event, JavaConnectionPacketReceivedEventData,
-        JavaConnectionPacketSentEventData, JavaConnectionState, MapInitializeEventData,
-        PacketReceivedEventData, PacketSentEventData, RawPacket, ServerBroadcastEventData,
-        ServerCommandEventData, ServerListPingAddress, ServerListPingEventData,
-        ServerLoadEventData, ServerLoadType, ServerTickEndEventData, ServerTickStartEventData,
-        ServerboundPacket,
+        JavaConnectionPacketSentEventData, JavaConnectionState, PacketReceivedEventData,
+        PacketSentEventData, RawPacket, ServerboundPacket,
     },
 };
 use pumpkin_core::net::ClientPlatform;
-use pumpkin_core::plugin::server::{
-    list_ping::ServerListPingEvent,
-    map_initialize::MapInitializeEvent,
-    packet::{
-        BedrockConnectionPacketReceivedEvent, BedrockConnectionPacketSentEvent,
-        JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent, PacketReceivedEvent,
-        PacketSentEvent,
-    },
-    server_broadcast::ServerBroadcastEvent,
-    server_command::ServerCommandEvent,
-    server_load::{LoadType, ServerLoadEvent},
-    server_tick_end::ServerTickEndEvent,
-    server_tick_start::ServerTickStartEvent,
+use pumpkin_core::plugin::{
+    BedrockConnectionPacketReceivedEvent, BedrockConnectionPacketSentEvent,
+    JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent, PacketReceivedEvent,
+    PacketSentEvent,
 };
 use pumpkin_protocol::ConnectionState as ProtoConnectionState;
 use pumpkin_wasm_host_common::state::PluginHostState;
@@ -310,179 +298,11 @@ impl ToFromWasmEvent for BedrockConnectionPacketSentEvent {
     }
 }
 
-impl ToFromWasmEvent for ServerCommandEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerCommandEvent(ServerCommandEventData {
-            command: self.command.clone(),
-            cancelled: self.cancelled,
-        })
-    }
-
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerCommandEvent(data) => Self {
-                command: data.command,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
-        }
-    }
-}
-
-impl ToFromWasmEvent for ServerBroadcastEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let message = state
-            .add(self.message.clone())
-            .expect("failed to add text-component resource");
-        let sender = state
-            .add(self.sender.clone())
-            .expect("failed to add text-component resource");
-
-        Event::ServerBroadcastEvent(ServerBroadcastEventData {
-            message,
-            sender,
-            cancelled: self.cancelled,
-        })
-    }
-
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerBroadcastEvent(data) => Self {
-                message: consume_text_component(state, &data.message),
-                sender: consume_text_component(state, &data.sender),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
-        }
-    }
-}
-
-impl ToFromWasmEvent for ServerListPingEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let motd = state
-            .add(self.motd.clone())
-            .expect("failed to add text-component resource");
-
-        Event::ServerListPingEvent(ServerListPingEventData {
-            hostname: self.hostname().to_string(),
-            address: ServerListPingAddress {
-                host: self.address().host().to_string(),
-                port: self.address().port(),
-            },
-            motd,
-            max_players: self.max_players,
-            num_players: self.num_players,
-            favicon: self.favicon.clone(),
-        })
-    }
-
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerListPingEvent(data) => Self {
-                hostname: data.hostname,
-                address:
-                    pumpkin_core::plugin::api::events::server::list_ping::ServerListPingAddress::new(
-                        data.address.host,
-                        data.address.port,
-                    ),
-                motd: consume_text_component(state, &data.motd),
-                max_players: data.max_players,
-                num_players: data.num_players,
-                favicon: data.favicon,
-            },
-            _ => panic!("unexpected event type"),
-        }
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        if !matches!(&event, Event::ServerListPingEvent(_)) {
-            cleanup_event(&event, state);
-            panic!("unexpected event type");
-        }
-
-        let returned = Self::from_wasm_event(event, state);
-        self.motd = returned.motd;
-        self.max_players = returned.max_players;
-        self.num_players = returned.num_players;
-        self.favicon = returned.favicon;
-    }
-}
-
-impl ToFromWasmEvent for ServerLoadEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerLoadEvent(ServerLoadEventData {
-            load_type: match self.load_type {
-                LoadType::Startup => ServerLoadType::Startup,
-                LoadType::Reload => ServerLoadType::Reload,
-            },
-        })
-    }
-
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerLoadEvent(data) => Self {
-                load_type: match data.load_type {
-                    ServerLoadType::Startup => LoadType::Startup,
-                    ServerLoadType::Reload => LoadType::Reload,
-                },
-            },
-            _ => panic!("unexpected event type"),
-        }
-    }
-}
-
-impl ToFromWasmEvent for ServerTickEndEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerTickEndEvent(ServerTickEndEventData {
-            tick: self.tick,
-            duration_nanos: self.duration_nanos,
-        })
-    }
-
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerTickEndEvent(data) => Self {
-                tick: data.tick,
-                duration_nanos: data.duration_nanos,
-            },
-            _ => panic!("unexpected event type"),
-        }
-    }
-}
-
-impl ToFromWasmEvent for ServerTickStartEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerTickStartEvent(ServerTickStartEventData { tick: self.tick })
-    }
-
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerTickStartEvent(data) => Self { tick: data.tick },
-            _ => panic!("unexpected event type"),
-        }
-    }
-}
-
-impl ToFromWasmEvent for MapInitializeEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::MapInitializeEvent(MapInitializeEventData {
-            map_id: self.map_id,
-        })
-    }
-
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::MapInitializeEvent(data) => Self {
-                map_id: data.map_id,
-            },
-            _ => panic!("unexpected event type"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pumpkin::plugin::event::{ServerListPingAddress, ServerListPingEventData};
+    use pumpkin_core::plugin::ServerListPingEvent;
     use pumpkin_protocol::packet::MultiVersionJavaPacket;
     use pumpkin_util::text::TextComponent;
     use wasmtime::component::Resource;
@@ -492,7 +312,7 @@ mod tests {
         let mut state = PluginHostState::new();
         let original_motd = TextComponent::text("Original");
         let returned_motd = TextComponent::text("Returned");
-        let mut event = ServerListPingEvent::new(
+        let mut event = ServerListPingEvent::from_socket_addr(
             "original.example".to_string(),
             "127.0.0.1:25565"
                 .parse()

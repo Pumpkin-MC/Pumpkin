@@ -7,12 +7,10 @@ use crate::{
         VehicleUpdateEventData,
     },
 };
-use pumpkin_core::plugin::vehicle::{
-    vehicle_block_collision::VehicleBlockCollisionEvent, vehicle_collision::VehicleCollisionEvent,
-    vehicle_create::VehicleCreateEvent, vehicle_damage::VehicleDamageEvent,
-    vehicle_destroy::VehicleDestroyEvent, vehicle_enter::VehicleEnterEvent,
-    vehicle_entity_collision::VehicleEntityCollisionEvent, vehicle_exit::VehicleExitEvent,
-    vehicle_move::VehicleMoveEvent, vehicle_update::VehicleUpdateEvent,
+use pumpkin_core::plugin::{
+    VehicleBlockCollisionEvent, VehicleCollisionEvent, VehicleCreateEvent, VehicleDamageEvent,
+    VehicleDestroyEvent, VehicleEnterEvent, VehicleEntityCollisionEvent, VehicleExitEvent,
+    VehicleMoveEvent, VehicleUpdateEvent,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_wasm_host_common::state::PluginHostState;
@@ -247,8 +245,12 @@ impl ToFromWasmEvent for VehicleMoveEvent {
     fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::VehicleMoveEvent(VehicleMoveEventData {
             vehicle_id: self.vehicle_id,
-            from_position: (self.from.x, self.from.y, self.from.z),
-            to_position: (self.to.x, self.to.y, self.to.z),
+            from_position: (
+                self.from_position.x,
+                self.from_position.y,
+                self.from_position.z,
+            ),
+            to_position: (self.to_position.x, self.to_position.y, self.to_position.z),
             cancelled: self.cancelled,
         })
     }
@@ -257,12 +259,16 @@ impl ToFromWasmEvent for VehicleMoveEvent {
         match event {
             Event::VehicleMoveEvent(data) => Self {
                 vehicle_id: data.vehicle_id,
-                from: Vector3::new(
+                from_position: Vector3::new(
                     data.from_position.0,
                     data.from_position.1,
                     data.from_position.2,
                 ),
-                to: Vector3::new(data.to_position.0, data.to_position.1, data.to_position.2),
+                to_position: Vector3::new(
+                    data.to_position.0,
+                    data.to_position.1,
+                    data.to_position.2,
+                ),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -272,12 +278,13 @@ impl ToFromWasmEvent for VehicleMoveEvent {
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         cleanup_event(&event, state);
         if let Event::VehicleMoveEvent(data) = event {
-            self.from = Vector3::new(
+            self.from_position = Vector3::new(
                 data.from_position.0,
                 data.from_position.1,
                 data.from_position.2,
             );
-            self.to = Vector3::new(data.to_position.0, data.to_position.1, data.to_position.2);
+            self.to_position =
+                Vector3::new(data.to_position.0, data.to_position.1, data.to_position.2);
             self.cancelled = data.cancelled;
         }
     }

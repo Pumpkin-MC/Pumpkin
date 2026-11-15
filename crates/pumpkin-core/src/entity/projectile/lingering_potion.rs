@@ -181,7 +181,7 @@ impl EntityBase for LingeringPotionEntity {
         extinguish_fire_if_water_potion(&world, hit_pos, &stack);
 
         if let Some(server) = world.server.upgrade() {
-            let mut event = crate::plugin::api::events::entity::lingering_potion_splash::LingeringPotionSplashEvent::new(
+            let mut event = crate::plugin::LingeringPotionSplashEvent::new(
                 self.get_entity().entity_id,
                 block_pos,
                 stack.item.registry_key.to_string(),

@@ -28,8 +28,8 @@ use crate::entity::{
         zombie::ZombieEntityBase,
     },
 };
-use crate::plugin::api::events::entity::entity_target::TargetReason;
-use crate::plugin::api::events::entity::pig_zombie_anger::PigZombieAngerEvent;
+use crate::plugin::PigZombieAngerEvent;
+use crate::plugin::TargetReason;
 use crate::world::World;
 
 const SPEED_MODIFIER_ATTACKING_ID: &str = "minecraft:attacking";

@@ -31,7 +31,7 @@ use crate::entity::{
         spawn::{EntitySpawnReason, SpawnGroupData},
     },
 };
-use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::plugin::TargetReason;
 use crate::world::World;
 
 /// Vanilla `Phantom.TICKS_PER_FLAP`, `Mth.ceil(24.166098F)`.

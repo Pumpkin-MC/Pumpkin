@@ -1,9 +1,7 @@
 use super::server_test_manager::{drain_game_test_queue, has_pending_game_tests};
 
 use crate::{
-    plugin::server::{
-        server_tick_end::ServerTickEndEvent, server_tick_start::ServerTickStartEvent,
-    },
+    plugin::{ServerTickEndEvent, ServerTickStartEvent},
     server::Server,
 };
 use pumpkin_gametest::GameTestRunner;

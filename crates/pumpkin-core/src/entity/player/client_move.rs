@@ -14,11 +14,11 @@ use pumpkin_util::text::TextComponent;
 
 use crate::entity::EntityBase;
 use crate::net::{ClientPlatform, DisconnectReason};
-use crate::plugin::player::player_input::PlayerInputEvent;
-use crate::plugin::player::player_move::PlayerMoveEvent;
-use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
-use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
-use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
+use crate::plugin::PlayerInputEvent;
+use crate::plugin::PlayerMoveEvent;
+use crate::plugin::PlayerToggleFlightEvent;
+use crate::plugin::PlayerToggleSneakEvent;
+use crate::plugin::PlayerToggleSprintEvent;
 use crate::server::Server;
 use crate::world::chunker;
 
@@ -258,7 +258,7 @@ impl Player {
                 server;
                 PlayerMoveEvent::new(player, last_pos, pos);
                 'after: {
-                    target = Some(event.to);
+                    target = Some(event.to_position);
                 }
                 'cancelled: {
                     cancelled = true;

@@ -77,10 +77,8 @@ use crate::{
         decrement_pending_bytes,
     },
     plugin::{
-        api::events::world::chunk_send::ChunkSend,
-        server::packet::{
-            BedrockConnectionPacketReceivedEvent, BedrockConnectionPacketSentEvent, PacketSentEvent,
-        },
+        BedrockConnectionPacketReceivedEvent, BedrockConnectionPacketSentEvent, ChunkSendEvent,
+        PacketSentEvent,
     },
     server::Server,
 };
@@ -486,7 +484,7 @@ impl BedrockClient {
             return outcome;
         };
 
-        let valid_chunks = ChunkSend::filter(&server, &player.world(), chunks).await;
+        let valid_chunks = ChunkSendEvent::filter(&server, &player.world(), chunks).await;
         outcome.record_cancelled(chunks, &valid_chunks);
         if valid_chunks.is_empty() {
             return outcome;
