@@ -14,9 +14,14 @@ impl JavaClient {
             return;
         }
 
-        debug!(
-            "Bundle item selected: Slot ID {}, Selected Item Index {}",
-            packet.slot_id.0, selected_item_index
-        );
+        let screen_handler_arc = player
+            .current_screen_handler
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let mut screen_handler = screen_handler_arc
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        screen_handler.set_selected_bundle_item_index(packet.slot_id.0, selected_item_index);
     }
 }

@@ -526,6 +526,69 @@ impl BoundingBox {
 
         (t_min <= t_max && (0.0..=1.0).contains(&t_min)).then_some(t_min)
     }
+
+    /// Whether `point` is inside, counting the min faces but not the max faces.
+    #[must_use]
+    pub fn contains(&self, point: Vector3<f64>) -> bool {
+        point.x >= self.min.x
+            && point.x < self.max.x
+            && point.y >= self.min.y
+            && point.y < self.max.y
+            && point.z >= self.min.z
+            && point.z < self.max.z
+    }
+
+    #[must_use]
+    pub fn get_center(&self) -> Vector3<f64> {
+        (self.min + self.max) * 0.5
+    }
+
+    /// Where the segment first enters this box. A segment starting inside never hits.
+    #[must_use]
+    pub fn clip(&self, from: Vector3<f64>, to: Vector3<f64>) -> Option<Vector3<f64>> {
+        let min = [self.min.x, self.min.y, self.min.z];
+        let max = [self.max.x, self.max.y, self.max.z];
+        let origin = [from.x, from.y, from.z];
+        let delta = [to.x - from.x, to.y - from.y, to.z - from.z];
+        let mut scale = 1.0;
+        let mut hit = false;
+        for axis in 0..3 {
+            if delta[axis] > 1.0e-7 {
+                hit |= Self::clip_point(&mut scale, axis, min[axis], &origin, &delta, &min, &max);
+            } else if delta[axis] < -1.0e-7 {
+                hit |= Self::clip_point(&mut scale, axis, max[axis], &origin, &delta, &min, &max);
+            }
+        }
+        hit.then(|| from.add(&(to.sub(&from) * scale)))
+    }
+
+    fn clip_point(
+        scale: &mut f64,
+        axis: usize,
+        plane: f64,
+        origin: &[f64; 3],
+        delta: &[f64; 3],
+        min: &[f64; 3],
+        max: &[f64; 3],
+    ) -> bool {
+        let s = (plane - origin[axis]) / delta[axis];
+        if s <= 0.0 || s >= *scale {
+            return false;
+        }
+        let b = (axis + 1) % 3;
+        let c = (axis + 2) % 3;
+        let pb = origin[b] + s * delta[b];
+        let pc = origin[c] + s * delta[c];
+        if min[b] - 1.0e-7 < pb
+            && pb < max[b] + 1.0e-7
+            && min[c] - 1.0e-7 < pc
+            && pc < max[c] + 1.0e-7
+        {
+            *scale = s;
+            return true;
+        }
+        false
+    }
 }
 
 /// Represents the dimensions of an entity.

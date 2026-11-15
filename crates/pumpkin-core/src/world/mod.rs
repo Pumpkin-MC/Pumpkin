@@ -3316,7 +3316,7 @@ impl World {
 
         let crafting_data = pumpkin_protocol::bedrock::client::CCraftingData {
             recipes: crate::net::bedrock::recipe::crafting_data(&server.recipe_manager),
-            clean_recipes: false,
+            clean_recipes: true,
         };
         if let Ok(data) = client.serialize_packet(&crafting_data) {
             client.send_game_packet(data).await;
@@ -4138,7 +4138,21 @@ impl World {
         power: f32,
         interaction: ExplosionInteraction,
     ) {
-        self.explode_with_calculator(position, power, interaction, None);
+        let explosion = Explosion::new(power, position, self.get_block_interaction(interaction));
+        self.run_explosion(&explosion);
+    }
+
+    /// Explodes at `position` with `source` as the entity that exploded.
+    pub fn explode_from(
+        self: &Arc<Self>,
+        source: &dyn EntityBase,
+        position: Vector3<f64>,
+        power: f32,
+        interaction: ExplosionInteraction,
+    ) {
+        let explosion = Explosion::new(power, position, self.get_block_interaction(interaction))
+            .with_source(source);
+        self.run_explosion(&explosion);
     }
 
     pub fn explode_with_calculator(
@@ -4148,18 +4162,12 @@ impl World {
         interaction: ExplosionInteraction,
         damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
     ) {
-        let block_interaction = self.get_block_interaction(interaction);
-        let mut explosion = Explosion::new(power, position, block_interaction);
+        let mut explosion =
+            Explosion::new(power, position, self.get_block_interaction(interaction));
         if let Some(calc) = damage_calculator {
             explosion = explosion.with_damage_calculator(calc);
         }
-        self.run_explosion(&explosion, position, power);
-    }
-
-    pub fn explode_tnt_minecart(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        let block_interaction = self.get_block_interaction(ExplosionInteraction::Tnt);
-        let explosion = Explosion::new(power, position, block_interaction).preserving_rails();
-        self.run_explosion(&explosion, position, power);
+        self.run_explosion(&explosion);
     }
 
     #[must_use]
@@ -4193,14 +4201,15 @@ impl World {
         }
     }
 
-    pub fn run_explosion(
-        self: &Arc<Self>,
-        explosion: &Explosion,
-        position: Vector3<f64>,
-        power: f32,
-    ) {
+    pub fn run_explosion(self: &Arc<Self>, explosion: &Explosion<'_>) {
+        let position = explosion.center();
+        let power = explosion.power();
         let mut event = crate::plugin::api::events::entity::entity_explode::EntityExplodeEvent::new(
-            0, position, power,
+            explosion
+                .source()
+                .map_or(0, |source| source.get_entity().entity_id),
+            position,
+            power,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
@@ -5695,6 +5704,7 @@ impl World {
                 position,
                 replaced_block_state_id,
                 block_moved,
+                flags,
             );
         }
 
@@ -5706,6 +5716,14 @@ impl World {
                 replaced_block_state_id,
                 block_moved,
             );
+        } else if flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK)
+            && is_new_block
+            && new_block.default_state.block_entity_type != u16::MAX
+            && self.get_block_entity(position).is_none()
+            && let Some(entity) =
+                crate::block::entities::create_block_entity_for_state(block_state_id, *position)
+        {
+            self.add_block_entity(entity);
         }
 
         // Level.java setBlock
@@ -6808,8 +6826,8 @@ impl World {
         pos: &BlockPos,
     ) -> BlockStateId {
         let mut current_state_id = state_id;
-        let block = Block::from_state_id(state_id);
         for direction in BlockDirection::all() {
+            let block = Block::from_state_id(current_state_id);
             let neighbor_pos = pos.offset(direction.to_offset());
             let neighbor_state_id = self.get_block_state_id(&neighbor_pos);
             current_state_id = self.block_registry.get_state_for_neighbor_update(
@@ -6823,6 +6841,98 @@ impl World {
             );
         }
         current_state_id
+    }
+
+    /// Mirrors `ServerLevel.updateNeighboursOnBlockSet(pos, oldState)`.
+    pub fn update_neighbours_on_block_set(
+        self: &Arc<Self>,
+        pos: &BlockPos,
+        old_state_id: BlockStateId,
+    ) {
+        let current_state_id = self.get_block_state_id(pos);
+        let current_block = Block::from_state_id(current_state_id);
+        let old_block = Block::from_state_id(old_state_id);
+        if old_block != current_block {
+            self.block_registry.on_state_replaced(
+                self,
+                old_block,
+                pos,
+                old_state_id,
+                false,
+                BlockFlags::NOTIFY_NEIGHBORS,
+            );
+        }
+        self.update_neighbors_at(pos, current_block, None);
+        if current_state_id.has_analog_output_signal() {
+            self.update_neighbour_for_output_signal(pos, current_block);
+        }
+    }
+
+    /// Loads custom NBT into the block entity at `pos` while preserving its `id` and coordinates.
+    /// Returns `None` if no block entity exists at `pos`, or `Some(changed)` indicating whether
+    /// the serialized block-entity fields changed.
+    pub fn load_block_entity_nbt(
+        self: &Arc<Self>,
+        pos: BlockPos,
+        tag: &NbtCompound,
+    ) -> Option<bool> {
+        let existing = self.get_block_entity(&pos)?;
+        let mut before = NbtCompound::new();
+        existing.write_nbt(&mut before);
+
+        let mut load_nbt = tag.clone();
+        load_nbt.put_string("id", existing.resource_location().to_string());
+        load_nbt.put_int("x", pos.0.x);
+        load_nbt.put_int("y", pos.0.y);
+        load_nbt.put_int("z", pos.0.z);
+        let reloaded = crate::block::entities::block_entity_from_nbt(&load_nbt)?;
+
+        let mut after = NbtCompound::new();
+        reloaded.write_nbt(&mut after);
+        let changed = before != after;
+
+        reloaded.set_world(Arc::downgrade(self));
+        self.add_block_entity(reloaded.clone());
+        let mut full_nbt = NbtCompound::new();
+        reloaded.write_internal(&mut full_nbt);
+        self.add_block_entity_nbt(pos, &full_nbt);
+
+        reloaded.on_nbt_loaded(self, Some(existing.as_ref()));
+        let current_state_id = self.get_block_state_id(&pos);
+        self.send_block_updated(&pos, current_state_id, current_state_id);
+        if current_state_id.has_analog_output_signal() {
+            self.update_neighbour_for_output_signal(&pos, Block::from_state_id(current_state_id));
+        }
+
+        Some(changed)
+    }
+
+    /// Mirrors `BlockInput.place(level, pos, update)`.
+    pub fn place_block_input(
+        self: &Arc<Self>,
+        pos: &BlockPos,
+        input: &crate::command::argument_types::block::BlockInput,
+        flags: BlockFlags,
+    ) -> bool {
+        let mut state_id = if flags.contains(BlockFlags::UPDATE_KNOWN_SHAPE) {
+            input.state_id
+        } else {
+            let shaped = self.update_from_neighbor_shapes(input.state_id, pos);
+            if pumpkin_data::block_properties::is_air(shaped) {
+                input.state_id
+            } else {
+                shaped
+            }
+        };
+        state_id = input.overwrite_defined_properties(state_id);
+
+        let replaced_state_id = self.set_block_state(pos, state_id, flags);
+        let nbt_affected = input
+            .nbt
+            .as_ref()
+            .is_some_and(|tag| self.load_block_entity_nbt(*pos, tag) == Some(true));
+
+        replaced_state_id != state_id || nbt_affected
     }
 
     pub fn replace_with_state_for_neighbor_update(
@@ -6905,6 +7015,17 @@ impl World {
             .cloned()
     }
 
+    fn weak_self(&self) -> Option<Weak<Self>> {
+        self.server.upgrade().and_then(|server| {
+            server
+                .worlds
+                .load()
+                .iter()
+                .find(|world| world.uuid == self.uuid)
+                .map(Arc::downgrade)
+        })
+    }
+
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk_pos = block_pos.chunk_position();
         if let Some(entity) = self
@@ -6934,6 +7055,9 @@ impl World {
                 .insert(*block_pos, custom_data.clone());
         }
         let entity = block_entity_from_nbt(&nbt)?;
+        if let Some(weak) = self.weak_self() {
+            entity.set_world(weak);
+        }
         self.block_entities
             .entry(chunk_pos)
             .or_default()
@@ -7000,6 +7124,9 @@ impl World {
     }
 
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
+        if let Some(weak) = self.weak_self() {
+            block_entity.set_world(weak);
+        }
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
@@ -7292,6 +7419,33 @@ impl World {
         context: &pumpkin_world::clip::ClipContext,
     ) -> pumpkin_world::clip::BlockHitResult {
         pumpkin_world::clip::clip(self, context)
+    }
+
+    /// Like [`Self::clip`], but a ray leaving the world border stops at it. The flag says whether
+    /// the hit is the border rather than a block.
+    pub fn clip_including_border(
+        &self,
+        context: &pumpkin_world::clip::ClipContext,
+    ) -> (pumpkin_world::clip::BlockHitResult, bool) {
+        let hit = self.clip(context);
+        let Ok(border) = self.worldborder.lock() else {
+            return (hit, false);
+        };
+        let from = context.from;
+        if !border.is_within_bounds(from.x, from.z, 0.0)
+            || border.is_within_bounds(hit.location.x, hit.location.z, 0.0)
+        {
+            return (hit, false);
+        }
+        let delta = hit.location - from;
+        let location = border.clamp_to_bounds(hit.location);
+        let border_hit = pumpkin_world::clip::BlockHitResult::hit(
+            location,
+            BlockDirection::get_nearest(delta.x, delta.y, delta.z),
+            BlockPos::floored(location.x, location.y, location.z),
+            false,
+        );
+        (border_hit, true)
     }
 
     pub fn ray_trace_block(

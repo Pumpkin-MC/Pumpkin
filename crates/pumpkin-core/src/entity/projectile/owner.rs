@@ -100,18 +100,20 @@ impl EntityReference {
         self.set_uuid(None);
     }
 
-    fn set_uuid(&self, uuid: Option<Uuid>) {
+    pub fn set_uuid(&self, uuid: Option<Uuid>) {
         self.uuid.store(uuid);
         *self.resolved.lock().unwrap_or_else(PoisonError::into_inner) = None;
     }
 }
 
-/// Vanilla projectile ownership, launch event and collision state.
+/// State every projectile shares: who shot it, whether it has cleared them and whether the
+/// shot was announced.
 #[derive(Default)]
 pub struct ProjectileOwner {
     owner: EntityReference,
     left_owner: AtomicBool,
     has_been_shot: AtomicBool,
+    /// Not saved, so a reload can deflect off the same entity again.
     last_deflected_by: AtomicCell<Option<i32>>,
 }
 
@@ -136,15 +138,11 @@ impl ProjectileOwner {
         }
     }
 
-    pub(crate) fn copy_owner_from(&self, projectile: &Self) {
-        self.owner.set_uuid(projectile.uuid());
-    }
-
-    /// Emits vanilla's first-tick projectile launch event at its new position.
-    pub fn emit_shoot_event(&self, projectile: &Entity) {
-        if !self.has_been_shot.load(Relaxed) {
+    /// Start of every projectile tick: announces the shot once, then checks the owner.
+    pub fn tick(&self, projectile: &Entity) {
+        if !self.has_been_shot.swap(true, Relaxed) {
             let world = projectile.world.load();
-            let owner = self.get(&world);
+            let owner = self.owner.get(&world);
             world.emit_game_event_with_context(
                 GameEvent::ProjectileShoot.name(),
                 projectile.pos.load(),
@@ -152,16 +150,21 @@ impl ProjectileOwner {
                     source_entity: owner.as_deref(),
                 },
             );
-            self.has_been_shot.store(true, Relaxed);
         }
+        self.check_left_owner(projectile);
     }
 
-    pub(crate) fn mark_deflected_by(&self, entity: &Entity) -> bool {
-        self.last_deflected_by.swap(Some(entity.entity_id)) != Some(entity.entity_id)
+    /// The entity that deflected the projectile last, which can't deflect it again in a row.
+    #[must_use]
+    pub fn last_deflected_by(&self) -> Option<i32> {
+        self.last_deflected_by.load()
     }
 
-    /// Vanilla `checkLeftOwner`, once per tick before moving.
-    pub fn check_left_owner(&self, projectile: &Entity) {
+    pub fn set_last_deflected_by(&self, entity: &Entity) {
+        self.last_deflected_by.store(Some(entity.entity_id));
+    }
+
+    fn check_left_owner(&self, projectile: &Entity) {
         if self.left_owner.load(Relaxed) {
             return;
         }
@@ -182,7 +185,9 @@ impl ProjectileOwner {
             .expand_all(1.0);
         let root = owner.get_entity().get_root_vehicle();
         !Self::any_self_or_passenger(root.as_deref().unwrap_or(owner), &|entity| {
-            !entity.is_spectator() && entity.get_entity().bounding_box.load().intersects(&area)
+            !entity.is_spectator()
+                && entity.can_hit()
+                && entity.get_entity().bounding_box.load().intersects(&area)
         })
     }
 
@@ -212,22 +217,22 @@ impl ProjectileOwner {
 
     pub fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.owner.write_nbt(nbt, "Owner");
-        nbt.put_bool("HasBeenShot", self.has_been_shot.load(Relaxed));
         if self.left_owner.load(Relaxed) {
             nbt.put_bool("LeftOwner", true);
         }
+        nbt.put_bool("HasBeenShot", self.has_been_shot.load(Relaxed));
     }
 
     /// Updates only the keys present, so a partial read keeps the rest.
     pub fn read_nbt(&self, nbt: &NbtCompound) {
         self.owner.read_nbt(nbt, "Owner");
-        if nbt.has("HasBeenShot") {
-            self.has_been_shot
-                .store(nbt.get_bool("HasBeenShot").unwrap_or(false), Relaxed);
-        }
         if nbt.has("LeftOwner") {
             self.left_owner
                 .store(nbt.get_bool("LeftOwner").unwrap_or(false), Relaxed);
+        }
+        if nbt.has("HasBeenShot") {
+            self.has_been_shot
+                .store(nbt.get_bool("HasBeenShot").unwrap_or(false), Relaxed);
         }
     }
 
@@ -236,8 +241,8 @@ impl ProjectileOwner {
         for key in removed {
             match &**key {
                 "Owner" => self.owner.clear(),
-                "HasBeenShot" => self.has_been_shot.store(false, Relaxed),
                 "LeftOwner" => self.left_owner.store(false, Relaxed),
+                "HasBeenShot" => self.has_been_shot.store(false, Relaxed),
                 _ => {}
             }
         }

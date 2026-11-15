@@ -733,20 +733,20 @@ fn verify_stage_parity(seed: u64, stage_dumps: &[ChunkStageDump]) {
 #[test]
 fn stage_parity_hashes() {
     let stages: Vec<ChunkStageDump> =
-        pumpkin_util::read_data_from_file!("../../../../../assets/tests/stage_hashes.json");
+        include_json!("../../../../../assets/tests/stage_hashes.json");
     verify_stage_parity(0, &stages);
 }
 
 #[test]
 fn nether_stage_parity_hashes() {
     let stages: Vec<ChunkStageDump> =
-        pumpkin_util::read_data_from_file!("../../../../../assets/tests/nether_stage_hashes.json");
+        include_json!("../../../../../assets/tests/nether_stage_hashes.json");
     verify_stage_parity(0, &stages);
 }
 
 #[test]
 fn end_stage_parity_hashes() {
     let stages: Vec<ChunkStageDump> =
-        pumpkin_util::read_data_from_file!("../../../../../assets/tests/end_stage_hashes.json");
+        include_json!("../../../../../assets/tests/end_stage_hashes.json");
     verify_stage_parity(0, &stages);
 }

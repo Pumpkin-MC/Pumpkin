@@ -4,7 +4,9 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::item::ItemEntity;
-use crate::entity::projectile::{ProjectileHit, is_projectile};
+use crate::entity::projectile::{
+    ProjectileHit, get_hit_result_on_move_vector, hit_target_or_deflect_self,
+};
 use crate::world::loot::{LootContextParameters, LootTableHandle, generate_loot_from_handle};
 use crate::{
     entity::{Entity, EntityBase, living::LivingEntity, player::Player},
@@ -16,8 +18,8 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::bedrock::server::ActorEventID;
-use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::clip::ClipBlock;
 use rand::RngExt;
 
 pub struct FishingBobberEntity {
@@ -151,11 +153,10 @@ impl FishingBobberEntity {
         dmg
     }
 
-    #[expect(clippy::too_many_lines)]
-    pub fn process_tick(&self, caller: &dyn EntityBase) {
+    pub fn process_tick(&self, caller: &dyn EntityBase, server: &Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
-        self.owner.check_left_owner(entity);
+        self.owner.tick(entity);
 
         if self.in_ground.load(Ordering::Relaxed) {
             return;
@@ -178,7 +179,6 @@ impl FishingBobberEntity {
         }
 
         let mut velocity = entity.velocity.load();
-        let start_pos = entity.pos.load();
 
         if entity.touching_water.load(Ordering::Relaxed) {
             velocity.y += 0.02; // Buoyancy
@@ -224,59 +224,47 @@ impl FishingBobberEntity {
         velocity = velocity.multiply(inertia, inertia, inertia);
         entity.velocity.store(velocity);
 
-        let new_pos = start_pos.add(&velocity);
-
-        let search_box = BoundingBox::new(
-            Vector3::new(
-                start_pos.x.min(new_pos.x),
-                start_pos.y.min(new_pos.y),
-                start_pos.z.min(new_pos.z),
-            ),
-            Vector3::new(
-                start_pos.x.max(new_pos.x),
-                start_pos.y.max(new_pos.y),
-                start_pos.z.max(new_pos.z),
-            ),
-        )
-        .expand(0.3, 0.3, 0.3);
-
-        // Basic block collision to stop bobber
-        let (block_cols, _) = world.get_block_collisions(search_box, caller);
-        if !block_cols.is_empty() {
-            self.in_ground.store(true, Ordering::Relaxed);
-            entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
+        // Hits are checked along the path first, then the move handles block collision.
+        let hit = get_hit_result_on_move_vector(
+            caller,
+            |other| {
+                (other.can_be_hit_by_projectile() && self.owner.can_hit(&world, other.get_entity()))
+                    || (other.get_entity().is_alive()
+                        && other.get_entity().entity_type == &EntityType::ITEM)
+            },
+            ClipBlock::Collider,
+        );
+        if let Some(hit) = hit {
+            hit_target_or_deflect_self(caller, hit, server);
+        }
+        if self.hooked_entity_id.load(Ordering::Relaxed) != 0 {
             return;
         }
 
-        entity.set_pos(new_pos);
-
-        let candidates = world.get_entities_at_box(&search_box);
-        for cand in candidates {
-            if !self.owner.can_hit(&world, cand.get_entity())
-                || cand.get_entity().entity_id == entity.entity_id
-            {
-                continue;
-            }
-
-            if is_projectile(cand.get_entity().entity_type) {
-                continue;
-            }
-
-            let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
-            if ebb.intersects(&search_box) {
-                self.hooked_entity_id
-                    .store(cand.get_entity().entity_id, Ordering::Relaxed);
-                entity.set_synced_data(
-                    pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
-                    cand.get_entity().entity_id + 1,
-                );
-                return;
-            }
+        entity.move_entity(caller, entity.velocity.load());
+        if entity.on_ground.load(Ordering::Relaxed)
+            || entity.horizontal_collision.load(Ordering::Relaxed)
+        {
+            self.in_ground.store(true, Ordering::Relaxed);
+            entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
         }
+    }
+
+    fn set_hooked_entity(&self, hooked: &Entity) {
+        self.hooked_entity_id
+            .store(hooked.entity_id, Ordering::Relaxed);
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
+            hooked.entity_id + 1,
+        );
     }
 }
 
 impl EntityBase for FishingBobberEntity {
+    fn should_bounce_on_world_border(&self) -> bool {
+        true
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.owner)
     }
@@ -308,11 +296,20 @@ impl EntityBase for FishingBobberEntity {
     fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn on_hit(&self, _hit: ProjectileHit) {
+    fn on_hit(&self, hit: ProjectileHit) {
         self.has_hit.store(true, Ordering::Relaxed);
+        match hit {
+            ProjectileHit::Entity { entity, .. } => self.set_hooked_entity(entity.get_entity()),
+            ProjectileHit::Block { hit_pos, .. } => {
+                let entity = &self.entity;
+                let distance = (hit_pos - entity.pos.load()).length();
+                let velocity = entity.velocity.load().normalize() * distance;
+                entity.velocity.store(velocity);
+            }
+        }
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.process_tick(caller, server);
     }
 }

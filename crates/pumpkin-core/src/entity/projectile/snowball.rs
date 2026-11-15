@@ -1,15 +1,12 @@
 use crate::entity::projectile::owner::ProjectileOwner;
-use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::ProjectileHit;
-use crate::world::game_event::GameEventContext;
 use crate::{
     entity::{Entity, EntityBase, projectile::ThrownItemEntity},
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EntityStatus, EntityType};
-use pumpkin_data::game_event::GameEvent;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 
 const GRAVITY: f64 = 0.03;
@@ -23,8 +20,6 @@ impl SnowballEntity {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
         };
 
@@ -42,8 +37,8 @@ impl EntityBase for SnowballEntity {
         Some(&self.thrown.owner)
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -74,17 +69,6 @@ impl EntityBase for SnowballEntity {
                 owner.as_deref(),
             );
         }
-        let event_pos = match &hit {
-            ProjectileHit::Block { pos, .. } => pos.to_centered_f64(),
-            ProjectileHit::Entity { hit_pos, .. } => *hit_pos,
-        };
-        world.emit_game_event_with_context(
-            GameEvent::ProjectileLand.name(),
-            event_pos,
-            &GameEventContext {
-                source_entity: Some(self),
-            },
-        );
         world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
     }
 }

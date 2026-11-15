@@ -166,8 +166,15 @@ impl ItemBehaviour for BoatItem {
             return;
         }
 
+        let mut stack = player.inventory.get_stack_in_hand(hand);
+
         // Create and spawn the boat
         let entity = Entity::new(world.clone(), hit_vec, entity_type);
+        if let Some(custom_name) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
+        {
+            entity.set_custom_name(custom_name.name.clone());
+        }
 
         // Set yaw to player's yaw
         entity.set_rotation(yaw, 0.0);
@@ -176,7 +183,6 @@ impl ItemBehaviour for BoatItem {
         world.spawn_entity(boat_entity);
         world.emit_game_event(GameEvent::EntityPlace.name(), hit_vec);
 
-        let mut stack = player.inventory.get_stack_in_hand(hand);
         if !stack.is_empty() && stack.item.id == item.id {
             stack.decrement_unless_creative(player.gamemode.load(), 1);
             player.inventory.set_stack_in_hand(hand, stack.clone());

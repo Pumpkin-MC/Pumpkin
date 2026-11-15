@@ -459,19 +459,92 @@ impl DataComponentImpl for ChargedProjectilesImpl {
 #[derive(Clone)]
 pub struct BundleContentsImpl {
     pub items: Vec<crate::item_stack::ItemStack>,
+    pub selected_item: i32,
 }
 impl PartialEq for BundleContentsImpl {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+    fn eq(&self, other: &Self) -> bool {
+        self.items.len() == other.items.len()
+            && self
+                .items
+                .iter()
+                .zip(&other.items)
+                .all(|(a, b)| a.are_equal(b))
     }
 }
 impl Eq for BundleContentsImpl {}
 impl std::fmt::Debug for BundleContentsImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BundleContentsImpl")
+        f.debug_struct("BundleContentsImpl")
+            .field("items_len", &self.items.len())
+            .field("selected_item", &self.selected_item)
+            .finish()
     }
 }
+
+const fn gcd_u64(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        let t = b;
+        b = a % b;
+        a = t;
+    }
+    a
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WeightFraction {
+    num: u64,
+    den: u64,
+}
+
+impl WeightFraction {
+    const ZERO: Self = Self { num: 0, den: 1 };
+    const ONE: Self = Self { num: 1, den: 1 };
+    const BUNDLE_IN_BUNDLE: Self = Self { num: 1, den: 16 };
+
+    const fn new(num: u64, den: u64) -> Option<Self> {
+        if den == 0 {
+            return None;
+        }
+        if num == 0 {
+            return Some(Self::ZERO);
+        }
+        let g = gcd_u64(num, den);
+        Some(Self {
+            num: num / g,
+            den: den / g,
+        })
+    }
+
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        let g = gcd_u64(self.den, rhs.den);
+        let left = self.num.checked_mul(rhs.den / g)?;
+        let right = rhs.num.checked_mul(self.den / g)?;
+        let num = left.checked_add(right)?;
+        let den = (self.den / g).checked_mul(rhs.den)?;
+        Self::new(num, den)
+    }
+
+    fn checked_mul_count(self, count: u64) -> Option<Self> {
+        let num = self.num.checked_mul(count)?;
+        Self::new(num, self.den)
+    }
+}
+
 impl BundleContentsImpl {
+    pub const NO_SELECTED_ITEM_INDEX: i32 = -1;
+    pub const EMPTY: Self = Self {
+        items: Vec::new(),
+        selected_item: Self::NO_SELECTED_ITEM_INDEX,
+    };
+
+    #[must_use]
+    pub const fn new(items: Vec<crate::item_stack::ItemStack>) -> Self {
+        Self {
+            items,
+            selected_item: Self::NO_SELECTED_ITEM_INDEX,
+        }
+    }
+
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
         let mut items = Vec::new();
         if let NbtTag::List(l) = tag {
@@ -483,42 +556,132 @@ impl BundleContentsImpl {
                 }
             }
         }
-        Some(Self { items })
+        Some(Self::new(items))
     }
-    pub fn get_weight(&self) -> u32 {
-        self.items
-            .iter()
-            .map(|item| item.item_count as u32 * (64 / item.get_max_stack_size() as u32).max(1))
-            .sum()
+
+    #[must_use]
+    pub fn can_item_be_in_bundle(stack: &crate::item_stack::ItemStack) -> bool {
+        !stack.is_empty()
+            && !crate::tag::Item::MINECRAFT_SHULKER_BOXES
+                .1
+                .contains(&stack.item.id)
     }
+
+    fn single_item_weight(stack: &crate::item_stack::ItemStack) -> Option<WeightFraction> {
+        if let Some(nested) = stack.get_data_component::<Self>() {
+            return nested
+                .content_weight()?
+                .checked_add(WeightFraction::BUNDLE_IN_BUNDLE);
+        }
+        if let Some(bees) = stack.get_data_component::<super::BeesImpl>()
+            && !bees.bees.is_empty()
+        {
+            return Some(WeightFraction::ONE);
+        }
+        WeightFraction::new(1, u64::from(stack.get_max_stack_size().max(1)))
+    }
+
+    fn content_weight(&self) -> Option<WeightFraction> {
+        let mut total = WeightFraction::ZERO;
+        for item in &self.items {
+            let item_weight =
+                Self::single_item_weight(item)?.checked_mul_count(u64::from(item.item_count))?;
+            total = total.checked_add(item_weight)?;
+        }
+        Some(total)
+    }
+
+    #[must_use]
+    pub fn max_amount_to_add(&self, stack: &crate::item_stack::ItemStack) -> u8 {
+        if !Self::can_item_be_in_bundle(stack) {
+            return 0;
+        }
+        let Some(current) = self.content_weight() else {
+            return 0;
+        };
+        if current.num >= current.den {
+            return 0;
+        }
+        let Some(item_weight) = Self::single_item_weight(stack) else {
+            return 0;
+        };
+        if item_weight.num == 0 {
+            return u8::MAX;
+        }
+        // Remaining capacity is (current.den - current.num) / current.den.
+        // Dividing by item_weight.num / item_weight.den gives:
+        // ((current.den - current.num) * item_weight.den) / (current.den * item_weight.num).
+        let rem_num = current.den - current.num;
+        let Some(numerator) = rem_num.checked_mul(item_weight.den) else {
+            return 0;
+        };
+        let Some(denominator) = current.den.checked_mul(item_weight.num) else {
+            return 0;
+        };
+        if denominator == 0 {
+            return 0;
+        }
+        u8::try_from(numerator / denominator).unwrap_or(u8::MAX)
+    }
+
+    #[must_use]
+    pub const fn index_is_outside_allowed_bounds(&self, index: i32) -> bool {
+        index < 0 || (index as usize) >= self.items.len()
+    }
+
+    pub const fn toggle_selected_item(&mut self, index: i32) {
+        self.selected_item =
+            if self.selected_item != index && !self.index_is_outside_allowed_bounds(index) {
+                index
+            } else {
+                Self::NO_SELECTED_ITEM_INDEX
+            };
+    }
+
+    #[must_use]
+    pub const fn get_selected_item_index(&self) -> i32 {
+        if self.index_is_outside_allowed_bounds(self.selected_item) {
+            Self::NO_SELECTED_ITEM_INDEX
+        } else {
+            self.selected_item
+        }
+    }
+
     pub fn try_insert(&mut self, stack: &mut crate::item_stack::ItemStack) -> bool {
-        if stack.is_empty() || stack.get_data_component::<BundleContentsImpl>().is_some() {
+        let count_to_add = stack.item_count.min(self.max_amount_to_add(stack));
+        if count_to_add == 0 {
             return false;
         }
-        let weight_per_item = (64 / stack.get_max_stack_size() as u32).max(1);
-        let mut inserted_anything = false;
-        while stack.item_count > 0 && self.get_weight() + weight_per_item <= 64 {
-            if let Some(top) = self.items.first_mut()
-                && crate::item_stack::ItemStack::are_items_and_components_equal(top, stack)
-                && top.item_count < top.get_max_stack_size()
-            {
-                top.item_count += 1;
-                stack.item_count -= 1;
-                inserted_anything = true;
-                continue;
-            }
-            self.items.insert(0, stack.copy_with_count(1));
-            stack.item_count -= 1;
-            inserted_anything = true;
+
+        if stack.get_max_stack_size() > 1
+            && let Some(existing_idx) = self.items.iter().position(|item| {
+                crate::item_stack::ItemStack::are_items_and_components_equal(item, stack)
+            })
+        {
+            let existing = self.items.remove(existing_idx);
+            let combined_count = existing.item_count.saturating_add(count_to_add);
+            let merged = existing.copy_with_count(combined_count);
+            stack.decrement(count_to_add);
+            self.items.insert(0, merged);
+        } else {
+            let split = stack.split(count_to_add);
+            self.items.insert(0, split);
         }
-        inserted_anything
+        true
     }
+
     pub fn try_extract(&mut self) -> Option<crate::item_stack::ItemStack> {
         if self.items.is_empty() {
-            None
-        } else {
-            Some(self.items.remove(0))
+            return None;
         }
+        let remove_index = if self.index_is_outside_allowed_bounds(self.selected_item) {
+            0
+        } else {
+            self.selected_item as usize
+        };
+        let removed = self.items.remove(remove_index);
+        self.toggle_selected_item(Self::NO_SELECTED_ITEM_INDEX);
+        Some(removed)
     }
 }
 impl DataComponentImpl for BundleContentsImpl {
@@ -964,4 +1127,63 @@ impl DataComponentImpl for RecipesImpl {
         )
     }
     default_impl!(Recipes);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BundleContentsImpl;
+    use crate::{item::Item, item_stack::ItemStack};
+
+    #[test]
+    fn bundle_toggle_selected_item_and_extract() {
+        let mut contents = BundleContentsImpl::EMPTY;
+        let mut diamonds = ItemStack::new(2, &Item::DIAMOND);
+        let mut emeralds = ItemStack::new(3, &Item::EMERALD);
+        let mut sticks = ItemStack::new(4, &Item::STICK);
+
+        assert!(contents.try_insert(&mut diamonds));
+        assert!(contents.try_insert(&mut emeralds));
+        assert!(contents.try_insert(&mut sticks));
+        // Inserted via addFirst -> [STICK(4), EMERALD(3), DIAMOND(2)]
+        assert_eq!(contents.items.len(), 3);
+        assert_eq!(
+            contents.get_selected_item_index(),
+            BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+        );
+
+        // Selecting index 1 (EMERALD), then toggling index 1 again resets to -1.
+        contents.toggle_selected_item(1);
+        assert_eq!(contents.get_selected_item_index(), 1);
+        contents.toggle_selected_item(1);
+        assert_eq!(
+            contents.get_selected_item_index(),
+            BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+        );
+
+        // Out-of-bounds index resets to -1.
+        contents.toggle_selected_item(2);
+        assert_eq!(contents.get_selected_item_index(), 2);
+        contents.toggle_selected_item(99);
+        assert_eq!(
+            contents.get_selected_item_index(),
+            BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+        );
+
+        // Extracting with selected index 1 removes EMERALD and resets selection to -1.
+        contents.toggle_selected_item(1);
+        let extracted = contents.try_extract().unwrap();
+        assert_eq!(extracted.item.id, Item::EMERALD.id);
+        assert_eq!(extracted.item_count, 3);
+        assert_eq!(
+            contents.get_selected_item_index(),
+            BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+        );
+        assert_eq!(contents.items.len(), 2);
+
+        // Inserting additional diamonds merges with non-top DIAMOND stack and moves it to index 0.
+        let mut more_diamonds = ItemStack::new(5, &Item::DIAMOND);
+        assert!(contents.try_insert(&mut more_diamonds));
+        assert_eq!(contents.items[0].item.id, Item::DIAMOND.id);
+        assert_eq!(contents.items[0].item_count, 7);
+    }
 }

@@ -1,10 +1,19 @@
+use std::sync::Arc;
+
 use crate::enchantment::effects::EnchantmentEntityEffectExt;
+use crate::entity::player::Player;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::{Entity, EntityBase};
+use crate::world::World;
 use pumpkin_data::data_component_impl::EnchantmentsImpl;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::enchantment::{Enchantment, EnchantmentEntityEffect, EnchantmentTarget};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 
 /// Data-driven helper for enchantment effects matching vanilla `EnchantmentHelper`.
 pub struct EnchantmentHelper;
@@ -207,6 +216,117 @@ impl EnchantmentHelper {
             }
         }
         damage
+    }
+
+    /// Modifies damage against a specific target type (e.g. Impaling, Smite, Bane of Arthropods, Sharpness).
+    #[must_use]
+    pub fn modify_damage_against(
+        weapon: &ItemStack,
+        base_damage: f64,
+        victim_type: Option<&'static EntityType>,
+    ) -> f64 {
+        let mut damage = base_damage;
+        if let Some(enchantments) = weapon.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                enchantment.modify_damage_against(*level, &mut damage, victim_type);
+            }
+        }
+        damage
+    }
+
+    fn is_world_thundering(world: &World) -> bool {
+        world.dimension.has_skylight
+            && !world.dimension.has_ceiling
+            && world.dimension != Dimension::THE_END
+            && world.is_raining()
+            && world.is_thundering()
+    }
+
+    /// Applies post-attack enchantment effects for a thrown trident hitting `victim`.
+    pub fn on_trident_post_attack(
+        world: &Arc<World>,
+        trident: &Entity,
+        owner: Option<&Arc<Player>>,
+        victim: &Entity,
+        weapon: &ItemStack,
+    ) {
+        let victim_pos = victim.pos.load();
+        let victim_block_pos = victim.block_pos.load();
+        Self::run_iteration_on_item(weapon, |enchantment, level| {
+            for targeted_effect in enchantment.get_post_attack_effects() {
+                if targeted_effect.enchanted == Some(EnchantmentTarget::Attacker)
+                    && targeted_effect.affected == Some(EnchantmentTarget::Victim)
+                {
+                    if let EnchantmentEntityEffect::Ignite { duration } = &targeted_effect.effect {
+                        victim.set_on_fire_for_ticks((duration.calculate(level) * 20.0) as u32);
+                    } else if *enchantment == Enchantment::CHANNELING
+                        && trident.entity_type == &EntityType::TRIDENT
+                        && Self::is_world_thundering(world)
+                        && world.can_see_sky(&victim_block_pos)
+                    {
+                        targeted_effect
+                            .effect
+                            .apply(world, level, owner, Some(victim), victim_pos);
+                    }
+                }
+            }
+        });
+    }
+
+    /// Applies `hit_block` enchantment effects for a thrown trident hitting `block_pos`.
+    pub fn on_trident_hit_block(
+        world: &Arc<World>,
+        trident: &Entity,
+        owner: Option<&Arc<Player>>,
+        block_pos: &BlockPos,
+        hit_pos: Vector3<f64>,
+        weapon: &ItemStack,
+    ) {
+        const CLAMP_EPSILON: f64 = 1.0e-5f32 as f64;
+        let bx = f64::from(block_pos.0.x);
+        let by = f64::from(block_pos.0.y);
+        let bz = f64::from(block_pos.0.z);
+        let compensated_pos = Vector3::new(
+            hit_pos
+                .x
+                .clamp(bx + CLAMP_EPSILON, bx + 1.0 - CLAMP_EPSILON),
+            hit_pos
+                .y
+                .clamp(by + CLAMP_EPSILON, by + 1.0 - CLAMP_EPSILON),
+            hit_pos
+                .z
+                .clamp(bz + CLAMP_EPSILON, bz + 1.0 - CLAMP_EPSILON),
+        );
+        let clamped_block_pos = BlockPos::floored_v(compensated_pos);
+
+        Self::run_iteration_on_item(weapon, |enchantment, level| {
+            for conditional_effect in enchantment.effects.hit_block {
+                if *enchantment == Enchantment::CHANNELING {
+                    if Self::is_world_thundering(world)
+                        && world
+                            .get_block(&clamped_block_pos)
+                            .has_tag(&tag::Block::MINECRAFT_LIGHTNING_RODS)
+                        && world.can_see_sky(&clamped_block_pos)
+                    {
+                        conditional_effect.effect.apply(
+                            world,
+                            level,
+                            owner,
+                            Some(trident),
+                            compensated_pos,
+                        );
+                    }
+                } else {
+                    conditional_effect.effect.apply(
+                        world,
+                        level,
+                        owner,
+                        Some(trident),
+                        compensated_pos,
+                    );
+                }
+            }
+        });
     }
 
     /// Modifies smash / fall-based damage using data-driven effects (e.g. Density).
