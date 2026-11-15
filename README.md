@@ -19,7 +19,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 ## Goals
 
 - **Performance**: Leveraging multi-threading for maximum speed and efficiency.
-- **Compatibility**: Supports the latest Java & Bedrock Minecraft server version while adhering to Vanilla game mechanics.
+- **Compatibility**: Supports the latest Java & Bedrock Minecraft server version while adhering to vanilla game mechanics.
 - **Security**: Prioritizes security by preventing known security exploits.
 - **Flexibility**: Highly configurable, with the ability to disable unnecessary features.
 - **Extensibility**: Provides a foundation for plugin development.

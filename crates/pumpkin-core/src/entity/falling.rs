@@ -53,6 +53,10 @@ impl FallingEntity {
 }
 
 impl EntityBase for FallingEntity {
+    fn can_hit(&self) -> bool {
+        !self.get_entity().is_removed()
+    }
+
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = &self.entity;
         let mut velo = entity.velocity.load();

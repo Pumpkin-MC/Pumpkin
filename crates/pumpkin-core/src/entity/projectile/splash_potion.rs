@@ -1,5 +1,4 @@
 use crate::entity::projectile::owner::ProjectileOwner;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
 use crate::{
@@ -27,8 +26,6 @@ impl SplashPotionEntity {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
         };
 
@@ -117,6 +114,10 @@ pub(crate) fn extinguish_fire_if_water_potion(
 }
 
 impl EntityBase for SplashPotionEntity {
+    fn hurt_knockback_direction(&self, hurt: &Entity) -> Option<(f64, f64)> {
+        super::knockback_away_from(self.get_entity(), hurt)
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.thrown.owner)
     }
@@ -135,8 +136,8 @@ impl EntityBase for SplashPotionEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -270,7 +271,7 @@ impl EntityBase for SplashPotionEntity {
         let mut candidates = world.get_entities_at_box(&aabb);
         let players = world.get_players_at_box(&aabb);
         for p in players {
-            candidates.push(p.clone() as Arc<dyn EntityBase>);
+            candidates.push(p as Arc<dyn EntityBase>);
         }
 
         let mut affected: Vec<(Arc<dyn EntityBase>, f32)> = Vec::new();

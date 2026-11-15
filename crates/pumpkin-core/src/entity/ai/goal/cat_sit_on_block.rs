@@ -1,4 +1,4 @@
-use std::sync::{Arc, Weak};
+use std::sync::Weak;
 
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BedPart, FurnaceLikeProperties, WhiteBedLikeProperties};
@@ -20,7 +20,7 @@ struct CatSitOnBlockTarget;
 static TARGET: CatSitOnBlockTarget = CatSitOnBlockTarget;
 
 impl MoveToTargetPos for CatSitOnBlockTarget {
-    fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool {
+    fn is_target_pos(&self, world: &World, block_pos: BlockPos) -> bool {
         if !world.get_block_state(&block_pos.up()).is_air() {
             return false;
         }

@@ -81,6 +81,20 @@ where
 
     /// Writes every staged chunk and syncs the region files.
     fn flush_all(&self) -> impl Future<Output = ()> + Send + '_;
+
+    /// Checks whether a chunk exists on disk or in pending saves without loading or decoding it.
+    fn is_chunk_generated<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        coord: Vector2<i32>,
+    ) -> impl Future<Output = bool> + Send + 'a;
+
+    /// Deletes a chunk from its region file (or pending saves) if present.
+    fn delete_chunk<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        coord: Vector2<i32>,
+    ) -> impl Future<Output = bool> + Send + 'a;
 }
 
 /// One open region file (32x32 chunks) of a storage format.
@@ -105,6 +119,12 @@ pub trait RegionFile: Send + Sync + Sized + 'static {
     /// Opens the region at `path`. A missing file is an empty region; it is created on the
     /// first flush.
     fn open(path: &Path, region: Vector2<i32>) -> Result<Self, ChunkReadingError>;
+
+    /// Returns whether the chunk at `index` exists in this region without reading its payload.
+    fn has_chunk(&self, index: usize) -> bool;
+
+    /// Removes the chunk at `index` from this region if present.
+    fn delete_chunk(&mut self, index: usize) -> std::io::Result<bool>;
 
     /// Reads the chunk at `index`, or returns `None` when it was never saved.
     fn read_chunk(&self, index: usize) -> Result<Option<Self::Raw>, ChunkReadingError>;

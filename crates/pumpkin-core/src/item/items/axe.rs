@@ -66,17 +66,9 @@ impl ItemBehaviour for AxeItem {
                 };
                 let (other_block, other_state_id) = world.get_block_and_state_id(&other_half_pos);
                 if other_block == block {
-                    let other_new_state_id = if result.target_block.states.len() <= 1 {
-                        result.target_block.default_state.id
-                    } else if let Some(other_props) = other_block.properties(other_state_id) {
-                        let props = other_props.to_props();
-                        result
-                            .target_block
-                            .from_properties(&props)
-                            .to_state_id(result.target_block)
-                    } else {
-                        result.target_block.default_state.id
-                    };
+                    let other_new_state_id = result
+                        .target_block
+                        .with_properties_of(other_block, other_state_id);
                     world.set_block_state(
                         &other_half_pos,
                         other_new_state_id,
@@ -95,15 +87,9 @@ impl ItemBehaviour for AxeItem {
                     let (neighbor_block, neighbor_state_id) =
                         world.get_block_and_state_id(&neighbor_pos);
                     if neighbor_block == block {
-                        let neighbor_new_state_id = neighbor_block
-                            .properties(neighbor_state_id)
-                            .map_or(result.target_block.default_state.id, |neighbor_props| {
-                                let props = neighbor_props.to_props();
-                                result
-                                    .target_block
-                                    .from_properties(&props)
-                                    .to_state_id(result.target_block)
-                            });
+                        let neighbor_new_state_id = result
+                            .target_block
+                            .with_properties_of(neighbor_block, neighbor_state_id);
                         world.set_block_state(
                             &neighbor_pos,
                             neighbor_new_state_id,

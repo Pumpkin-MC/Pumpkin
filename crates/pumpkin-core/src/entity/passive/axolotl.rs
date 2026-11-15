@@ -27,8 +27,6 @@ use crate::entity::{
     player::Player,
 };
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(i32)]
 pub enum AxolotlVariant {
@@ -107,7 +105,14 @@ impl AxolotlEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.25,
+                    &tag::Item::MINECRAFT_AXOLOTL_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.2, false)));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
@@ -219,8 +224,6 @@ impl AgeableMob for AxolotlEntity {
 impl Animal for AxolotlEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_AXOLOTL_FOOD)
-            || item_stack.item == &Item::TROPICAL_FISH_BUCKET
-            || item_stack.item == &Item::TROPICAL_FISH
     }
 }
 

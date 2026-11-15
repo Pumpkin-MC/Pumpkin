@@ -31,6 +31,7 @@ impl BedrockClient {
         self.try_handle_login(packet, server).await
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn try_handle_login(
         self: &Arc<Self>,
         packet: SLogin,
@@ -79,7 +80,12 @@ impl BedrockClient {
 
         let bedrock_config = &server.advanced_config.networking.bedrock;
         let name = build_username(
-            &player_data.display_name,
+            // Can happen in self-signed / logged out clients
+            if player_data.display_name.is_empty() {
+                &client_data.third_party_name
+            } else {
+                &player_data.display_name
+            },
             &bedrock_config.username_prefix,
             bedrock_config.replace_username_spaces,
         );

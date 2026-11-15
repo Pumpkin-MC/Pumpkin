@@ -2,6 +2,8 @@
 use super::*;
 
 impl PendingConnection {
+    /// Registries and tags are sent in the 26.3 format; for older clients the multiversion
+    /// plugin rewrites them in `JavaConnectionPacketSentEvent`.
     pub async fn handle_known_packs(&mut self, server: &Server) {
         let version = CURRENT_MC_VERSION;
         let synced = server.datapack_manager.get_all_synced_registries();

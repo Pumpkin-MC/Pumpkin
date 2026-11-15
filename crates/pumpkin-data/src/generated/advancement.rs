@@ -7364,7 +7364,9 @@ impl Advancement {
             trigger: "minecraft:player_hurt_entity",
             conditions: AdvancementCondition::PlayerHurtEntity(DamageCondition {
                 blocked: None,
-                is_projectile: Some(false),
+                is_projectile: None,
+                is_mace_smash: Some(true),
+                direct_entity: Some("minecraft:player"),
                 dealt_min: Some(100f64),
                 taken_min: None,
             }),
@@ -7479,6 +7481,8 @@ impl Advancement {
             conditions: AdvancementCondition::PlayerHurtEntity(DamageCondition {
                 blocked: None,
                 is_projectile: Some(true),
+                is_mace_smash: None,
+                direct_entity: Some("#minecraft:arrows"),
                 dealt_min: None,
                 taken_min: None,
             }),
@@ -7667,6 +7671,8 @@ impl Advancement {
             conditions: AdvancementCondition::PlayerHurtEntity(DamageCondition {
                 blocked: None,
                 is_projectile: Some(true),
+                is_mace_smash: None,
+                direct_entity: Some("minecraft:trident"),
                 dealt_min: None,
                 taken_min: None,
             }),
@@ -73437,6 +73443,8 @@ impl Advancement {
             conditions: AdvancementCondition::EntityHurtPlayer(DamageCondition {
                 blocked: Some(true),
                 is_projectile: Some(true),
+                is_mace_smash: None,
+                direct_entity: None,
                 dealt_min: None,
                 taken_min: None,
             }),

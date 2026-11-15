@@ -23,7 +23,6 @@ use uuid::Uuid;
 
 use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, GearDamage, NBTStorageInit};
-use crate::block::OnLandedUponArgs;
 use crate::entity::NBTStorage;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
@@ -86,6 +85,9 @@ pub struct LivingEntity {
     pub entity: Entity,
     /// Tracks the remaining time until the entity can regenerate health.
     pub hurt_cooldown: AtomicI32,
+    /// Arrows sticking out of the entity, synced so the client renders them.
+    arrow_count: AtomicI32,
+    remove_arrow_time: AtomicI32,
     /// Stores the amount of damage the entity last received.
     pub last_damage_taken: AtomicCell<f32>,
     /// The current health level of the entity.
@@ -143,6 +145,16 @@ pub struct LivingEntity {
 
     /// The last block position the entity occupied, used to trigger location changed effects.
     pub last_block_pos: AtomicCell<Option<BlockPos>>,
+
+    /// Vanilla `currentImpulseImpactPos` (persisted as `current_explosion_impact_pos`).
+    pub current_impulse_impact_pos: AtomicCell<Option<Vector3<f64>>>,
+    /// Vanilla `currentImpulseContextResetGraceTime`.
+    pub current_impulse_context_reset_grace_time: AtomicI32,
+
+    /// Vanilla `autoSpinAttackTicks`, `autoSpinAttackDmg`, and `autoSpinAttackItemStack`.
+    pub auto_spin_attack_ticks: AtomicI32,
+    pub auto_spin_attack_dmg: AtomicCell<f32>,
+    pub auto_spin_attack_item_stack: std::sync::Mutex<Option<(ItemStack, Option<EquipmentSlot>)>>,
 
     /// The attributes of the entity
     pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
@@ -240,8 +252,137 @@ impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
     const RANDOM_TELEPORT_ATTEMPTS: usize = 16;
-    #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
+
+    #[must_use]
+    pub fn is_auto_spin_attack(&self) -> bool {
+        (self.livings_flags.load(Relaxed) & Self::USING_RIPTIDE_FLAG) != 0
+    }
+
+    pub fn start_auto_spin_attack(
+        &self,
+        activation_ticks: i32,
+        dmg: f32,
+        item_stack: ItemStack,
+        slot: Option<EquipmentSlot>,
+    ) {
+        self.auto_spin_attack_ticks.store(activation_ticks, Relaxed);
+        self.auto_spin_attack_dmg.store(dmg);
+        *self
+            .auto_spin_attack_item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((item_stack, slot));
+        self.set_living_flag(Self::USING_RIPTIDE_FLAG, true);
+    }
+
+    pub fn stop_auto_spin_attack(&self) {
+        self.auto_spin_attack_ticks.store(0, Relaxed);
+        self.set_living_flag(Self::USING_RIPTIDE_FLAG, false);
+        self.auto_spin_attack_dmg.store(0.0);
+        *self
+            .auto_spin_attack_item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
+    /// Vanilla `LivingEntity.checkAutoSpinAttack`.
+    pub(crate) fn check_auto_spin_attack(
+        &self,
+        caller: &dyn EntityBase,
+        old_box: BoundingBox,
+        current_box: BoundingBox,
+    ) {
+        let minmax = old_box.minmax(&current_box);
+        let world = self.entity.world.load();
+        let entities: Vec<Arc<dyn EntityBase>> = world
+            .get_all_at_box(&minmax)
+            .into_iter()
+            .filter(|e| {
+                let ent = e.get_entity();
+                ent.entity_id != self.entity.entity_id && !e.is_spectator()
+            })
+            .collect();
+
+        if !entities.is_empty() {
+            for entity in entities {
+                if entity.get_living_entity().is_some() {
+                    if let Some(player) = caller.get_player() {
+                        player.attack(&entity);
+                    }
+                    self.auto_spin_attack_ticks.store(0, Relaxed);
+                    self.entity
+                        .velocity
+                        .store(self.entity.velocity.load() * -0.2);
+                    self.entity.velocity_dirty.store(true, SeqCst);
+                    break;
+                }
+            }
+        } else if self.entity.horizontal_collision.load(Relaxed) {
+            self.auto_spin_attack_ticks.store(0, Relaxed);
+        }
+
+        if self.auto_spin_attack_ticks.load(Relaxed) <= 0 {
+            self.stop_auto_spin_attack();
+        }
+    }
+
+    /// Vanilla `LivingEntity.hasLandedInLiquid`.
+    #[must_use]
+    pub fn has_landed_in_liquid(&self) -> bool {
+        self.entity.velocity.load().y < f64::from(1.0e-5f32) && self.entity.is_in_liquid()
+    }
+
+    pub fn set_ignore_fall_damage_from_current_impulse(
+        &self,
+        ignore_fall_damage: bool,
+        new_impulse_impact_pos: Vector3<f64>,
+    ) {
+        if ignore_fall_damage {
+            self.apply_post_impulse_grace_time(40);
+            self.current_impulse_impact_pos
+                .store(Some(new_impulse_impact_pos));
+        } else {
+            self.current_impulse_context_reset_grace_time
+                .store(0, Relaxed);
+        }
+    }
+
+    pub fn apply_post_impulse_grace_time(&self, ticks: i32) {
+        self.current_impulse_context_reset_grace_time
+            .fetch_max(ticks, Relaxed);
+    }
+
+    #[must_use]
+    pub fn is_ignoring_fall_damage_from_current_impulse(&self) -> bool {
+        self.current_impulse_impact_pos.load().is_some()
+    }
+
+    pub fn try_reset_current_impulse_context(&self) {
+        if self.current_impulse_context_reset_grace_time.load(Relaxed) == 0 {
+            self.reset_current_impulse_context();
+        }
+    }
+
+    #[must_use]
+    pub fn is_in_post_impulse_grace_time(&self) -> bool {
+        self.current_impulse_context_reset_grace_time.load(Relaxed) > 0
+    }
+
+    pub fn reset_current_impulse_context(&self) {
+        self.current_impulse_context_reset_grace_time
+            .store(0, Relaxed);
+        self.current_impulse_impact_pos.store(None);
+    }
+
+    /// Mirrors `MaceItem.calculateImpactPosition`.
+    #[must_use]
+    pub fn calculate_impact_position(&self) -> Vector3<f64> {
+        let current_pos = self.entity.pos.load();
+        match self.current_impulse_impact_pos.load() {
+            Some(impact_pos) if impact_pos.y <= current_pos.y => impact_pos,
+            _ => current_pos,
+        }
+    }
 
     const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [
         &Block::COBWEB,
@@ -345,6 +486,8 @@ impl LivingEntity {
             health: AtomicCell::new(max_health), // Initial health value from attributes
             entity,
             hurt_cooldown: AtomicI32::new(0),
+            arrow_count: AtomicI32::new(0),
+            remove_arrow_time: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             absorption: AtomicCell::new(0.0),
             fall_distance: AtomicCell::new(0.0),
@@ -379,6 +522,11 @@ impl LivingEntity {
             speed: AtomicCell::new(0.0),
             water_movement_speed_multiplier,
             last_block_pos: AtomicCell::new(None),
+            current_impulse_impact_pos: AtomicCell::new(None),
+            current_impulse_context_reset_grace_time: AtomicI32::new(0),
+            auto_spin_attack_ticks: AtomicI32::new(0),
+            auto_spin_attack_dmg: AtomicCell::new(0.0),
+            auto_spin_attack_item_stack: std::sync::Mutex::new(None),
             equipment_attribute_modifier_ids: std::sync::Mutex::new(FxHashMap::default()),
         }
     }
@@ -404,6 +552,12 @@ impl LivingEntity {
                 .map(|attacker| attacker.get_entity().entity_id),
             entity_id => Some(entity_id),
         }
+    }
+
+    /// Still inside the hurt animation of the last hit taken.
+    #[must_use]
+    pub fn was_hurt_recently(&self) -> bool {
+        self.hurt_cooldown.load(Relaxed) > HURT_DURATION
     }
 
     pub fn get_last_hurt_by_mob_timestamp(&self) -> i32 {
@@ -833,9 +987,16 @@ impl LivingEntity {
         }
         self.livings_flags.store(b, Ordering::Relaxed);
 
-        let bedrock_meta = (flag == Self::USING_ITEM_FLAG).then(|| {
-            let index =
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM;
+        let bedrock_flag = if flag == Self::USING_ITEM_FLAG {
+            Some(pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM)
+        } else if flag == Self::USING_RIPTIDE_FLAG {
+            Some(
+                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::DAMAGE_NEARBY_MOBS,
+            )
+        } else {
+            None
+        };
+        let bedrock_meta = bedrock_flag.map(|index| {
             let mask = 1i64 << index;
             if value {
                 self.entity.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
@@ -1098,6 +1259,33 @@ impl LivingEntity {
         }
     }
 
+    #[must_use]
+    pub fn get_arrow_count(&self) -> i32 {
+        self.arrow_count.load(Relaxed)
+    }
+
+    pub fn set_arrow_count(&self, count: i32) {
+        self.arrow_count.store(count, Relaxed);
+        self.entity.set_synced_data(
+            tracked_data::living_entity::DATA_ARROW_COUNT_ID,
+            VarInt(count),
+        );
+    }
+
+    /// Stuck arrows fall out one at a time, faster the more there are.
+    fn tick_arrow_count(&self) {
+        let count = self.get_arrow_count();
+        if count <= 0 {
+            return;
+        }
+        if self.remove_arrow_time.load(Relaxed) <= 0 {
+            self.remove_arrow_time.store(20 * (30 - count), Relaxed);
+        }
+        if self.remove_arrow_time.fetch_sub(1, Relaxed) - 1 <= 0 {
+            self.set_arrow_count(count - 1);
+        }
+    }
+
     /// Returns the computed value for `attribute` using the local instance, falling back
     /// to `attribute.default_value` if no local instance exists.
     pub fn get_attribute_value(&self, attribute: &Attributes) -> f64 {
@@ -1335,7 +1523,11 @@ impl LivingEntity {
         if effect.show_icon {
             flag |= 4;
         }
-        if effect.blend {
+        if effect.blend
+            || effect.effect_type.fade_in_ticks != 0
+            || effect.effect_type.fade_out_ticks != 0
+            || effect.effect_type.fade_out_threshold_ticks != 0
+        {
             flag |= 8;
         }
 
@@ -1359,17 +1551,20 @@ impl LivingEntity {
         };
 
         let chunk_pos = self.entity.chunk_pos.load();
-        self.entity
-            .world
-            .load()
-            .broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
-        if effect.effect_type != &StatusEffect::INSTANT_HEALTH
-            && effect.effect_type != &StatusEffect::INSTANT_DAMAGE
-        {
-            self.active_effects
+        let world = self.entity.world.load();
+        world.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        if !effect.effect_type.instantaneous {
+            let apply_sound = effect.effect_type.apply_sound;
+            let was_absent = self
+                .active_effects
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(effect.effect_type, effect);
+                .insert(effect.effect_type, effect)
+                .is_none();
+            if was_absent && let Some(sound) = apply_sound {
+                let category = self.entity.entity_type.sound_source;
+                world.play_sound_fine(sound, category, &self.entity.pos.load(), 1.0, 1.0);
+            }
         }
         self.sync_effect_particles();
     }
@@ -1912,12 +2107,17 @@ impl LivingEntity {
     }
 
     pub(crate) fn travel_flying(&self, caller: &dyn EntityBase) {
+        self.travel_flying_with_speed(caller, self.get_speed());
+    }
+
+    /// Flies with `air_speed` out of fluids, slowing down in water and lava.
+    pub(crate) fn travel_flying_with_speed(&self, caller: &dyn EntityBase, air_speed: f32) {
         let (speed, drag) = if self.entity.is_in_water() {
             (f64::from(0.02f32), f64::from(0.8f32))
         } else if self.entity.touching_lava.load(Relaxed) {
             (f64::from(0.02f32), 0.5)
         } else {
-            (f64::from(self.get_speed()), f64::from(0.91f32))
+            (f64::from(air_speed), f64::from(0.91f32))
         };
         self.entity
             .update_velocity_from_input(self.movement_input.load(), speed);
@@ -2281,16 +2481,9 @@ impl LivingEntity {
             }
             let world = self.entity.world.load();
             let block = world.get_block(&self.entity.get_pos_with_y_offset(0.2).0);
-            let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
-            if let Some(pumpkin_block) = pumpkin_block {
-                pumpkin_block.on_landed_upon(OnLandedUponArgs {
-                    world: &world,
-                    fall_distance,
-                    entity: caller,
-                });
-            } else {
-                self.handle_fall_damage(caller, fall_distance, 1.0);
-            }
+            world
+                .block_registry
+                .on_landed_upon(block, &world, fall_distance, caller);
         } else if height_difference < 0.0 {
             let new_fall_distance = if !self.should_prevent_fall_damage()
                 && !self.should_prevent_fall_damage_in_area()
@@ -2358,11 +2551,27 @@ impl LivingEntity {
             );
         }
 
-        self.propagate_fall_to_passengers(fall_distance, damage_modifier);
-        let damage = self.calculate_fall_damage(caller, fall_distance, damage_modifier);
+        let effective_fall_distance =
+            self.current_impulse_impact_pos
+                .load()
+                .map_or(fall_distance, |impact_pos| {
+                    let effective = f64::from(fall_distance)
+                        .min(impact_pos.y - self.entity.pos.load().y)
+                        as f32;
+                    if effective <= 0.0 {
+                        self.reset_current_impulse_context();
+                    } else {
+                        self.try_reset_current_impulse_context();
+                    }
+                    effective
+                });
+
+        self.propagate_fall_to_passengers(effective_fall_distance, damage_modifier);
+        let damage = self.calculate_fall_damage(caller, effective_fall_distance, damage_modifier);
         if damage <= 0 {
             return false;
         }
+        self.reset_current_impulse_context();
         caller.play_entity_sound(Self::get_fall_damage_sound(caller, damage), 1.0, 1.0);
         self.play_block_fall_sound(caller);
         self.damage(caller, damage as f32, DamageType::FALL);
@@ -2517,6 +2726,9 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, kill_credit.as_deref());
 
             self.make_voice_sound(&*dyn_self, self.death_sound(&*dyn_self));
+            let perished = killer
+                .and_then(EntityBase::get_mob)
+                .is_none_or(|mob| mob.killed_entity(&*dyn_self));
             world.send_entity_status(&self.entity, EntityStatus::Death, ActorEventID::Death);
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
@@ -2571,13 +2783,14 @@ impl LivingEntity {
                 ..Default::default()
             };
 
-            let should_drop_loot = dyn_self.should_drop_loot();
+            let should_drop_loot = perished && dyn_self.should_drop_loot();
             if should_drop_loot {
                 self.drop_loot(&*dyn_self, &params);
             }
 
             // Award experience
-            if params.killed_by_player.unwrap_or(false)
+            if perished
+                && params.killed_by_player.unwrap_or(false)
                 && world.level_info.load().game_rules.mob_drops
                 && dyn_self.should_drop_experience()
             {
@@ -2591,7 +2804,7 @@ impl LivingEntity {
             if should_drop_loot {
                 self.drop_equipment(looting_level);
             }
-            if let Some(mob) = dyn_self.get_mob() {
+            if perished && let Some(mob) = dyn_self.get_mob() {
                 mob.drop_inventory();
             }
 
@@ -3163,6 +3376,7 @@ impl LivingEntity {
 
         // Clear fall/fire state
         self.fall_distance.store(0f32);
+        self.reset_current_impulse_context();
         self.death_time.store(0, Relaxed);
         self.entity.extinguish();
         self.entity.fire_ticks.store(0, Relaxed);
@@ -3177,6 +3391,9 @@ impl LivingEntity {
         let world = self.entity.world.load();
         if let Some(player) = world.get_player_by_id(self.entity.entity_id) {
             player.hunger_manager.restart();
+            player
+                .spawn_extra_particles_on_fall
+                .store(false, Ordering::Relaxed);
         }
 
         self.dead.store(false, Relaxed);
@@ -3249,6 +3466,20 @@ impl LivingEntity {
             }
         }
         nbt.put_bool("FallFlying", self.entity.is_fall_flying());
+        nbt.put_int(
+            "current_impulse_context_reset_grace_time",
+            self.current_impulse_context_reset_grace_time.load(Relaxed),
+        );
+        if let Some(impact_pos) = self.current_impulse_impact_pos.load() {
+            nbt.put(
+                "current_explosion_impact_pos",
+                NbtTag::List(vec![
+                    impact_pos.x.into(),
+                    impact_pos.y.into(),
+                    impact_pos.z.into(),
+                ]),
+            );
+        }
         if let Some(player) = self.last_hurt_by_player.load() {
             nbt.put_uuid("last_hurt_by_player", player);
             nbt.put_int(
@@ -3340,6 +3571,24 @@ impl LivingEntity {
         self.entity
             .fall_flying
             .store(nbt.get_bool("FallFlying").unwrap_or(false), Relaxed);
+        self.current_impulse_context_reset_grace_time.store(
+            nbt.get_int("current_impulse_context_reset_grace_time")
+                .unwrap_or(0)
+                .max(0),
+            Relaxed,
+        );
+        let impact_pos = nbt
+            .get_list("current_explosion_impact_pos")
+            .and_then(|list| {
+                if list.len() != 3 {
+                    return None;
+                }
+                let x = list[0].extract_double()?;
+                let y = list[1].extract_double()?;
+                let z = list[2].extract_double()?;
+                (x.is_finite() && y.is_finite() && z.is_finite()).then_some(Vector3::new(x, y, z))
+            });
+        self.current_impulse_impact_pos.store(impact_pos);
         self.last_hurt_by_player
             .store(nbt.get_uuid("last_hurt_by_player"));
         self.last_hurt_by_player_memory_time.store(
@@ -3732,6 +3981,19 @@ impl LivingEntity {
                     }
                 }
 
+                if let Some(attacker_player) = cause.or(source).and_then(EntityBase::get_player) {
+                    attacker_player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerHurtEntity {
+                            is_blocked: true,
+                            is_projectile: damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE),
+                            is_mace_smash: damage_type.has_tag(&tag::DamageType::MINECRAFT_MACE_SMASH),
+                            damage: f64::from(amount),
+                            direct_entity_type: source
+                                .map(|s| s.get_entity().entity_type.resource_name.to_string()),
+                        },
+                    );
+                }
+
                 return false;
             }
         }
@@ -3957,6 +4219,19 @@ impl LivingEntity {
             self.on_death(damage_type, source, cause);
         }
 
+        if let Some(attacker_player) = cause.or(source).and_then(EntityBase::get_player) {
+            attacker_player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerHurtEntity {
+                    is_blocked: false,
+                    is_projectile: damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE),
+                    is_mace_smash: damage_type.has_tag(&tag::DamageType::MINECRAFT_MACE_SMASH),
+                    damage: f64::from(amount),
+                    direct_entity_type: source
+                        .map(|s| s.get_entity().entity_type.resource_name.to_string()),
+                },
+            );
+        }
+
         true
     }
 
@@ -3975,12 +4250,18 @@ impl LivingEntity {
         damage: f32,
     ) {
         let target_pos = self.entity.pos.load();
-        let (dx, dz) = source
-            .map(|source| source.get_entity().pos.load())
-            .or(position)
-            .map_or((0.0, 0.0), |pos| {
-                (pos.x - target_pos.x, pos.z - target_pos.z)
-            });
+        let (dx, dz) = if let Some((x, z)) =
+            source.and_then(|source| source.hurt_knockback_direction(&self.entity))
+        {
+            (-x, -z)
+        } else {
+            source
+                .map(|source| source.get_entity().pos.load())
+                .or(position)
+                .map_or((0.0, 0.0), |pos| {
+                    (pos.x - target_pos.x, pos.z - target_pos.z)
+                })
+        };
         if caller.get_mob().is_some_and(|mob| {
             mob.mob_knockback(
                 0.4,
@@ -4042,22 +4323,40 @@ impl EntityBase for LivingEntity {
             self.entity.refresh_dimensions();
         }
 
+        let pre_tick_pos = self.entity.last_pos.load();
         self.entity.tick(caller, server);
         self.tick_last_hurt_by_mob();
         if let Some(mob) = caller.get_mob() {
             mob.tick_ambient_sound();
             mob.base_tick();
         }
+        self.tick_arrow_count();
 
         // Only tick movement if the entity is alive. This prevents a dead "corpse"
         // from continuing to be simulated (accumulating fall_distance/velocity).
         // We allow movement during death animation (20 ticks) so knockback is applied.
         let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
         let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
+        if is_alive || in_death_animation {
+            let _ = self.current_impulse_context_reset_grace_time.fetch_update(
+                Relaxed,
+                Relaxed,
+                |grace_time| (grace_time > 0).then_some(grace_time - 1),
+            );
+        }
         if (is_alive || in_death_animation) && !is_player {
+            let before_travel_box = self.entity.bounding_box.load();
             self.tick_movement(caller);
             // Vanilla-like order: freeze logic runs after movement/collisions.
             self.entity.tick_frozen(caller);
+            if self.auto_spin_attack_ticks.load(Relaxed) > 0 {
+                self.auto_spin_attack_ticks.fetch_sub(1, Relaxed);
+                self.check_auto_spin_attack(
+                    caller,
+                    before_travel_box,
+                    self.entity.bounding_box.load(),
+                );
+            }
         } else if is_alive {
             // Vanilla `aiStep`: tiny leftovers stop before travel
             self.entity.check_zero_velo();
@@ -4091,6 +4390,22 @@ impl EntityBase for LivingEntity {
 
             // Players push from `World::tick` once all players ticked
             self.entity.tick_frozen(caller);
+            if self.auto_spin_attack_ticks.load(Relaxed) > 0 {
+                self.auto_spin_attack_ticks.fetch_sub(1, Relaxed);
+                let before_travel_box = BoundingBox::new_from_pos(
+                    pre_tick_pos.x,
+                    pre_tick_pos.y,
+                    pre_tick_pos.z,
+                    &self.entity.entity_dimension.load(),
+                );
+                self.check_auto_spin_attack(
+                    caller,
+                    before_travel_box,
+                    self.entity.bounding_box.load(),
+                );
+            }
+        } else if self.is_auto_spin_attack() {
+            self.stop_auto_spin_attack();
         }
 
         // Fetch supporting blocks for players or other entities
@@ -4135,19 +4450,17 @@ impl EntityBase for LivingEntity {
 
         self.tick_effects();
 
-        if let Some(player) = caller.get_player() {
-            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
-            if remaining_use_ticks > 0 {
-                let item_in_use = self
-                    .item_in_use
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
-                if let Some(item) = item_in_use.as_ref() {
-                    server
-                        .item_registry
-                        .on_use_tick(item, player, remaining_use_ticks);
-                }
+        let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+        if remaining_use_ticks > 0 {
+            let item_in_use = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(item) = item_in_use.as_ref() {
+                server
+                    .item_registry
+                    .on_use_tick(item, caller, remaining_use_ticks);
             }
         }
 
@@ -4394,6 +4707,8 @@ impl EntityBase for LivingEntity {
 }
 
 const LAST_HURT_BY_PLAYER_MEMORY_TIME: i32 = 100;
+/// Ticks of the hurt animation; the damage cooldown runs twice as long.
+const HURT_DURATION: i32 = 10;
 
 pub const SPEED_MODIFIER_SPRINTING_ID: &str = "minecraft:sprinting";
 pub const SPEED_MODIFIER_SPRINTING_AMOUNT: f64 = 0.300_000_011_920_928_96;
@@ -4518,6 +4833,7 @@ impl LivingEntity {
                     let destination = self.entity.pos.load();
                     if destination != center {
                         self.fall_distance.store(0.0);
+                        self.reset_current_impulse_context();
                         // Vanilla broadcasts entity event 46 (teleport particles) on success.
                         world.send_entity_status(
                             &self.entity,
@@ -5816,6 +6132,64 @@ mod player_wall_tests {
         living.entity.velocity.store(Vector3::new(0.5, 0.0, 0.0));
         living.make_move(&living);
         assert_eq!(living.entity.velocity.load().x, 0.0);
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn impulse_context_ignores_fall_damage_above_impact_and_persists_nbt() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = LivingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::ZOMBIE,
+        ));
+
+        let initial_impact = living.calculate_impact_position();
+        assert_eq!(initial_impact, Vector3::new(0.5, 64.0, 0.5));
+        living.set_ignore_fall_damage_from_current_impulse(true, initial_impact);
+        assert!(living.is_ignoring_fall_damage_from_current_impulse());
+        assert!(living.is_in_post_impulse_grace_time());
+
+        // Chaining a smash higher up preserves the original lower impact position.
+        living.entity.set_pos(Vector3::new(0.5, 70.0, 0.5));
+        assert_eq!(
+            living.calculate_impact_position(),
+            Vector3::new(0.5, 64.0, 0.5)
+        );
+
+        let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+        living.write_living_nbt(&mut nbt);
+        let restored = LivingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::ZOMBIE,
+        ));
+        restored.read_living_nbt_non_mut(&nbt);
+        assert_eq!(
+            restored.current_impulse_impact_pos.load(),
+            Some(Vector3::new(0.5, 64.0, 0.5))
+        );
+        assert_eq!(
+            restored
+                .current_impulse_context_reset_grace_time
+                .load(std::sync::atomic::Ordering::Relaxed),
+            40
+        );
+
+        // Landing at the impact height deals no fall damage and clears the impulse context.
+        assert!(!restored.cause_fall_damage(&restored, 12.0, 1.0));
+        assert!(!restored.is_ignoring_fall_damage_from_current_impulse());
+        assert!(!restored.is_in_post_impulse_grace_time());
+
+        // Landing 6 blocks below the impact height only counts the 6 blocks below impact (3 damage).
+        restored.set_ignore_fall_damage_from_current_impulse(true, Vector3::new(0.5, 64.0, 0.5));
+        restored.entity.set_pos(Vector3::new(0.5, 58.0, 0.5));
+        assert!(restored.cause_fall_damage(&restored, 20.0, 1.0));
+        assert!(!restored.is_ignoring_fall_damage_from_current_impulse());
+        assert_eq!(restored.last_damage_taken.load(), 3.0);
 
         world.level.shutdown().await;
         Ok(())

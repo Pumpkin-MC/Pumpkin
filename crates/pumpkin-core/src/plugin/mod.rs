@@ -32,7 +32,11 @@ pub mod loader;
 /// host features.
 pub mod permissions;
 
-use crate::{LOGGER_IMPL, server::Server};
+use crate::{
+    LOGGER_IMPL,
+    net::{bedrock::BedrockVersions, java::JavaVersions},
+    server::Server,
+};
 
 tokio::task_local! {
     /// The plugin whose `on_load` runs on this task
@@ -508,6 +512,8 @@ pub struct PluginManager {
     next_plugin_token: AtomicU64,
     loaders: RwLock<Vec<RegisteredLoader>>,
     pub handlers: Arc<ArcSwap<HandlerMap>>,
+    pub java_versions: Arc<JavaVersions>,
+    pub bedrock_versions: Arc<BedrockVersions>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
     /// Plugin files that are known but not running, by path
     inactive: SyncRwLock<HashMap<PathBuf, PluginEntry>>,
@@ -614,6 +620,8 @@ impl PluginManager {
             next_plugin_token: AtomicU64::new(0),
             loaders: RwLock::new(loaders),
             handlers: Arc::new(ArcSwap::from_pointee(HashMap::new())),
+            java_versions: Arc::new(JavaVersions::new()),
+            bedrock_versions: Arc::new(BedrockVersions::new()),
             unloaded_files: RwLock::new(HashSet::new()),
             inactive: SyncRwLock::new(HashMap::new()),
             services: Arc::new(RwLock::new(Services::default())),
@@ -2085,6 +2093,27 @@ impl PluginManager {
         plugins.iter().any(|p| p.path == path)
     }
 
+    /// Get telemetry information for all active plugins.
+    #[must_use]
+    pub fn active_plugins_telemetry(&self) -> Vec<crate::telemetry::PluginInfo> {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        plugins
+            .iter()
+            .filter(|p| p.is_active && p.instance.is_some())
+            .map(|p| crate::telemetry::PluginInfo {
+                name: p.metadata.name.clone(),
+                version: p.metadata.version.clone(),
+                language: p
+                    .loader_data
+                    .as_deref()
+                    .and_then(|data| p.loader.binding_language(data)),
+            })
+            .collect()
+    }
+
     /// Checks if plugin loaded
     #[must_use]
     pub fn is_plugin_loaded(&self, name: &str) -> bool {
@@ -2378,6 +2407,8 @@ impl PluginManager {
         let children_unloading = !self.unload_children(name).await;
         let owner = self.loader_owner(&loader).await;
         let mut registrations = self.take_registrations(name).await;
+        self.java_versions.unregister(name);
+        self.bedrock_versions.unregister(name);
         context.unregister_commands();
         context.unregister_permissions();
 

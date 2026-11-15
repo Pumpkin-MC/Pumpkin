@@ -53,10 +53,7 @@ impl FollowOwnerGoal {
         let Some(owner) = owner else {
             return true;
         };
-        if owner.is_spectator() || !owner.living_entity.entity.is_alive() {
-            return true;
-        }
-        false
+        owner.is_spectator() || !owner.living_entity.entity.is_alive()
     }
 
     fn find_owner(mob: &dyn Mob) -> Option<Arc<Player>> {

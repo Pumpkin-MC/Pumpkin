@@ -41,6 +41,11 @@ pub trait PluginLoader: Send + Sync {
 
     /// Called once per server tick for loaders that run work of their own, like scheduled plugin tasks.
     fn on_tick(&self, _server: &Arc<Server>) {}
+
+    /// Returns the guest binding language or runtime for a loaded plugin, if known.
+    fn binding_language(&self, _data: &(dyn Any + Send + Sync)) -> Option<String> {
+        None
+    }
 }
 
 /// Unified loader error type

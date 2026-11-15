@@ -127,6 +127,15 @@ impl PermissionRegistry {
         self.permissions.get(node)
     }
 
+    /// Returns a copy of every registered permission, in no particular order.
+    #[must_use]
+    pub fn get_permissions(&self) -> Vec<Permission> {
+        self.permissions
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
+    }
+
     /// Overrides the default behaviour of an already-registered permission.
     ///
     /// Used to apply per-command permission overrides from the server

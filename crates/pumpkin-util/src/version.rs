@@ -296,7 +296,7 @@ pub enum BedrockMinecraftVersion {
     V_1_21,
     /// 1.26.51. Shares its protocol version with 1.26.50.
     V_1_26_51,
-    /// 1.26.60.
+    /// 1.26.60. Shares its protocol version with 1.26.61 through 1.26.63.
     V_1_26_60,
     /// Fallback for unrecognized protocol versions.
     Unknown,

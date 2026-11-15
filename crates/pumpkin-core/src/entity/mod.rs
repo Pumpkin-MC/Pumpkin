@@ -1,3 +1,4 @@
+use crate::block::blocks::bubble_column;
 use crate::{
     entity::{
         ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag},
@@ -16,6 +17,7 @@ use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
+use projectile_deflection::ProjectileDeflection;
 use pumpkin_data::BlockState;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::blocks_movement;
@@ -584,6 +586,69 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Called while the entity is at the top of a bubble column. Projectiles get the uncapped push.
+    fn on_above_bubble_column(&self, drag_down: bool, pos: &BlockPos) {
+        let entity = self.get_entity();
+        if self.get_projectile_owner().is_some() {
+            bubble_column::push_projectile(entity, drag_down, true);
+        } else {
+            bubble_column::push_entity(entity, drag_down, true);
+        }
+        bubble_column::send_bubble_column_particles(&entity.world.load(), pos);
+    }
+
+    /// Called while the entity is inside a bubble column, below its top.
+    fn on_inside_bubble_column(&self, drag_down: bool) {
+        let entity = self.get_entity();
+        if self.get_projectile_owner().is_some() {
+            bubble_column::push_projectile(entity, drag_down, false);
+        } else {
+            bubble_column::push_entity(entity, drag_down, false);
+        }
+    }
+
+    /// Whether a projectile bounces back off the world border instead of hitting it, like arrows and bobbers.
+    fn should_bounce_on_world_border(&self) -> bool {
+        false
+    }
+
+    /// Lets the exploding entity change how much a block resists its explosion.
+    fn get_block_explosion_resistance(&self, _block: &Block, resistance: f32) -> f32 {
+        resistance
+    }
+
+    fn can_be_hit_by_projectile(&self) -> bool {
+        self.get_entity().is_alive() && self.can_hit()
+    }
+
+    /// What a projectile hitting this entity does instead of hitting it.
+    fn deflection(&self, _projectile: &dyn EntityBase) -> ProjectileDeflection {
+        projectile_deflection::default_deflection(self.get_entity())
+    }
+
+    /// Whether a projectile that hit this entity bounces off or stops, `was_hurt` telling if the
+    /// hit did damage. Endermen let missed projectiles fly on.
+    fn projectile_receives_side_effects_on_hit(&self, _was_hurt: bool) -> bool {
+        true
+    }
+
+    /// Whether this projectile accepts a deflection right now.
+    fn can_be_deflected(&self) -> bool {
+        true
+    }
+
+    /// Runs after this projectile was deflected, `by_attack` when a player hit it.
+    fn on_deflection(&self, _by_attack: bool) {}
+
+    /// The horizontal direction a living entity hit by this projectile is pushed away from.
+    /// `None` for anything that isn't a projectile.
+    fn hurt_knockback_direction(&self, _hurt: &Entity) -> Option<(f64, f64)> {
+        self.get_projectile_owner().map(|_| {
+            let velocity = self.get_entity().velocity.load();
+            (velocity.x, velocity.z)
+        })
+    }
+
     fn is_immobile(&self) -> bool {
         self.get_living_entity()
             .is_some_and(LivingEntity::is_dead_or_dying)
@@ -665,7 +730,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     /// Vanilla `nextStep`: the `move_dist` at which the next step sound and event happen.
     fn next_step(&self) -> f32 {
-        (self.get_entity().move_dist.load() as i32 + 1) as f32
+        self.get_entity().default_next_step()
     }
 
     /// Vanilla `playStepSound`.
@@ -1389,6 +1454,9 @@ pub fn ride_tick(entity: &dyn EntityBase) {
         living.fall_distance.store(0.0);
     }
     position_rider(vehicle.as_ref(), entity);
+    if let Some(mob) = entity.get_mob() {
+        mob.mob_ride_tick();
+    }
 }
 
 /// Vanilla `rideTick` for every rider of a root vehicle, top-down once all entities have
@@ -2003,6 +2071,12 @@ impl Entity {
                 },
             )
             .collect()
+    }
+
+    /// One block of walking past the current distance.
+    #[must_use]
+    pub fn default_next_step(&self) -> f32 {
+        (self.move_dist.load() as i32 + 1) as f32
     }
 
     /// The type's baby size for babies, its adult size otherwise.
@@ -3148,6 +3222,11 @@ impl Entity {
             input.y,
             input.z.mul_add(cos, input.x * sin),
         )
+    }
+
+    #[must_use]
+    pub fn get_on_pos(&self) -> BlockPos {
+        self.get_pos_with_y_offset(1.0e-5).0
     }
 
     #[must_use]
@@ -4733,7 +4812,8 @@ impl Entity {
     pub fn has_line_of_sight(&self, other: &Self) -> bool {
         let from = self.get_eye_pos();
         let to = other.get_eye_pos();
-        if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+        let distance_sq = from.squared_distance_to_vec(&to);
+        if distance_sq.is_nan() || distance_sq > 128.0 * 128.0 {
             return false;
         }
         self.world

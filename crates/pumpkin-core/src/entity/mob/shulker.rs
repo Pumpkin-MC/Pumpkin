@@ -354,10 +354,7 @@ impl Mob for ShulkerEntity {
     }
 
     fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
-        if self.is_closed() && damage_type == DamageType::ARROW {
-            return false;
-        }
-        true
+        !(self.is_closed() && damage_type == DamageType::ARROW)
     }
 
     fn modify_incoming_damage(&self, amount: f32, damage_type: DamageType) -> f32 {
