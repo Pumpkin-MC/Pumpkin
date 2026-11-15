@@ -1,6 +1,6 @@
 mod chest;
 pub mod command_block;
-mod container;
+pub(crate) mod container;
 mod furnace;
 mod hopper;
 mod rideable;
@@ -121,13 +121,16 @@ impl MinecartEntity {
         }
     }
 
-    const fn drop_item(&self) -> Option<&'static Item> {
+    const fn drop_item(&self) -> &'static Item {
         match &self.kind {
-            MinecartKind::Chest(_) => Some(&Item::CHEST_MINECART),
-            MinecartKind::Furnace(_) => Some(&Item::FURNACE_MINECART),
-            MinecartKind::Hopper(_) => Some(&Item::HOPPER_MINECART),
-            MinecartKind::Tnt(_) => Some(&Item::TNT_MINECART),
-            _ => None,
+            MinecartKind::Chest(_) => &Item::CHEST_MINECART,
+            MinecartKind::Furnace(_) => &Item::FURNACE_MINECART,
+            MinecartKind::Hopper(_) => &Item::HOPPER_MINECART,
+            MinecartKind::Tnt(_) => &Item::TNT_MINECART,
+            MinecartKind::Rideable(_)
+            | MinecartKind::CommandBlock(_)
+            | MinecartKind::Spawner(_)
+            | MinecartKind::Other => &Item::MINECART,
         }
     }
 }
@@ -548,6 +551,23 @@ impl EntityBase for MinecartEntity {
         None
     }
 
+    fn has_container_inventory(&self) -> bool {
+        self.container().is_some()
+    }
+
+    fn get_container_inventory(&self) -> Option<Arc<dyn Inventory>> {
+        let container = self.container()?;
+        if container.has_loot_table() {
+            let world = self.vehicle.entity.world.load();
+            container.unpack_loot(&crate::world::loot::LootContextParameters {
+                world: Some(&world),
+                position: Some(self.vehicle.entity.pos.load()),
+                ..Default::default()
+            });
+        }
+        Some(container.clone() as Arc<dyn Inventory>)
+    }
+
     fn is_pushable(&self) -> bool {
         true
     }
@@ -787,9 +807,13 @@ impl EntityBase for MinecartEntity {
                     let inventory: Arc<dyn Inventory> = container.clone();
                     world.scatter_inventory(&position, &inventory);
                 }
-                if let Some(item) = self.drop_item() {
-                    world.drop_stack(&position, ItemStack::new(1, item));
+                let mut stack = ItemStack::new(1, self.drop_item());
+                if let Some(custom_name) = self.vehicle.entity.custom_name.load().as_ref() {
+                    stack.set_data_component(pumpkin_data::data_component_impl::CustomNameImpl {
+                        name: custom_name.clone(),
+                    });
                 }
+                world.drop_stack(&position, stack);
             }
         }
 

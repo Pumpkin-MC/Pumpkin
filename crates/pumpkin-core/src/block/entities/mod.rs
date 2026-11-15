@@ -139,6 +139,8 @@ pub trait BlockEntity: Any + Send + Sync {
 
     fn set_block_state(&mut self, _block_state: BlockStateId) {}
 
+    fn set_world(&self, _world: std::sync::Weak<World>) {}
+
     /// Runs post-load side effects matching vanilla `BlockEntity.loadAdditional` when NBT is
     /// applied to a live block entity in a world.
     fn on_nbt_loaded(&self, _world: &Arc<World>, _previous: Option<&dyn BlockEntity>) {}

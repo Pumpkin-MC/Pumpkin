@@ -452,6 +452,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         None
     }
 
+    fn has_container_inventory(&self) -> bool {
+        false
+    }
+
+    fn get_container_inventory(&self) -> Option<Arc<dyn pumpkin_inventory::Inventory>> {
+        None
+    }
+
     /// Players are tracked by profile name, every other entity by its UUID.
     fn get_scoreboard_name(&self) -> String {
         self.get_player().map_or_else(

@@ -194,7 +194,8 @@ impl BlockBehaviour for LecternBlock {
         }
 
         let block_entity = args.world.get_block_entity(args.position)?;
-        let inventory = block_entity.get_inventory()?;
+        let lectern = Arc::downcast::<LecternBlockEntity>(block_entity).ok()?;
+        let inventory = lectern.book_inventory();
 
         let controller = Arc::new(LecternPageController {
             world: args.world.clone(),

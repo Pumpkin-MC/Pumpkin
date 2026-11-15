@@ -218,16 +218,42 @@ impl CrafterBlock {
         orientation: Orientation,
     ) {
         let direction = orientation_to_front(orientation);
+        let opposite_dir = direction.opposite();
         let target_pos = pos.offset(direction.to_offset());
 
-        if let Some(target_entity) = world.get_block_entity(&target_pos)
-            && let Some(target_inv) = target_entity.get_inventory()
-        {
-            while !stack.is_empty() {
-                let one_item = stack.split(1);
-                if !HopperBlockEntity::add_one_item(crafter, target_inv.as_ref(), &one_item) {
-                    stack.item_count += one_item.item_count;
-                    break;
+        if let Some(target_inv) = HopperBlockEntity::get_container_at(world, &target_pos) {
+            let max_stack = target_inv
+                .get_max_count_per_stack()
+                .min(stack.get_max_stack_size());
+            let is_crafter = target_inv.as_any().is::<CrafterBlockEntity>();
+            if is_crafter || stack.item_count > max_stack {
+                while !stack.is_empty() {
+                    let one_item = stack.split(1);
+                    if !HopperBlockEntity::add_item(
+                        Some(crafter),
+                        target_inv.as_ref(),
+                        one_item.clone(),
+                        Some(opposite_dir),
+                    )
+                    .is_empty()
+                    {
+                        stack.item_count += one_item.item_count;
+                        break;
+                    }
+                }
+            } else {
+                while !stack.is_empty() {
+                    let old_count = stack.item_count;
+                    let moved = std::mem::replace(stack, ItemStack::EMPTY.clone());
+                    *stack = HopperBlockEntity::add_item(
+                        Some(crafter),
+                        target_inv.as_ref(),
+                        moved,
+                        Some(opposite_dir),
+                    );
+                    if stack.item_count == old_count {
+                        break;
+                    }
                 }
             }
         }

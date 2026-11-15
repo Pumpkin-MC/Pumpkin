@@ -6891,6 +6891,7 @@ impl World {
         reloaded.write_nbt(&mut after);
         let changed = before != after;
 
+        reloaded.set_world(Arc::downgrade(self));
         self.add_block_entity(reloaded.clone());
         let mut full_nbt = NbtCompound::new();
         reloaded.write_internal(&mut full_nbt);
@@ -7014,6 +7015,17 @@ impl World {
             .cloned()
     }
 
+    fn weak_self(&self) -> Option<Weak<Self>> {
+        self.server.upgrade().and_then(|server| {
+            server
+                .worlds
+                .load()
+                .iter()
+                .find(|world| world.uuid == self.uuid)
+                .map(Arc::downgrade)
+        })
+    }
+
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk_pos = block_pos.chunk_position();
         if let Some(entity) = self
@@ -7043,6 +7055,9 @@ impl World {
                 .insert(*block_pos, custom_data.clone());
         }
         let entity = block_entity_from_nbt(&nbt)?;
+        if let Some(weak) = self.weak_self() {
+            entity.set_world(weak);
+        }
         self.block_entities
             .entry(chunk_pos)
             .or_default()
@@ -7109,6 +7124,9 @@ impl World {
     }
 
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
+        if let Some(weak) = self.weak_self() {
+            block_entity.set_world(weak);
+        }
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
