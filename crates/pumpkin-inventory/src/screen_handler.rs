@@ -767,6 +767,31 @@ pub trait ScreenHandler: Send + Sync {
         success
     }
 
+    /// Toggles the selected item index on a bundle in `slot_index` (`AbstractContainerMenu.setSelectedBundleItemIndex`).
+    fn set_selected_bundle_item_index(&mut self, slot_index: i32, selected_item_index: i32) {
+        let Ok(slot_index) = usize::try_from(slot_index) else {
+            return;
+        };
+        let slots = &self.get_behaviour().slots;
+        if slot_index >= slots.len() {
+            return;
+        }
+        let slot = slots[slot_index].clone();
+        let mut stack = slot.get_stack();
+        if stack
+            .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+            .is_none()
+        {
+            return;
+        }
+        if let Some(bundle) =
+            stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+        {
+            bundle.toggle_selected_item(selected_item_index);
+            slot.get_inventory().set_stack(slot.get_index(), stack);
+        }
+    }
+
     /// Handles a slot click event.
     ///
     /// Override for custom click handling. Return true to prevent default handling.
@@ -1049,60 +1074,117 @@ pub trait ScreenHandler: Send + Sync {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-                if click_type == MouseClick::Right {
-                    let mut intercepted = false;
-
-                    if can_put && slot.can_insert(&cursor_stack) && !cursor_stack.is_empty() {
-                        let mut inner_slot_stack = slot.get_stack();
-                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                            && bundle.try_insert(&mut cursor_stack) {
-                                slot.set_stack(inner_slot_stack);
-                                intercepted = true;
-                            }
-                    }
-
-                    if !intercepted && can_grab && slot.can_take_items(player) && !slot_stack.is_empty()
-                        && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
-                            let mut inner_slot_stack = slot.get_stack();
-                            if bundle.try_insert(&mut inner_slot_stack) {
-                                if inner_slot_stack.item_count == 0 {
-                                    inner_slot_stack = ItemStack::EMPTY.clone();
+                // 26.3 Bundle click overrides (`AbstractContainerMenu.tryItemClickBehaviourOverride`):
+                // 1. `BundleItem.overrideStackedOnOther` (bundle on cursor)
+                if cursor_stack
+                    .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                    .is_some()
+                {
+                    if click_type == MouseClick::Left && !slot_stack.is_empty() {
+                        if can_grab
+                            && slot.can_take_items(player)
+                            && pumpkin_data::data_component_impl::BundleContentsImpl::can_item_be_in_bundle(&slot_stack)
+                        {
+                            let max_to_add = cursor_stack
+                                .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                .map_or(0, |b| b.max_amount_to_add(&slot_stack));
+                            if max_to_add > 0 {
+                                let mut taken =
+                                    slot.safe_take(slot_stack.item_count, max_to_add, player);
+                                if !taken.is_empty()
+                                    && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                {
+                                    bundle.try_insert(&mut taken);
                                 }
-                                slot.set_stack(inner_slot_stack);
-                                intercepted = true;
                             }
-                        }
-
-                    if !intercepted
-                        && can_grab
-                        && slot.can_take_items(player)
-                        && cursor_stack.is_empty()
-                    {
-                        let mut inner_slot_stack = slot.get_stack();
-                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                            && let Some(extracted) = bundle.try_extract() {
-                                *cursor_stack = extracted;
-                                slot.set_stack(inner_slot_stack);
-                                intercepted = true;
-                            }
-                    }
-
-                    if !intercepted && can_put && slot_stack.is_empty()
-                        && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                        && let Some(extracted) = bundle.try_extract() {
-                            let remainder = slot.insert_stack(extracted);
-                            if !remainder.is_empty() {
-                                bundle.items.insert(0, remainder);
-                            }
-                            intercepted = true;
-                        }
-
-                    if intercepted {
-                        if cursor_stack.item_count == 0 {
-                            *cursor_stack = ItemStack::EMPTY.clone();
                         }
                         slot.mark_dirty();
                         return;
+                    } else if click_type == MouseClick::Right && slot_stack.is_empty() {
+                        if can_put
+                            && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                            && let Some(extracted) = bundle.try_extract()
+                        {
+                            let mut remainder = if slot.can_insert(&extracted) {
+                                slot.insert_stack(extracted)
+                            } else {
+                                extracted
+                            };
+                            if !remainder.is_empty() {
+                                bundle.try_insert(&mut remainder);
+                            }
+                        }
+                        slot.mark_dirty();
+                        return;
+                    }
+                }
+
+                // 2. `BundleItem.overrideOtherStackedOnMe` (bundle in slot)
+                if slot_stack
+                    .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                    .is_some()
+                {
+                    if click_type == MouseClick::Left && cursor_stack.is_empty() {
+                        if slot_stack
+                            .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                            .is_some_and(|b| {
+                                b.selected_item
+                                    != pumpkin_data::data_component_impl::BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+                            })
+                        {
+                            let mut inner_slot_stack = slot.get_stack();
+                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
+                                bundle.toggle_selected_item(
+                                    pumpkin_data::data_component_impl::BundleContentsImpl::NO_SELECTED_ITEM_INDEX,
+                                );
+                                slot.get_inventory()
+                                    .set_stack(slot.get_index(), inner_slot_stack);
+                            }
+                        }
+                    } else if click_type == MouseClick::Left && !cursor_stack.is_empty() {
+                        if can_put
+                            && slot.allow_modification(player)
+                            && slot.can_insert(&cursor_stack)
+                        {
+                            let mut inner_slot_stack = slot.get_stack();
+                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                && bundle.try_insert(&mut cursor_stack)
+                            {
+                                if cursor_stack.item_count == 0 {
+                                    *cursor_stack = ItemStack::EMPTY.clone();
+                                }
+                                slot.set_stack(inner_slot_stack);
+                            }
+                        }
+                        slot.mark_dirty();
+                        return;
+                    } else if click_type == MouseClick::Right && cursor_stack.is_empty() {
+                        if can_grab && slot.allow_modification(player) {
+                            let mut inner_slot_stack = slot.get_stack();
+                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                && let Some(extracted) = bundle.try_extract()
+                            {
+                                *cursor_stack = extracted;
+                                slot.set_stack(inner_slot_stack);
+                            }
+                        }
+                        slot.mark_dirty();
+                        return;
+                    } else if slot_stack
+                        .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                        .is_some_and(|b| {
+                            b.selected_item
+                                != pumpkin_data::data_component_impl::BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+                        })
+                    {
+                        let mut inner_slot_stack = slot.get_stack();
+                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
+                            bundle.toggle_selected_item(
+                                pumpkin_data::data_component_impl::BundleContentsImpl::NO_SELECTED_ITEM_INDEX,
+                            );
+                            slot.get_inventory()
+                                .set_stack(slot.get_index(), inner_slot_stack);
+                        }
                     }
                 }
 

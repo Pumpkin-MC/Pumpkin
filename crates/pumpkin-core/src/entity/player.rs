@@ -6847,16 +6847,22 @@ impl Player {
         }
     }
 
-    /// Opens the inventory of the horse this player rides. `false` if it isn't riding one.
+    /// Opens the inventory of the vehicle this player rides (horses, chest boats, etc.).
     pub fn open_vehicle_inventory(self: &Arc<Self>) -> bool {
         let Some(vehicle) = self.get_entity().get_vehicle() else {
             return false;
         };
-        let Some(horse) = vehicle.get_mob().and_then(|mob| mob.as_abstract_horse()) else {
-            return false;
-        };
-        horse.open_custom_inventory_screen(self);
-        true
+        if let Some(horse) = vehicle.get_mob().and_then(|mob| mob.as_abstract_horse()) {
+            horse.open_custom_inventory_screen(self);
+            return true;
+        }
+        if let Some(boat) = vehicle
+            .cast_any()
+            .downcast_ref::<crate::entity::vehicle::boat::BoatEntity>()
+        {
+            return boat.open_custom_inventory_screen(self);
+        }
+        false
     }
 
     /// Only rears and plays the sound; the rider's client simulates the jump itself.
@@ -8985,12 +8991,16 @@ impl InventoryPlayer for Player {
                     )
                 ) {
                     // Java container screens append the player's 36 inventory slots to
-                    // the container slots. Bedrock synchronizes those two inventories
-                    // separately and addresses generic block containers as LevelEntity.
-                    let container_slot_count = packet
-                        .slot_data
-                        .len()
-                        .saturating_sub(PlayerInventory::MAIN_SIZE);
+                    // the container slots (`CrafterMenu` also appends 1 preview slot).
+                    // Bedrock synchronizes those two inventories separately and addresses
+                    // generic block containers as LevelEntity.
+                    let trailing_slots = if window_type == Some(WindowType::Crafter3x3) {
+                        PlayerInventory::MAIN_SIZE + 1
+                    } else {
+                        PlayerInventory::MAIN_SIZE
+                    };
+                    let container_slot_count =
+                        packet.slot_data.len().saturating_sub(trailing_slots);
                     let slots = packet.slot_data[..container_slot_count]
                         .iter()
                         .map(|stack| NetworkItemStackDescriptor::from(&*stack.0))
@@ -9069,8 +9079,13 @@ impl InventoryPlayer for Player {
                     let slot_idx = packet.slot as usize;
                     let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
 
-                    let bedrock_info = if total_slots >= 36 {
-                        let container_slots = total_slots - 36;
+                    let trailing_slots = if window_type == Some(WindowType::Crafter3x3) {
+                        PlayerInventory::MAIN_SIZE + 1
+                    } else {
+                        PlayerInventory::MAIN_SIZE
+                    };
+                    let bedrock_info = if total_slots >= trailing_slots {
+                        let container_slots = total_slots - trailing_slots;
                         if slot_idx < container_slots {
                             self.bedrock_mount_equip_slot(u32::from(window_id as u8))
                                 .map_or_else(
@@ -9084,8 +9099,10 @@ impl InventoryPlayer for Player {
                             let inv_slot = slot_idx - container_slots;
                             if inv_slot < 27 {
                                 Some((0, ContainerName::Inventory, (inv_slot + 9) as u8))
-                            } else {
+                            } else if inv_slot < PlayerInventory::MAIN_SIZE {
                                 Some((0, ContainerName::Inventory, (inv_slot - 27) as u8))
+                            } else {
+                                None
                             }
                         }
                     } else {

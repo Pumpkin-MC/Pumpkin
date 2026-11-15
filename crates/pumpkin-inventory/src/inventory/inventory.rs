@@ -1,3 +1,4 @@
+use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -90,6 +91,32 @@ pub trait Inventory: Send + Sync + Clearable {
         _hopper_inventory: &dyn Inventory,
         _slot: usize,
         _stack: &ItemStack,
+    ) -> bool {
+        true
+    }
+
+    fn is_sided(&self) -> bool {
+        false
+    }
+
+    fn get_slots_for_face(&self, _direction: BlockDirection) -> &'static [usize] {
+        &[]
+    }
+
+    fn can_place_item_through_face(
+        &self,
+        slot: usize,
+        stack: &ItemStack,
+        _direction: Option<BlockDirection>,
+    ) -> bool {
+        self.is_valid_slot_for(slot, stack)
+    }
+
+    fn can_take_item_through_face(
+        &self,
+        _slot: usize,
+        _stack: &ItemStack,
+        _direction: BlockDirection,
     ) -> bool {
         true
     }

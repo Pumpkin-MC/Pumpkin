@@ -86,6 +86,11 @@ impl ItemBehaviour for MinecartItem {
             Vector3::new(pos.x + 0.5, pos.y + 0.0625 + height, pos.z + 0.5),
             entity_type,
         );
+        if let Some(custom_name) =
+            item.get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
+        {
+            entity.set_custom_name(custom_name.name.clone());
+        }
         let minecart_entity = Arc::new(MinecartEntity::new(entity));
         world.spawn_entity(minecart_entity);
         world.emit_game_event(GameEvent::EntityPlace.name(), pos);

@@ -1,14 +1,19 @@
 use super::BlockEntity;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
-use std::sync::Mutex;
+use std::any::Any;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 pub struct DecoratedPotBlockEntity {
     pub position: BlockPos,
     pub sherds: Mutex<Option<Vec<NbtTag>>>,
     pub item: Mutex<Option<ItemStack>>,
+    pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for DecoratedPotBlockEntity {
@@ -32,6 +37,8 @@ impl BlockEntity for DecoratedPotBlockEntity {
             position,
             sherds: Mutex::new(sherds),
             item: Mutex::new(item),
+            dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -128,6 +135,26 @@ impl BlockEntity for DecoratedPotBlockEntity {
         }
     }
 
+    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        Some(self)
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_dirty(&self) {
+        self.dirty.store(false, Ordering::Relaxed);
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -142,6 +169,8 @@ impl DecoratedPotBlockEntity {
             position,
             sherds: Mutex::new(None),
             item: Mutex::new(None),
+            dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -205,6 +234,96 @@ impl DecoratedPotBlockEntity {
                     1 + (filled * 14.0).floor() as u8
                 }
             })
+    }
+}
+
+impl Inventory for DecoratedPotBlockEntity {
+    fn size(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        self.item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .is_none_or(ItemStack::is_empty)
+    }
+
+    fn get_stack(&self, slot: usize) -> ItemStack {
+        if slot != 0 {
+            return ItemStack::EMPTY.clone();
+        }
+        self.item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+            .unwrap_or_else(|| ItemStack::EMPTY.clone())
+    }
+
+    fn remove_stack(&self, slot: usize) -> ItemStack {
+        if slot != 0 {
+            return ItemStack::EMPTY.clone();
+        }
+        let removed = self
+            .item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+            .unwrap_or_else(|| ItemStack::EMPTY.clone());
+        self.mark_dirty();
+        removed
+    }
+
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
+        if slot != 0 || amount == 0 {
+            return ItemStack::EMPTY.clone();
+        }
+        let mut guard = self
+            .item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(existing) = guard.as_mut() else {
+            return ItemStack::EMPTY.clone();
+        };
+        let split = existing.split(amount);
+        if existing.is_empty() {
+            *guard = None;
+        }
+        drop(guard);
+        self.mark_dirty();
+        split
+    }
+
+    fn set_stack(&self, slot: usize, stack: ItemStack) {
+        if slot != 0 {
+            return;
+        }
+        *self
+            .item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            (!stack.is_empty()).then_some(stack);
+        self.mark_dirty();
+    }
+
+    fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Clearable for DecoratedPotBlockEntity {
+    fn clear(&self) {
+        *self
+            .item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.mark_dirty();
     }
 }
 
