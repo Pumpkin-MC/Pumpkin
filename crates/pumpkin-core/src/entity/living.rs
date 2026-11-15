@@ -1416,6 +1416,11 @@ impl LivingEntity {
         {
             return false;
         }
+        if (entity_type == &EntityType::NAUTILUS || entity_type == &EntityType::ZOMBIE_NAUTILUS)
+            && effect.effect_type == &StatusEffect::POISON
+        {
+            return false;
+        }
 
         if entity_type.has_tag(&tag::EntityType::MINECRAFT_IMMUNE_TO_INFESTED) {
             effect.effect_type != &StatusEffect::INFESTED
