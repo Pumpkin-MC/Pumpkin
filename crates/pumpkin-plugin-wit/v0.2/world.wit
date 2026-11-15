@@ -1073,7 +1073,7 @@ interface %world {
         /// clear sky, then `rain-time` ticks of the given state. Negative values count as 0.
         /// A rain or thunder flip fires a cancellable `weather-change-event` or
         /// `thunder-change-event` with the `plugin` cause; a cancelled flip is put back.
-        set-weather: func(clear-time: s32, rain-time: s32, raining: bool, thundering: bool);
+        set-weather: async func(clear-time: s32, rain-time: s32, raining: bool, thundering: bool);
 
         /// Sets the ticks of clear sky left from `/weather clear`. Negative values count as 0.
         set-clear-weather-duration: func(ticks: s32);
@@ -1086,7 +1086,7 @@ interface %world {
 
         /// Starts or ends a custom phase of the weather profile. Without `ticks` the phase
         /// lasts its profile duration (or waits its delay when ended).
-        set-weather-phase: func(id: string, active: bool, ticks: option<s32>) -> result<_, string>;
+        set-weather-phase: async func(id: string, active: bool, ticks: option<s32>) -> result<_, string>;
 
         /// Returns the ticks until the rain next starts or stops.
         get-weather-duration: func() -> s32;

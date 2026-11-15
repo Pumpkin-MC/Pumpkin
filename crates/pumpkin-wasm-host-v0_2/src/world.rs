@@ -955,24 +955,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         })
     }
 
-    fn set_weather(
-        &mut self,
-        world: Resource<World>,
-        clear_time: i32,
-        rain_time: i32,
-        raining: bool,
-        thundering: bool,
-    ) -> wasmtime::Result<()> {
-        self.get(&world)?.set_weather(
-            pumpkin_core::plugin::api::events::world::weather_change::WeatherCause::Plugin,
-            clear_time.max(0),
-            rain_time.max(0),
-            raining,
-            thundering,
-        );
-        Ok(())
-    }
-
     fn set_clear_weather_duration(
         &mut self,
         world: Resource<World>,
@@ -993,16 +975,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         self.get(&world)?
             .set_weather_durations(None, None, Some(ticks));
         Ok(())
-    }
-
-    fn set_weather_phase(
-        &mut self,
-        world: Resource<World>,
-        id: String,
-        active: bool,
-        ticks: Option<i32>,
-    ) -> wasmtime::Result<Result<(), String>> {
-        Ok(self.get(&world)?.set_weather_phase(&id, active, ticks))
     }
 
     fn get_weather_duration(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
@@ -1573,6 +1545,41 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
     ) -> wasmtime::Result<()> {
         let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
         run_blocking(accessor, move || world.set_thundering(thundering)).await
+    }
+
+    async fn set_weather(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        clear_time: i32,
+        rain_time: i32,
+        raining: bool,
+        thundering: bool,
+    ) -> wasmtime::Result<()> {
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        run_blocking(accessor, move || {
+            world.set_weather(
+                pumpkin_core::plugin::api::events::world::weather_change::WeatherCause::Plugin,
+                clear_time.max(0),
+                rain_time.max(0),
+                raining,
+                thundering,
+            );
+        })
+        .await
+    }
+
+    async fn set_weather_phase(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        id: String,
+        active: bool,
+        ticks: Option<i32>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        run_blocking(accessor, move || {
+            world.set_weather_phase(&id, active, ticks)
+        })
+        .await
     }
 
     async fn create_explosion(
