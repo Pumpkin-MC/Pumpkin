@@ -484,6 +484,9 @@ impl HopperBlockEntity {
             one_item = Some(current.split(1));
             true
         });
+        // Marked dirty even if the insert fails afterwards: vanilla `SimpleContainer.removeItem`
+        // calls `setChanged`, so a composter empties on the take and the bone meal is lost when
+        // the hopper cannot take it. Kept for parity, see MC-175090
         if one_item.is_some() {
             container.mark_dirty();
         }
