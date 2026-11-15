@@ -113,12 +113,10 @@ impl ZoglinEntity {
     pub fn set_baby(&self, baby: bool) {
         self.mob_entity
             .set_baby_flag(&self.is_baby, tracked_data::zoglin::DATA_BABY_ID, baby);
-        let living = &self.mob_entity.living_entity;
-        living
-            .entity
-            .set_default_dimensions(Entity::age_dimensions(living.entity.entity_type, baby));
         if baby {
-            living.set_attribute_base(&Attributes::ATTACK_DAMAGE, Self::BABY_ATTACK_DAMAGE);
+            self.mob_entity
+                .living_entity
+                .set_attribute_base(&Attributes::ATTACK_DAMAGE, Self::BABY_ATTACK_DAMAGE);
         }
     }
 }

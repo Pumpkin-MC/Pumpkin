@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use crate::block::entities::bed::BedBlockEntity;
+use crate::world::{Explosion, ExplosionInteraction};
 use pumpkin_data::block_properties::BedPart;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::{Block as BlockTag, Taggable};
 use pumpkin_data::translation;
@@ -12,9 +14,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::OnLandedUponArgs;
-use crate::block::UpdateEntityMovementAfterFallOnArgs;
-use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
@@ -82,16 +81,6 @@ impl BlockBehaviour for BedBlock {
                     .replaceable();
         }
         true
-    }
-
-    fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance * 0.5, 1.0);
-        }
-    }
-
-    fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
-        bounce_entity_after_fall(args.entity, 0.66);
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
@@ -171,7 +160,7 @@ impl BlockBehaviour for BedBlock {
                 args.world.break_block(
                     &other_half_pos,
                     None,
-                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
+                    (args.flags & BlockFlags::SKIP_DROPS) | BlockFlags::NOTIFY_ALL,
                 );
             }
         }
@@ -235,11 +224,13 @@ impl BedBlock {
             world.break_block(&bed_head_pos, None, BlockFlags::SKIP_DROPS);
             world.break_block(&bed_foot_pos, None, BlockFlags::SKIP_DROPS);
 
-            world.explode(
-                bed_head_pos.to_centered_f64(),
+            let explosion = Explosion::new(
                 5.0,
-                crate::world::ExplosionInteraction::Block,
-            );
+                bed_head_pos.to_centered_f64(),
+                world.get_block_interaction(ExplosionInteraction::Block),
+            )
+            .with_damage_type(DamageType::BAD_RESPAWN_POINT);
+            world.run_explosion(&explosion);
 
             return BlockActionResult::SuccessServer;
         }
@@ -335,7 +326,11 @@ impl BedBlock {
 
         // Make sure there are no monsters nearby
         for entity in world.entities.load().iter() {
-            if !entity_prevents_sleep(entity.get_entity()) {
+            if !entity_prevents_sleep(entity.get_entity())
+                || entity
+                    .get_mob()
+                    .is_some_and(|mob| !mob.is_preventing_player_rest(player.as_ref()))
+            {
                 continue;
             }
 

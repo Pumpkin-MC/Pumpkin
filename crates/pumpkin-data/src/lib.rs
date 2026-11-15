@@ -359,6 +359,11 @@ pub mod cat_variant;
 #[path = "generated/frog_variant.rs"]
 pub mod frog_variant;
 
+#[cfg(feature = "sulfur_cube_archetype")]
+#[rustfmt::skip]
+#[path = "generated/sulfur_cube_archetype.rs"]
+pub mod sulfur_cube_archetype;
+
 #[cfg(feature = "cow_variant")]
 #[rustfmt::skip]
 #[path = "generated/cow_variant.rs"]

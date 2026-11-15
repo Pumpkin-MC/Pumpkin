@@ -71,6 +71,7 @@ impl ItemBehaviour for LeadItem {
                 .and_then(|guard| {
                     guard
                         .as_ref()
+                        .and_then(std::sync::Weak::upgrade)
                         .map(|holder| holder.get_entity().entity_id == player_id)
                 })
                 .unwrap_or(false);

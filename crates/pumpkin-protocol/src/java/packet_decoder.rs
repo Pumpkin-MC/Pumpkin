@@ -70,6 +70,10 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         self.compression = Some(threshold);
     }
 
+    pub const fn reader_mut(&mut self) -> Option<&mut DecryptionReader<R>> {
+        self.reader.as_mut()
+    }
+
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
     pub fn set_encryption(&mut self, key: &[u8; 16]) -> Result<(), PacketDecodeError> {
         if matches!(self.reader, Some(DecryptionReader::Decrypt(_))) {

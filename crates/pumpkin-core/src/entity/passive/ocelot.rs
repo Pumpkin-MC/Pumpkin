@@ -4,7 +4,6 @@ use std::sync::{
 };
 
 use pumpkin_data::entity::{EntityStatus, EntityType};
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
@@ -97,16 +96,19 @@ impl OcelotEntity {
 
 impl Animal for OcelotEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        let item = item_stack.get_item();
-        item.has_tag(&tag::Item::MINECRAFT_OCELOT_FOOD)
-            || item == &Item::COD
-            || item == &Item::SALMON
+        item_stack
+            .get_item()
+            .has_tag(&tag::Item::MINECRAFT_OCELOT_FOOD)
     }
 }
 
 impl crate::entity::ageable::AgeableMob for OcelotEntity {
     fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
         &self.ageable_data
+    }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::OCELOT_BABY_SPAWN_CHANCE
     }
 }
 

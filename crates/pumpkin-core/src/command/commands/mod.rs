@@ -239,7 +239,7 @@ fn apply_command_overrides(
             // the whole command, not just that one alias.
             let primary = dispatcher.primary_command_name(&name);
 
-            dispatcher.disable_command(name.clone());
+            dispatcher.disable_command(name);
             dispatcher.disable_command(primary.clone());
             // Node-based commands keep their aliases as redirecting root nodes,
             // so flag those too.

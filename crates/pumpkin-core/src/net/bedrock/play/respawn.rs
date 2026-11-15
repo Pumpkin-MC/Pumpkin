@@ -12,14 +12,8 @@ impl BedrockClient {
             return;
         }
 
-        let entity = player.get_entity();
-        let position = entity.pos.load();
         self.try_enqueue_client_packet(&SRespawn {
-            position: pumpkin_util::math::vector3::Vector3::new(
-                position.x as f32,
-                position.y as f32 + entity.entity_type.eye_height,
-                position.z as f32,
-            ),
+            position: player.bedrock_pos().to_f32_lossy(),
             state: RespawnState::ReadyToSpawn,
             player_runtime_id: VarULong(player.entity_id() as u64),
         });

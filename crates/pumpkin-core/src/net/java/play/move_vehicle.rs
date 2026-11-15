@@ -9,11 +9,7 @@ impl JavaClient {
         let entity = player.get_entity();
         let last_pos = entity.pos.load();
         let pos = Vector3::new(packet.x, packet.y, packet.z);
-        let vehicle = entity
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let vehicle = entity.get_vehicle();
         if let Some(vehicle) = &vehicle {
             let vehicle_entity = vehicle.get_entity();
             let old_pos = vehicle_entity.pos.load();
@@ -25,7 +21,7 @@ impl JavaClient {
                 .store(packet.on_ground, Ordering::Relaxed);
             vehicle_entity.emit_client_movement(vehicle.as_ref(), pos - old_pos);
             if let Some(living) = vehicle.get_living_entity() {
-                living.fall(vehicle.as_ref(), pos.y - old_y, packet.on_ground, false);
+                living.fall(vehicle.as_ref(), pos.y - old_y, packet.on_ground);
             }
 
             let world = player.world();

@@ -8,8 +8,10 @@ use super::{BrainTick, VisibilityContext};
 
 pub mod adult;
 pub mod dummy;
+pub mod frog_attackables;
 pub mod golem;
 pub mod hurt_by;
+pub mod is_in_water;
 pub mod nearest_bed;
 pub mod nearest_items;
 pub mod nearest_living_entities;
@@ -40,6 +42,8 @@ pub enum SensorType {
     NearestItems,
     FoodTemptations,
     FrogTemptations,
+    FrogAttackables,
+    IsInWater,
     NearestAdult,
     NearestBed,
     VillagerBabies,
@@ -59,6 +63,8 @@ impl SensorType {
             Self::NearestItems => "minecraft:nearest_items",
             Self::FoodTemptations => "minecraft:food_temptations",
             Self::FrogTemptations => "minecraft:frog_temptations",
+            Self::FrogAttackables => "minecraft:frog_attackables",
+            Self::IsInWater => "minecraft:is_in_water",
             Self::NearestAdult => "minecraft:nearest_adult",
             Self::NearestBed => "minecraft:nearest_bed",
             Self::VillagerBabies => "minecraft:villager_babies",
@@ -78,6 +84,8 @@ impl SensorType {
             | Self::NearestItems
             | Self::FoodTemptations
             | Self::FrogTemptations
+            | Self::FrogAttackables
+            | Self::IsInWater
             | Self::NearestAdult
             | Self::NearestBed
             | Self::VillagerBabies
@@ -96,6 +104,8 @@ impl SensorType {
             Self::NearestItems => Box::new(nearest_items::NearestItemSensor),
             Self::FoodTemptations => Box::new(tempting::TemptingSensor::for_animal()),
             Self::FrogTemptations => Box::new(tempting::TemptingSensor::for_frog()),
+            Self::FrogAttackables => Box::new(frog_attackables::FrogAttackablesSensor),
+            Self::IsInWater => Box::new(is_in_water::IsInWaterSensor),
             Self::NearestAdult => Box::new(adult::AdultSensor),
             Self::NearestBed => Box::<nearest_bed::NearestBedSensor>::default(),
             Self::VillagerBabies => Box::new(villager_babies::VillagerBabiesSensor),
