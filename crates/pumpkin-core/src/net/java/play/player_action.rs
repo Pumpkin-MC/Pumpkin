@@ -31,7 +31,7 @@ impl JavaClient {
                     let position = player_action.position;
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
-                    let (block, state) = world.get_block_and_state(&position);
+                    let block = world.get_block(&position);
 
                     if let Some(server_arc) = world.server.upgrade() {
                         let mut interact_event = PlayerInteractEvent::new(
@@ -44,10 +44,7 @@ impl JavaClient {
                             .plugin_manager
                             .fire_blocking(&server_arc, &mut interact_event);
                         if interact_event.cancelled {
-                            player.try_send_client_packet(&CBlockUpdate::new(
-                                position,
-                                VarInt(i32::from(state.id.as_u16())),
-                            ));
+                            self.sync_block_state_to_client(player, &world, position);
                             self.update_sequence(player_action.sequence.0);
                             return;
                         }
@@ -67,10 +64,36 @@ impl JavaClient {
                             return;
                         }
                     }
+                    // interact and damage events may move the player or change it
+                    if !Arc::ptr_eq(&player.world(), &world) {
+                        let mut mining_pos = player
+                            .mining_pos
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let tracked_pos = *mining_pos;
+                        let was_mining = player.mining.swap(false, Ordering::Relaxed);
+                        let stage = player
+                            .current_block_destroy_stage
+                            .swap(-1, Ordering::Relaxed);
+                        player
+                            .current_block_breaking_speed
+                            .store(0, Ordering::Relaxed);
+                        *mining_pos = BlockPos::ZERO;
+                        drop(mining_pos);
+                        if was_mining || stage >= 0 {
+                            world.set_block_breaking(
+                                entity,
+                                tracked_pos,
+                                BlockBreakingProgress::Stop,
+                            );
+                        }
+                        self.update_sequence(player_action.sequence.0);
+                        return;
+                    }
+                    let (block, state) = world.get_block_and_state(&position);
 
                     let gamemode = player.gamemode.load();
-                    let cannot_mine = player.cannot_mine_block(Some(server), block, gamemode);
-                    if cannot_mine {
+                    if player.block_action_restricted(block) {
                         player.try_send_client_packet(&CBlockUpdate::new(
                             position,
                             VarInt(i32::from(state.id.as_u16())),
@@ -83,9 +106,10 @@ impl JavaClient {
                     // TODO: Config
                     if gamemode == GameMode::Creative {
                         // Block break & play sound
-                        let new_state = world.break_block(
+                        let new_state = player.destroy_block(
+                            server,
+                            &world,
                             &position,
-                            Some(player),
                             BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                         );
                         if new_state.is_some() {
@@ -93,7 +117,7 @@ impl JavaClient {
                                 .block_registry
                                 .broken(&world, block, player, &position, server, state);
                         }
-                        self.sync_block_state_to_client(&world, position);
+                        self.sync_block_state_to_client(player, &world, position);
                         self.update_sequence(player_action.sequence.0);
                         return;
                     }
@@ -105,39 +129,16 @@ impl JavaClient {
                         server
                             .block_registry
                             .attack(&world, block, state, &position, player);
+                        // the attack callback may have moved the player
+                        if !Arc::ptr_eq(&player.world(), &world) {
+                            self.update_sequence(player_action.sequence.0);
+                            return;
+                        }
                         let speed = block::calc_block_breaking(player, state, block);
                         // Instant break
                         if speed >= 1.0 {
-                            let broken_state = world.get_block_state(&position);
-                            let can_harvest = player.can_harvest(broken_state, block);
-                            let flags = if can_harvest {
-                                BlockFlags::NOTIFY_ALL
-                            } else {
-                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
-                            };
-                            let new_state = world.break_block(&position, Some(player), flags);
-                            if new_state.is_some() {
-                                server.block_registry.broken(
-                                    &world,
-                                    block,
-                                    player,
-                                    &position,
-                                    server,
-                                    broken_state,
-                                );
-                                player.apply_tool_damage_for_block_break(broken_state);
-                                if can_harvest {
-                                    player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
-                                }
-                                let item_id = player.inventory().held_item().item.id;
-                                player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
-                                player.increment_stat(
-                                    StatisticCategory::Mined,
-                                    block.id.as_u16() as i32,
-                                    1,
-                                );
-                            }
-                            self.sync_block_state_to_client(&world, position);
+                            player.break_block(&position);
+                            self.sync_block_state_to_client(player, &world, position);
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
                             *player
@@ -227,12 +228,9 @@ impl JavaClient {
                     let block = Block::from_state_id(state.id);
                     // Vanilla `getDestroyProgress`, which returns 0 for unbreakable blocks.
                     let speed = block::calc_block_breaking(player, state, block);
-                    if state.is_air()
-                        || speed <= 0.0
-                        || player.cannot_mine_block(Some(server), block, gamemode)
-                    {
+                    if state.is_air() || speed <= 0.0 {
                         player.stop_mining();
-                        self.sync_block_state_to_client(&world, location);
+                        self.sync_block_state_to_client(player, &world, location);
                         self.update_sequence(player_action.sequence.0);
                         return;
                     }
@@ -240,7 +238,7 @@ impl JavaClient {
                     if gamemode == GameMode::Creative {
                         player.stop_mining();
                         player.break_block(&location);
-                        self.sync_block_state_to_client(&world, location);
+                        self.sync_block_state_to_client(player, &world, location);
                         self.update_sequence(player_action.sequence.0);
                         return;
                     }
@@ -252,7 +250,7 @@ impl JavaClient {
                     if progress >= FINISHED_DIGGING_PROGRESS_THRESHOLD {
                         player.stop_mining();
                         player.break_block(&location);
-                        self.sync_block_state_to_client(&world, location);
+                        self.sync_block_state_to_client(player, &world, location);
                     } else {
                         // Vanilla `hasDelayedDestroy`: a finish can arrive before the server
                         // tick has caught up, so keep mining until progress reaches 1.0.
@@ -308,7 +306,11 @@ impl JavaClient {
         );
     }
 
-    fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
+    fn sync_block_state_to_client(&self, player: &Player, world: &Arc<World>, position: BlockPos) {
+        // event moved the player
+        if !Arc::ptr_eq(&player.world(), world) {
+            return;
+        }
         let synced_state_id = world.get_block_state_id(&position);
         self.try_send_packet(&CBlockUpdate::new(
             position,

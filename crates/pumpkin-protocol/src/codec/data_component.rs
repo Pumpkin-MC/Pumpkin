@@ -1684,10 +1684,44 @@ fn serialize_adventure_predicate(
         } else {
             seq.write_bool(false)?;
         }
-        seq.write_bool(false)?;
-        seq.write_bool(false)?;
+        seq.write_option(&c.get_compound("state"), |seq, state| {
+            serialize_state_properties(state, seq)
+        })?;
+        // TODO: vanilla also accepts the nbt predicate as an SNBT string, which needs an SNBT parser
+        seq.write_option(
+            &c.get("nbt").and_then(NbtTag::extract_compound),
+            |seq, nbt| seq.write_nbt(NbtTag::Compound((*nbt).clone())),
+        )?;
         seq.write_var_int(&VarInt(0))?;
         seq.write_var_int(&VarInt(0))?;
+    }
+    Ok(())
+}
+
+/// Writes vanilla's `StatePropertiesPredicate` stream form: exact values or `{min,max}` ranges.
+fn serialize_state_properties(
+    state: &pumpkin_nbt::compound::NbtCompound,
+    seq: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    seq.write_var_int(&VarInt::from(state.child_tags.len() as i32))?;
+    for (name, matcher) in &state.child_tags {
+        seq.write_string(name)?;
+        match matcher {
+            NbtTag::String(value) => {
+                seq.write_bool(true)?;
+                seq.write_string(value)?;
+            }
+            NbtTag::Compound(range) => {
+                seq.write_bool(false)?;
+                seq.write_option(&range.get_string("min"), |seq, v| seq.write_string(v))?;
+                seq.write_option(&range.get_string("max"), |seq, v| seq.write_string(v))?;
+            }
+            _ => {
+                return Err(WritingError::Message(format!(
+                    "Invalid block state property matcher for {name}"
+                )));
+            }
+        }
     }
     Ok(())
 }
@@ -1705,24 +1739,33 @@ fn deserialize_adventure_predicate(seq: &mut impl NetworkReadExt) -> Result<NbtT
         let has_props = seq.get_bool()?;
         if has_props {
             let props_len = seq.get_var_int()?.0;
+            if props_len < 0 {
+                return Err(ReadingError::Message(format!(
+                    "Negative block state property count {props_len}"
+                )));
+            }
+            let mut state = pumpkin_nbt::compound::NbtCompound::new();
             for _ in 0..props_len {
-                let _ = seq.get_str()?;
+                let name = seq.get_str()?;
                 let is_exact = seq.get_bool()?;
                 if is_exact {
-                    let _ = seq.get_str()?;
+                    state.put_string(&name, seq.get_str()?.into_string());
                 } else {
+                    let mut range = pumpkin_nbt::compound::NbtCompound::new();
                     if seq.get_bool()? {
-                        let _ = seq.get_str()?;
+                        range.put_string("min", seq.get_str()?.into_string());
                     }
                     if seq.get_bool()? {
-                        let _ = seq.get_str()?;
+                        range.put_string("max", seq.get_str()?.into_string());
                     }
+                    state.put_compound(&name, range);
                 }
             }
+            comp.put_compound("state", state);
         }
         let has_nbt = seq.get_bool()?;
-        if has_nbt {
-            let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        if has_nbt && let Some(nbt) = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)? {
+            comp.put("nbt", nbt);
         }
         let exact_len = seq.get_var_int()?.0;
         for _ in 0..exact_len {
@@ -3507,6 +3550,50 @@ mod tests {
         bytes.push(0); // no signature
         bytes.extend_from_slice(&[0, 0, 0, 0]); // no texture, cape, elytra, model
         bytes
+    }
+
+    fn adventure_predicate_round_trip(predicate: pumpkin_nbt::compound::NbtCompound) {
+        let tag = NbtTag::List(vec![NbtTag::Compound(predicate)]);
+        let mut encoded = Vec::new();
+        serialize_adventure_predicate(&tag, &mut encoded).unwrap();
+        let decoded = deserialize_adventure_predicate(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded, tag);
+    }
+
+    #[test]
+    fn adventure_predicate_keeps_exact_property() {
+        let mut state = pumpkin_nbt::compound::NbtCompound::new();
+        state.put_string("facing", "north".to_string());
+        let mut predicate = pumpkin_nbt::compound::NbtCompound::new();
+        predicate.put_compound("state", state);
+        adventure_predicate_round_trip(predicate);
+    }
+
+    #[test]
+    fn adventure_predicate_keeps_property_range() {
+        let mut range = pumpkin_nbt::compound::NbtCompound::new();
+        range.put_string("min", "2".to_string());
+        let mut state = pumpkin_nbt::compound::NbtCompound::new();
+        state.put_compound("age", range);
+        let mut predicate = pumpkin_nbt::compound::NbtCompound::new();
+        predicate.put_compound("state", state);
+        adventure_predicate_round_trip(predicate);
+    }
+
+    #[test]
+    fn adventure_predicate_keeps_nbt() {
+        let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+        nbt.put_string("CustomName", "x".to_string());
+        let mut predicate = pumpkin_nbt::compound::NbtCompound::new();
+        predicate.put_compound("nbt", nbt);
+        adventure_predicate_round_trip(predicate);
+    }
+
+    #[test]
+    fn adventure_predicate_rejects_negative_property_count() {
+        // one predicate, no blocks, properties with count -1, then no nbt or components
+        let bytes = [1, 0, 1, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0, 0, 0];
+        assert!(deserialize_adventure_predicate(&mut bytes.as_slice()).is_err());
     }
 
     #[test]

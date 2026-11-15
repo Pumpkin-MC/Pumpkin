@@ -5797,6 +5797,7 @@ impl World {
         );
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -5839,7 +5840,12 @@ impl World {
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
-        if event.cancelled {
+        // event handlers may replace the block or move the player
+        let unchanged = || {
+            self.get_block_state_id(position) == broken_block_state.id
+                && cause.is_none_or(|player| Arc::ptr_eq(&player.world(), self))
+        };
+        if event.cancelled || !unchanged() {
             return None;
         }
 
@@ -5863,6 +5869,10 @@ impl World {
                 ..Default::default()
             };
             crate::block::drop_loot(self, broken_block, position, true, &params);
+            // TODO: vanilla removes the block before `playerDestroy` drops its loot
+            if !unchanged() {
+                return None;
+            }
         }
 
         let new_state_id = if *self.get_fluid(position) == Fluid::WATER {
@@ -6704,6 +6714,21 @@ impl World {
     pub fn get_block_and_state_id(&self, position: &BlockPos) -> (&'static Block, BlockStateId) {
         let id = self.get_block_state_id(position);
         (Block::from_state_id(id), id)
+    }
+
+    /// Fires `event`, false if it was cancelled, `block` is not at `position`, or a handler
+    /// changed the state there.
+    pub fn fire_block_event<E>(&self, position: &BlockPos, block: &Block, event: &mut E) -> bool
+    where
+        E: crate::plugin::api::events::Payload + crate::plugin::api::events::Cancellable + 'static,
+    {
+        let state_id = self.get_block_state_id(position);
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, event);
+        }
+        !event.cancelled()
+            && Block::from_state_id(state_id) == block
+            && self.get_block_state_id(position) == state_id
     }
 
     /// Updates neighboring blocks of a block with a specified source block
