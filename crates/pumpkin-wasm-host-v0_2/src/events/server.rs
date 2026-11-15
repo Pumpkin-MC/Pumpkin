@@ -552,30 +552,26 @@ mod tests {
             payload,
         );
 
-        let wasm_event = event.to_wasm_event(&mut state);
-        if let Event::JavaConnectionPacketReceivedEvent(ref data) = wasm_event {
-            assert_eq!(data.connection_id, 42);
-            assert_eq!(
-                data.version,
-                crate::pumpkin::plugin::player::JavaMinecraftVersion::V1202
-            );
-            assert_eq!(data.state, JavaConnectionState::Login);
-            assert_eq!(data.packet_id, 0x00);
-            assert_eq!(data.raw_payload, vec![1, 2, 3, 4]);
-            assert!(!data.cancelled);
-        } else {
-            panic!("Expected JavaConnectionPacketReceivedEvent");
-        }
+        let data = event.to_wasm_event(&mut state);
 
-        let modified_event =
-            Event::JavaConnectionPacketReceivedEvent(JavaConnectionPacketReceivedEventData {
-                connection_id: 42,
-                version: crate::pumpkin::plugin::player::JavaMinecraftVersion::V1202,
-                state: JavaConnectionState::Login,
-                packet_id: 0x05,
-                raw_payload: vec![9, 8, 7],
-                cancelled: true,
-            });
+        assert_eq!(data.connection_id, 42);
+        assert_eq!(
+            data.version,
+            crate::pumpkin::plugin::player::JavaMinecraftVersion::V1202
+        );
+        assert_eq!(data.state, JavaConnectionState::Login);
+        assert_eq!(data.packet_id, 0x00);
+        assert_eq!(data.raw_payload, vec![1, 2, 3, 4]);
+        assert!(!data.cancelled);
+
+        let modified_event = JavaConnectionPacketReceivedEventData {
+            connection_id: 42,
+            version: crate::pumpkin::plugin::player::JavaMinecraftVersion::V1202,
+            state: JavaConnectionState::Login,
+            packet_id: 0x05,
+            raw_payload: vec![9, 8, 7],
+            cancelled: true,
+        };
 
         event.apply_wasm_event(modified_event, &mut state);
         assert_eq!(event.packet_id, 0x05);
@@ -595,35 +591,31 @@ mod tests {
             payload,
         );
 
-        let wasm_event = event.to_wasm_event(&mut state);
-        if let Event::JavaConnectionPacketSentEvent(ref data) = wasm_event {
-            assert_eq!(data.connection_id, 99);
-            assert_eq!(
-                data.version,
-                crate::pumpkin::plugin::player::JavaMinecraftVersion::V1164
-            );
-            assert_eq!(data.state, JavaConnectionState::Handshake);
-            assert_eq!(data.packet_id, 0x01);
-            assert_eq!(data.raw_payload, vec![10, 20]);
-            assert!(data.extra_packets.is_empty());
-            assert!(!data.cancelled);
-        } else {
-            panic!("Expected JavaConnectionPacketSentEvent");
-        }
+        let data = event.to_wasm_event(&mut state);
 
-        let modified_event =
-            Event::JavaConnectionPacketSentEvent(JavaConnectionPacketSentEventData {
-                connection_id: 99,
-                version: crate::pumpkin::plugin::player::JavaMinecraftVersion::V1164,
-                state: JavaConnectionState::Handshake,
-                packet_id: 0x02,
-                raw_payload: vec![30, 40, 50],
-                extra_packets: vec![RawPacket {
-                    packet_id: 0x03,
-                    payload: vec![60],
-                }],
-                cancelled: true,
-            });
+        assert_eq!(data.connection_id, 99);
+        assert_eq!(
+            data.version,
+            crate::pumpkin::plugin::player::JavaMinecraftVersion::V1164
+        );
+        assert_eq!(data.state, JavaConnectionState::Handshake);
+        assert_eq!(data.packet_id, 0x01);
+        assert_eq!(data.raw_payload, vec![10, 20]);
+        assert!(data.extra_packets.is_empty());
+        assert!(!data.cancelled);
+
+        let modified_event = JavaConnectionPacketSentEventData {
+            connection_id: 99,
+            version: crate::pumpkin::plugin::player::JavaMinecraftVersion::V1164,
+            state: JavaConnectionState::Handshake,
+            packet_id: 0x02,
+            raw_payload: vec![30, 40, 50],
+            extra_packets: vec![RawPacket {
+                packet_id: 0x03,
+                payload: vec![60],
+            }],
+            cancelled: true,
+        };
 
         event.apply_wasm_event(modified_event, &mut state);
         assert_eq!(event.packet_id, 0x02);
@@ -711,30 +703,26 @@ mod tests {
             payload,
         );
 
-        let wasm_event = event.to_wasm_event(&mut state);
-        if let Event::BedrockConnectionPacketReceivedEvent(ref data) = wasm_event {
-            assert_eq!(data.connection_id, 77);
-            assert_eq!(data.protocol_version, 671);
-            assert_eq!(
-                data.version,
-                crate::pumpkin::plugin::player::BedrockMinecraftVersion::V121
-            );
-            assert_eq!(data.packet_id, 1);
-            assert_eq!(data.raw_payload, vec![0xAA, 0xBB]);
-            assert!(!data.cancelled);
-        } else {
-            panic!("Expected BedrockConnectionPacketReceivedEvent");
-        }
+        let data = event.to_wasm_event(&mut state);
 
-        let modified =
-            Event::BedrockConnectionPacketReceivedEvent(BedrockConnectionPacketReceivedEventData {
-                connection_id: 77,
-                protocol_version: 671,
-                version: crate::pumpkin::plugin::player::BedrockMinecraftVersion::V121,
-                packet_id: 1,
-                raw_payload: vec![0xCC, 0xDD, 0xEE],
-                cancelled: false,
-            });
+        assert_eq!(data.connection_id, 77);
+        assert_eq!(data.protocol_version, 671);
+        assert_eq!(
+            data.version,
+            crate::pumpkin::plugin::player::BedrockMinecraftVersion::V121
+        );
+        assert_eq!(data.packet_id, 1);
+        assert_eq!(data.raw_payload, vec![0xAA, 0xBB]);
+        assert!(!data.cancelled);
+
+        let modified = BedrockConnectionPacketReceivedEventData {
+            connection_id: 77,
+            protocol_version: 671,
+            version: crate::pumpkin::plugin::player::BedrockMinecraftVersion::V121,
+            packet_id: 1,
+            raw_payload: vec![0xCC, 0xDD, 0xEE],
+            cancelled: false,
+        };
         event.apply_wasm_event(modified, &mut state);
         assert_eq!(&event.payload[..], &[0xCC, 0xDD, 0xEE]);
         assert!(!event.cancelled);
@@ -752,33 +740,28 @@ mod tests {
             payload,
         );
 
-        let wasm_event = event.to_wasm_event(&mut state);
-        if let Event::BedrockConnectionPacketSentEvent(ref data) = wasm_event {
-            assert_eq!(data.connection_id, 88);
-            assert_eq!(data.protocol_version, 2193);
-            assert_eq!(
-                data.version,
-                crate::pumpkin::plugin::player::BedrockMinecraftVersion::V12651
-            );
-            assert_eq!(data.packet_id, 143);
-            assert!(data.extra_packets.is_empty());
-        } else {
-            panic!("Expected BedrockConnectionPacketSentEvent");
-        }
+        let data = event.to_wasm_event(&mut state);
+        assert_eq!(data.connection_id, 88);
+        assert_eq!(data.protocol_version, 2193);
+        assert_eq!(
+            data.version,
+            crate::pumpkin::plugin::player::BedrockMinecraftVersion::V12651
+        );
+        assert_eq!(data.packet_id, 143);
+        assert!(data.extra_packets.is_empty());
 
-        let modified =
-            Event::BedrockConnectionPacketSentEvent(BedrockConnectionPacketSentEventData {
-                connection_id: 88,
-                protocol_version: 2193,
-                version: crate::pumpkin::plugin::player::BedrockMinecraftVersion::V12651,
-                packet_id: 143,
-                raw_payload: vec![2, 0],
-                extra_packets: vec![RawPacket {
-                    packet_id: 2,
-                    payload: vec![0, 0, 0, 0],
-                }],
-                cancelled: true,
-            });
+        let modified = BedrockConnectionPacketSentEventData {
+            connection_id: 88,
+            protocol_version: 2193,
+            version: crate::pumpkin::plugin::player::BedrockMinecraftVersion::V12651,
+            packet_id: 143,
+            raw_payload: vec![2, 0],
+            extra_packets: vec![RawPacket {
+                packet_id: 2,
+                payload: vec![0, 0, 0, 0],
+            }],
+            cancelled: true,
+        };
         event.apply_wasm_event(modified, &mut state);
         assert_eq!(event.packet_id, 143);
         assert_eq!(&event.payload[..], &[2, 0]);
