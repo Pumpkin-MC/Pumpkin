@@ -129,6 +129,11 @@ impl JavaClient {
                         server
                             .block_registry
                             .attack(&world, block, state, &position, player);
+                        // the attack callback may have moved the player
+                        if !Arc::ptr_eq(&player.world(), &world) {
+                            self.update_sequence(player_action.sequence.0);
+                            return;
+                        }
                         let speed = block::calc_block_breaking(player, state, block);
                         // Instant break
                         if speed >= 1.0 {

@@ -121,6 +121,11 @@ fn block_predicate_matches(predicate: &NbtTag, block: &Block) -> bool {
             if let Some(list) = c.get_list("predicates") {
                 return list.iter().any(|p| block_predicate_matches(p, block));
             }
+            // TODO: evaluate property and NBT constraints; until then a predicate that has
+            // any matches nothing instead of matching every state of the block.
+            if c.get("state").is_some() || c.get("nbt").is_some() {
+                return false;
+            }
             if let Some(blocks_tag) = c.get("blocks") {
                 IDSet::<Block>::read(blocks_tag).is_some_and(|idset| match &idset {
                     IDSet::Tag(tag) => block.is_tagged_with(tag).unwrap_or(false),

@@ -1705,24 +1705,28 @@ fn deserialize_adventure_predicate(seq: &mut impl NetworkReadExt) -> Result<NbtT
         let has_props = seq.get_bool()?;
         if has_props {
             let props_len = seq.get_var_int()?.0;
+            let mut state = pumpkin_nbt::compound::NbtCompound::new();
             for _ in 0..props_len {
-                let _ = seq.get_str()?;
+                let name = seq.get_str()?;
                 let is_exact = seq.get_bool()?;
                 if is_exact {
-                    let _ = seq.get_str()?;
+                    state.put_string(&name, seq.get_str()?.into_string());
                 } else {
+                    let mut range = pumpkin_nbt::compound::NbtCompound::new();
                     if seq.get_bool()? {
-                        let _ = seq.get_str()?;
+                        range.put_string("min", seq.get_str()?.into_string());
                     }
                     if seq.get_bool()? {
-                        let _ = seq.get_str()?;
+                        range.put_string("max", seq.get_str()?.into_string());
                     }
+                    state.put_compound(&name, range);
                 }
             }
+            comp.put_compound("state", state);
         }
         let has_nbt = seq.get_bool()?;
-        if has_nbt {
-            let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        if has_nbt && let Some(nbt) = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)? {
+            comp.put("nbt", nbt);
         }
         let exact_len = seq.get_var_int()?.0;
         for _ in 0..exact_len {
