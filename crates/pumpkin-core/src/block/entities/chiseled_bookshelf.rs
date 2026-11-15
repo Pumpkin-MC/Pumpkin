@@ -331,7 +331,12 @@ impl Inventory for ChiseledBookshelfBlockEntity {
     }
 
     fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
-        pumpkin_inventory::update_locked_stack(&self.items, slot, update)
+        let changed = pumpkin_inventory::update_locked_stack(&self.items, slot, update);
+        // The lock is released, like `set_stack` the block state follows the slot.
+        if changed {
+            self.sync_state_if_attached(slot);
+        }
+        changed
     }
 
     fn mark_dirty(&self) {

@@ -757,8 +757,11 @@ impl Mob for WanderingTraderEntity {
                     // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
                     // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
                     // A `buyB` that is present but invalid rejects the recipe, like a failed vanilla codec decode.
-                    let buy_b = recipe.get_compound("buyB").map_or(Some(None), |cost_b| {
-                        ItemStack::read_item_stack(cost_b).map(Some)
+                    let buy_b = recipe.get("buyB").map_or(Some(None), |cost_b| {
+                        cost_b
+                            .extract_compound()
+                            .and_then(ItemStack::read_item_stack)
+                            .map(Some)
                     });
                     let sell_item = recipe
                         .get_compound("sell")

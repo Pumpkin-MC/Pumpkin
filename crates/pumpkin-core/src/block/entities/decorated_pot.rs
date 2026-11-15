@@ -307,6 +307,21 @@ impl Inventory for DecoratedPotBlockEntity {
         self.mark_dirty();
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot != 0 {
+            return false;
+        }
+        // One lock for read and write, a parallel insert can't be overwritten.
+        let mut guard = self
+            .item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut stack = guard.take().unwrap_or_else(|| ItemStack::EMPTY.clone());
+        let changed = update(&mut stack);
+        *guard = (!stack.is_empty()).then_some(stack);
+        changed
+    }
+
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
         self.comparator_dirty.store(true, Ordering::Relaxed);

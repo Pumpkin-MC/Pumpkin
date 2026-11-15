@@ -353,7 +353,11 @@ impl Inventory for CrafterBlockEntity {
         let changed = pumpkin_inventory::update_locked_stack(&self.items, slot, update);
         // Like `set_stack`, a write re-enables the slot.
         if changed && self.is_slot_disabled(slot) {
-            self.set_slot_state(slot, true);
+            // `set_slot_state` refuses a filled slot, and the update already filled it.
+            self.disabled_slots
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)[slot] = false;
+            self.mark_dirty();
         }
         changed
     }
