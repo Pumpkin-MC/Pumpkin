@@ -4927,9 +4927,8 @@ impl Entity {
             return false;
         }
         *leashed_to = Some(Arc::downgrade(holder));
-        // The effects go out under the same lock, so a later unleash is applied and sent after them.
-        self.send_leash_attached(holder);
         drop(leashed_to);
+        self.send_leash_attached(holder);
         true
     }
 
@@ -4955,17 +4954,15 @@ impl Entity {
     }
 
     pub fn attach_leash(&self, holder: &Arc<dyn EntityBase>) {
-        let mut leashed_to = self
+        *self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *leashed_to = Some(Arc::downgrade(holder));
-        // Sent under the same lock, so clients get leash changes in the order they happened.
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(holder));
         self.send_leash_attached(holder);
-        drop(leashed_to);
     }
 
-    /// Resets the leash motion and tells clients about the new holder. Does not lock `leashed_to`.
+    /// Resets the leash motion and tells clients about the new holder. Call it without holding
+    /// `leashed_to`: sending the packet runs plugin handlers that may lock it again.
     fn send_leash_attached(&self, holder: &Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
         self.leash_angular_momentum.store(0.0);
@@ -5018,16 +5015,15 @@ impl Entity {
             }
         }
 
-        let mut leashed_to = self
+        let old_holder = self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(old_holder) = leashed_to.take() else {
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        let Some(old_holder) = old_holder else {
             return;
         };
-        // Sent under the same lock, so clients get leash changes in the order they happened.
         self.send_leash_removed();
-        drop(leashed_to);
 
         if let Some(holder) = old_holder.upgrade()
             && let Some(server) = world.server.upgrade()
@@ -5044,14 +5040,15 @@ impl Entity {
     }
 
     pub fn remove_leash(&self) {
-        let mut leashed_to = self
+        let had_holder = self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if leashed_to.take().is_some() {
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+            .is_some();
+        if had_holder {
             self.send_leash_removed();
         }
-        drop(leashed_to);
     }
 
     fn send_leash_removed(&self) {
