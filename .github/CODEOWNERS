@@ -1,0 +1,24 @@
+# Last matching pattern takes precedence.
+/crates/pumpkin-protocol/                     @Snowiiii @xRookieFight
+/crates/pumpkin-core/src/net/                 @Snowiiii @xRookieFight
+/assets/bedrock/                              @xRookieFight
+/crates/pumpkin-protocol/src/bedrock/         @xRookieFight @QuantumSegfault
+/crates/pumpkin-core/src/net/bedrock/         @xRookieFight @QuantumSegfault
+/crates/pumpkin-core/src/command/             @aure31
+/crates/pumpkin-plugin-api/                   @yunuservices
+/crates/pumpkin-plugin-wit/                   @yunuservices @QuantumSegfault
+/crates/pumpkin-api-macros/                   @yunuservices
+/crates/pumpkin-core/src/plugin/              @yunuservices @QuantumSegfault
+/crates/pumpkin-wasm-host/                    @yunuservices @QuantumSegfault
+/crates/pumpkin-wasm-host-common/             @yunuservices @QuantumSegfault
+/crates/pumpkin-wasm-host-v0_1/               @yunuservices @QuantumSegfault
+/crates/pumpkin-wasm-host-v0_2/               @yunuservices @QuantumSegfault
+*.md                                          @Q2297045667
+/docs/                                        @Q2297045667
+/crates/pumpkin-core/src/entity/mob/          @Snowiiii @RoosterBooster007
+/crates/pumpkin-core/src/entity/projectile/   @Snowiiii @RoosterBooster007
+/crates/pumpkin-core/src/block/               @Snowiiii @RoosterBooster007
+/crates/pumpkin-core/src/item/                @Snowiiii @RoosterBooster007
+/crates/pumpkin-world/src/generation/feature/ @Snowiiii @RoosterBooster007 @MegalithOfficial
+/crates/pumpkin-world/src/generation/noise/   @Snowiiii @RoosterBooster007 @MegalithOfficial
+/.github/workflows/                           @Snowiiii
