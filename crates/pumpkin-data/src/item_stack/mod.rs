@@ -333,6 +333,16 @@ impl ItemStack {
     }
 
     #[must_use]
+    pub fn has_enchantment_tag(&self, tag: &'static crate::tag::Tag) -> bool {
+        let Some(data) = self.get_data_component::<EnchantmentsImpl>() else {
+            return false;
+        };
+        data.enchantment
+            .iter()
+            .any(|(enc, level)| *level > 0 && enc.has_tag(tag))
+    }
+
+    #[must_use]
     pub fn is_unbreakable(&self) -> bool {
         self.get_data_component::<UnbreakableImpl>().is_some()
     }
@@ -371,7 +381,7 @@ impl ItemStack {
     #[must_use]
     pub fn can_be_hurt_by(&self, damage_type: DamageType) -> bool {
         self.get_data_component::<DamageResistantImpl>()
-            .is_none_or(|res| damage_type.is_tagged_with(res.res_type.as_str()) != Some(true))
+            .is_none_or(|res| !res.types.contains(&damage_type))
     }
 
     pub fn repair_item(&mut self, amount: i32) -> i32 {
@@ -891,7 +901,20 @@ impl ItemStack {
         // Try to get item by registry key
         let item = Item::from_registry_key(registry_key)?;
 
-        let count = compound.get_int("count")? as u8;
+        // `ItemStack.MAP_CODEC` makes `count` optional with default 1 on decode.
+        let count = if let Some(c) = compound
+            .get_int("count")
+            .or_else(|| compound.get_byte("count").map(i32::from))
+        {
+            if !(0..=99).contains(&c) {
+                return None;
+            }
+            c as u8
+        } else if item == &Item::AIR {
+            0
+        } else {
+            1
+        };
 
         // Create the item stack
         let mut item_stack = Self::new(count, item);
@@ -914,6 +937,57 @@ impl ItemStack {
         }
 
         Some(item_stack)
+    }
+
+    /// Encodes a non-empty stack as vanilla `ItemStackTemplate.MAP_CODEC`.
+    #[must_use]
+    pub fn write_item_stack_template(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("id", format!("minecraft:{}", self.item.registry_key));
+        if self.item_count != 1 {
+            compound.put_int("count", i32::from(self.item_count));
+        }
+
+        let mut tag = NbtCompound::new();
+        for (id, data) in &self.patch {
+            if !id.is_persistent() {
+                continue;
+            }
+            if let Some(data) = data {
+                tag.put(id.to_name(), data.write_data());
+            } else {
+                let name = '!'.to_string() + id.to_name();
+                tag.put(name.as_str(), NbtCompound::new());
+            }
+        }
+        if !tag.child_tags.is_empty() {
+            compound.put_compound("components", tag);
+        }
+
+        NbtTag::Compound(compound)
+    }
+
+    /// Decodes a non-empty stack from vanilla `ItemStackTemplate.CODEC` (compound or item string).
+    #[must_use]
+    pub fn read_item_stack_template(tag: &NbtTag) -> Option<Self> {
+        match tag {
+            NbtTag::String(full_id) => {
+                let registry_key = full_id.strip_prefix("minecraft:").unwrap_or(full_id);
+                let item = Item::from_registry_key(registry_key)?;
+                if item == &Item::AIR {
+                    return None;
+                }
+                Some(Self::new(1, item))
+            }
+            NbtTag::Compound(compound) => {
+                let stack = Self::read_item_stack(compound)?;
+                if stack.is_empty() || stack.item_count > 99 {
+                    return None;
+                }
+                Some(stack)
+            }
+            _ => None,
+        }
     }
 }
 

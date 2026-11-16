@@ -362,7 +362,9 @@ impl DispenserBlock {
         } else if item.item.id == Item::HONEYCOMB.id {
             // Honeycombs wax copper blocks or drop when facing non-waxable blocks
             Self::dispense_honeycomb(ctx, item);
-        } else if entity_from_egg(item.item.id).is_some() {
+        } else if crate::item::items::spawn_egg::entity_type_from_spawn_egg_stack(item).is_some()
+            && entity_from_egg(item.item.id).is_some()
+        {
             // Spawn eggs
             Self::dispense_spawn_egg(ctx, item);
         } else if item.item.id == Item::SHEARS.id {
@@ -638,7 +640,9 @@ impl DispenserBlock {
     }
 
     fn dispense_spawn_egg(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        let Some(entity_type) = entity_from_egg(item.item.id) else {
+        let Some(entity_type) =
+            crate::item::items::spawn_egg::entity_type_from_spawn_egg_stack(item)
+        else {
             return;
         };
 

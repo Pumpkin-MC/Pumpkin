@@ -308,18 +308,119 @@ impl DataComponentImpl for BlockTransformerImpl {
     default_impl!(BlockTransformer);
 }
 
-/// 26.3 `minecraft:brewing_fuel` marker. Presence identifies brewing-stand fuel.
+/// 26.3 `minecraft:brewing_fuel` (`BrewingFuel(ResolvableInt uses, ResolvableFloat speedMultiplier)`).
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BrewingFuelImpl;
+pub struct BrewingFuelImpl {
+    pub uses: IntProvider,
+    pub speed_multiplier: FloatProvider,
+}
 impl BrewingFuelImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const DEFAULT: Self = Self {
+        uses: IntProvider::Id(Cow::Borrowed("minecraft:brewing/uses_default")),
+        speed_multiplier: FloatProvider::Id(Cow::Borrowed("minecraft:brewing/speed_default")),
+    };
+
+    #[must_use]
+    pub fn get_uses(&self) -> i32 {
+        match &self.uses {
+            IntProvider::Inline(v) => (*v).max(0),
+            IntProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "brewing/uses_default" => 20,
+                    _ => crate::context_provider::get_context_int_provider_json(id)
+                        .and_then(|s| s.trim().parse::<i32>().ok())
+                        .unwrap_or(20)
+                        .max(0),
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn get_speed_multiplier(&self) -> f32 {
+        match &self.speed_multiplier {
+            FloatProvider::Inline(v) => (*v).max(0.0),
+            FloatProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "brewing/speed_default" => 1.0,
+                    _ => crate::context_provider::get_context_float_provider_json(id)
+                        .and_then(|s| s.trim().parse::<f32>().ok())
+                        .unwrap_or(1.0)
+                        .max(0.0),
+                }
+            }
+        }
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        if compound.is_empty() {
+            return Some(Self::DEFAULT);
+        }
+        let uses = if let Some(id) = compound.get_string("uses") {
+            IntProvider::Id(Cow::Owned(id.to_string()))
+        } else if let Some(val) = compound.get("uses").and_then(NbtTag::extract_int) {
+            IntProvider::Inline(val)
+        } else {
+            return None;
+        };
+        let speed_multiplier = if let Some(id) = compound.get_string("speed_multiplier") {
+            FloatProvider::Id(Cow::Owned(id.to_string()))
+        } else if let Some(val) = compound
+            .get("speed_multiplier")
+            .and_then(NbtTag::extract_float)
+        {
+            FloatProvider::Inline(val)
+        } else {
+            FloatProvider::Id(Cow::Borrowed("minecraft:brewing/speed_default"))
+        };
+        Some(Self {
+            uses,
+            speed_multiplier,
+        })
     }
 }
 impl DataComponentImpl for BrewingFuelImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::Compound(NbtCompound::new())
+        let mut compound = NbtCompound::new();
+        match &self.uses {
+            IntProvider::Id(id) => compound.put_string("uses", id.to_string()),
+            IntProvider::Inline(val) => compound.put_int("uses", *val),
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => compound.put_string("speed_multiplier", id.to_string()),
+            FloatProvider::Inline(val) => compound.put_float("speed_multiplier", *val),
+        }
+        NbtTag::Compound(compound)
     }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        match &self.uses {
+            IntProvider::Id(id) => {
+                digest.update(&[1u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            IntProvider::Inline(val) => {
+                digest.update(&[2u8]);
+                digest.update(&get_i32_hash(*val).to_le_bytes());
+            }
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => {
+                digest.update(&[3u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            FloatProvider::Inline(val) => {
+                digest.update(&[4u8]);
+                digest.update(&get_f32_hash(*val).to_le_bytes());
+            }
+        }
+        digest.finalize() as i32
+    }
+
     default_impl!(BrewingFuel);
 }
 

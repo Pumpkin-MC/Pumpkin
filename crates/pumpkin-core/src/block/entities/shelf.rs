@@ -114,24 +114,6 @@ impl BlockEntity for ShelfBlockEntity {
         )
     }
 
-    fn collect_item_components(&self, stack: &mut ItemStack) {
-        let items = self
-            .items
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let entries: Vec<(u8, ItemStack)> = items
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| !item.is_empty())
-            .map(|(slot, item)| (slot as u8, item.clone()))
-            .collect();
-        if !entries.is_empty() {
-            stack.set_data_component(pumpkin_data::data_component_impl::ContainerImpl {
-                items: entries,
-            });
-        }
-    }
-
     fn apply_item_components(&self, stack: &ItemStack) {
         let Some(container) =
             stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()

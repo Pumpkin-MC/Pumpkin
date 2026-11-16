@@ -441,7 +441,7 @@ impl HostItemStack for PluginHostState {
         let attr = super::living_entity::from_wit_attribute(modifier.attribute);
         let slot = super::enchantment::to_data_slot(modifier.slot);
         let op = from_wit_item_operation(modifier.modifier.operation);
-        let leaked_id: &'static str = Box::leak(modifier.modifier.id.into_boxed_str());
+        let mod_id = modifier.modifier.id;
 
         let mut current_mods = stack
             .get_data_component::<AttributeModifiersImpl>()
@@ -449,13 +449,14 @@ impl HostItemStack for PluginHostState {
                 comp.attribute_modifiers.clone().into_owned()
             });
 
-        current_mods.retain(|m| !(m.r#type == attr && m.id == leaked_id && m.slot == slot));
+        current_mods.retain(|m| !(m.r#type == attr && m.id.as_ref() == mod_id && m.slot == slot));
         current_mods.push(Modifier {
             r#type: attr,
-            id: leaked_id,
+            id: Cow::Owned(mod_id),
             amount: modifier.modifier.amount,
             operation: op,
             slot,
+            display: pumpkin_data::data_component_impl::ModifierDisplay::Default,
         });
 
         stack.set_data_component(AttributeModifiersImpl {

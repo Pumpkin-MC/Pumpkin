@@ -354,13 +354,60 @@ impl DataComponentImpl for CustomModelDataImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TooltipDisplayImpl;
+pub struct TooltipDisplayImpl {
+    pub hide_tooltip: bool,
+    pub hidden_components: Cow<'static, [crate::data_component::DataComponent]>,
+}
+impl Default for TooltipDisplayImpl {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
 impl TooltipDisplayImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const DEFAULT: Self = Self {
+        hide_tooltip: false,
+        hidden_components: Cow::Borrowed(&[]),
+    };
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let Some(compound) = data.extract_compound() else {
+            return Some(Self::DEFAULT);
+        };
+        let hide_tooltip = compound.get_bool("hide_tooltip").unwrap_or(false);
+        let hidden_components = compound
+            .get_list("hidden_components")
+            .map(|list| {
+                list.iter()
+                    .filter_map(|t| {
+                        t.extract_string()
+                            .and_then(crate::data_component::DataComponent::try_from_name)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .map_or(Cow::Borrowed(&[][..]), Cow::Owned);
+        Some(Self {
+            hide_tooltip,
+            hidden_components,
+        })
     }
 }
 impl DataComponentImpl for TooltipDisplayImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        if self.hide_tooltip {
+            compound.put_bool("hide_tooltip", true);
+        }
+        if !self.hidden_components.is_empty() {
+            compound.put_list(
+                "hidden_components",
+                self.hidden_components
+                    .iter()
+                    .map(|c| NbtTag::String(c.to_name().into()))
+                    .collect(),
+            );
+        }
+        NbtTag::Compound(compound)
+    }
     default_impl!(TooltipDisplay);
 }
 
@@ -615,33 +662,114 @@ impl DataComponentImpl for BannerPatternsImpl {
     default_impl!(BannerPatterns);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
+#[derive(Clone, Default)]
 pub struct PotDecorationsImpl {
-    pub sherds: Vec<Cow<'static, str>>,
+    pub back: Option<crate::item_stack::ItemStack>,
+    pub left: Option<crate::item_stack::ItemStack>,
+    pub right: Option<crate::item_stack::ItemStack>,
+    pub front: Option<crate::item_stack::ItemStack>,
 }
 #[allow(non_upper_case_globals)]
-pub const PotDecorationsImpl: PotDecorationsImpl = PotDecorationsImpl { sherds: Vec::new() };
-impl PotDecorationsImpl {
-    pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let mut sherds = Vec::new();
-        if let NbtTag::List(list) = data {
-            for tag in list {
-                if let Some(s) = tag.extract_string() {
-                    sherds.push(Cow::Owned(s.to_string()));
+pub const PotDecorationsImpl: PotDecorationsImpl = PotDecorationsImpl::EMPTY;
+
+impl std::fmt::Debug for PotDecorationsImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PotDecorationsImpl")
+            .field("back", &self.back.as_ref().map(|s| s.item.registry_key))
+            .field("left", &self.left.as_ref().map(|s| s.item.registry_key))
+            .field("right", &self.right.as_ref().map(|s| s.item.registry_key))
+            .field("front", &self.front.as_ref().map(|s| s.item.registry_key))
+            .finish()
+    }
+}
+
+impl PartialEq for PotDecorationsImpl {
+    fn eq(&self, other: &Self) -> bool {
+        fn side_eq(
+            a: &Option<crate::item_stack::ItemStack>,
+            b: &Option<crate::item_stack::ItemStack>,
+        ) -> bool {
+            match (a, b) {
+                (None, None) => true,
+                (Some(sa), Some(sb)) => {
+                    sa.item_count == sb.item_count && sa.are_items_and_components_equal(sb)
                 }
+                _ => false,
             }
         }
-        Some(Self { sherds })
+        side_eq(&self.back, &other.back)
+            && side_eq(&self.left, &other.left)
+            && side_eq(&self.right, &other.right)
+            && side_eq(&self.front, &other.front)
+    }
+}
+impl Eq for PotDecorationsImpl {}
+
+impl PotDecorationsImpl {
+    pub const EMPTY: Self = Self {
+        back: None,
+        left: None,
+        right: None,
+        front: None,
+    };
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.back.is_none() && self.left.is_none() && self.right.is_none() && self.front.is_none()
+    }
+
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        match data {
+            NbtTag::Compound(compound) => Some(Self {
+                back: compound
+                    .get("back")
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                left: compound
+                    .get("left")
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                right: compound
+                    .get("right")
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                front: compound
+                    .get("front")
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+            }),
+            // Legacy 4-element `[back, left, right, front]` list fallback.
+            NbtTag::List(list) => Some(Self {
+                back: list
+                    .first()
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                left: list
+                    .get(1)
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                right: list
+                    .get(2)
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                front: list
+                    .get(3)
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+            }),
+            _ => None,
+        }
     }
 }
 impl DataComponentImpl for PotDecorationsImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::List(
-            self.sherds
-                .iter()
-                .map(|s| NbtTag::String(s.to_string().into()))
-                .collect(),
-        )
+        let mut compound = NbtCompound::new();
+        if let Some(back) = &self.back {
+            compound.put("back", back.write_item_stack_template());
+        }
+        if let Some(left) = &self.left {
+            compound.put("left", left.write_item_stack_template());
+        }
+        if let Some(right) = &self.right {
+            compound.put("right", right.write_item_stack_template());
+        }
+        if let Some(front) = &self.front {
+            compound.put("front", front.write_item_stack_template());
+        }
+        NbtTag::Compound(compound)
     }
     default_impl!(PotDecorations);
 }
