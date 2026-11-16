@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use uuid::Uuid;
 
-use crate::block::blocks::carved_pumpkin::find_golem_pattern;
+use crate::block::blocks::carved_pumpkin::can_spawn_golem;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::wither_skull::find_wither_pattern;
@@ -1288,7 +1288,7 @@ impl DispenserBlock {
             && if block == &Block::WITHER_SKELETON_SKULL {
                 find_wither_pattern(ctx.world, &target).is_some()
             } else {
-                find_golem_pattern(ctx.world, &target).is_some()
+                can_spawn_golem(ctx.world, &target)
             };
 
         if summons_mob {
