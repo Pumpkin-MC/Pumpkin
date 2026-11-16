@@ -568,6 +568,13 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Vanilla `Entity.canInteractWithLevel`, using `LivingEntity.isAlive` for living entities.
+    fn can_interact_with_level(&self) -> bool {
+        self.get_living_entity()
+            .map_or_else(|| self.get_entity().is_alive(), LivingEntity::is_alive)
+            && !self.is_spectator()
+    }
+
     fn can_be_seen_by_anyone(&self) -> bool {
         self.get_living_entity()
             .is_some_and(|living| !self.is_spectator() && living.is_alive())
@@ -5185,8 +5192,13 @@ impl Entity {
         };
         let holder_entity = holder.get_entity();
 
-        if !self.is_alive() || !holder_entity.is_alive() {
-            self.unleash();
+        if !caller.can_interact_with_level() || !holder.can_interact_with_level() {
+            if self.world.load().level_info.load().game_rules.entity_drops {
+                self.drop_leash();
+            } else {
+                // Vanilla `removeLeash`; `unleash` also fires the unleash event like `drop_leash`.
+                self.unleash();
+            }
             return LeashTick::NotLeashed;
         }
 
