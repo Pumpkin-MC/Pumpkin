@@ -283,6 +283,15 @@ impl ItemStack {
 
     pub fn set_data_component<T: DataComponentImpl + 'static>(&mut self, component: T) {
         let to_set_id = T::get_enum();
+        if self
+            .item
+            .components
+            .iter()
+            .any(|(id, default_val)| *id == to_set_id && component.equal(*default_val))
+        {
+            self.patch.retain(|(id, _)| *id != to_set_id);
+            return;
+        }
         let boxed = Some(Box::new(component) as _);
         if let Some((_, c)) = self.patch.iter_mut().find(|(id, _)| *id == to_set_id) {
             *c = boxed;

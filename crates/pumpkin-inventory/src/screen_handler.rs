@@ -251,6 +251,18 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Called when the player takes a brewed potion from a brewing stand potion slot.
     fn on_brewed_potion(&self) {}
+
+    fn game_time(&self) -> i64 {
+        0
+    }
+
+    fn sync_container_world_event(&self, _event: pumpkin_data::world::WorldEvent) {}
+
+    fn on_crafted_post_process(&self, _stack: &mut ItemStack) {}
+
+    fn map_state(&self, _map_id: i32) -> Option<(bool, i8)> {
+        None
+    }
 }
 
 /// Gives a stack to the player or drops it if inventory is full.

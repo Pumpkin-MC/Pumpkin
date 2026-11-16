@@ -9500,6 +9500,31 @@ impl InventoryPlayer for Player {
             crate::entity::player::advancement::trigger::AdvancementTrigger::BrewedPotion,
         );
     }
+
+    fn game_time(&self) -> i64 {
+        self.world().get_world_age()
+    }
+
+    fn sync_container_world_event(&self, event: pumpkin_data::world::WorldEvent) {
+        if let Some(pos) = self.open_container_pos.load() {
+            self.world().sync_world_event(event, pos, 0);
+        }
+    }
+
+    fn on_crafted_post_process(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
+        if let Some(server) = self.world().server.upgrade() {
+            crate::world::map::resolve_map_post_processing(stack, &server);
+        }
+    }
+
+    fn map_state(&self, map_id: i32) -> Option<(bool, i8)> {
+        let server = self.world().server.upgrade()?;
+        let map = server.map_manager.get_map(map_id)?;
+        let data = map
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Some((data.locked, data.scale))
+    }
 }
 
 #[cfg(test)]
