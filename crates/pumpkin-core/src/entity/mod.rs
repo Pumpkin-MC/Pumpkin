@@ -568,6 +568,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Called on the old holder after an entity leashed to it was unleashed.
+    fn notify_leashee_removed(&self) {}
+
     /// Vanilla `Entity.canInteractWithLevel`, using `LivingEntity.isAlive` for living entities.
     fn can_interact_with_level(&self) -> bool {
         self.get_living_entity()
@@ -4999,7 +5002,8 @@ impl Entity {
         };
         self.send_leash_removed();
 
-        if let Some(holder) = old_holder.upgrade()
+        let holder = old_holder.upgrade();
+        if let Some(holder) = &holder
             && let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
@@ -5011,17 +5015,22 @@ impl Entity {
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
+        if let Some(holder) = holder {
+            holder.notify_leashee_removed();
+        }
     }
 
     pub fn remove_leash(&self) {
-        let had_holder = self
+        let old_holder = self
             .leashed_to
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
-            .is_some();
-        if had_holder {
+            .take();
+        if let Some(old_holder) = old_holder {
             self.send_leash_removed();
+            if let Some(holder) = old_holder.upgrade() {
+                holder.notify_leashee_removed();
+            }
         }
     }
 
@@ -5037,19 +5046,34 @@ impl Entity {
         true
     }
 
-    pub fn drop_all_leash_connections(&self) -> bool {
-        let world = self.world.load();
+    /// Vanilla `Leashable.leashableLeashedTo`: entities in the 32 block box around this one
+    /// that are leashed to it.
+    pub fn leashable_leashed_to(&self) -> Vec<Arc<dyn EntityBase>> {
         let center = self.bounding_box.load().get_center();
         let half = Vector3::new(16.0, 16.0, 16.0);
-        let scan_area = BoundingBox::new(center - half, center + half);
+        self.world
+            .load()
+            .get_entities_at_box(&BoundingBox::new(center - half, center + half))
+            .into_iter()
+            .filter(|other| {
+                other
+                    .get_entity()
+                    .get_leash_holder()
+                    .is_some_and(|holder| holder.get_entity().entity_id == self.entity_id)
+            })
+            .collect()
+    }
 
+    pub fn drop_all_leash_connections(&self) -> bool {
+        let world = self.world.load();
         let mut dropped = self.drop_leash();
-        for other in world.get_entities_at_box(&scan_area) {
-            let other_entity = other.get_entity();
-            let leashed_to_self = other_entity
+        for other in self.leashable_leashed_to() {
+            let other = other.get_entity();
+            // Another player may have moved this leash since the scan.
+            let still_held = other
                 .get_leash_holder()
                 .is_some_and(|holder| holder.get_entity().entity_id == self.entity_id);
-            if leashed_to_self && other_entity.drop_leash() {
+            if still_held && other.drop_leash() {
                 dropped = true;
             }
         }
