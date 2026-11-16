@@ -213,6 +213,7 @@ pub struct AdvancedConfiguration {
     #[toml(default = Self::default().advancement)]
     pub advancement: AdvancementConfig,
     /// Update checker configuration.
+    #[toml(default = Self::default().update_checker)]
     pub update_checker: UpdateCheckerConfig,
 }
 
@@ -564,6 +565,18 @@ mod tests {
                 GameMode::Creative,
                 "world.chunk.compression.level",
             ),
+            (
+                "[update_checker]\nconnect_timeout = \"five seconds\"\n",
+                "connect_timeout = \"five seconds\"",
+                GameMode::Survival,
+                "update_checker.connect_timeout",
+            ),
+            (
+                "[networking.proxy.haproxy]\nenabled = \"yes\"\n",
+                "enabled = \"yes\"",
+                GameMode::Survival,
+                "networking.proxy.haproxy.enabled",
+            ),
         ] {
             let source = format!(
                 "force_gamemode = true\ndefault_level_name = \"kids\"\ntps = 12.5\n{source}"
@@ -621,6 +634,11 @@ mod tests {
 seed = "-42"
 op_permission_level = 3
 accepts-transfers = false
+[update_checker]
+enabled = false
+connect_timeout = 3000
+[networking.proxy.haproxy]
+enabled = true
 [networking.java]
 keep-alive-time = 25
 view_distance = 8

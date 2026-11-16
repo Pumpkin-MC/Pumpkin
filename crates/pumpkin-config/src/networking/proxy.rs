@@ -11,6 +11,7 @@ pub struct ProxyConfig {
     #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Configuration for `HAProxy` PROXY protocol integration.
+    #[toml(default = Self::default().haproxy)]
     pub haproxy: HAProxyConfig,
     /// Configuration for Velocity proxy integration.
     #[toml(default = Self::default().velocity)]
@@ -24,10 +25,12 @@ pub struct ProxyConfig {
 }
 
 /// Configuration for `HAProxy` PROXY protocol integration.
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct HAProxyConfig {
     /// Whether `HAProxy` PROXY protocol (v1 and v2) support is enabled.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
 }
 

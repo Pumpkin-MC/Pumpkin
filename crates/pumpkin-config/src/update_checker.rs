@@ -1,16 +1,21 @@
 use serde::{Deserialize, Serialize};
 
 /// Configuration for checking for new Pumpkin updates on startup.
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct UpdateCheckerConfig {
     /// Whether to check for new Pumpkin updates on server startup.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Whether to notify server operators in chat when they join if an update is available.
+    #[toml(default = Self::default().notify_ops_on_join)]
     pub notify_ops_on_join: bool,
     /// Connection timeout in milliseconds.
+    #[toml(default = Self::default().connect_timeout)]
     pub connect_timeout: u32,
     /// Read timeout in milliseconds.
+    #[toml(default = Self::default().read_timeout)]
     pub read_timeout: u32,
 }
 
