@@ -17,10 +17,7 @@ use pumpkin_world::poi::{PoiStorage, SectionPos};
 use rayon::prelude::*;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, RwLock, Weak};
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::atomic::Ordering,
-};
+use std::{collections::HashMap, sync::atomic::Ordering};
 use tracing::{debug, error, info, trace, warn};
 
 mod active_chunks;
@@ -159,7 +156,7 @@ use pumpkin_util::{
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
 use pumpkin_util::{
-    math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
+    math::{position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
@@ -295,6 +292,7 @@ pub struct World {
     pub custom_data: std::sync::Mutex<NbtCompound>,
     /// Persistent custom data for block entities at specific positions
     pub custom_block_entity_data: DashMap<BlockPos, NbtCompound>,
+    pub(crate) encoded_chunk_cache: DashMap<Vector2<i32>, crate::net::chunk_sender::EncodedChunk>,
     /// Entity tracker responsible for tracking entity visibility and sending delta/status packets to watchers.
     pub entity_tracker: entity_tracker::EntityTracker,
 }
@@ -454,6 +452,7 @@ impl World {
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
+            encoded_chunk_cache: DashMap::new(),
             entity_tracker: entity_tracker::EntityTracker::new(),
         }
     }
@@ -1027,65 +1026,45 @@ impl World {
         }
     }
 
-    /// Keyed by encode version: always `CURRENT_MC_VERSION`, older clients are converted
-    /// per connection on enqueue by the multiversion plugin.
-    // TODO: collapse to a plain recipient list with a single serialize.
-    pub(crate) fn collect_java_recipients_by_version<'a>(
-        players: impl Iterator<Item = &'a Arc<Player>>,
-    ) -> BTreeMap<JavaMinecraftVersion, Vec<&'a JavaClient>> {
-        let mut recipients_by_version: BTreeMap<JavaMinecraftVersion, Vec<&'a JavaClient>> =
-            BTreeMap::new();
-        for player in players {
-            if let ClientPlatform::Java(java_client) = player.client.as_ref() {
-                recipients_by_version
-                    .entry(CURRENT_MC_VERSION)
-                    .or_default()
-                    .push(java_client);
-            }
-        }
-        recipients_by_version
-    }
-
     pub fn broadcast_java_clients<'a, P: ClientPacket>(
         packet: &P,
         recipients: impl Iterator<Item = &'a JavaClient>,
     ) {
-        let mut recipients_by_version: BTreeMap<JavaMinecraftVersion, Vec<&JavaClient>> =
-            BTreeMap::new();
-        for client in recipients {
-            recipients_by_version
-                .entry(CURRENT_MC_VERSION)
-                .or_default()
-                .push(client);
-        }
-        Self::broadcast_java_grouped(packet, recipients_by_version);
-    }
-
-    fn broadcast_java_grouped<P: ClientPacket>(
-        packet: &P,
-        recipients_by_version: BTreeMap<JavaMinecraftVersion, Vec<&JavaClient>>,
-    ) {
-        for (version, recipients) in recipients_by_version {
-            let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
-                Ok(packet_data) => packet_data,
-                Err(pumpkin_protocol::ser::WritingError::UnsupportedVersion(_)) => {
-                    continue;
-                }
-                Err(err) => {
-                    error!(
-                        "Failed to serialize packet {} for version {:?}: {}",
-                        std::any::type_name::<P>(),
-                        version,
-                        err
-                    );
-                    continue;
+        let mut packet_data = None;
+        for recipient in recipients {
+            let data = match &packet_data {
+                Some(data) => data,
+                None => {
+                    match JavaClient::serialize_packet_for_version(packet, CURRENT_MC_VERSION) {
+                        Ok(data) => packet_data.insert(data),
+                        Err(pumpkin_protocol::ser::WritingError::UnsupportedVersion(_)) => return,
+                        Err(err) => {
+                            error!(
+                                "Failed to serialize packet {} for version {:?}: {}",
+                                std::any::type_name::<P>(),
+                                CURRENT_MC_VERSION,
+                                err
+                            );
+                            return;
+                        }
+                    }
                 }
             };
-
-            for recipient in recipients {
-                recipient.try_enqueue_packet(packet_data.clone());
-            }
+            recipient.try_enqueue_packet(data.clone());
         }
+    }
+
+    pub(crate) fn broadcast_java_players<'a, P: ClientPacket>(
+        packet: &P,
+        players: impl Iterator<Item = &'a Arc<Player>>,
+    ) {
+        Self::broadcast_java_clients(
+            packet,
+            players.filter_map(|player| match player.client.as_ref() {
+                ClientPlatform::Java(java_client) => Some(java_client),
+                ClientPlatform::Bedrock(_) => None,
+            }),
+        );
     }
 
     fn broadcast_bedrock_grouped<'a, P: BClientPacket>(
@@ -1114,8 +1093,7 @@ impl World {
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
     pub fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         let players = self.players.load();
-        let recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
-        Self::broadcast_java_grouped(packet, recipients_by_version);
+        Self::broadcast_java_players(packet, players.iter());
     }
 
     pub fn broadcast_bedrock_all<P: BClientPacket>(&self, packet: &P) {
@@ -1178,9 +1156,7 @@ impl World {
         be_packet: &B,
     ) {
         let players = self.players.load();
-        let je_recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
-
-        Self::broadcast_java_grouped(je_packet, je_recipients_by_version);
+        Self::broadcast_java_players(je_packet, players.iter());
         Self::broadcast_bedrock_grouped(
             be_packet,
             players.iter().filter_map(|p| match p.client.as_ref() {
@@ -1279,23 +1255,24 @@ impl World {
         be_packet: &B,
     ) {
         let players = self.players.load();
-        let mut java_recipients = Vec::new();
-        let mut bedrock_recipients = Vec::new();
-
-        for p in players.iter() {
-            if except.contains(&p.gameprofile.id) {
-                continue;
-            }
-            match p.client.as_ref() {
-                ClientPlatform::Java(_) => java_recipients.push(p),
-                ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
-            }
-        }
-
-        let recipients_by_version =
-            Self::collect_java_recipients_by_version(java_recipients.into_iter());
-        Self::broadcast_java_grouped(je_packet, recipients_by_version);
-        Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
+        Self::broadcast_java_players(
+            je_packet,
+            players
+                .iter()
+                .filter(|p| !except.contains(&p.gameprofile.id)),
+        );
+        Self::broadcast_bedrock_grouped(
+            be_packet,
+            players.iter().filter_map(|p| {
+                if except.contains(&p.gameprofile.id) {
+                    return None;
+                }
+                match p.client.as_ref() {
+                    ClientPlatform::Bedrock(be_client) => Some(be_client),
+                    ClientPlatform::Java(_) => None,
+                }
+            }),
+        );
     }
 
     /// Broadcasts the skin layers of a player, encoding the metadata for each Java client's own
@@ -1316,15 +1293,13 @@ impl World {
                 continue;
             }
             match p.client.as_ref() {
-                ClientPlatform::Java(_) => java_recipients.push(p),
+                ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
             }
         }
 
-        let recipients_by_version =
-            Self::collect_java_recipients_by_version(java_recipients.into_iter());
-
-        for (version, recipients) in recipients_by_version {
+        if !java_recipients.is_empty() {
+            let version = CURRENT_MC_VERSION;
             let mut buf = Vec::new();
             for meta in [
                 Metadata::new(
@@ -1340,11 +1315,7 @@ impl World {
             }
             buf.put_u8(255);
             let packet = CSetEntityMetadata::new(entity_id.into(), buf.into());
-            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
-                for recipient in recipients {
-                    recipient.try_enqueue_packet(packet_data.clone());
-                }
-            }
+            Self::broadcast_java_clients(&packet, java_recipients.into_iter());
         }
 
         Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
@@ -1357,12 +1328,12 @@ impl World {
     /// **Note:** This function acquires a lock on the `current_players` map, ensuring thread safety.
     pub fn broadcast_packet_except<P: ClientPacket>(&self, except: &[uuid::Uuid], packet: &P) {
         let players = self.players.load();
-        let recipients_by_version = Self::collect_java_recipients_by_version(
+        Self::broadcast_java_players(
+            packet,
             players
                 .iter()
                 .filter(|candidate| !except.contains(&candidate.gameprofile.id)),
         );
-        Self::broadcast_java_grouped(packet, recipients_by_version);
     }
 
     pub fn spawn_particle(
@@ -1609,8 +1580,7 @@ impl World {
             is_within_chebyshev_distance(chunk_pos, center, audible_chunks)
         });
 
-        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
-        Self::broadcast_java_grouped(&packet, recipients_by_version);
+        Self::broadcast_java_players(&packet, recipients);
     }
 
     pub fn play_sound_raw_expect(
@@ -1639,8 +1609,7 @@ impl World {
             is_within_chebyshev_distance(chunk_pos, center, audible_chunks)
         });
 
-        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
-        Self::broadcast_java_grouped(&packet, recipients_by_version);
+        Self::broadcast_java_players(&packet, recipients);
     }
 
     pub fn play_block_sound(&self, sound: Sound, category: SoundCategory, position: BlockPos) {
@@ -1711,6 +1680,7 @@ impl World {
         players.par_iter().for_each(|player| {
             player.tick(server);
         });
+        self.encoded_chunk_cache.clear();
         // Vanilla `ServerPlayer.pushEntities`: one player after another, not while frozen
         if server.tick_rate_manager.runs_normally() {
             for player in players.iter() {
@@ -2046,7 +2016,7 @@ impl World {
                 let mut bedrock_recipients = Vec::new();
                 for p in recipients {
                     match p.client.as_ref() {
-                        ClientPlatform::Java(_) => java_recipients.push(p),
+                        ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                         ClientPlatform::Bedrock(be_client) => {
                             bedrock_recipients.push(be_client);
                         }
@@ -2066,11 +2036,9 @@ impl World {
                     }
                 }
 
-                let recipients_by_version =
-                    Self::collect_java_recipients_by_version(java_recipients.into_iter());
-                Self::broadcast_java_grouped(
+                Self::broadcast_java_clients(
                     &CMultiBlockUpdate::new(&updates),
-                    recipients_by_version,
+                    java_recipients.into_iter(),
                 );
 
                 for (block_pos, _) in &updates {
@@ -4861,28 +4829,23 @@ impl World {
 
     /// Gets a `Player` by an entity id
     pub fn get_player_by_id(&self, id: i32) -> Option<Arc<Player>> {
-        for player in self.players.load().iter() {
-            if player.entity_id() == id {
-                entity_islands::check_reached(id);
-                return Some(player.clone());
-            }
-        }
-        None
+        self.entity_index
+            .player_by_id(&self.players.load_full(), id)
+            .inspect(|_| entity_islands::check_reached(id))
     }
 
     /// Gets an entity by an entity id
     pub fn get_entity_by_id(&self, id: i32) -> Option<Arc<dyn EntityBase>> {
-        for entity in self.entities.load().iter() {
-            if entity.get_entity().entity_id == id {
-                entity_islands::check_reached(id);
-                return Some(entity.clone());
-            }
+        if let Some(entity) = self.entity_index.by_id(&self.entities.load_full(), id) {
+            entity_islands::check_reached(id);
+            return Some(entity);
         }
-        for player in self.players.load().iter() {
-            if player.get_entity().entity_id == id {
-                entity_islands::check_reached(id);
-                return Some(player.clone() as Arc<dyn EntityBase>);
-            }
+        if let Some(player) = self
+            .entity_index
+            .player_by_id(&self.players.load_full(), id)
+        {
+            entity_islands::check_reached(id);
+            return Some(player as Arc<dyn EntityBase>);
         }
         None
     }
@@ -4899,27 +4862,12 @@ impl World {
 
     // Gets all entities at a Box
     pub fn get_all_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
-        let players_guard = self.players.load();
-        let min_chunk_x = get_section_cord(aabb.min.x.floor() as i32) - 1;
-        let max_chunk_x = get_section_cord(aabb.max.x.floor() as i32) + 1;
-        let min_chunk_z = get_section_cord(aabb.min.z.floor() as i32) - 1;
-        let max_chunk_z = get_section_cord(aabb.max.z.floor() as i32) + 1;
-
         self.entity_index
             .query(self.entities.load_full(), *aabb)
             .chain(
-                players_guard
-                    .iter()
-                    .filter(move |player| {
-                        let entity = player.get_entity();
-                        let chunk_pos = entity.chunk_pos.load();
-                        chunk_pos.x >= min_chunk_x
-                            && chunk_pos.x <= max_chunk_x
-                            && chunk_pos.y >= min_chunk_z
-                            && chunk_pos.y <= max_chunk_z
-                            && entity.bounding_box.load().intersects(aabb)
-                    })
-                    .map(|p| p.clone() as Arc<dyn EntityBase>),
+                self.entity_index
+                    .query_players(self.players.load_full(), *aabb)
+                    .map(|p| p as Arc<dyn EntityBase>),
             )
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
             .collect()
@@ -4947,25 +4895,9 @@ impl World {
 
     // Gets all Player entities at a Box
     pub fn get_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<Player>> {
-        let players_guard = self.players.load();
-        let min_chunk_x = get_section_cord(aabb.min.x.floor() as i32) - 1;
-        let max_chunk_x = get_section_cord(aabb.max.x.floor() as i32) + 1;
-        let min_chunk_z = get_section_cord(aabb.min.z.floor() as i32) - 1;
-        let max_chunk_z = get_section_cord(aabb.max.z.floor() as i32) + 1;
-
-        players_guard
-            .iter()
-            .filter(move |player| {
-                let entity = player.get_entity();
-                let chunk_pos = entity.chunk_pos.load();
-                chunk_pos.x >= min_chunk_x
-                    && chunk_pos.x <= max_chunk_x
-                    && chunk_pos.y >= min_chunk_z
-                    && chunk_pos.y <= max_chunk_z
-                    && entity.bounding_box.load().intersects(aabb)
-            })
+        self.entity_index
+            .query_players(self.players.load_full(), *aabb)
             .inspect(|player| entity_islands::check_reached(player.entity_id()))
-            .cloned()
             .collect()
     }
 
@@ -4982,12 +4914,9 @@ impl World {
     ///
     /// An `Option<Arc<Player>>` containing the player if found, or `None` if not.
     pub fn get_player_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<Player>> {
-        self.players
-            .load()
-            .iter()
-            .find(|p| p.gameprofile.id == id)
+        self.entity_index
+            .player_by_uuid(&self.players.load_full(), id)
             .inspect(|player| entity_islands::check_reached(player.entity_id()))
-            .cloned()
     }
 
     /// Retrieves an entity by their unique UUID.
@@ -5163,12 +5092,13 @@ impl World {
         if list.len() >= max_list_capacity {
             return;
         }
-        for player in self.players.load().iter() {
-            if bounding_box.intersects(&player.get_entity().bounding_box.load())
-                && predicate(player.as_ref())
-            {
+        for player in self
+            .entity_index
+            .query_players(self.players.load_full(), bounding_box)
+        {
+            if predicate(player.as_ref()) {
                 entity_islands::check_reached(player.entity_id());
-                list.push(player.clone());
+                list.push(player);
                 if list.len() > max_list_capacity {
                     return;
                 }
@@ -7673,25 +7603,26 @@ impl World {
 
         let mut hits = Vec::new();
 
-        for entity in self.entities.load().iter() {
+        for entity in self.entity_index.query(self.entities.load_full(), ray_box) {
             let bb = entity.get_entity().bounding_box.load();
-            if bb.intersects(&ray_box)
-                && let Some((t, _, hit_pos)) =
-                    Self::intersects_aabb_with_hit(start, end, bb.min, bb.max)
+            if let Some((t, _, hit_pos)) =
+                Self::intersects_aabb_with_hit(start, end, bb.min, bb.max)
             {
                 let distance = (hit_pos - start).length();
-                hits.push((entity.clone(), hit_pos, distance, t));
+                hits.push((entity, hit_pos, distance, t));
             }
         }
 
-        for player in self.players.load().iter() {
+        for player in self
+            .entity_index
+            .query_players(self.players.load_full(), ray_box)
+        {
             let bb = player.get_entity().bounding_box.load();
-            if bb.intersects(&ray_box)
-                && let Some((t, _, hit_pos)) =
-                    Self::intersects_aabb_with_hit(start, end, bb.min, bb.max)
+            if let Some((t, _, hit_pos)) =
+                Self::intersects_aabb_with_hit(start, end, bb.min, bb.max)
             {
                 let distance = (hit_pos - start).length();
-                hits.push((player.clone() as Arc<dyn EntityBase>, hit_pos, distance, t));
+                hits.push((player as Arc<dyn EntityBase>, hit_pos, distance, t));
             }
         }
 
@@ -7842,8 +7773,7 @@ impl World {
                 .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
-        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
-        Self::broadcast_java_grouped(packet, recipients_by_version);
+        Self::broadcast_java_players(packet, recipients);
     }
 
     pub fn broadcast_to_chunk_bedrock<P: BClientPacket>(
@@ -7884,14 +7814,12 @@ impl World {
 
         for p in recipients {
             match p.client.as_ref() {
-                ClientPlatform::Java(_) => java_recipients.push(p),
+                ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
             }
         }
 
-        let recipients_by_version =
-            Self::collect_java_recipients_by_version(java_recipients.into_iter());
-        Self::broadcast_java_grouped(je_packet, recipients_by_version);
+        Self::broadcast_java_clients(je_packet, java_recipients.into_iter());
         Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 
@@ -7913,8 +7841,7 @@ impl World {
                 .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
-        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
-        Self::broadcast_java_grouped(packet, recipients_by_version);
+        Self::broadcast_java_players(packet, recipients);
     }
 
     pub fn broadcast_to_chunk_except_editioned<J: ClientPacket, B: BClientPacket>(
@@ -7939,14 +7866,12 @@ impl World {
 
         for p in recipients {
             match p.client.as_ref() {
-                ClientPlatform::Java(_) => java_recipients.push(p),
+                ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
             }
         }
 
-        let je_recipients_by_version =
-            Self::collect_java_recipients_by_version(java_recipients.into_iter());
-        Self::broadcast_java_grouped(je_packet, je_recipients_by_version);
+        Self::broadcast_java_clients(je_packet, java_recipients.into_iter());
         Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 
@@ -8358,6 +8283,7 @@ struct NaturalSpawnChunkCache {
 impl NaturalSpawnChunkCache {
     fn count(&mut self, mut player_chunks: Vec<Vector2<i32>>) -> i32 {
         player_chunks.sort_unstable_by_key(|pos| (pos.x, pos.y));
+        player_chunks.dedup();
         if self.player_chunks != player_chunks {
             self.count = natural_spawn_chunk_count(player_chunks.iter().copied());
             self.player_chunks = player_chunks;

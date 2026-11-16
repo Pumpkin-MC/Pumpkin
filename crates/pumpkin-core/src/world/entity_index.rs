@@ -7,9 +7,11 @@ use uuid::Uuid;
 
 use crate::entity::EntityBase;
 use crate::entity::mob::has_game_event_listener;
+use crate::entity::player::Player;
 use crossbeam::atomic::AtomicCell;
 
 type Registry = Vec<Arc<dyn EntityBase>>;
+type PlayerRegistry = Vec<Arc<Player>>;
 type Cell = [i32; 3];
 
 const CELL_SIZE: f64 = 4.0;
@@ -184,10 +186,113 @@ impl Index {
     }
 }
 
+#[derive(Default)]
+struct PlayerIndex {
+    registry: Weak<PlayerRegistry>,
+    slots: FxHashMap<i32, usize>,
+    uuids: FxHashMap<Uuid, usize>,
+    ranges: Vec<Option<CellRange>>,
+    bounds: Vec<AtomicCell<BoundingBox>>,
+    cells: FxHashMap<Cell, Vec<usize>>,
+    oversized: Vec<usize>,
+}
+
+impl PlayerIndex {
+    fn matches(&self, registry: &Arc<PlayerRegistry>) -> bool {
+        self.registry.as_ptr() == Arc::as_ptr(registry)
+    }
+
+    fn rebuild(&mut self, registry: &Arc<PlayerRegistry>) {
+        self.slots.clear();
+        self.uuids.clear();
+        self.ranges.clear();
+        self.cells.clear();
+        self.oversized.clear();
+        self.bounds.clear();
+        for (slot, player) in registry.iter().enumerate() {
+            let entity = player.get_entity();
+            self.slots.insert(entity.entity_id, slot);
+            self.uuids.entry(player.gameprofile.id).or_insert(slot);
+            let bounds = entity.bounding_box.load();
+            self.bounds.push(AtomicCell::new(bounds));
+            let range = Index::entity_range(&bounds);
+            self.ranges.push(range);
+            self.insert(slot, range);
+        }
+        self.registry = Arc::downgrade(registry);
+    }
+
+    fn insert(&mut self, slot: usize, range: Option<CellRange>) {
+        if let Some(range) = range {
+            for cell in range.cells() {
+                self.cells.entry(cell).or_default().push(slot);
+            }
+        } else {
+            self.oversized.push(slot);
+        }
+    }
+
+    fn update(&mut self, entity_id: i32, area: &BoundingBox) {
+        let Some(&slot) = self.slots.get(&entity_id) else {
+            return;
+        };
+        self.bounds[slot].store(*area);
+        let next = Index::entity_range(area);
+        let previous = self.ranges[slot];
+        if previous == next {
+            return;
+        }
+        if let Some(previous) = previous {
+            for cell in previous.cells() {
+                if let std::collections::hash_map::Entry::Occupied(mut entry) =
+                    self.cells.entry(cell)
+                {
+                    entry.get_mut().retain(|member| *member != slot);
+                    if entry.get().is_empty() {
+                        entry.remove();
+                    }
+                }
+            }
+        } else {
+            self.oversized.retain(|member| *member != slot);
+        }
+        self.ranges[slot] = next;
+        self.insert(slot, next);
+    }
+
+    fn intersects(&self, slot: usize, area: &BoundingBox) -> bool {
+        area.intersects(&self.bounds[slot].load())
+    }
+
+    fn candidates(&self, area: &BoundingBox) -> Vec<usize> {
+        let Some(range) = CellRange::of(area) else {
+            return (0..self.bounds.len()).collect();
+        };
+        let mut slots: Vec<usize> = self.oversized.clone();
+        if range.count() <= self.cells.len() as u64 {
+            for cell in range.cells() {
+                if let Some(members) = self.cells.get(&cell) {
+                    slots.extend(members.iter().copied());
+                }
+            }
+        } else {
+            for (&cell, members) in &self.cells {
+                if range.contains(cell) {
+                    slots.extend(members.iter().copied());
+                }
+            }
+        }
+        slots.sort_unstable();
+        slots.dedup();
+        slots
+    }
+}
+
 /// Live broad phase for the world's non-player entity queries.
 #[derive(Default)]
 pub struct EntityIndex {
     inner: RwLock<Index>,
+    players: RwLock<PlayerIndex>,
 }
 
 impl EntityIndex {
@@ -202,6 +307,29 @@ impl EntityIndex {
         drop(index);
         let mut index = self
             .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !index.matches(registry) {
+            index.rebuild(registry);
+        }
+        query(&index)
+    }
+
+    fn with_players<T>(
+        &self,
+        registry: &Arc<PlayerRegistry>,
+        query: impl FnOnce(&PlayerIndex) -> T,
+    ) -> T {
+        let index = self
+            .players
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if index.matches(registry) {
+            return query(&index);
+        }
+        drop(index);
+        let mut index = self
+            .players
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !index.matches(registry) {
@@ -233,6 +361,19 @@ impl EntityIndex {
         slots.into_iter().map(move |slot| registry[slot].clone())
     }
 
+    pub fn query_players(
+        &self,
+        registry: Arc<PlayerRegistry>,
+        area: BoundingBox,
+    ) -> impl Iterator<Item = Arc<Player>> + use<> {
+        let slots = self.with_players(&registry, |index| {
+            let mut slots = index.candidates(&area);
+            slots.retain(|&slot| index.intersects(slot, &area));
+            slots
+        });
+        slots.into_iter().map(move |slot| registry[slot].clone())
+    }
+
     /// Mobs with game event listeners whose body overlaps `area`, in list order.
     pub fn listeners(
         &self,
@@ -250,9 +391,28 @@ impl EntityIndex {
         slots.into_iter().map(move |slot| registry[slot].clone())
     }
 
+    pub fn by_id(&self, registry: &Arc<Registry>, id: i32) -> Option<Arc<dyn EntityBase>> {
+        let slot = self.with_index(registry, |index| index.slots.get(&id).copied())?;
+        Some(registry[slot].clone())
+    }
+
     /// The first entity with `uuid` in registry order, without a scan.
     pub fn by_uuid(&self, registry: &Arc<Registry>, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
         let slot = self.with_index(registry, |index| index.uuids.get(&uuid).copied())?;
+        Some(registry[slot].clone())
+    }
+
+    pub fn player_by_id(&self, registry: &Arc<PlayerRegistry>, id: i32) -> Option<Arc<Player>> {
+        let slot = self.with_players(registry, |index| index.slots.get(&id).copied())?;
+        Some(registry[slot].clone())
+    }
+
+    pub fn player_by_uuid(
+        &self,
+        registry: &Arc<PlayerRegistry>,
+        uuid: Uuid,
+    ) -> Option<Arc<Player>> {
+        let slot = self.with_players(registry, |index| index.uuids.get(&uuid).copied())?;
         Some(registry[slot].clone())
     }
 
@@ -277,6 +437,38 @@ impl EntityIndex {
         drop(index);
         let mut index = self
             .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        index.update(entity_id, &area);
+        bounds.store(area);
+    }
+
+    pub fn set_player_bounds(
+        &self,
+        entity_id: i32,
+        bounds: &AtomicCell<BoundingBox>,
+        area: BoundingBox,
+    ) {
+        let index = self
+            .players
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let next = Index::entity_range(&area);
+        match index.slots.get(&entity_id) {
+            None => {
+                bounds.store(area);
+                return;
+            }
+            Some(&slot) if index.ranges[slot] == next => {
+                index.bounds[slot].store(area);
+                bounds.store(area);
+                return;
+            }
+            Some(_) => {}
+        }
+        drop(index);
+        let mut index = self
+            .players
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         index.update(entity_id, &area);
