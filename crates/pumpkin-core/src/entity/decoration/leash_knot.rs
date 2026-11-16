@@ -85,6 +85,12 @@ impl EntityBase for LeashKnotEntity {
         None
     }
 
+    fn notify_leashee_removed(&self) {
+        if self.entity.leashable_leashed_to().is_empty() {
+            self.entity.remove();
+        }
+    }
+
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         let world = self.entity.world.load();
         let block = world.get_block(&self.entity.block_pos.load());
