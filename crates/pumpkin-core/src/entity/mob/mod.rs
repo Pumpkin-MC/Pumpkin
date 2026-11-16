@@ -1153,7 +1153,7 @@ impl MobEntity {
             let diff = entity.pos.load() - player.get_entity().pos.load();
             if diff.length_squared() <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
                 let new_holder: Arc<dyn EntityBase> = player.clone();
-                if !entity.approve_leash_attachment(new_holder.as_ref()) {
+                if !entity.fire_leash_event(&new_holder) {
                     return Some(false);
                 }
                 if holder.is_some() {

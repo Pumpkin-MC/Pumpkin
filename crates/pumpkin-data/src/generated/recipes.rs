@@ -3,6 +3,59 @@ use crate::item::Item;
 use crate::tag::Taggable;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize)]
+pub enum SpecialCraftingRecipe {
+    Dye {
+        target: RecipeIngredientTypes,
+        dye: RecipeIngredientTypes,
+        result: RecipeResultStruct,
+    },
+    Imbue {
+        source: RecipeIngredientTypes,
+        material: RecipeIngredientTypes,
+        result: RecipeResultStruct,
+    },
+    ShieldDecoration {
+        banner: RecipeIngredientTypes,
+        target: RecipeIngredientTypes,
+        result: RecipeResultStruct,
+    },
+    BannerDuplicate {
+        banner: RecipeIngredientTypes,
+        result: RecipeResultStruct,
+    },
+    BookCloning {
+        source: RecipeIngredientTypes,
+        material: RecipeIngredientTypes,
+        allowed_generations: (i32, i32),
+        result: RecipeResultStruct,
+    },
+    FireworkStar {
+        shapes: &'static [(&'static str, RecipeIngredientTypes)],
+        trail: RecipeIngredientTypes,
+        twinkle: RecipeIngredientTypes,
+        fuel: RecipeIngredientTypes,
+        dye: RecipeIngredientTypes,
+        result: RecipeResultStruct,
+    },
+    FireworkStarFade {
+        target: RecipeIngredientTypes,
+        dye: RecipeIngredientTypes,
+        result: RecipeResultStruct,
+    },
+    FireworkRocket {
+        shell: RecipeIngredientTypes,
+        fuel: RecipeIngredientTypes,
+        star: RecipeIngredientTypes,
+        result: RecipeResultStruct,
+    },
+    MapExtending {
+        map: RecipeIngredientTypes,
+        material: RecipeIngredientTypes,
+        result: RecipeResultStruct,
+    },
+    RepairItem,
+}
+#[derive(Clone, Debug, Serialize)]
 pub enum CraftingRecipeTypes {
     CraftingShaped {
         category: RecipeCategoryTypes,
@@ -23,12 +76,14 @@ pub enum CraftingRecipeTypes {
         group: Option<&'static str>,
         input: RecipeIngredientTypes,
         material: RecipeIngredientTypes,
+        material_count: (u8, u8),
+        add_material_count_to_result: bool,
         result: RecipeResultStruct,
     },
     CraftingDecoratedPot {
         category: RecipeCategoryTypes,
     },
-    CraftingSpecial,
+    CraftingSpecial(SpecialCraftingRecipe),
 }
 #[allow(dead_code)]
 #[derive(Clone, Debug, Serialize)]
@@ -1048,6 +1103,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:black_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:black_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -1068,6 +1131,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:black_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:black_bundle",
             count: 1u8,
@@ -1205,6 +1270,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:black_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:black_shulker_box",
             count: 1u8,
@@ -1372,6 +1439,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:blue_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:blue_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -1392,6 +1467,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:blue_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:blue_bundle",
             count: 1u8,
@@ -1549,6 +1626,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:blue_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:blue_shulker_box",
             count: 1u8,
@@ -1711,6 +1790,16 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BookCloning {
+        source: RecipeIngredientTypes::Simple("minecraft:written_book"),
+        material: RecipeIngredientTypes::Tagged("#minecraft:book_cloning_target"),
+        allowed_generations: (0i32, 1i32),
+        result: RecipeResultStruct {
+            id: "minecraft:written_book",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Building,
         group: None,
@@ -1859,6 +1948,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:brown_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:brown_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -1879,6 +1976,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:brown_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:brown_bundle",
             count: 1u8,
@@ -2006,6 +2105,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:brown_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:brown_shulker_box",
             count: 1u8,
@@ -3777,6 +3878,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:cyan_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:cyan_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -3797,6 +3906,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:cyan_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:cyan_bundle",
             count: 1u8,
@@ -3937,6 +4048,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:cyan_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:cyan_shulker_box",
             count: 1u8,
@@ -8360,6 +8473,16 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::FireworkRocket {
+        shell: RecipeIngredientTypes::Simple("minecraft:paper"),
+        fuel: RecipeIngredientTypes::Simple("minecraft:gunpowder"),
+        star: RecipeIngredientTypes::Simple("minecraft:firework_star"),
+        result: RecipeResultStruct {
+            id: "minecraft:firework_rocket",
+            count: 3u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShapeless {
         category: RecipeCategoryTypes::Misc,
         group: None,
@@ -8373,6 +8496,41 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::FireworkStar {
+        shapes: &[
+            ("burst", RecipeIngredientTypes::Simple("minecraft:feather")),
+            (
+                "creeper",
+                RecipeIngredientTypes::Tagged("#minecraft:skulls"),
+            ),
+            (
+                "large_ball",
+                RecipeIngredientTypes::Simple("minecraft:fire_charge"),
+            ),
+            (
+                "star",
+                RecipeIngredientTypes::Simple("minecraft:gold_nugget"),
+            ),
+        ],
+        trail: RecipeIngredientTypes::Simple("minecraft:diamond"),
+        twinkle: RecipeIngredientTypes::Simple("minecraft:glowstone_dust"),
+        fuel: RecipeIngredientTypes::Simple("minecraft:gunpowder"),
+        dye: RecipeIngredientTypes::Tagged("#minecraft:dyes"),
+        result: RecipeResultStruct {
+            id: "minecraft:firework_star",
+            count: 1u8,
+            components: &[],
+        },
+    }),
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::FireworkStarFade {
+        target: RecipeIngredientTypes::Simple("minecraft:firework_star"),
+        dye: RecipeIngredientTypes::Tagged("#minecraft:dyes"),
+        result: RecipeResultStruct {
+            id: "minecraft:firework_star",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Equipment,
         group: None,
@@ -8864,6 +9022,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:gray_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:gray_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -8884,6 +9050,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:gray_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:gray_bundle",
             count: 1u8,
@@ -9024,6 +9192,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:gray_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:gray_shulker_box",
             count: 1u8,
@@ -9129,6 +9299,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:green_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:green_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -9149,6 +9327,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:green_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:green_bundle",
             count: 1u8,
@@ -9266,6 +9446,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:green_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:green_shulker_box",
             count: 1u8,
@@ -10097,6 +10279,15 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::Dye {
+        target: RecipeIngredientTypes::Simple("minecraft:leather_boots"),
+        dye: RecipeIngredientTypes::Tagged("#minecraft:dyes"),
+        result: RecipeResultStruct {
+            id: "minecraft:leather_boots",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Equipment,
         group: None,
@@ -10109,6 +10300,15 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::Dye {
+        target: RecipeIngredientTypes::Simple("minecraft:leather_chestplate"),
+        dye: RecipeIngredientTypes::Tagged("#minecraft:dyes"),
+        result: RecipeResultStruct {
+            id: "minecraft:leather_chestplate",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Equipment,
         group: None,
@@ -10121,6 +10321,15 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::Dye {
+        target: RecipeIngredientTypes::Simple("minecraft:leather_helmet"),
+        dye: RecipeIngredientTypes::Tagged("#minecraft:dyes"),
+        result: RecipeResultStruct {
+            id: "minecraft:leather_helmet",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: None,
@@ -10133,6 +10342,15 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::Dye {
+        target: RecipeIngredientTypes::Simple("minecraft:leather_horse_armor"),
+        dye: RecipeIngredientTypes::Tagged("#minecraft:dyes"),
+        result: RecipeResultStruct {
+            id: "minecraft:leather_horse_armor",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Equipment,
         group: None,
@@ -10145,6 +10363,15 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::Dye {
+        target: RecipeIngredientTypes::Simple("minecraft:leather_leggings"),
+        dye: RecipeIngredientTypes::Tagged("#minecraft:dyes"),
+        result: RecipeResultStruct {
+            id: "minecraft:leather_leggings",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Restone,
         group: None,
@@ -10196,6 +10423,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:light_blue_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:light_blue_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -10219,6 +10454,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:light_blue_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:light_blue_bundle",
             count: 1u8,
@@ -10365,6 +10602,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:light_blue_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:light_blue_shulker_box",
             count: 1u8,
@@ -10488,6 +10727,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:light_gray_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:light_gray_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -10511,6 +10758,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:light_gray_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:light_gray_bundle",
             count: 1u8,
@@ -10691,6 +10940,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:light_gray_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:light_gray_shulker_box",
             count: 1u8,
@@ -10835,6 +11086,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:lime_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:lime_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -10855,6 +11114,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:lime_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:lime_bundle",
             count: 1u8,
@@ -10985,6 +11246,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:lime_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:lime_shulker_box",
             count: 1u8,
@@ -11138,6 +11401,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:magenta_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:magenta_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -11158,6 +11429,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:magenta_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:magenta_bundle",
             count: 1u8,
@@ -11337,6 +11610,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:magenta_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:magenta_shulker_box",
             count: 1u8,
@@ -11694,12 +11969,23 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("map_cloning"),
         input: RecipeIngredientTypes::Tagged("#minecraft:clonable_maps"),
         material: RecipeIngredientTypes::Simple("minecraft:map"),
+        material_count: (1u8, 8u8),
+        add_material_count_to_result: true,
         result: RecipeResultStruct {
             id: "minecraft:air",
             count: 1u8,
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::MapExtending {
+        map: RecipeIngredientTypes::Tagged("#minecraft:extendable_maps"),
+        material: RecipeIngredientTypes::Simple("minecraft:paper"),
+        result: RecipeResultStruct {
+            id: "minecraft:air",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShapeless {
         category: RecipeCategoryTypes::Building,
         group: None,
@@ -12421,6 +12707,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:orange_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:orange_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -12441,6 +12735,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:orange_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:orange_bundle",
             count: 1u8,
@@ -12601,6 +12897,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:orange_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:orange_shulker_box",
             count: 1u8,
@@ -13097,6 +13395,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:pink_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:pink_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -13117,6 +13423,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:pink_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:pink_bundle",
             count: 1u8,
@@ -13287,6 +13595,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:pink_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:pink_shulker_box",
             count: 1u8,
@@ -14305,6 +14615,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:purple_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:purple_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -14325,6 +14643,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:purple_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:purple_bundle",
             count: 1u8,
@@ -14455,6 +14775,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:purple_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:purple_shulker_box",
             count: 1u8,
@@ -14854,6 +15176,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:red_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:red_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -14874,6 +15204,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:red_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:red_bundle",
             count: 1u8,
@@ -15149,6 +15481,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:red_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:red_shulker_box",
             count: 1u8,
@@ -15291,6 +15625,7 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::RepairItem),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Restone,
         group: None,
@@ -15594,6 +15929,15 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::ShieldDecoration {
+        banner: RecipeIngredientTypes::Tagged("#minecraft:banners"),
+        target: RecipeIngredientTypes::Simple("minecraft:shield"),
+        result: RecipeResultStruct {
+            id: "minecraft:shield",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: None,
@@ -17230,6 +17574,15 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::Imbue {
+        source: RecipeIngredientTypes::Simple("minecraft:lingering_potion"),
+        material: RecipeIngredientTypes::Simple("minecraft:arrow"),
+        result: RecipeResultStruct {
+            id: "minecraft:tipped_arrow",
+            count: 8u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Restone,
         group: None,
@@ -18954,6 +19307,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:white_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:white_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -18974,6 +19335,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:white_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:white_bundle",
             count: 1u8,
@@ -19113,6 +19476,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:white_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:white_shulker_box",
             count: 1u8,
@@ -19262,6 +19627,15 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::Dye {
+        target: RecipeIngredientTypes::Simple("minecraft:wolf_armor"),
+        dye: RecipeIngredientTypes::Tagged("#minecraft:dyes"),
+        result: RecipeResultStruct {
+            id: "minecraft:wolf_armor",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Equipment,
         group: None,
@@ -19399,6 +19773,14 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
             components: &[],
         },
     },
+    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+        banner: RecipeIngredientTypes::Simple("minecraft:yellow_banner"),
+        result: RecipeResultStruct {
+            id: "minecraft:yellow_banner",
+            count: 1u8,
+            components: &[],
+        },
+    }),
     CraftingRecipeTypes::CraftingShaped {
         category: RecipeCategoryTypes::Misc,
         group: Some("bed"),
@@ -19419,6 +19801,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("bundle_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:bundles"),
         material: RecipeIngredientTypes::Simple("minecraft:yellow_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:yellow_bundle",
             count: 1u8,
@@ -19576,6 +19960,8 @@ pub static RECIPES_CRAFTING: &[CraftingRecipeTypes] = &[
         group: Some("shulker_box_dye"),
         input: RecipeIngredientTypes::Tagged("#minecraft:shulker_boxes"),
         material: RecipeIngredientTypes::Simple("minecraft:yellow_dye"),
+        material_count: (1u8, 1u8),
+        add_material_count_to_result: false,
         result: RecipeResultStruct {
             id: "minecraft:yellow_shulker_box",
             count: 1u8,

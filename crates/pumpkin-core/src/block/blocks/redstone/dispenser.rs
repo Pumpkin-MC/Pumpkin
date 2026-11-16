@@ -59,9 +59,7 @@ use pumpkin_data::block_properties::{
     SkeletonSkullLikeProperties,
 };
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::{
-    CustomNameImpl, EquippableImpl, IDSet, PotionContentsImpl,
-};
+use pumpkin_data::data_component_impl::{EquippableImpl, IDSet, PotionContentsImpl};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::game_event::GameEvent;
@@ -362,7 +360,9 @@ impl DispenserBlock {
         } else if item.item.id == Item::HONEYCOMB.id {
             // Honeycombs wax copper blocks or drop when facing non-waxable blocks
             Self::dispense_honeycomb(ctx, item);
-        } else if entity_from_egg(item.item.id).is_some() {
+        } else if crate::item::items::spawn_egg::entity_type_from_spawn_egg_stack(item).is_some()
+            && entity_from_egg(item.item.id).is_some()
+        {
             // Spawn eggs
             Self::dispense_spawn_egg(ctx, item);
         } else if item.item.id == Item::SHEARS.id {
@@ -553,11 +553,10 @@ impl DispenserBlock {
         let dispensed = item.split(1);
         let facing = to_normal(ctx.facing);
         let entity = Entity::new(ctx.world.clone(), spawn_pos, entity_type);
-        if let Some(custom_name) = dispensed.get_data_component::<CustomNameImpl>() {
-            entity.set_custom_name(custom_name.name.clone());
-        }
         entity.set_rotation(facing.x.atan2(facing.z) as f32 * 57.295_776, 0.0);
-        ctx.world.spawn_entity(Arc::new(BoatEntity::new(entity)));
+        let boat = Arc::new(BoatEntity::new(entity));
+        crate::item::items::spawn_egg::apply_entity_variant(&dispensed, boat.as_ref(), None);
+        ctx.world.spawn_entity(boat);
 
         ctx.world
             .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
@@ -579,9 +578,6 @@ impl DispenserBlock {
         let dispensed = item.split(1);
         let facing = to_normal(ctx.facing);
         let entity = Entity::new(ctx.world.clone(), spawn_pos, &EntityType::ARMOR_STAND);
-        if let Some(custom_name) = dispensed.get_data_component::<CustomNameImpl>() {
-            entity.set_custom_name(custom_name.name.clone());
-        }
         entity.set_rotation(facing.x.atan2(facing.z) as f32 * 57.295_776, 0.0);
 
         ctx.world.play_sound(
@@ -589,8 +585,9 @@ impl DispenserBlock {
             SoundCategory::Blocks,
             &spawn_pos,
         );
-        ctx.world
-            .spawn_entity(Arc::new(ArmorStandEntity::new(entity)));
+        let armor_stand = Arc::new(ArmorStandEntity::new(entity));
+        crate::item::items::spawn_egg::apply_entity_variant(&dispensed, armor_stand.as_ref(), None);
+        ctx.world.spawn_entity(armor_stand);
 
         ctx.world
             .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
@@ -638,7 +635,9 @@ impl DispenserBlock {
     }
 
     fn dispense_spawn_egg(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        let Some(entity_type) = entity_from_egg(item.item.id) else {
+        let Some(entity_type) =
+            crate::item::items::spawn_egg::entity_type_from_spawn_egg_stack(item)
+        else {
             return;
         };
 
@@ -1034,11 +1033,9 @@ impl DispenserBlock {
         );
 
         let entity = Entity::new(ctx.world.clone(), spawn_pos, entity_type);
-        if let Some(custom_name) = dispensed.get_data_component::<CustomNameImpl>() {
-            entity.set_custom_name(custom_name.name.clone());
-        }
-        ctx.world
-            .spawn_entity(Arc::new(MinecartEntity::new(entity)));
+        let minecart = Arc::new(MinecartEntity::new(entity));
+        crate::item::items::spawn_egg::apply_entity_variant(&dispensed, minecart.as_ref(), None);
+        ctx.world.spawn_entity(minecart);
 
         ctx.world
             .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);

@@ -12,12 +12,11 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::{GetStateForNeighborUpdateArgs, can_support_center};
 use crate::{
     block::{
-        BlockIsReplacing,
-        registry::BlockActionResult,
-        {BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, NormalUseArgs, OnPlaceArgs},
+        BlockBehaviour, BlockIsReplacing, CanPlaceAtArgs, CanUpdateAtArgs, ExplodeArgs,
+        GetStateForNeighborUpdateArgs, OnPlaceArgs, OnProjectileHitArgs, UseWithItemArgs,
+        can_support_center, registry::BlockActionResult,
     },
     entity::EntityBase,
 };
@@ -40,11 +39,11 @@ impl BlockBehaviour for CandleBlock {
         properties.to_state_id(args.block)
     }
 
-    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
         let mut properties = CandleLikeProperties::from_state_id(state_id);
 
-        if args.player.may_build() && properties.lit {
+        if args.item_stack.is_empty() && args.player.may_build() && properties.lit {
             properties.lit = false;
             args.world.set_block_state(
                 args.position,
@@ -63,7 +62,44 @@ impl BlockBehaviour for CandleBlock {
             return BlockActionResult::Success;
         }
 
-        BlockActionResult::Pass
+        BlockActionResult::PassToDefaultBlockAction
+    }
+
+    fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
+        let mut properties = CandleLikeProperties::from_state_id(args.state.id);
+        if args.projectile.get_entity().is_on_fire() && !properties.waterlogged && !properties.lit {
+            properties.lit = true;
+            args.world.set_block_state(
+                args.position,
+                properties.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
+    }
+
+    fn explode(&self, args: ExplodeArgs<'_>) {
+        let (current_block, current_state) = args.world.get_block_and_state(args.position);
+        if current_block != args.block {
+            return;
+        }
+        let mut properties = CandleLikeProperties::from_state_id(current_state.id);
+        if properties.lit {
+            properties.lit = false;
+            args.world.set_block_state(
+                args.position,
+                properties.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+            args.world.play_sound(
+                Sound::BlockCandleExtinguish,
+                SoundCategory::Blocks,
+                &args.position.to_centered_f64(),
+            );
+            args.world.emit_game_event(
+                GameEvent::BlockChange.name(),
+                args.position.to_centered_f64(),
+            );
+        }
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {

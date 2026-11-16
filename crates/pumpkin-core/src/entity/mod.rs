@@ -1713,21 +1713,16 @@ pub struct Entity {
 pub struct EntityBoundingBox {
     value: AtomicCell<BoundingBox>,
     index: std::sync::RwLock<std::sync::Weak<crate::world::EntityIndex>>,
-    indexed: bool,
+    is_player: bool,
     entity_id: i32,
 }
 
 impl EntityBoundingBox {
     fn new(world: &World, entity_id: i32, entity_type: &EntityType, bounds: BoundingBox) -> Self {
-        let index = if entity_type == &EntityType::PLAYER {
-            std::sync::Weak::new()
-        } else {
-            Arc::downgrade(&world.entity_index)
-        };
         Self {
             value: AtomicCell::new(bounds),
-            index: std::sync::RwLock::new(index),
-            indexed: entity_type != &EntityType::PLAYER,
+            index: std::sync::RwLock::new(Arc::downgrade(&world.entity_index)),
+            is_player: entity_type == &EntityType::PLAYER,
             entity_id,
         }
     }
@@ -1740,16 +1735,16 @@ impl EntityBoundingBox {
 
     /// Publishes bounds and their spatial index membership together.
     pub fn store(&self, bounds: BoundingBox) {
-        if !self.indexed {
-            self.value.store(bounds);
-            return;
-        }
         let index = self
             .index
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(index) = index.upgrade() {
-            index.set_bounds(self.entity_id, &self.value, bounds);
+            if self.is_player {
+                index.set_player_bounds(self.entity_id, &self.value, bounds);
+            } else {
+                index.set_bounds(self.entity_id, &self.value, bounds);
+            }
         } else {
             self.value.store(bounds);
         }
@@ -1761,7 +1756,11 @@ impl EntityBoundingBox {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *owner = Arc::downgrade(index);
-        index.set_bounds(self.entity_id, &self.value, self.value.load());
+        if self.is_player {
+            index.set_player_bounds(self.entity_id, &self.value, self.value.load());
+        } else {
+            index.set_bounds(self.entity_id, &self.value, self.value.load());
+        }
     }
 }
 
@@ -1989,9 +1988,7 @@ impl Entity {
         let biome = world.level.get_rough_biome(&block_pos);
         self.current_biome.store(Arc::new(biome));
         self.last_biome_update_pos.store(block_pos);
-        if self.entity_type != &EntityType::PLAYER {
-            self.bounding_box.set_index(&world.entity_index);
-        }
+        self.bounding_box.set_index(&world.entity_index);
         self.world.store(world);
     }
 
@@ -4355,33 +4352,51 @@ impl Entity {
 
     pub fn send_bedrock_actor_data(&self, bedrock_meta: &SyncedActorDataList) {
         let world = self.world.load();
-        let players = world.players.load();
-        let mut bedrock_recipients = Vec::new();
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
-            if !tracked.has_bedrock_watchers() && self.entity_type != &EntityType::PLAYER {
+            let self_bedrock = tracked
+                .entity
+                .get_player()
+                .and_then(|p| match p.client.as_ref() {
+                    ClientPlatform::Bedrock(client) => Some(client),
+                    ClientPlatform::Java(_) => None,
+                });
+            if !tracked.has_bedrock_watchers() && self_bedrock.is_none() {
                 return;
             }
-            for player in players.iter() {
-                if (tracked.is_seen_by(&player.gameprofile.id)
-                    || player.entity_id() == self.entity_id)
-                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
-                {
-                    bedrock_recipients.push(client);
-                }
+            let packet = CSetActorData {
+                target_runtime_id: VarULong(self.entity_id as u64),
+                actor_data: SyncedActorDataList(bedrock_meta.0.clone()),
+                synced_properties: PropertySyncData {
+                    int_entries_list: std::collections::HashMap::new(),
+                    float_entries_list: std::collections::HashMap::new(),
+                },
+                tick: VarULong(0),
+            };
+            tracked.send_to_tracking_players_bedrock(&packet, &world);
+            if let Some(client) = self_bedrock
+                && let Ok(packet_data) = client.serialize_packet(&packet)
+            {
+                client.try_enqueue_packet(packet_data);
             }
-        } else {
-            let chunk_pos = self.chunk_pos.load();
-            for player in players.iter() {
-                if player
-                    .watched_section
-                    .load()
-                    .is_within_distance(chunk_pos.x, chunk_pos.y)
-                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
-                {
-                    bedrock_recipients.push(client);
-                }
+            return;
+        }
+
+        let players = world.players.load();
+        let chunk_pos = self.chunk_pos.load();
+        let mut bedrock_recipients = Vec::new();
+        for player in players.iter() {
+            if player
+                .watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
+                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+            {
+                bedrock_recipients.push(client);
             }
+        }
+        if bedrock_recipients.is_empty() {
+            return;
         }
 
         let packet = CSetActorData {
@@ -4400,44 +4415,30 @@ impl Entity {
         }
     }
 
-    /// The Java players that should receive entity data for this entity: everyone
-    /// tracking it, plus the entity itself when it is a player. Until the entity is
-    /// tracked, every player watching its chunk stands in for the tracker.
-    fn java_metadata_recipients<'a>(
-        &self,
-        world: &World,
-        players: &'a [Arc<Player>],
-    ) -> Vec<&'a Arc<Player>> {
-        let mut java_recipients = Vec::new();
-
+    fn send_java_metadata_packet(&self, world: &World, packet: &CSetEntityMetadata) {
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
-            for player in players {
-                if (tracked.is_seen_by(&player.gameprofile.id)
-                    || player.entity_id() == self.entity_id)
-                    && let ClientPlatform::Java(_) = player.client.as_ref()
-                {
-                    java_recipients.push(player);
-                }
+            tracked.send_to_tracking_players(packet, world);
+            if let Some(player) = tracked.entity.get_player() {
+                player.try_send_client_packet(packet);
+            } else if self.entity_type == &EntityType::PLAYER
+                && let Some(player) = world.get_player_by_id(self.entity_id)
+            {
+                player.try_send_client_packet(packet);
             }
         } else {
+            let players = world.players.load();
             let chunk_pos = self.chunk_pos.load();
-            for player in players {
-                // A player that just changed world is in the new world's player list but
-                // not in its tracker yet, and its watched section still points at the
-                // world it left, so it has to be matched on its entity id instead.
-                if (player.entity_id() == self.entity_id
-                    || player
-                        .watched_section
-                        .load()
-                        .is_within_distance(chunk_pos.x, chunk_pos.y))
-                    && let ClientPlatform::Java(_) = player.client.as_ref()
-                {
-                    java_recipients.push(player);
-                }
-            }
+            World::broadcast_java_players(
+                packet,
+                players.iter().filter(|player| {
+                    player.entity_id() == self.entity_id
+                        || player
+                            .watched_section
+                            .load()
+                            .is_within_distance(chunk_pos.x, chunk_pos.y)
+                }),
+            );
         }
-
-        java_recipients
     }
 
     /// Sends the given metadata entries to this entity's viewers, and the matching
@@ -4448,28 +4449,15 @@ impl Entity {
         bedrock_meta: Option<&SyncedActorDataList>,
     ) {
         let world = self.world.load();
-        let players = world.players.load();
-
-        let java_recipients = self.java_metadata_recipients(&world, &players);
-
-        let recipients_by_version =
-            World::collect_java_recipients_by_version(java_recipients.into_iter());
-
-        for (version, recipients) in recipients_by_version {
-            let mut buf = Vec::new();
-            for m in meta {
-                let _ = m.write(&mut buf, &version);
-            }
-            if buf.is_empty() {
-                continue;
-            }
+        let version = CURRENT_MC_VERSION;
+        let mut buf = Vec::new();
+        for m in meta {
+            let _ = m.write(&mut buf, &version);
+        }
+        if !buf.is_empty() {
             buf.put_u8(255);
             let packet = CSetEntityMetadata::new(self.entity_id.into(), buf.into());
-            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
-                for recipient in recipients {
-                    recipient.try_enqueue_packet(packet_data.clone());
-                }
-            }
+            self.send_java_metadata_packet(&world, &packet);
         }
 
         if let Some(bedrock_meta) = bedrock_meta {
@@ -4485,7 +4473,6 @@ impl Entity {
         }
 
         let world = self.world.load();
-        let players = world.players.load();
 
         // Unwatched, skip the player scan.
         if self.entity_type != &EntityType::PLAYER
@@ -4498,27 +4485,10 @@ impl Entity {
             return;
         }
 
-        let java_recipients = self.java_metadata_recipients(&world, &players);
-
-        if java_recipients.is_empty() {
-            // Vanilla `packDirty` clears even without recipients.
-            self.synched_data.clear_dirty();
-            return;
-        }
-
-        let recipients_by_version =
-            World::collect_java_recipients_by_version(java_recipients.into_iter());
-
-        for (version, recipients) in recipients_by_version {
-            if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
-                let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
-                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
-                {
-                    for recipient in recipients {
-                        recipient.try_enqueue_packet(packet_data.clone());
-                    }
-                }
-            }
+        let version = CURRENT_MC_VERSION;
+        if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
+            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
+            self.send_java_metadata_packet(&world, &packet);
         }
         self.synched_data.clear_dirty();
     }
@@ -4532,30 +4502,13 @@ impl Entity {
     /// again even though nothing became dirty on our side.
     pub fn refresh_synced_data(&self) {
         let world = self.world.load();
-        let players = world.players.load();
-
-        let java_recipients = self.java_metadata_recipients(&world, &players);
-
-        if java_recipients.is_empty() {
-            return;
-        }
-
-        let recipients_by_version =
-            World::collect_java_recipients_by_version(java_recipients.into_iter());
-
-        for (version, recipients) in recipients_by_version {
-            if let Some(buf) = self
-                .synched_data
-                .get_non_default_values_for_version(&version)
-            {
-                let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
-                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
-                {
-                    for recipient in recipients {
-                        recipient.try_enqueue_packet(packet_data.clone());
-                    }
-                }
-            }
+        let version = CURRENT_MC_VERSION;
+        if let Some(buf) = self
+            .synched_data
+            .get_non_default_values_for_version(&version)
+        {
+            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
+            self.send_java_metadata_packet(&world, &packet);
         }
         self.synched_data.clear_dirty();
     }
@@ -4918,14 +4871,56 @@ impl Entity {
         clippy::needless_pass_by_value,
         reason = "callers pass owned or cast Arc<dyn EntityBase>"
     )]
-    pub fn leash_to(&self, holder: Arc<dyn EntityBase>) {
-        if self.approve_leash_attachment(holder.as_ref()) {
+    /// Returns false if a plugin cancelled the leash event.
+    pub fn leash_to(&self, holder: Arc<dyn EntityBase>) -> bool {
+        let allowed = self.fire_leash_event(&holder);
+        if allowed {
             self.attach_leash(&holder);
         }
+        allowed
     }
 
-    pub(crate) fn approve_leash_attachment(&self, holder: &dyn EntityBase) -> bool {
-        let holder_entity_id = holder.get_entity().entity_id;
+    /// Moves the leash to `holder` only while `expected_holder_id` still holds it. The check and
+    /// the swap happen under one lock, so concurrent transfers (players' packets are handled in
+    /// parallel) cannot both win. Returns whether the leash moved.
+    pub fn leash_to_if_held_by(
+        &self,
+        expected_holder_id: i32,
+        holder: &Arc<dyn EntityBase>,
+    ) -> bool {
+        let held_by = |leashed_to: &Option<Weak<dyn EntityBase>>| {
+            leashed_to
+                .as_ref()
+                .and_then(Weak::upgrade)
+                .is_some_and(|current| current.get_entity().entity_id == expected_holder_id)
+        };
+        // Cheap check first so the plugin event only fires for entities that will move. Each lock
+        // is released before the next call: the event and `attach_leash` may lock it again.
+        let held = held_by(
+            &self
+                .leashed_to
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        if !held || !self.fire_leash_event(holder) {
+            return false;
+        }
+        let mut leashed_to = self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !held_by(&leashed_to) {
+            return false;
+        }
+        *leashed_to = Some(Arc::downgrade(holder));
+        drop(leashed_to);
+        self.send_leash_attached(holder);
+        true
+    }
+
+    /// Fires `PlayerLeashEntityEvent` when a player becomes the holder. Returns false if a plugin
+    /// cancelled it.
+    pub(crate) fn fire_leash_event(&self, holder: &Arc<dyn EntityBase>) -> bool {
         let world = self.world.load();
         if let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
@@ -4935,28 +4930,32 @@ impl Entity {
                 crate::plugin::api::events::player::player_leash_entity::PlayerLeashEntityEvent {
                     player: player_arc,
                     entity_id: self.entity_id,
-                    holder_id: holder_entity_id,
+                    holder_id: holder.get_entity().entity_id,
                     cancelled: false,
                 };
             server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return false;
-            }
+            return !event.cancelled;
         }
         true
     }
 
     pub fn attach_leash(&self, holder: &Arc<dyn EntityBase>) {
+        *self
+            .leashed_to
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(holder));
+        self.send_leash_attached(holder);
+    }
+
+    /// Resets the leash motion and tells clients about the new holder. Call it without holding
+    /// `leashed_to`: sending the packet runs plugin handlers that may lock it again.
+    fn send_leash_attached(&self, holder: &Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
         self.leash_angular_momentum.store(0.0);
         *self
             .delayed_leash
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-        *self
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(holder));
 
         let je_packet = pumpkin_protocol::java::client::play::CSetEntityLink::new(
             self.entity_id,

@@ -618,6 +618,7 @@ macro_rules! impl_block_entity_for_cooking {
                     lit_total_time,
                     lit_time_remaining,
                     recipes_used: std::sync::Mutex::new(recipes_used_map),
+                    metadata: $crate::block::entities::ContainerMetadata::from_nbt(nbt),
                 };
                 pumpkin_inventory::sync_read_items_from_nbt(nbt, furnace.items.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner));
 
@@ -652,6 +653,37 @@ macro_rules! impl_block_entity_for_cooking {
                 }
 
                 self.write_inventory_nbt(nbt, true);
+                self.metadata.write_nbt(nbt);
+            }
+
+            fn apply_item_components(&self, stack: &ItemStack) {
+                self.metadata.apply_item_components(stack);
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::apply_container_items_to_slice(stack, &mut *items);
+            }
+
+            fn collect_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_name_only(stack);
+            }
+
+            fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_item_components(stack);
+                let items = self
+                    .items
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::collect_container_items_from_slice(&*items, stack);
+            }
+
+            fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+                self.metadata.get_lock()
+            }
+
+            fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+                self.metadata.get_custom_name()
             }
 
             fn get_inventory(

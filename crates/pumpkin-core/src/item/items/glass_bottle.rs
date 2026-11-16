@@ -3,9 +3,9 @@ use std::any::Any;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::item::items::bucket::create_filled_result;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
-use pumpkin_data::block_properties::WaterCauldronLikeProperties;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::PotionContentsImpl;
 use pumpkin_data::game_event::GameEvent;
@@ -13,11 +13,10 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Potion;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
+use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::{Block, BlockDirection, BlockId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::world::BlockFlags;
 
 /// A potion holding water; the contents component is what names it and makes it
 /// brewable.
@@ -187,27 +186,8 @@ impl ItemBehaviour for GlassBottleItem {
         let world = player.world();
         let state_id = world.get_block_state_id(&location);
 
-        if !matches!(block.id, BlockId::WATER | BlockId::WATER_CAULDRON)
-            && !block.is_waterlogged(state_id)
-        {
+        if block.id != BlockId::WATER && !block.is_waterlogged(state_id) {
             return BlockActionResult::Pass;
-        }
-
-        if block.id == BlockId::WATER_CAULDRON {
-            let mut props = WaterCauldronLikeProperties::from_state_id(state_id);
-            let new_cauldron = if props.level > 1 {
-                props.level -= 1;
-                props.to_state_id(block)
-            } else {
-                Block::CAULDRON.default_state.id
-            };
-            world.set_block_state(&location, new_cauldron, BlockFlags::NOTIFY_ALL);
-            world.emit_game_event(GameEvent::BlockChange.name(), location.to_f64());
-            player.increment_stat(
-                StatisticCategory::Custom,
-                CustomStatistic::UseCauldron as i32,
-                1,
-            );
         }
 
         world.play_sound(
@@ -217,17 +197,7 @@ impl ItemBehaviour for GlassBottleItem {
         );
         world.emit_game_event(GameEvent::FluidPickup.name(), location.to_f64());
         player.increment_stat(StatisticCategory::Used, i32::from(Item::GLASS_BOTTLE.id), 1);
-
-        let mut water_bottle = water_bottle();
-        if item.item_count == 1 && player.gamemode.load() != pumpkin_util::GameMode::Creative {
-            *item = water_bottle;
-        } else {
-            item.decrement_unless_creative(player.gamemode.load(), 1);
-            let was_added = player.inventory().insert_stack_anywhere(&mut water_bottle);
-            if !was_added && !water_bottle.is_empty() {
-                world.drop_stack(&player.position().to_block_pos(), water_bottle);
-            }
-        }
+        create_filled_result(item, player, water_bottle(), true);
         BlockActionResult::Success
     }
 
