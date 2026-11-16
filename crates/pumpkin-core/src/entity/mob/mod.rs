@@ -1143,8 +1143,9 @@ impl MobEntity {
             let diff = entity.pos.load() - player.get_entity().pos.load();
             let dist_sq = diff.length_squared();
             if dist_sq <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
-                entity.leash_to(player.clone() as Arc<dyn EntityBase>);
-                if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                if entity.leash_to(player.clone() as Arc<dyn EntityBase>)
+                    && player.gamemode.load() != pumpkin_util::GameMode::Creative
+                {
                     item_stack.decrement(1);
                 }
                 return true;
