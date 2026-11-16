@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[toml(ignore_unknown_fields, recoverable)]
 pub struct AdvancementConfig {
     /// Whether advancements can be earned and shown to players.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Whether saving advancements is enabled.
     #[toml(default = Self::default().save_advancements)]
