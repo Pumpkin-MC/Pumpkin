@@ -5232,12 +5232,8 @@ impl Entity {
             self.world
                 .load()
                 .play_sound(Sound::ItemLeadBreak, SoundCategory::Neutral, &holder_pos);
-            self.unleash();
-            let lead_item =
-                pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-            self.world
-                .load()
-                .drop_stack(&self.block_pos.load(), lead_item);
+            // Vanilla `leashTooFarBehaviour`
+            self.drop_leash();
             return LeashTick::Snapped;
         }
         let elastic_threshold = Self::LEASH_ELASTIC_DISTANCE
