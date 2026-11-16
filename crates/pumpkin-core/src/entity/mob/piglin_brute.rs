@@ -4,12 +4,14 @@ use std::sync::{
 };
 
 use pumpkin_data::Block;
+use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -65,15 +67,7 @@ impl PiglinBruteEntity {
             );
             target_selector.add_goal(
                 3,
-                ActiveTargetGoal::with_default(
-                    &mob_arc.mob_entity,
-                    &EntityType::WITHER_SKELETON,
-                    true,
-                ),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WITHER, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, TargetMatch::WITHER_LIKE, true),
             );
         };
 
@@ -165,6 +159,14 @@ impl PiglinBruteEntity {
 }
 
 impl Mob for PiglinBruteEntity {
+    fn wants_to_pick_up(&self, stack: &pumpkin_data::item_stack::ItemStack) -> bool {
+        stack.item.id == pumpkin_data::item::Item::GOLDEN_AXE.id && self.can_hold_item(stack)
+    }
+
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(Sound::EntityPiglinBruteStep, 0.15, 1.0);
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -216,7 +218,7 @@ impl Mob for PiglinBruteEntity {
         }
     }
 
-    fn get_base_experience_reward(&self) -> u32 {
+    fn xp_reward(&self) -> u32 {
         Self::XP_REWARD
     }
 }

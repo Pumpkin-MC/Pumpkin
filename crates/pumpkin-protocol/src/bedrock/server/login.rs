@@ -76,7 +76,7 @@ mod tests {
         let connection_request_len = 4 + jwt.len() + 4 + client_token.len();
         let mut input = Vec::new();
 
-        2193i32
+        2225i32
             .write_be(&mut input)
             .expect("write protocol version");
         VarUInt(connection_request_len as u32)
@@ -93,7 +93,7 @@ mod tests {
 
         let packet = SLogin::read(&mut Cursor::new(input)).expect("read login packet");
 
-        assert_eq!(packet.protocol_version, 2193);
+        assert_eq!(packet.protocol_version, 2225);
         assert_eq!(packet.jwt, jwt);
         assert_eq!(packet.raw_token.len(), RAW_TOKEN_LEN);
         assert_eq!(packet.raw_token, client_token);

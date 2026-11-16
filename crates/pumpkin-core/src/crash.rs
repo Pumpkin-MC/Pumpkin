@@ -203,24 +203,21 @@ impl CrashReport {
         writeln_output!(
             &mut output,
             "Server compiled with Rust {}",
-            rustc_version_runtime::version()
+            env!("RUSTC_VERSION")
         );
 
-        if sysinfo::IS_SUPPORTED_SYSTEM {
+        if let Ok(sys) = System::new_all() {
             writeln_output!(&mut output, "\n--- System Details ---");
-
-            let mut sys = System::new_all();
-            sys.refresh_all();
 
             writeln_output!(
                 &mut output,
                 "Operating System: {}",
-                System::long_os_version().unwrap_or("Unknown".to_string())
+                System::long_os_version().unwrap_or_else(|_| "Unknown".to_string())
             );
             writeln_output!(
                 &mut output,
                 "Kernel: {}",
-                System::kernel_version().unwrap_or_else(|| "Unknown".to_string())
+                System::kernel_version().unwrap_or_else(|_| "Unknown".to_string())
             );
             writeln_output!(
                 &mut output,

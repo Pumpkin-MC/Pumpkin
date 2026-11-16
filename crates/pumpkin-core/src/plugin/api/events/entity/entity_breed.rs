@@ -10,17 +10,21 @@ pub struct EntityBreedEvent {
     /// The ID of the parent 2 entity.
     pub mother_id: i32,
 
-    /// The ID of the child entity.
+    /// The ID of the child entity, `-1` when breeding spawns none (frogs lay spawn instead).
     pub child_id: i32,
+
+    /// Experience the parents drop. Modifiable.
+    pub experience: i32,
 }
 
 impl EntityBreedEvent {
     #[must_use]
-    pub const fn new(father_id: i32, mother_id: i32, child_id: i32) -> Self {
+    pub const fn new(father_id: i32, mother_id: i32, child_id: i32, experience: i32) -> Self {
         Self {
             father_id,
             mother_id,
             child_id,
+            experience,
             cancelled: false,
         }
     }

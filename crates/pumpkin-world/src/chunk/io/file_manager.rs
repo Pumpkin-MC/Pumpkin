@@ -515,6 +515,124 @@ where
         self.flush_entries(true, false).await;
         self.evict();
     }
+
+    async fn is_chunk_generated(&self, folder: &LevelFolder, coord: Vector2<i32>) -> bool {
+        let region = region_of(coord);
+        let index = region_chunk_index(coord);
+        let path = D::file_path(folder, &R::file_name(region));
+
+        let cached = self
+            .regions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&region)
+            .cloned();
+
+        let entry = if let Some(entry) = cached {
+            if entry
+                .pending
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .contains_key(&index)
+            {
+                return true;
+            }
+            if entry.state().is_none() && !path.exists() {
+                return false;
+            }
+            entry
+        } else {
+            if !path.exists() {
+                return false;
+            }
+            self.entry(region, path)
+        };
+
+        let _save = entry.save_lock.lock().await;
+        if entry
+            .pending
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_key(&index)
+        {
+            return true;
+        }
+        if entry.open().await.is_err() {
+            return false;
+        }
+        entry.state().is_some_and(|state| {
+            state
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .file
+                .has_chunk(index)
+        })
+    }
+
+    async fn delete_chunk(&self, folder: &LevelFolder, coord: Vector2<i32>) -> bool {
+        let region = region_of(coord);
+        let index = region_chunk_index(coord);
+        let path = D::file_path(folder, &R::file_name(region));
+
+        let cached = self
+            .regions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&region)
+            .cloned();
+
+        let entry = if let Some(entry) = cached {
+            entry
+        } else {
+            if !path.exists() {
+                return false;
+            }
+            self.entry(region, path.clone())
+        };
+
+        let _save = entry.save_lock.lock().await;
+        let removed_pending = entry
+            .pending
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&index)
+            .is_some();
+        entry.hashes[index].store(0, Ordering::Relaxed);
+
+        if entry.state().is_none() && !path.exists() {
+            return removed_pending;
+        }
+        if let Err(err) = entry.open().await {
+            error!("Failed to open region file {}: {err}", path.display());
+            return removed_pending;
+        }
+
+        let delete_entry = entry.clone();
+        let deleted_from_file = run_blocking(move || {
+            let Some(state) = delete_entry.state() else {
+                return false;
+            };
+            let mut state = state
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match state.file.delete_chunk(index) {
+                Ok(deleted) => {
+                    if deleted && state.file.has_staged() {
+                        state.staged_since.get_or_insert_with(Instant::now);
+                    }
+                    deleted
+                }
+                Err(err) => {
+                    error!("Failed deleting chunk at index {index}: {err}");
+                    false
+                }
+            }
+        })
+        .await
+        .unwrap_or(false);
+
+        removed_pending || deleted_from_file
+    }
 }
 
 pub enum LevelFileIO<D> {
@@ -567,6 +685,22 @@ where
             Self::Linear(io) => io.flush_all().await,
             Self::Anvil(io) => io.flush_all().await,
             Self::Pump(io) => io.flush_all().await,
+        }
+    }
+
+    async fn is_chunk_generated(&self, folder: &LevelFolder, coord: Vector2<i32>) -> bool {
+        match self {
+            Self::Linear(io) => io.is_chunk_generated(folder, coord).await,
+            Self::Anvil(io) => io.is_chunk_generated(folder, coord).await,
+            Self::Pump(io) => io.is_chunk_generated(folder, coord).await,
+        }
+    }
+
+    async fn delete_chunk(&self, folder: &LevelFolder, coord: Vector2<i32>) -> bool {
+        match self {
+            Self::Linear(io) => io.delete_chunk(folder, coord).await,
+            Self::Anvil(io) => io.delete_chunk(folder, coord).await,
+            Self::Pump(io) => io.delete_chunk(folder, coord).await,
         }
     }
 }
@@ -719,5 +853,45 @@ mod tests {
         manager.flush_all().await;
         let region = AnvilRegion::open(&path, Vector2::new(0, 0)).unwrap();
         assert!(region.read_chunk(1).unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn chunk_generated_and_deleted_across_lifecycle() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let folder = folder(dir.path());
+        let manager =
+            ChunkFileManager::<AnvilRegion, ChunkEntityData>::new(AnvilChunkConfig::default());
+        let pos = Vector2::new(3, 5);
+        let other_pos = Vector2::new(4, 5);
+
+        assert!(!manager.is_chunk_generated(&folder, pos).await);
+        assert!(!folder.entities_folder.join("r.0.0.mca").exists());
+        assert!(!manager.delete_chunk(&folder, pos).await);
+
+        let chunk = Arc::new(ChunkEntityData {
+            x: pos.x,
+            z: pos.y,
+            data: Mutex::new(Vec::new()),
+            live: AtomicBool::new(false),
+            dirty: AtomicBool::new(true),
+        });
+        manager
+            .save_chunks(&folder, vec![(pos, chunk)])
+            .await
+            .unwrap();
+
+        assert!(manager.is_chunk_generated(&folder, pos).await);
+        assert!(!manager.is_chunk_generated(&folder, other_pos).await);
+
+        assert!(manager.delete_chunk(&folder, pos).await);
+        assert!(!manager.is_chunk_generated(&folder, pos).await);
+        assert!(!manager.delete_chunk(&folder, pos).await);
+
+        let reopened = AnvilRegion::open(
+            &folder.entities_folder.join("r.0.0.mca"),
+            Vector2::new(0, 0),
+        )
+        .unwrap();
+        assert!(!reopened.has_chunk(region_chunk_index(pos)));
     }
 }

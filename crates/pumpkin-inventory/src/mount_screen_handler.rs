@@ -9,8 +9,13 @@ use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{ArmorSlot, NormalSlot};
 
+pub type MountValidityCheck = Box<dyn Fn(&dyn InventoryPlayer) -> bool + Send + Sync>;
+
 pub struct MountScreenHandler {
     behaviour: ScreenHandlerBehaviour,
+    pub validity_check: Option<MountValidityCheck>,
+    /// The slot Bedrock shows as its single mount equipment slot.
+    pub bedrock_equip_slot: Option<usize>,
     pub mount_inventory: Arc<dyn Inventory>,
     pub saddle_inventory: Arc<dyn Inventory>,
     pub armor_inventory: Arc<dyn Inventory>,
@@ -38,6 +43,8 @@ impl MountScreenHandler {
     ) -> Self {
         let mut handler = Self {
             behaviour: ScreenHandlerBehaviour::new(sync_id, None),
+            validity_check: None,
+            bedrock_equip_slot: None,
             mount_inventory,
             saddle_inventory: saddle_inventory.clone(),
             armor_inventory: armor_inventory.clone(),
@@ -77,6 +84,12 @@ impl ScreenHandler for MountScreenHandler {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn can_use(&self, player: &dyn InventoryPlayer) -> bool {
+        self.validity_check
+            .as_ref()
+            .is_none_or(|check| check(player))
     }
 
     fn get_behaviour(&self) -> &ScreenHandlerBehaviour {

@@ -1,6 +1,5 @@
 use super::{ChunkLevel, ChunkPos, HashMapType, LevelChannel};
 use crate::chunk_system::chunk_state::StagedChunkEnum; // Fixed path
-use itertools::Itertools;
 use std::cmp::min;
 use std::collections::hash_map::Entry;
 use std::fmt::Write;
@@ -183,7 +182,7 @@ impl ChunkLoading {
 
     pub fn remove_force_ticket(&mut self, pos: ChunkPos) {
         // debug!("remove force ticket at {pos:?}");
-        if let Some((index, _)) = self.high_priority.iter().find_position(|x| **x == pos) {
+        if let Some(index) = self.high_priority.iter().position(|x| *x == pos) {
             self.high_priority.remove(index);
         }
         self.is_priority_dirty = true;
@@ -237,7 +236,7 @@ impl ChunkLoading {
             // warn!("No ticket found at {pos:?}");
             return;
         };
-        let Some((index, _)) = vec.iter().find_position(|x| **x == level) else {
+        let Some(index) = vec.iter().position(|x| *x == level) else {
             // warn!("No ticket found at {pos:?}");
             return;
         };

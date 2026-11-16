@@ -20,6 +20,8 @@ use crate::{
 type CropProperties = WheatLikeProperties;
 type FarmlandProperties = FarmlandLikeProperties;
 
+pub const MAX_AGE: u8 = 7;
+
 /// Raw brightness `CropBlock` and `StemBlock` need at the plant to grow on a random tick.
 const MIN_GROWTH_LIGHT: u8 = 9;
 /// Minimum raw brightness `CropBlock` and `PitcherCropBlock` need at the plant to survive.
@@ -83,7 +85,7 @@ trait CropBlockBase: PlantBlockBase {
     }
 
     fn max_age(&self) -> i32 {
-        7
+        i32::from(MAX_AGE)
     }
 
     fn get_age(&self, state: BlockStateId, _block: &Block) -> i32 {

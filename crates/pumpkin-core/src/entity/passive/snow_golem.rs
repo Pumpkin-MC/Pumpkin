@@ -7,18 +7,21 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        ranged_attack::RangedAttackGoal, wander_around::WanderAroundGoal,
     },
     item::ItemEntity,
     mob::{Mob, MobEntity, RangedAttackMob},
     player::Player,
     projectile::snowball::SnowballEntity,
 };
+
+const SNOW_GOLEM_HUNTS: &[Hunt] = &[Hunt::new(1, TargetMatch::Enemy, true)];
 
 pub struct SnowGolemEntity {
     pub mob_entity: MobEntity,
@@ -57,10 +60,7 @@ impl SnowGolemEntity {
             );
             goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ZOMBIE, true),
-            );
+            hunting::apply(target_selector, &mob_arc.mob_entity, SNOW_GOLEM_HUNTS);
         };
 
         mob_arc
@@ -79,6 +79,41 @@ impl SnowGolemEntity {
             pumpkin_data::tracked_data::snow_golem::DATA_PUMPKIN_ID,
             flags as i8,
         );
+    }
+
+    #[must_use]
+    pub fn ready_for_shearing(&self) -> bool {
+        self.has_pumpkin()
+    }
+
+    pub fn shear(&self, category: SoundCategory, tool: &ItemStack) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        self.set_has_pumpkin(false);
+        let pos = entity.pos.load();
+        world.play_sound(Sound::EntitySnowGolemShear, category, &pos);
+        let drops = world
+            .get_loot_table("minecraft:shearing/snow_golem")
+            .map_or_else(
+                || vec![ItemStack::new(1, &Item::CARVED_PUMPKIN)],
+                |handle| {
+                    let params = crate::world::loot::LootContextParameters {
+                        world: Some(&world),
+                        position: Some(pos),
+                        this_entity: Some(self as &dyn EntityBase),
+                        tool: Some(tool.clone()),
+                        ..Default::default()
+                    };
+                    crate::world::loot::generate_loot_from_handle(&handle, rand::random(), &params)
+                },
+            );
+        for drop_stack in drops {
+            let item_entity = Arc::new(ItemEntity::new(
+                Entity::new(world.clone(), pos, &EntityType::ITEM),
+                drop_stack,
+            ));
+            world.spawn_entity(item_entity);
+        }
     }
 
     pub fn throw_snowball(&self, target: &Arc<dyn EntityBase>) {
@@ -135,7 +170,7 @@ impl Mob for SnowGolemEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        if item_stack.get_item() == &Item::SHEARS && self.has_pumpkin() {
+        if item_stack.get_item() == &Item::SHEARS && self.ready_for_shearing() {
             let entity = self.get_entity();
             let world = entity.world.load();
             if let Some(server) = world.server.upgrade() {
@@ -150,14 +185,11 @@ impl Mob for SnowGolemEntity {
                     return false;
                 }
             }
-            self.set_has_pumpkin(false);
-            let pos = entity.pos.load();
-            world.play_sound(Sound::EntitySnowGolemShear, SoundCategory::Players, &pos);
-            let item_entity = Arc::new(ItemEntity::new(
-                Entity::new(world.clone(), pos, &EntityType::ITEM),
-                ItemStack::new(1, &Item::CARVED_PUMPKIN),
-            ));
-            world.spawn_entity(item_entity);
+            self.shear(SoundCategory::Players, item_stack);
+            world.emit_game_event(
+                pumpkin_data::game_event::GameEvent::Shear.name(),
+                entity.pos.load(),
+            );
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                 let _ = item_stack.damage_item(1);
             }

@@ -92,6 +92,27 @@ impl BlockEntity for BellBlockEntity {
         self.position
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let direction = match self.last_side_hit.load() {
+            Some(HorizontalFacing::South) => 0,
+            Some(HorizontalFacing::West) => 1,
+            Some(HorizontalFacing::North) => 2,
+            Some(HorizontalFacing::East) => 3,
+            None => 255,
+        };
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("Bell", self.position)
+                .movable(false)
+                .put_bool("Ringing", self.ringing.load())
+                .put_int("Ticks", self.ring_ticks.load())
+                .put_int("Direction", direction)
+                .finish(),
+        )
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

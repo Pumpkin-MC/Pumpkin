@@ -32,14 +32,12 @@ use crate::entity::{
     ai::test_support::world,
     mob::{Mob, magma_cube::MagmaCubeEntity},
     passive::{
-        chicken::ChickenEntity,
-        frog::FrogEntity,
-        mooshroom::{MooshroomEntity, MooshroomVariant},
-        sheep::SheepEntity,
+        chicken::ChickenEntity, frog::FrogEntity, mooshroom::MooshroomEntity, sheep::SheepEntity,
     },
 };
 use pumpkin_data::{
-    chicken_variant::ChickenVariant, entity::EntityType, frog_variant::FrogVariant,
+    chicken_variant::ChickenVariant, entity::EntityType, entity_variant::MooshroomVariant,
+    frog_variant::FrogVariant,
 };
 use pumpkin_util::loot_table::parser::parse_loot_table;
 use pumpkin_util::math::vector3::Vector3;

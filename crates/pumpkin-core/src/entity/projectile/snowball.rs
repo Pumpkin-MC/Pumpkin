@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicBool;
+use crate::entity::projectile::owner::ProjectileOwner;
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
@@ -24,9 +24,7 @@ impl SnowballEntity {
         // Initialize without owner
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
+            owner: ProjectileOwner::none(),
             gravity: GRAVITY,
         };
 
@@ -41,12 +39,12 @@ impl SnowballEntity {
 }
 
 impl EntityBase for SnowballEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -64,18 +62,26 @@ impl EntityBase for SnowballEntity {
         let world = self.get_entity().world.load();
 
         // Always send particle status regardless of what was hit
-        world.send_entity_status(
-            self.get_entity(),
-            EntityStatus::Death,
-            Some(ActorEventID::Death),
-        );
+        world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
 
         // Handle entity-specific damage
-        if let ProjectileHit::Entity { ref entity, .. } = hit {
+        if let ProjectileHit::Entity {
+            ref entity,
+            hit_pos,
+            ..
+        } = hit
+        {
             let is_blaze = entity.get_entity().entity_type.id == EntityType::BLAZE.id;
-            let damage = if is_blaze { 3.0 } else { 0.0 }; // Only damage blazes
-
-            entity.damage(entity.as_ref(), damage, DamageType::THROWN);
+            let damage = if is_blaze { 3.0 } else { 0.0 };
+            let owner = self.thrown.owner.get(&world);
+            entity.damage_with_context(
+                entity.as_ref(),
+                damage,
+                DamageType::THROWN,
+                Some(hit_pos),
+                Some(self),
+                owner.as_deref(),
+            );
         }
     }
 }

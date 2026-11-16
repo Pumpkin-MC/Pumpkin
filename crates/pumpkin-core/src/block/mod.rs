@@ -138,12 +138,18 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
         if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance, 1.0);
+            let reduced_fall_distance =
+                args.fall_distance * (1.0 - args.block.fall_distance_reduction);
+            living.handle_fall_damage(args.entity, reduced_fall_distance, 1.0);
         }
     }
 
     fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
-        stop_vertical_movement_after_fall(args.entity);
+        if args.block.bounce_restitution > 0.0 {
+            bounce_entity_after_fall(args.entity, f64::from(args.block.bounce_restitution));
+        } else {
+            stop_vertical_movement_after_fall(args.entity);
+        }
     }
 
     /// Called when a player starts digging this block, except in creative.
@@ -257,6 +263,40 @@ pub struct BlockHitResult<'a> {
     pub cursor_pos: &'a Vector3<f32>,
 }
 
+impl BlockHitResult<'_> {
+    /// Vanilla `SelectableSlotContainer.getHitSlot`.
+    #[must_use]
+    pub fn get_hit_slot(
+        &self,
+        block_facing: pumpkin_data::block_properties::HorizontalFacing,
+        rows: usize,
+        columns: usize,
+    ) -> Option<usize> {
+        use pumpkin_data::block_properties::HorizontalFacing;
+
+        let hit_direction = self.face.to_horizontal_facing()?;
+        if block_facing != hit_direction {
+            return None;
+        }
+        let (rel_x, rel_y) = match hit_direction {
+            HorizontalFacing::North => (1.0 - self.cursor_pos.x, self.cursor_pos.y),
+            HorizontalFacing::South => (self.cursor_pos.x, self.cursor_pos.y),
+            HorizontalFacing::West => (self.cursor_pos.z, self.cursor_pos.y),
+            HorizontalFacing::East => (1.0 - self.cursor_pos.z, self.cursor_pos.y),
+        };
+        let row = Self::selectable_slot_section(1.0 - rel_y, rows);
+        let column = Self::selectable_slot_section(rel_x, columns);
+        Some(column + row * columns)
+    }
+
+    fn selectable_slot_section(relative_coordinate: f32, max_sections: usize) -> usize {
+        let targeted_pixel = relative_coordinate * 16.0;
+        let section_size = 16.0 / (max_sections as f32);
+        ((targeted_pixel / section_size).floor() as isize).clamp(0, max_sections as isize - 1)
+            as usize
+    }
+}
+
 pub struct OnEntityCollisionArgs<'a> {
     pub server: &'a Server,
     pub world: &'a Arc<World>,
@@ -289,6 +329,7 @@ pub struct ExplodeArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub position: &'a BlockPos,
+    pub explosion: &'a crate::world::Explosion<'a>,
 }
 
 pub struct OnSyncedBlockEventArgs<'a> {
@@ -358,11 +399,13 @@ pub struct PlayerPlacedArgs<'a> {
 
 pub struct OnLandedUponArgs<'a> {
     pub world: &'a Arc<World>,
+    pub block: &'a Block,
     pub fall_distance: f32,
     pub entity: &'a dyn EntityBase,
 }
 
 pub struct UpdateEntityMovementAfterFallOnArgs<'a> {
+    pub block: &'a Block,
     pub entity: &'a dyn EntityBase,
 }
 
@@ -421,6 +464,8 @@ pub struct OnStateReplacedArgs<'a> {
     pub old_state_id: BlockStateId,
     pub position: &'a BlockPos,
     pub moved: bool,
+    /// The flags of the change that removed the block.
+    pub flags: BlockFlags,
 }
 
 pub struct EmitsRedstonePowerArgs<'a> {

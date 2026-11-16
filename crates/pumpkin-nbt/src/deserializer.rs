@@ -144,7 +144,7 @@ impl<'a, R: Read + Seek> NbtDataSource<'a> for NbtStreamReader<R> {
     fn read_string(&mut self, len: usize) -> Result<Cow<'a, str>> {
         let mut buf = vec![0u8; len];
         self.0.read_exact(&mut buf).map_err(Error::Incomplete)?;
-        let string = cesu8::from_java_cesu8(&buf).map_err(|_| Error::Cesu8DecodingError)?;
+        let string = crate::cesu8::from_java_cesu8(&buf)?;
         Ok(Cow::Owned(string.into_owned()))
     }
 
@@ -185,12 +185,7 @@ impl<'a> NbtDataSource<'a> for Cursor<&'a [u8]> {
         self.set_position((pos + len) as u64);
         let data = self.get_ref();
         let slice = &data[pos..pos + len];
-        if let Ok(s) = std::str::from_utf8(slice) {
-            Ok(Cow::Borrowed(s))
-        } else {
-            let string = cesu8::from_java_cesu8(slice).map_err(|_| Error::Cesu8DecodingError)?;
-            Ok(string)
-        }
+        crate::cesu8::from_java_cesu8(slice)
     }
 
     fn read_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>> {
@@ -278,7 +273,7 @@ impl<'a> NbtDataSource<'a> for Cursor<Vec<u8>> {
         self.set_position((pos + len) as u64);
         let data = self.get_ref();
         let slice = &data[pos..pos + len];
-        let string = cesu8::from_java_cesu8(slice).map_err(|_| Error::Cesu8DecodingError)?;
+        let string = crate::cesu8::from_java_cesu8(slice)?;
         Ok(Cow::Owned(string.into_owned()))
     }
 

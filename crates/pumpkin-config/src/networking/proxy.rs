@@ -10,6 +10,8 @@ pub struct ProxyConfig {
     /// Whether proxy support is enabled.
     #[toml(default = Self::default().enabled)]
     pub enabled: bool,
+    /// Configuration for `HAProxy` PROXY protocol integration.
+    pub haproxy: HAProxyConfig,
     /// Configuration for Velocity proxy integration.
     #[toml(default = Self::default().velocity)]
     pub velocity: VelocityConfig,
@@ -19,6 +21,14 @@ pub struct ProxyConfig {
     /// Configuration for Vine modern proxy integration with Ed25519 authentication.
     #[toml(default = Self::default().vine)]
     pub vine: VineConfig,
+}
+
+/// Configuration for `HAProxy` PROXY protocol integration.
+#[derive(Deserialize, Serialize, Default)]
+#[serde(default)]
+pub struct HAProxyConfig {
+    /// Whether `HAProxy` PROXY protocol (v1 and v2) support is enabled.
+    pub enabled: bool,
 }
 
 /// Configuration for `BungeeCord` proxy integration.

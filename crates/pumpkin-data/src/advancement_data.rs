@@ -395,6 +395,8 @@ pub struct BredAnimalsCondition {
 pub struct DamageCondition {
     pub blocked: Option<bool>,
     pub is_projectile: Option<bool>,
+    pub is_mace_smash: Option<bool>,
+    pub direct_entity: Option<&'static str>,
     pub dealt_min: Option<f64>,
     pub taken_min: Option<f64>,
 }

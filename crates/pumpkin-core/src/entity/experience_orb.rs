@@ -20,13 +20,14 @@ use crate::{
     },
 };
 
-use super::{Entity, EntityBase, living::LivingEntity, player::Player};
+use super::{Entity, EntityBase, living::LivingEntity, player::Player, weak_slot::WeakSlot};
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
     amount: u32,
     health: AtomicI32,
     orb_age: AtomicU32,
+    following_player: WeakSlot<Player>,
 }
 
 impl ExperienceOrbEntity {
@@ -40,6 +41,7 @@ impl ExperienceOrbEntity {
             amount,
             health: AtomicI32::new(Self::DEFAULT_HEALTH),
             orb_age: AtomicU32::new(0),
+            following_player: WeakSlot::new(),
         }
     }
 
@@ -123,6 +125,41 @@ impl ExperienceOrbEntity {
         }
     }
 
+    /// Vanilla `ExperienceOrb.followNearbyPlayer`
+    /// accelerate towards a player within 8 blocks.
+    fn follow_nearby_player(&self) {
+        let entity = &self.entity;
+        let pos = entity.pos.load();
+        let lost = self.following_player.get().is_none_or(|player| {
+            player.is_spectator()
+                || player.get_entity().pos.load().squared_distance_to_vec(&pos) > 64.0
+        });
+        if lost {
+            let nearest = entity.world.load().get_nearest_player(pos, 8.0, |player| {
+                !player.is_spectator() && !player.living_entity.is_dead_or_dying()
+            });
+            match nearest {
+                Some(player) => self.following_player.set(&player),
+                None => self.following_player.clear(),
+            }
+        }
+        let Some(player) = self.following_player.get() else {
+            return;
+        };
+
+        let target = player.get_entity();
+        let target_pos = target
+            .pos
+            .load()
+            .add_raw(0.0, target.get_eye_height() / 2.0, 0.0);
+        let delta = target_pos.sub(&pos);
+        let power = 1.0 - delta.length() / 8.0;
+        entity
+            .velocity
+            .store(entity.velocity.load() + delta.normalize() * (power * power * 0.1));
+        entity.velocity_dirty.store(true, Ordering::SeqCst);
+    }
+
     const fn round_to_orb_size(value: u32) -> u32 {
         if value >= 2477 {
             2477
@@ -197,6 +234,9 @@ fn closest_free_center(
 }
 
 impl EntityBase for ExperienceOrbEntity {
+    /// Vanilla `ExperienceOrb.doWaterSplashEffect` does nothing.
+    fn do_water_splash_effect(&self, _caller: &dyn EntityBase) {}
+
     fn audited_reach(&self) -> Option<AuditedReach> {
         let entity = &self.entity;
         let world = entity.world.load();
@@ -253,6 +293,8 @@ impl EntityBase for ExperienceOrbEntity {
         }
 
         entity.velocity.store(velo);
+        self.follow_nearby_player();
+        let velo = entity.velocity.load();
 
         entity.move_entity(caller, velo);
 
@@ -279,6 +321,10 @@ impl EntityBase for ExperienceOrbEntity {
 
     fn get_entity(&self) -> &Entity {
         &self.entity
+    }
+
+    fn receives_player_touch(&self) -> bool {
+        true
     }
 
     fn damage_with_context(
@@ -331,23 +377,21 @@ impl EntityBase for ExperienceOrbEntity {
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {
-        if player.living_entity.health.load() > 0.0 {
-            let can_pickup = if let Ok(mut delay) = player.experience_pick_up_delay.try_lock()
-                && *delay == 0
-            {
-                *delay = 2;
-                true
-            } else {
-                false
-            };
-            if can_pickup {
-                player.living_entity.pickup(&self.entity, 1);
-                self.entity.remove();
-                let amount = self.amount as i32;
-                let remaining = player.apply_mending_from_xp(amount);
-                if remaining > 0 {
-                    player.add_experience_points(remaining);
-                }
+        let can_pickup = if let Ok(mut delay) = player.experience_pick_up_delay.try_lock()
+            && *delay == 0
+        {
+            *delay = 2;
+            true
+        } else {
+            false
+        };
+        if can_pickup {
+            player.living_entity.pickup(&self.entity, 1);
+            self.entity.remove();
+            let amount = self.amount as i32;
+            let remaining = player.apply_mending_from_xp(amount);
+            if remaining > 0 {
+                player.add_experience_points(remaining);
             }
         }
     }

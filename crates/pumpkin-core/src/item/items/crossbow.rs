@@ -50,7 +50,15 @@ impl ItemBehaviour for CrossbowItem {
             .set_active_hand(hand, stack, Self::USE_DURATION);
     }
 
-    fn on_use_tick(&self, _stack: &ItemStack, player: &Player, remaining_use_ticks: i32) {
+    fn on_use_tick(
+        &self,
+        _stack: &ItemStack,
+        user: &dyn crate::entity::EntityBase,
+        remaining_use_ticks: i32,
+    ) {
+        let Some(player) = user.get_player() else {
+            return;
+        };
         let hand = (*player
             .living_entity
             .active_hand

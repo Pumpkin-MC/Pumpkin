@@ -20,6 +20,8 @@ pub struct SmoothSwimmingMoveControl {
 }
 
 impl SmoothSwimmingMoveControl {
+    pub(crate) const BUOYANCY: f64 = 0.005;
+
     #[must_use]
     pub const fn new(
         max_turn_x: i32,
@@ -62,7 +64,7 @@ impl MoveControlTrait for SmoothSwimmingMoveControl {
 
         if self.apply_gravity && entity.touching_water.load(Ordering::Relaxed) {
             let vel = entity.velocity.load();
-            entity.set_velocity(Vector3::new(vel.x, vel.y + 0.005, vel.z));
+            entity.set_velocity(Vector3::new(vel.x, vel.y + Self::BUOYANCY, vel.z));
         }
 
         let is_done = mob_entity.steered().navigator().is_done();
@@ -141,5 +143,13 @@ impl MoveControlTrait for SmoothSwimmingMoveControl {
 
     fn has_wanted(&self) -> bool {
         self.operation == Operation::MoveTo
+    }
+
+    fn get_speed_modifier(&self) -> f64 {
+        self.speed_modifier
+    }
+
+    fn get_wanted_position(&self) -> Vector3<f64> {
+        Vector3::new(self.wanted_x, self.wanted_y, self.wanted_z)
     }
 }

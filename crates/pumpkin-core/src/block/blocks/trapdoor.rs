@@ -48,10 +48,7 @@ fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
 }
 
 fn can_open_trapdoor(block: &Block) -> bool {
-    if block == &Block::IRON_TRAPDOOR {
-        return false;
-    }
-    true
+    block != &Block::IRON_TRAPDOOR
 }
 
 fn get_sound(block: &Block, open: bool) -> Sound {

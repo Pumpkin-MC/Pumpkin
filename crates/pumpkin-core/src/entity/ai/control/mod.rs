@@ -30,9 +30,20 @@ pub trait MoveControlTrait: Control {
     fn has_wanted(&self) -> bool {
         false
     }
+
+    fn get_speed_modifier(&self) -> f64 {
+        0.0
+    }
+
+    fn get_wanted_position(&self) -> Vector3<f64> {
+        Vector3::default()
+    }
 }
 
 pub trait LookControlTrait: Control {
+    fn wanted_position(&self) -> Option<Vector3<f64>> {
+        None
+    }
     fn tick(&mut self, mob: &dyn Mob);
 
     fn look_at_with_range(

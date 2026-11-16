@@ -1,4 +1,5 @@
 pub mod abstract_fish;
+pub mod abstract_horse;
 pub mod abstract_schooling_fish;
 pub mod ageable_water_creature;
 pub mod allay;
@@ -49,3 +50,4 @@ pub mod wandering_trader;
 pub mod water_animal;
 pub mod wolf;
 pub mod zombie_horse;
+pub mod zombie_nautilus;

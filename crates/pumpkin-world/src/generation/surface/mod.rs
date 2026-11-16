@@ -21,7 +21,7 @@ use crate::{
 use super::{
     noise::perlin::DoublePerlinNoiseSampler,
     noise::router::{
-        chunk_noise_router::ChunkNoiseRouter,
+        chunk_noise_router::ChunkVeinRouter,
         density_volume::{DensityBuffer, DensityVolume},
         proto_noise_router::DoublePerlinNoiseBuilder,
         surface_height_sampler::SurfaceHeightEstimateSampler,
@@ -41,7 +41,9 @@ pub struct MaterialRuleContext<'a> {
     pub block_pos_x: i32,
     pub block_pos_y: i32,
     pub block_pos_z: i32,
-    pub biome: &'a Biome,
+    pub biome: Option<&'a Biome>,
+    pub(crate) surface_biomes:
+        Option<&'a crate::chunk_system::generation_cache::SurfaceBiomeNeighborhood>,
     pub run_depth: i32,
     pub secondary_depth: f32,
     packed_chunk_pos: i64,
@@ -72,39 +74,44 @@ pub struct MaterialRuleContext<'a> {
 pub struct VeinContext<'a> {
     pub volume: DensityVolume,
     pub vein_toggle: DensityBuffer,
-    pub vein_ridged: DensityBuffer,
-    pub router: ChunkNoiseRouter<'a>,
+    pub vein_ridged: Option<DensityBuffer>,
+    pub router: ChunkVeinRouter<'a>,
     pub ore_random_deriver: &'a XoroshiroSplitter,
 }
 
 impl VeinContext<'_> {
-    #[must_use]
-    pub fn get_density(&self, is_iron: bool, x: i32, y: i32, z: i32) -> f32 {
+    pub fn get_density(&mut self, is_iron: bool, x: i32, y: i32, z: i32) -> f32 {
         let Some(index) = self.volume.index_of_block(x, y, z) else {
             return -1.0;
         };
-        let ridged = self.vein_ridged[index];
-        if ridged < 0.0 {
-            return -1.0;
-        }
         let toggle = self.vein_toggle[index];
-        if is_iron {
+        let input = if is_iron {
             if !(-60..-8).contains(&y) {
                 return -1.0;
             }
             let closest_to_bound = (-8 - y).min(y - -60) as f32;
             let edge_roundoff = (closest_to_bound.clamp(0.0, 20.0) * 0.01) - 0.2;
-            let input = -toggle - 0.4 + edge_roundoff;
-            if input >= 0.0 { 0.7 } else { -1.0 }
+            -toggle - 0.4 + edge_roundoff
         } else {
             if !(0..50).contains(&y) {
                 return -1.0;
             }
             let closest_to_bound = (50 - y).min(y) as f32;
             let edge_roundoff = (closest_to_bound.clamp(0.0, 20.0) * 0.01) - 0.2;
-            let input = toggle - 0.4 + edge_roundoff;
-            if input >= 0.0 { 0.7 } else { -1.0 }
+            toggle - 0.4 + edge_roundoff
+        };
+        if input < 0.0 {
+            return -1.0;
         }
+        let vein_ridged = self.vein_ridged.get_or_insert_with(|| {
+            let mut ridged = DensityBuffer::acquire(&self.volume);
+            self.router.vein_ridged_volume(&mut ridged, &self.volume);
+            ridged
+        });
+        if vein_ridged[index] < 0.0 {
+            return -1.0;
+        }
+        0.7
     }
 
     #[must_use]
@@ -153,7 +160,8 @@ impl<'a> MaterialRuleContext<'a> {
             block_pos_x: 0,
             block_pos_y: 0,
             block_pos_z: 0,
-            biome: &Biome::PLAINS,
+            biome: None,
+            surface_biomes: None,
             run_depth: 0,
             secondary_depth: 0.0,
             surface_noise,
@@ -244,6 +252,36 @@ impl<'a> MaterialRuleContext<'a> {
         self.fluid_height = fluid_height;
         self.stone_depth_below = stone_depth_below;
         self.stone_depth_above = stone_depth_above;
+        self.biome = None;
+    }
+
+    #[expect(
+        clippy::panic,
+        reason = "surface scheduling guarantees a complete 3x3 biome neighborhood"
+    )]
+    pub fn get_biome(&mut self, chunk: &ProtoChunk) -> &'a Biome {
+        if let Some(biome) = self.biome {
+            return biome;
+        }
+        let biome = if let Some(surface_biomes) = self.surface_biomes {
+            if let Some(single_id) = surface_biomes.single_biome() {
+                Biome::from_id(single_id).unwrap_or(&Biome::PLAINS)
+            } else {
+                let Some(biome_id) = chunk.get_terrain_gen_biome_id_from_neighborhood(
+                    surface_biomes,
+                    self.block_pos_x,
+                    self.block_pos_y,
+                    self.block_pos_z,
+                ) else {
+                    panic!("surface biome neighborhood must cover fuzzy biome lookup");
+                };
+                Biome::from_id(biome_id).unwrap_or(&Biome::PLAINS)
+            }
+        } else {
+            chunk.get_terrain_gen_biome(self.block_pos_x, self.block_pos_y, self.block_pos_z)
+        };
+        self.biome = Some(biome);
+        biome
     }
 
     pub fn get_secondary_depth(&mut self) -> f32 {
@@ -268,7 +306,9 @@ pub fn test_condition(
     surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
 ) -> bool {
     match condition {
-        MaterialCondition::Biome(biome) => BiomeMaterialCondition::test(biome.biome_is, context),
+        MaterialCondition::Biome(biome) => {
+            BiomeMaterialCondition::test(biome.biome_is, chunk, context)
+        }
         MaterialCondition::NoiseThreshold(noise_threshold) => {
             test_noise_threshold(noise_threshold, context)
         }
@@ -278,7 +318,8 @@ pub fn test_condition(
         MaterialCondition::YAbove(above_y) => test_above_y_material(above_y, context),
         MaterialCondition::Water(water) => test_water_material(water, context),
         MaterialCondition::Temperature => {
-            let temperature = context.biome.weather.compute_temperature(
+            let biome = context.get_biome(chunk);
+            let temperature = biome.weather.compute_temperature(
                 context.block_pos_x as f64,
                 context.block_pos_y,
                 context.block_pos_z as f64,
@@ -416,8 +457,19 @@ pub fn estimate_surface_height(
 pub struct BiomeMaterialCondition;
 
 impl BiomeMaterialCondition {
-    pub fn test(biome_is: &[&'static Biome], context: &MaterialRuleContext) -> bool {
-        biome_is.contains(&context.biome)
+    pub fn test(
+        biome_is: &[&'static Biome],
+        chunk: &ProtoChunk,
+        context: &mut MaterialRuleContext,
+    ) -> bool {
+        if context.biome.is_none()
+            && let Some(surface_biomes) = context.surface_biomes
+            && !biome_is.iter().any(|b| surface_biomes.contains_biome(b.id))
+        {
+            return false;
+        }
+        let current = context.get_biome(chunk);
+        biome_is.contains(&current)
     }
 }
 
