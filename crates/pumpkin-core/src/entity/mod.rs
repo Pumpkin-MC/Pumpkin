@@ -102,7 +102,6 @@ pub mod passive;
 pub mod player;
 pub mod projectile;
 pub mod projectile_deflection;
-pub mod shearable;
 pub mod spawn_util;
 pub mod synched_entity_data;
 pub mod tnt;
@@ -166,6 +165,14 @@ pub enum GearDamage {
 
 /// Returns the [`EntityStatus`] that should be broadcast when the given
 /// equipment slot breaks.
+#[must_use]
+pub const fn hand_equipment_slot(hand: pumpkin_util::Hand) -> EquipmentSlot {
+    match hand {
+        pumpkin_util::Hand::Right => EquipmentSlot::MAIN_HAND,
+        pumpkin_util::Hand::Left => EquipmentSlot::OFF_HAND,
+    }
+}
+
 #[must_use]
 pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
     match slot {
@@ -239,12 +246,6 @@ pub const fn entity_type_to_bedrock_identifier(entity_type: &EntityType) -> &'st
     } else {
         entity_type.resource_name
     }
-}
-
-/// Reports whether an interaction handled the action and used the held item.
-pub struct EntityInteractionResult {
-    pub handled: bool,
-    pub item_used: bool,
 }
 
 pub trait EntityBase: Send + Sync + std::any::Any {
@@ -962,30 +963,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn interact_with_hand(
         &self,
-        _player: &Arc<Player>,
-        _item_stack: &mut ItemStack,
-        _hand: pumpkin_util::Hand,
-    ) -> Option<bool> {
-        None
-    }
-
-    fn interact_with_hand_result(
-        &self,
         player: &Arc<Player>,
         item_stack: &mut ItemStack,
         hand: pumpkin_util::Hand,
-    ) -> Option<EntityInteractionResult> {
-        if let Some(handled) = interact_with_shears(self, player, item_stack, hand) {
-            return Some(EntityInteractionResult {
-                handled,
-                item_used: true,
-            });
-        }
-        self.interact_with_hand(player, item_stack, hand)
-            .map(|handled| EntityInteractionResult {
-                handled,
-                item_used: false,
-            })
+    ) -> Option<bool> {
+        interact_with_shears(self, player, item_stack, hand)
     }
 
     fn set_on_fire_for(&self, seconds: f32) {
@@ -5049,7 +5031,7 @@ impl Entity {
         player: Option<&Arc<Player>>,
     ) -> Option<bool> {
         let world = self.world.load();
-        let area = self.leash_connections_box();
+        let area = BoundingBox::of_size(self.bounding_box.load().get_center(), 32.0, 32.0, 32.0);
         let connections = world
             .get_entities_at_box(&area)
             .into_iter()
@@ -5060,20 +5042,6 @@ impl Entity {
                     .is_some_and(|holder| holder.get_entity().entity_id == self.entity_id)
             })
             .collect::<Vec<_>>();
-        self.shear_leash_connections(caller, player, &connections)
-    }
-
-    pub(crate) fn leash_connections_box(&self) -> BoundingBox {
-        BoundingBox::of_size(self.bounding_box.load().get_center(), 32.0, 32.0, 32.0)
-    }
-
-    pub(crate) fn shear_leash_connections(
-        &self,
-        caller: &(impl EntityBase + ?Sized),
-        player: Option<&Arc<Player>>,
-        connections: &[Arc<dyn EntityBase>],
-    ) -> Option<bool> {
-        let world = self.world.load();
         if self.get_leash_holder().is_none() && connections.is_empty() {
             return None;
         }
@@ -6566,13 +6534,13 @@ fn interact_with_shears(
         .shear_off_all_leash_connections(target, Some(player))
     {
         if sheared {
-            let _ = player.damage_item_stack(stack, 1);
+            let _ = player.damage_held_stack(stack, 1, hand);
         }
         return Some(sheared);
     }
     let mob = target.get_mob()?;
     if mob.can_shear_equipment(player) && !player.get_entity().is_sneaking() {
-        mob.attempt_to_shear_equipment_with_hand(player, stack, hand)
+        mob.attempt_to_shear_equipment(player, stack, hand)
     } else {
         None
     }
