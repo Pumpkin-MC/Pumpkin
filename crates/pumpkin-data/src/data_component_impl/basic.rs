@@ -774,18 +774,82 @@ impl DataComponentImpl for PotDecorationsImpl {
     default_impl!(PotDecorations);
 }
 
-/// The lock's item predicate, kept as its raw NBT compound since Pumpkin does
-/// not yet model item predicates.
-// TODO: replace `predicate` with a typed item predicate once item predicates are modelled.
+/// Container/beacon lock predicate (`LockCode` / `ItemPredicate` in `26.3`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct LockImpl {
     pub predicate: NbtCompound,
 }
 impl LockImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        data.extract_compound().map(|predicate| Self {
-            predicate: predicate.clone(),
-        })
+        if let Some(predicate) = data.extract_compound() {
+            Some(Self {
+                predicate: predicate.clone(),
+            })
+        } else if let Some(legacy_key) = data.extract_string() {
+            if legacy_key.is_empty() {
+                return None;
+            }
+            let mut components = NbtCompound::new();
+            components.put_string("minecraft:custom_name", legacy_key.to_string());
+            let mut predicate = NbtCompound::new();
+            predicate.put_compound("components", components);
+            Some(Self { predicate })
+        } else {
+            None
+        }
+    }
+
+    /// Vanilla `LockCode.unlocksWith(ItemStack)` -> `ItemPredicate.test(ItemInstance)`.
+    #[must_use]
+    pub fn unlocks_with(&self, stack: &crate::item_stack::ItemStack) -> bool {
+        if let Some(items_tag) = self.predicate.get("items") {
+            let Some(item_set) = super::IDSet::<crate::item::Item>::read(items_tag) else {
+                return false;
+            };
+            if stack.is_empty() || !item_set.contains(stack.item) {
+                return false;
+            }
+        }
+        let count = if stack.is_empty() {
+            0
+        } else {
+            i32::from(stack.item_count)
+        };
+        if let Some(count_tag) = self.predicate.get("count") {
+            match count_tag {
+                NbtTag::Int(exact) => {
+                    if count != *exact {
+                        return false;
+                    }
+                }
+                NbtTag::Compound(bounds) => {
+                    if bounds.get_int("min").is_some_and(|min| count < min)
+                        || bounds.get_int("max").is_some_and(|max| count > max)
+                    {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+        if let Some(components) = self.predicate.get_compound("components") {
+            for (comp_key, expected_tag) in &components.child_tags {
+                let Some(dc) = crate::data_component::DataComponent::try_from_name(comp_key) else {
+                    return false;
+                };
+                let Some(expected) = super::read_data(dc, expected_tag) else {
+                    return false;
+                };
+                if stack.is_empty()
+                    || !stack
+                        .get_data_component_by_id(dc)
+                        .is_some_and(|actual| actual.equal(expected.as_ref()))
+                {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
 impl DataComponentImpl for LockImpl {

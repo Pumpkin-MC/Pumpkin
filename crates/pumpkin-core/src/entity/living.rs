@@ -955,8 +955,29 @@ impl LivingEntity {
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
+    /// Vanilla `ItemStack.causeUseVibration`: emits the game event only when `use_effects.interact_vibrations` is true.
+    pub fn cause_use_vibration(
+        &self,
+        stack: &ItemStack,
+        event: pumpkin_data::game_event::GameEvent,
+    ) {
+        if stack
+            .get_data_component::<pumpkin_data::data_component_impl::UseEffectsImpl>()
+            .is_none_or(|u| u.interact_vibrations)
+        {
+            self.entity
+                .world
+                .load()
+                .emit_game_event(event.name(), self.entity.pos.load());
+        }
+    }
+
     pub fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
         let is_blocking = stack.get_data_component::<BlocksAttacksImpl>().is_some();
+        self.cause_use_vibration(
+            &stack,
+            pumpkin_data::game_event::GameEvent::ItemInteractStart,
+        );
         self.item_use_time.store(duration, Ordering::Relaxed);
         *self
             .item_in_use
@@ -1050,10 +1071,17 @@ impl LivingEntity {
     }
 
     pub fn clear_active_hand(&self) {
-        *self
+        let prev = self
             .item_in_use
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(ref stack) = prev {
+            self.cause_use_vibration(
+                stack,
+                pumpkin_data::game_event::GameEvent::ItemInteractFinish,
+            );
+        }
         *self
             .active_hand
             .lock()
@@ -3145,9 +3173,9 @@ impl LivingEntity {
                         item_id: protection_item.item.registry_key.to_string(),
                     },
                 );
-                self.entity.world.load().emit_game_event(
-                    pumpkin_data::game_event::GameEvent::ItemInteractFinish.name(),
-                    self.entity.pos.load(),
+                self.cause_use_vibration(
+                    &protection_item,
+                    pumpkin_data::game_event::GameEvent::ItemInteractFinish,
                 );
                 player.set_health(1.0);
             } else {

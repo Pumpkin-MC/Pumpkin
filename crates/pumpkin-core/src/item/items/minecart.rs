@@ -86,12 +86,12 @@ impl ItemBehaviour for MinecartItem {
             Vector3::new(pos.x + 0.5, pos.y + 0.0625 + height, pos.z + 0.5),
             entity_type,
         );
-        if let Some(custom_name) =
-            item.get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
-        {
-            entity.set_custom_name(custom_name.name.clone());
-        }
         let minecart_entity = Arc::new(MinecartEntity::new(entity));
+        crate::item::items::spawn_egg::apply_entity_variant(
+            item,
+            minecart_entity.as_ref(),
+            Some(player),
+        );
         world.spawn_entity(minecart_entity);
         world.emit_game_event(GameEvent::EntityPlace.name(), pos);
         item.decrement_unless_creative(player.gamemode.load(), 1);

@@ -69,13 +69,17 @@ impl DataComponentImpl for WritableBookContentImpl {
 pub struct WrittenBookContentImpl {
     pub title: String,
     pub author: String,
+    pub generation: i32,
     pub pages: Vec<TextComponent>,
+    pub resolved: bool,
 }
 impl WrittenBookContentImpl {
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
         let mut pages = Vec::new();
         let mut title = String::new();
         let mut author = String::new();
+        let mut generation = 0;
+        let mut resolved = false;
         if let NbtTag::Compound(c) = tag {
             if let Some(value) = c.get("title").and_then(read_text) {
                 title = value;
@@ -83,6 +87,7 @@ impl WrittenBookContentImpl {
             if let Some(s) = c.get_string("author") {
                 author = s.to_string();
             }
+            generation = c.get_int("generation").unwrap_or(0).clamp(0, 3);
             if let Some(NbtTag::List(l)) = c.get("pages") {
                 for item in l {
                     if let Some(page) = read_component(item) {
@@ -90,11 +95,14 @@ impl WrittenBookContentImpl {
                     }
                 }
             }
+            resolved = c.get_bool("resolved").unwrap_or(false);
         }
         Some(Self {
             title,
             author,
+            generation,
             pages,
+            resolved,
         })
     }
 }
@@ -103,8 +111,10 @@ impl DataComponentImpl for WrittenBookContentImpl {
         let mut compound = NbtCompound::new();
         compound.put("title", text_tag(&self.title));
         compound.put_string("author", self.author.clone());
+        compound.put_int("generation", self.generation);
         let pages_tags: Vec<NbtTag> = self.pages.iter().map(text_component_tag).collect();
         compound.put("pages", NbtTag::List(pages_tags));
+        compound.put_bool("resolved", self.resolved);
         NbtTag::Compound(compound)
     }
     default_impl!(WrittenBookContent);
@@ -228,7 +238,9 @@ mod tests {
         let content = WrittenBookContentImpl {
             title: "Title".to_string(),
             author: "Author".to_string(),
+            generation: 1,
             pages: vec![TextComponent::text("one"), TextComponent::text("two")],
+            resolved: true,
         };
         let tag = content.write_data();
         let written_compound = match &tag {

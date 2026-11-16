@@ -30,6 +30,7 @@ pub struct BrewingStandBlockEntity {
     pub speed_multiplier_bits: AtomicU32,
     pub last_potion_count: StdMutex<Option<[bool; 3]>>,
     pub ingredient_item: StdMutex<Option<&'static pumpkin_data::item::Item>>,
+    pub metadata: super::ContainerMetadata,
 }
 
 impl BrewingStandBlockEntity {
@@ -54,6 +55,7 @@ impl BrewingStandBlockEntity {
             speed_multiplier_bits: AtomicU32::new(1.0f32.to_bits()),
             last_potion_count: StdMutex::new(None),
             ingredient_item: StdMutex::new(None),
+            metadata: super::ContainerMetadata::default(),
         }
     }
 
@@ -588,6 +590,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         Self: Sized,
     {
         let mut entity = Self::new(position);
+        entity.metadata = super::ContainerMetadata::from_nbt(nbt);
 
         // Load brew time / fuel if present in NBT (26.3 writes Ints; legacy worlds used Short/Byte)
         if let Some(bt) = nbt
@@ -666,6 +669,37 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             "speed_multiplier",
             f32::from_bits(self.speed_multiplier_bits.load(Ordering::Relaxed)),
         );
+        self.metadata.write_nbt(nbt);
+    }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        self.metadata.apply_item_components(stack);
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::apply_container_items_to_slice(stack, &mut *items);
+    }
+
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_name_only(stack);
+    }
+
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_item_components(stack);
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::collect_container_items_from_slice(&*items, stack);
+    }
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.metadata.get_lock()
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.metadata.get_custom_name()
     }
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {

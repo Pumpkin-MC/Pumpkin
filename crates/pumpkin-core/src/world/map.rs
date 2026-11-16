@@ -132,6 +132,7 @@ impl MapData {
     }
 }
 
+#[derive(Clone)]
 pub struct MapDecoration {
     pub icon_type: i32,
     pub x: i8,

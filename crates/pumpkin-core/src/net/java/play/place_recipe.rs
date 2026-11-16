@@ -38,7 +38,7 @@ impl JavaClient {
             .filter(|r| {
                 !matches!(
                     r,
-                    CraftingRecipeTypes::CraftingSpecial
+                    CraftingRecipeTypes::CraftingSpecial(_)
                         | CraftingRecipeTypes::CraftingDecoratedPot { .. }
                 )
             })
@@ -72,7 +72,7 @@ impl JavaClient {
             let recipe = RECIPES_CRAFTING.iter().find(|r| {
                 if matches!(
                     r,
-                    CraftingRecipeTypes::CraftingSpecial
+                    CraftingRecipeTypes::CraftingSpecial(_)
                         | CraftingRecipeTypes::CraftingDecoratedPot { .. }
                 ) {
                     return false;

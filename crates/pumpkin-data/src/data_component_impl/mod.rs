@@ -443,6 +443,17 @@ impl IDSet<crate::damage::DamageType> {
     }
 }
 
+impl IDSet<crate::item::Item> {
+    /// Membership by id or item tag.
+    #[must_use]
+    pub fn contains(&self, item: &crate::item::Item) -> bool {
+        match self {
+            Self::Tag(tag) => item.is_tagged_with(tag).unwrap_or(false),
+            Self::IDs(items) => items.iter().any(|i| i.id == item.id),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum EquipmentType {
     Hand,
@@ -1215,5 +1226,73 @@ mod tests {
         let sword = ItemStack::new(1, &Item::NETHERITE_SWORD);
         assert!(!sword.can_be_hurt_by(crate::damage::DamageType::LAVA));
         assert!(sword.can_be_hurt_by(crate::damage::DamageType::CACTUS));
+    }
+
+    #[test]
+    fn lock_predicate_and_written_book_roundtrips() {
+        use crate::item::Item;
+        use crate::item_stack::ItemStack;
+        use pumpkin_util::text::TextComponent;
+
+        let mut comp_pred = NbtCompound::new();
+        comp_pred.put_string("minecraft:custom_name", "Secret Key".to_string());
+        let mut count_bounds = NbtCompound::new();
+        count_bounds.put_int("min", 2);
+        count_bounds.put_int("max", 4);
+        let mut pred = NbtCompound::new();
+        pred.put_string("items", "minecraft:tripwire_hook".to_string());
+        pred.put_compound("count", count_bounds);
+        pred.put_compound("components", comp_pred);
+        let lock = LockImpl { predicate: pred };
+
+        assert!(!lock.unlocks_with(&ItemStack::EMPTY));
+
+        let mut key = ItemStack::new(2, &Item::TRIPWIRE_HOOK);
+        assert!(!lock.unlocks_with(&key));
+        key.set_data_component(CustomNameImpl {
+            name: TextComponent::text("Secret Key"),
+        });
+        assert!(lock.unlocks_with(&key));
+
+        let mut wrong_count = key.clone();
+        wrong_count.item_count = 1;
+        assert!(!lock.unlocks_with(&wrong_count));
+
+        let wrong_item = ItemStack::new_with_component(
+            2,
+            &Item::STICK,
+            vec![(
+                DataComponent::CustomName,
+                Some(Box::new(CustomNameImpl {
+                    name: TextComponent::text("Secret Key"),
+                })),
+            )],
+        );
+        assert!(!lock.unlocks_with(&wrong_item));
+
+        let legacy = LockImpl::read_data(&NbtTag::String("Vault".into())).unwrap();
+        let mut legacy_key = ItemStack::new(1, &Item::STICK);
+        assert!(!legacy.unlocks_with(&legacy_key));
+        legacy_key.set_data_component(CustomNameImpl {
+            name: TextComponent::text("Vault"),
+        });
+        assert!(legacy.unlocks_with(&legacy_key));
+
+        assert_round_trip(
+            WrittenBookContentImpl {
+                title: "Chronicle".to_string(),
+                author: "Alex".to_string(),
+                generation: 2,
+                pages: vec![TextComponent::text("Page 1")],
+                resolved: true,
+            },
+            WrittenBookContentImpl::read_data,
+        );
+        assert_round_trip(
+            JukeboxPlayableImpl {
+                song: "minecraft:precipice",
+            },
+            JukeboxPlayableImpl::read_data,
+        );
     }
 }

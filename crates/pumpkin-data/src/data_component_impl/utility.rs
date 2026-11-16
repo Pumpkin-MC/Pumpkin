@@ -1171,17 +1171,86 @@ pub struct JukeboxPlayableImpl {
     pub song: &'static str,
 }
 impl JukeboxPlayableImpl {
+    #[must_use]
+    pub const fn song_registry_key(song: crate::jukebox_song::JukeboxSong) -> &'static str {
+        use crate::jukebox_song::JukeboxSong;
+        match song {
+            JukeboxSong::Id11 => "minecraft:11",
+            JukeboxSong::Id13 => "minecraft:13",
+            JukeboxSong::Id5 => "minecraft:5",
+            JukeboxSong::Blocks => "minecraft:blocks",
+            JukeboxSong::Bounce => "minecraft:bounce",
+            JukeboxSong::Cat => "minecraft:cat",
+            JukeboxSong::Chirp => "minecraft:chirp",
+            JukeboxSong::Creator => "minecraft:creator",
+            JukeboxSong::CreatorMusicBox => "minecraft:creator_music_box",
+            JukeboxSong::Far => "minecraft:far",
+            JukeboxSong::LavaChicken => "minecraft:lava_chicken",
+            JukeboxSong::Mall => "minecraft:mall",
+            JukeboxSong::Mellohi => "minecraft:mellohi",
+            JukeboxSong::Otherside => "minecraft:otherside",
+            JukeboxSong::Pigstep => "minecraft:pigstep",
+            JukeboxSong::Precipice => "minecraft:precipice",
+            JukeboxSong::Relic => "minecraft:relic",
+            JukeboxSong::Stal => "minecraft:stal",
+            JukeboxSong::Strad => "minecraft:strad",
+            JukeboxSong::Tears => "minecraft:tears",
+            JukeboxSong::Wait => "minecraft:wait",
+            JukeboxSong::Ward => "minecraft:ward",
+        }
+    }
+
+    #[must_use]
+    pub const fn song_from_id(id: u32) -> Option<crate::jukebox_song::JukeboxSong> {
+        use crate::jukebox_song::JukeboxSong;
+        match id {
+            0 => Some(JukeboxSong::Id11),
+            1 => Some(JukeboxSong::Id13),
+            2 => Some(JukeboxSong::Id5),
+            3 => Some(JukeboxSong::Blocks),
+            4 => Some(JukeboxSong::Bounce),
+            5 => Some(JukeboxSong::Cat),
+            6 => Some(JukeboxSong::Chirp),
+            7 => Some(JukeboxSong::Creator),
+            8 => Some(JukeboxSong::CreatorMusicBox),
+            9 => Some(JukeboxSong::Far),
+            10 => Some(JukeboxSong::LavaChicken),
+            11 => Some(JukeboxSong::Mall),
+            12 => Some(JukeboxSong::Mellohi),
+            13 => Some(JukeboxSong::Otherside),
+            14 => Some(JukeboxSong::Pigstep),
+            15 => Some(JukeboxSong::Precipice),
+            16 => Some(JukeboxSong::Relic),
+            17 => Some(JukeboxSong::Stal),
+            18 => Some(JukeboxSong::Strad),
+            19 => Some(JukeboxSong::Tears),
+            20 => Some(JukeboxSong::Wait),
+            21 => Some(JukeboxSong::Ward),
+            _ => None,
+        }
+    }
+
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let compound = data.extract_compound()?;
-        let song = compound.get_string("song")?;
-        let static_song = crate::jukebox_song::JukeboxSong::from_name(
-            song.strip_prefix("minecraft:").unwrap_or(song),
-        )
-        .map_or("", |s| s.to_name());
-        Some(Self { song: static_song })
+        let raw_song = data
+            .extract_string()
+            .or_else(|| data.extract_compound().and_then(|c| c.get_string("song")))?;
+        let song = crate::jukebox_song::JukeboxSong::from_name(
+            raw_song.strip_prefix("minecraft:").unwrap_or(raw_song),
+        )?;
+        Some(Self {
+            song: Self::song_registry_key(song),
+        })
     }
 }
 impl DataComponentImpl for JukeboxPlayableImpl {
+    fn write_data(&self) -> NbtTag {
+        let song = if self.song.contains(':') {
+            self.song.to_string()
+        } else {
+            format!("minecraft:{}", self.song)
+        };
+        NbtTag::String(song.into())
+    }
     default_impl!(JukeboxPlayable);
 }
 

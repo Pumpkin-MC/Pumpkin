@@ -6233,9 +6233,101 @@ impl Player {
         }
     }
 
+    fn tick_inventory_item_components(&self, server: &Server) {
+        use pumpkin_data::data_component::DataComponent;
+        use pumpkin_data::data_component_impl::{
+            LodestoneTrackerImpl, MapIdImpl, MapPostProcessing, MapPostProcessingImpl,
+        };
+        use pumpkin_inventory::Inventory;
+
+        let world = self.world();
+        let inv_size = self.inventory.size();
+        let mut any_changed = false;
+        for slot_idx in 0..inv_size {
+            let mut stack = self.inventory.get_stack(slot_idx);
+            if stack.is_empty() {
+                continue;
+            }
+            let mut changed = if let Some(post) = stack
+                .get_data_component::<MapPostProcessingImpl>()
+                .and_then(|p| p.processing)
+                && let Some(orig_id) = stack.get_data_component::<MapIdImpl>().map(|m| m.id)
+                && let Some(orig_arc) = server.map_manager.get_map(orig_id)
+                && let Ok(orig) = orig_arc.try_lock()
+            {
+                let new_id = server.next_map_id();
+                match post {
+                    MapPostProcessing::Scale => {
+                        let new_scale = (orig.scale + 1).min(4);
+                        let _ = server.map_manager.create_map(
+                            new_id,
+                            orig.dimension.clone(),
+                            orig.center_x,
+                            orig.center_z,
+                            new_scale,
+                        );
+                    }
+                    MapPostProcessing::Lock => {
+                        let new_arc = server.map_manager.create_map(
+                            new_id,
+                            orig.dimension.clone(),
+                            orig.center_x,
+                            orig.center_z,
+                            orig.scale,
+                        );
+                        if let Ok(mut new_map) = new_arc.try_lock() {
+                            new_map.locked = true;
+                            *new_map.colors = *orig.colors;
+                            new_map.decorations.clone_from(&orig.decorations);
+                            new_map.dirty = true;
+                        }
+                    }
+                }
+                stack
+                    .patch
+                    .retain(|(id, _)| *id != DataComponent::MapPostProcessing);
+                stack.set_data_component(MapIdImpl { id: new_id });
+                true
+            } else {
+                false
+            };
+
+            if let Some(tracker) = stack.get_data_component::<LodestoneTrackerImpl>()
+                && tracker.tracked
+                && let Some(target) = &tracker.target
+                && target.dimension == world.dimension.minecraft_name
+            {
+                let pos = BlockPos::new(target.x, target.y, target.z);
+                if world.level.is_chunk_loaded(&pos.chunk_position())
+                    && world.get_block(&pos) != &Block::LODESTONE
+                {
+                    stack.set_data_component(LodestoneTrackerImpl {
+                        target: None,
+                        tracked: true,
+                    });
+                    changed = true;
+                }
+            }
+
+            if changed {
+                self.inventory.set_stack(slot_idx, stack);
+                any_changed = true;
+            }
+        }
+
+        if any_changed {
+            self.player_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .send_content_updates();
+        }
+    }
+
     pub fn tick_maps(&self, server: &Server) {
         use pumpkin_data::data_component_impl::MapIdImpl;
         use pumpkin_data::item::Item;
+
+        self.tick_inventory_item_components(server);
 
         for hand in Hand::all() {
             let stack = self.inventory().get_stack_in_hand(hand);
@@ -6247,7 +6339,9 @@ impl Player {
                 if let Some(map_data_arc) = server.map_manager.get_map(map_id)
                     && let Ok(mut map_data) = map_data_arc.try_lock()
                 {
-                    map_data.update(self);
+                    if !map_data.locked {
+                        map_data.update(self);
+                    }
 
                     let tick_count = self.tick_counter.load(Ordering::Relaxed);
                     if map_data.dirty || tick_count % 10 == 0 {
@@ -6765,6 +6859,29 @@ impl Player {
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
+        let custom_name = block_pos
+            .and_then(|pos| self.world().get_block_entity(&pos))
+            .and_then(|be| be.get_custom_name());
+        let display_name = custom_name.unwrap_or_else(|| screen_handler_factory.get_display_name());
+
+        if let Some(pos) = block_pos
+            && let Some(be) = self.world().get_block_entity(&pos)
+            && let Some(lock) = be.get_lock()
+            && self.gamemode.load() != GameMode::Spectator
+            && !lock.unlocks_with(&self.inventory.held_item())
+        {
+            self.send_system_message_raw(
+                &TextComponent::translate("container.isLocked", [display_name]),
+                true,
+            );
+            self.world().play_sound(
+                pumpkin_data::sound::Sound::BlockChestLocked,
+                pumpkin_data::sound::SoundCategory::Blocks,
+                &pos.to_centered_f64(),
+            );
+            return None;
+        }
+
         if !self
             .current_screen_handler
             .lock()
@@ -6804,7 +6921,6 @@ impl Player {
             let sync_id = screen_handler_temp.sync_id();
             let window_type = screen_handler_temp.window_type()?;
 
-            let display_name = screen_handler_factory.get_display_name();
             let java_packet =
                 COpenScreen::new(sync_id.into(), (window_type as i32).into(), &display_name);
 

@@ -160,6 +160,39 @@ impl ItemStack {
         }
         None
     }
+
+    #[must_use]
+    pub fn get_data_component_by_id(
+        &self,
+        to_get_id: DataComponent,
+    ) -> Option<&dyn DataComponentImpl> {
+        for (id, component) in &self.patch {
+            if *id == to_get_id {
+                return component.as_deref();
+            }
+        }
+        for (id, component) in self.item.components {
+            if *id == to_get_id {
+                return Some(*component);
+            }
+        }
+        None
+    }
+
+    /// Vanilla `ItemStack.transmuteCopy(ItemLike, count)`: creates a new stack of `target_item`
+    /// with `count`, preserving `self.patch` (all explicit component overrides and removals).
+    #[must_use]
+    pub fn transmute_copy(&self, target_item: &'static Item, count: u8) -> Self {
+        if self.is_empty() {
+            return Self::EMPTY.clone();
+        }
+        Self {
+            item_count: count,
+            item: target_item,
+            patch: self.patch.clone(),
+            uid: ITEM_STACK_ID_GEN.next_id(),
+        }
+    }
     #[must_use]
     pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
         let to_get_id = T::get_enum();
@@ -488,8 +521,17 @@ impl ItemStack {
         if let Some(value) = self.get_data_component::<ConsumableImpl>() {
             return value.consume_ticks();
         }
-        if self.get_data_component::<BlocksAttacksImpl>().is_some() {
+        if self.get_data_component::<BlocksAttacksImpl>().is_some()
+            || self
+                .get_data_component::<crate::data_component_impl::KineticWeaponImpl>()
+                .is_some()
+        {
             return 72000;
+        }
+        if let Some(inst) = self.get_data_component::<crate::data_component_impl::InstrumentImpl>()
+            && let Some(instrument) = crate::instrument::Instrument::from_name(&inst.instrument)
+        {
+            return i32::try_from(instrument.use_duration_ticks()).unwrap_or(i32::MAX);
         }
         0
     }
