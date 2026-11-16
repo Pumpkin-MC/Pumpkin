@@ -76,9 +76,6 @@ pub struct WitherEntity {
 impl WitherEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        mob_entity
-            .persistence_required
-            .store(true, Ordering::Relaxed);
         let wither = Self {
             mob_entity,
             invulnerable_ticks: AtomicI32::new(0),
@@ -605,6 +602,10 @@ impl Mob for WitherEntity {
     fn on_removed(&self) {
         self.remove_all_bossbar(&self.get_entity().world.load());
     }
+    
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        false
+    }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
@@ -704,8 +705,5 @@ impl Mob for WitherEntity {
         if let Some(invul) = nbt.get_int("Invul") {
             self.set_invulnerable_ticks(invul);
         }
-        self.mob_entity
-            .persistence_required
-            .store(true, Ordering::Relaxed);
     }
 }
