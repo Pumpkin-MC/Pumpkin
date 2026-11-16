@@ -6234,10 +6234,7 @@ impl Player {
     }
 
     fn tick_inventory_item_components(&self, server: &Server) {
-        use pumpkin_data::data_component::DataComponent;
-        use pumpkin_data::data_component_impl::{
-            LodestoneTrackerImpl, MapIdImpl, MapPostProcessing, MapPostProcessingImpl,
-        };
+        use pumpkin_data::data_component_impl::LodestoneTrackerImpl;
         use pumpkin_inventory::Inventory;
 
         let world = self.world();
@@ -6248,49 +6245,7 @@ impl Player {
             if stack.is_empty() {
                 continue;
             }
-            let mut changed = if let Some(post) = stack
-                .get_data_component::<MapPostProcessingImpl>()
-                .and_then(|p| p.processing)
-                && let Some(orig_id) = stack.get_data_component::<MapIdImpl>().map(|m| m.id)
-                && let Some(orig_arc) = server.map_manager.get_map(orig_id)
-                && let Ok(orig) = orig_arc.try_lock()
-            {
-                let new_id = server.next_map_id();
-                match post {
-                    MapPostProcessing::Scale => {
-                        let new_scale = (orig.scale + 1).min(4);
-                        let _ = server.map_manager.create_map(
-                            new_id,
-                            orig.dimension.clone(),
-                            orig.center_x,
-                            orig.center_z,
-                            new_scale,
-                        );
-                    }
-                    MapPostProcessing::Lock => {
-                        let new_arc = server.map_manager.create_map(
-                            new_id,
-                            orig.dimension.clone(),
-                            orig.center_x,
-                            orig.center_z,
-                            orig.scale,
-                        );
-                        if let Ok(mut new_map) = new_arc.try_lock() {
-                            new_map.locked = true;
-                            *new_map.colors = *orig.colors;
-                            new_map.decorations.clone_from(&orig.decorations);
-                            new_map.dirty = true;
-                        }
-                    }
-                }
-                stack
-                    .patch
-                    .retain(|(id, _)| *id != DataComponent::MapPostProcessing);
-                stack.set_data_component(MapIdImpl { id: new_id });
-                true
-            } else {
-                false
-            };
+            let mut changed = crate::world::map::resolve_map_post_processing(&mut stack, server);
 
             if let Some(tracker) = stack.get_data_component::<LodestoneTrackerImpl>()
                 && tracker.tracked

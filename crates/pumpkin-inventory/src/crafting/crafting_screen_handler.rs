@@ -122,6 +122,20 @@ impl RecipeResult {
         }
         stack
     }
+
+    #[must_use]
+    pub fn remaining_item_for_slot(
+        &self,
+        slot: usize,
+        ingredient: &ItemStack,
+    ) -> Option<ItemStack> {
+        ingredient.crafting_remainder().or_else(|| {
+            self.remaining_items
+                .as_ref()
+                .and_then(|rems| rems.get(slot))
+                .and_then(Clone::clone)
+        })
+    }
 }
 
 fn resolve_result_item(result: &RecipeResultStruct, fallback: &'static Item) -> &'static Item {
@@ -1103,20 +1117,16 @@ impl Slot for ResultSlot {
             stack.item_count as i32,
         );
         player.on_recipe_crafted(stack);
-        let custom_remainders = self
-            .match_recipe()
-            .and_then(|matched| matched.remaining_items);
+        let matched_recipe = self.match_recipe();
         for i in 0..self.inventory.size() {
             let ingredient = self.inventory.get_stack(i);
             if ingredient.is_empty() {
                 continue;
             }
-            let remainder = ingredient.crafting_remainder().or_else(|| {
-                custom_remainders
-                    .as_ref()
-                    .and_then(|rems| rems.get(i))
-                    .and_then(Clone::clone)
-            });
+            let remainder = matched_recipe
+                .as_ref()
+                .and_then(|m| m.remaining_item_for_slot(i, &ingredient))
+                .or_else(|| ingredient.crafting_remainder());
             self.inventory.remove_stack_specific(i, 1);
             let Some(remainder) = remainder else {
                 continue;

@@ -375,6 +375,17 @@ impl ItemStack {
             .any(|(enc, level)| *level > 0 && enc.has_tag(tag))
     }
 
+    /// Vanilla `EnchantmentHelper.has(stack, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE)`.
+    #[must_use]
+    pub fn has_prevent_armor_change(&self) -> bool {
+        let Some(data) = self.get_data_component::<EnchantmentsImpl>() else {
+            return false;
+        };
+        data.enchantment
+            .iter()
+            .any(|(enc, level)| *level > 0 && enc.effects.prevent_armor_change)
+    }
+
     #[must_use]
     pub fn is_unbreakable(&self) -> bool {
         self.get_data_component::<UnbreakableImpl>().is_some()

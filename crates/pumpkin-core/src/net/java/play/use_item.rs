@@ -117,7 +117,15 @@ impl JavaClient {
         }
         let equipment_slot = held
             .get_data_component::<EquippableImpl>()
-            .filter(|equippable| equippable.swappable)
+            .filter(|equippable| {
+                equippable.swappable
+                    && (equippable.slot.slot_type()
+                        == pumpkin_data::data_component_impl::EquipmentType::HumanoidArmor
+                        || matches!(equippable.slot, EquipmentSlot::OffHand(_)))
+                    && equippable.allowed_entities.as_ref().is_none_or(|allowed| {
+                        allowed.contains(&pumpkin_data::entity::EntityType::PLAYER)
+                    })
+            })
             .map(|equippable| equippable.slot.clone());
         if let Some(slot) = equipment_slot {
             // The equipment lock has to be released before touching the hand again:
@@ -127,25 +135,44 @@ impl JavaClient {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .get(&slot);
-            if current_equipped.are_items_and_components_equal(held) {
+            let gamemode = player.gamemode.load();
+            if (current_equipped.has_prevent_armor_change() && gamemode != GameMode::Creative)
+                || current_equipped.are_items_and_components_equal(held)
+            {
                 return;
             }
 
-            player.enqueue_equipment_change(&slot, held);
-
-            let equipped = if current_equipped.is_empty() {
-                let equipped = held.clone();
-                held.decrement_unless_creative(player.gamemode.load(), 1);
-                equipped
+            let equipped = if held.item_count <= 1 {
+                let swapped_to_eq = if gamemode == GameMode::Creative {
+                    held.clone()
+                } else {
+                    held.copy_with_count(1)
+                };
+                if gamemode != GameMode::Creative || !current_equipped.is_empty() {
+                    *held = current_equipped;
+                }
+                swapped_to_eq
             } else {
-                std::mem::replace(held, current_equipped)
+                let swapped_to_eq = held.copy_with_count(1);
+                held.decrement_unless_creative(gamemode, 1);
+                if !current_equipped.is_empty() {
+                    inventory.offer(current_equipped, false, player.as_ref());
+                }
+                swapped_to_eq
             };
+
+            player.enqueue_equipment_change(&slot, &equipped);
             inventory
                 .entity_equipment
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .put(&slot, equipped);
             inventory.set_stack_in_hand(hand, held.clone());
+            player
+                .player_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .send_content_updates();
         }
     }
 
