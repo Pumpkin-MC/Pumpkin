@@ -15,7 +15,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProviderResult};
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
-use crate::plugin::{PluginEntry, PluginId, PluginStatus};
+use crate::plugin::{ManagerError, PluginEntry, PluginId, PluginStatus};
 use crate::server::Server;
 
 const DESCRIPTION: &str = "Manage server plugins.";
@@ -336,26 +336,42 @@ impl CommandExecutor for ReloadExecutor {
                 );
                 return;
             }
-            let was_loaded = server_clone.plugin_manager.is_plugin_loaded(&plugin_name);
-            if was_loaded
-                && let Err(e) = server_clone
-                    .plugin_manager
-                    .unload_plugin(&plugin_name)
-                    .await
-            {
-                let in_use = e.is_library_in_use();
-                source_clone.send_feedback(
-                    TextComponent::text(format!("Failed to unload plugin {plugin_name}: {e}"))
-                        .color_named(if in_use {
+            // Checked and unloaded as one load: a replacement that came in since is not unloaded
+            let running = server_clone.plugin_manager.active_plugin(&plugin_name);
+            let was_loaded = running.is_some();
+            if let Some((id, can_unload)) = running {
+                if !can_unload {
+                    source_clone.send_feedback(
+                        TextComponent::text(format!(
+                            "Plugin {plugin_name} cannot be unloaded at runtime, restart the server"
+                        ))
+                        .color_named(NamedColor::Red),
+                        false,
+                    );
+                    return;
+                }
+                if let Err(e) = server_clone.plugin_manager.unload_loaded(&id).await {
+                    let in_use = e.is_library_in_use();
+                    let replaced = matches!(e, ManagerError::PluginNotFound(_));
+                    let message = if replaced {
+                        format!(
+                            "Plugin {plugin_name} was loaded again in the meantime, not reloaded"
+                        )
+                    } else {
+                        format!("Failed to unload plugin {plugin_name}: {e}")
+                    };
+                    source_clone.send_feedback(
+                        TextComponent::text(message).color_named(if in_use {
                             NamedColor::Yellow
                         } else {
                             NamedColor::Red
                         }),
-                    false,
-                );
-                // Unloaded all the same, only its library is kept
-                if !in_use {
-                    return;
+                        false,
+                    );
+                    // Unloaded all the same, only its library is kept
+                    if !in_use {
+                        return;
+                    }
                 }
             }
 
