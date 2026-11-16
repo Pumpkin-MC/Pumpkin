@@ -5,14 +5,14 @@
 /crates/pumpkin-protocol/src/bedrock/         @xRookieFight @QuantumSegfault
 /crates/pumpkin-core/src/net/bedrock/         @xRookieFight @QuantumSegfault
 /crates/pumpkin-core/src/command/             @aure31
-/crates/pumpkin-plugin-api/                   @yunuservices
-/crates/pumpkin-plugin-wit/                   @yunuservices @QuantumSegfault
-/crates/pumpkin-api-macros/                   @yunuservices
-/crates/pumpkin-core/src/plugin/              @yunuservices @QuantumSegfault
-/crates/pumpkin-wasm-host/                    @yunuservices @QuantumSegfault
-/crates/pumpkin-wasm-host-common/             @yunuservices @QuantumSegfault
-/crates/pumpkin-wasm-host-v0_1/               @yunuservices @QuantumSegfault
-/crates/pumpkin-wasm-host-v0_2/               @yunuservices @QuantumSegfault
+/crates/pumpkin-plugin-api/                   @yunuservices @Phoenixxo
+/crates/pumpkin-plugin-wit/                   @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-api-macros/                   @yunuservices @Phoenixxo
+/crates/pumpkin-core/src/plugin/              @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-wasm-host/                    @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-wasm-host-common/             @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-wasm-host-v0_1/               @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-wasm-host-v0_2/               @yunuservices @Phoenixxo @QuantumSegfault
 *.md                                          @Q2297045667
 /docs/                                        @Q2297045667
 /crates/pumpkin-core/src/entity/mob/          @Snowiiii @RoosterBooster007
@@ -22,3 +22,8 @@
 /crates/pumpkin-world/src/generation/feature/ @Snowiiii @RoosterBooster007 @MegalithOfficial
 /crates/pumpkin-world/src/generation/noise/   @Snowiiii @RoosterBooster007 @MegalithOfficial
 /.github/workflows/                           @Snowiiii
+/tools/pumpkin-codegen/                       @Snowiiii @KairuDeibisu
+/crates/pumpkin-gametest/                     @KairuDeibisu
+/tools/pumpkin-tester/                        @KairuDeibisu
+/crates/pumpkin-core/src/server/builtin_game_tests/ @KairuDeibisu
+/crates/pumpkin-core/src/server/server_test_manager.rs @KairuDeibisu
