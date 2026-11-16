@@ -84,6 +84,7 @@ impl ItemBehaviour for HangingEntityItem {
                 .data
                 .store(i32::from(face.to_index()), Ordering::Relaxed);
             let painting = Arc::new(PaintingEntity::new_with_variant(entity, variant));
+            painting.set_attached_pos(location);
             world.play_sound(
                 Sound::EntityPaintingPlace,
                 SoundCategory::Blocks,
