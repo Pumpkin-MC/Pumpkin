@@ -643,7 +643,7 @@ impl PluginManager {
 
     /// Unload all loaded plugins
     pub async fn unload_all_plugins(self: &Arc<Self>) -> Result<(), ManagerError> {
-        self.unload_active_plugins(|_| true).await
+        self.unload_active_plugins(false, |_| true).await
     }
 
     /// The active plugins matching `filter` with their files, dependents before what they depend on
@@ -697,9 +697,11 @@ impl PluginManager {
         }
     }
 
-    /// Unload the active plugins matching `filter`, reporting the first failure
+    /// Unload the active plugins matching `filter`, reporting the first failure.
+    /// `keep_resident`: leave one running that became resident since `filter` ran.
     async fn unload_active_plugins(
         self: &Arc<Self>,
+        keep_resident: bool,
         filter: impl Fn(&LoadedPlugin) -> bool,
     ) -> Result<(), ManagerError> {
         let plugin_names = self.unload_order(filter).into_iter().map(|(name, _)| name);
@@ -708,7 +710,7 @@ impl PluginManager {
         // like `reload_all_plugins` does not rescan while a plugin's resources are still resident
         let mut first_error = None;
         for name in plugin_names {
-            match self.unload_plugin(&name).await {
+            match self.unload(&name, None, keep_resident).await {
                 Ok(()) => {}
                 // Unloaded all the same, its library is only kept
                 Err(e) if e.is_library_in_use() => warn!("Plugin {name}: {e}"),
@@ -740,7 +742,7 @@ impl PluginManager {
         let resident = self.resident_plugins().await;
         let unloading = self.unload_order(|p| !resident.contains(&p.metadata.name));
         let names: HashSet<&String> = unloading.iter().map(|(name, _)| name).collect();
-        self.unload_active_plugins(|p| p.is_active && names.contains(&p.metadata.name))
+        self.unload_active_plugins(true, |p| p.is_active && names.contains(&p.metadata.name))
             .await?;
         self.prune_missing_files().await;
         if let Err(e) = self.load_plugins(server).await {
@@ -755,12 +757,9 @@ impl PluginManager {
         Ok(())
     }
 
-    /// The active plugins a reload-all must leave running: those whose loader can't unload, and
-    /// the owners of their loaders, however deep. Unloading an owner unloads its children, and
-    /// a rescan skips a child that cannot be unloaded.
-    async fn resident_plugins(&self) -> HashSet<String> {
-        let owned: Vec<(String, Arc<dyn PluginLoader>)> = self
-            .loaders
+    /// Loaders registered by a plugin, with that plugin's name
+    async fn owned_loaders(&self) -> Vec<(String, Arc<dyn PluginLoader>)> {
+        self.loaders
             .read()
             .await
             .iter()
@@ -768,11 +767,16 @@ impl PluginManager {
                 let owner = registered.owner.clone()?;
                 Some((owner, Arc::clone(&registered.loader)))
             })
-            .collect();
-        let plugins = self
-            .plugins
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .collect()
+    }
+
+    /// The active plugins a reload-all must leave running: those whose loader can't unload, and
+    /// the owners of their loaders, however deep. Unloading an owner unloads its children, and
+    /// a rescan skips a child that cannot be unloaded.
+    fn resident_among(
+        plugins: &[LoadedPlugin],
+        owned: &[(String, Arc<dyn PluginLoader>)],
+    ) -> HashSet<String> {
         let mut resident: HashSet<String> = plugins
             .iter()
             .filter(|p| p.is_active && !p.loader.can_unload())
@@ -780,7 +784,7 @@ impl PluginManager {
             .collect();
         loop {
             let before = resident.len();
-            for (owner, loader) in &owned {
+            for (owner, loader) in owned {
                 let keeps_child = plugins.iter().any(|p| {
                     p.is_active
                         && Arc::ptr_eq(&p.loader, loader)
@@ -794,6 +798,15 @@ impl PluginManager {
                 return resident;
             }
         }
+    }
+
+    async fn resident_plugins(&self) -> HashSet<String> {
+        let owned = self.owned_loaders().await;
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Self::resident_among(&plugins, &owned)
     }
 
     /// Forget plugin files that are gone from disk, so a rescan stops listing them.
@@ -1935,6 +1948,8 @@ impl PluginManager {
                     let reason = format!("dependency {dep} is not active");
                     self.mark_inactive(path, Some(&metadata), PluginStatus::Failed(reason.clone()));
                     discard_loaded(instance, loader, loader_data).await;
+                    // Tried again when a loader is added: the dependency may come with it
+                    self.unloaded_files.write().await.insert(path.to_path_buf());
                     return Err(ManagerError::DependencyError(format!(
                         "Plugin \"{}\": {reason}",
                         metadata.name
@@ -2362,16 +2377,22 @@ impl PluginManager {
         name: &'a str,
         load: Option<u64>,
     ) -> BoxFuture<'a, Result<(), ManagerError>> {
-        Box::pin(self.unload(name, load))
+        Box::pin(self.unload(name, load, false))
     }
 
     /// Unload the plugin `id` names, not a later load of the same name.
     pub async fn unload_loaded(self: &Arc<Self>, id: &PluginId) -> Result<(), ManagerError> {
-        self.unload(&id.name, Some(id.token)).await
+        self.unload(&id.name, Some(id.token), false).await
     }
 
     /// `load`: only that load of `name`.
-    async fn unload(self: &Arc<Self>, name: &str, load: Option<u64>) -> Result<(), ManagerError> {
+    /// `keep_resident`: does nothing if the plugin turned resident, see `resident_among`.
+    async fn unload(
+        self: &Arc<Self>,
+        name: &str,
+        load: Option<u64>,
+        keep_resident: bool,
+    ) -> Result<(), ManagerError> {
         // The record is claimed, not removed: it keeps the name until the release attempt, so a
         // load of the same plugin is refused instead of running next to the old copy. State goes in
         // the same section, or a load reserving the name would lose its Loading state to this unload
@@ -2383,6 +2404,11 @@ impl PluginManager {
                 None => self.wait_for_initialization(name).await?,
             }
 
+            let owned = if keep_resident {
+                self.owned_loaders().await
+            } else {
+                Vec::new()
+            };
             let mut states = self.plugin_states.write().await;
             // A load can reserve the name between the wait and the lock
             if matches!(states.get(name), Some(PluginState::Loading)) {
@@ -2395,6 +2421,11 @@ impl PluginManager {
                 .plugins
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // A child admitted after the caller's snapshot: its owner's unload would leave it
+            // inactive. Checked in the section that claims, which also admits children
+            if keep_resident && Self::resident_among(&plugins, &owned).contains(name) {
+                return Ok(());
+            }
             // An inactive record is already unloaded, or another unload is releasing it
             let plugin = plugins
                 .iter_mut()
@@ -3210,6 +3241,24 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn plugin_missing_a_dependency_loads_once_a_loader_brings_it() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let dependent = loader.add("c", ok(), ok());
+        loader.depend(&dependent, "d");
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &dependent).await.is_err());
+
+        let late = Arc::new(TestLoader::default());
+        let dependency = late.add("d", ok(), ok());
+        manager.unloaded_files.write().await.insert(dependency);
+        let retry = manager.add_loader(&server, late).await;
+        assert!(matches!(retry, LoaderRetry::Loaded(2)));
+        assert!(manager.is_plugin_active("c"));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn owner_of_a_resident_plugin_stays_in_reload_all() {
         let world = tempfile::tempdir().unwrap();
         let loader = Arc::new(TestLoader::default());
@@ -3244,6 +3293,44 @@ mod tests {
 
         let resident = manager.resident_plugins().await;
         assert_eq!(resident, HashSet::from(["p".to_string(), "c".to_string()]));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn owner_turned_resident_after_the_snapshot_is_kept() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        let child_loader = Arc::new(TestLoader {
+            resident: true,
+            ..TestLoader::default()
+        });
+        let child = child_loader.add("c", ok(), ok());
+        let owner_loader = SyncMutex::new(Some(child_loader));
+        let owner = loader.add(
+            "p",
+            hook(move |context| {
+                let child_loader = owner_loader
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .take();
+                async move {
+                    if let Some(child_loader) = child_loader {
+                        context.register_plugin_loader(child_loader).await;
+                    }
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
+        assert!(manager.resident_plugins().await.is_empty());
+
+        // The child starts after the snapshot, before the owner is claimed
+        assert!(manager.try_load_plugin(&server, &child).await.is_ok());
+        assert!(manager.unload("p", None, true).await.is_ok());
+        assert!(manager.is_plugin_active("p"));
+        assert!(manager.is_plugin_active("c"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
