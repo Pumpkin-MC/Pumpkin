@@ -254,6 +254,9 @@ impl Mob for SnowGolemEntity {
                     }
                     new_state = event.new_state_id;
                 }
+                if pumpkin_data::BlockState::from_id(new_state).is_air() {
+                    continue;
+                }
                 world.set_block_state(&snow_pos, new_state, BlockFlags::NOTIFY_ALL);
                 world.emit_game_event_with_context(
                     GameEvent::BlockPlace.name(),
