@@ -51,10 +51,18 @@ impl ItemBehaviour for GoatHornItem {
             return;
         };
 
-        let duration = instrument.use_duration_ticks() as i32;
+        let duration = i32::try_from(instrument.use_duration_ticks()).unwrap_or(i32::MAX);
         let volume = instrument.range() / 16.0;
         let world = player.world();
         let pos = player.position();
+
+        let cooldown_group = stack
+            .get_use_cooldown()
+            .and_then(|c| c.cooldown_group.clone())
+            .unwrap_or_else(|| item.registry_key.to_string());
+        if player.is_on_cooldown(&cooldown_group) {
+            return;
+        }
 
         player.living_entity.set_active_hand(hand, stack, duration);
         world.play_sound_raw(
@@ -65,6 +73,9 @@ impl ItemBehaviour for GoatHornItem {
             1.0,
         );
         world.emit_game_event(GameEvent::InstrumentPlay.name(), pos);
+        if duration > 0 {
+            player.start_cooldown(cooldown_group, duration);
+        }
         player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
     }
 

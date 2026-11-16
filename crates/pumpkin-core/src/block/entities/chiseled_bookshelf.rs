@@ -126,6 +126,22 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::apply_container_items_to_slice(stack, &mut *items);
+    }
+
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::collect_container_items_from_slice(&*items, stack);
+    }
 }
 
 impl ChiseledBookshelfBlockEntity {

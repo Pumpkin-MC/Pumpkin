@@ -35,6 +35,7 @@ pub struct SmokerBlockEntity {
     /// Tracks recipes used for XP calculation (vanilla `RecipesUsed` NBT format)
     /// Maps result item ID -> craft count
     pub recipes_used: StdMutex<HashMap<String, u32>>,
+    pub metadata: super::ContainerMetadata,
 }
 
 impl SmokerBlockEntity {
@@ -53,6 +54,7 @@ impl SmokerBlockEntity {
             lit_total_time: AtomicU16::new(0),
             lit_time_remaining: AtomicU16::new(0),
             recipes_used: StdMutex::new(HashMap::new()),
+            metadata: super::ContainerMetadata::default(),
         }
     }
 }

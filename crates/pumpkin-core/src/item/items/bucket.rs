@@ -425,6 +425,21 @@ fn try_place_liquid(
             }
             props.waterlogged = true;
             props.to_state_id(target_block)
+        } else if target_block.has_tag(&tag::Block::MINECRAFT_CANDLES) {
+            let mut props = pumpkin_data::block_properties::CandleLikeProperties::from_state_id(
+                target_state.id,
+            );
+            if props.lit {
+                world.play_sound(
+                    Sound::BlockCandleExtinguish,
+                    SoundCategory::Blocks,
+                    &place_pos.to_centered_f64(),
+                );
+                world.emit_game_event(GameEvent::BlockChange.name(), place_pos.to_centered_f64());
+                props.lit = false;
+            }
+            props.waterlogged = true;
+            props.to_state_id(target_block)
         } else {
             target_block
                 .set_waterlogged(target_state.id, true)
