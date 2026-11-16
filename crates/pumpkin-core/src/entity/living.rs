@@ -3867,7 +3867,8 @@ impl LivingEntity {
         }
 
         // Check for shield blocking before armor/magic/cooldown
-        if self.is_blocking()
+        if amount > 0.0
+            && self.is_blocking()
             && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_SHIELD)
             && let Some(pos) = position
         {
