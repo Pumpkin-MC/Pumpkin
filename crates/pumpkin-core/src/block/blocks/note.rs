@@ -157,12 +157,43 @@ impl BlockBehaviour for NoteBlock {
         let note_props = NoteBlockLikeProperties::from_state_id(block_state.id);
         let instrument = note_props.instrument;
         let pitch = if is_base_block(instrument) {
-            // checks if can be pitched
             Self::get_note_pitch(u16::from(note_props.note))
         } else {
-            1.0 // default pitch
+            1.0
         };
-        // check hasCustomSound
+        if instrument == NoteblockInstrument::CustomHead {
+            let custom_sound = args
+                .world
+                .get_block_entity(&args.position.up())
+                .and_then(|be| {
+                    be.as_any()
+                        .downcast_ref::<crate::block::entities::skull::SkullBlockEntity>()
+                        .and_then(|skull| {
+                            skull
+                                .note_block_sound
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .clone()
+                        })
+                });
+            let Some(sound_name) = custom_sound else {
+                return false;
+            };
+            let sound_event = pumpkin_data::data_component_impl::IdOr::Value(
+                pumpkin_data::data_component_impl::SoundEvent {
+                    sound_name,
+                    range: None,
+                },
+            );
+            args.world.play_sound_event_fine(
+                &sound_event,
+                SoundCategory::Records,
+                &args.position.to_centered_f64(),
+                3.0,
+                pitch,
+            );
+            return true;
+        }
         args.world.play_sound_raw(
             convert_instrument_to_sound(instrument) as u16,
             SoundCategory::Records,

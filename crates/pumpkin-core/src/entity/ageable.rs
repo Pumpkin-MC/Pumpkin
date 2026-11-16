@@ -6,6 +6,7 @@ use crate::entity::mob::Mob;
 pub const BABY_START_AGE: i32 = -24000;
 pub const DEFAULT_BABY_SPAWN_CHANCE: f32 = 0.05;
 pub const ABSTRACT_HORSE_BABY_SPAWN_CHANCE: f32 = 0.2;
+pub const OCELOT_BABY_SPAWN_CHANCE: f32 = 1.0;
 pub const PANDA_BABY_SPAWN_CHANCE: f32 = 0.2;
 pub const POLAR_BEAR_BABY_SPAWN_CHANCE: f32 = 1.0;
 pub const STRIDER_BABY_SPAWN_CHANCE: f32 = 0.5;
@@ -114,9 +115,12 @@ pub trait AgeableMob: Mob {
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, is_baby);
             entity.refresh_dimensions();
             self.age_boundary_reached();
+            // Full refresh, so growing up also clears the Bedrock baby flag and scale.
+            let mut actor_data = entity.bedrock_metadata();
             if let Some(meta) = self.mob_metadata() {
-                entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
+                actor_data.merge(meta.to_bedrock_actor_data());
             }
+            entity.send_bedrock_actor_data(&actor_data);
         }
     }
 

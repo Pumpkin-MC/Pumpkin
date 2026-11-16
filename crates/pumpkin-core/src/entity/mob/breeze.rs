@@ -1,4 +1,5 @@
 use crate::entity::EntityBase;
+use crate::entity::projectile_deflection::{ProjectileDeflection, default_deflection};
 use pumpkin_data::sound::Sound;
 use std::sync::{Arc, Weak};
 
@@ -66,5 +67,20 @@ impl Mob for BreezeEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn deflection(&self, projectile: &dyn EntityBase) -> ProjectileDeflection {
+        let projectile_type = projectile.get_entity().entity_type;
+        if projectile_type == &EntityType::WIND_CHARGE
+            || projectile_type == &EntityType::BREEZE_WIND_CHARGE
+        {
+            ProjectileDeflection::None
+        } else if default_deflection(&self.mob_entity.living_entity.entity)
+            == ProjectileDeflection::Reverse
+        {
+            ProjectileDeflection::Breeze
+        } else {
+            ProjectileDeflection::None
+        }
     }
 }

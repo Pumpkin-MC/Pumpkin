@@ -12,6 +12,7 @@ use std::{
 };
 
 use crate::block::entities::BlockEntity;
+use crate::world::World;
 use pumpkin_inventory::{Clearable, Inventory};
 
 pub struct LecternBlockEntity {
@@ -69,8 +70,9 @@ impl BlockEntity for LecternBlockEntity {
         nbt.put_int("Page", self.page.load(Ordering::Relaxed) as i32);
     }
 
-    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
-        Some(self)
+    fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        let inventory: Arc<dyn Inventory> = self;
+        world.scatter_inventory(position, &inventory);
     }
 
     fn is_comparator_dirty(&self) -> bool {
@@ -134,6 +136,11 @@ impl LecternBlockEntity {
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
         }
+    }
+
+    #[must_use]
+    pub fn book_inventory(self: Arc<Self>) -> Arc<dyn Inventory> {
+        self
     }
 
     /// Number of pages in a writable or written book, `0` for anything else.

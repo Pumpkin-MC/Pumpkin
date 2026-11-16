@@ -1,3 +1,5 @@
+#![allow(clippy::empty_enums)]
+
 use wasmtime::component::bindgen;
 
 bindgen!({

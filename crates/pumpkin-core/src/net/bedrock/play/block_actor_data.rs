@@ -1,6 +1,7 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use pumpkin_protocol::bedrock::server::block_actor_data::SBlockActorData;
+use tracing::warn;
 
 fn parse_bedrock_sign_lines(text: &str) -> [Box<str>; 4] {
     let mut lines = [Box::from(""), Box::from(""), Box::from(""), Box::from("")];
@@ -36,15 +37,7 @@ fn apply_sign_text(
     }
 
     let sign_text = sign_entity.get_text(is_front);
-    sign_text
-        .messages
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone_from(&lines);
-    *sign_text
-        .filtered_messages
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = lines;
+    sign_text.set_client_messages(&lines);
 
     if let Some(color_val) = text_comp.get_int("SignTextColor") {
         let dye = crate::block::entities::sign::bedrock_sign_text_color_to_dye_color(color_val);
@@ -67,6 +60,8 @@ impl BedrockClient {
     }
 
     fn handle_sign_block_actor_data(player: &Arc<Player>, packet: &SBlockActorData) {
+        player.update_last_action_time();
+
         let world = player.get_entity().world.load_full();
         let Some(block_entity) = world.get_block_entity(&packet.block_position) else {
             return;
@@ -76,17 +71,11 @@ impl BedrockClient {
         else {
             return;
         };
-        if sign_entity.is_waxed() {
-            return;
-        }
-
-        let currently_editing = *sign_entity
-            .currently_editing_player()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(editor_id) = currently_editing
-            && editor_id != player.gameprofile.id
-        {
+        if !sign_entity.may_update_text(&world, player) {
+            warn!(
+                "Player {} just tried to change non-editable sign",
+                player.gameprofile.name
+            );
             return;
         }
 

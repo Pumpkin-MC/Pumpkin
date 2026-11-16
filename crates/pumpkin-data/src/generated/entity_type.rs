@@ -1296,7 +1296,7 @@ impl EntityType {
             (Attributes::MAX_ABSORPTION, 0f64),
             (Attributes::MAX_HEALTH, 20f64),
             (Attributes::MOVEMENT_EFFICIENCY, 0f64),
-            (Attributes::MOVEMENT_SPEED, 0.2300000041723251f64),
+            (Attributes::MOVEMENT_SPEED, 0.23000000417232513f64),
             (Attributes::NAME_TAG_DISTANCE, 64f64),
             (Attributes::OXYGEN_BONUS, 0f64),
             (Attributes::SAFE_FALL_DISTANCE, 3f64),
@@ -2601,7 +2601,7 @@ impl EntityType {
             heightmap: HeightMap::MotionBlockingNoLeaves,
         },
         attachments: EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         },
         baby_attachments: None,
@@ -3382,7 +3382,7 @@ impl EntityType {
             (Attributes::MAX_ABSORPTION, 0f64),
             (Attributes::MAX_HEALTH, 20f64),
             (Attributes::MOVEMENT_EFFICIENCY, 0f64),
-            (Attributes::MOVEMENT_SPEED, 0.2300000041723251f64),
+            (Attributes::MOVEMENT_SPEED, 0.23000000417232513f64),
             (Attributes::NAME_TAG_DISTANCE, 64f64),
             (Attributes::OXYGEN_BONUS, 0f64),
             (Attributes::SAFE_FALL_DISTANCE, 3f64),
@@ -3436,7 +3436,7 @@ impl EntityType {
             vehicle: [0f64, 0.699999988079071f64, 0f64],
         },
         baby_attachments: Some(EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0.1875f64, 0f64],
         }),
         baby_dimensions: Some(EntityDimensions {
@@ -4349,7 +4349,7 @@ impl EntityType {
             heightmap: HeightMap::MotionBlockingNoLeaves,
         },
         attachments: EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         },
         baby_attachments: None,
@@ -5338,7 +5338,7 @@ impl EntityType {
             heightmap: HeightMap::MotionBlockingNoLeaves,
         },
         attachments: EntityAttachments {
-            passenger: &[[0f64, 0.975000023841858f64, 0f64]],
+            passenger: &[[0f64, 0.9750000238418579f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         },
         baby_attachments: None,
@@ -5779,7 +5779,7 @@ impl EntityType {
             (Attributes::MAX_ABSORPTION, 0f64),
             (Attributes::MAX_HEALTH, 20f64),
             (Attributes::MOVEMENT_EFFICIENCY, 0f64),
-            (Attributes::MOVEMENT_SPEED, 0.2300000041723251f64),
+            (Attributes::MOVEMENT_SPEED, 0.23000000417232513f64),
             (Attributes::NAME_TAG_DISTANCE, 64f64),
             (Attributes::OXYGEN_BONUS, 0f64),
             (Attributes::SAFE_FALL_DISTANCE, 3f64),
@@ -5833,7 +5833,7 @@ impl EntityType {
             vehicle: [0f64, 0.699999988079071f64, 0f64],
         },
         baby_attachments: Some(EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0.1875f64, 0f64],
         }),
         baby_dimensions: Some(EntityDimensions {
@@ -8521,7 +8521,7 @@ impl EntityType {
             vehicle: [0f64, 0.699999988079071f64, 0f64],
         },
         baby_attachments: Some(EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0.1875f64, 0f64],
         }),
         baby_dimensions: Some(EntityDimensions {
@@ -9540,7 +9540,7 @@ impl EntityType {
             (Attributes::MAX_ABSORPTION, 0f64),
             (Attributes::MAX_HEALTH, 8f64),
             (Attributes::MOVEMENT_EFFICIENCY, 0f64),
-            (Attributes::MOVEMENT_SPEED, 0.2300000041723251f64),
+            (Attributes::MOVEMENT_SPEED, 0.23000000417232513f64),
             (Attributes::NAME_TAG_DISTANCE, 64f64),
             (Attributes::OXYGEN_BONUS, 0f64),
             (Attributes::SAFE_FALL_DISTANCE, 3f64),
@@ -11223,11 +11223,11 @@ impl EntityType {
             heightmap: HeightMap::MotionBlockingNoLeaves,
         },
         attachments: EntityAttachments {
-            passenger: &[[0f64, 0.4900000095367432f64, 0f64]],
+            passenger: &[[0f64, 0.49000000953674316f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         },
         baby_attachments: Some(EntityAttachments {
-            passenger: &[[0f64, 0.4900000095367432f64, 0f64]],
+            passenger: &[[0f64, 0.49000000953674316f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         }),
         baby_dimensions: Some(EntityDimensions {
@@ -11451,7 +11451,7 @@ impl EntityType {
             heightmap: HeightMap::MotionBlockingNoLeaves,
         },
         attachments: EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         },
         baby_attachments: None,
@@ -12045,11 +12045,11 @@ impl EntityType {
             heightmap: HeightMap::MotionBlockingNoLeaves,
         },
         attachments: EntityAttachments {
-            passenger: &[[0f64, 1.950000047683716f64, 0f64]],
+            passenger: &[[0f64, 1.9500000476837158f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         },
         baby_attachments: Some(EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         }),
         baby_dimensions: Some(EntityDimensions {
@@ -12248,11 +12248,11 @@ impl EntityType {
             heightmap: HeightMap::MotionBlockingNoLeaves,
         },
         attachments: EntityAttachments {
-            passenger: &[[0f64, 1.950000047683716f64, 0f64]],
+            passenger: &[[0f64, 1.9500000476837158f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         },
         baby_attachments: Some(EntityAttachments {
-            passenger: &[[0f64, 0.975000023841858f64, 0f64]],
+            passenger: &[[0f64, 0.9750000238418579f64, 0f64]],
             vehicle: [0f64, 0f64, 0f64],
         }),
         baby_dimensions: Some(EntityDimensions {
@@ -13012,7 +13012,7 @@ impl EntityType {
             (Attributes::MAX_ABSORPTION, 0f64),
             (Attributes::MAX_HEALTH, 20f64),
             (Attributes::MOVEMENT_EFFICIENCY, 0f64),
-            (Attributes::MOVEMENT_SPEED, 0.2300000041723251f64),
+            (Attributes::MOVEMENT_SPEED, 0.23000000417232513f64),
             (Attributes::NAME_TAG_DISTANCE, 64f64),
             (Attributes::OXYGEN_BONUS, 0f64),
             (Attributes::SAFE_FALL_DISTANCE, 3f64),
@@ -13066,7 +13066,7 @@ impl EntityType {
             vehicle: [0f64, 0.699999988079071f64, 0f64],
         },
         baby_attachments: Some(EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0.1875f64, 0f64],
         }),
         baby_dimensions: Some(EntityDimensions {
@@ -13329,7 +13329,7 @@ impl EntityType {
             (Attributes::MAX_ABSORPTION, 0f64),
             (Attributes::MAX_HEALTH, 20f64),
             (Attributes::MOVEMENT_EFFICIENCY, 0f64),
-            (Attributes::MOVEMENT_SPEED, 0.2300000041723251f64),
+            (Attributes::MOVEMENT_SPEED, 0.23000000417232513f64),
             (Attributes::NAME_TAG_DISTANCE, 64f64),
             (Attributes::OXYGEN_BONUS, 0f64),
             (Attributes::SAFE_FALL_DISTANCE, 3f64),
@@ -13383,7 +13383,7 @@ impl EntityType {
             vehicle: [0f64, 0.699999988079071f64, 0f64],
         },
         baby_attachments: Some(EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0.125f64, 0f64],
         }),
         baby_dimensions: Some(EntityDimensions {
@@ -13441,7 +13441,7 @@ impl EntityType {
             (Attributes::MAX_ABSORPTION, 0f64),
             (Attributes::MAX_HEALTH, 20f64),
             (Attributes::MOVEMENT_EFFICIENCY, 0f64),
-            (Attributes::MOVEMENT_SPEED, 0.2300000041723251f64),
+            (Attributes::MOVEMENT_SPEED, 0.23000000417232513f64),
             (Attributes::NAME_TAG_DISTANCE, 64f64),
             (Attributes::OXYGEN_BONUS, 0f64),
             (Attributes::SAFE_FALL_DISTANCE, 3f64),
@@ -13495,7 +13495,7 @@ impl EntityType {
             vehicle: [0f64, 0.699999988079071f64, 0f64],
         },
         baby_attachments: Some(EntityAttachments {
-            passenger: &[[0f64, 0.9800000190734864f64, 0f64]],
+            passenger: &[[0f64, 0.9800000190734863f64, 0f64]],
             vehicle: [0f64, 0.1875f64, 0f64],
         }),
         baby_dimensions: Some(EntityDimensions {

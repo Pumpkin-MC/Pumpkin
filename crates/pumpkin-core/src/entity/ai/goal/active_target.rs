@@ -14,7 +14,7 @@ use crate::plugin::api::events::entity::entity_target::TargetReason;
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
@@ -75,7 +75,7 @@ impl TargetCondition {
 
 pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     reciprocal_chance: i32,
     target_type: TargetMatch,
     target_predicate: TargetPredicate,
@@ -200,8 +200,8 @@ impl ActiveTargetGoal {
         })
     }
 
-    pub fn set_target(&mut self, target: Option<Arc<dyn EntityBase>>) {
-        self.target = target;
+    pub fn set_target(&mut self, target: Option<&Arc<dyn EntityBase>>) {
+        self.target = target.map(Arc::downgrade);
     }
 
     /// Vanilla's targeting conditions plus the per-mob filters, cheap ones before the sight test.
@@ -245,7 +245,7 @@ impl ActiveTargetGoal {
             },
         );
 
-        self.target = found;
+        self.target = found.as_ref().map(Arc::downgrade);
     }
 }
 
@@ -280,6 +280,7 @@ impl Goal for ActiveTargetGoal {
             return self
                 .target
                 .as_ref()
+                .and_then(Weak::upgrade)
                 .is_some_and(|target| self.accepts(mob, &world, target.as_ref()));
         }
         // Like vanilla TargetGoal.canContinueToUse, the condition only gates the search.
@@ -287,23 +288,20 @@ impl Goal for ActiveTargetGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
+        let target = self.target.as_ref().and_then(Weak::upgrade);
         let reason = if self.condition == TargetCondition::Untamed {
             TargetReason::RandomTarget
-        } else if self
-            .target
-            .as_ref()
-            .is_some_and(|t| t.get_player().is_some())
-        {
+        } else if target.as_ref().is_some_and(|t| t.get_player().is_some()) {
             TargetReason::ClosestPlayer
         } else {
             TargetReason::ClosestEntity
         };
-        self.track_target_goal
-            .start_targeting(mob, self.target.clone(), reason);
+        self.track_target_goal.start_targeting(mob, target, reason);
         self.track_target_goal.start(mob);
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
+        self.target = None;
         self.track_target_goal.stop(mob);
     }
 

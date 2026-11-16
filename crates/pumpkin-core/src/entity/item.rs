@@ -388,7 +388,7 @@ impl ItemEntity {
                 && !bundle.items.is_empty()
             {
                 contents.extend(bundle.items.iter().cloned());
-                stack.set_data_component(BundleContentsImpl { items: Vec::new() });
+                stack.set_data_component(BundleContentsImpl::EMPTY);
             }
             contents
         };
@@ -733,11 +733,12 @@ impl EntityBase for ItemEntity {
         true
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
-        if self.pickup_delay.load(Ordering::Relaxed) > 0
-            || player.living_entity.health.load() <= 0.0
-            || player.is_spectator()
-        {
+        if self.pickup_delay.load(Ordering::Relaxed) > 0 {
             return;
         }
 
