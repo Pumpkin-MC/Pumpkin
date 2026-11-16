@@ -315,6 +315,7 @@ use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
+use crate::plugin::player::player_transfer::PlayerTransferEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::server::Server;
 use crate::world::{BlockBreakingProgress, World};
@@ -633,7 +634,6 @@ pub struct Player {
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
     pub client: Arc<ClientPlatform>,
-    transfer_requested: AtomicBool,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's `EnderChest` inventory.
@@ -1046,7 +1046,6 @@ impl Player {
             chat_spam_tick_count: AtomicU32::new(0),
             // Item usage tracking
             using_item: AtomicBool::new(false),
-            transfer_requested: AtomicBool::new(false),
             item_use_start_time: AtomicI32::new(0),
             using_hand: AtomicCell::new(None),
             // Minecraft has no way to change the default permission level of new players.
@@ -4782,26 +4781,35 @@ impl Player {
         self.abilities.lock().is_ok_and(|a| a.allow_modify_world)
     }
 
-    /// Requests a transfer to another server without waiting for the client to reconnect.
-    pub fn transfer(&self, host: &str, port: u16) {
+    /// Requests a transfer and returns the destination if the packet was queued.
+    ///
+    /// The result does not indicate whether the client reached its destination.
+    pub fn transfer(self: &Arc<Self>, host: &str, port: u16) -> Option<(String, u16)> {
         if self.client.closed() {
-            return;
+            return None;
         }
-        // Mark before queuing: the client may disconnect as soon as it receives the packet.
-        self.transfer_requested.store(true, Ordering::Relaxed);
-        self.try_enqueue_packet_editioned(
-            &pumpkin_protocol::java::client::play::CTransfer::new(host, VarInt(i32::from(port))),
-            &pumpkin_protocol::bedrock::client::transfer::CTransfer::new(
-                host.to_string(),
-                port,
-                false,
-            ),
-        );
-    }
 
-    /// Returns whether this session has requested a transfer, not whether it succeeded.
-    pub fn transfer_requested(&self) -> bool {
-        self.transfer_requested.load(Ordering::Relaxed)
+        let mut event = PlayerTransferEvent::new(self.clone(), host.to_owned(), port);
+        let server = self.world().server.upgrade()?;
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        if event.cancelled {
+            return None;
+        }
+
+        let PlayerTransferEvent { host, port, .. } = event;
+        self.client
+            .try_queue_packet_editioned(
+                &pumpkin_protocol::java::client::play::CTransfer::new(
+                    &host,
+                    VarInt(i32::from(port)),
+                ),
+                &pumpkin_protocol::bedrock::client::transfer::CTransfer::new(
+                    host.clone(),
+                    port,
+                    false,
+                ),
+            )
+            .then_some((host, port))
     }
 
     pub fn kick(&self, reason: DisconnectReason, message: &TextComponent) {
@@ -8996,6 +9004,12 @@ mod tests {
         bedrock_player_inventory_slot, bedrock_player_screen_slot, read_last_death_location,
         read_root_vehicle, write_last_death_location, write_root_vehicle,
     };
+    use crate::{
+        plugin::{BoxFuture, EventHandler, player::player_transfer::PlayerTransferEvent},
+        server::Server,
+    };
+    use std::sync::Arc;
+
     use pumpkin_data::{Block, screen::WindowType};
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use pumpkin_protocol::bedrock::network_item::ContainerName;
@@ -9097,8 +9111,31 @@ mod tests {
         assert_eq!(read_root_vehicle(&nbt), Some(expected));
     }
 
-    #[tokio::test]
-    async fn transfer_marks_leave_event_before_sending_packet()
+    struct TransferHandler;
+
+    impl EventHandler<PlayerTransferEvent> for TransferHandler {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PlayerTransferEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.host == "cancel.example" {
+                    event.cancelled = true;
+                } else if event.host == "closed.example" {
+                    if let Some(client) = event.player.client.java() {
+                        client.close();
+                    }
+                } else {
+                    event.host = "localhost".into();
+                    event.port = 25566;
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn transfer_event_can_cancel_or_redirect_a_packet()
     -> Result<(), Box<dyn std::error::Error>> {
         use super::Player;
         use crate::{
@@ -9107,8 +9144,7 @@ mod tests {
                 ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
                 java::{JavaClient, pending::PendingConnection},
             },
-            plugin::api::events::player::player_leave::PlayerLeaveEvent,
-            server::Server,
+            plugin::EventPriority,
         };
         use arc_swap::ArcSwap;
         use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
@@ -9121,8 +9157,8 @@ mod tests {
             },
             packet::MultiVersionJavaPacket,
         };
-        use pumpkin_util::{GameMode, text::TextComponent};
-        use std::{sync::Arc, time::Duration};
+        use pumpkin_util::GameMode;
+        use std::time::Duration;
 
         let directory = tempfile::tempdir()?;
         let basic = BasicConfiguration {
@@ -9173,11 +9209,15 @@ mod tests {
             &world,
             GameMode::Survival,
         ));
-        assert!(!PlayerLeaveEvent::new(player.clone(), TextComponent::text("")).transfer_requested);
+        server
+            .plugin_manager
+            .register(Arc::new(TransferHandler), EventPriority::Normal, true);
 
-        player.transfer("localhost", 25566);
-        // The writer has not run yet on this current-thread runtime.
-        assert!(PlayerLeaveEvent::new(player.clone(), TextComponent::text("")).transfer_requested);
+        assert_eq!(player.transfer("cancel.example", 25565), None);
+        assert_eq!(
+            player.transfer("redirect.example", 25565),
+            Some(("localhost".into(), 25566))
+        );
         let client = player.client.java().ok_or("No Java client")?;
         client.try_send_packet(&CKeepAlive::new(1));
         let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
@@ -9186,7 +9226,7 @@ mod tests {
         assert_eq!(packet.id, CTransfer::to_id(CURRENT_MC_VERSION));
         // Java transfer payload: UTF-8 host preceded by its length, followed by VarInt port.
         assert_eq!(packet.payload.as_ref(), b"\x09localhost\xde\xc7\x01");
-        client.close();
+        assert_eq!(player.transfer("closed.example", 25565), None);
         client.await_tasks().await;
         Ok(())
     }

@@ -2381,17 +2381,6 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn transfer(
-        &mut self,
-        player: Resource<Player>,
-        host: String,
-        port: u16,
-    ) -> wasmtime::Result<()> {
-        let player = self.get(&player)?;
-        player.transfer(&host, port);
-        Ok(())
-    }
-
     fn get_selected_slot(&mut self, player: Resource<Player>) -> wasmtime::Result<u8> {
         let player = self.get(&player)?;
         Ok(player.inventory.get_selected_slot())
@@ -2839,6 +2828,25 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
 }
 
 impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn transfer(
+        mut host: Access<'_, PluginHostState, Self>,
+        player: Resource<Player>,
+        destination: String,
+        port: u16,
+    ) -> wasmtime::Result<()> {
+        let (player, plugin) = {
+            let state = host.get();
+            (state.get(&player)?.clone(), plugin_from_state(state)?)
+        };
+
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                let _ = player.transfer(&destination, port);
+            })
+            .await
+    }
+
     async fn open_ender_chest(
         mut host: Access<'_, PluginHostState, Self>,
         player: Resource<Player>,

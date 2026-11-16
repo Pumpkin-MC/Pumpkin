@@ -479,8 +479,12 @@ impl BedrockClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        self.try_queue_packet_data(packet_data);
+    }
+
+    pub(super) fn try_queue_packet_data(&self, packet_data: Bytes) -> bool {
         if self.is_closed() {
-            return;
+            return false;
         }
 
         let packet_len = packet_data.len();
@@ -496,7 +500,7 @@ impl BedrockClient {
                 );
                 self.close_token.cancel();
             }
-            return;
+            return false;
         }
 
         if let Err(err) = self
@@ -508,7 +512,9 @@ impl BedrockClient {
             if !self.is_closed() {
                 error!("Failed to add packet to the outgoing packet queue for client: {err}");
             }
+            return false;
         }
+        true
     }
 
     pub fn write_raw_packet<P: BClientPacket>(

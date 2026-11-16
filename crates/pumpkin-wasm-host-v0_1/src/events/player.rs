@@ -261,13 +261,11 @@ impl ToFromWasmEvent for PlayerLeaveEvent {
 
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
-            Event::PlayerLeaveEvent(data) => {
-                let player = consume_player(state, &data.player);
-                let mut event =
-                    Self::new(player, consume_text_component(state, &data.leave_message));
-                event.cancelled = data.cancelled;
-                event
-            }
+            Event::PlayerLeaveEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                leave_message: consume_text_component(state, &data.leave_message),
+                cancelled: data.cancelled,
+            },
             _ => panic!("unexpected event type"),
         }
     }

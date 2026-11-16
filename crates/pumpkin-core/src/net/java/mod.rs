@@ -482,10 +482,14 @@ impl JavaClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        self.try_queue_packet_data(packet_data);
+    }
+
+    pub(super) fn try_queue_packet_data(&self, packet_data: Bytes) -> bool {
         let Some((packet_data, packet_len)) = self.reserve_pending_bytes(packet_data, true) else {
-            return;
+            return false;
         };
-        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len);
+        self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len)
     }
 
     /// Like [`Self::try_enqueue_packet_data`] but does not fire `PacketSentEvent` for

@@ -3030,10 +3030,9 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         player: Resource<Player>,
         host: String,
         port: u16,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<bool> {
         let player = accessor.get_res(&player)?;
-        player.transfer(&host, port);
-        Ok(())
+        run_blocking(accessor, move || player.transfer(&host, port).is_some()).await
     }
 
     async fn open_ender_chest(
