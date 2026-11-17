@@ -27,7 +27,6 @@ bytes.workspace = true
 # encryption
 aes.workspace = true
 cfb8.workspace = true
-hybrid-array = "0.4"
 
 # compression
 flate2.workspace = true
