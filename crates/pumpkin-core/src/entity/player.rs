@@ -5317,9 +5317,9 @@ impl Player {
                 Difficulty::Normal => amount,
                 Difficulty::Hard => amount * 3.0 / 2.0,
             };
-            if amount == 0.0 {
-                return false;
-            }
+        }
+        if amount == 0.0 {
+            return false;
         }
         self.living_entity
             .damage_with_context(caller, amount, damage_type, position, source, cause)
