@@ -88,6 +88,8 @@ pub struct LivingEntity {
     /// Arrows sticking out of the entity, synced so the client renders them.
     arrow_count: AtomicI32,
     remove_arrow_time: AtomicI32,
+    stinger_count: AtomicI32,
+    remove_stinger_time: AtomicI32,
     /// Stores the amount of damage the entity last received.
     pub last_damage_taken: AtomicCell<f32>,
     /// The current health level of the entity.
@@ -488,6 +490,8 @@ impl LivingEntity {
             hurt_cooldown: AtomicI32::new(0),
             arrow_count: AtomicI32::new(0),
             remove_arrow_time: AtomicI32::new(0),
+            stinger_count: AtomicI32::new(0),
+            remove_stinger_time: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             absorption: AtomicCell::new(0.0),
             fall_distance: AtomicCell::new(0.0),
@@ -1300,18 +1304,27 @@ impl LivingEntity {
         );
     }
 
-    /// Stuck arrows fall out one at a time, faster the more there are.
-    fn tick_arrow_count(&self) {
-        let count = self.get_arrow_count();
+    pub fn get_stinger_count(&self) -> i32 {
+        self.stinger_count.load(Relaxed)
+    }
+
+    pub fn set_stinger_count(&self, count: i32) {
+        self.stinger_count.store(count, Relaxed);
+        self.entity.set_synced_data(
+            tracked_data::living_entity::DATA_STINGER_COUNT_ID,
+            VarInt(count),
+        );
+    }
+
+    /// Stuck arrows and stingers fall out one at a time, faster the more there are.
+    fn tick_stuck_count(count: i32, removal_time: &AtomicI32) -> bool {
         if count <= 0 {
-            return;
+            return false;
         }
-        if self.remove_arrow_time.load(Relaxed) <= 0 {
-            self.remove_arrow_time.store(20 * (30 - count), Relaxed);
+        if removal_time.load(Relaxed) <= 0 {
+            removal_time.store(20 * (30 - count), Relaxed);
         }
-        if self.remove_arrow_time.fetch_sub(1, Relaxed) - 1 <= 0 {
-            self.set_arrow_count(count - 1);
-        }
+        removal_time.fetch_sub(1, Relaxed) - 1 <= 0
     }
 
     /// Returns the computed value for `attribute` using the local instance, falling back
@@ -1911,7 +1924,9 @@ impl LivingEntity {
 
                 let mut velo = self.entity.velocity.load();
 
-                velo.y += 0.04;
+                velo.y += caller
+                    .get_mob()
+                    .map_or(0.04, crate::entity::mob::Mob::fluid_jump_velocity);
 
                 self.entity.velocity.store(velo);
             } else if (on_ground || in_water && fluid_height <= swim_height)
@@ -4436,7 +4451,14 @@ impl EntityBase for LivingEntity {
             mob.tick_ambient_sound();
             mob.base_tick();
         }
-        self.tick_arrow_count();
+        let arrow_count = self.get_arrow_count();
+        if Self::tick_stuck_count(arrow_count, &self.remove_arrow_time) {
+            self.set_arrow_count(arrow_count - 1);
+        }
+        let stinger_count = self.get_stinger_count();
+        if Self::tick_stuck_count(stinger_count, &self.remove_stinger_time) {
+            self.set_stinger_count(stinger_count - 1);
+        }
 
         // Only tick movement if the entity is alive. This prevents a dead "corpse"
         // from continuing to be simulated (accumulating fall_distance/velocity).

@@ -5956,14 +5956,11 @@ impl World {
                 cause,
             );
 
+        let tool = cause.map(|player| player.inventory().held_item());
         if !flags.contains(BlockFlags::SKIP_DROPS) {
-            let tool = cause.as_ref().and_then(|p| {
-                let item = p.inventory().held_item();
-                if item.is_empty() { None } else { Some(item) }
-            });
             let params = crate::world::loot::LootContextParameters {
                 world: Some(self),
-                tool,
+                tool: tool.clone().filter(|item| !item.is_empty()),
                 block_state: Some(broken_block_state),
                 position: Some(position.to_f64()),
                 killed_by_player: Some(cause.is_some()),
@@ -5978,7 +5975,19 @@ impl World {
             Block::AIR.default_state.id
         };
 
+        let block_entity = cause
+            .filter(|player| player.gamemode.load() != pumpkin_util::GameMode::Creative)
+            .filter(|_| broken_block_state.block_entity_type != u16::MAX)
+            .and_then(|player| {
+                self.get_block_entity(position)
+                    .map(|entity| (player, entity))
+            });
         let broken_state_id = self.set_block_state(position, new_state_id, flags);
+        if let Some((player, entity)) = block_entity
+            && let Some(tool) = tool
+        {
+            entity.on_player_destroyed(self, broken_state_id, player, &tool);
+        }
         self.broadcast_destroy_block_particles(position, broken_state_id, new_state_id, cause);
 
         Some(broken_state_id)
