@@ -1,5 +1,6 @@
 use crate::generation::proto_chunk::GenerationCache;
 use bitflags::bitflags;
+use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockState, BlockStateId, Mirror, Rotation, chunk::Biome};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -98,4 +99,66 @@ pub trait BlockAccessor: Send + Sync {
     fn clip(&self, context: &crate::clip::ClipContext) -> crate::clip::BlockHitResult {
         crate::clip::clip(self, context)
     }
+}
+
+/// Returns the normalized fluid family contained in a block state.
+#[must_use]
+pub fn fluid_from_block_state(id: BlockStateId) -> &'static Fluid {
+    if let Some(fluid) = Fluid::from_state_id(id) {
+        return fluid.to_flowing();
+    }
+    // These blocks contain source water without a `waterlogged` property.
+    if matches!(
+        id.to_block_id(),
+        pumpkin_data::BlockId::KELP
+            | pumpkin_data::BlockId::KELP_PLANT
+            | pumpkin_data::BlockId::SEAGRASS
+            | pumpkin_data::BlockId::TALL_SEAGRASS
+            | pumpkin_data::BlockId::BUBBLE_COLUMN
+    ) || id.is_waterlogged()
+    {
+        &Fluid::FLOWING_WATER
+    } else {
+        &Fluid::EMPTY
+    }
+}
+
+/// Returns the fluid family and its source, flowing, or falling state.
+#[must_use]
+pub fn fluid_state_from_block_state(id: BlockStateId) -> (&'static Fluid, FluidState) {
+    let fluid = fluid_from_block_state(id);
+    let source = if fluid.matches_type(&Fluid::WATER) {
+        &Fluid::WATER
+    } else if fluid.matches_type(&Fluid::LAVA) {
+        &Fluid::LAVA
+    } else {
+        &Fluid::EMPTY
+    };
+    let mut state = source.states[source.default_state_index as usize].clone();
+
+    if matches!(
+        id.to_block_id(),
+        pumpkin_data::BlockId::WATER | pumpkin_data::BlockId::LAVA
+    ) {
+        // LiquidBlock#getFluidState: source, amounts 7..1, then falling amount 8.
+        // The fluid family's first state is not the state of the actual block.
+        let level = pumpkin_data::block_properties::WaterLikeProperties::from_state_id(id).level;
+        let amount = if level == 0 || level >= 8 {
+            8
+        } else {
+            8 - level
+        };
+        state.height = f32::from(amount) / 9.0;
+        state.level = i16::from(amount);
+        state.is_source = level == 0;
+        state.is_still = state.is_source;
+        state.falling = level >= 8;
+        state.block_state_id = pumpkin_data::block_properties::WaterLikeProperties {
+            level: level.min(8),
+        }
+        .to_state_id(id.to_block());
+    }
+
+    // Keep the normalized family used by fluid callbacks, independently of source state.
+    (fluid, state)
 }

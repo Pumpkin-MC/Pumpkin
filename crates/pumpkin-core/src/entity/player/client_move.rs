@@ -44,11 +44,11 @@ pub enum ClientMoveOutcome {
 }
 
 impl Player {
-    const fn clamp_horizontal(pos: f64) -> f64 {
+    pub(crate) const fn clamp_horizontal(pos: f64) -> f64 {
         pos.clamp(-3.0E7, 3.0E7)
     }
 
-    const fn clamp_vertical(pos: f64) -> f64 {
+    pub(crate) const fn clamp_vertical(pos: f64) -> f64 {
         pos.clamp(-2.0E7, 2.0E7)
     }
 
@@ -272,6 +272,12 @@ impl Player {
         }
 
         let pos = target.unwrap_or(last_pos);
+        if matches!(self.client.as_ref(), ClientPlatform::Java(_))
+            && entity.has_new_boat_collision(self, pos - last_pos)
+        {
+            self.reject_client_move();
+            return ClientMoveOutcome::Rejected;
+        }
         let was_on_ground = entity.on_ground.load(Ordering::Relaxed);
         entity.set_pos(pos);
 

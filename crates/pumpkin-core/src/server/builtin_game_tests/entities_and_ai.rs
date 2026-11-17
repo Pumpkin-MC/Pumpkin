@@ -4,6 +4,24 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use super::build_stone_floor;
 
+pub(super) async fn test_empty_boat_falls(helper: GameTestHelper) -> GameTestResult<()> {
+    build_stone_floor(&helper, 4, 4).await?;
+    helper
+        .spawn_entity_at("minecraft:oak_boat", Vector3::new(1.5, 3.0, 1.5))
+        .await?;
+
+    helper.succeed_when(|helper| async move {
+        helper
+            .assert_entity_present_in_box(
+                "minecraft:oak_boat",
+                BlockPos::new(1, 1, 1),
+                BlockPos::new(2, 2, 2),
+            )
+            .await
+    })?;
+    Ok(())
+}
+
 pub(super) async fn test_item_entities_merge(helper: GameTestHelper) -> GameTestResult<()> {
     build_stone_floor(&helper, 4, 4).await?;
 

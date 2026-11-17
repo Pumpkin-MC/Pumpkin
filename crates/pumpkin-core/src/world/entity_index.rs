@@ -71,6 +71,7 @@ struct Index {
     /// Copy of each entity's bounds, so exact tests skip the entity itself.
     bounds: Vec<AtomicCell<BoundingBox>>,
     types: Vec<&'static EntityType>,
+    has_boats: bool,
     /// Mobs with game event listeners, in list order.
     listeners: Vec<usize>,
     cells: FxHashMap<Cell, Vec<usize>>,
@@ -89,6 +90,7 @@ impl Index {
         self.cells.clear();
         self.oversized.clear();
         self.types.clear();
+        self.has_boats = false;
         self.bounds.clear();
         self.listeners.clear();
         for (slot, registered) in registry.iter().enumerate() {
@@ -97,6 +99,7 @@ impl Index {
             // The first in list order wins, like a linear search.
             self.uuids.entry(entity.entity_uuid).or_insert(slot);
             self.types.push(entity.entity_type);
+            self.has_boats |= entity.entity_type.boat.is_some();
             if registered.get_mob().is_some_and(has_game_event_listener) {
                 self.listeners.push(slot);
             }
@@ -359,6 +362,10 @@ impl EntityIndex {
             slots
         });
         slots.into_iter().map(move |slot| registry[slot].clone())
+    }
+
+    pub(super) fn has_boats(&self, registry: &Arc<Registry>) -> bool {
+        self.with_index(registry, |index| index.has_boats)
     }
 
     pub fn query_players(

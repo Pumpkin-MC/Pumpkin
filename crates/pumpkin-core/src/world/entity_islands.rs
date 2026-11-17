@@ -17,10 +17,18 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
+use crate::entity::{
+    DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity, vehicle::boat::BoatEntity,
+};
+use crate::plugin::api::events::block::block_break::BlockBreakEvent;
 use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
-    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+    entity_breed::EntityBreedEvent, entity_dismount::EntityDismountEvent,
+    entity_portal::EntityPortalEvent, entity_pose_change::EntityPoseChangeEvent,
+    entity_target::EntityTargetEvent, entity_toggle_sit::EntityToggleSitEvent,
+    pig_zombie_anger::PigZombieAngerEvent,
+};
+use crate::plugin::api::events::vehicle::{
+    vehicle_exit::VehicleExitEvent, vehicle_move::VehicleMoveEvent,
 };
 use crate::plugin::{
     api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
@@ -314,10 +322,12 @@ impl EntityReach {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
+        let boat = entity.cast_any().downcast_ref::<BoatEntity>();
         let movement = base.velocity.load().length()
             + entity
                 .get_mob()
-                .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement);
+                .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement)
+            + boat.map_or(0.0, BoatEntity::additional_tick_movement);
         let radius = movement
             + config.unaudited_reach
             + entity.get_living_entity().map_or(0.0, |living| {
@@ -341,7 +351,24 @@ impl EntityReach {
             || entity
                 .cast_any()
                 .downcast_ref::<TNTEntity>()
-                .is_some_and(TNTEntity::is_about_to_explode);
+                .is_some_and(TNTEntity::is_about_to_explode)
+            || (boat.is_some() && {
+                let world = base.world.load();
+                world.server.upgrade().is_some_and(|server| {
+                    let plugins = &server.plugin_manager;
+                    plugins.has_handlers::<VehicleMoveEvent>()
+                        || plugins.has_handlers::<VehicleUpdateEvent>()
+                        || plugins.has_handlers::<EntityDismountEvent>()
+                        || plugins.has_handlers::<EntityPortalEvent>()
+                        || plugins.has_handlers::<EntityPoseChangeEvent>()
+                        || plugins.has_handlers::<VehicleExitEvent>()
+                        || plugins.has_handlers::<BlockBreakEvent>()
+                        || plugins.has_handlers::<PacketSentEvent>()
+                }) || any_contact_section(&world, &reach.body, |x, y, z| {
+                    // Gateway contact can teleport the boat beyond its island in this tick.
+                    section_contains_block(&world, x, y, z, |block| block == &Block::END_GATEWAY)
+                })
+            });
         Self::Conservative(reach)
     }
 }
@@ -548,6 +575,18 @@ fn contact_may_change_blocks(
     contact: &BoundingBox,
     sections: &mut FxHashMap<(i32, i32, i32), bool>,
 ) -> bool {
+    any_contact_section(world, contact, |x, y, z| {
+        *sections
+            .entry((x, y, z))
+            .or_insert_with(|| contact_section_may_change_blocks(world, x, y, z))
+    })
+}
+
+fn any_contact_section(
+    world: &World,
+    contact: &BoundingBox,
+    mut matches: impl FnMut(i32, i32, i32) -> bool,
+) -> bool {
     if [
         contact.min.x,
         contact.min.y,
@@ -561,22 +600,22 @@ fn contact_may_change_blocks(
     {
         return true;
     }
-    let bottom = world.dimension.min_y;
-    let top = bottom + world.dimension.height;
-    let min_y = (contact.min.y as i32).max(bottom);
-    let max_y = ((contact.max.y - 1.0) as i32).min(top - 1);
+    let min_block = contact.min_block_pos().0;
+    let max_block = contact.max_block_pos().0;
+    let min_y = min_block.y.max(world.get_bottom_y());
+    let max_y = max_block.y.min(world.get_top_y());
     if min_y > max_y {
         return false;
     }
     let min = [
-        get_section_cord(contact.min.x as i32),
+        get_section_cord(min_block.x),
         get_section_cord(min_y),
-        get_section_cord(contact.min.z as i32),
+        get_section_cord(min_block.z),
     ];
     let max = [
-        get_section_cord((contact.max.x - 1.0) as i32),
+        get_section_cord(max_block.x),
         get_section_cord(max_y),
-        get_section_cord((contact.max.z - 1.0) as i32),
+        get_section_cord(max_block.z),
     ];
     let volume = (0..3).fold(1i64, |volume, axis| {
         volume.saturating_mul(i64::from(max[axis]) - i64::from(min[axis]) + 1)
@@ -587,10 +626,7 @@ fn contact_may_change_blocks(
     for x in min[0]..=max[0] {
         for z in min[2]..=max[2] {
             for y in min[1]..=max[1] {
-                if *sections
-                    .entry((x, y, z))
-                    .or_insert_with(|| contact_section_may_change_blocks(world, x, y, z))
-                {
+                if matches(x, y, z) {
                     return true;
                 }
             }
@@ -600,6 +636,18 @@ fn contact_may_change_blocks(
 }
 
 fn contact_section_may_change_blocks(world: &World, x: i32, y: i32, z: i32) -> bool {
+    section_contains_block(world, x, y, z, |block| {
+        block.id == Block::END_GATEWAY.id || changes_on_contact(block)
+    })
+}
+
+fn section_contains_block(
+    world: &World,
+    x: i32,
+    y: i32,
+    z: i32,
+    matches: impl Fn(&Block) -> bool,
+) -> bool {
     world
         .level
         .read_chunk_sync(&Vector2::new(x, z), |chunk| {
@@ -613,10 +661,7 @@ fn contact_section_may_change_blocks(world: &World, x: i32, y: i32, z: i32) -> b
                 .ok()
                 .and_then(|index| blocks.get(index))
                 .is_none_or(|palette| {
-                    palette.contains_matching(|state| {
-                        let block = Block::from_state_id(state);
-                        block.id == Block::END_GATEWAY.id || changes_on_contact(block)
-                    })
+                    palette.contains_matching(|state| matches(Block::from_state_id(state)))
                 })
         })
         .unwrap_or(true)
@@ -1351,6 +1396,33 @@ mod tests {
             ];
             assert_eq!(islands(&nodes, &[], &[]), [vec![0], vec![1], vec![2]]);
         }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn boat_near_gateway_requires_serial_tick() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::Entity;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        let boat = BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(8.0, 64.0, 8.0),
+            &EntityType::OAK_BOAT,
+        ));
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            ..Default::default()
+        };
+        assert!(resolve(vec![EntityReach::of(&boat, &config)], &config).is_some());
+        chunk.set_block_absolute_y(8, 64, 8, Block::END_GATEWAY.default_state.id);
+        assert!(resolve(vec![EntityReach::of(&boat, &config)], &config).is_none());
         world.level.shutdown().await;
         Ok(())
     }
