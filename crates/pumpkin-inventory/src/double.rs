@@ -109,6 +109,20 @@ impl Inventory for DoubleInventory {
         }
     }
 
+    fn can_transfer_to(
+        &self,
+        hopper_inventory: &dyn Inventory,
+        slot: usize,
+        stack: &ItemStack,
+    ) -> bool {
+        if slot >= self.first.size() {
+            self.second
+                .can_transfer_to(hopper_inventory, slot - self.first.size(), stack)
+        } else {
+            self.first.can_transfer_to(hopper_inventory, slot, stack)
+        }
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

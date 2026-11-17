@@ -388,7 +388,7 @@ impl ItemEntity {
                 && !bundle.items.is_empty()
             {
                 contents.extend(bundle.items.iter().cloned());
-                stack.set_data_component(BundleContentsImpl { items: Vec::new() });
+                stack.set_data_component(BundleContentsImpl::EMPTY);
             }
             contents
         };
