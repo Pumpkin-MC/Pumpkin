@@ -1,6 +1,6 @@
 use crate::entity::projectile::owner::ProjectileOwner;
+use pumpkin_data::damage::DamageType;
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
 
 use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
 use crate::{
@@ -30,8 +30,6 @@ impl EggEntity {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
         };
 
@@ -81,8 +79,8 @@ impl EntityBase for EggEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -96,6 +94,18 @@ impl EntityBase for EggEntity {
         let world = self.get_entity().world.load();
         let hit_pos = hit.hit_pos();
         let normal = hit.normal();
+
+        if let crate::entity::projectile::ProjectileHit::Entity { ref entity, .. } = hit {
+            let owner = self.thrown.owner.get(&world);
+            entity.damage_with_context(
+                entity.as_ref(),
+                0.0,
+                DamageType::THROWN,
+                Some(hit_pos),
+                Some(self),
+                owner.as_deref(),
+            );
+        }
 
         // Chicken spawn position offset slightly from hit position
         let spawn_pos = hit_pos.add(&normal.multiply(0.5, 0.5, 0.5));

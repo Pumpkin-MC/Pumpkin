@@ -3,9 +3,9 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, CustomDataImpl, DamageImpl, DamageResistantImpl,
-    DataComponentImpl, EnchantmentsImpl, IDSet, MaxDamageImpl, MaxStackSizeImpl, Rarity,
-    RarityImpl, SwingAnimationImpl, ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut,
-    read_data,
+    DataComponentImpl, EnchantmentGlintOverrideImpl, EnchantmentsImpl, IDSet,
+    MAX_ENCHANTMENT_LEVEL, MaxDamageImpl, MaxStackSizeImpl, Rarity, RarityImpl, SwingAnimationImpl,
+    ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut, read_data,
 };
 
 use crate::item::Item;
@@ -160,6 +160,39 @@ impl ItemStack {
         }
         None
     }
+
+    #[must_use]
+    pub fn get_data_component_by_id(
+        &self,
+        to_get_id: DataComponent,
+    ) -> Option<&dyn DataComponentImpl> {
+        for (id, component) in &self.patch {
+            if *id == to_get_id {
+                return component.as_deref();
+            }
+        }
+        for (id, component) in self.item.components {
+            if *id == to_get_id {
+                return Some(*component);
+            }
+        }
+        None
+    }
+
+    /// Vanilla `ItemStack.transmuteCopy(ItemLike, count)`: creates a new stack of `target_item`
+    /// with `count`, preserving `self.patch` (all explicit component overrides and removals).
+    #[must_use]
+    pub fn transmute_copy(&self, target_item: &'static Item, count: u8) -> Self {
+        if self.is_empty() {
+            return Self::EMPTY.clone();
+        }
+        Self {
+            item_count: count,
+            item: target_item,
+            patch: self.patch.clone(),
+            uid: ITEM_STACK_ID_GEN.next_id(),
+        }
+    }
     #[must_use]
     pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
         let to_get_id = T::get_enum();
@@ -205,9 +238,20 @@ impl ItemStack {
         false
     }
 
+    #[must_use]
     pub fn has_enchantments(&self) -> bool {
         self.get_data_component::<EnchantmentsImpl>()
             .is_some_and(|e| !e.enchantment.is_empty())
+    }
+
+    /// Vanilla `ItemStack.hasFoil`.
+    #[must_use]
+    pub fn has_foil(&self) -> bool {
+        self.get_data_component::<EnchantmentGlintOverrideImpl>()
+            .map_or_else(
+                || self.has_enchantments(),
+                |override_glint| override_glint.glint,
+            )
     }
 
     pub fn add_enchantment(&mut self, enchantment: &'static Enchantment, level: u16) {
@@ -239,6 +283,15 @@ impl ItemStack {
 
     pub fn set_data_component<T: DataComponentImpl + 'static>(&mut self, component: T) {
         let to_set_id = T::get_enum();
+        if self
+            .item
+            .components
+            .iter()
+            .any(|(id, default_val)| *id == to_set_id && component.equal(*default_val))
+        {
+            self.patch.retain(|(id, _)| *id != to_set_id);
+            return;
+        }
         let boxed = Some(Box::new(component) as _);
         if let Some((_, c)) = self.patch.iter_mut().find(|(id, _)| *id == to_set_id) {
             *c = boxed;
@@ -285,6 +338,12 @@ impl ItemStack {
             .map_or(1, |value| value.size)
     }
 
+    /// The stack returned to the crafting input after one item is consumed.
+    #[must_use]
+    pub fn crafting_remainder(&self) -> Option<Self> {
+        self.item.crafting_remainder.map(|item| Self::new(1, item))
+    }
+
     #[must_use]
     pub fn get_max_damage(&self) -> Option<i32> {
         self.get_data_component::<MaxDamageImpl>()
@@ -313,6 +372,27 @@ impl ItemStack {
             }
         }
         0
+    }
+
+    #[must_use]
+    pub fn has_enchantment_tag(&self, tag: &'static crate::tag::Tag) -> bool {
+        let Some(data) = self.get_data_component::<EnchantmentsImpl>() else {
+            return false;
+        };
+        data.enchantment
+            .iter()
+            .any(|(enc, level)| *level > 0 && enc.has_tag(tag))
+    }
+
+    /// Vanilla `EnchantmentHelper.has(stack, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE)`.
+    #[must_use]
+    pub fn has_prevent_armor_change(&self) -> bool {
+        let Some(data) = self.get_data_component::<EnchantmentsImpl>() else {
+            return false;
+        };
+        data.enchantment
+            .iter()
+            .any(|(enc, level)| *level > 0 && enc.effects.prevent_armor_change)
     }
 
     #[must_use]
@@ -354,7 +434,7 @@ impl ItemStack {
     #[must_use]
     pub fn can_be_hurt_by(&self, damage_type: DamageType) -> bool {
         self.get_data_component::<DamageResistantImpl>()
-            .is_none_or(|res| damage_type.is_tagged_with(res.res_type.as_str()) != Some(true))
+            .is_none_or(|res| !res.types.contains(&damage_type))
     }
 
     pub fn repair_item(&mut self, amount: i32) -> i32 {
@@ -383,20 +463,14 @@ impl ItemStack {
         damage > 0.0
     }
 
-    /// Apply durability damage to this item and return the outcome.
-    /// Callers must check the return value to handle break broadcasts and item stack updates.
-    /// TODO: Restore `#[must_use]` once all callsites (esp. tool/mob block-hit/damage sites)
-    /// implement proper `DamageResult::Broken` handling instead of suppressing with `let _ =`.
-    /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
-    #[must_use]
-    pub fn damage_item(&mut self, amount: i32) -> DamageResult {
+    fn compute_durability_damage_applied(&self, amount: i32) -> Option<(i32, i32)> {
         if amount <= 0 || !self.is_damageable() || self.is_unbreakable() {
-            return DamageResult::Untouched;
+            return None;
         }
 
         let max_damage = self.get_max_damage().unwrap_or(0);
         if max_damage <= 0 {
-            return DamageResult::Untouched;
+            return None;
         }
 
         // Hoist armor check and enchantment level outside loop to avoid repeated lookups.
@@ -411,9 +485,19 @@ impl ItemStack {
             }
         }
 
-        if applied <= 0 {
+        (applied > 0).then_some((applied, max_damage))
+    }
+
+    /// Apply durability damage to this item and return the outcome.
+    /// Callers must check the return value to handle break broadcasts and item stack updates.
+    /// TODO: Restore `#[must_use]` once all callsites (esp. tool/mob block-hit/damage sites)
+    /// implement proper `DamageResult::Broken` handling instead of suppressing with `let _ =`.
+    /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
+    #[must_use]
+    pub fn damage_item(&mut self, amount: i32) -> DamageResult {
+        let Some((applied, max_damage)) = self.compute_durability_damage_applied(amount) else {
             return DamageResult::Untouched;
-        }
+        };
 
         let new_damage = self.get_damage().saturating_add(applied);
         if new_damage >= max_damage {
@@ -433,13 +517,41 @@ impl ItemStack {
         DamageResult::Damaged
     }
 
+    /// Vanilla `ItemStack.hurtWithoutBreaking`: applies durability damage after Unbreaking,
+    /// clamping at `max_damage - 1` so the item never breaks from this call.
+    #[must_use]
+    pub fn damage_item_without_breaking(&mut self, amount: i32) -> DamageResult {
+        let Some((applied, max_damage)) = self.compute_durability_damage_applied(amount) else {
+            return DamageResult::Untouched;
+        };
+
+        let old_damage = self.get_damage();
+        let new_damage = old_damage
+            .saturating_add(applied)
+            .min((max_damage - 1).max(0));
+        if new_damage == old_damage {
+            return DamageResult::Untouched;
+        }
+        self.set_damage(new_damage);
+        DamageResult::Damaged
+    }
+
     #[must_use]
     pub fn get_max_use_time(&self) -> i32 {
         if let Some(value) = self.get_data_component::<ConsumableImpl>() {
             return value.consume_ticks();
         }
-        if self.get_data_component::<BlocksAttacksImpl>().is_some() {
+        if self.get_data_component::<BlocksAttacksImpl>().is_some()
+            || self
+                .get_data_component::<crate::data_component_impl::KineticWeaponImpl>()
+                .is_some()
+        {
             return 72000;
+        }
+        if let Some(inst) = self.get_data_component::<crate::data_component_impl::InstrumentImpl>()
+            && let Some(instrument) = crate::instrument::Instrument::from_name(&inst.instrument)
+        {
+            return i32::try_from(instrument.use_duration_ticks()).unwrap_or(i32::MAX);
         }
         0
     }
@@ -695,7 +807,7 @@ impl ItemStack {
         if level <= 0 {
             return;
         }
-        let level = min(level, 255);
+        let level = min(level, MAX_ENCHANTMENT_LEVEL);
         if let Some(data) = self.get_data_component_mut::<EnchantmentsImpl>() {
             for (enc, old_level) in data.enchantment.to_mut() {
                 if *enc == enchantment {
@@ -851,7 +963,20 @@ impl ItemStack {
         // Try to get item by registry key
         let item = Item::from_registry_key(registry_key)?;
 
-        let count = compound.get_int("count")? as u8;
+        // `ItemStack.MAP_CODEC` makes `count` optional with default 1 on decode.
+        let count = if let Some(c) = compound
+            .get_int("count")
+            .or_else(|| compound.get_byte("count").map(i32::from))
+        {
+            if !(0..=99).contains(&c) {
+                return None;
+            }
+            c as u8
+        } else if item == &Item::AIR {
+            0
+        } else {
+            1
+        };
 
         // Create the item stack
         let mut item_stack = Self::new(count, item);
@@ -874,6 +999,57 @@ impl ItemStack {
         }
 
         Some(item_stack)
+    }
+
+    /// Encodes a non-empty stack as vanilla `ItemStackTemplate.MAP_CODEC`.
+    #[must_use]
+    pub fn write_item_stack_template(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("id", format!("minecraft:{}", self.item.registry_key));
+        if self.item_count != 1 {
+            compound.put_int("count", i32::from(self.item_count));
+        }
+
+        let mut tag = NbtCompound::new();
+        for (id, data) in &self.patch {
+            if !id.is_persistent() {
+                continue;
+            }
+            if let Some(data) = data {
+                tag.put(id.to_name(), data.write_data());
+            } else {
+                let name = '!'.to_string() + id.to_name();
+                tag.put(name.as_str(), NbtCompound::new());
+            }
+        }
+        if !tag.child_tags.is_empty() {
+            compound.put_compound("components", tag);
+        }
+
+        NbtTag::Compound(compound)
+    }
+
+    /// Decodes a non-empty stack from vanilla `ItemStackTemplate.CODEC` (compound or item string).
+    #[must_use]
+    pub fn read_item_stack_template(tag: &NbtTag) -> Option<Self> {
+        match tag {
+            NbtTag::String(full_id) => {
+                let registry_key = full_id.strip_prefix("minecraft:").unwrap_or(full_id);
+                let item = Item::from_registry_key(registry_key)?;
+                if item == &Item::AIR {
+                    return None;
+                }
+                Some(Self::new(1, item))
+            }
+            NbtTag::Compound(compound) => {
+                let stack = Self::read_item_stack(compound)?;
+                if stack.is_empty() || stack.item_count > 99 {
+                    return None;
+                }
+                Some(stack)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -1634,5 +1810,25 @@ mod tests {
         let loaded = ItemStack::read_item_stack(&compound).expect("failed to load item stack");
         assert_eq!(loaded.patch.len(), 1);
         assert_eq!(loaded.patch[0].0, DataComponent::Damage);
+    }
+
+    #[test]
+    fn damage_item_without_breaking_clamps_before_break() {
+        let mut trident = ItemStack::new(1, &Item::TRIDENT);
+        assert_eq!(trident.get_max_damage(), Some(250));
+
+        assert_eq!(
+            trident.damage_item_without_breaking(300),
+            DamageResult::Damaged
+        );
+        assert_eq!(trident.get_damage(), 249);
+        assert_eq!(trident.item_count, 1);
+        assert!(trident.next_damage_will_break());
+
+        assert_eq!(
+            trident.damage_item_without_breaking(1),
+            DamageResult::Untouched
+        );
+        assert_eq!(trident.get_damage(), 249);
     }
 }

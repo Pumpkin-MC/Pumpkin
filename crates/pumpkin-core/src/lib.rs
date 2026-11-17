@@ -695,16 +695,19 @@ impl PumpkinServer {
             // Branch for Bedrock NetherNet connections negotiated over HTTP/WebRTC.
             nethernet_result = resolve_some(self.nethernet_listener.as_ref(), NetherNetListener::accept) => {
                 if let Some((session, client_addr)) = nethernet_result {
+                    let client_id = *master_client_id_counter;
                     *master_client_id_counter += 1;
                     let be_clients = bedrock_clients.clone();
                     let packet_limiter = PacketRateLimiter::from_config(
                         &self.server.advanced_config.networking.bedrock.packet_limiter,
                     );
                     let client = Arc::new(BedrockClient::new(
+                        client_id,
                         session.clone(),
                         client_addr,
                         be_clients,
                         packet_limiter,
+                        Arc::downgrade(&self.server),
                     ));
                     client.start_outgoing_packet_task();
                     bedrock_clients.lock().await.insert(client_addr, client.clone());
@@ -750,7 +753,6 @@ impl PumpkinServer {
                         profile,
                         Some(config),
                     ) {
-                        client.set_player(player.clone());
                         client.progress_player_packets(&player).await;
                         client.close().await;
                         client.await_tasks().await;

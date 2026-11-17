@@ -1,5 +1,5 @@
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::projectile::owner::ProjectileOwner;
@@ -27,8 +27,6 @@ impl ExperienceBottleEntity {
             thrown: ThrownItemEntity {
                 entity,
                 owner: ProjectileOwner::none(),
-                collides_with_projectiles: false,
-                has_hit: AtomicBool::new(false),
                 gravity: GRAVITY,
             },
             item_stack: RwLock::new(ItemStack::new(1, &Item::EXPERIENCE_BOTTLE)),
@@ -69,8 +67,8 @@ impl EntityBase for ExperienceBottleEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {

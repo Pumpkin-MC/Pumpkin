@@ -769,7 +769,12 @@ impl DragonFight {
                     for crystal in &live_crystals {
                         crystal.set_beam_target(None);
                         let pos = crystal.get_entity().pos.load();
-                        world.explode(pos, 6.0, crate::world::ExplosionInteraction::None);
+                        world.explode_from(
+                            *crystal,
+                            pos,
+                            6.0,
+                            crate::world::ExplosionInteraction::None,
+                        );
                         crystal.get_entity().remove();
                     }
                 } else if time >= 80 {

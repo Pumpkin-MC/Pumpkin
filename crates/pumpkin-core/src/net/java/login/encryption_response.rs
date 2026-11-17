@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 impl PendingConnection {
     async fn verify_encryption_token(
@@ -119,6 +120,9 @@ impl PendingConnection {
     }
 
     pub(super) async fn enable_compression(&mut self, server: &Server) {
+        if self.version.load() < JavaMinecraftVersion::V_1_8 {
+            return;
+        }
         let compression = server
             .advanced_config
             .networking
@@ -165,6 +169,18 @@ impl PendingConnection {
         );
         self.send_packet_now(&packet).await;
         self.login_success_sent = true;
+        // Clients before 1.20.2 have no configuration state and enter play right away.
+        if self.version.load() < JavaMinecraftVersion::V_1_20_2 {
+            self.connection_state.store(ConnectionState::Play);
+            if let Some(reason) = crate::net::can_not_join(profile, &self.address, server).await {
+                self.kick(reason).await;
+                return Some(PacketHandlerResult::Stop);
+            }
+            return Some(PacketHandlerResult::ReadyToPlay(
+                profile.clone(),
+                self.config.clone().unwrap_or_default(),
+            ));
+        }
         None
     }
 

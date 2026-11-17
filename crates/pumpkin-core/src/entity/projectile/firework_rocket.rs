@@ -58,8 +58,6 @@ impl FireworkRocketEntity {
             entity: ThrownItemEntity {
                 entity,
                 owner: ProjectileOwner::none(),
-                collides_with_projectiles: false,
-                has_hit: AtomicBool::new(false),
                 gravity: GRAVITY,
             },
             life: 0.into(),
@@ -211,6 +209,10 @@ impl FireworkRocketEntity {
 }
 
 impl EntityBase for FireworkRocketEntity {
+    fn hurt_knockback_direction(&self, hurt: &Entity) -> Option<(f64, f64)> {
+        super::knockback_away_from(self.get_entity(), hurt)
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.entity.owner)
     }
@@ -240,8 +242,8 @@ impl EntityBase for FireworkRocketEntity {
         }
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.entity.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.entity.process_tick(caller, server);
 
         let entity = self.get_entity();
         let world = entity.world.load();

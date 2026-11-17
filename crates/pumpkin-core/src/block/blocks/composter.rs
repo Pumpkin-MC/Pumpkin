@@ -1,4 +1,10 @@
-use std::sync::Arc;
+use std::{
+    any::Any,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use crate::{
     block::{
@@ -9,7 +15,7 @@ use crate::{
     world::{World, game_event::GameEventContext},
 };
 use pumpkin_data::{
-    Block, BlockState, BlockStateId,
+    Block, BlockDirection, BlockState, BlockStateId,
     block_properties::ComposterLikeProperties,
     data_component_impl::CompostableImpl,
     entity::EntityType,
@@ -19,7 +25,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
-use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_inventory::{Clearable, Inventory, screen_handler::InventoryPlayer};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
@@ -195,5 +201,375 @@ impl ComposterBlock {
         level: u8,
     ) {
         Self::set_level_with_source(None, world, location, state_id, block, level);
+    }
+
+    #[must_use]
+    pub fn get_container(
+        state_id: BlockStateId,
+        world: &Arc<World>,
+        pos: &BlockPos,
+    ) -> Arc<dyn Inventory> {
+        let level = ComposterLikeProperties::from_state_id(state_id).level;
+        if level == 8 {
+            Arc::new(ComposterOutputContainer {
+                state_id,
+                world: world.clone(),
+                pos: *pos,
+                stack: Mutex::new(ItemStack::new(1, &Item::BONE_MEAL)),
+                changed: AtomicBool::new(false),
+            })
+        } else if level < 7 {
+            Arc::new(ComposterInputContainer {
+                state_id,
+                world: world.clone(),
+                pos: *pos,
+                stack: Mutex::new(ItemStack::EMPTY.clone()),
+                changed: AtomicBool::new(false),
+            })
+        } else {
+            Arc::new(ComposterEmptyContainer)
+        }
+    }
+}
+
+struct ComposterEmptyContainer;
+
+impl Clearable for ComposterEmptyContainer {
+    fn clear(&self) {}
+}
+
+impl Inventory for ComposterEmptyContainer {
+    fn size(&self) -> usize {
+        0
+    }
+
+    fn is_empty(&self) -> bool {
+        true
+    }
+
+    fn get_stack(&self, _slot: usize) -> ItemStack {
+        ItemStack::EMPTY.clone()
+    }
+
+    fn remove_stack(&self, _slot: usize) -> ItemStack {
+        ItemStack::EMPTY.clone()
+    }
+
+    fn remove_stack_specific(&self, _slot: usize, _amount: u8) -> ItemStack {
+        ItemStack::EMPTY.clone()
+    }
+
+    fn set_stack(&self, _slot: usize, _stack: ItemStack) {}
+
+    fn is_sided(&self) -> bool {
+        true
+    }
+
+    fn get_slots_for_face(&self, _direction: BlockDirection) -> &'static [usize] {
+        &[]
+    }
+
+    fn can_place_item_through_face(
+        &self,
+        _slot: usize,
+        _stack: &ItemStack,
+        _direction: Option<BlockDirection>,
+    ) -> bool {
+        false
+    }
+
+    fn can_take_item_through_face(
+        &self,
+        _slot: usize,
+        _stack: &ItemStack,
+        _direction: BlockDirection,
+    ) -> bool {
+        false
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+struct ComposterInputContainer {
+    state_id: BlockStateId,
+    world: Arc<World>,
+    pos: BlockPos,
+    stack: Mutex<ItemStack>,
+    changed: AtomicBool,
+}
+
+impl Clearable for ComposterInputContainer {
+    fn clear(&self) {
+        *self
+            .stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = ItemStack::EMPTY.clone();
+    }
+}
+
+impl Inventory for ComposterInputContainer {
+    fn size(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        self.stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty()
+    }
+
+    fn get_stack(&self, slot: usize) -> ItemStack {
+        if slot == 0 {
+            self.stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+        } else {
+            ItemStack::EMPTY.clone()
+        }
+    }
+
+    fn remove_stack(&self, slot: usize) -> ItemStack {
+        if slot != 0 {
+            return ItemStack::EMPTY.clone();
+        }
+        let mut guard = self
+            .stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        std::mem::replace(&mut *guard, ItemStack::EMPTY.clone())
+    }
+
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
+        if slot != 0 || amount == 0 {
+            return ItemStack::EMPTY.clone();
+        }
+        let mut guard = self
+            .stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if guard.is_empty() {
+            ItemStack::EMPTY.clone()
+        } else {
+            guard.split(amount)
+        }
+    }
+
+    fn set_stack(&self, slot: usize, stack: ItemStack) {
+        if slot == 0 {
+            *self
+                .stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+        }
+    }
+
+    fn get_max_count_per_stack(&self) -> u8 {
+        1
+    }
+
+    fn is_sided(&self) -> bool {
+        true
+    }
+
+    fn get_slots_for_face(&self, direction: BlockDirection) -> &'static [usize] {
+        if direction == BlockDirection::Up {
+            &[0]
+        } else {
+            &[]
+        }
+    }
+
+    fn can_place_item_through_face(
+        &self,
+        _slot: usize,
+        stack: &ItemStack,
+        direction: Option<BlockDirection>,
+    ) -> bool {
+        !self.changed.load(Ordering::Relaxed)
+            && direction == Some(BlockDirection::Up)
+            && stack.get_data_component::<CompostableImpl>().is_some()
+    }
+
+    fn can_take_item_through_face(
+        &self,
+        _slot: usize,
+        _stack: &ItemStack,
+        _direction: BlockDirection,
+    ) -> bool {
+        false
+    }
+
+    fn mark_dirty(&self) {
+        let mut contents = {
+            let mut guard = self
+                .stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if guard.is_empty() {
+                return;
+            }
+            std::mem::replace(&mut *guard, ItemStack::EMPTY.clone())
+        };
+        if contents.get_data_component::<CompostableImpl>().is_some() {
+            self.changed.store(true, Ordering::Relaxed);
+            let new_state_id = ComposterBlock::insert_item(
+                None,
+                self.state_id,
+                &self.world,
+                &mut contents,
+                &self.pos,
+            );
+            self.world.sync_world_event(
+                WorldEvent::ComposterFill,
+                self.pos,
+                i32::from(new_state_id != self.state_id),
+            );
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+struct ComposterOutputContainer {
+    state_id: BlockStateId,
+    world: Arc<World>,
+    pos: BlockPos,
+    stack: Mutex<ItemStack>,
+    changed: AtomicBool,
+}
+
+impl Clearable for ComposterOutputContainer {
+    fn clear(&self) {
+        *self
+            .stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = ItemStack::EMPTY.clone();
+    }
+}
+
+impl Inventory for ComposterOutputContainer {
+    fn size(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        self.stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty()
+    }
+
+    fn get_stack(&self, slot: usize) -> ItemStack {
+        if slot == 0 {
+            self.stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+        } else {
+            ItemStack::EMPTY.clone()
+        }
+    }
+
+    fn remove_stack(&self, slot: usize) -> ItemStack {
+        if slot != 0 {
+            return ItemStack::EMPTY.clone();
+        }
+        let removed = {
+            let mut guard = self
+                .stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::replace(&mut *guard, ItemStack::EMPTY.clone())
+        };
+        self.mark_dirty();
+        removed
+    }
+
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
+        if slot != 0 || amount == 0 {
+            return ItemStack::EMPTY.clone();
+        }
+        let res = {
+            let mut guard = self
+                .stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if guard.is_empty() {
+                return ItemStack::EMPTY.clone();
+            }
+            guard.split(amount)
+        };
+        self.mark_dirty();
+        res
+    }
+
+    fn set_stack(&self, slot: usize, stack: ItemStack) {
+        if slot == 0 {
+            *self
+                .stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+            self.mark_dirty();
+        }
+    }
+
+    fn get_max_count_per_stack(&self) -> u8 {
+        1
+    }
+
+    fn is_sided(&self) -> bool {
+        true
+    }
+
+    fn get_slots_for_face(&self, direction: BlockDirection) -> &'static [usize] {
+        if direction == BlockDirection::Down {
+            &[0]
+        } else {
+            &[]
+        }
+    }
+
+    fn can_place_item_through_face(
+        &self,
+        _slot: usize,
+        _stack: &ItemStack,
+        _direction: Option<BlockDirection>,
+    ) -> bool {
+        false
+    }
+
+    fn can_take_item_through_face(
+        &self,
+        _slot: usize,
+        stack: &ItemStack,
+        direction: BlockDirection,
+    ) -> bool {
+        !self.changed.load(Ordering::Relaxed)
+            && direction == BlockDirection::Down
+            && stack.item.id == Item::BONE_MEAL.id
+    }
+
+    fn mark_dirty(&self) {
+        if !self.changed.swap(true, Ordering::Relaxed) {
+            let block = Block::from_state_id(self.state_id);
+            ComposterBlock::set_level_with_source(
+                None,
+                &self.world,
+                &self.pos,
+                self.state_id,
+                block,
+                0,
+            );
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

@@ -63,6 +63,7 @@ impl BlockBehaviour for FlowerPotBlock {
         if let Some(plant_item) = get_plant_item_from_potted_block(args.block) {
             let mut stack = ItemStack::new(1, plant_item);
             args.player.inventory.insert_stack_anywhere(&mut stack);
+            args.player.sync_inventory_to_client();
             if !stack.is_empty() {
                 args.player.drop_item(stack);
             }

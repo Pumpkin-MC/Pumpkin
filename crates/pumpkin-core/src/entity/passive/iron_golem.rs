@@ -273,6 +273,7 @@ impl Mob for IronGolemEntity {
                 0.0,
             ));
             EnchantmentHelper::on_post_attack(
+                self,
                 target.get_entity(),
                 &self.mob_entity.living_entity.held_item(self),
             );

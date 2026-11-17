@@ -768,7 +768,7 @@ impl RaidGardenGoal {
 }
 
 impl MoveToTargetPos for RaidGardenTarget {
-    fn is_target_pos(&self, world: Arc<World>, block_pos: BlockPos) -> bool {
+    fn is_target_pos(&self, world: &World, block_pos: BlockPos) -> bool {
         if world
             .get_block(&block_pos)
             .has_tag(&tag::Block::MINECRAFT_SUPPORTS_CROPS)

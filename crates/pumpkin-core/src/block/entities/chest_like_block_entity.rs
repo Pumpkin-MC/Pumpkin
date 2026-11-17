@@ -32,6 +32,7 @@ macro_rules! impl_block_entity_for_chest {
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(loot_table_key),
                     loot_table_seed,
+                    metadata: $crate::block::entities::ContainerMetadata::from_nbt(nbt),
                 };
 
                 // Only read saved items when there is no pending loot table.
@@ -74,6 +75,7 @@ macro_rules! impl_block_entity_for_chest {
                     // Loot has already been generated, so persist the actual items.
                     self.write_inventory_nbt(nbt, true);
                 }
+                self.metadata.write_nbt(nbt);
             }
 
             fn tick(&self, world: &Arc<$crate::world::World>) {
@@ -154,6 +156,7 @@ macro_rules! impl_block_entity_for_chest {
             }
 
             fn apply_item_components(&self, stack: &ItemStack) {
+                self.metadata.apply_item_components(stack);
                 if let Some(loot) = stack
                     .get_data_component::<pumpkin_data::data_component_impl::ContainerLootImpl>()
                 {
@@ -163,19 +166,32 @@ macro_rules! impl_block_entity_for_chest {
                         .unwrap_or_else(std::sync::PoisonError::into_inner) =
                         Some(loot.loot_table.clone());
                 }
-                if let Some(container) =
-                    stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
-                {
-                    let mut items = self
-                        .items
-                        .write()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    for (slot, item) in &container.items {
-                        if let Some(target) = items.get_mut(*slot as usize) {
-                            *target = item.clone();
-                        }
-                    }
-                }
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::apply_container_items_to_slice(stack, &mut *items);
+            }
+
+            fn collect_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_name_only(stack);
+            }
+
+            fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_item_components(stack);
+                let items = self
+                    .items
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::collect_container_items_from_slice(&*items, stack);
+            }
+
+            fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+                self.metadata.get_lock()
+            }
+
+            fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+                self.metadata.get_custom_name()
             }
         }
     };
@@ -355,6 +371,7 @@ macro_rules! impl_chest_helper_methods {
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(None),
                     loot_table_seed: 0,
+                    metadata: $crate::block::entities::ContainerMetadata::default(),
                 }
             }
 

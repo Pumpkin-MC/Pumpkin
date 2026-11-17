@@ -30,13 +30,11 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity, spawn::SpawnGroupData},
+    mob::{Mob, MobEntity, drop_from_gift_loot_table, spawn::SpawnGroupData},
     passive::animal::Animal,
     player::Player,
 };
-use crate::plugin::api::events::entity::entity_drop_item::EntityDropItemEvent;
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
 const EGG_LAY_TIME: std::ops::Range<i32> = 6000..12000;
 const CHICKEN_JOCKEY_EXPERIENCE_REWARD: u32 = 10;
@@ -111,36 +109,9 @@ impl ChickenEntity {
 
     fn lay_egg(&self) -> bool {
         let entity = self.get_entity();
-        let world = entity.world.load_full();
-        let Some(table) = world.get_loot_table(CHICKEN_LAY_LOOT_TABLE) else {
-            return false;
-        };
-        let params = LootContextParameters {
-            world: Some(&world),
-            position: Some(entity.pos.load()),
-            this_entity: Some(self),
-            ..Default::default()
-        };
-        let drops = generate_loot_from_handle(&table, self.get_random().random(), &params);
-        let mut dropped = false;
-        for stack in drops {
-            let mut drop_event = EntityDropItemEvent::new(
-                entity.entity_id,
-                format!("minecraft:{}", stack.item.registry_key),
-                stack.item_count,
-            );
-            if let Some(server) = world.server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut drop_event);
-            }
-            if drop_event.cancelled {
-                continue;
-            }
+        drop_from_gift_loot_table(self, CHICKEN_LAY_LOOT_TABLE, |stack| {
             entity.spawn_at_location(stack);
-            dropped = true;
-        }
-        dropped
+        })
     }
 
     fn variant_name(&self) -> String {

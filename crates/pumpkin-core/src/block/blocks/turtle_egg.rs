@@ -17,6 +17,7 @@ use crate::block::{
     OnLandedUponArgs, OnPlaceArgs, RandomTickArgs,
 };
 use crate::entity::EntityBase;
+use crate::entity::passive::turtle::TurtleEntity;
 use crate::entity::r#type::from_type;
 use crate::world::World;
 
@@ -26,6 +27,9 @@ type TurtleEggProperties = TurtleEggLikeProperties;
 pub struct TurtleEggBlock;
 
 impl TurtleEggBlock {
+    pub const MIN_EGGS: u8 = 1;
+    pub const MAX_EGGS: u8 = 4;
+
     #[must_use]
     pub fn is_sand(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         world.get_block(pos).has_tag(&tag::Block::MINECRAFT_SAND)
@@ -96,7 +100,7 @@ impl BlockBehaviour for TurtleEggBlock {
             && let BlockIsReplacing::Itself(state_id) = args.replacing
         {
             let mut properties = TurtleEggProperties::from_state_id(state_id);
-            if properties.eggs < 4 {
+            if properties.eggs < Self::MAX_EGGS {
                 properties.eggs += 1;
             }
             return properties.to_state_id(args.block);
@@ -109,7 +113,7 @@ impl BlockBehaviour for TurtleEggBlock {
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
         let b = BlockAccessor::get_block(args.world, args.position);
         args.player.get_entity().pose.load() != EntityPose::Crouching
-            && TurtleEggProperties::from_state_id(args.state_id).eggs < 4
+            && TurtleEggProperties::from_state_id(args.state_id).eggs < Self::MAX_EGGS
             && args.block.id == b.id
     }
 
@@ -203,6 +207,9 @@ impl BlockBehaviour for TurtleEggBlock {
                         from_type(&EntityType::TURTLE, spawn_pos, args.world, Uuid::new_v4());
                     if let Some(mob) = turtle.get_mob() {
                         mob.spawn_as_baby();
+                    }
+                    if let Some(turtle) = turtle.cast_any().downcast_ref::<TurtleEntity>() {
+                        turtle.set_home_pos(*args.position);
                     }
                     args.world.spawn_entity(turtle);
                 }
