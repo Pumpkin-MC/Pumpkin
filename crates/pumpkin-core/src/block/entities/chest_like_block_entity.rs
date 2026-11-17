@@ -524,8 +524,11 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             Some("minecraft:chests/simple_dungeon".into());
-        chest.set_stack(0, ItemStack::new(1, &Item::DIAMOND));
         chest.unpack_loot_table_with(&mut |_key, _seed| {
+            // Generation runs with neither lock held, so a concurrent insert can happen here.
+            assert!(chest.items.try_write().is_ok());
+            assert!(chest.loot_table.try_lock().is_ok());
+            chest.set_stack(0, ItemStack::new(1, &Item::DIAMOND));
             vec![
                 ItemStack::new(1, &Item::STONE),
                 ItemStack::new(1, &Item::DIRT),
