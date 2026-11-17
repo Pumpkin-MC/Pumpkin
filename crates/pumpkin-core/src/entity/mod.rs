@@ -3391,6 +3391,8 @@ impl Entity {
                     .update_entity_movement_after_fall_on(effect_block, caller);
             } else {
                 // Vanilla `restituteMovementAfterCollisions`: block bounciness only applies when landing.
+                // TODO vanilla also applies the `BOUNCINESS` attribute (+ sulfur cubes) on
+                // walls and ceilings
                 stop_vertical_movement_after_fall(caller);
             }
         }

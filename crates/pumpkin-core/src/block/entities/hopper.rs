@@ -525,9 +525,7 @@ impl HopperBlockEntity {
             one_item = Some(current.split(1));
             true
         });
-        // Marked dirty even if the insert fails afterwards: vanilla `SimpleContainer.removeItem`
-        // calls `setChanged`, so a composter empties on the take and the bone meal is lost when
-        // the hopper cannot take it. Kept for parity, see MC-175090
+        // Like vanilla (MC-175090) the composter empties on the take, even if the insert then fails.
         if one_item.is_some() {
             container.mark_dirty();
         }
@@ -588,10 +586,7 @@ impl HopperBlockEntity {
             }) {
                 continue;
             }
-            // Vanilla `HopperBlockEntity.ejectItems`: actually remove the item from the
-            // hopper before offering it to the target, restoring it on failure. Reading a
-            // clone and never writing back left the source stack untouched, duplicating
-            // the item into the target while the hopper kept its full stack.
+            // Vanilla `ejectItems`: remove the item before offering it to the target, restore it on failure.
             let Some(one_item) = Self::take_one(self, slot, &item) else {
                 continue;
             };
