@@ -253,16 +253,15 @@ impl DecoratedPotBlockEntity {
                     ..Default::default()
                 },
             );
-            {
-                let mut item = this
-                    .item
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let mut slots = [item.take().unwrap_or_else(|| ItemStack::EMPTY.clone())];
-                place_items_in_slots(&mut slots, generated, seed);
-                let [slot] = slots;
-                *item = (!slot.is_empty()).then_some(slot);
-            }
+            let mut item = this
+                .item
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut slots = [item.take().unwrap_or_else(|| ItemStack::EMPTY.clone())];
+            place_items_in_slots(&mut slots, generated, seed);
+            let [slot] = slots;
+            *item = (!slot.is_empty()).then_some(slot);
+            drop(item);
             this.mark_dirty();
         }
     }
