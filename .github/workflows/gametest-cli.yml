@@ -34,22 +34,22 @@ jobs:
       - name: Build GameTest server
         run: cargo build --locked -p pumpkin
       - name: Run GameTests
-        run: target/debug/pumpkin --tests --universe gametestserver --report gametest-results.xml
+        run: target/debug/pumpkin --tests --universe gametestserver --report
       - uses: actions/setup-node@v4
         if: always()
         with:
           node-version: lts/*
       - name: Generate HTML report
-        if: always() && hashFiles('gametest-results.xml') != ''
+        if: always() && hashFiles('report.xml') != ''
         run: |
           npm install --global xunit-viewer@10.6.1
-          xunit-viewer --results gametest-results.xml --output gametest-results.html
+          xunit-viewer --results report.xml --output report.html
       - name: Upload GameTest report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: gametest-results
           path: |
-            gametest-results.xml
-            gametest-results.html
+            report.xml
+            report.html
           if-no-files-found: warn

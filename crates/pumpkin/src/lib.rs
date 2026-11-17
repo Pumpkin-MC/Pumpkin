@@ -26,8 +26,8 @@ struct GameTestArgs {
     /// The path to where the test server world will be created. Any existing folder will be replaced.
     #[arg(long, default_value = "gametestserver")]
     universe: PathBuf,
-    /// Exports results in a junit-like XML report at the given path.
-    #[arg(long)]
+    /// Exports results in a JUnit-like XML report (default: report.xml).
+    #[arg(long, num_args = 0..=1, default_missing_value = "report.xml")]
     report: Option<PathBuf>,
     /// Which test(s) to run (namespaced ID selector using wildcards). Empty means run all.
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
@@ -77,4 +77,28 @@ pub fn parse_startup_command(
         repeat_count: options.repeat_count,
         packs: options.packs,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::{GameTestOptions, StartupCommand, parse_startup_command};
+
+    #[test]
+    fn report_flag_uses_default_or_explicit_path() {
+        for (args, expected) in [
+            (vec!["--tests", "--report"], "report.xml"),
+            (vec!["--tests", "--report", "custom.xml"], "custom.xml"),
+        ] {
+            let command = parse_startup_command(args.into_iter().map(str::to_owned));
+            assert!(matches!(
+                command,
+                Ok(StartupCommand::GameTestServer(GameTestOptions {
+                    report: Some(path),
+                    ..
+                })) if path == PathBuf::from(expected)
+            ));
+        }
+    }
 }
