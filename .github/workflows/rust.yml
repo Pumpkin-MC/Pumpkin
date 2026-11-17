@@ -33,6 +33,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: "2"
   CI_RUST_TOOLCHAIN_VER: ${{ inputs.rust_toolchain_version || 'stable' }}
   RUSTFLAGS: "-Dwarnings"
 
