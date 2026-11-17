@@ -827,8 +827,9 @@ impl EntityBase for ItemEntity {
             }
             let (item_id, count_before) = (stack.item.id, stack.item_count);
             let inserted = player.inventory.insert_stack_anywhere(&mut stack);
-            // Vanilla `Inventory.add`: creative voids the stack only when none of it fit.
-            if !inserted && player.is_creative() {
+            // Vanilla `Inventory.add`: the loop ends on a pass that inserts nothing, so creative
+            // voids whatever is left of a stack that did not fully fit, even after a partial insert.
+            if !stack.is_empty() && player.is_creative() {
                 stack.set_count(0);
             }
             (
