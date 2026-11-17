@@ -229,12 +229,14 @@ impl ItemEntity {
             && stack.are_items_and_components_equal(other)
     }
 
-    /// Vanilla `ItemEntity.merge`: moves up to `min(max stack, max_count)` from `from` into `to`.
+    /// Vanilla `ItemEntity.merge`: moves `min(min(max stack, max_count) - to.count, from.count)`.
+    ///
+    /// Not clamped at zero: a `to` above the limit is cut back and the excess goes into `from`.
     pub fn merge(to: &mut ItemStack, from: &mut ItemStack, max_count: u8) {
-        let max_size = to.get_max_stack_size().min(max_count);
-        let moved = from.item_count.min(max_size.saturating_sub(to.item_count));
-        to.increment(moved);
-        from.decrement(moved);
+        let limit = i16::from(to.get_max_stack_size().min(max_count));
+        let delta = (limit - i16::from(to.item_count)).min(i16::from(from.item_count));
+        to.item_count = (i16::from(to.item_count) + delta).clamp(0, i16::from(u8::MAX)) as u8;
+        from.item_count = (i16::from(from.item_count) - delta).clamp(0, i16::from(u8::MAX)) as u8;
     }
 
     /// Vanilla `ItemEntity.isMergable`.
