@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 pumpkin-util.workspace = true
 serde.workspace = true
+tempfile.workspace = true
+toml_edit.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 
