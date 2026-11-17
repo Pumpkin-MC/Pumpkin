@@ -263,6 +263,40 @@ pub struct BlockHitResult<'a> {
     pub cursor_pos: &'a Vector3<f32>,
 }
 
+impl BlockHitResult<'_> {
+    /// Vanilla `SelectableSlotContainer.getHitSlot`.
+    #[must_use]
+    pub fn get_hit_slot(
+        &self,
+        block_facing: pumpkin_data::block_properties::HorizontalFacing,
+        rows: usize,
+        columns: usize,
+    ) -> Option<usize> {
+        use pumpkin_data::block_properties::HorizontalFacing;
+
+        let hit_direction = self.face.to_horizontal_facing()?;
+        if block_facing != hit_direction {
+            return None;
+        }
+        let (rel_x, rel_y) = match hit_direction {
+            HorizontalFacing::North => (1.0 - self.cursor_pos.x, self.cursor_pos.y),
+            HorizontalFacing::South => (self.cursor_pos.x, self.cursor_pos.y),
+            HorizontalFacing::West => (self.cursor_pos.z, self.cursor_pos.y),
+            HorizontalFacing::East => (1.0 - self.cursor_pos.z, self.cursor_pos.y),
+        };
+        let row = Self::selectable_slot_section(1.0 - rel_y, rows);
+        let column = Self::selectable_slot_section(rel_x, columns);
+        Some(column + row * columns)
+    }
+
+    fn selectable_slot_section(relative_coordinate: f32, max_sections: usize) -> usize {
+        let targeted_pixel = relative_coordinate * 16.0;
+        let section_size = 16.0 / (max_sections as f32);
+        ((targeted_pixel / section_size).floor() as isize).clamp(0, max_sections as isize - 1)
+            as usize
+    }
+}
+
 pub struct OnEntityCollisionArgs<'a> {
     pub server: &'a Server,
     pub world: &'a Arc<World>,

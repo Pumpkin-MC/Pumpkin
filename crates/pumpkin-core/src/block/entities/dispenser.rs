@@ -15,11 +15,13 @@ pub struct DispenserBlockEntity {
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
+    pub metadata: super::ContainerMetadata,
 }
 
 impl BlockEntity for DispenserBlockEntity {
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_inventory_nbt(nbt, true);
+        self.metadata.write_nbt(nbt);
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
@@ -31,6 +33,7 @@ impl BlockEntity for DispenserBlockEntity {
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
+            metadata: super::ContainerMetadata::from_nbt(nbt),
         };
 
         pumpkin_inventory::sync_read_items_from_nbt(
@@ -42,6 +45,36 @@ impl BlockEntity for DispenserBlockEntity {
         );
 
         dispenser
+    }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        self.metadata.apply_item_components(stack);
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::apply_container_items_to_slice(stack, &mut *items);
+    }
+
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_name_only(stack);
+    }
+
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_item_components(stack);
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::collect_container_items_from_slice(&*items, stack);
+    }
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.metadata.get_lock()
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.metadata.get_custom_name()
     }
 
     fn resource_location(&self) -> &'static str {
@@ -107,6 +140,7 @@ impl DispenserBlockEntity {
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
+            metadata: super::ContainerMetadata::default(),
         }
     }
 

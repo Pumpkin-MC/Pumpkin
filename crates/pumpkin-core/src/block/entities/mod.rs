@@ -141,8 +141,21 @@ pub trait BlockEntity: Any + Send + Sync {
     /// Copies the block entity's state on the item stack dropped for it.
     fn collect_item_components(&self, _stack: &mut ItemStack) {}
 
+    /// Copies all implicit components onto a Creative Ctrl+Pick Block item stack (`BlockEntity.collectComponents`).
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.collect_item_components(stack);
+    }
+
     /// Restores the state from the item stack the block was placed from.
     fn apply_item_components(&self, _stack: &ItemStack) {}
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        None
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        None
+    }
 
     fn drops_for_creative_player(&self) -> bool {
         false
@@ -183,6 +196,138 @@ pub trait BlockEntity: Any + Send + Sync {
     }
     fn to_experience_container(self: Arc<Self>) -> Option<Arc<dyn ExperienceContainer>> {
         None
+    }
+}
+
+/// Shared `BaseContainerBlockEntity` / `BeaconBlockEntity` `CustomName` + `lock` state (`26.3`).
+#[derive(Default)]
+pub struct ContainerMetadata {
+    pub custom_name: std::sync::Mutex<Option<pumpkin_util::text::TextComponent>>,
+    pub lock: std::sync::Mutex<Option<pumpkin_data::data_component_impl::LockImpl>>,
+}
+
+impl ContainerMetadata {
+    #[must_use]
+    pub fn from_nbt(nbt: &NbtCompound) -> Self {
+        let custom_name = nbt
+            .get("CustomName")
+            .or_else(|| nbt.get("custom_name"))
+            .and_then(pumpkin_data::data_component_impl::CustomNameImpl::read_data)
+            .map(|c| c.name);
+        let lock = nbt
+            .get("lock")
+            .or_else(|| nbt.get("Lock"))
+            .and_then(pumpkin_data::data_component_impl::LockImpl::read_data);
+        Self {
+            custom_name: std::sync::Mutex::new(custom_name),
+            lock: std::sync::Mutex::new(lock),
+        }
+    }
+
+    pub fn write_nbt(&self, nbt: &mut NbtCompound) {
+        use pumpkin_data::data_component_impl::{CustomNameImpl, DataComponentImpl};
+        if let Some(name) = self
+            .custom_name
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            nbt.put("CustomName", CustomNameImpl { name }.write_data());
+        }
+        if let Some(lock) = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            nbt.put("lock", lock.write_data());
+        }
+    }
+
+    pub fn apply_item_components(&self, stack: &ItemStack) {
+        if let Some(name) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
+        {
+            *self
+                .custom_name
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(name.name.clone());
+        }
+        if let Some(lock) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::LockImpl>()
+        {
+            *self
+                .lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(lock.clone());
+        }
+    }
+
+    pub fn collect_name_only(&self, stack: &mut ItemStack) {
+        if let Some(name) = self
+            .custom_name
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            stack.set_data_component(pumpkin_data::data_component_impl::CustomNameImpl { name });
+        }
+    }
+
+    pub fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.collect_name_only(stack);
+        if let Some(lock) = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            stack.set_data_component(lock);
+        }
+    }
+
+    #[must_use]
+    pub fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    #[must_use]
+    pub fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.custom_name
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+}
+
+pub fn apply_container_items_to_slice(stack: &ItemStack, items: &mut [ItemStack]) -> bool {
+    let Some(container) =
+        stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
+    else {
+        return false;
+    };
+    for (slot, item) in &container.items {
+        if let Some(target) = items.get_mut(*slot as usize) {
+            *target = item.clone();
+        }
+    }
+    true
+}
+
+pub fn collect_container_items_from_slice(items: &[ItemStack], stack: &mut ItemStack) {
+    let contents: Vec<(u8, ItemStack)> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| !item.is_empty())
+        .map(|(slot, item)| (slot as u8, item.clone()))
+        .collect();
+    if !contents.is_empty() {
+        stack.set_data_component(pumpkin_data::data_component_impl::ContainerImpl {
+            items: contents,
+        });
     }
 }
 

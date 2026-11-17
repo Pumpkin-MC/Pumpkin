@@ -154,6 +154,9 @@ impl CrafterBlock {
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_LISTENERS);
 
             let mut result_stack = recipe_result.to_item_stack();
+            if let Some(server) = server.as_deref() {
+                crate::world::map::resolve_map_post_processing(&mut result_stack, server);
+            }
             if let Some(server) = server {
                 let mut event =
                     crate::plugin::api::events::block::crafter_craft::CrafterCraftEvent::new(
@@ -170,10 +173,14 @@ impl CrafterBlock {
             Self::dispense_item(world, pos, crafter, &mut result_stack, props.orientation);
 
             let recipe_id = format!("minecraft:{}", result_stack.item.registry_key);
-            let check_pos = pos.to_f64();
+            let center_pos = pos.to_centered_f64();
             let players = world.players.load();
             for player in players.iter() {
-                if player.position().squared_distance_to_vec(&check_pos) <= 25.0 {
+                let p = player.position();
+                if (p.x - center_pos.x).abs() <= 8.5
+                    && (p.y - center_pos.y).abs() <= 8.5
+                    && (p.z - center_pos.z).abs() <= 8.5
+                {
                     player.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::CrafterRecipeCrafted {
                             recipe_id: recipe_id.clone(),
@@ -185,7 +192,8 @@ impl CrafterBlock {
             for i in 0..CrafterBlockEntity::INVENTORY_SIZE {
                 let stack = crafter.get_stack(i);
                 if !stack.is_empty()
-                    && let Some(mut remainder_stack) = stack.crafting_remainder()
+                    && let Some(mut remainder_stack) =
+                        recipe_result.remaining_item_for_slot(i, &stack)
                 {
                     Self::dispense_item(
                         world,

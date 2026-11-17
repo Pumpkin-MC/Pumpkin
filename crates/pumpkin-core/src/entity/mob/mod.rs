@@ -1114,6 +1114,13 @@ impl MobEntity {
     ) -> bool {
         let entity = &self.living_entity.entity;
 
+        if item_stack.item.id == pumpkin_data::item::Item::SHEARS.id
+            && entity.shear_off_all_leash_connections(true)
+        {
+            let _ = player.damage_item_stack(item_stack, 1);
+            return true;
+        }
+
         // If already leashed to player, right-clicking unleashes the mob
         let currently_leashed = entity.is_leashed();
 
@@ -1136,8 +1143,9 @@ impl MobEntity {
             let diff = entity.pos.load() - player.get_entity().pos.load();
             let dist_sq = diff.length_squared();
             if dist_sq <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
-                entity.leash_to(player.clone() as Arc<dyn EntityBase>);
-                if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                if entity.leash_to(player.clone() as Arc<dyn EntityBase>)
+                    && player.gamemode.load() != pumpkin_util::GameMode::Creative
+                {
                     item_stack.decrement(1);
                 }
                 return true;

@@ -880,15 +880,25 @@ impl BlockRegistry {
                 stack.get_data_component::<pumpkin_data::data_component_impl::BlockEntityDataImpl>()
                 && let Some(existing_be) = world.get_block_entity(&final_block_pos)
             {
-                let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-                existing_be.write_internal(&mut nbt);
-                for (k, v) in &block_entity_data.nbt.child_tags {
-                    if !matches!(k.as_ref(), "x" | "y" | "z" | "id") {
-                        nbt.child_tags.insert(k.clone(), v.clone());
+                let expected_id = existing_be
+                    .resource_location()
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(existing_be.resource_location());
+                let id_matches = block_entity_data
+                    .nbt
+                    .get_string("id")
+                    .is_none_or(|id| id.strip_prefix("minecraft:").unwrap_or(id) == expected_id);
+                if id_matches {
+                    let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+                    existing_be.write_internal(&mut nbt);
+                    for (k, v) in &block_entity_data.nbt.child_tags {
+                        if !matches!(k.as_ref(), "x" | "y" | "z" | "id") {
+                            nbt.child_tags.insert(k.clone(), v.clone());
+                        }
                     }
-                }
-                if let Some(reloaded) = crate::block::entities::block_entity_from_nbt(&nbt) {
-                    world.add_block_entity(reloaded);
+                    if let Some(reloaded) = crate::block::entities::block_entity_from_nbt(&nbt) {
+                        world.add_block_entity(reloaded);
+                    }
                 }
             }
             if let Some(block_entity) = world.get_block_entity(&final_block_pos) {

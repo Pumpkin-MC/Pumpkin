@@ -38,6 +38,7 @@ pub struct HopperBlockEntity {
     pub comparator_dirty: AtomicBool,
     pub cooldown_time: AtomicI32,
     pub ticked_game_time: AtomicI64,
+    pub metadata: super::ContainerMetadata,
 }
 
 #[must_use]
@@ -69,6 +70,7 @@ impl BlockEntity for HopperBlockEntity {
             NbtTag::Int(self.cooldown_time.load(Ordering::Relaxed)),
         );
         self.write_inventory_nbt(nbt, true);
+        self.metadata.write_nbt(nbt);
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
@@ -85,6 +87,7 @@ impl BlockEntity for HopperBlockEntity {
                     .unwrap_or(Self::NO_COOLDOWN_TIME),
             ),
             ticked_game_time: AtomicI64::new(0),
+            metadata: super::ContainerMetadata::from_nbt(nbt),
         };
 
         pumpkin_inventory::sync_read_items_from_nbt(
@@ -166,6 +169,36 @@ impl BlockEntity for HopperBlockEntity {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        self.metadata.apply_item_components(stack);
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::apply_container_items_to_slice(stack, &mut *items);
+    }
+
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_name_only(stack);
+    }
+
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_item_components(stack);
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::collect_container_items_from_slice(&*items, stack);
+    }
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.metadata.get_lock()
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.metadata.get_custom_name()
+    }
 }
 
 impl HopperBlockEntity {
@@ -185,6 +218,7 @@ impl HopperBlockEntity {
             comparator_dirty: AtomicBool::new(false),
             cooldown_time: AtomicI32::new(Self::NO_COOLDOWN_TIME),
             ticked_game_time: AtomicI64::new(0),
+            metadata: super::ContainerMetadata::default(),
         }
     }
 
