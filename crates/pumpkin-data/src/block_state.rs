@@ -1,7 +1,8 @@
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
-use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
+use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument, SOUND_TYPES};
 use crate::blocks::SuffocationPredicate;
+use crate::sound::Sound;
 use crate::tag::{self, Taggable};
 use crate::{Block, BlockDirection, BlockId};
 
@@ -32,6 +33,8 @@ pub struct BlockState {
     pub outline_shapes: &'static [u16],
     /// How much light is subtracted as it passes through this block (0 for transparent, 15 for opaque).
     pub opacity: u8,
+    /// Index into [`SOUND_TYPES`], see [`Self::get_sound_type`].
+    pub sound_type: u8,
     /// The ID of the block entity associated with this state.
     /// Set to `u16::MAX` if the block does not hold NBT data.
     pub block_entity_type: u16,
@@ -42,6 +45,20 @@ pub struct BlockState {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct BlockStateId(u16);
+
+/// Vanilla `SoundType`: the sounds a block makes when broken, stepped on, placed, hit or fallen on.
+#[derive(Debug)]
+pub struct SoundType {
+    /// The vanilla `SoundType` constant name, e.g. `WOOD`.
+    pub name: &'static str,
+    pub volume: f32,
+    pub pitch: f32,
+    pub break_sound: Sound,
+    pub step_sound: Sound,
+    pub place_sound: Sound,
+    pub hit_sound: Sound,
+    pub fall_sound: Sound,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -189,8 +206,8 @@ impl BlockState {
     }
 
     #[must_use]
-    pub fn is_waterlogged(&self) -> bool {
-        self.id.is_waterlogged()
+    pub const fn is_waterlogged(&self) -> bool {
+        self.state_flags & IS_WATERLOGGED != 0
     }
 
     /// Produce a new state identical to `self` except the waterlogged property
@@ -202,6 +219,11 @@ impl BlockState {
             .to_block()
             .set_waterlogged(self.id, value)
             .map(BlockStateId::to_state)
+    }
+
+    #[must_use]
+    pub fn get_sound_type(&self) -> &'static SoundType {
+        &SOUND_TYPES[self.sound_type as usize]
     }
 
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
@@ -333,8 +355,8 @@ impl BlockStateId {
 
     #[inline]
     #[must_use]
-    pub fn is_waterlogged(self) -> bool {
-        self.to_block().is_waterlogged(self)
+    pub const fn is_waterlogged(self) -> bool {
+        self.to_state().is_waterlogged()
     }
 
     #[inline]
@@ -395,6 +417,8 @@ const HAS_RANDOM_TICKS: u16 = 1 << 9;
 const IS_SOLID_RENDER: u16 = 1 << 10;
 const CAN_OCCLUDE: u16 = 1 << 11;
 const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
+// codegen flag
+const IS_WATERLOGGED: u16 = 1 << 13;
 
 // side_flags
 const DOWN_SIDE_SOLID: u8 = 1 << 0;
@@ -408,11 +432,43 @@ const UP_CENTER_SOLID: u8 = 1 << 7;
 
 #[cfg(test)]
 mod tests {
-    use crate::Block;
+    use super::{BlockState, BlockStateId};
+    use crate::{Block, BlockId};
     use pumpkin_util::math::position::BlockPos;
 
     fn assert_close(actual: f64, expected: f64) {
         assert!((actual - expected).abs() < 1.0e-6, "{actual} != {expected}");
+    }
+
+    #[test]
+    fn waterlogged_flag_matches_properties() {
+        for raw in 0..BlockStateId::STATE_COUNT {
+            let id = BlockStateId::new(raw).unwrap();
+            let by_props = Block::from_state_id(id)
+                .properties(id)
+                .is_some_and(|props| {
+                    props
+                        .to_props()
+                        .contains(&crate::Property::Waterlogged(true))
+                });
+            assert_eq!(id.is_waterlogged(), by_props, "{id:?}");
+        }
+    }
+
+    #[test]
+    fn block_lookups_share_one_copy() {
+        let stone = Block::from_id(BlockId::STONE);
+        assert!(std::ptr::eq(
+            stone,
+            Block::from_name("minecraft:stone").unwrap()
+        ));
+        assert!(std::ptr::eq(
+            stone,
+            Block::from_item_id(stone.item_id).unwrap()
+        ));
+        let state = BlockState::from_id(stone.default_state.id);
+        assert!(std::ptr::eq(state, stone.default_state));
+        assert!(std::ptr::eq(state, &stone.states[0]));
     }
 
     #[test]

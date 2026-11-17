@@ -59,6 +59,24 @@ impl FrogVariant {
             Self::Warm => "minecraft:entity/frog/frog_warm",
         }
     }
+    #[doc = "Selects the variant a frog spawning in this biome gets, from the variants' spawn conditions."]
+    #[must_use]
+    pub fn select_for_biome(biome_name: &str) -> Self {
+        let bare = biome_name.strip_prefix("minecraft:").unwrap_or(biome_name);
+        if crate::tag::WorldgenBiome::MINECRAFT_SPAWNS_COLD_VARIANT_FROGS
+            .0
+            .contains(&bare)
+        {
+            return Self::Cold;
+        }
+        if crate::tag::WorldgenBiome::MINECRAFT_SPAWNS_WARM_VARIANT_FROGS
+            .0
+            .contains(&bare)
+        {
+            return Self::Warm;
+        }
+        Self::Temperate
+    }
     #[doc = "Returns all vanilla frog variants."]
     #[must_use]
     pub const fn all() -> &'static [Self] {

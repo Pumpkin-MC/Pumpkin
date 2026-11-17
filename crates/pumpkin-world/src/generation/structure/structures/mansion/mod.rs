@@ -527,10 +527,7 @@ fn transformed_palette(
         rotation,
         mirror.state_mirror(),
     );
-    PaletteEntry {
-        name: palette.name.clone(),
-        properties,
-    }
+    PaletteEntry::with_properties(palette.name.clone(), properties)
 }
 
 #[cfg(test)]

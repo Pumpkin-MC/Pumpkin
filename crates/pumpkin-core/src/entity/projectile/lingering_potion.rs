@@ -1,5 +1,5 @@
+use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
 
 use crate::entity::projectile::splash_potion::extinguish_fire_if_water_potion;
 use crate::{
@@ -27,9 +27,7 @@ impl LingeringPotionEntity {
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
+            owner: ProjectileOwner::none(),
             gravity: GRAVITY,
         };
 
@@ -64,8 +62,12 @@ impl LingeringPotionEntity {
 }
 
 impl EntityBase for LingeringPotionEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn hurt_knockback_direction(&self, hurt: &Entity) -> Option<(f64, f64)> {
+        super::knockback_away_from(self.get_entity(), hurt)
+    }
+
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn init_data_tracker(&self) {
@@ -82,8 +84,8 @@ impl EntityBase for LingeringPotionEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -109,11 +111,7 @@ impl EntityBase for LingeringPotionEntity {
             .clone();
 
         // Play impact particles
-        world.send_entity_status(
-            self.get_entity(),
-            EntityStatus::Death,
-            Some(ActorEventID::Death),
-        );
+        world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
 
         let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);
 

@@ -213,11 +213,18 @@ impl CommandExecutor for LocateStructureExecutor {
         // must not report a bastion just because both share
         // `minecraft:nether_complexes`. Mirrors the `placementScans` map in
         // vanilla's `ChunkGenerator.findNearestMapStructure`.
+        let world = context.source.world();
+        let seed = world.level.seed.0;
+        let world_gen = world.level.world_gen.load_full();
+
         let mut scans: Vec<(usize, Vec<StructureKeys>)> = Vec::new();
         for key in wanted {
             let Some(set_index) = structure_set_containing(key) else {
                 continue;
             };
+            if !world_gen.can_locate_structure(set_index, key) {
+                continue;
+            }
             if let Some((_, keys)) = scans.iter_mut().find(|(index, _)| *index == set_index) {
                 keys.push(key);
             } else {
@@ -226,10 +233,6 @@ impl CommandExecutor for LocateStructureExecutor {
         }
 
         let origin = BlockPos::floored_v(context.source.position);
-
-        let world = context.source.world();
-        let seed = world.level.seed.0;
-        let world_gen = world.level.world_gen.load_full();
 
         let mut found: Option<(BlockPos, StructureKeys)> = None;
         for (set_index, keys) in scans {

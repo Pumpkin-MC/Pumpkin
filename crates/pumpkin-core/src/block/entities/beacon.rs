@@ -25,6 +25,7 @@ pub struct BeaconBlockEntity {
     // Vanilla Parity Fields
     pub custom_name: Mutex<Option<String>>,
     pub lock_key: Mutex<Option<String>>,
+    pub metadata: super::ContainerMetadata,
     pub last_check_y: AtomicI32,
 }
 
@@ -48,6 +49,7 @@ impl BeaconBlockEntity {
             payment: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             custom_name: Mutex::new(None),
             lock_key: Mutex::new(None),
+            metadata: super::ContainerMetadata::default(),
             last_check_y: AtomicI32::new(position.0.y - 1),
         }
     }
@@ -195,6 +197,12 @@ impl BeaconBlockEntity {
                 continue;
             }
 
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::ConstructBeacon {
+                    level: levels,
+                },
+            );
+
             if let Some(effect) = primary_effect {
                 player.add_effect(pumpkin_data::potion::Effect {
                     effect_type: effect,
@@ -272,6 +280,7 @@ impl BlockEntity for BeaconBlockEntity {
             payment: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             custom_name: Mutex::new(custom_name),
             lock_key: Mutex::new(lock_key),
+            metadata: super::ContainerMetadata::from_nbt(nbt),
             last_check_y: AtomicI32::new(position.0.y - 1),
         }
     }
@@ -309,6 +318,27 @@ impl BlockEntity for BeaconBlockEntity {
         {
             nbt.put_string("Lock", lock.clone());
         }
+        self.metadata.write_nbt(nbt);
+    }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        self.metadata.apply_item_components(stack);
+    }
+
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_name_only(stack);
+    }
+
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_item_components(stack);
+    }
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.metadata.get_lock()
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.metadata.get_custom_name()
     }
 
     fn tick(&self, world: &Arc<World>) {
@@ -361,7 +391,7 @@ impl BlockEntity for BeaconBlockEntity {
     ) -> Option<NbtCompound> {
         let name_guard = self.custom_name.lock().ok();
         let name = name_guard.as_ref().and_then(|n| n.as_deref());
-        Some(crate::block::entities::bedrock::build_beacon_actor(
+        Some(build_beacon_actor(
             self.position,
             self.primary_effect.load(Ordering::Relaxed),
             self.secondary_effect.load(Ordering::Relaxed),
@@ -453,5 +483,36 @@ impl Clearable for BeaconBlockEntity {
         if let Ok(mut payment) = self.payment.try_lock() {
             *payment = ItemStack::EMPTY.clone();
         }
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for beacons.
+#[must_use]
+pub fn build_beacon_actor(
+    position: BlockPos,
+    primary: i32,
+    secondary: i32,
+    custom_name: Option<&str>,
+) -> NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new("Beacon", position)
+        .movable(false)
+        .custom_name(custom_name)
+        .put_int("primary", primary.max(0))
+        .put_int("secondary", secondary.max(0))
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn beacon_actor_builder() {
+        let pos = BlockPos::new(5, 64, 5);
+        let nbt = build_beacon_actor(pos, 1, 1, None);
+        assert_eq!(nbt.get_string("id"), Some("Beacon"));
+        assert_eq!(nbt.get_int("primary"), Some(1));
+        assert_eq!(nbt.get_int("secondary"), Some(1));
+        assert_eq!(nbt.get_bool("isMovable"), Some(false));
     }
 }

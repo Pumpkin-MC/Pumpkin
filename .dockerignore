@@ -1,18 +1,2 @@
-# A whitelist of files that should be included into Docker.
-# Put an exclaimation mark before everything to include.
-
-# Ignore everything
+# Dockerfile downloads a prebuilt release binary and needs no build context files.
 *
-
-# Allow the source code folders
-!/crates/
-!/tools/
-!/assets/
-!/pumpkin.toml
-
-# Allow build.rs to read git commit sha
-!/.git
-
-# Dependencies
-!Cargo.lock
-!Cargo.toml

@@ -572,9 +572,16 @@ impl EntitySelectorPredicate {
                 entity.write_nbt(&mut actual_nbt);
                 matches_nbt_compound(expected_nbt, &actual_nbt) ^ invert
             }
-            Self::Predicate(_predicate_id, invert) => {
-                // Since loot-table predicates are not yet fully implemented, we default to false (or true ^ invert)
-                false ^ invert
+            Self::Predicate(predicate_id, invert) => {
+                let ent = entity.get_entity();
+                let world_arc = ent.world.load();
+                let params = crate::world::loot::LootContextParameters {
+                    this_entity: Some(entity),
+                    position: Some(ent.pos.load()),
+                    world: Some(&world_arc),
+                    ..Default::default()
+                };
+                crate::world::loot::evaluate_predicate(predicate_id, &params) ^ *invert
             }
             Self::AllOf(predicates) => predicates.iter().all(|predicate| predicate.test(entity)),
         }

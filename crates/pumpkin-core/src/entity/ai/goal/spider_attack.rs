@@ -3,6 +3,7 @@ use rand::RngExt;
 use super::{Controls, Goal};
 use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
 use crate::entity::mob::Mob;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 
 /// Melee that gives up in daylight: a 1 in 100 chance per check to drop the target.
 pub struct SpiderAttackGoal {
@@ -26,7 +27,7 @@ impl Goal for SpiderAttackGoal {
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         // Roll first: the daylight lookup only runs on the rare hit.
         if mob.get_random().random_range(0..100) == 0 && mob.get_mob_entity().is_in_daylight() {
-            mob.set_mob_target(None);
+            mob.set_mob_target(None, TargetReason::ForgotTarget);
             return false;
         }
         self.melee_attack_goal.should_continue(mob)

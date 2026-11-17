@@ -3,6 +3,7 @@
 use compound::NbtCompound;
 use deserializer::NbtReadHelper;
 use serializer::NbtWriteHelper;
+use uuid::Uuid;
 
 use crate::{
     BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, DOUBLE_ID, END_ID, Error, FLOAT_ID, INT_ARRAY_ID, INT_ID,
@@ -551,6 +552,32 @@ impl NbtTag {
             Self::IntArray(int_array) => Some(int_array),
             _ => None,
         }
+    }
+
+    /// A UUID as a 4-element int array, most significant bits first (the vanilla `UUID` layout).
+    #[must_use]
+    pub fn uuid(value: Uuid) -> Self {
+        let value = value.as_u128();
+        Self::IntArray(vec![
+            (value >> 96) as i32,
+            ((value >> 64) & 0xFFFF_FFFF) as i32,
+            ((value >> 32) & 0xFFFF_FFFF) as i32,
+            (value & 0xFFFF_FFFF) as i32,
+        ])
+    }
+
+    /// Reads a UUID written by [`Self::uuid`].
+    #[must_use]
+    pub fn extract_uuid(&self) -> Option<Uuid> {
+        let &[a, b, c, d] = self.extract_int_array()? else {
+            return None;
+        };
+        Some(Uuid::from_u128(
+            ((a as u32 as u128) << 96)
+                | ((b as u32 as u128) << 64)
+                | ((c as u32 as u128) << 32)
+                | (d as u32 as u128),
+        ))
     }
 
     /// Returns the contained long array, if this is a long-array tag.

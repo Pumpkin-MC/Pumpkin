@@ -59,14 +59,20 @@ impl LpVector3d {
     }
 
     pub fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, ReadingError> {
+        // `write` encodes a zero vector as a single 0 byte, so read one byte
+        // first; reading two would consume the field that follows it.
         let mut low_16 = [0u8; 2];
         reader
-            .read_exact(&mut low_16)
+            .read_exact(&mut low_16[..1])
             .map_err(|e| ReadingError::Message(e.to_string()))?;
 
-        if low_16[0] == 0 && low_16[1] == 0 {
+        if low_16[0] == 0 {
             return Ok(Self(Vector3::new(0.0, 0.0, 0.0)));
         }
+
+        reader
+            .read_exact(&mut low_16[1..])
+            .map_err(|e| ReadingError::Message(e.to_string()))?;
 
         let mut mid_32 = [0u8; 4];
         reader
@@ -165,6 +171,21 @@ mod tests {
         let mut buf = Vec::new();
         velocity.write_legacy(&mut buf)?;
         assert_eq!(buf, vec![0x0F, 0xA0, 0xF0, 0x60, 0x00, 0x00]);
+        Ok(())
+    }
+
+    #[test]
+    fn zero_vector_round_trips_as_one_byte() -> Result<(), Box<dyn std::error::Error>> {
+        let velocity = LpVector3d(Vector3::new(0.0, 0.0, 0.0));
+        let mut buf = Vec::new();
+        velocity.write(&mut buf)?;
+        assert_eq!(buf, [0]);
+
+        // The following byte belongs to the next field and must stay unread.
+        let mut reader = std::io::Cursor::new([0u8, 0x2A]);
+        let decoded = LpVector3d::read(&mut reader)?;
+        assert_eq!(decoded.0, Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(reader.position(), 1);
         Ok(())
     }
 }

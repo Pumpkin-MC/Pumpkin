@@ -24,3 +24,32 @@ pub struct CCorrectPlayerMovePrediction {
     /// Tick number on which the prediction error occurred.
     pub tick: VarULong,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// order: type, pos, delta, vehicle rotation, optional angular velocity,
+    /// on ground, unsigned varlong tick.
+    #[test]
+    fn player_correction_layout() {
+        let packet = CCorrectPlayerMovePrediction {
+            prediction_type: 0,
+            pos: Vector3::new(1.0, 2.0, 3.0),
+            pos_delta: Vector3::new(0.5, 0.0, -0.5),
+            rotation: Vector2::default(),
+            vehicle_angular_velocity: None,
+            on_ground: true,
+            tick: VarULong(300),
+        };
+        let mut buf = Vec::new();
+        packet.write(&mut buf).unwrap();
+
+        let mut expected = vec![0u8];
+        for f in [1.0f32, 2.0, 3.0, 0.5, 0.0, -0.5, 0.0, 0.0] {
+            expected.extend_from_slice(&f.to_le_bytes());
+        }
+        expected.extend_from_slice(&[0, 1, 0xAC, 0x02]);
+        assert_eq!(buf, expected);
+    }
+}

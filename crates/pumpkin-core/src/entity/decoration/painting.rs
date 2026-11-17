@@ -81,7 +81,7 @@ impl PaintingEntity {
     pub fn sync_variant(&self) {
         self.entity.set_synced_data(
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
-            VarInt(self.variant().id() as i32),
+            VarInt(self.variant_id.load(Ordering::Relaxed) as i32),
         );
     }
 
@@ -215,7 +215,13 @@ impl EntityBase for PaintingEntity {
         let index = self.entity.data.load(Ordering::Relaxed) as u8;
         let direction = BlockDirection::from_index(index).unwrap_or(BlockDirection::South);
         nbt.put_byte("facing", facing_to_horizontal(direction) as i8);
-        nbt.put_string("variant", self.variant().asset_id().to_string());
+        let variant_id = self.variant_id.load(Ordering::Relaxed);
+        let variant_str =
+            self.entity
+                .resolve_dynamic_entry_id("minecraft:painting_variant", variant_id, |_id| {
+                    self.variant().asset_id().to_string()
+                });
+        nbt.put_string("variant", variant_str);
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
@@ -226,9 +232,14 @@ impl EntityBase for PaintingEntity {
         if let Some(variant_str) = nbt
             .get_string("variant")
             .or_else(|| nbt.get_string("Motive"))
-            && let Some(variant) = PaintingVariant::from_name(variant_str)
+            && let Some(raw_id) =
+                self.entity
+                    .resolve_dynamic_raw_id("minecraft:painting_variant", variant_str, |n| {
+                        PaintingVariant::from_name(n).map(|v| v.id())
+                    })
         {
-            self.set_variant(variant);
+            self.variant_id.store(raw_id, Ordering::Relaxed);
+            self.sync_variant();
         }
     }
 
@@ -248,7 +259,7 @@ impl EntityBase for PaintingEntity {
         let mut metadata = Vec::new();
         Metadata::new(
             pumpkin_data::tracked_data::painting::DATA_PAINTING_VARIANT_ID,
-            VarInt(self.variant().id() as i32),
+            VarInt(self.variant_id.load(Ordering::Relaxed) as i32),
         )
         .write(&mut metadata, &version)
         .ok()?;
@@ -259,6 +270,13 @@ impl EntityBase for PaintingEntity {
     fn set_variant_name(&self, name: &str) {
         if let Some(variant) = PaintingVariant::from_name(name) {
             self.set_variant(variant);
+        } else if let Some(server) = self.entity.world.load().server.upgrade()
+            && let Some(raw_id) = server
+                .datapack_manager
+                .get_dynamic_registry_raw_id("minecraft:painting_variant", name)
+        {
+            self.variant_id.store(raw_id, Ordering::Relaxed);
+            self.sync_variant();
         }
     }
 

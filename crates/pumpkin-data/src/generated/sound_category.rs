@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SoundCategory {
     Master,
     Music,

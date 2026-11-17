@@ -4,7 +4,9 @@ mod embedded_stop;
 mod login_and_movement;
 mod loot_tables;
 mod player_actions;
+mod polar_bear;
 mod sheep_shearing;
+mod sign_authorization;
 mod status_ping;
 mod world_interaction;
 
@@ -38,6 +40,8 @@ pub async fn run_bot_tests(
 
     sheep_shearing::run_sheep_shearing_test(server, summary_lines)?;
 
+    polar_bear::run_polar_bear_defense_test(server, &bot1, summary_lines)?;
+
     block_tuning_and_invert::run_block_tuning_and_invert_tests(server, &mut bot1, summary_lines)
         .await?;
 
@@ -45,6 +49,8 @@ pub async fn run_bot_tests(
 
     player_actions::run_player_actions_and_disconnect_tests(server, bot1, bot2, summary_lines)
         .await?;
+
+    sign_authorization::run_sign_authorization_tests(server, addr, summary_lines).await?;
 
     embedded_stop::run_embedded_stop_test(summary_lines).await?;
 

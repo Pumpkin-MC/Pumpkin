@@ -6,8 +6,106 @@ use std::path::{Path, PathBuf};
 use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 use rayon::prelude::*;
+use serde::Deserialize;
 
 const DEFAULT_NAMESPACE: &str = "minecraft";
+
+#[derive(Deserialize)]
+struct MinimalBlockAssets {
+    blocks: Vec<MinimalBlock>,
+}
+
+#[derive(Deserialize)]
+struct MinimalBlock {
+    name: String,
+    default_state_id: u16,
+    properties: Vec<i32>,
+    states: Vec<MinimalBlockState>,
+}
+
+#[derive(Deserialize)]
+struct MinimalBlockState {
+    id: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum MinimalPropertyType {
+    #[serde(rename = "boolean")]
+    Boolean,
+    #[serde(rename = "int")]
+    Int { min: u8, max: u8 },
+    #[serde(rename = "enum")]
+    Enum { values: Vec<String> },
+}
+
+#[derive(Deserialize)]
+struct MinimalProperty {
+    hash_key: i32,
+    serialized_name: String,
+    #[serde(flatten)]
+    property_type: MinimalPropertyType,
+}
+
+fn resolve_state_id(
+    block_map: &BTreeMap<String, MinimalBlock>,
+    prop_map: &BTreeMap<i32, MinimalProperty>,
+    name: &str,
+    properties: &[(String, String)],
+) -> u16 {
+    let clean_name = name.strip_prefix("minecraft:").unwrap_or(name);
+    let Some(block) = block_map.get(clean_name) else {
+        panic!("Unknown block in structure template: {name}");
+    };
+    if block.properties.is_empty() || properties.is_empty() {
+        return block.default_state_id;
+    }
+
+    let min_state_id = block.states[0].id;
+    let mut default_idx = block.default_state_id - min_state_id;
+    let mut curr = 0u16;
+    let mut mul = 1u16;
+
+    for &prop_hash in block.properties.iter().rev() {
+        let prop = &prop_map[&prop_hash];
+        let count = match &prop.property_type {
+            MinimalPropertyType::Boolean => 2,
+            MinimalPropertyType::Int { min, max } => u16::from(*max - *min + 1),
+            MinimalPropertyType::Enum { values } => values.len() as u16,
+        };
+        let default_val_idx = default_idx % count;
+        default_idx /= count;
+
+        let val_idx = if let Some((_, v)) = properties
+            .iter()
+            .find(|(k, _)| k.as_str() == prop.serialized_name.as_str())
+        {
+            match &prop.property_type {
+                MinimalPropertyType::Boolean => match v.as_str() {
+                    "true" => 0,
+                    "false" => 1,
+                    _ => default_val_idx,
+                },
+                MinimalPropertyType::Int { min, max } => v
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|&n| n >= *min && n <= *max)
+                    .map_or(default_val_idx, |n| u16::from(n - *min)),
+                MinimalPropertyType::Enum { values } => values
+                    .iter()
+                    .position(|s| s == v)
+                    .map_or(default_val_idx, |idx| idx as u16),
+            }
+        } else {
+            default_val_idx
+        };
+
+        curr += val_idx * mul;
+        mul *= count;
+    }
+
+    block.states[curr as usize].id
+}
 
 struct EmbeddedPack {
     id: String,
@@ -337,6 +435,23 @@ pub fn build() -> TokenStream {
 
     parsed_templates.sort_by(|a, b| a.resource_id.cmp(&b.resource_id));
 
+    let blocks_assets: MinimalBlockAssets =
+        serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
+            .expect("Failed to parse blocks.json");
+    let block_map: BTreeMap<String, MinimalBlock> = blocks_assets
+        .blocks
+        .into_iter()
+        .map(|b| (b.name.clone(), b))
+        .collect();
+
+    let generated_properties: Vec<MinimalProperty> =
+        serde_json::from_str(&fs::read_to_string("../../assets/properties.json").unwrap())
+            .expect("Failed to parse properties.json");
+    let prop_map: BTreeMap<i32, MinimalProperty> = generated_properties
+        .into_iter()
+        .map(|p| (p.hash_key, p))
+        .collect();
+
     let mut definitions = Vec::with_capacity(parsed_templates.len());
     let mut const_refs = Vec::with_capacity(parsed_templates.len());
     let mut index: Vec<(&str, usize)> = Vec::with_capacity(parsed_templates.len() * 2);
@@ -355,6 +470,8 @@ pub fn build() -> TokenStream {
                     .iter()
                     .map(|entry| {
                         let name = &entry.name;
+                        let state_id =
+                            resolve_state_id(&block_map, &prop_map, name, &entry.properties);
                         let props: Vec<TokenStream> = entry
                             .properties
                             .iter()
@@ -364,6 +481,7 @@ pub fn build() -> TokenStream {
                             StaticPaletteEntry {
                                 name: #name,
                                 properties: &[#(#props),*],
+                                state_id: crate::BlockStateId::new_or_air(#state_id),
                             }
                         }
                     })
@@ -441,6 +559,7 @@ pub fn build() -> TokenStream {
         pub struct StaticPaletteEntry {
             pub name: &'static str,
             pub properties: &'static [crate::block_properties::Property],
+            pub state_id: crate::BlockStateId,
         }
 
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]

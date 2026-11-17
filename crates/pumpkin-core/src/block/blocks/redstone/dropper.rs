@@ -159,23 +159,27 @@ impl BlockBehaviour for DropperBlock {
 
             if let Some((slot_index, mut item)) = dropper.get_random_slot() {
                 let props = DispenserLikeProperties::from_state_id(state.id);
+                let direction = props.facing.to_block_direction();
+                let target_pos = args.position.offset(direction.to_offset());
 
-                let target_pos = args
-                    .position
-                    .offset(props.facing.to_block_direction().to_offset());
-
-                if let Some(entity) = args.world.get_block_entity(&target_pos)
-                    && let Some(container) = entity.get_inventory()
+                if let Some(container) =
+                    HopperBlockEntity::get_container_at(args.world, &target_pos)
                 {
                     let backup = item.clone();
                     let one_item = item.split(1);
 
-                    if HopperBlockEntity::add_one_item(dropper, container.as_ref(), &one_item) {
+                    if HopperBlockEntity::add_item(
+                        Some(dropper),
+                        container.as_ref(),
+                        one_item,
+                        Some(direction.opposite()),
+                    )
+                    .is_empty()
+                    {
                         dropper.set_stack(slot_index, item);
-                        return;
+                    } else {
+                        dropper.set_stack(slot_index, backup);
                     }
-
-                    dropper.set_stack(slot_index, backup);
                     return;
                 }
 

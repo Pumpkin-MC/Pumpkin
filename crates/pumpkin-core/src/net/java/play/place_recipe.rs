@@ -13,7 +13,9 @@ impl JavaClient {
             GenericIngredient, compute_biggest_craftable, take_n_ingredient,
         };
         use crate::server::recipe::DynamicRecipe;
-        use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING};
+        use pumpkin_data::recipes::{
+            CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING,
+        };
         use pumpkin_data::screen::WindowType;
         use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 
@@ -38,7 +40,7 @@ impl JavaClient {
             .filter(|r| {
                 !matches!(
                     r,
-                    CraftingRecipeTypes::CraftingSpecial
+                    CraftingRecipeTypes::CraftingSpecial(_)
                         | CraftingRecipeTypes::CraftingDecoratedPot { .. }
                 )
             })
@@ -46,7 +48,7 @@ impl JavaClient {
         let cooking_display_count = RECIPES_COOKING.len();
         let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
 
-        let (grid_width, crafting_inv) = {
+        let (window_type, grid_width, crafting_inv) = {
             let screen_handler_arc = player
                 .current_screen_handler
                 .lock()
@@ -55,24 +57,59 @@ impl JavaClient {
             let handler = screen_handler_arc
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let grid_width: usize = match handler.window_type() {
-                Some(WindowType::Crafting) => 3,
-                None => 2, // player inventory 2x2
+            let win_type = handler.window_type();
+            match win_type {
+                Some(WindowType::Crafting) => (
+                    win_type,
+                    3usize,
+                    handler.get_behaviour().slots[1].get_inventory(),
+                ),
+                None => (
+                    win_type,
+                    2usize,
+                    handler.get_behaviour().slots[1].get_inventory(),
+                ),
+                Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker) => (
+                    win_type,
+                    1usize,
+                    handler.get_behaviour().slots[0].get_inventory(),
+                ),
                 _ => return,
-            };
-            (grid_width, handler.get_behaviour().slots[1].get_inventory())
+            }
         };
 
-        let grid_size = grid_width * grid_width;
+        let is_cooking_window = matches!(
+            window_type,
+            Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker)
+        );
+        let grid_size = if is_cooking_window {
+            1
+        } else {
+            grid_width * grid_width
+        };
         let mut ingredient_slots: Vec<Option<GenericIngredient<'_>>> = vec![None; grid_size];
 
-        if target_id < crafting_display_count {
+        if is_cooking_window {
+            if target_id < crafting_display_count
+                || target_id >= crafting_display_count + cooking_display_count
+            {
+                return;
+            }
+            let cooking_recipe = &RECIPES_COOKING[target_id - crafting_display_count];
+            let ingredient = match (window_type, cooking_recipe) {
+                (Some(WindowType::Furnace), CookingRecipeType::Smelting(r))
+                | (Some(WindowType::BlastFurnace), CookingRecipeType::Blasting(r))
+                | (Some(WindowType::Smoker), CookingRecipeType::Smoking(r)) => &r.ingredient,
+                _ => return,
+            };
+            ingredient_slots[0] = Some(GenericIngredient::Vanilla(ingredient));
+        } else if target_id < crafting_display_count {
             // Crafting recipe
             let mut counter = 0usize;
             let recipe = RECIPES_CRAFTING.iter().find(|r| {
                 if matches!(
                     r,
-                    CraftingRecipeTypes::CraftingSpecial
+                    CraftingRecipeTypes::CraftingSpecial(_)
                         | CraftingRecipeTypes::CraftingDecoratedPot { .. }
                 ) {
                     return false;
@@ -104,19 +141,25 @@ impl JavaClient {
                     }
                 }
                 CraftingRecipeTypes::CraftingTransmute {
-                    input, material, ..
+                    input,
+                    material,
+                    material_count,
+                    ..
                 } => {
-                    if grid_size >= 2 {
+                    let needed_materials = usize::from(material_count.0.max(1));
+                    if grid_size > needed_materials {
                         ingredient_slots[0] = Some(GenericIngredient::Vanilla(input));
-                        ingredient_slots[1] = Some(GenericIngredient::Vanilla(material));
+                        for slot in ingredient_slots.iter_mut().skip(1).take(needed_materials) {
+                            *slot = Some(GenericIngredient::Vanilla(material));
+                        }
                     }
                 }
                 _ => return,
             }
-        } else if target_id < crafting_display_count + cooking_display_count {
-            // TODO: cooking recipes
-            return;
         } else {
+            if target_id < crafting_display_count + cooking_display_count {
+                return;
+            }
             let dynamic_id = target_id - crafting_display_count - cooking_display_count;
             let Some(DynamicRecipe::Crafting(crafting)) = dynamic_recipes.get(dynamic_id) else {
                 return;

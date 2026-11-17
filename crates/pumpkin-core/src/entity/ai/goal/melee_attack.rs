@@ -1,9 +1,11 @@
 use super::{Controls, Goal};
 
+use crate::entity::EntityBase;
 use crate::entity::ai::goal::revenge::MobFilter;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
@@ -23,6 +25,7 @@ pub struct MeleeAttackGoal {
     last_update_time: i64,
     last_target_position: Option<Vector3<f64>>,
     gate: Option<MobFilter>,
+    attack: Option<fn(&dyn Mob, &dyn EntityBase)>,
 }
 
 impl MeleeAttackGoal {
@@ -39,6 +42,7 @@ impl MeleeAttackGoal {
             last_update_time: 0,
             last_target_position: None,
             gate: None,
+            attack: None,
         }
     }
 
@@ -46,6 +50,13 @@ impl MeleeAttackGoal {
     #[must_use]
     pub const fn gated_by(mut self, gate: MobFilter) -> Self {
         self.gate = Some(gate);
+        self
+    }
+
+    /// Replaces the swing and hit, vanilla `checkAndPerformAttack` overrides.
+    #[must_use]
+    pub const fn performing(mut self, attack: fn(&dyn Mob, &dyn EntityBase)) -> Self {
+        self.attack = Some(attack);
         self
     }
 
@@ -137,7 +148,7 @@ impl Goal for MeleeAttackGoal {
                 !EntityPredicate::ExceptCreativeOrSpectator.test(entity.get_entity())
             });
         if should_clear {
-            mob.set_mob_target(None);
+            mob.set_mob_target(None, TargetReason::ForgotTarget);
         }
 
         mob.get_mob_entity().set_attacking(false);
@@ -194,20 +205,17 @@ impl Goal for MeleeAttackGoal {
         self.cooldown = (self.cooldown - 1).max(0);
 
         if self.cooldown <= 0
-            && mob.get_mob_entity().is_in_attack_range(target.as_ref())
+            && mob.is_in_attack_range(target.as_ref())
             && mob.has_line_of_sight(target.get_entity())
         {
             self.cooldown = self.get_max_cooldown();
-
-            // Iron golem animation plays on every swing, even when blocked
-            if let Some(golem) = mob.as_iron_golem() {
-                golem.trigger_attack_animation();
+            if let Some(attack) = self.attack {
+                attack(mob, target.as_ref());
+                return;
             }
 
             mob.get_mob_entity().living_entity.swing_hand();
-            let damaged = mob
-                .get_mob_entity()
-                .try_attack(mob.get_entity(), target.as_ref());
+            let damaged = mob.do_hurt_target(target.as_ref());
             if damaged {
                 mob.on_attack(target.as_ref());
             }

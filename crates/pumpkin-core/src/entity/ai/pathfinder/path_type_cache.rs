@@ -90,9 +90,7 @@ impl PathTypeCache {
     }
 
     pub fn clear(&mut self) {
-        for i in 0..CACHE_SIZE {
-            self.path_types[i] = None;
-        }
+        self.path_types.fill(None);
         self.overflow_cache.clear();
     }
 

@@ -3,16 +3,12 @@ use rand::RngExt;
 
 use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::{
-    ai::{
-        pathfinder::{NavigatorGoal, node::PathComputationType},
-        util::default_random_pos,
-    },
+    ai::{brain::behavior::utils::get_random_swimmable_pos, pathfinder::NavigatorGoal},
     mob::Mob,
 };
 
 const HORIZONTAL_RANGE: i32 = 10;
 const VERTICAL_RANGE: i32 = 7;
-const MAX_ATTEMPTS: i32 = 10;
 const NO_ACTION_TIME_LIMIT: i32 = 100;
 
 pub struct RandomSwimmingGoal {
@@ -29,26 +25,6 @@ impl RandomSwimmingGoal {
             interval,
             target: None,
         }
-    }
-
-    fn get_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
-        let world = mob.get_entity().world.load();
-        let mut target = default_random_pos::get_pos(mob, HORIZONTAL_RANGE, VERTICAL_RANGE);
-        let mut count = 0;
-        while let Some(pos) = target {
-            let pos = pos.to_block_pos();
-            let (block, state) = world.get_block_and_state(&pos);
-            if world
-                .block_registry
-                .is_pathfindable(block, state, PathComputationType::Water)
-                || count >= MAX_ATTEMPTS
-            {
-                break;
-            }
-            count += 1;
-            target = default_random_pos::get_pos(mob, HORIZONTAL_RANGE, VERTICAL_RANGE);
-        }
-        target
     }
 }
 
@@ -68,7 +44,7 @@ impl Goal for RandomSwimmingGoal {
         {
             return false;
         }
-        self.target = Self::get_position(mob);
+        self.target = get_random_swimmable_pos(mob, HORIZONTAL_RANGE, VERTICAL_RANGE);
         self.target.is_some()
     }
 

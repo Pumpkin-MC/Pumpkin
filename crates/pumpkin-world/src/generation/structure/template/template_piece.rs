@@ -177,40 +177,6 @@ impl TemplatePiece {
         let box_limit = self.piece.bounding_box;
 
         for block in &self.template.blocks {
-            let palette_entry = &self.template.palette[block.state as usize];
-
-            // Structure blocks are data markers
-            if palette_entry.name == "minecraft:structure_block" {
-                continue;
-            }
-
-            let mut placed_entry = palette_entry.clone();
-            let mut block_entity_nbt = block.nbt.clone();
-
-            // Jigsaw blocks are replaced with final_state
-            if palette_entry.name == "minecraft:jigsaw" {
-                let final_state = block_entity_nbt
-                    .as_ref()
-                    .and_then(|nbt| nbt.get_string("final_state"))
-                    .unwrap_or("minecraft:air");
-                placed_entry = PaletteEntry::from_string(final_state);
-                block_entity_nbt = None;
-            }
-
-            // Skip structure void blocks
-            if Self::is_structure_void(&placed_entry.name) {
-                continue;
-            }
-
-            // Resolve the block state with rotation/mirror
-            let Some(mut state) = BlockStateResolver::resolve(
-                &placed_entry,
-                self.place_settings.get_rotation(),
-                self.place_settings.get_mirror(),
-            ) else {
-                continue;
-            };
-
             // Transform position to world coordinates
             let world_pos = self.transform_pos(block.pos);
 
@@ -219,23 +185,48 @@ impl TemplatePiece {
                 continue;
             }
 
+            let palette_entry = &self.template.palette[block.state as usize];
+
+            // Structure blocks are data markers
+            if palette_entry.name == "minecraft:structure_block" {
+                continue;
+            }
+
+            let mut block_entity_nbt = block.nbt.clone();
+            let jigsaw_entry: PaletteEntry;
+            let placed_entry = if palette_entry.name == "minecraft:jigsaw" {
+                // Jigsaw blocks are replaced with final_state
+                let final_state = block_entity_nbt
+                    .as_ref()
+                    .and_then(|nbt| nbt.get_string("final_state"))
+                    .unwrap_or("minecraft:air");
+                jigsaw_entry = PaletteEntry::from_string(final_state);
+                block_entity_nbt = None;
+                &jigsaw_entry
+            } else {
+                palette_entry
+            };
+
+            // Skip structure void blocks
+            if Self::is_structure_void(&placed_entry.name) {
+                continue;
+            }
+
+            // Resolve the block state with rotation/mirror
+            let Some(mut state) = BlockStateResolver::resolve(
+                placed_entry,
+                self.place_settings.get_rotation(),
+                self.place_settings.get_mirror(),
+            ) else {
+                continue;
+            };
+
             // Handle waterlogging if enabled
             if self.place_settings.should_apply_waterlogging()
                 && chunk.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
-                && let Some(waterlogged) =
-                    placed_entry.properties.iter_mut().find_map(|p| match p {
-                        pumpkin_data::Property::Waterlogged(w) => Some(w),
-                        _ => None,
-                    })
+                && let Some(waterlogged_state) = state.set_waterlogged(true)
             {
-                *waterlogged = true;
-                if let Some(waterlogged_state) = BlockStateResolver::resolve(
-                    &placed_entry,
-                    self.place_settings.get_rotation(),
-                    self.place_settings.get_mirror(),
-                ) {
-                    state = waterlogged_state;
-                }
+                state = waterlogged_state;
             }
 
             // Place the block

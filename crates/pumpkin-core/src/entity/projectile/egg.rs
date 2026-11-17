@@ -1,5 +1,6 @@
+use crate::entity::projectile::owner::ProjectileOwner;
+use pumpkin_data::damage::DamageType;
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
 
 use crate::plugin::player::egg_throw::PlayerEggThrowEvent;
 use crate::{
@@ -28,9 +29,7 @@ impl EggEntity {
         entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
+            owner: ProjectileOwner::none(),
             gravity: GRAVITY,
         };
 
@@ -62,8 +61,8 @@ impl EggEntity {
 }
 
 impl EntityBase for EggEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
     fn init_data_tracker(&self) {
@@ -80,8 +79,8 @@ impl EntityBase for EggEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -96,15 +95,23 @@ impl EntityBase for EggEntity {
         let hit_pos = hit.hit_pos();
         let normal = hit.normal();
 
+        if let crate::entity::projectile::ProjectileHit::Entity { ref entity, .. } = hit {
+            let owner = self.thrown.owner.get(&world);
+            entity.damage_with_context(
+                entity.as_ref(),
+                0.0,
+                DamageType::THROWN,
+                Some(hit_pos),
+                Some(self),
+                owner.as_deref(),
+            );
+        }
+
         // Chicken spawn position offset slightly from hit position
         let spawn_pos = hit_pos.add(&normal.multiply(0.5, 0.5, 0.5));
 
         // Play egg break particles
-        world.send_entity_status(
-            self.get_entity(),
-            EntityStatus::Death,
-            Some(ActorEventID::Death),
-        );
+        world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
 
         // Decide spawn count per probabilities:
         // r == 0 -> spawn 4 (1/256)
@@ -115,7 +122,6 @@ impl EntityBase for EggEntity {
         let mut hatching = to_spawn > 0;
         let mut hatching_type: &'static EntityType = &EntityType::CHICKEN;
 
-        let owner_id = self.thrown.owner_id;
         let entity_uuid = self.get_entity().entity_uuid;
         let variant_name = {
             let stack = self
@@ -127,8 +133,7 @@ impl EntityBase for EggEntity {
                 .map(|comp| comp.value.clone())
         };
 
-        if let Some(owner_id) = owner_id
-            && let Some(player) = world.get_player_by_id(owner_id)
+        if let Some(player) = self.thrown.owner.get_player(&world)
             && let Some(server) = world.server.upgrade()
         {
             let mut event = PlayerEggThrowEvent::new(
@@ -155,7 +160,9 @@ impl EntityBase for EggEntity {
                 let yaw = rand::random::<f32>() * 360.0;
                 let new_entity = mob.get_entity();
                 new_entity.set_rotation(yaw, 0.0);
-                new_entity.set_age(-24000);
+                if let Some(mob) = mob.get_mob() {
+                    mob.spawn_as_baby();
+                }
                 if let Some(name) = &variant_name {
                     mob.set_variant_name(name);
                 }

@@ -32,6 +32,7 @@ macro_rules! impl_block_entity_for_chest {
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(loot_table_key),
                     loot_table_seed,
+                    metadata: $crate::block::entities::ContainerMetadata::from_nbt(nbt),
                 };
 
                 // Only read saved items when there is no pending loot table.
@@ -74,6 +75,7 @@ macro_rules! impl_block_entity_for_chest {
                     // Loot has already been generated, so persist the actual items.
                     self.write_inventory_nbt(nbt, true);
                 }
+                self.metadata.write_nbt(nbt);
             }
 
             fn tick(&self, world: &Arc<$crate::world::World>) {
@@ -127,7 +129,11 @@ macro_rules! impl_block_entity_for_chest {
                 &self,
                 state_id: pumpkin_data::BlockStateId,
             ) -> Option<pumpkin_nbt::compound::NbtCompound> {
-                $crate::block::entities::bedrock::build_chest_actor(self.position, state_id, None)
+                $crate::block::entities::chest_like_block_entity::build_chest_actor(
+                    self.position,
+                    state_id,
+                    None,
+                )
             }
 
             fn as_any(&self) -> &dyn std::any::Any {
@@ -150,6 +156,7 @@ macro_rules! impl_block_entity_for_chest {
             }
 
             fn apply_item_components(&self, stack: &ItemStack) {
+                self.metadata.apply_item_components(stack);
                 if let Some(loot) = stack
                     .get_data_component::<pumpkin_data::data_component_impl::ContainerLootImpl>()
                 {
@@ -159,19 +166,32 @@ macro_rules! impl_block_entity_for_chest {
                         .unwrap_or_else(std::sync::PoisonError::into_inner) =
                         Some(loot.loot_table.clone());
                 }
-                if let Some(container) =
-                    stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
-                {
-                    let mut items = self
-                        .items
-                        .write()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    for (slot, item) in &container.items {
-                        if let Some(target) = items.get_mut(*slot as usize) {
-                            *target = item.clone();
-                        }
-                    }
-                }
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::apply_container_items_to_slice(stack, &mut *items);
+            }
+
+            fn collect_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_name_only(stack);
+            }
+
+            fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_item_components(stack);
+                let items = self
+                    .items
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::collect_container_items_from_slice(&*items, stack);
+            }
+
+            fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+                self.metadata.get_lock()
+            }
+
+            fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+                self.metadata.get_custom_name()
             }
         }
     };
@@ -351,6 +371,7 @@ macro_rules! impl_chest_helper_methods {
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(None),
                     loot_table_seed: 0,
+                    metadata: $crate::block::entities::ContainerMetadata::default(),
                 }
             }
 
@@ -407,4 +428,62 @@ macro_rules! impl_chest_helper_methods {
             }
         }
     };
+}
+
+/// Builds the Bedrock block-actor NBT for chests and trapped chests with double-chest pairing.
+#[must_use]
+pub fn build_chest_actor(
+    position: pumpkin_util::math::position::BlockPos,
+    state_id: pumpkin_data::BlockStateId,
+    custom_name: Option<&str>,
+) -> Option<pumpkin_nbt::compound::NbtCompound> {
+    use pumpkin_data::{
+        BlockState,
+        block_properties::{ChestLikeProperties, ChestType},
+        tag::Taggable,
+    };
+
+    let (block, _) = BlockState::from_id_with_block(state_id);
+    if !block.has_tag(&pumpkin_data::tag::Block::C_CHESTS_WOODEN)
+        && !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_COPPER_CHESTS)
+    {
+        return None;
+    }
+
+    let mut builder =
+        super::bedrock::BedrockBlockActorBuilder::new("Chest", position).custom_name(custom_name);
+
+    let properties = ChestLikeProperties::from_state_id(state_id);
+    if properties.r#type != ChestType::Single {
+        let direction = if properties.r#type == ChestType::Left {
+            properties.facing.rotate_clockwise()
+        } else {
+            properties.facing.rotate_counter_clockwise()
+        };
+        let pair = position.offset(direction.to_offset());
+        builder = builder
+            .put_int("pairx", pair.0.x)
+            .put_int("pairz", pair.0.z);
+        if properties.r#type == ChestType::Right {
+            builder = builder.put_bool("pairlead", true);
+        }
+    }
+
+    Some(builder.finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::Block;
+    use pumpkin_util::math::position::BlockPos;
+
+    #[test]
+    fn chest_actor_builder() {
+        let pos = BlockPos::new(7, 64, 7);
+        let single = build_chest_actor(pos, Block::CHEST.default_state.id, None).expect("chest");
+        assert_eq!(single.get_string("id"), Some("Chest"));
+        assert_eq!(single.get_bool("isMovable"), Some(true));
+        assert!(single.get_int("pairx").is_none());
+    }
 }
