@@ -28,7 +28,7 @@ pub(super) async fn test_block_tuning_and_invert(test: GameTestContext) -> GameT
         .await?;
 
     let player = test
-        .spawn_simulated_player(
+        .spawn_npc(
             "BlockUseTester",
             Vector3::new(2.5, 1.0, 1.5),
             GameMode::Survival,

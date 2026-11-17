@@ -141,7 +141,7 @@ impl GameTestSession {
     }
 
     pub async fn clear_placement(&self) -> GameTestResult<()> {
-        self.world.disconnect_simulated_players().await?;
+        self.world.disconnect_npcs().await?;
         if let Some(placement) = self.current_placement() {
             clear_placed_test(
                 self.world.as_ref(),
@@ -161,8 +161,8 @@ impl GameTestSession {
             .or(self.placement)
     }
 
-    pub async fn disconnect_simulated_players(&self) -> GameTestResult<()> {
-        self.world.disconnect_simulated_players().await
+    pub async fn disconnect_npcs(&self) -> GameTestResult<()> {
+        self.world.disconnect_npcs().await
     }
 
     #[must_use]

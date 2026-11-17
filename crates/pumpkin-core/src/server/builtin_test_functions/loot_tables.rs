@@ -33,7 +33,7 @@ pub(super) async fn test_loot_entity_context_and_nested_tables(
     test.set_dimensions(5, 5, 5).await?;
     test.build_floor(5, 5, &Block::STONE).await?;
     let player = test
-        .spawn_simulated_player(
+        .spawn_npc(
             "LootTester",
             Vector3::new(2.5, 1.0, 2.5),
             GameMode::Survival,

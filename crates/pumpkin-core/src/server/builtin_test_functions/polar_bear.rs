@@ -98,7 +98,7 @@ pub(super) async fn test_polar_bear_cub_defense_and_target_lifecycle(
 ) -> GameTestResult<()> {
     test.set_dimensions(26, 9, 26).await?;
     let player = test
-        .spawn_simulated_player(
+        .spawn_npc(
             "BearTester",
             Vector3::new(17.5, 2.0, 12.5),
             GameMode::Survival,

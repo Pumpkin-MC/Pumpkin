@@ -2,7 +2,7 @@
   "type": "minecraft:function",
   "environment": "minecraft:default",
   "structure": "minecraft:empty",
-  "function": "pumpkin:simulated_player_actions",
+  "function": "pumpkin:npc_actions",
   "max_ticks": 20,
   "setup_ticks": 0
 }

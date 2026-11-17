@@ -616,7 +616,7 @@ impl ChunkSender {
                     client.try_enqueue_packet(chunk.payload.clone());
                     true
                 }
-                ClientPlatform::Simulated(_) => true,
+                ClientPlatform::Npc(_) => true,
             };
             if queued {
                 self.encode_failures.remove(&chunk.position);

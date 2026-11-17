@@ -12,9 +12,9 @@ use crate::entity::GameTestEntity;
 use crate::error::{GameTestError, GameTestResult};
 use crate::model::GameTestRotation;
 
-/// Controls a player admitted to the server for a `GameTest`.
+/// Controls an NPC admitted to the server for a `GameTest`.
 #[async_trait]
-pub trait SimulatedPlayer: Send + Sync {
+pub trait Npc: Send + Sync {
     fn entity_id(&self) -> i32;
 
     /// Controls whether `/list` includes this player.
@@ -196,22 +196,22 @@ pub trait GameTestWorld: Send + Sync {
         ))
     }
 
-    async fn spawn_simulated_player(
+    async fn spawn_npc(
         &self,
         _name: &str,
         _position: Vector3<f64>,
         _gamemode: GameMode,
-    ) -> GameTestResult<std::sync::Arc<dyn SimulatedPlayer>> {
+    ) -> GameTestResult<std::sync::Arc<dyn Npc>> {
         Err(GameTestError::World(
-            "simulated players are not supported by this GameTestWorld".to_string(),
+            "NPCs are not supported by this GameTestWorld".to_string(),
         ))
     }
 
-    async fn disconnect_simulated_players(&self) -> GameTestResult<()> {
+    async fn disconnect_npcs(&self) -> GameTestResult<()> {
         Ok(())
     }
 
-    async fn simulated_player_position(&self, _name: &str) -> Option<Vector3<f64>> {
+    async fn npc_position(&self, _name: &str) -> Option<Vector3<f64>> {
         None
     }
 

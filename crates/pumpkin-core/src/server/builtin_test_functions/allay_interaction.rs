@@ -11,7 +11,7 @@ pub(super) async fn test_allay_interaction(test: GameTestContext) -> GameTestRes
     test.build_floor(5, 5, &Block::STONE).await?;
 
     let player = test
-        .spawn_simulated_player(
+        .spawn_npc(
             "AllayTester",
             Vector3::new(1.5, 1.0, 1.5),
             GameMode::Survival,
@@ -68,9 +68,9 @@ pub(super) async fn test_allay_interaction(test: GameTestContext) -> GameTestRes
             let (player, allay, _, diamond) = take_sample.clone();
             async move {
                 player.set_held_item(Hand::Right, ItemStack::EMPTY.clone())?;
-                let first_free_slot = player.first_empty_inventory_slot().ok_or_else(|| {
-                    GameTestError::World("Simulated player inventory is full".to_string())
-                })?;
+                let first_free_slot = player
+                    .first_empty_inventory_slot()
+                    .ok_or_else(|| GameTestError::World("NPC inventory is full".to_string()))?;
                 player.interact_with(&allay, Hand::Right)?;
                 test.assert_true(
                     player.inventory_item(first_free_slot)?.are_equal(&diamond)

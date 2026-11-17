@@ -233,7 +233,7 @@ impl TelemetrySessionTracker {
             .as_secs();
 
         server.for_each_player(|player| {
-            if matches!(player.client.as_ref(), ClientPlatform::Simulated(_)) {
+            if matches!(player.client.as_ref(), ClientPlatform::Npc(_)) {
                 return;
             }
             if sessions.len() >= MAX_COMPLETED_SESSIONS_PER_HEARTBEAT {
@@ -747,7 +747,7 @@ fn extract_player_client_meta(
             (PlayerEdition::Java, Some(raw_brand))
         }
         ClientPlatform::Bedrock(_) => (PlayerEdition::Bedrock, None),
-        ClientPlatform::Simulated(_) => (PlayerEdition::Java, None),
+        ClientPlatform::Npc(_) => (PlayerEdition::Java, None),
     };
 
     let player_cfg = player.config.load();
@@ -773,7 +773,7 @@ fn collect_players_telemetry(
 ) -> Vec<PlayerTelemetryInfo> {
     let mut online_count = 0usize;
     server.for_each_player(|player| {
-        if matches!(player.client.as_ref(), ClientPlatform::Simulated(_)) {
+        if matches!(player.client.as_ref(), ClientPlatform::Npc(_)) {
             return;
         }
         if online_count >= MAX_TELEMETRY_PLAYERS {

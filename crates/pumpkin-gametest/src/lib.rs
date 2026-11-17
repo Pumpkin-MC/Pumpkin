@@ -29,7 +29,7 @@ pub use structure::{
     place_structure_with_controller_rotation,
     place_structure_with_controller_rotation_and_entities, remove_barriers,
 };
-pub use world::{GameTestWorld, SimulatedPlayer};
+pub use world::{GameTestWorld, Npc};
 
 #[cfg(test)]
 mod tests {
