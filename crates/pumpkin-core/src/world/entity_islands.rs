@@ -367,10 +367,10 @@ impl EntityReach {
                         PICKUP_RANGE,
                     ))
                     .iter()
-                    .any(|candidate| candidate.get_entity().is_leashed());
+                    .any(|candidate| candidate.get_entity().has_leash_data());
         }
-        // A leashed mob can enter a boat's pickup area before the boat's turn.
-        if base.is_leashed() && entity.get_mob().is_some() {
+        // A mob can restore a leash and enter pickup range before the boat's turn.
+        if base.has_leash_data() && entity.get_mob().is_some() {
             reach.global |= base
                 .world
                 .load()
@@ -1428,6 +1428,8 @@ mod tests {
     async fn boat_pickup_serializes_leash_side_effects() -> Result<(), Box<dyn std::error::Error>> {
         use std::sync::Arc;
 
+        use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+
         use crate::entity::{
             Entity, decoration::leash_knot::LeashKnotEntity, passive::pig::PigEntity,
             vehicle::boat::BoatEntity,
@@ -1450,6 +1452,7 @@ mod tests {
             Vector3::new(50.0, 64.0, 0.0),
             &EntityType::LEASH_KNOT,
         )));
+        assert!(pig.audited_reach().is_some());
         pig.get_entity().attach_leash(&holder);
         world.add_entity_silent(boat.clone());
         world.add_entity_silent(pig.clone());
@@ -1472,6 +1475,39 @@ mod tests {
             )
             .is_none()
         );
+
+        holder.get_entity().set_pos(Vector3::new(5.0, 64.0, 0.0));
+        world.add_entity_silent(holder.clone());
+        let mut holder_nbt = NbtCompound::new();
+        holder_nbt.put_uuid("UUID", holder.get_entity().entity_uuid);
+        for saved in [
+            NbtTag::Compound(holder_nbt),
+            NbtTag::IntArray(vec![5, 64, 0]),
+        ] {
+            let entity = pig.get_entity();
+            let mut nbt = NbtCompound::new();
+            nbt.put("leash", saved);
+            entity.read_leash_data(&nbt);
+            assert!(!entity.is_leashed());
+            assert!(pig.audited_reach().is_none());
+            for (x, in_pickup_range) in [(1.2, true), (1.35, false)] {
+                entity.set_pos(Vector3::new(x, 64.0, 0.0));
+                let boat_reach = EntityReach::of(boat.as_ref(), &config);
+                let EntityReach::Conservative(reach) = &boat_reach else {
+                    return Err("expected conservative boat reach".into());
+                };
+                assert_eq!(reach.global, in_pickup_range);
+                assert!(
+                    resolve(
+                        vec![EntityReach::of(pig.as_ref(), &config), boat_reach],
+                        &config,
+                    )
+                    .is_none()
+                );
+            }
+            entity.tick_leash(pig.as_ref());
+            assert!(entity.is_leashed());
+        }
         world.level.shutdown().await;
         Ok(())
     }

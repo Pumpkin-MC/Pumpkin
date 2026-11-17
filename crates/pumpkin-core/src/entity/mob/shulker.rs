@@ -348,7 +348,7 @@ impl Mob for ShulkerEntity {
 
         let pos = entity.block_pos.load();
         let face = self.get_attach_face();
-        if !self.can_stay_at(&pos, face) {
+        if !entity.has_vehicle() && !self.can_stay_at(&pos, face) {
             self.find_new_attachment();
         }
     }

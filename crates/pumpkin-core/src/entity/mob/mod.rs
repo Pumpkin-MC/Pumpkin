@@ -1406,7 +1406,7 @@ impl MobEntity {
                 .is_empty()
             || entity.has_vehicle()
             || entity.has_passengers()
-            || entity.is_leashed()
+            || entity.has_leash_data()
         {
             return None;
         }

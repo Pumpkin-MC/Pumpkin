@@ -5440,6 +5440,16 @@ impl Entity {
             .is_some_and(|h| h.strong_count() > 0)
     }
 
+    /// Whether a leash is attached or awaiting restoration from saved data.
+    pub(crate) fn has_leash_data(&self) -> bool {
+        self.is_leashed()
+            || self
+                .delayed_leash
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+    }
+
     pub fn get_leash_holder(&self) -> Option<Arc<dyn EntityBase>> {
         self.leashed_to
             .lock()

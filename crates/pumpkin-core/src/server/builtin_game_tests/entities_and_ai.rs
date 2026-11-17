@@ -40,6 +40,67 @@ pub(super) async fn test_boats_pick_up_nearby_mobs(helper: GameTestHelper) -> Ga
     Ok(())
 }
 
+pub(super) async fn test_riding_shulker_keeps_attach_face(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    let seat = BlockPos::new(1, 2, 2);
+    helper
+        .set_block_default(&BlockPos::new(2, 2, 2), &Block::STONE)
+        .await?;
+    for entity in ["minecraft:oak_boat", "minecraft:shulker"] {
+        helper
+            .spawn_entity_at(entity, Vector3::new(1.5, 2.0, 2.5))
+            .await?;
+    }
+    helper
+        .execute_command(
+            &seat,
+            "ride @e[type=minecraft:shulker,distance=..3,limit=1] mount @e[type=minecraft:oak_boat,distance=..3,limit=1]",
+        )
+        .await?;
+
+    helper
+        .start_sequence()
+        .then_idle(5)
+        .then_execute(move |helper| async move {
+            let passengers = helper
+                .execute_command(
+                    &seat,
+                    "execute as @e[type=minecraft:oak_boat,distance=..3] on passengers if entity @s[type=minecraft:shulker,nbt={AttachFace:0b}]",
+                )
+                .await?;
+            helper.assert_true(passengers == 1, "Riding shulker must remain attached down")?;
+            helper
+                .execute_command(
+                    &seat,
+                    "ride @e[type=minecraft:shulker,distance=..3,limit=1] dismount",
+                )
+                .await?;
+            helper
+                .execute_command(&seat, "kill @e[type=minecraft:oak_boat,distance=..3]")
+                .await?;
+            helper
+                .execute_command(
+                    &seat,
+                    "tp @e[type=minecraft:shulker,distance=..3] ~ ~ ~",
+                )
+                .await?;
+            Ok(())
+        })
+        .then_idle(1)
+        .then_execute(move |helper| async move {
+            let attached = helper
+                .execute_command(
+                    &seat,
+                    "execute if entity @e[type=minecraft:shulker,distance=..3,nbt={AttachFace:5b}]",
+                )
+                .await?;
+            helper.assert_true(attached == 1, "Dismounted shulker must attach to the east wall")
+        })
+        .then_succeed();
+    Ok(())
+}
+
 pub(super) async fn test_item_entities_merge(helper: GameTestHelper) -> GameTestResult<()> {
     build_stone_floor(&helper, 4, 4).await?;
 
