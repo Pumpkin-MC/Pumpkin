@@ -25,10 +25,9 @@ use std::sync::{
 
 use crate::screen_handler::InventoryPlayer;
 
+use crate::inventory::Inventory;
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_world::inventory::Inventory;
 
 /// A slot in an inventory.
 ///
@@ -329,15 +328,26 @@ impl Slot for ArmorSlot {
         self.id.store(id as u8, Ordering::Relaxed);
     }
 
-    /// Restricts inserts to appropriate armor types.
+    /// Restricts inserts to appropriate armor types via the `equippable` component (`ArmorSlot.mayPlace`).
     fn can_insert(&self, stack: &ItemStack) -> bool {
         match self.equipment_slot {
-            EquipmentSlot::Head(_) => {
-                stack.is_helmet() || stack.is_skull() || stack.item == &Item::CARVED_PUMPKIN
+            EquipmentSlot::Head(_)
+            | EquipmentSlot::Chest(_)
+            | EquipmentSlot::Legs(_)
+            | EquipmentSlot::Feet(_)
+            | EquipmentSlot::Saddle(_)
+            | EquipmentSlot::Body(_) => {
+                stack
+                    .get_data_component::<pumpkin_data::data_component_impl::EquippableImpl>()
+                    .is_some_and(|equippable| {
+                        std::mem::discriminant(equippable.slot)
+                            == std::mem::discriminant(&self.equipment_slot)
+                            && equippable.allowed_entities.as_ref().is_none_or(|allowed| {
+                                allowed.contains(&pumpkin_data::entity::EntityType::PLAYER)
+                            })
+                    })
+                    && self.inventory.is_valid_slot_for(self.index, stack)
             }
-            EquipmentSlot::Chest(_) => stack.is_chestplate() || stack.item == &Item::ELYTRA,
-            EquipmentSlot::Legs(_) => stack.is_leggings(),
-            EquipmentSlot::Feet(_) => stack.is_boots(),
             _ => true,
         }
     }
@@ -355,8 +365,9 @@ impl Slot for ArmorSlot {
         1
     }
 
-    /// TODO: Check for curse of binding enchantment.
-    fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
-        true
+    /// Vanilla `ArmorSlot.mayPickup`: blocks non-creative removal when `prevent_armor_change` is present.
+    fn can_take_items(&self, player: &dyn InventoryPlayer) -> bool {
+        let stack = self.get_stack();
+        !(!stack.is_empty() && !player.has_infinite_materials() && stack.has_prevent_armor_change())
     }
 }

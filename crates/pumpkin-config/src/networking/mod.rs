@@ -1,6 +1,6 @@
+use management::ManagementServerConfig;
 use proxy::ProxyConfig;
 use query::QueryConfig;
-use rcon::RCONConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::LANBroadcastConfig;
@@ -17,12 +17,12 @@ pub mod compression;
 pub mod java;
 /// LAN broadcast discovery configuration.
 pub mod lan_broadcast;
+/// Management server (MSMP) configuration.
+pub mod management;
 /// Reverse proxy and BungeeCord/Velocity configuration.
 pub mod proxy;
 /// GS4 Query protocol configuration.
 pub mod query;
-/// RCON remote console configuration.
-pub mod rcon;
 
 /// Packet limiter configuration.
 pub mod packet_limiter;
@@ -30,15 +30,15 @@ pub use packet_limiter::PacketLimiterConfig;
 
 /// Configuration for server networking features.
 ///
-/// Covers authentication, query, RCON, proxying, packet compression,
+/// Covers authentication, query, management protocol, proxying, packet compression,
 /// and LAN broadcast behaviour.
 #[derive(Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct NetworkingConfig {
     /// Query protocol settings for server status requests.
     pub query: QueryConfig,
-    /// RCON (remote console) configuration.
-    pub rcon: RCONConfig,
+    /// Management server (MSMP) configuration.
+    pub management: ManagementServerConfig,
     /// Proxy-related networking settings.
     pub proxy: ProxyConfig,
     /// LAN broadcast settings.

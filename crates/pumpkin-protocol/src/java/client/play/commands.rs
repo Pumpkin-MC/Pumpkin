@@ -240,7 +240,12 @@ pub enum ArgumentType {
     LootTable,
     LootPredicate,
     LootModifier,
+    ContextFloatProvider,
+    ContextIntProvider,
+    SlotSource,
     Dialog,
+    Feature,
+    SwingAnimation,
     Uuid,
 }
 
@@ -251,13 +256,10 @@ impl ArgumentType {
     pub const SCORE_HOLDER_FLAG_ALLOW_MULTIPLE: u8 = 1;
 
     #[must_use]
-    pub fn to_id(&self, version: &JavaMinecraftVersion) -> i32 {
+    pub const fn to_id(&self, _version: &JavaMinecraftVersion) -> i32 {
         // SAFETY: Since Self is repr(u32), it is guaranteed to hold the discriminant in the first 4 bytes
         // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
-        let id = unsafe { *std::ptr::from_ref::<Self>(self).cast::<u32>() };
-
-        pumpkin_data::argument_type_id_remap::remap_argument_type_id_for_version(id, *version)
-            as i32
+        unsafe { *std::ptr::from_ref::<Self>(self).cast::<u32>() as i32 }
     }
 
     #[must_use]
@@ -534,5 +536,25 @@ impl SuggestionProviders {
             Self::AvailableSounds => "minecraft:available_sounds",
             Self::SummonableEntities => "minecraft:summonable_entities",
         }
+    }
+}
+
+#[cfg(test)]
+mod argument_type_id_tests {
+    use super::ArgumentType;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    /// Ids of `ArgumentTypeInfos` in 26.3.
+    #[test]
+    fn ids_follow_vanilla() {
+        let v = JavaMinecraftVersion::V_26_3;
+        assert_eq!(ArgumentType::LootModifier.to_id(&v), 54);
+        assert_eq!(ArgumentType::ContextFloatProvider.to_id(&v), 55);
+        assert_eq!(ArgumentType::ContextIntProvider.to_id(&v), 56);
+        assert_eq!(ArgumentType::SlotSource.to_id(&v), 57);
+        assert_eq!(ArgumentType::Dialog.to_id(&v), 58);
+        assert_eq!(ArgumentType::Feature.to_id(&v), 59);
+        assert_eq!(ArgumentType::SwingAnimation.to_id(&v), 60);
+        assert_eq!(ArgumentType::Uuid.to_id(&v), 61);
     }
 }

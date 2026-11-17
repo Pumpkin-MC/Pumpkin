@@ -6,10 +6,10 @@ use crate::screen_handler::{
 };
 use crate::slot::NormalSlot;
 
+use crate::inventory::Inventory;
+use crate::window_property::PropertyDelegate;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
-use pumpkin_world::block::entities::PropertyDelegate;
-use pumpkin_world::inventory::Inventory;
 
 /// Callbacks into the lectern block so page turns and book removal can drive
 /// block-state changes (redstone pulse, `has_book`) that live outside this crate.

@@ -5,16 +5,25 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 
+/// Plays a sound effect at a designated world position or associated with an actor.
 #[derive(PacketWrite)]
 #[packet(123)]
 pub struct CLevelSoundEvent {
+    /// Canonical identifier string for the sound event.
     pub sound_event: String,
+    /// World coordinates where the sound source is located.
     pub position: Vector3<f32>,
+    /// Auxiliary integer parameter used by specific sound effects.
     pub data: VarInt,
+    /// Identifier of the entity generating the sound (e.g. `minecraft:skeleton`).
     pub actor_identifier: String,
+    /// Whether the sound pitch/variant should reflect a juvenile mob variant.
     pub is_baby: bool,
+    /// Whether the sound plays globally at full volume without spatial falloff.
     pub is_global: bool,
+    /// Unique identifier of the entity emitting the sound.
     pub actor_unique_id: i64,
+    /// Optional explicit override position where the event should trigger.
     pub fire_at_position: Option<Vector3<f32>>,
 }
 

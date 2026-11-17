@@ -1,11 +1,10 @@
 // Last verified for v2169
 
-use std::io::{Error, Read};
-
 use pumpkin_macros::packet;
 
-use crate::{codec::var_int::VarInt, serial::PacketRead};
+use crate::serial::PacketRead;
 
+/// Sent by the client to update the server on client-side loading screen transitions.
 #[derive(PacketRead)]
 #[packet(312)]
 pub struct SLoadingScreen {
@@ -13,23 +12,15 @@ pub struct SLoadingScreen {
     _loading_screen_id: Option<u32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Type of loading screen transition event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PacketRead)]
 #[repr(i32)]
+#[serial(varint)]
 pub enum LoadingScreenPacketType {
+    /// Client has started displaying a loading screen.
     StartLoadingScreen = 0,
+    /// Client has dismissed the loading screen and resumed rendering.
     EndLoadingScreen = 1,
-}
-
-impl PacketRead for LoadingScreenPacketType {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        match VarInt::read(reader)?.0 {
-            0 => Ok(Self::StartLoadingScreen),
-            1 => Ok(Self::EndLoadingScreen),
-            val => Err(Error::other(format!(
-                "Invalid LoadingScreenPacketType: {val}"
-            ))),
-        }
-    }
 }
 
 impl SLoadingScreen {

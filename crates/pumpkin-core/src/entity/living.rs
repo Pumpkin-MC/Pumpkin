@@ -1,0 +1,6307 @@
+use pumpkin_data::particle::Particle;
+use pumpkin_data::potion::Effect;
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::tracked_data;
+use pumpkin_inventory::build_equipment_slots;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
+use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
+use pumpkin_protocol::codec::var_ulong::VarULong;
+use pumpkin_util::Difficulty;
+use pumpkin_util::GameMode;
+use pumpkin_util::Hand;
+use pumpkin_util::math::position::BlockPos;
+use rustc_hash::FxHashMap;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::sync::atomic::{
+    AtomicBool, AtomicI32, AtomicU8,
+    Ordering::{Relaxed, SeqCst},
+};
+use tracing::warn;
+use uuid::Uuid;
+
+use super::experience_orb::ExperienceOrbEntity;
+use super::{Entity, EntityBase, GearDamage, NBTStorageInit};
+use crate::entity::NBTStorage;
+use crate::entity::attributes::Modifier;
+use crate::entity::attributes::ModifierOperation;
+use crate::entity::attributes::{AttributeInstance, apply_attributes, pack_attributes};
+use crate::entity::breath::DROWNING_INTERVAL;
+use crate::entity::combat::{CombatRules, CombatTracker, FallLocation, knockback_after_resistance};
+use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
+use crate::entity::mob::neutral::find_by_uuid;
+use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
+use crate::server::Server;
+use crate::world::loot::LootContextParameters;
+use crossbeam::atomic::AtomicCell;
+use pumpkin_data::AttributeModifierSlot;
+use pumpkin_data::attributes::Attributes;
+use pumpkin_data::block_properties::{LadderLikeProperties, OakTrapdoorLikeProperties};
+use pumpkin_data::data_component_impl::Operation;
+use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeAnimation, ConsumeEffect};
+use pumpkin_data::data_component_impl::{
+    AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
+    EquipmentSlot, EquippableImpl, FoodImpl, UseRemainderImpl,
+};
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_rules::{GameRule, GameRuleValue};
+use pumpkin_data::item_stack::{DamageResult, ItemStack};
+use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::{Block, Enchantment};
+use pumpkin_data::{damage::DamageType, sound::Sound};
+use pumpkin_inventory::entity_equipment::EntityEquipment;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::{
+    CHurtAnimation, CSwingArm, CTakeItemEntity, CUpdateMobEffect,
+};
+use pumpkin_protocol::{
+    codec::item_stack_seralizer::ItemStackSerializer,
+    java::client::play::{CSetEquipment, MetadataSerializer},
+    ser::{NetworkWriteExt, WritingError},
+};
+use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::text::TextComponent;
+use rand::RngExt;
+use std::sync::RwLock;
+
+#[derive(Clone, Copy)]
+struct LastHurtByMob {
+    uuid: Uuid,
+    entity_id: i32,
+}
+
+/// Represents a living entity within the game world.
+///
+/// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
+#[repr(C)]
+pub struct LivingEntity {
+    /// The underlying entity object, providing basic entity information and functionality.
+    pub entity: Entity,
+    /// Tracks the remaining time until the entity can regenerate health.
+    pub hurt_cooldown: AtomicI32,
+    /// Arrows sticking out of the entity, synced so the client renders them.
+    arrow_count: AtomicI32,
+    remove_arrow_time: AtomicI32,
+    /// Stores the amount of damage the entity last received.
+    pub last_damage_taken: AtomicCell<f32>,
+    /// The current health level of the entity.
+    pub health: AtomicCell<f32>,
+    /// The current absorption (yellow hearts) on the entity.
+    pub absorption: AtomicCell<f32>,
+    pub item_use_time: AtomicI32,
+    pub item_in_use: std::sync::Mutex<Option<ItemStack>>,
+    pub active_hand: std::sync::Mutex<Option<Hand>>,
+    pub recent_kinetic_enemies: std::sync::Mutex<FxHashMap<i32, i32>>,
+    pub death_time: AtomicU8,
+    /// Indicates whether the entity is dead. (`on_death` called)
+    pub dead: AtomicBool,
+    /// The distance the entity has been falling.
+    pub fall_distance: AtomicCell<f32>,
+    pub active_effects: std::sync::Mutex<FxHashMap<&'static StatusEffect, Effect>>,
+    pub entity_equipment: Arc<std::sync::Mutex<EntityEquipment>>,
+    pub equipment_drop_chances: Arc<std::sync::Mutex<FxHashMap<EquipmentSlot, f32>>>,
+    pub movement_input: AtomicCell<Vector3<f64>>,
+    speed: AtomicCell<f32>,
+    pub equipment_slots: Arc<FxHashMap<usize, EquipmentSlot>>,
+
+    pub jumping: AtomicBool,
+    /// Air movement keeps its horizontal speed and skips drag, used during long jumps.
+    pub discard_friction: AtomicBool,
+
+    pub jumping_cooldown: AtomicU8,
+
+    pub climbing: AtomicBool,
+
+    /// The position where the entity was last climbing, used for death messages
+    pub climbing_pos: AtomicCell<Option<BlockPos>>,
+
+    last_hurt_by_mob: AtomicCell<Option<LastHurtByMob>>,
+    last_hurt_by_mob_timestamp: AtomicI32,
+    last_damage_type: std::sync::Mutex<Option<DamageType>>,
+    /// Entity id of the last damage source's causing entity, 0 when it had none.
+    last_damage_attacker: AtomicI32,
+    last_damage_stamp: std::sync::atomic::AtomicI64,
+
+    /// The entity ID of the entity this living entity last attacked.
+    pub last_attacking_id: AtomicI32,
+    /// The tick at which this entity last attacked something (entity age).
+    pub last_attack_time: AtomicI32,
+
+    /// Tracks combat entries, assisted falls, kill credit, and death messages.
+    pub combat_tracker: std::sync::Mutex<CombatTracker>,
+
+    pub last_hurt_by_player: AtomicCell<Option<Uuid>>,
+    pub last_hurt_by_player_memory_time: AtomicI32,
+    pub no_action_time: AtomicI32,
+
+    water_movement_speed_multiplier: f32,
+    livings_flags: AtomicU8,
+
+    /// The last block position the entity occupied, used to trigger location changed effects.
+    pub last_block_pos: AtomicCell<Option<BlockPos>>,
+
+    /// Vanilla `currentImpulseImpactPos` (persisted as `current_explosion_impact_pos`).
+    pub current_impulse_impact_pos: AtomicCell<Option<Vector3<f64>>>,
+    /// Vanilla `currentImpulseContextResetGraceTime`.
+    pub current_impulse_context_reset_grace_time: AtomicI32,
+
+    /// Vanilla `autoSpinAttackTicks`, `autoSpinAttackDmg`, and `autoSpinAttackItemStack`.
+    pub auto_spin_attack_ticks: AtomicI32,
+    pub auto_spin_attack_dmg: AtomicCell<f32>,
+    pub auto_spin_attack_item_stack: std::sync::Mutex<Option<(ItemStack, Option<EquipmentSlot>)>>,
+
+    /// The attributes of the entity
+    pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
+    /// Modifier ids applied from the current item in each equipment slot.
+    /// Used to remove them on unequip without the previous stack.
+    equipment_attribute_modifier_ids: std::sync::Mutex<FxHashMap<EquipmentSlot, Vec<(u8, String)>>>,
+}
+
+#[derive(Clone)]
+struct EffectParticle {
+    particle_id: VarInt,
+    color: i32,
+}
+
+#[derive(Clone)]
+struct EffectParticles(Vec<EffectParticle>);
+
+impl MetadataSerializer for EffectParticles {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        let count = i32::try_from(self.0.len())
+            .map_err(|_| WritingError::Message("Too many effect particles".into()))?;
+        writer.write_var_int(&VarInt(count))?;
+        for particle in &self.0 {
+            writer.write_var_int(&particle.particle_id)?;
+            writer.write_i32(particle.color)?;
+        }
+        Ok(())
+    }
+}
+
+impl EffectParticle {
+    const fn from_effect(effect: &Effect) -> Self {
+        Self {
+            particle_id: VarInt(Particle::EntityEffect as i32),
+            color: (((if effect.ambient { 38 } else { 255 }) as u32) << 24
+                | effect.effect_type.color as u32) as i32,
+        }
+    }
+}
+
+fn is_allowed_by_team_rules(
+    own_team: Option<&crate::world::scoreboard::Team>,
+    their_team: Option<&crate::world::scoreboard::Team>,
+) -> bool {
+    use crate::world::scoreboard::CollisionRule;
+
+    let own_rule = own_team.map_or(CollisionRule::Always, |team| team.collision_rule);
+    let their_rule = their_team.map_or(CollisionRule::Always, |team| team.collision_rule);
+
+    if own_rule == CollisionRule::Never || their_rule == CollisionRule::Never {
+        return false;
+    }
+
+    let same_team = own_team
+        .zip(their_team)
+        .is_some_and(|(own, their)| own.name == their.name);
+
+    if (own_rule == CollisionRule::PushOwnTeam || their_rule == CollisionRule::PushOwnTeam)
+        && same_team
+    {
+        return false;
+    }
+
+    (own_rule != CollisionRule::PushOtherTeams && their_rule != CollisionRule::PushOtherTeams)
+        || same_team
+}
+
+/// Who an instant effect came from: the potion or cloud, and who threw or placed it.
+#[derive(Clone, Copy)]
+pub struct EffectSource<'a> {
+    pub direct: &'a dyn EntityBase,
+    pub owner: Option<&'a dyn EntityBase>,
+}
+
+impl LivingEntity {
+    pub(crate) const DEFAULT_OFF_GROUND_SPEED: f64 = 0.02;
+    pub(crate) const FRICTION_SPEED_THRESHOLD: f64 = 0.6;
+
+    pub fn is_dead_or_dying(&self) -> bool {
+        self.health.load() <= 0.0 || self.dead.load(Relaxed)
+    }
+
+    pub fn get_speed(&self) -> f32 {
+        self.speed.load()
+    }
+
+    pub fn set_speed(&self, speed: f32) {
+        self.speed.store(speed);
+    }
+
+    const USING_ITEM_FLAG: u8 = 1;
+    const OFF_HAND_ACTIVE_FLAG: u8 = 2;
+    const RANDOM_TELEPORT_ATTEMPTS: usize = 16;
+    const USING_RIPTIDE_FLAG: u8 = 4;
+
+    #[must_use]
+    pub fn is_auto_spin_attack(&self) -> bool {
+        (self.livings_flags.load(Relaxed) & Self::USING_RIPTIDE_FLAG) != 0
+    }
+
+    pub fn start_auto_spin_attack(
+        &self,
+        activation_ticks: i32,
+        dmg: f32,
+        item_stack: ItemStack,
+        slot: Option<EquipmentSlot>,
+    ) {
+        self.auto_spin_attack_ticks.store(activation_ticks, Relaxed);
+        self.auto_spin_attack_dmg.store(dmg);
+        *self
+            .auto_spin_attack_item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((item_stack, slot));
+        self.set_living_flag(Self::USING_RIPTIDE_FLAG, true);
+    }
+
+    pub fn stop_auto_spin_attack(&self) {
+        self.auto_spin_attack_ticks.store(0, Relaxed);
+        self.set_living_flag(Self::USING_RIPTIDE_FLAG, false);
+        self.auto_spin_attack_dmg.store(0.0);
+        *self
+            .auto_spin_attack_item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
+    /// Vanilla `LivingEntity.checkAutoSpinAttack`.
+    pub(crate) fn check_auto_spin_attack(
+        &self,
+        caller: &dyn EntityBase,
+        old_box: BoundingBox,
+        current_box: BoundingBox,
+    ) {
+        let minmax = old_box.minmax(&current_box);
+        let world = self.entity.world.load();
+        let entities: Vec<Arc<dyn EntityBase>> = world
+            .get_all_at_box(&minmax)
+            .into_iter()
+            .filter(|e| {
+                let ent = e.get_entity();
+                ent.entity_id != self.entity.entity_id && !e.is_spectator()
+            })
+            .collect();
+
+        if !entities.is_empty() {
+            for entity in entities {
+                if entity.get_living_entity().is_some() {
+                    if let Some(player) = caller.get_player() {
+                        player.attack(&entity);
+                    }
+                    self.auto_spin_attack_ticks.store(0, Relaxed);
+                    self.entity
+                        .velocity
+                        .store(self.entity.velocity.load() * -0.2);
+                    self.entity.velocity_dirty.store(true, SeqCst);
+                    break;
+                }
+            }
+        } else if self.entity.horizontal_collision.load(Relaxed) {
+            self.auto_spin_attack_ticks.store(0, Relaxed);
+        }
+
+        if self.auto_spin_attack_ticks.load(Relaxed) <= 0 {
+            self.stop_auto_spin_attack();
+        }
+    }
+
+    /// Vanilla `LivingEntity.hasLandedInLiquid`.
+    #[must_use]
+    pub fn has_landed_in_liquid(&self) -> bool {
+        self.entity.velocity.load().y < f64::from(1.0e-5f32) && self.entity.is_in_liquid()
+    }
+
+    pub fn set_ignore_fall_damage_from_current_impulse(
+        &self,
+        ignore_fall_damage: bool,
+        new_impulse_impact_pos: Vector3<f64>,
+    ) {
+        if ignore_fall_damage {
+            self.apply_post_impulse_grace_time(40);
+            self.current_impulse_impact_pos
+                .store(Some(new_impulse_impact_pos));
+        } else {
+            self.current_impulse_context_reset_grace_time
+                .store(0, Relaxed);
+        }
+    }
+
+    pub fn apply_post_impulse_grace_time(&self, ticks: i32) {
+        self.current_impulse_context_reset_grace_time
+            .fetch_max(ticks, Relaxed);
+    }
+
+    #[must_use]
+    pub fn is_ignoring_fall_damage_from_current_impulse(&self) -> bool {
+        self.current_impulse_impact_pos.load().is_some()
+    }
+
+    pub fn try_reset_current_impulse_context(&self) {
+        if self.current_impulse_context_reset_grace_time.load(Relaxed) == 0 {
+            self.reset_current_impulse_context();
+        }
+    }
+
+    #[must_use]
+    pub fn is_in_post_impulse_grace_time(&self) -> bool {
+        self.current_impulse_context_reset_grace_time.load(Relaxed) > 0
+    }
+
+    pub fn reset_current_impulse_context(&self) {
+        self.current_impulse_context_reset_grace_time
+            .store(0, Relaxed);
+        self.current_impulse_impact_pos.store(None);
+    }
+
+    /// Mirrors `MaceItem.calculateImpactPosition`.
+    #[must_use]
+    pub fn calculate_impact_position(&self) -> Vector3<f64> {
+        let current_pos = self.entity.pos.load();
+        match self.current_impulse_impact_pos.load() {
+            Some(impact_pos) if impact_pos.y <= current_pos.y => impact_pos,
+            _ => current_pos,
+        }
+    }
+
+    const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [
+        &Block::COBWEB,
+        &Block::LADDER,
+        &Block::POWDER_SNOW,
+        &Block::SLIME_BLOCK,
+    ];
+
+    fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
+    }
+
+    fn death_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        entity_type.death_sound.unwrap_or(Sound::EntityGenericDeath)
+    }
+
+    #[must_use]
+    pub fn is_baby(&self) -> bool {
+        self.entity.age.load(Relaxed) < 0
+    }
+
+    #[must_use]
+    pub fn should_drop_loot(&self) -> bool {
+        !self.is_baby()
+            && self
+                .entity
+                .world
+                .load()
+                .level_info
+                .load()
+                .game_rules
+                .mob_drops
+    }
+
+    #[must_use]
+    pub fn should_drop_experience(&self) -> bool {
+        !self.is_baby()
+    }
+
+    pub fn make_sound(&self, sound: Sound, category: SoundCategory, volume: f32, pitch: f32) {
+        if self.entity.is_silent() {
+            return;
+        }
+        self.entity.world.load().play_sound_fine(
+            sound,
+            category,
+            &self.entity.pos.load(),
+            volume,
+            pitch,
+        );
+    }
+
+    fn make_voice_sound(&self, caller: &dyn EntityBase, sound: Sound) {
+        let custom_sound = caller.get_mob().and_then(|mob| mob.as_custom_sound());
+        self.make_sound(
+            sound,
+            custom_sound.map_or_else(
+                || caller.sound_source(),
+                super::custom_sound::CustomSound::sound_category,
+            ),
+            custom_sound.map_or(1.0, super::custom_sound::CustomSound::sound_volume),
+            custom_sound.map_or_else(
+                || self.get_pitch(),
+                super::custom_sound::CustomSound::voice_pitch,
+            ),
+        );
+    }
+
+    pub(crate) fn get_pitch(&self) -> f32 {
+        let mut rng = rand::rng();
+        if self.is_baby() {
+            (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.5
+        } else {
+            (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.0
+        }
+    }
+
+    pub fn new(mut entity: Entity) -> Self {
+        entity.blocks_building = true;
+        let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
+            0.98
+        } else if entity.entity_type == &EntityType::SKELETON_HORSE {
+            0.96
+        } else {
+            0.8
+        };
+        let mut max_health: f32 = 20.0; // Overridden by attribute base below
+        Self {
+            // Populate local attribute instances from the default registry and get initial vars
+            attributes: {
+                let mut m = FxHashMap::default();
+
+                for (attr, base) in entity.entity_type.attributes {
+                    if attr.id == Attributes::MAX_HEALTH.id {
+                        max_health = *base as f32;
+                    }
+                    m.insert(attr.id, AttributeInstance::new(*base));
+                }
+                std::sync::RwLock::new(m)
+            },
+            health: AtomicCell::new(max_health), // Initial health value from attributes
+            entity,
+            hurt_cooldown: AtomicI32::new(0),
+            arrow_count: AtomicI32::new(0),
+            remove_arrow_time: AtomicI32::new(0),
+            last_damage_taken: AtomicCell::new(0.0),
+            absorption: AtomicCell::new(0.0),
+            fall_distance: AtomicCell::new(0.0),
+            death_time: AtomicU8::new(0),
+            dead: AtomicBool::new(false),
+            item_use_time: AtomicI32::new(0),
+            item_in_use: std::sync::Mutex::new(None),
+            active_hand: std::sync::Mutex::new(None),
+            recent_kinetic_enemies: std::sync::Mutex::new(FxHashMap::default()),
+            livings_flags: AtomicU8::new(0),
+            active_effects: std::sync::Mutex::new(FxHashMap::default()),
+            entity_equipment: Arc::new(std::sync::Mutex::new(EntityEquipment::new())),
+            equipment_drop_chances: Arc::new(std::sync::Mutex::new(FxHashMap::default())),
+            equipment_slots: Arc::new(build_equipment_slots()),
+            jumping: AtomicBool::new(false),
+            discard_friction: AtomicBool::new(false),
+            jumping_cooldown: AtomicU8::new(0),
+            climbing: AtomicBool::new(false),
+            climbing_pos: AtomicCell::new(None),
+            last_hurt_by_mob: AtomicCell::new(None),
+            last_hurt_by_mob_timestamp: AtomicI32::new(0),
+            last_damage_type: std::sync::Mutex::new(None),
+            last_damage_attacker: AtomicI32::new(0),
+            last_damage_stamp: std::sync::atomic::AtomicI64::new(0),
+            last_attacking_id: AtomicI32::new(0),
+            last_attack_time: AtomicI32::new(0),
+            combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
+            last_hurt_by_player: AtomicCell::new(None),
+            last_hurt_by_player_memory_time: AtomicI32::new(0),
+            no_action_time: AtomicI32::new(0),
+            movement_input: AtomicCell::new(Vector3::default()),
+            speed: AtomicCell::new(0.0),
+            water_movement_speed_multiplier,
+            last_block_pos: AtomicCell::new(None),
+            current_impulse_impact_pos: AtomicCell::new(None),
+            current_impulse_context_reset_grace_time: AtomicI32::new(0),
+            auto_spin_attack_ticks: AtomicI32::new(0),
+            auto_spin_attack_dmg: AtomicCell::new(0.0),
+            auto_spin_attack_item_stack: std::sync::Mutex::new(None),
+            equipment_attribute_modifier_ids: std::sync::Mutex::new(FxHashMap::default()),
+        }
+    }
+
+    pub fn get_last_hurt_by_mob(&self) -> Option<Arc<dyn EntityBase>> {
+        let reference = self.last_hurt_by_mob.load()?;
+        let world = self.entity.world.load();
+        if reference.entity_id != 0 {
+            return world.get_entity_by_id(reference.entity_id);
+        }
+        let attacker = find_by_uuid(&world, reference.uuid)?;
+        self.last_hurt_by_mob.store(Some(LastHurtByMob {
+            entity_id: attacker.get_entity().entity_id,
+            ..reference
+        }));
+        Some(attacker)
+    }
+
+    pub fn get_last_hurt_by_mob_id(&self) -> Option<i32> {
+        match self.last_hurt_by_mob.load()?.entity_id {
+            0 => self
+                .get_last_hurt_by_mob()
+                .map(|attacker| attacker.get_entity().entity_id),
+            entity_id => Some(entity_id),
+        }
+    }
+
+    /// Still inside the hurt animation of the last hit taken.
+    #[must_use]
+    pub fn was_hurt_recently(&self) -> bool {
+        self.hurt_cooldown.load(Relaxed) > HURT_DURATION
+    }
+
+    pub fn get_last_hurt_by_mob_timestamp(&self) -> i32 {
+        self.last_hurt_by_mob_timestamp.load(Relaxed)
+    }
+
+    pub fn set_last_hurt_by_mob(&self, attacker: Option<&dyn EntityBase>) {
+        self.last_hurt_by_mob.store(attacker.map(|attacker| {
+            let entity = attacker.get_entity();
+            LastHurtByMob {
+                uuid: entity.entity_uuid,
+                entity_id: entity.entity_id,
+            }
+        }));
+        self.last_hurt_by_mob_timestamp
+            .store(self.entity.tick_count.load(Relaxed), Relaxed);
+    }
+
+    fn tick_last_hurt_by_mob(&self) {
+        if self.last_hurt_by_mob.load().is_none() {
+            return;
+        }
+        if self.entity.tick_count.load(Relaxed) - self.get_last_hurt_by_mob_timestamp() > 100
+            || self
+                .get_last_hurt_by_mob()
+                .is_some_and(|attacker| !attacker.get_living_entity().is_some_and(Self::is_alive))
+        {
+            self.set_last_hurt_by_mob(None);
+        }
+    }
+
+    pub fn get_last_hurt_by_player(&self) -> Option<Arc<crate::entity::player::Player>> {
+        let uuid = self.last_hurt_by_player.load()?;
+        self.entity.world.load().get_player_by_uuid(uuid)
+    }
+
+    /// Returns the entity that should receive kill credit for this entity's death.
+    /// Following vanilla Java logic (`LivingEntity.getKillCredit`):
+    /// 1. Prioritize `last_hurt_by_player`, which is forgotten 100 ticks after the hit.
+    /// 2. Then `last_hurt_by_mob`, which is cleared 100 ticks after the hit.
+    pub fn get_kill_credit(&self) -> Option<Arc<dyn EntityBase>> {
+        if self.last_hurt_by_player.load().is_some() {
+            return self
+                .get_last_hurt_by_player()
+                .map(|player| player as Arc<dyn EntityBase>);
+        }
+
+        if let Some(mob) = self.get_last_hurt_by_mob() {
+            return Some(mob);
+        }
+
+        None
+    }
+
+    /// Triggers location-based enchantment effects (e.g. Frost Walker) when the entity's block position changes.
+    pub fn on_changed_block(&self, caller: &dyn EntityBase, _pos: BlockPos) {
+        let pos_f64 = self.entity.pos.load();
+        if let Some(player) = caller.get_player() {
+            let boots = player.inventory.get_slot(36);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    &self.entity,
+                    &boots,
+                    pos_f64,
+                );
+            }
+        } else {
+            let boots = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&EquipmentSlot::FEET);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    &self.entity,
+                    &boots,
+                    pos_f64,
+                );
+            }
+        }
+    }
+
+    pub fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
+        if equipment.is_empty() {
+            return;
+        }
+        self.apply_and_send_equipment_attribute_modifiers(equipment);
+
+        if equipment
+            .iter()
+            .any(|(slot, _)| *slot == EquipmentSlot::FEET)
+        {
+            let pos_f64 = self.entity.pos.load();
+            for (slot, stack) in equipment {
+                if *slot == EquipmentSlot::FEET && !stack.is_empty() {
+                    crate::enchantment::EnchantmentHelper::on_location_changed(
+                        &self.entity,
+                        stack,
+                        pos_f64,
+                    );
+                }
+            }
+        }
+
+        let equipment_java: Vec<(i8, ItemStackSerializer)> = equipment
+            .iter()
+            .map(|(slot, stack)| {
+                (
+                    slot.discriminant(),
+                    ItemStackSerializer::from(stack.clone()),
+                )
+            })
+            .collect();
+        let je_packet = CSetEquipment::new(self.entity_id().into(), equipment_java);
+        let world = self.entity.world.load();
+        world.send_to_tracking_players(&self.entity, &je_packet);
+
+        let mut armor_changed = false;
+        for (slot, stack) in equipment {
+            if *slot == EquipmentSlot::MAIN_HAND {
+                self.update_weapon_attributes(stack);
+            }
+            if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
+                let window_id = if *slot == EquipmentSlot::OFF_HAND {
+                    pumpkin_protocol::bedrock::server::inventory_transaction::WINDOW_ID_OFF_HAND
+                        as u8
+                } else {
+                    0
+                };
+
+                let be_packet = pumpkin_protocol::bedrock::client::CMobEquipment {
+                    target_runtime_id: (self.entity_id() as u64).into(),
+                    item: pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::from(
+                        stack,
+                    ),
+                    slot: 0,
+                    selected_slot: 0,
+                    container_id: window_id,
+                };
+                world.send_to_tracking_players_bedrock(&self.entity, &be_packet);
+            } else if slot.is_armor_slot() || matches!(slot, EquipmentSlot::Body(_)) {
+                armor_changed = true;
+            }
+        }
+
+        if armor_changed {
+            let armor_packet = self.bedrock_armor_packet(equipment);
+            world.send_to_tracking_players_bedrock(&self.entity, &armor_packet);
+        }
+    }
+
+    #[must_use]
+    pub fn bedrock_armor_packet(
+        &self,
+        overrides: &[(EquipmentSlot, ItemStack)],
+    ) -> pumpkin_protocol::bedrock::client::CMobArmorEquipment {
+        use pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor;
+
+        let equipment_guard = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let slot_desc = |target: &EquipmentSlot| -> NetworkItemStackDescriptor {
+            if let Some((_, stack)) = overrides.iter().rfind(|(slot, _)| slot == target) {
+                NetworkItemStackDescriptor::from(stack)
+            } else {
+                let stack = equipment_guard.get(target);
+                NetworkItemStackDescriptor::from(&stack)
+            }
+        };
+
+        let packet = pumpkin_protocol::bedrock::client::CMobArmorEquipment {
+            target_runtime_id: (self.entity_id() as u64).into(),
+            head: slot_desc(&EquipmentSlot::HEAD),
+            chest: slot_desc(&EquipmentSlot::CHEST),
+            legs: slot_desc(&EquipmentSlot::LEGS),
+            feet: slot_desc(&EquipmentSlot::FEET),
+            body: slot_desc(&EquipmentSlot::BODY),
+        };
+        drop(equipment_guard);
+        packet
+    }
+
+    /// Applies the held item's attack attribute modifiers to this entity's
+    /// attribute map and sends the changed attributes to clients. Without this
+    /// the client never sees the reduced attack speed and does not show the
+    /// crosshair attack indicator.
+    fn update_weapon_attributes(&self, stack: &ItemStack) {
+        let component = stack.get_data_component::<AttributeModifiersImpl>();
+
+        // Single pass over the item's modifiers, split by attribute.
+        let mut speed_modifiers: Vec<Modifier> = Vec::new();
+        let mut damage_modifiers: Vec<Modifier> = Vec::new();
+        for modifier in component
+            .into_iter()
+            .flat_map(|c| c.attribute_modifiers.iter())
+        {
+            let target = if modifier.r#type == &Attributes::ATTACK_SPEED {
+                &mut speed_modifiers
+            } else if modifier.r#type == &Attributes::ATTACK_DAMAGE {
+                &mut damage_modifiers
+            } else {
+                continue;
+            };
+            target.push(Modifier {
+                id: modifier.id.to_string(),
+                amount: modifier.amount,
+                operation: match modifier.operation {
+                    Operation::AddValue => ModifierOperation::Add,
+                    Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                    Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                },
+            });
+        }
+
+        let mut changed: Vec<Attributes> = Vec::new();
+        {
+            let mut attributes = self
+                .attributes
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (attribute, modifiers) in [
+                (Attributes::ATTACK_SPEED, speed_modifiers),
+                (Attributes::ATTACK_DAMAGE, damage_modifiers),
+            ] {
+                let instance = attributes
+                    .entry(attribute.id)
+                    .or_insert_with(|| AttributeInstance::new(attribute.default_value));
+                if instance.modifiers == modifiers {
+                    continue;
+                }
+                instance.modifiers = modifiers;
+                instance.mark_dirty();
+                changed.push(attribute);
+            }
+        }
+        if !changed.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(self, changed);
+        }
+    }
+
+    /// Applies item `attribute_modifiers` for the given slots and notifies clients.
+    ///
+    /// The local HUD armor bar is driven by `minecraft:armor` / `minecraft:armor_toughness`
+    /// on `UPDATE_ATTRIBUTES`, not by `SET_EQUIPMENT`.
+    pub fn apply_and_send_equipment_attribute_modifiers(
+        &self,
+        equipment: &[(EquipmentSlot, ItemStack)],
+    ) {
+        let mut touched = Vec::new();
+        for (slot, stack) in equipment {
+            self.apply_equipment_slot_attribute_modifiers(slot, stack, &mut touched);
+        }
+        if !touched.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(self, touched);
+        }
+    }
+
+    /// Re-applies modifiers from every currently equipped stack without notifying clients.
+    pub fn apply_current_equipment_attribute_modifiers(&self) {
+        let equipment = self.snapshot_equipped_stacks();
+        let mut touched = Vec::new();
+        for (slot, stack) in &equipment {
+            self.apply_equipment_slot_attribute_modifiers(slot, stack, &mut touched);
+        }
+    }
+
+    /// Re-applies modifiers from every currently equipped stack and sends updates.
+    pub fn send_current_equipment_attribute_modifiers(&self) {
+        self.apply_and_send_equipment_attribute_modifiers(&self.snapshot_equipped_stacks());
+    }
+
+    fn snapshot_equipped_stacks(&self) -> Vec<(EquipmentSlot, ItemStack)> {
+        let guard = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .equipment
+            .iter()
+            .map(|(slot, stack)| (slot.clone(), stack.clone()))
+            .collect()
+    }
+
+    fn apply_equipment_slot_attribute_modifiers(
+        &self,
+        slot: &EquipmentSlot,
+        stack: &ItemStack,
+        touched: &mut Vec<Attributes>,
+    ) {
+        let previous = {
+            let mut map = self
+                .equipment_attribute_modifier_ids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            map.remove(slot).unwrap_or_default()
+        };
+        for (attr_id, modifier_id) in previous {
+            if let Some(attr) = attributes_by_id(attr_id) {
+                self.update_attribute(attr, |inst| inst.remove_modifier(&modifier_id));
+                push_unique_attribute(touched, attr);
+            }
+        }
+
+        if stack.is_empty() {
+            return;
+        }
+        let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() else {
+            return;
+        };
+
+        let mut applied = Vec::new();
+        for item_mod in modifiers.attribute_modifiers.iter() {
+            if !attribute_modifier_slot_matches(&item_mod.slot, slot) {
+                continue;
+            }
+            let operation = match item_mod.operation {
+                Operation::AddValue => ModifierOperation::Add,
+                Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+            };
+            self.update_attribute(item_mod.r#type, |inst| {
+                inst.add_or_replace_modifier(Modifier {
+                    id: item_mod.id.to_string(),
+                    amount: item_mod.amount,
+                    operation,
+                });
+            });
+            applied.push((item_mod.r#type.id, item_mod.id.to_string()));
+            push_unique_attribute(touched, item_mod.r#type);
+        }
+
+        if !applied.is_empty() {
+            let mut map = self
+                .equipment_attribute_modifier_ids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            map.insert(slot.clone(), applied);
+        }
+    }
+
+    pub(crate) fn on_item_pickup(&self, item: &crate::entity::item::ItemEntity) {
+        let Some(owner) = item.get_owner_entity() else {
+            return;
+        };
+        let Some(player) = owner.get_player() else {
+            return;
+        };
+        let item_id = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .item
+            .registry_key
+            .to_string();
+        player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::ThrownItemPickedUpByEntity {
+            entity_type: format!("minecraft:{}", self.entity.entity_type.resource_name),
+            item_id,
+            is_baby: self.is_baby(),
+            player_wearing_safe_armor: crate::entity::mob::piglin_ai::PiglinAi::is_wearing_safe_armor(&player.living_entity),
+        });
+    }
+
+    /// Picks up an item entity or XP orb.
+    pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
+        let mut pickup_event =
+            crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
+                self.entity.entity_id,
+                item.entity_type.id.to_string(),
+                stack_amount as u8,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut pickup_event);
+            if pickup_event.cancelled {
+                return false;
+            }
+        }
+
+        let chunk_pos = self.entity.chunk_pos.load();
+        self.entity.world.load().broadcast_to_chunk_editioned(
+            chunk_pos,
+            &CTakeItemEntity::new(
+                item.entity_id.into(),
+                self.entity.entity_id.into(),
+                VarInt(stack_amount as i32),
+            ),
+            &CTakeItemActor {
+                item_runtime_id: VarULong(item.entity_id as u64),
+                actor_runtime_id: VarULong(self.entity.entity_id as u64),
+            },
+        );
+        true
+    }
+
+    /// Sends the Hand animation to all others, used when Eating for example
+    /// Vanilla `ItemStack.causeUseVibration`: emits the game event only when `use_effects.interact_vibrations` is true.
+    pub fn cause_use_vibration(
+        &self,
+        stack: &ItemStack,
+        event: pumpkin_data::game_event::GameEvent,
+    ) {
+        if stack
+            .get_data_component::<pumpkin_data::data_component_impl::UseEffectsImpl>()
+            .is_none_or(|u| u.interact_vibrations)
+        {
+            self.entity
+                .world
+                .load()
+                .emit_game_event(event.name(), self.entity.pos.load());
+        }
+    }
+
+    pub fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
+        let is_blocking = stack.get_data_component::<BlocksAttacksImpl>().is_some();
+        self.cause_use_vibration(
+            &stack,
+            pumpkin_data::game_event::GameEvent::ItemInteractStart,
+        );
+        self.item_use_time.store(duration, Ordering::Relaxed);
+        *self
+            .item_in_use
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(stack);
+        *self
+            .active_hand
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hand);
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+        self.set_living_flag(Self::USING_ITEM_FLAG, true);
+        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
+        if is_blocking {
+            self.set_bedrock_blocking(true);
+        }
+    }
+
+    fn set_living_flag(&self, flag: u8, value: bool) {
+        let index = flag;
+        let mut b = self.livings_flags.load(Ordering::Relaxed);
+        if value {
+            b |= index;
+        } else {
+            b &= !index;
+        }
+        self.livings_flags.store(b, Ordering::Relaxed);
+
+        let bedrock_flag = if flag == Self::USING_ITEM_FLAG {
+            Some(pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM)
+        } else if flag == Self::USING_RIPTIDE_FLAG {
+            Some(
+                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::DAMAGE_NEARBY_MOBS,
+            )
+        } else {
+            None
+        };
+        let bedrock_meta = bedrock_flag.map(|index| {
+            let mask = 1i64 << index;
+            if value {
+                self.entity.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
+            } else {
+                self.entity
+                    .bedrock_flags
+                    .fetch_and(!mask, Ordering::Relaxed);
+            }
+
+            let mut meta =
+                pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
+            meta.set(
+                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
+                pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int64(
+                    self.entity.bedrock_flags.load(Ordering::Relaxed),
+                ),
+            );
+            meta
+        });
+
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS, b);
+        if let Some(bedrock_meta) = &bedrock_meta {
+            self.entity.send_bedrock_actor_data(bedrock_meta);
+        }
+    }
+
+    pub fn set_bedrock_blocking(&self, blocking: bool) {
+        let flag = pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::BLOCKING;
+        let index = (flag - 64) as u8;
+        let mask = 1i64 << index;
+        if blocking {
+            self.entity
+                .bedrock_flags_two
+                .fetch_or(mask, Ordering::Relaxed);
+        } else {
+            self.entity
+                .bedrock_flags_two
+                .fetch_and(!mask, Ordering::Relaxed);
+        }
+
+        let mut meta =
+            pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
+        meta.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS_TWO,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int64(
+                self.entity.bedrock_flags_two.load(Ordering::Relaxed),
+            ),
+        );
+        self.entity.send_bedrock_actor_data(&meta);
+    }
+
+    pub fn clear_active_hand(&self) {
+        let prev = self
+            .item_in_use
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(ref stack) = prev {
+            self.cause_use_vibration(
+                stack,
+                pumpkin_data::game_event::GameEvent::ItemInteractFinish,
+            );
+        }
+        *self
+            .active_hand
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+        self.item_use_time.store(0, Ordering::Relaxed);
+
+        self.set_living_flag(Self::USING_ITEM_FLAG, false);
+        self.set_bedrock_blocking(false);
+    }
+
+    pub fn was_recently_stabbed(&self, target_id: i32, now: i32, allowed_ticks: i32) -> bool {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&target_id)
+            .is_some_and(|stabbed_at| now - stabbed_at < allowed_ticks)
+    }
+
+    pub fn remember_stabbed_entity(&self, target_id: i32, now: i32) {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(target_id, now);
+    }
+
+    pub fn is_blocking(&self) -> bool {
+        let item_in_use = self
+            .item_in_use
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(item) = item_in_use.as_ref()
+            && let Some(blocks_attacks) = item.get_data_component::<BlocksAttacksImpl>()
+        {
+            let use_time = self.item_use_time.load(Ordering::Relaxed);
+            let required_time = if let Some(dyn_self) = self
+                .entity
+                .world
+                .load()
+                .get_entity_by_id(self.entity.entity_id)
+                && let Some(player) = dyn_self
+                    .cast_any()
+                    .downcast_ref::<crate::entity::player::Player>()
+                && matches!(
+                    player.client.as_ref(),
+                    crate::net::ClientPlatform::Bedrock(_)
+                ) {
+                0
+            } else {
+                blocks_attacks.block_delay_ticks()
+            };
+            return item.get_max_use_time() - use_time >= required_time;
+        }
+        false
+    }
+
+    /// Like vanilla, the dead are not healed and a negative amount takes health.
+    ///
+    /// A negative amount can only come from a splash or lingering instant health
+    /// potion with a custom amplifier of 29 mod 32 (`4 << 29` overflows). In vanilla:
+    /// 1. Health is clamped to 0, `die` is never called.
+    /// 2. Mobs then play the death animation and vanish after 20 ticks, without drops.
+    /// 3. A player at 0 health gets the death screen and respawns, without drops.
+    ///
+    /// Kept for parity, the tick and respawn paths already treat 0 health like vanilla.
+    // TODO: config option to prevent this (clamp the amount or run the real death flow).
+    pub fn heal(&self, additional_health: f32) {
+        if self.health.load() <= 0.0 || additional_health == 0.0 {
+            return;
+        }
+        let mut event =
+            crate::plugin::api::events::entity::entity_regain_health::EntityRegainHealthEvent::new(
+                self.entity.entity_id,
+                additional_health,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+        // A handler may have changed health, or killed the entity.
+        let health = self.health.load();
+        if health > 0.0 {
+            self.set_health(health + additional_health);
+        }
+    }
+
+    pub fn set_health(&self, health: f32) {
+        // Clamp to [0, max_health]
+        let max_health = self.get_max_health();
+        let clamped = health.max(0.0).min(max_health);
+        self.health.store(clamped);
+        // tell everyone entities health changed
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, clamped);
+    }
+
+    /// Returns the current maximum health for this entity
+    pub fn get_max_health(&self) -> f32 {
+        self.get_attribute_value(&Attributes::MAX_HEALTH) as f32
+    }
+
+    /// Sets the maximum health for this entity
+    pub fn set_max_health(&self, max_health: f32) {
+        // Update base attribute
+        self.set_attribute_base(&Attributes::MAX_HEALTH, max_health as f64);
+
+        // Broadcast the attribute change
+        crate::entity::attributes::send_attribute_updates_for_living(
+            self,
+            vec![Attributes::MAX_HEALTH],
+        );
+
+        // Clamp current health to new max if needed and send metadata update
+        let current_health = self.health.load();
+        if current_health > max_health {
+            self.set_health(max_health);
+        }
+    }
+
+    /// Returns the current absorption amount for this entity (yellow hearts)
+    pub fn get_absorption(&self) -> f32 {
+        self.absorption.load()
+    }
+
+    /// Sets the current absorption amount for this entity (yellow hearts)
+    pub fn set_absorption(&self, new_abs: f32) {
+        // Must be at least 0
+        let new_abs = new_abs.max(0.0);
+
+        // Set local state
+        self.absorption.store(new_abs);
+
+        // Broadcast attribute update for max_absorption so clients receive
+        // the updated absorption value via the attribute packet.
+        crate::entity::attributes::send_attribute_updates_for_living(
+            self,
+            vec![Attributes::MAX_ABSORPTION],
+        );
+
+        // Send absorption metadata for players (visual yellow hearts)
+        if self.entity.entity_type == &EntityType::PLAYER {
+            self.entity
+                .set_synced_data(tracked_data::player::DATA_PLAYER_ABSORPTION_ID, new_abs);
+        }
+    }
+
+    /// Convenience helper to mutate an attribute instance. Automatically inserts
+    /// a new instance populated from the registry base if needed.
+    pub fn update_attribute<F: FnOnce(&mut AttributeInstance)>(
+        &self,
+        attribute: &Attributes,
+        f: F,
+    ) {
+        let mut map = self
+            .attributes
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let inst = map.entry(attribute.id).or_insert_with(|| {
+            let base = self
+                .entity
+                .entity_type
+                .attributes
+                .iter()
+                .find(|a| a.0.id == attribute.id)
+                .map_or_else(
+                    || {
+                        tracing::debug!(
+                            "Entity type {} has no base value for attribute {}; falling back to default {}",
+                            self.entity.entity_type.resource_name,
+                            attribute.name,
+                            attribute.default_value,
+                        );
+                        attribute.default_value
+                    },
+                    |a| a.1,
+                );
+            AttributeInstance::new(base)
+        });
+
+        f(inst);
+        inst.mark_dirty();
+    }
+
+    /// Vanilla `refreshDirtyAttributes`: reports every attribute modified since the last refresh.
+    fn refresh_dirty_attributes(&self, caller: &dyn EntityBase) {
+        let updated: Vec<u8> = self
+            .attributes
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter_mut()
+            .filter_map(|(id, instance)| std::mem::take(instance.updated.get_mut()).then_some(*id))
+            .collect();
+        if let Some(mob) = caller.get_mob() {
+            for attribute in updated {
+                mob.get_mob_entity().on_attribute_updated(attribute);
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn get_arrow_count(&self) -> i32 {
+        self.arrow_count.load(Relaxed)
+    }
+
+    pub fn set_arrow_count(&self, count: i32) {
+        self.arrow_count.store(count, Relaxed);
+        self.entity.set_synced_data(
+            tracked_data::living_entity::DATA_ARROW_COUNT_ID,
+            VarInt(count),
+        );
+    }
+
+    /// Stuck arrows fall out one at a time, faster the more there are.
+    fn tick_arrow_count(&self) {
+        let count = self.get_arrow_count();
+        if count <= 0 {
+            return;
+        }
+        if self.remove_arrow_time.load(Relaxed) <= 0 {
+            self.remove_arrow_time.store(20 * (30 - count), Relaxed);
+        }
+        if self.remove_arrow_time.fetch_sub(1, Relaxed) - 1 <= 0 {
+            self.set_arrow_count(count - 1);
+        }
+    }
+
+    /// Returns the computed value for `attribute` using the local instance, falling back
+    /// to `attribute.default_value` if no local instance exists.
+    pub fn get_attribute_value(&self, attribute: &Attributes) -> f64 {
+        let map = self
+            .attributes
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        map.get(&attribute.id)
+            .map_or(attribute.default_value, |instance| {
+                instance.sanitized_value(attribute)
+            })
+    }
+
+    /// Returns the base attribute value for `attribute` for this entity's type.
+    pub fn get_attribute_base(&self, attribute: &Attributes) -> f64 {
+        // Check the local base value first (could be modified)
+        let map = self
+            .attributes
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(instance) = map.get(&attribute.id) {
+            return instance.base_value;
+        }
+
+        // Fall back to registry base value if no local instance exists
+        self.entity
+            .entity_type
+            .attributes
+            .iter()
+            .find(|a| a.0.id == attribute.id)
+            .map_or(attribute.default_value, |a| a.1)
+    }
+
+    /// Undead: healing hurts them, harming heals them.
+    #[must_use]
+    pub fn is_inverted_heal_and_harm(&self) -> bool {
+        self.entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM)
+    }
+
+    /// Vanilla `HealOrHarmMobEffect`. False for other effects.
+    /// `scale` from splash distance or 1 when drunk, `None` for an added effect,
+    /// whose heal never goes negative. With a `source`, harm is indirect magic
+    /// credited to it and its owner.
+    pub fn apply_instant_effect(
+        &self,
+        effect_type: &StatusEffect,
+        amplifier: u8,
+        scale: Option<f64>,
+        source: Option<EffectSource<'_>>,
+    ) -> bool {
+        let is_harm = if effect_type == &StatusEffect::INSTANT_DAMAGE {
+            true
+        } else if effect_type == &StatusEffect::INSTANT_HEALTH {
+            false
+        } else {
+            return false;
+        };
+        // Java's int shift: wraps the count, so high amplifiers stay in range.
+        let scaled = |base: i32| {
+            let shifted = base.wrapping_shl(u32::from(amplifier));
+            scale.map_or(shifted, |scale| (scale * f64::from(shifted) + 0.5) as i32) as f32
+        };
+        if is_harm == self.is_inverted_heal_and_harm() {
+            let amount = scaled(4);
+            self.heal(if scale.is_none() {
+                amount.max(0.0)
+            } else {
+                amount
+            });
+        } else if let Some(dyn_self) = self
+            .entity
+            .world
+            .load()
+            .get_entity_by_id(self.entity.entity_id)
+        {
+            let (damage_type, direct, owner) = source
+                .map_or((DamageType::MAGIC, None, None), |s| {
+                    (DamageType::INDIRECT_MAGIC, Some(s.direct), s.owner)
+                });
+            dyn_self.damage_with_context(&*dyn_self, scaled(6), damage_type, None, direct, owner);
+        }
+        true
+    }
+
+    /// Update or insert the base value for an attribute on this entity.
+    /// If the attribute doesn't exist locally yet, it will be inserted.
+    pub fn set_attribute_base(&self, attribute: &Attributes, new_base: f64) {
+        let mut map = self
+            .attributes
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(inst) = map.get_mut(&attribute.id) {
+            inst.base_value = new_base;
+            inst.mark_dirty();
+        } else {
+            let ai = AttributeInstance::new(new_base);
+            ai.mark_dirty();
+            map.insert(attribute.id, ai);
+        }
+    }
+
+    pub fn reset_effects_and_attributes(&self) {
+        // Clear active effects and reset modified attributes
+        let effects_to_remove: Vec<_> = {
+            let lock = self
+                .active_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            lock.keys().copied().collect()
+        };
+
+        for effect_type in effects_to_remove {
+            self.remove_effect(effect_type);
+        }
+    }
+
+    pub const fn entity_id(&self) -> i32 {
+        self.entity.entity_id
+    }
+
+    // canBeAffected, with the mob overrides folded in
+    fn can_be_affected(&self, effect: &Effect) -> bool {
+        let entity_type = self.entity.entity_type;
+        if (entity_type == &EntityType::WITHER_SKELETON || entity_type == &EntityType::WITHER)
+            && effect.effect_type == &StatusEffect::WITHER
+        {
+            return false;
+        }
+        if (entity_type == &EntityType::NAUTILUS || entity_type == &EntityType::ZOMBIE_NAUTILUS)
+            && effect.effect_type == &StatusEffect::POISON
+        {
+            return false;
+        }
+
+        if entity_type.has_tag(&tag::EntityType::MINECRAFT_IMMUNE_TO_INFESTED) {
+            effect.effect_type != &StatusEffect::INFESTED
+        } else if entity_type.has_tag(&tag::EntityType::MINECRAFT_IMMUNE_TO_OOZING) {
+            effect.effect_type != &StatusEffect::OOZING
+        } else if entity_type.has_tag(&tag::EntityType::MINECRAFT_IGNORES_POISON_AND_REGEN) {
+            effect.effect_type != &StatusEffect::REGENERATION
+                && effect.effect_type != &StatusEffect::POISON
+        } else {
+            true
+        }
+    }
+
+    #[expect(clippy::too_many_lines)]
+    pub fn add_effect(&self, effect: Effect) {
+        if !self.can_be_affected(&effect) {
+            return;
+        }
+
+        let mut effect_event =
+            crate::plugin::api::events::entity::entity_potion_effect::EntityPotionEffectEvent::new(
+                self.entity.entity_id,
+                effect.effect_type.translation_key.to_string(),
+                effect.duration,
+                effect.amplifier,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut effect_event);
+        }
+        if effect_event.cancelled {
+            return;
+        }
+
+        // Like vanilla, instant effects are never sent or stored as active effects.
+        if self.apply_instant_effect(effect.effect_type, effect.amplifier, None, None) {
+            return;
+        }
+
+        // Apply non-instant effects
+
+        // Effects that modify attributes (ex. speed) should also update the
+        // entity's attribute instances (server-side) and then notify clients.
+        if !effect.effect_type.attribute_modifiers.is_empty() {
+            // Apply each attribute modifier into the local AttributeInstance
+            for m in effect.effect_type.attribute_modifiers {
+                let id = m.id.to_string();
+                let op = match m.operation {
+                    Operation::AddValue => ModifierOperation::Add,
+                    Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                    Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                };
+                let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
+                let mod_inst = Modifier {
+                    id,
+                    amount: scaled_amount,
+                    operation: op,
+                };
+
+                self.update_attribute(m.attribute, |inst| {
+                    inst.add_or_replace_permanent_modifier(mod_inst.clone());
+                });
+            }
+
+            // Recompute packet modifiers from active effects for each affected attribute
+            let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
+            for m in effect.effect_type.attribute_modifiers {
+                if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
+                    touched_attrs.push(m.attribute.clone());
+                }
+            }
+
+            if !touched_attrs.is_empty() {
+                crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs);
+            }
+        }
+
+        // Apply absorption effect (+4 absorption per level)
+        if effect.effect_type == &StatusEffect::ABSORPTION {
+            let added = 4.0 * (effect.amplifier as f32 + 1.0);
+            let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
+            let new_abs = (self.absorption.load() + added).min(max_abs);
+            self.set_absorption(new_abs);
+        }
+
+        // Apply invisible effect
+        if effect.effect_type == &StatusEffect::INVISIBILITY {
+            self.entity.set_invisible(true);
+        }
+
+        // Apply glowing effect
+        if effect.effect_type == &StatusEffect::GLOWING {
+            self.entity.set_glowing_from_effect(true);
+        }
+
+        // Broadcast effect to nearby players
+        let mut flag: i8 = 0;
+        if effect.ambient {
+            flag |= 1;
+        }
+        if effect.show_particles {
+            flag |= 2;
+        }
+        if effect.show_icon {
+            flag |= 4;
+        }
+        if effect.blend
+            || effect.effect_type.fade_in_ticks != 0
+            || effect.effect_type.fade_out_ticks != 0
+            || effect.effect_type.fade_out_threshold_ticks != 0
+        {
+            flag |= 8;
+        }
+
+        let je_packet = CUpdateMobEffect::new(
+            self.entity.entity_id.into(),
+            VarInt(i32::from(effect.effect_type.id)),
+            effect.amplifier.into(),
+            effect.duration.into(),
+            flag,
+        );
+
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect {
+            target_runtime_id: VarULong(self.entity.entity_id as u64),
+            event_id: pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+            effect_id: VarInt(effect.effect_type.to_bedrock_id()),
+            effect_amplifier: VarInt(i32::from(effect.amplifier)),
+            show_particles: effect.show_particles,
+            effect_duration_ticks: VarInt(effect.duration),
+            tick: VarULong(0),
+            ambient: effect.ambient,
+        };
+
+        let chunk_pos = self.entity.chunk_pos.load();
+        let world = self.entity.world.load();
+        world.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        if !effect.effect_type.instantaneous {
+            let apply_sound = effect.effect_type.apply_sound;
+            let was_absent = self
+                .active_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(effect.effect_type, effect)
+                .is_none();
+            if was_absent && let Some(sound) = apply_sound {
+                let category = self.entity.entity_type.sound_source;
+                world.play_sound_fine(sound, category, &self.entity.pos.load(), 1.0, 1.0);
+            }
+        }
+        self.sync_effect_particles();
+    }
+
+    fn sync_effect_particles(&self) {
+        let effects = self
+            .active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let has_effects = !effects.is_empty();
+        let particles = EffectParticles(
+            effects
+                .values()
+                .filter(|effect| effect.show_particles)
+                .map(EffectParticle::from_effect)
+                .collect(),
+        );
+        let ambient = effects
+            .values()
+            .filter(|effect| effect.show_particles)
+            .all(|effect| effect.ambient);
+        drop(effects);
+
+        self.entity
+            .set_synced_data(tracked_data::living_entity::EFFECT_PARTICLES, particles);
+        if has_effects {
+            self.entity
+                .set_synced_data(tracked_data::living_entity::EFFECT_AMBIENCE_ID, ambient);
+        }
+    }
+
+    pub fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
+        // Remove the effect
+        let succeeded = self
+            .active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&effect_type)
+            .is_some();
+
+        // Broadcast effect removal
+        self.entity
+            .world
+            .load()
+            .send_remove_mob_effect(&self.entity, effect_type);
+
+        // Remove attribute modifiers, if any
+        if !effect_type.attribute_modifiers.is_empty() {
+            let mut touched_attrs = Vec::new();
+
+            for m in effect_type.attribute_modifiers {
+                let id = m.id.to_string();
+
+                // Clean local server state
+                self.update_attribute(m.attribute, |inst| {
+                    inst.remove_modifier(&id);
+                });
+
+                // Track unique attributes for the packet update
+                if !touched_attrs
+                    .iter()
+                    .any(|a: &Attributes| a.id == m.attribute.id)
+                {
+                    touched_attrs.push(m.attribute.clone());
+                }
+            }
+
+            // Sync the clean state to the client
+            if !touched_attrs.is_empty() {
+                crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs);
+            }
+        }
+
+        // If absorption effect removed, clear current absorption amount and notify clients
+        if effect_type == &StatusEffect::ABSORPTION {
+            self.set_absorption(0.0);
+        }
+
+        // If health boost effect removed, clamp current health to new max and notify clients
+        if effect_type == &StatusEffect::HEALTH_BOOST {
+            let new_max = self.get_max_health();
+            if self.health.load() > new_max {
+                // Update local health and send both health and absorption metadata together
+                self.set_health(new_max.max(0.0));
+            }
+        }
+
+        // If invisible effect removed, disable invisibility
+        if effect_type == &StatusEffect::INVISIBILITY {
+            self.entity.set_invisible(false);
+        }
+
+        // If glowing effect removed, disable glowing
+        if effect_type == &StatusEffect::GLOWING {
+            self.entity.set_glowing_from_effect(false);
+        }
+
+        if succeeded {
+            self.sync_effect_particles();
+        }
+
+        succeeded
+    }
+
+    pub fn has_effect(&self, effect: &'static StatusEffect) -> bool {
+        self.active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_key(&effect)
+    }
+
+    pub fn get_effect(&self, effect: &'static StatusEffect) -> Option<Effect> {
+        self.active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&effect)
+            .cloned()
+    }
+
+    pub fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
+        let block_pos = self.entity.block_pos.load();
+        let block = self.entity.world.load().get_block(&block_pos);
+        (
+            block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
+            block,
+        )
+    }
+
+    // Check if the entity is in water
+    pub fn is_in_water(&self) -> bool {
+        self.entity.touching_water.load(Ordering::Relaxed)
+    }
+
+    // Check if the entity is in powder snow
+    pub fn is_in_powder_snow(&self) -> bool {
+        self.entity.is_in_powder_snow.load(Ordering::Relaxed)
+    }
+
+    pub fn should_prevent_fall_damage(&self) -> bool {
+        let (prevents, block) = self.is_in_fall_damage_resetting();
+
+        if block == &Block::SCAFFOLDING && !self.entity.is_sneaking() {
+            return false;
+        }
+
+        if block == &Block::WATER {
+            return true;
+        }
+
+        if self.entity.entity_type == &EntityType::PLAYER {
+            if block == &Block::END_GATEWAY || block == &Block::END_PORTAL {
+                return true;
+            }
+
+            if block == &Block::NETHER_PORTAL {
+                let world = self.entity.world.load();
+                let level_info = world.level_info.load();
+
+                return level_info.game_rules.players_nether_portal_default_delay == 0;
+            }
+        }
+
+        prevents
+    }
+
+    pub fn should_prevent_fall_damage_in_area(&self) -> bool {
+        let world = self.entity.world.load();
+        let block_pos = self.entity.block_pos.load().down();
+        let entity_pos = self.entity.pos.load();
+
+        let min = BlockPos(Vector3::new(
+            block_pos.0.x - 1,
+            block_pos.0.y,
+            block_pos.0.z - 1,
+        ));
+        let max = BlockPos(Vector3::new(
+            block_pos.0.x + 1,
+            block_pos.0.y,
+            block_pos.0.z + 1,
+        ));
+        let pos_iter = BlockPos::iterate(min, max);
+
+        // FIXME: it seems the java server checks all blocks around with a raycast and check if miss or hit,
+        // then added to a collision checker to handle in the tick handler
+        for pos in pos_iter {
+            let block = world.get_block(&pos);
+
+            if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block) {
+                let block_center = Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.5,
+                    f64::from(pos.0.z) + 0.5,
+                );
+                let distance = entity_pos.squared_distance_to_vec(&block_center);
+
+                // Fetch safe fall distance from attribute
+                let safe_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE);
+                return distance.sqrt() <= safe_distance * safe_distance;
+            }
+        }
+
+        false
+    }
+
+    pub fn is_immune_to_fall_damage(&self) -> bool {
+        self.entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_FALL_DAMAGE_IMMUNE)
+    }
+
+    fn get_effective_gravity(&self, caller: &dyn EntityBase) -> f64 {
+        let final_gravity = if self.entity.has_no_gravity() {
+            0.0
+        } else {
+            caller.get_gravity()
+        };
+
+        if self.entity.velocity.load().y <= 0.0 && self.has_effect(&StatusEffect::SLOW_FALLING) {
+            final_gravity.min(0.01)
+        } else {
+            final_gravity
+        }
+    }
+
+    pub fn swing_hand(&self) {
+        let world = self.entity.world.load();
+        let entity_id = self.entity_id();
+
+        let je_packet =
+            pumpkin_protocol::java::client::play::CSwingArm::new(entity_id.into(), false);
+        let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+            action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
+            target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            data: 0.0,
+            swing_source: None,
+            hand: 0,
+        };
+
+        world.broadcast_editioned(&je_packet, &be_packet);
+    }
+
+    pub fn swing_off_hand(&self) {
+        let world = self.entity.world.load();
+        let entity_id = self.entity_id();
+
+        let je_packet = CSwingArm::new(entity_id.into(), true);
+        let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+            action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
+            target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            data: 0.0,
+            swing_source: None,
+            hand: 1,
+        };
+
+        world.broadcast_editioned(&je_packet, &be_packet);
+    }
+
+    fn tick_movement(&self, caller: &dyn EntityBase) {
+        if let Some(mob) = caller.get_mob() {
+            mob.before_mob_ai_step();
+        }
+        let client_controlled = caller.get_mob().is_some()
+            && caller
+                .get_controlling_passenger()
+                .is_some_and(|rider| rider.get_player().is_some());
+        if self.jumping_cooldown.load(Relaxed) != 0 {
+            self.jumping_cooldown.fetch_sub(1, Relaxed);
+        }
+
+        let should_swim_in_fluids = caller.get_player().is_none_or(|player| !player.is_flying());
+
+        self.entity.check_zero_velo();
+
+        let mut movement_input = self.movement_input.load();
+
+        movement_input.x *= 0.98;
+
+        movement_input.z *= 0.98;
+
+        self.movement_input.store(movement_input);
+
+        if caller.is_immobile() {
+            self.jumping.store(false, Relaxed);
+            let input = self.movement_input.load();
+            self.movement_input.store(Vector3::new(0.0, input.y, 0.0));
+        } else if let Some(mob) = caller.get_mob()
+            && !mob.get_mob_entity().is_no_ai()
+            && !client_controlled
+        {
+            // Prepare old motion before controllers produce this tick's inputs.
+            mob.get_mob_entity().server_ai_step(mob, caller);
+        }
+
+        if self.jumping.load(SeqCst) && should_swim_in_fluids {
+            let in_lava = self.entity.touching_lava.load(SeqCst);
+
+            let in_water = self.entity.touching_water.load(SeqCst);
+
+            let fluid_height = if in_lava {
+                self.entity.lava_height.load()
+            } else {
+                self.entity.water_height.load()
+            };
+
+            let swim_height = self.get_swim_height();
+
+            let on_ground = self.entity.on_ground.load(SeqCst);
+
+            if (in_water || in_lava) && (!on_ground || fluid_height > swim_height) {
+                // Swim upward
+
+                let mut velo = self.entity.velocity.load();
+
+                velo.y += 0.04;
+
+                self.entity.velocity.store(velo);
+            } else if (on_ground || in_water && fluid_height <= swim_height)
+                && self.jumping_cooldown.load(SeqCst) == 0
+            {
+                self.jump(caller);
+
+                self.jumping_cooldown.store(10, SeqCst);
+            }
+        } else {
+            self.jumping_cooldown.store(0, SeqCst);
+        }
+
+        if self.has_effect(&StatusEffect::SLOW_FALLING)
+            || self.has_effect(&StatusEffect::LEVITATION)
+        {
+            self.fall_distance.store(0.0);
+        }
+
+        // Vanilla Mob.isEffectiveAi / Mannequin.isEffectiveAi: non-effective AI entities don't travel.
+        let effective_ai = caller.is_effective_ai() && !client_controlled;
+
+        if client_controlled {
+            self.entity.velocity.store(Vector3::default());
+        } else if effective_ai && !caller.get_mob().is_some_and(|mob| mob.travel(caller)) {
+            // A mob with its own travel, e.g. the allay, replaces the default one
+            self.travel(caller);
+        }
+
+        let suffocating = self.entity.tick_block_collisions(caller);
+
+        if suffocating && self.entity.pose.load() != EntityPose::Sleeping {
+            caller.damage(caller, 1.0, DamageType::IN_WALL);
+        }
+
+        self.push_entities(caller);
+
+        if let Some(ageable) = caller.get_mob().and_then(|mob| mob.as_ageable())
+            && self.entity.is_alive()
+            && !self.is_dead_or_dying()
+        {
+            ageable.ageable_ai_step();
+        }
+
+        if let Some(mob) = caller.get_mob() {
+            mob.mob_ai_step();
+            crate::entity::mob::pick_up_nearby_items(mob);
+            if mob.ticks_body_rotation() {
+                mob.get_mob_entity()
+                    .body_rotation_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .client_tick(mob);
+            }
+        }
+    }
+
+    pub(crate) fn push_entities(&self, dyn_self: &dyn EntityBase) {
+        if dyn_self.get_mob().is_some_and(|mob| !mob.pushes_entities()) {
+            return;
+        }
+
+        let world = self.entity.world.load();
+        let entity_bb = self.entity.bounding_box.load();
+        let mut own_team: Option<Option<crate::world::scoreboard::Team>> = None;
+
+        let pushable: Vec<Arc<dyn EntityBase>> = world
+            .get_all_at_box(&entity_bb)
+            .into_iter()
+            .filter(|entity| {
+                let entity_ref = entity.get_entity();
+                if entity_ref.entity_id == self.entity.entity_id
+                    || entity.is_spectator()
+                    || !entity.is_pushable()
+                {
+                    return false;
+                }
+                let own = own_team.get_or_insert_with(|| dyn_self.get_team());
+                is_allowed_by_team_rules(own.as_ref(), entity.get_team().as_ref())
+            })
+            .collect();
+
+        if pushable.is_empty() {
+            return;
+        }
+
+        // Entity cramming check
+        let max_cramming = match world.get_game_rule(&GameRule::MaxEntityCramming) {
+            GameRuleValue::Int(value) => value,
+            GameRuleValue::Bool(_) => 0,
+        };
+        if max_cramming > 0
+            && pushable.len() as i64 > max_cramming - 1
+            && rand::random::<u32>().is_multiple_of(4)
+        {
+            let count = pushable
+                .iter()
+                .filter(|entity| !entity.is_passenger())
+                .count();
+            if count as i64 > max_cramming - 1 {
+                dyn_self.damage(dyn_self, 6.0, DamageType::CRAMMING);
+            }
+        }
+
+        for entity in pushable {
+            let mob = dyn_self.get_mob();
+            if let Some(mob) = mob {
+                mob.do_push(&entity);
+            }
+            if mob.is_none_or(|mob| mob.can_push_entity(entity.as_ref())) {
+                entity.push(dyn_self);
+            }
+        }
+    }
+
+    /// Vanilla `LivingEntity.travel`, without gliding yet. Returns the horizontal friction.
+    fn travel(&self, caller: &dyn EntityBase) -> f64 {
+        let should_swim_in_fluids = caller.get_player().is_none_or(|player| !player.is_flying());
+        let touching_water = self.entity.touching_water.load(SeqCst);
+        // Strider is the only entity that has canWalkOnFluid = false
+        if self.entity.is_in_liquid()
+            && should_swim_in_fluids
+            && self.entity.entity_type != &EntityType::STRIDER
+        {
+            self.travel_in_fluid(caller, touching_water)
+        } else {
+            self.travel_in_air(caller)
+        }
+    }
+
+    pub(crate) fn compute_modified_friction(friction: f32, modifier: f32) -> f64 {
+        f64::from((1.0 - (1.0 - friction) * modifier).clamp(0.0, 1.0))
+    }
+
+    /// `getFrictionInfluencedSpeed`.
+    pub(crate) fn friction_influenced_speed(speed: f64, block_friction: f64) -> f64 {
+        if block_friction > Self::FRICTION_SPEED_THRESHOLD {
+            speed * 0.216_000_02 / block_friction.powi(3)
+        } else {
+            speed
+        }
+    }
+
+    fn get_block_friction(&self) -> f64 {
+        if self.entity.on_ground.load(Relaxed) {
+            Self::compute_modified_friction(
+                self.entity
+                    .get_block_with_y_offset(0.500_001)
+                    .1
+                    .slipperiness,
+                self.get_attribute_value(&Attributes::FRICTION_MODIFIER) as f32,
+            )
+        } else {
+            1.0
+        }
+    }
+
+    fn travel_in_air(&self, caller: &dyn EntityBase) -> f64 {
+        // applyMovementInput
+
+        let effective_speed = if caller.get_mob().is_some() {
+            f64::from(self.get_speed())
+        } else {
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+        };
+
+        let air_drag_modifier = self.get_attribute_value(&Attributes::AIR_DRAG_MODIFIER) as f32;
+        let air_drag = Self::compute_modified_friction(0.91, air_drag_modifier);
+        let block_friction = self.get_block_friction();
+        let speed = if self.entity.on_ground.load(Relaxed) {
+            Self::friction_influenced_speed(effective_speed, block_friction)
+        } else {
+            caller.get_player().map_or(
+                Self::DEFAULT_OFF_GROUND_SPEED,
+                super::player::Player::get_off_ground_speed,
+            )
+        };
+        let friction = block_friction * air_drag;
+
+        self.entity
+            .update_velocity_from_input(self.movement_input.load(), speed);
+
+        self.apply_climbing_speed(caller);
+
+        self.make_move(caller);
+
+        let mut velo = self.entity.velocity.load();
+
+        let can_powder_snow_climb = if self.entity.was_in_powder_snow.load(Relaxed) {
+            crate::block::blocks::powder_snow::can_entity_walk_on_powder_snow(caller)
+        } else {
+            false
+        };
+
+        if (self.entity.horizontal_collision.load(SeqCst) || self.jumping.load(SeqCst))
+            && (caller.on_climbable() || can_powder_snow_climb)
+        {
+            velo.y = 0.2;
+        }
+
+        let levitation = self.get_effect(&StatusEffect::LEVITATION);
+
+        if let Some(lev) = levitation {
+            velo.y += 0.05f64.mul_add(f64::from(lev.amplifier + 1), -velo.y) * 0.2;
+        } else {
+            velo.y -= self.get_effective_gravity(caller);
+
+            // TODO: If world is not loaded: replace effective gravity with:
+
+            // if below world's bottom y then -0.1, else 0.0
+        }
+
+        if !self.discard_friction.load(Relaxed) {
+            velo.x *= friction;
+            velo.z *= friction;
+            velo.y *= caller.get_y_velocity_drag().unwrap_or_else(|| {
+                if caller.is_flutterer() {
+                    air_drag
+                } else {
+                    Self::compute_modified_friction(0.98, air_drag_modifier)
+                }
+            });
+        }
+
+        self.entity.velocity.store(velo);
+        friction
+    }
+
+    pub(crate) fn travel_flying(&self, caller: &dyn EntityBase) {
+        self.travel_flying_with_speed(caller, self.get_speed());
+    }
+
+    /// Flies with `air_speed` out of fluids, slowing down in water and lava.
+    pub(crate) fn travel_flying_with_speed(&self, caller: &dyn EntityBase, air_speed: f32) {
+        let (speed, drag) = if self.entity.is_in_water() {
+            (f64::from(0.02f32), f64::from(0.8f32))
+        } else if self.entity.touching_lava.load(Relaxed) {
+            (f64::from(0.02f32), 0.5)
+        } else {
+            (f64::from(air_speed), f64::from(0.91f32))
+        };
+        self.entity
+            .update_velocity_from_input(self.movement_input.load(), speed);
+        self.make_move(caller);
+        self.entity
+            .velocity
+            .store(self.entity.velocity.load() * drag);
+    }
+
+    /// Vanilla `LivingEntity.travelInWater`. Returns the horizontal friction.
+    pub(crate) fn travel_in_water(
+        &self,
+        caller: &dyn EntityBase,
+        gravity: f64,
+        falling: bool,
+    ) -> f64 {
+        let old_y = self.entity.pos.load().y;
+        let movement_input = self.movement_input.load();
+        let effective_speed = if caller.get_mob().is_some() {
+            f64::from(self.get_speed())
+        } else {
+            self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
+        };
+        let mut friction = if self.entity.sprinting.load(Relaxed) {
+            0.9
+        } else {
+            f64::from(self.water_movement_speed_multiplier)
+        };
+
+        let mut speed = 0.02;
+
+        // Apply water movement efficiency attribute
+        let mut water_movement_efficiency =
+            self.get_attribute_value(&Attributes::WATER_MOVEMENT_EFFICIENCY);
+
+        if water_movement_efficiency > 0.0 {
+            if !self.entity.on_ground.load(SeqCst) {
+                water_movement_efficiency *= 0.5;
+            }
+
+            friction += (0.546_000_06 - friction) * water_movement_efficiency;
+            speed += (effective_speed - speed) * water_movement_efficiency;
+        }
+
+        if self.has_effect(&StatusEffect::DOLPHINS_GRACE) {
+            friction = 0.96;
+        }
+
+        self.entity
+            .update_velocity_from_input(movement_input, speed);
+
+        self.make_move(caller);
+
+        let mut velo = self.entity.velocity.load();
+        if self.entity.horizontal_collision.load(SeqCst) && caller.on_climbable() {
+            velo.y = 0.2;
+        }
+
+        velo = velo.multiply(friction, 0.8, friction);
+
+        self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
+        self.entity.velocity.store(velo);
+        self.jump_out_of_fluid(old_y);
+        friction
+    }
+
+    fn travel_in_fluid(&self, caller: &dyn EntityBase, water: bool) -> f64 {
+        let movement_input = self.movement_input.load();
+
+        let falling = self.entity.velocity.load().y <= 0.0;
+        let gravity = self.get_effective_gravity(caller);
+
+        if water {
+            // Only players read the friction, and they are never mobs.
+            if let Some(mob) = caller.get_mob() {
+                mob.travel_in_water(caller, gravity, falling);
+                mob.mob_travel_in_fluid(caller);
+                return 1.0;
+            }
+            return self.travel_in_water(caller, gravity, falling);
+        }
+
+        let old_y = self.entity.pos.load().y;
+        self.entity.update_velocity_from_input(movement_input, 0.02);
+
+        self.make_move(caller);
+
+        let mut velo = self.entity.velocity.load();
+
+        if self.entity.lava_height.load() <= self.get_swim_height() {
+            velo.x *= 0.5;
+            velo.z *= 0.5;
+            velo.y *= 0.8;
+
+            self.apply_fluid_moving_speed(&mut velo.y, gravity, falling);
+        } else {
+            velo = velo * 0.5;
+        }
+
+        if gravity != 0.0 {
+            velo.y -= gravity / 4.0; // Negative gravity = buoyancy
+        }
+
+        self.entity.velocity.store(velo);
+        self.jump_out_of_fluid(old_y);
+        if let Some(mob) = caller.get_mob() {
+            mob.mob_travel_in_fluid(caller);
+        }
+        0.5
+    }
+
+    fn jump_out_of_fluid(&self, old_y: f64) {
+        let mut velo = self.entity.velocity.load();
+        if !self.entity.horizontal_collision.load(SeqCst) {
+            return;
+        }
+        let lift = velo.y + f64::from(0.6f32) - self.entity.pos.load().y + old_y;
+        let bounding_box = self
+            .entity
+            .bounding_box
+            .load()
+            .shift(Vector3::new(velo.x, lift, velo.z));
+        let world = self.entity.world.load();
+        if world.is_space_empty(bounding_box) && !world.contains_any_liquid(bounding_box) {
+            velo.y = f64::from(0.3f32);
+            self.entity.velocity.store(velo);
+        }
+    }
+
+    fn apply_fluid_moving_speed(&self, dy: &mut f64, gravity: f64, falling: bool) {
+        if gravity != 0.0 && !self.entity.sprinting.load(Relaxed) {
+            if falling && (*dy - 0.005).abs() >= 0.003 && (*dy - gravity / 16.0).abs() < 0.003 {
+                *dy = -0.003;
+            } else {
+                *dy -= gravity / 16.0;
+            }
+        }
+    }
+
+    pub(crate) fn make_move(&self, caller: &dyn EntityBase) {
+        if self.entity.entity_type == &EntityType::PLAYER {
+            // The client owns the position, only the landing of `move` applies
+            let mut velo = self.entity.velocity.load();
+            if self.entity.on_ground.load(Relaxed) && velo.y < 0.0 {
+                velo.y = 0.0;
+            }
+            // Vanilla `restituteMovementAfterCollisions`: a wall stops or bounces that axis
+            let moved = if velo.horizontal_length_squared() > 0.0 {
+                self.entity.collide(velo, caller).movement
+            } else {
+                velo
+            };
+            let x_hit = (velo.x - moved.x).abs() >= 1.0e-5;
+            let z_hit = (velo.z - moved.z).abs() >= 1.0e-5;
+            if x_hit || z_hit {
+                let bounce = if self.entity.is_sneaking() {
+                    0.0
+                } else {
+                    -self.get_attribute_value(&Attributes::BOUNCINESS)
+                };
+                if x_hit {
+                    velo.x *= bounce;
+                }
+                if z_hit {
+                    velo.z *= bounce;
+                }
+            }
+            self.entity.velocity.store(velo);
+        } else {
+            self.entity.move_entity(caller, self.entity.velocity.load());
+        }
+
+        self.check_climbing(caller);
+    }
+
+    /// Vanilla `LivingEntity.onClimbable` for the block at the feet. Read-only, since other
+    /// entities query it from their own tick (`is_pushable`).
+    pub fn on_climbable(&self) -> bool {
+        let pos = self.entity.block_pos.load();
+        let world = self.entity.world.load();
+        let (block, state_id) = world.get_block_and_state_id(&pos);
+
+        if self.entity.fall_flying.load(Relaxed)
+            && block.has_tag(&tag::Block::MINECRAFT_CAN_GLIDE_THROUGH)
+        {
+            return false;
+        }
+
+        if block.has_tag(&tag::Block::MINECRAFT_CLIMBABLE) {
+            return true;
+        }
+
+        if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+            let trapdoor = OakTrapdoorLikeProperties::from_state_id(state_id);
+            if trapdoor.open {
+                let below = pos.down();
+                let (below_block, below_id) = world.get_block_and_state_id(&below);
+                if below_block == &Block::LADDER {
+                    let ladder = LadderLikeProperties::from_state_id(below_id);
+                    if ladder.facing == trapdoor.facing {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Vanilla `LivingEntity.isPushable` for the caller's own `onClimbable`, without the
+    /// unloaded-chunk short circuit: Pumpkin only ticks entities in ticking chunks.
+    pub fn can_be_pushed(&self, on_climbable: bool) -> bool {
+        self.health.load() > 0.0 && !self.dead.load(Relaxed) && !on_climbable
+    }
+
+    /// Stores the climb state of the end position, only from this entity's own tick.
+    fn check_climbing(&self, caller: &dyn EntityBase) {
+        let climbing = caller.on_climbable();
+        self.climbing.store(climbing, Relaxed);
+        if climbing {
+            self.climbing_pos.store(Some(self.entity.block_pos.load()));
+        } else if self.entity.on_ground.load(SeqCst) {
+            self.climbing_pos.store(None);
+        }
+    }
+
+    fn apply_climbing_speed(&self, caller: &dyn EntityBase) {
+        if caller.on_climbable() {
+            self.fall_distance.store(0.0);
+
+            let mut velo = self.entity.velocity.load();
+
+            let pos = 0.15;
+
+            let neg = -0.15;
+
+            if velo.x < neg {
+                velo.x = neg;
+            } else if velo.x > pos {
+                velo.x = pos;
+            }
+
+            if velo.z < neg {
+                velo.z = neg;
+            } else if velo.z > pos {
+                velo.z = pos;
+            }
+
+            velo.y = velo.y.max(neg);
+
+            // TODO
+            // if velo.y < 0.0
+            //     && self.entity.entity_type == &EntityType::PLAYER
+            //     && self.entity.sneaking.load(Relaxed)
+            // {
+            //     let block = self
+            //         .entity
+            //         .world
+            //         .read()
+            //         .await
+            //         .get_block(&self.entity.block_pos.load())
+            //         .await;
+
+            //     if let Some(props) = block.properties(block.default_state.id) {
+            //         if props.name() == "ScaffoldingLikeProperties" {
+            //             velo.y = 0.0;
+            //         }
+            //     }
+            // }
+
+            self.entity.velocity.store(velo);
+        }
+    }
+
+    pub fn get_swim_height(&self) -> f64 {
+        let eye_height = self.entity.get_eye_height();
+
+        if self.entity.entity_type == &EntityType::BREEZE {
+            eye_height
+        } else if self.entity.entity_type == &EntityType::SULFUR_CUBE {
+            f64::from(self.entity.height()) * 0.2
+        } else if eye_height < 0.4 {
+            0.0
+        } else {
+            0.4
+        }
+    }
+
+    fn jump(&self, caller: &dyn EntityBase) {
+        let mob = caller.get_mob();
+        self.jump_from_ground(mob.map_or(1.0, crate::entity::mob::Mob::jump_power_multiplier));
+        if let Some(mob) = mob {
+            mob.on_jump_from_ground();
+        }
+    }
+
+    fn jump_from_ground(&self, multiplier: f32) {
+        let jump = self.get_jump_velocity(f64::from(multiplier));
+
+        if jump <= 1.0e-5 {
+            return;
+        }
+
+        let mut velo = self.entity.velocity.load();
+
+        velo.y = jump.max(velo.y);
+
+        if self.entity.sprinting.load(Relaxed) {
+            let yaw = f64::from(self.entity.yaw.load()).to_radians();
+
+            velo.x -= yaw.sin() * 0.2;
+            velo.z += yaw.cos() * 0.2;
+        }
+
+        self.entity.velocity.store(velo);
+
+        self.entity.velocity_dirty.store(true, SeqCst);
+    }
+
+    pub(crate) fn get_jump_velocity(&self, mut strength: f64) -> f64 {
+        strength *= self.get_attribute_value(&Attributes::JUMP_STRENGTH);
+        strength *= f64::from(self.entity.get_jump_velocity_multiplier());
+        strength + f64::from(self.get_jump_boost_power())
+    }
+
+    #[must_use]
+    pub fn get_jump_boost_power(&self) -> f32 {
+        self.get_effect(&StatusEffect::JUMP_BOOST)
+            .map_or(0.0, |effect| 0.1 * (f32::from(effect.amplifier) + 1.0))
+    }
+
+    pub fn fall(&self, caller: &dyn EntityBase, height_difference: f64, ground: bool) {
+        if caller
+            .get_mob()
+            .is_some_and(|mob| !mob.should_check_fall_damage())
+        {
+            return;
+        }
+        if ground {
+            let fall_distance = self.fall_distance.swap(0.0);
+            if fall_distance > 0.0 {
+                self.on_changed_block(caller, self.entity.block_pos.load());
+                if let Some(player) = caller.get_player() {
+                    let current_y = self.entity.pos.load().y;
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::FallFromHeight {
+                            distance_y: f64::from(fall_distance),
+                            from_y: current_y + f64::from(fall_distance),
+                            to_y: current_y,
+                        },
+                    );
+                }
+            }
+            // Vanilla `fallOn` runs for creative players and fall immune mobs too (farmland,
+            // turtle eggs); `cause_fall_damage` filters the damage itself
+            if fall_distance <= 0.0
+                || self.should_prevent_fall_damage()
+                || self.should_prevent_fall_damage_in_area()
+            {
+                return;
+            }
+            let world = self.entity.world.load();
+            let block = world.get_block(&self.entity.get_pos_with_y_offset(0.2).0);
+            world
+                .block_registry
+                .on_landed_upon(block, &world, fall_distance, caller);
+        } else if height_difference < 0.0 {
+            let new_fall_distance = if !self.should_prevent_fall_damage()
+                && !self.should_prevent_fall_damage_in_area()
+            {
+                let distance = self.fall_distance.load();
+                distance - (height_difference as f32)
+            } else {
+                0f32
+            };
+            self.fall_distance.store(new_fall_distance);
+        }
+    }
+
+    /// Applies fall damage through the mob's override when it has one.
+    pub fn handle_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        caller.get_mob().map_or_else(
+            || self.cause_fall_damage(caller, fall_distance, damage_modifier),
+            |mob| mob.cause_fall_damage(caller, fall_distance, damage_modifier),
+        )
+    }
+
+    pub fn cause_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> bool {
+        let may_fly = caller.get_player().is_some_and(|player| {
+            player
+                .abilities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .allow_flying
+        });
+        if may_fly || self.is_immune_to_fall_damage() {
+            return false;
+        }
+
+        // Vanilla parity: the fall_damage gamerule only affects players.
+        if caller.get_player().is_some()
+            && !self
+                .entity
+                .world
+                .load()
+                .level_info
+                .load()
+                .game_rules
+                .fall_damage
+        {
+            return false;
+        }
+
+        if fall_distance >= 2.0
+            && let Some(player) = caller.get_player()
+        {
+            player.increment_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::FallOneCm as i32,
+                (fall_distance * 100.0).round() as i32,
+            );
+        }
+
+        let effective_fall_distance =
+            self.current_impulse_impact_pos
+                .load()
+                .map_or(fall_distance, |impact_pos| {
+                    let effective = f64::from(fall_distance)
+                        .min(impact_pos.y - self.entity.pos.load().y)
+                        as f32;
+                    if effective <= 0.0 {
+                        self.reset_current_impulse_context();
+                    } else {
+                        self.try_reset_current_impulse_context();
+                    }
+                    effective
+                });
+
+        self.propagate_fall_to_passengers(effective_fall_distance, damage_modifier);
+        let damage = self.calculate_fall_damage(caller, effective_fall_distance, damage_modifier);
+        if damage <= 0 {
+            return false;
+        }
+        self.reset_current_impulse_context();
+        caller.play_entity_sound(Self::get_fall_damage_sound(caller, damage), 1.0, 1.0);
+        self.play_block_fall_sound(caller);
+        self.damage(caller, damage as f32, DamageType::FALL);
+        true
+    }
+
+    fn calculate_fall_damage(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_modifier: f32,
+    ) -> i32 {
+        caller.get_mob().map_or_else(
+            || self.base_fall_damage(fall_distance, damage_modifier),
+            |mob| mob.calculate_fall_damage(fall_distance, damage_modifier),
+        )
+    }
+
+    pub fn base_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+        if self.is_immune_to_fall_damage() {
+            return 0;
+        }
+        let fall_power = f64::from(fall_distance) + 1.0E-6
+            - self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE);
+        (fall_power
+            * f64::from(damage_modifier)
+            * self.get_attribute_value(&Attributes::FALL_DAMAGE_MULTIPLIER))
+        .floor() as i32
+    }
+
+    pub fn propagate_fall_to_passengers(&self, fall_distance: f32, damage_modifier: f32) {
+        let passengers = self
+            .entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers {
+            if let Some(living) = passenger.get_living_entity() {
+                living.handle_fall_damage(passenger.as_ref(), fall_distance, damage_modifier);
+            }
+        }
+    }
+
+    /// Vanilla `getFallDamageSound`.
+    pub(crate) fn get_fall_damage_sound(caller: &dyn EntityBase, damage: i32) -> Sound {
+        let (small, big) = caller.get_fall_sounds();
+        if damage > 4 { big } else { small }
+    }
+
+    /// Vanilla `playBlockFallSound`: the fall sound of the block landed on.
+    pub fn play_block_fall_sound(&self, caller: &dyn EntityBase) {
+        if self.entity.is_silent() {
+            return;
+        }
+        let pos = self.entity.pos.load();
+        let block_pos = BlockPos::new(
+            pos.x.floor() as i32,
+            (pos.y - 0.2).floor() as i32,
+            pos.z.floor() as i32,
+        );
+        let state = self.entity.world.load().get_block_state(&block_pos);
+        if !state.is_air() {
+            let sound_type = state.get_sound_type();
+            caller.play_entity_sound(
+                sound_type.fall_sound,
+                sound_type.volume * 0.5,
+                sound_type.pitch * 0.75,
+            );
+        }
+    }
+
+    #[allow(clippy::redundant_closure_for_method_calls)]
+    /// Builds the chat death message for this entity: picks the
+    /// `death.attack.<id>` (or the `.player` variant when a killer entity is
+    /// known, or the kill-credit name when the killer is offline/removed)
+    /// translation and fills in the victim and killer display names.
+    pub fn get_death_message(
+        dyn_self: &dyn EntityBase,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> TextComponent {
+        let kill_credit = dyn_self.get_living_entity().and_then(Self::get_kill_credit);
+        let kill_credit_name = kill_credit.as_ref().map(|c| c.get_display_name());
+
+        if let Some(living) = dyn_self.get_living_entity() {
+            let tracker = living
+                .combat_tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            return tracker.get_death_message(dyn_self.get_display_name(), kill_credit_name);
+        }
+
+        if let Some(cause) = cause
+            && source.is_some()
+        {
+            TextComponent::translate_cross(
+                format!("death.attack.{}", damage_type.message_id),
+                format!("death.attack.{}", damage_type.message_id),
+                [dyn_self.get_display_name(), cause.get_display_name()],
+            )
+        } else if let Some(killer) = cause
+            .or(source)
+            .map(|c| c.get_display_name())
+            .or(kill_credit_name)
+        {
+            TextComponent::translate_cross(
+                format!("death.attack.{}.player", damage_type.message_id),
+                format!("death.attack.{}.player", damage_type.message_id),
+                [dyn_self.get_display_name(), killer],
+            )
+        } else {
+            TextComponent::translate_cross(
+                format!("death.attack.{}", damage_type.message_id),
+                format!("death.attack.{}", damage_type.message_id),
+                [dyn_self.get_display_name()],
+            )
+        }
+    }
+
+    /// Marks the entity as dead exactly once and runs the server-side death
+    /// flow: stop movement input, attribute the kill, drop loot, broadcast the
+    /// `Death` (3) entity event, and hand out XP. Safe to call on every lethal
+    /// damage event; only the first call has an effect.
+    #[allow(clippy::too_many_lines)]
+    pub fn on_death(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        let world = self.entity.world.load();
+        let Some(dyn_self) = world.get_entity_by_id(self.entity.entity_id) else {
+            return;
+        };
+        if self
+            .dead
+            .compare_exchange(false, true, Relaxed, Relaxed)
+            .is_ok()
+        {
+            if let Some(mob) = dyn_self.get_mob() {
+                mob.on_die(cause.or(source));
+            }
+            self.movement_input.store(Vector3::default());
+            self.jumping.store(false, Relaxed);
+
+            // Like vanilla, stats go to the kill credit, loot and XP to the killing blow.
+            let kill_credit = self.get_kill_credit();
+            let killer = cause.or(source);
+
+            self.update_death_stats(&*dyn_self, kill_credit.as_deref());
+
+            self.make_voice_sound(&*dyn_self, self.death_sound(&*dyn_self));
+            let perished = killer
+                .and_then(EntityBase::get_mob)
+                .is_none_or(|mob| mob.killed_entity(&*dyn_self));
+            world.send_entity_status(&self.entity, EntityStatus::Death, ActorEventID::Death);
+            let looting_level;
+            let tool = if let Some(cause_ent) = cause {
+                if let Some(player) = cause_ent
+                    .cast_any()
+                    .downcast_ref::<crate::entity::player::Player>()
+                {
+                    let hand_stack = player
+                        .inventory()
+                        .get_stack_in_hand(pumpkin_util::Hand::Right);
+                    looting_level = hand_stack
+                        .get_enchantment_level(&Enchantment::LOOTING)
+                        .max(0) as u32;
+                    (!hand_stack.is_empty()).then(|| hand_stack.clone())
+                } else {
+                    looting_level = 0;
+                    None
+                }
+            } else {
+                looting_level = 0;
+                None
+            };
+
+            let is_raining = world.is_raining();
+            let is_thundering = world.is_thundering();
+
+            let has_player_kill = self.last_hurt_by_player_memory_time.load(Relaxed) > 0;
+
+            let params = LootContextParameters {
+                killed_by_player: Some(has_player_kill),
+                world: Some(&world),
+                this_entity: Some(dyn_self.as_ref()),
+                killer_entity: killer,
+                direct_killer_entity: source,
+                position: Some(self.entity.pos.load()),
+                world_time: world.level_info.load().day_time as u64,
+                damage_type: Some(damage_type),
+                tool,
+                is_raining: Some(is_raining),
+                is_thundering: Some(is_thundering),
+                is_on_fire: Some(
+                    self.entity
+                        .fire_ticks
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                        > 0,
+                ),
+                direct_attacker_weapon: source.and_then(|direct| {
+                    direct
+                        .get_living_entity()
+                        .map(|living| living.held_item(direct))
+                }),
+                ..Default::default()
+            };
+
+            let should_drop_loot = perished && dyn_self.should_drop_loot();
+            if should_drop_loot {
+                self.drop_loot(&*dyn_self, &params);
+            }
+
+            // Award experience
+            if perished
+                && params.killed_by_player.unwrap_or(false)
+                && world.level_info.load().game_rules.mob_drops
+                && dyn_self.should_drop_experience()
+            {
+                let amount = dyn_self.get_experience_reward(killer);
+                if amount > 0 {
+                    ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount);
+                }
+            }
+            self.entity.pose.store(EntityPose::Dying);
+
+            if should_drop_loot {
+                self.drop_equipment(looting_level);
+            }
+            if perished && let Some(mob) = dyn_self.get_mob() {
+                mob.drop_inventory();
+            }
+
+            // Broadcast death message if it's a player and the gamerule is enabled
+            self.broadcast_death_message(&*dyn_self, damage_type, source, cause);
+
+            // Trigger on_mob_death for active status effects
+            let active_effects_vec: Vec<_> = {
+                let effects = self
+                    .active_effects
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                effects
+                    .values()
+                    .map(|e| (e.effect_type, e.amplifier))
+                    .collect()
+            };
+            for (effect_type, amplifier) in active_effects_vec {
+                if let Some(mob_effect) = crate::entity::effect::get_mob_effect(effect_type) {
+                    mob_effect.on_mob_death(self, amplifier, &damage_type);
+                }
+            }
+
+            self.reset_effects_and_attributes();
+        }
+    }
+
+    fn drop_equipment(&self, looting_level: u32) {
+        let world = self.entity.world.load();
+        let block_pos = self.entity.block_pos.load();
+
+        let drop_chances = self
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let slots_to_drop: Vec<EquipmentSlot> = {
+            let mut slots: Vec<_> = self.equipment_slots.values().cloned().collect();
+            slots.extend([
+                EquipmentSlot::MAIN_HAND,
+                EquipmentSlot::BODY,
+                EquipmentSlot::SADDLE,
+            ]);
+            slots
+        };
+
+        for slot in &slots_to_drop {
+            let mut chance = drop_chances
+                .get(slot)
+                .copied()
+                .unwrap_or(DEFAULT_EQUIPMENT_DROP_CHANCE);
+            // A chance above 1.0 marks a guaranteed, undamaged drop.
+            let preserved = chance > 1.0;
+            // Vanilla approximation: EnchantmentHelper.processEquipmentDropChance
+            // adds lootingLevel * 0.01 to the per-slot equipment drop chance.
+            chance += looting_level as f32 * 0.01;
+            chance = chance.min(1.0);
+            if !preserved && rand::random::<f32>() >= chance {
+                continue;
+            }
+            let mut item = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .equipment
+                .remove(slot)
+                .unwrap_or_else(|| ItemStack::EMPTY.clone());
+            if item.is_empty() {
+                continue;
+            }
+            if prevents_equipment_drop(&item) {
+                continue;
+            }
+            // Vanilla approximation: Mob.dropCustomDeathLoot applies random
+            // damage to dropped equipment using two chained random calls:
+            // setDamageValue(maxDamage - random.nextInt(1 + random.nextInt(max(maxDamage - 3, 1))))
+            if !preserved && let Some(max_damage) = item.get_max_damage() {
+                let mut rng = rand::rng();
+                let inner = rng.random_range(0..(max_damage - 3).max(1));
+                let outer = rng.random_range(0..=inner);
+                item.set_damage((max_damage - outer).max(0));
+            }
+            world.drop_stack(&block_pos, item);
+        }
+    }
+
+    fn broadcast_death_message(
+        &self,
+        dyn_self: &dyn EntityBase,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) {
+        let world = self.entity.world.load();
+        let show_death_messages = { world.level_info.load().game_rules.show_death_messages };
+        if self.entity.entity_type == &EntityType::PLAYER {
+            let death_message = Self::get_death_message(dyn_self, damage_type, source, cause);
+            let mut final_death_message = death_message;
+            if let Some(player) = dyn_self.get_player() {
+                if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+                    && let Some(server) = world.server.upgrade()
+                {
+                    let mut event =
+                        crate::plugin::api::events::entity::entity_death::PlayerDeathEvent::new(
+                            player_arc,
+                            final_death_message.clone(),
+                            0,
+                        );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    final_death_message = event.death_message;
+                }
+
+                player.handle_killed(&final_death_message);
+            }
+
+            if show_death_messages && let Some(server) = world.server.upgrade() {
+                for player in server.get_all_players() {
+                    player.send_system_message(&final_death_message);
+                }
+            }
+        } else if self.entity.custom_name.load().is_some() {
+            let death_message = Self::get_death_message(dyn_self, damage_type, source, cause);
+            tracing::info!(
+                "Named entity {} died: {}",
+                dyn_self.get_display_name().to_pretty_console(),
+                death_message.to_pretty_console()
+            );
+        }
+    }
+
+    fn update_death_stats(&self, dyn_self: &dyn EntityBase, cause: Option<&dyn EntityBase>) {
+        if let Some(victim_player) = dyn_self.get_player() {
+            victim_player.increment_custom_stat(CustomStatistic::Deaths, 1);
+            victim_player.set_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::TimeSinceDeath as i32,
+                0,
+            );
+            victim_player.set_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::TimeSinceRest as i32,
+                0,
+            );
+            if let Some(killer_entity) = cause.map(EntityBase::get_entity) {
+                victim_player.increment_stat(
+                    StatisticCategory::KilledBy,
+                    killer_entity.entity_type.id as i32,
+                    1,
+                );
+            }
+        }
+
+        if let Some(killer_player) = cause.and_then(|c| c.get_player()) {
+            killer_player.increment_stat(
+                StatisticCategory::Killed,
+                self.entity.entity_type.id as i32,
+                1,
+            );
+            if dyn_self.get_player().is_some() {
+                killer_player.increment_stat(
+                    StatisticCategory::Custom,
+                    CustomStatistic::PlayerKills as i32,
+                    1,
+                );
+            } else {
+                killer_player.increment_stat(
+                    StatisticCategory::Custom,
+                    CustomStatistic::MobKills as i32,
+                    1,
+                );
+
+                let resource_name = self.entity.entity_type.resource_name;
+                let criterion_key = format!("minecraft:{resource_name}");
+                killer_player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilledEntity {
+                        entity_type_resource: criterion_key,
+                    },
+                );
+
+                if resource_name == "skeleton" {
+                    let distance_sq = killer_player
+                        .position()
+                        .squared_distance_to_vec(&self.entity.pos.load());
+                    if distance_sq >= 2500.0 {
+                        killer_player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::SniperDuel);
+                    }
+                }
+
+                if resource_name == "phantom" {
+                    killer_player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::TwoBirdsOneArrow);
+                }
+
+                let held_item = killer_player.inventory().held_item();
+                let is_crossbow = held_item.item.registry_key == "crossbow";
+                if is_crossbow {
+                    killer_player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::Arbalistic,
+                    );
+                }
+
+                killer_player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::KillMobNearSculkCatalyst,
+                );
+            }
+        }
+    }
+
+    fn drop_loot(&self, dyn_self: &dyn EntityBase, params: &LootContextParameters) {
+        let mob = dyn_self
+            .get_mob()
+            .map(crate::entity::mob::Mob::get_mob_entity);
+        let key = mob
+            .and_then(|mob| {
+                mob.death_loot_table
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .take()
+            })
+            .unwrap_or_else(|| {
+                format!(
+                    "minecraft:entities/{}",
+                    self.get_entity().entity_type.resource_name
+                )
+            });
+        let world = self.entity.world.load();
+        if let Some(loot_table) = world.get_loot_table(&key) {
+            let seed = mob
+                .map(|mob| mob.death_loot_table_seed.load(Relaxed))
+                .filter(|seed| *seed != 0)
+                .unwrap_or_else(rand::random);
+            let pos = self.entity.block_pos.load();
+            for stack in crate::world::loot::generate_loot_from_handle(&loot_table, seed, params) {
+                world.drop_stack(&pos, stack);
+            }
+        }
+    }
+
+    fn tick_effects(&self) {
+        let mut effects_to_remove = Vec::new();
+        let mut effects_to_apply = Vec::new();
+
+        {
+            let Ok(mut effects) = self.active_effects.try_lock() else {
+                return;
+            };
+            let entity_age = self.entity.tick_count.load(Relaxed);
+            for effect in effects.values_mut() {
+                if effect.duration == 0 {
+                    effects_to_remove.push(effect.effect_type);
+                    continue;
+                }
+
+                let tick_duration = if effect.duration == -1 {
+                    entity_age
+                } else {
+                    effect.duration
+                };
+
+                if let Some(mob_effect) = crate::entity::effect::get_mob_effect(effect.effect_type)
+                    && mob_effect.should_apply_effect_tick(tick_duration, effect.amplifier)
+                {
+                    effects_to_apply.push((mob_effect, effect.amplifier));
+                }
+
+                if effect.duration != -1 {
+                    effect.duration -= 1;
+                }
+            }
+        }
+
+        // Call the central removal function for each expired effect
+        for effect_type in effects_to_remove {
+            self.remove_effect(effect_type);
+        }
+
+        for (mob_effect, amplifier) in effects_to_apply {
+            mob_effect.apply_effect_tick(self, amplifier);
+        }
+    }
+
+    /// Vanilla `LivingEntity.checkTotemDeathProtection`: checks both hands in `MAIN_HAND`,
+    /// `OFF_HAND` order for `minecraft:death_protection`, consumes 1 item, sets health to `1.0`,
+    /// executes `DeathProtection.death_effects`, and broadcasts entity status `35`.
+    fn check_totem_death_protection(
+        &self,
+        caller: &dyn EntityBase,
+        damage_type: &DamageType,
+    ) -> bool {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY) {
+            return false;
+        }
+
+        for hand in Hand::all() {
+            let stack = self.get_stack_in_hand(caller, hand);
+            let Some(death_protection) = stack.get_data_component::<DeathProtectionImpl>().cloned()
+            else {
+                continue;
+            };
+
+            let mut resurrect_event =
+                crate::plugin::api::events::entity::entity_resurrect::EntityResurrectEvent::new(
+                    self.entity.entity_id,
+                );
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut resurrect_event);
+            }
+            if resurrect_event.cancelled {
+                return false;
+            }
+
+            let protection_item = stack.clone();
+            let mut updated_stack = stack;
+            updated_stack.decrement(1);
+
+            if let Some(player) = caller.get_player() {
+                player
+                    .inventory
+                    .set_stack_in_hand(hand, updated_stack.clone());
+                let slot_index = match hand {
+                    Hand::Right => player.inventory.get_selected_slot() as usize,
+                    Hand::Left => PlayerInventory::OFF_HAND_SLOT,
+                };
+                player.sync_hand_slot(slot_index, updated_stack);
+                player.increment_stat(
+                    StatisticCategory::Used,
+                    i32::from(protection_item.item.id),
+                    1,
+                );
+                player.trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::UsedTotem {
+                        item_id: protection_item.item.registry_key.to_string(),
+                    },
+                );
+                self.cause_use_vibration(
+                    &protection_item,
+                    pumpkin_data::game_event::GameEvent::ItemInteractFinish,
+                );
+                player.set_health(1.0);
+            } else {
+                let slot = match hand {
+                    Hand::Right => EquipmentSlot::MAIN_HAND,
+                    Hand::Left => EquipmentSlot::OFF_HAND,
+                };
+                self.entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .equipment
+                    .insert(slot.clone(), updated_stack.clone());
+                self.send_equipment_changes(&[(slot, updated_stack)]);
+                self.set_health(1.0);
+            }
+
+            self.apply_consume_effects_slice(caller, &death_protection.death_effects);
+            self.entity.world.load().send_entity_status(
+                &self.entity,
+                EntityStatus::ProtectedFromDeath,
+                ActorEventID::InstantDeath,
+            );
+            return true;
+        }
+
+        false
+    }
+
+    /// Vanilla `LivingEntity.applyItemBlocking`: resolves data-driven `minecraft:blocks_attacks`
+    /// damage reduction, item durability loss, and attacker weapon disable cooldown.
+    #[allow(clippy::too_many_lines)]
+    fn apply_item_blocking(
+        &self,
+        caller: &dyn EntityBase,
+        world: &crate::world::World,
+        damage_type: &DamageType,
+        amount: f32,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+    ) -> f32 {
+        if amount <= 0.0 || !self.is_blocking() {
+            return 0.0;
+        }
+        if source.is_some_and(|src| {
+            src.cast_any()
+                .downcast_ref::<crate::entity::projectile::arrow::ArrowEntity>()
+                .is_some_and(|arrow| arrow.pierce_level.load(Ordering::Relaxed) > 0)
+        }) {
+            return 0.0;
+        }
+
+        let Some(blocks_attacks) = ({
+            let item_in_use = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            item_in_use
+                .as_ref()
+                .and_then(|stack| stack.get_data_component::<BlocksAttacksImpl>().cloned())
+        }) else {
+            return 0.0;
+        };
+
+        if blocks_attacks
+            .bypassed_by
+            .as_ref()
+            .is_some_and(|bypassed| bypassed.contains(damage_type))
+        {
+            return 0.0;
+        }
+
+        let player_pos = self.entity.pos.load();
+        let angle_rad = position.map_or(std::f64::consts::PI, |pos| {
+            let look_vec = Vector3::rotation_vector(0.0, f64::from(self.entity.head_yaw.load()));
+            let mut to_source = pos - player_pos;
+            to_source.y = 0.0;
+            let len_sq = to_source.length_squared();
+            if len_sq > 1.0e-12 {
+                let dir = to_source * (1.0 / len_sq.sqrt());
+                dir.dot(&look_vec).clamp(-1.0, 1.0).acos()
+            } else {
+                0.0
+            }
+        });
+
+        let damage_blocked = blocks_attacks.resolve_blocked_damage(damage_type, amount, angle_rad);
+        if damage_blocked <= 0.0 {
+            return 0.0;
+        }
+
+        if let Some(ref block_sound) = blocks_attacks.block_sound {
+            world.play_sound_event(block_sound, SoundCategory::Players, &player_pos);
+        }
+        world.play_bedrock_level_sound("item.shield.block", &player_pos, 0);
+
+        if let Some(player) = caller.get_player()
+            && damage_blocked < f32::MAX
+        {
+            player.increment_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::DamageBlockedByShield as i32,
+                (damage_blocked * 10.0).round() as i32,
+            );
+        }
+
+        let active_hand = *self
+            .active_hand
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(hand) = active_hand {
+            let slot = if hand == Hand::Left {
+                EquipmentSlot::OFF_HAND
+            } else {
+                EquipmentSlot::MAIN_HAND
+            };
+
+            let mut blocking_item_key = None;
+            let durability_damage = blocks_attacks.item_damage.apply(damage_blocked);
+            if let Some(player) = caller.get_player() {
+                let stack_before = player.inventory.get_stack_in_hand(hand);
+                if !stack_before.is_empty() {
+                    blocking_item_key = Some(stack_before.item.registry_key.to_string());
+                    if durability_damage > 0 {
+                        player.increment_stat(
+                            StatisticCategory::Used,
+                            i32::from(stack_before.item.id),
+                            1,
+                        );
+                    }
+                }
+                if durability_damage > 0 {
+                    let broke = player.damage_item_in_slot(&slot, durability_damage);
+                    let empty = player.inventory.get_stack_in_hand(hand).is_empty();
+                    if broke && empty {
+                        self.clear_active_hand();
+                    }
+                }
+            } else if durability_damage > 0 {
+                let mut equipment_guard = self
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
+                    let break_sound = stack
+                        .get_data_component::<pumpkin_data::data_component_impl::BreakSoundImpl>()
+                        .map(|bs| bs.sound.clone());
+                    if stack.damage_item(durability_damage) == DamageResult::Broken {
+                        if let Some(ref sound) = break_sound {
+                            world.play_sound_event(sound, SoundCategory::Neutral, &player_pos);
+                        }
+                        world.send_entity_status(
+                            &self.entity,
+                            crate::entity::equipment_break_status(&slot),
+                            ActorEventID::None,
+                        );
+                        *stack = ItemStack::EMPTY.clone();
+                        let broken_stack = stack.clone();
+                        drop(equipment_guard);
+
+                        self.send_equipment_changes(&[(slot, broken_stack)]);
+                        self.clear_active_hand();
+                    }
+                }
+            }
+
+            if !damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE)
+                && let Some(direct_attacker) = source
+                && direct_attacker.get_living_entity().is_some()
+            {
+                let disable_seconds =
+                    if direct_attacker.get_entity().entity_type == &EntityType::WARDEN {
+                        5.0
+                    } else if let Some(attacker_player) = direct_attacker.get_player() {
+                        attacker_player
+                            .inventory()
+                            .held_item()
+                            .get_data_component::<pumpkin_data::data_component_impl::WeaponImpl>()
+                            .map_or(0.0, |w| w.disable_blocking_for_seconds)
+                    } else if let Some(attacker_living) = direct_attacker.get_living_entity() {
+                        attacker_living
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .get(&EquipmentSlot::MAIN_HAND)
+                            .get_data_component::<pumpkin_data::data_component_impl::WeaponImpl>()
+                            .map_or(0.0, |w| w.disable_blocking_for_seconds)
+                    } else {
+                        0.0
+                    };
+                let cooldown_ticks = blocks_attacks.disable_blocking_for_ticks(disable_seconds);
+                if cooldown_ticks > 0 {
+                    if let Some(player) = caller.get_player()
+                        && let Some(blocking_key) = blocking_item_key
+                    {
+                        player.start_cooldown(blocking_key, cooldown_ticks);
+                    }
+                    self.clear_active_hand();
+                    if let Some(ref disabled_sound) = blocks_attacks.disabled_sound {
+                        world.play_sound_event(disabled_sound, SoundCategory::Players, &player_pos);
+                    }
+                    world.play_bedrock_level_sound("item.shield.break", &player_pos, 0);
+                }
+            }
+        }
+
+        damage_blocked
+    }
+
+    pub fn do_hurt_equipment(
+        &self,
+        caller: &dyn EntityBase,
+        damage_type: DamageType,
+        damage: f32,
+        slots: &[EquipmentSlot],
+    ) {
+        if damage <= 0.0 {
+            return;
+        }
+        let durability_damage = (damage / 4.0).max(1.0) as i32;
+        for slot in slots {
+            let mut stack = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(slot);
+            let damage_on_hurt = stack
+                .get_data_component::<EquippableImpl>()
+                .is_some_and(|equippable| equippable.damage_on_hurt);
+            if !damage_on_hurt || !stack.is_damageable() || !stack.can_be_hurt_by(damage_type) {
+                continue;
+            }
+            if let Some(player) = caller.get_player() {
+                player.damage_item_in_slot(slot, durability_damage);
+                continue;
+            }
+            let result = stack.damage_item(durability_damage);
+            if result == DamageResult::Untouched {
+                continue;
+            }
+            self.entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .put(slot, stack.clone());
+            self.send_equipment_changes(&[(slot.clone(), stack)]);
+            if result == DamageResult::Broken {
+                self.entity.world.load().send_entity_status(
+                    &self.entity,
+                    super::equipment_break_status(slot),
+                    ActorEventID::None,
+                );
+            }
+        }
+    }
+
+    pub fn held_item(&self, caller: &dyn EntityBase) -> ItemStack {
+        if let Some(player) = caller.get_player() {
+            return player.inventory.held_item();
+        }
+        self.held_item_from_equipment()
+    }
+
+    pub fn held_item_from_equipment(&self) -> ItemStack {
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        equipment
+            .equipment
+            .get(&EquipmentSlot::MAIN_HAND)
+            .cloned()
+            .unwrap_or_else(|| ItemStack::EMPTY.clone())
+    }
+
+    pub fn get_stack_in_hand(&self, caller: &dyn EntityBase, hand: Hand) -> ItemStack {
+        match hand {
+            Hand::Left => self.off_hand_item(caller),
+            Hand::Right => self.held_item(caller),
+        }
+    }
+
+    /// getOffHandStack in source
+    pub fn off_hand_item(&self, caller: &dyn EntityBase) -> ItemStack {
+        if let Some(player) = caller.get_player() {
+            return player.inventory.off_hand_item();
+        }
+        let Some(slot) = self.equipment_slots.get(&PlayerInventory::OFF_HAND_SLOT) else {
+            return ItemStack::EMPTY.clone();
+        };
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        equipment
+            .equipment
+            .get(slot)
+            .cloned()
+            .unwrap_or_else(|| ItemStack::EMPTY.clone())
+    }
+
+    /// Forgotten after 40 ticks.
+    pub fn get_last_damage_type(&self) -> Option<DamageType> {
+        self.get_last_damage_source()
+            .map(|(damage_type, _)| damage_type)
+    }
+
+    /// Vanilla `getLastDamageSource`: the last damage type and the entity id of its causing
+    /// entity (0 when none), forgotten after 40 ticks.
+    pub fn get_last_damage_source(&self) -> Option<(DamageType, i32)> {
+        let stamp = self.last_damage_stamp.load(Ordering::Relaxed);
+        let mut last = self
+            .last_damage_type
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.entity.world.load().get_world_age() - stamp > 40 {
+            *last = None;
+        }
+        last.map(|damage_type| (damage_type, self.last_damage_attacker.load(Relaxed)))
+    }
+
+    #[must_use]
+    pub fn should_take_drowning_damage(&self) -> bool {
+        self.entity.air_supply.load(Relaxed) <= -DROWNING_INTERVAL
+    }
+
+    pub(crate) fn tick_air_supply(&self, caller: &dyn crate::entity::mob::Mob) {
+        if !self.is_alive() {
+            return;
+        }
+        let entity = &self.entity;
+        let current = entity.air_supply.load(Relaxed);
+        let max_air = caller.get_max_air_supply();
+        let water_breathing = self.has_effect(&StatusEffect::WATER_BREATHING)
+            || self.has_effect(&StatusEffect::CONDUIT_POWER);
+        let nautilus_breathing = self.has_effect(&StatusEffect::BREATH_OF_THE_NAUTILUS);
+        if entity.is_submerged_in_water()
+            && entity
+                .world
+                .load()
+                .get_block(&entity.get_eye_pos().to_block_pos())
+                != &Block::BUBBLE_COLUMN
+        {
+            if !caller.can_breathe_underwater() && !water_breathing && !nautilus_breathing {
+                entity.set_air_supply(caller.mob_decrease_air_supply(current));
+                if self.should_take_drowning_damage() {
+                    entity.set_air_supply(0);
+                    entity.world.load().send_entity_status(
+                        entity,
+                        EntityStatus::DrownParticles,
+                        ActorEventID::None,
+                    );
+                    caller.damage(
+                        caller,
+                        crate::entity::breath::DROWNING_DAMAGE,
+                        DamageType::DROWN,
+                    );
+                }
+            } else if current < max_air && (!nautilus_breathing || water_breathing) {
+                entity.set_air_supply(caller.increase_air_supply(current));
+            }
+        } else if current < max_air {
+            entity.set_air_supply(caller.increase_air_supply(current));
+        }
+    }
+
+    #[must_use]
+    pub fn is_alive(&self) -> bool {
+        self.entity.is_alive() && self.health.load() > 0.0
+    }
+
+    pub fn can_attack(&self, target: &dyn EntityBase) -> bool {
+        if target.get_player().is_some()
+            && self.entity.world.load().level_info.load().difficulty == Difficulty::Peaceful
+        {
+            return false;
+        }
+        target.can_be_seen_as_enemy()
+    }
+
+    pub fn reset_state(&self) {
+        self.entity.reset_state();
+
+        // Restore to maximum health for this entity type
+        let max_health = self.get_max_health();
+        self.set_health(max_health);
+        // Clear any absorption
+        self.absorption.store(0.0);
+        // Send health metadata
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, max_health);
+
+        self.reset_effects_and_attributes();
+
+        // Fresh damage cooldown, as on a new vanilla player
+        self.hurt_cooldown.store(0, Relaxed);
+        self.last_damage_taken.store(0f32);
+
+        self.entity.portal_cooldown.store(0, Relaxed);
+        *self
+            .entity
+            .portal_manager
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+
+        // Clear fall/fire state
+        self.fall_distance.store(0f32);
+        self.reset_current_impulse_context();
+        self.death_time.store(0, Relaxed);
+        self.entity.extinguish();
+        self.entity.fire_ticks.store(0, Relaxed);
+
+        // Clear velocity and movement input to remove persisted momentum
+        self.entity.velocity.store(Vector3::default());
+        self.entity.velocity_dirty.store(true, SeqCst);
+        self.movement_input.store(Vector3::default());
+        self.jumping.store(false, Relaxed);
+
+        // If this LivingEntity corresponds to a Player, reset their hunger manager
+        let world = self.entity.world.load();
+        if let Some(player) = world.get_player_by_id(self.entity.entity_id) {
+            player.hunger_manager.restart();
+            player
+                .spawn_extra_particles_on_fall
+                .store(false, Ordering::Relaxed);
+        }
+
+        self.dead.store(false, Relaxed);
+    }
+
+    pub fn is_player(&self) -> bool {
+        let world = self.entity.world.load();
+        world.get_player_by_id(self.entity.entity_id).is_some()
+    }
+
+    pub fn get_movement(&self) -> Vector3<f64> {
+        self.entity.movement.load()
+    }
+
+    fn death_sound(&self, entity: &dyn EntityBase) -> Sound {
+        if let Some(sound_source) = entity.get_mob().and_then(|x| x.as_custom_sound())
+            && let Some(audio) = sound_source.death_sound()
+        {
+            return audio;
+        }
+
+        Self::death_sound_for_entity(self.entity.entity_type)
+    }
+
+    fn hurt_sound(&self, entity: &dyn EntityBase) -> Sound {
+        if let Some(sound_source) = entity.get_mob().and_then(|x| x.as_custom_sound())
+            && let Some(audio) = sound_source.hurt_sound()
+        {
+            return audio;
+        }
+
+        Self::hurt_sound_for_entity(self.entity.entity_type)
+    }
+}
+
+impl LivingEntity {
+    pub fn write_living_nbt(&self, nbt: &mut NbtCompound) {
+        // Avoid persisting a lethal fall distance when the entity is dead to prevent death loops
+        let fall_distance = if self.dead.load(Relaxed) {
+            0.0
+        } else {
+            self.fall_distance.load()
+        };
+        nbt.put_double("fall_distance", f64::from(fall_distance));
+        let invulnerable_time = self.hurt_cooldown.load(Relaxed);
+        if invulnerable_time > 0 {
+            nbt.put_int("invulnerable_time", invulnerable_time);
+        }
+        nbt.put("Health", NbtTag::Float(self.health.load()));
+        nbt.put_short("DeathTime", i16::from(self.death_time.load(Relaxed)));
+        nbt.put("AbsorptionAmount", NbtTag::Float(self.absorption.load()));
+        nbt.put_list("attributes", pack_attributes(self));
+        {
+            let effects_vec: Vec<pumpkin_data::potion::Effect> = {
+                let effects = self
+                    .active_effects
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                effects.values().cloned().collect()
+            };
+            if !effects_vec.is_empty() {
+                // Iterate effects and create Box<[NbtTag]>
+                let mut effects_list = Vec::with_capacity(effects_vec.len());
+                for effect in effects_vec {
+                    let mut effect_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                    effect.write_nbt(&mut effect_nbt);
+                    effects_list.push(NbtTag::Compound(effect_nbt));
+                }
+                nbt.put("active_effects", NbtTag::List(effects_list));
+            }
+        }
+        nbt.put_bool("FallFlying", self.entity.is_fall_flying());
+        nbt.put_int(
+            "current_impulse_context_reset_grace_time",
+            self.current_impulse_context_reset_grace_time.load(Relaxed),
+        );
+        if let Some(impact_pos) = self.current_impulse_impact_pos.load() {
+            nbt.put(
+                "current_explosion_impact_pos",
+                NbtTag::List(vec![
+                    impact_pos.x.into(),
+                    impact_pos.y.into(),
+                    impact_pos.z.into(),
+                ]),
+            );
+        }
+        if let Some(player) = self.last_hurt_by_player.load() {
+            nbt.put_uuid("last_hurt_by_player", player);
+            nbt.put_int(
+                "last_hurt_by_player_memory_time",
+                self.last_hurt_by_player_memory_time.load(Relaxed),
+            );
+        }
+        if let Some(reference) = self.last_hurt_by_mob.load() {
+            nbt.put_uuid("last_hurt_by_mob", reference.uuid);
+            nbt.put_int(
+                "ticks_since_last_hurt_by_mob",
+                self.entity.tick_count.load(Relaxed) - self.get_last_hurt_by_mob_timestamp(),
+            );
+        }
+        let equipment = {
+            let guard = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut compound = NbtCompound::new();
+            for (slot, stack) in &guard.equipment {
+                if !stack.is_empty() {
+                    let mut item_nbt = NbtCompound::new();
+                    stack.write_item_stack(&mut item_nbt);
+                    compound.put(slot.to_name(), NbtTag::Compound(item_nbt));
+                }
+            }
+            compound
+        };
+        if !equipment.child_tags.is_empty() {
+            nbt.put("equipment", NbtTag::Compound(equipment));
+        }
+    }
+
+    pub fn read_living_nbt_non_mut(&self, nbt: &NbtCompound) {
+        // Load fall distance, but if this entity is currently marked dead ensure we don't restore
+        // a lethal fall distance that would immediately re-kill on spawn.
+        let fall_distance = nbt
+            .get_numeric_float("fall_distance")
+            .or_else(|| nbt.get_numeric_float("FallDistance"))
+            .unwrap_or(0.0);
+        if self.dead.load(Relaxed) {
+            self.fall_distance.store(0.0);
+        } else {
+            self.fall_distance.store(fall_distance);
+        }
+        self.hurt_cooldown
+            .store(nbt.get_int("invulnerable_time").unwrap_or(0), Relaxed);
+
+        self.absorption
+            .store(nbt.get_numeric_float("AbsorptionAmount").unwrap_or(0.0));
+
+        if let Some(packed) = nbt.get_list("attributes") {
+            apply_attributes(self, packed);
+        }
+
+        let mut read_effects = Vec::new();
+        for effect in nbt.get_list("active_effects").unwrap_or_default() {
+            if let NbtTag::Compound(effect_nbt) = effect {
+                if let Some(mut effect) = Effect::create_from_nbt(&mut effect_nbt.clone()) {
+                    effect.blend = true; // TODO: change, is taken from effect give command
+                    read_effects.push(effect);
+                } else {
+                    warn!("Unable to read effect from nbt");
+                }
+            }
+        }
+        let mut active_effects = self
+            .active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        active_effects.clear();
+        for effect in read_effects {
+            active_effects.insert(effect.effect_type, effect);
+        }
+        self.entity
+            .set_glowing_from_effect(active_effects.contains_key(&StatusEffect::GLOWING));
+
+        // Vanilla LivingEntity.readAdditionalSaveData defaults to the mob's own max health,
+        // not a flat 20; a hoglin (40 max) or iron golem (100 max) with no saved Health would
+        // otherwise be silently reset to 20 here.
+        self.health.store(
+            nbt.get_numeric_float("Health")
+                .unwrap_or_else(|| self.get_max_health()),
+        );
+        if let Some(death_time) = nbt.get_short("DeathTime") {
+            self.death_time.store(death_time as u8, Relaxed);
+        }
+        self.entity
+            .fall_flying
+            .store(nbt.get_bool("FallFlying").unwrap_or(false), Relaxed);
+        self.current_impulse_context_reset_grace_time.store(
+            nbt.get_int("current_impulse_context_reset_grace_time")
+                .unwrap_or(0)
+                .max(0),
+            Relaxed,
+        );
+        let impact_pos = nbt
+            .get_list("current_explosion_impact_pos")
+            .and_then(|list| {
+                if list.len() != 3 {
+                    return None;
+                }
+                let x = list[0].extract_double()?;
+                let y = list[1].extract_double()?;
+                let z = list[2].extract_double()?;
+                (x.is_finite() && y.is_finite() && z.is_finite()).then_some(Vector3::new(x, y, z))
+            });
+        self.current_impulse_impact_pos.store(impact_pos);
+        self.last_hurt_by_player
+            .store(nbt.get_uuid("last_hurt_by_player"));
+        self.last_hurt_by_player_memory_time.store(
+            nbt.get_int("last_hurt_by_player_memory_time").unwrap_or(0),
+            Relaxed,
+        );
+        self.last_hurt_by_mob.store(
+            nbt.get_uuid("last_hurt_by_mob")
+                .map(|uuid| LastHurtByMob { uuid, entity_id: 0 }),
+        );
+        self.last_hurt_by_mob_timestamp.store(
+            self.entity.tick_count.load(Relaxed)
+                - nbt.get_int("ticks_since_last_hurt_by_mob").unwrap_or(0),
+            Relaxed,
+        );
+
+        let mut equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        equipment.clear();
+        for (name, tag) in nbt
+            .get_compound("equipment")
+            .map_or_else(Default::default, |equipment| equipment.child_tags.iter())
+        {
+            if let Some(slot) = EquipmentSlot::get_from_name(name)
+                && let Some(compound) = tag.extract_compound()
+                && let Some(stack) = ItemStack::read_item_stack(compound)
+            {
+                equipment.put(slot, stack);
+            }
+        }
+    }
+
+    /// Calculates damage after armor reduction, mirroring vanilla `LivingEntity.getDamageAfterArmorAbsorb`.
+    pub fn get_damage_after_armor_absorb(
+        &self,
+        caller: &dyn EntityBase,
+        damage: f32,
+        damage_type: &DamageType,
+        attacker: Option<&dyn EntityBase>,
+    ) -> f32 {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_ARMOR) {
+            return damage;
+        }
+
+        self.do_hurt_equipment(
+            caller,
+            *damage_type,
+            damage,
+            caller.hurt_gear_slots(GearDamage::Armor),
+        );
+        let armor = self.get_attribute_value(&Attributes::ARMOR).floor() as f32;
+        let toughness = self.get_attribute_value(&Attributes::ARMOR_TOUGHNESS) as f32;
+
+        let breach_level = attacker
+            .and_then(|att| {
+                let player = att.get_player()?;
+                let hand_stack = player
+                    .inventory()
+                    .get_stack_in_hand(pumpkin_util::Hand::Right);
+                let level = hand_stack.get_enchantment_level(&Enchantment::BREACH);
+                (level > 0).then_some(level as u32)
+            })
+            .unwrap_or(0);
+
+        CombatRules::get_damage_after_absorb(damage, armor, toughness, breach_level)
+    }
+
+    /// Calculates damage after magic/resistance/enchantment reduction, mirroring vanilla `LivingEntity.getDamageAfterMagicAbsorb`.
+    pub fn get_damage_after_magic_absorb(
+        &self,
+        mut damage: f32,
+        damage_type: &DamageType,
+        caller: &dyn EntityBase,
+        cause: Option<&dyn EntityBase>,
+    ) -> f32 {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_EFFECTS) {
+            return damage;
+        }
+
+        // 1. Resistance Effect (evaluated before enchantments)
+        if !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_RESISTANCE)
+            && let Some(effect) = self.get_effect(&StatusEffect::RESISTANCE)
+        {
+            let absorb_value = (effect.amplifier + 1) * 5;
+            let absorb = 25 - absorb_value;
+            let v = damage * absorb as f32;
+            let old_damage = damage;
+            damage = (v / 25.0).max(0.0);
+            let damage_resisted = old_damage - damage;
+            if damage_resisted > 0.0 {
+                if let Some(victim_player) = caller.get_player() {
+                    victim_player.increment_stat(
+                        StatisticCategory::Custom,
+                        CustomStatistic::DamageResisted as i32,
+                        (damage_resisted * 10.0).round() as i32,
+                    );
+                } else if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+                    attacker_player.increment_stat(
+                        StatisticCategory::Custom,
+                        CustomStatistic::DamageDealtResisted as i32,
+                        (damage_resisted * 10.0).round() as i32,
+                    );
+                }
+            }
+        }
+
+        if damage <= 0.0 {
+            return 0.0;
+        }
+
+        // 2. Enchantment Protection
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_ENCHANTMENTS) {
+            return damage;
+        }
+
+        let mut epf = 0.0f32;
+        {
+            let equipment_lock = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for slot in [
+                EquipmentSlot::HEAD,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::FEET,
+            ] {
+                if let Some(stack) = equipment_lock.equipment.get(&slot)
+                    && !stack.is_empty()
+                    && let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>()
+                {
+                    for (enchantment, level) in enchantments.enchantment.iter() {
+                        enchantment.modify_damage_protection_against(*level, damage_type, &mut epf);
+                    }
+                }
+            }
+        }
+
+        if epf > 0.0 {
+            damage = CombatRules::get_damage_after_magic_absorb(damage, epf);
+        }
+
+        damage
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub fn damage_with_context(
+        &self,
+        caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        let mut amount = amount;
+
+        // Check invulnerability before applying damage
+        if self.entity.is_invulnerable_to(&damage_type, cause) {
+            return false;
+        }
+
+        if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
+            return false; // Dying or dead
+        }
+
+        // Like vanilla, negative damage is still a hit, just of zero.
+        amount = amount.max(0.0);
+
+        let mut damage_event =
+            crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+                self.entity.entity_id,
+                damage_type,
+                amount,
+            );
+        if let Some(server) = self.entity.world.load().server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut damage_event);
+        }
+        if damage_event.cancelled {
+            return false;
+        }
+        amount = damage_event.damage;
+
+        if let Some(damager) = source.or(cause) {
+            let mut by_entity_event =
+                crate::plugin::api::events::entity::entity_damage_by_entity::EntityDamageByEntityEvent {
+                    entity_id: self.entity.entity_id,
+                    damager_id: damager.get_entity().entity_id,
+                    damage: amount,
+                    cause: format!("{damage_type:?}"),
+                    cancelled: false,
+                };
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut by_entity_event);
+            }
+            if by_entity_event.cancelled {
+                return false;
+            }
+            amount = by_entity_event.damage;
+        } else if position.is_some()
+            || matches!(
+                damage_type,
+                DamageType::CACTUS
+                    | DamageType::SWEET_BERRY_BUSH
+                    | DamageType::CAMPFIRE
+                    | DamageType::HOT_FLOOR
+                    | DamageType::STALAGMITE
+            )
+        {
+            let damager_pos = position.map(|p| {
+                BlockPos(Vector3::new(
+                    p.x.floor() as i32,
+                    p.y.floor() as i32,
+                    p.z.floor() as i32,
+                ))
+            });
+            let mut by_block_event =
+                crate::plugin::api::events::entity::entity_damage_by_block::EntityDamageByBlockEvent {
+                    entity_id: self.entity.entity_id,
+                    damager_pos,
+                    damage: amount,
+                    cause: format!("{damage_type:?}"),
+                    cancelled: false,
+                };
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut by_block_event);
+            }
+            if by_block_event.cancelled {
+                return false;
+            }
+            amount = by_block_event.damage;
+        }
+
+        let world = self.entity.world.load();
+        let is_fire_damage = damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE);
+
+        // Fire damage can be prevented by either game rules or fire resistance
+        if is_fire_damage {
+            // Check game rule for fire damage (only for players)
+            if self.entity.entity_type == &EntityType::PLAYER
+                && !world.level_info.load().game_rules.fire_damage
+            {
+                return false;
+            }
+
+            // Check for fire resistance effect
+            if self.has_effect(&StatusEffect::FIRE_RESISTANCE)
+                && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_EFFECTS)
+            {
+                return false;
+            }
+        }
+
+        // Vanilla parity: entities in FREEZE_HURTS_EXTRA_TYPES take 5x freezing damage.
+        if damage_type == DamageType::FREEZE
+            && self
+                .entity
+                .entity_type
+                .has_tag(&tag::EntityType::MINECRAFT_FREEZE_HURTS_EXTRA_TYPES)
+        {
+            amount *= 5.0;
+        }
+
+        // Check for item blocking (`LivingEntity.applyItemBlocking`) before armor/magic/cooldown
+        let pre_block_amount = amount;
+        let damage_blocked =
+            self.apply_item_blocking(caller, &world, &damage_type, amount, position, source);
+        let was_blocked = damage_blocked > 0.0;
+        if was_blocked {
+            amount = (amount - damage_blocked).max(0.0);
+            if amount <= 0.0 {
+                if let Some(attacker_player) = cause.or(source).and_then(EntityBase::get_player) {
+                    attacker_player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerHurtEntity {
+                            is_blocked: true,
+                            is_projectile: damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE),
+                            is_mace_smash: damage_type.has_tag(&tag::DamageType::MINECRAFT_MACE_SMASH),
+                            damage: f64::from(pre_block_amount),
+                            direct_entity_type: source
+                                .map(|s| s.get_entity().entity_type.resource_name.to_string()),
+                        },
+                    );
+                }
+                return false;
+            }
+        }
+
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_DAMAGES_HELMET)
+            && !self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&EquipmentSlot::HEAD)
+                .is_empty()
+        {
+            self.do_hurt_equipment(
+                caller,
+                damage_type,
+                amount,
+                caller.hurt_gear_slots(GearDamage::Helmet),
+            );
+            amount *= 0.75;
+        }
+
+        // Vanilla `hurtServer` damage cooldown, on the damage before armor: within it only
+        // the part above the last hit lands
+        let last_damage = self.last_damage_taken.load();
+        let (incoming, took_full_damage) = if self.hurt_cooldown.load(Relaxed) > 10
+            && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_COOLDOWN)
+        {
+            if amount <= last_damage {
+                return false;
+            }
+            (amount - last_damage, false)
+        } else {
+            self.hurt_cooldown.store(20, Relaxed);
+            (amount, true)
+        };
+        self.last_damage_taken.store(amount);
+
+        // Vanilla `actuallyHurt`: armor, then enchantments and effects
+        let damage_after_armor =
+            self.get_damage_after_armor_absorb(caller, incoming, &damage_type, cause.or(source));
+        let effective_amount = self.get_damage_after_magic_absorb(
+            damage_after_armor,
+            &damage_type,
+            caller,
+            cause.or(source),
+        );
+        let play_sound = took_full_damage && self.health.load() > effective_amount;
+        let damage_amount = effective_amount.max(0.0);
+
+        // Record the source once the hit is confirmed.
+        *self
+            .last_damage_type
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(damage_type);
+        self.last_damage_attacker.store(
+            cause
+                .or(source)
+                .map_or(0, |attacker| attacker.get_entity().entity_id),
+            Relaxed,
+        );
+        self.last_damage_stamp.store(world.get_world_age(), Relaxed);
+
+        let Some(server) = world.server.upgrade() else {
+            return false;
+        };
+        if let Some(attacker) = cause.or(source)
+            && attacker.get_living_entity().is_some()
+            && !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_ANGER)
+            && (damage_type != DamageType::WIND_CHARGE
+                || !self
+                    .entity
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_NO_ANGER_FROM_WIND_CHARGE))
+        {
+            self.set_last_hurt_by_mob(Some(attacker));
+        }
+        let config = &server.advanced_config.pvp;
+
+        // Vanilla flashes only for a full hit, not the rest landing within the cooldown
+        if config.hurt_animation && took_full_damage {
+            let entity_id = self.entity.entity_id;
+            let hurt_yaw = source.map_or(0.0, |source| {
+                let src = source.get_entity().pos.load();
+                let tgt = self.entity.pos.load();
+                (src.z - tgt.z).atan2(src.x - tgt.x).to_degrees() as f32 - self.entity.yaw.load()
+            });
+            let hurt_event = SActorEvent {
+                target_runtime_id: VarULong(entity_id as u64),
+                event_id: ActorEventID::Hurt,
+                data: VarInt(0),
+                fire_at_position: None,
+            };
+            let hurt_animation = CHurtAnimation::new(entity_id.into(), hurt_yaw);
+            world.send_to_tracking_players_and_self_editioned(
+                &self.entity,
+                &hurt_animation,
+                &hurt_event,
+            );
+        }
+
+        if took_full_damage {
+            world.broadcast_damage_event(
+                &self.entity,
+                i32::from(damage_type.id),
+                source.map(|e| e.get_entity().entity_id),
+                cause.map(|e| e.get_entity().entity_id),
+                position,
+            );
+        }
+
+        self.no_action_time.store(0, Relaxed);
+        if play_sound {
+            if let Some(mob) = caller.get_mob() {
+                mob.reset_ambient_sound_time();
+            }
+            self.make_voice_sound(caller, self.hurt_sound(caller));
+        }
+
+        // Full blocks returned early, so `!blocked || damage > 0` always holds here
+        if took_full_damage {
+            if !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_IMPACT) {
+                self.entity.mark_hurt();
+            }
+            // Vanilla knocks back lethal hits too -> `pvp.knockback` turns it off for player hits
+            let knockback_allowed =
+                config.knockback || cause.or(source).and_then(EntityBase::get_player).is_none();
+            if knockback_allowed && !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_KNOCKBACK) {
+                self.deal_default_knockback(caller, position, source, cause, amount);
+            }
+        }
+
+        // Vanilla parity: actuallyHurt
+        let original_damage = damage_amount;
+        let current_abs = self.absorption.load();
+        let dmg_to_health = (original_damage - current_abs).max(0.0);
+        let absorbed_damage = original_damage - dmg_to_health;
+
+        if absorbed_damage > 0.0 {
+            let new_abs = (current_abs - absorbed_damage).max(0.0);
+            self.set_absorption(new_abs);
+
+            if let Some(player) = caller.get_player() {
+                player.increment_stat(
+                    StatisticCategory::Custom,
+                    CustomStatistic::DamageAbsorbed as i32,
+                    (absorbed_damage * 10.0).round() as i32,
+                );
+            }
+
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
+                attacker_player.increment_stat(
+                    StatisticCategory::Custom,
+                    CustomStatistic::DamageDealtAbsorbed as i32,
+                    (absorbed_damage * 10.0).round() as i32,
+                );
+            }
+        }
+
+        let max_h = self.get_max_health();
+        let new_health = (self.health.load() - dmg_to_health).clamp(0.0, max_h);
+
+        if dmg_to_health > 0.0 {
+            if let Some(player) = caller.get_player() {
+                if damage_type.exhaustion > 0.0 {
+                    player.add_exhaustion(damage_type.exhaustion);
+                }
+                player.increment_stat(
+                    StatisticCategory::Custom,
+                    CustomStatistic::DamageTaken as i32,
+                    (dmg_to_health * 10.0).round() as i32,
+                );
+            }
+
+            if new_health > 0.0 {
+                self.set_health(new_health);
+            } else {
+                // Defer network sync of `0.0` until `check_totem_death_protection` runs, so a
+                // Totem rescue sends `1.0` directly without a spurious `0.0` death packet.
+                self.health.store(0.0);
+            }
+
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
+                attacker_player.increment_stat(
+                    StatisticCategory::Custom,
+                    CustomStatistic::DamageDealt as i32,
+                    (dmg_to_health * 10.0).round() as i32,
+                );
+                self.last_hurt_by_player
+                    .store(Some(attacker_player.gameprofile.id));
+                self.last_hurt_by_player_memory_time
+                    .store(LAST_HURT_BY_PLAYER_MEMORY_TIME, Relaxed);
+            }
+        }
+
+        if dmg_to_health > 0.0 || absorbed_damage > 0.0 {
+            let current_tick = world.get_world_age();
+            let fall_location = FallLocation::get_current_fall_location(self, &world);
+            let fall_distance = self.fall_distance.load();
+
+            {
+                let mut tracker = self
+                    .combat_tracker
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                tracker.record_damage(
+                    current_tick,
+                    self.health.load() > 0.0 && !self.dead.load(Relaxed),
+                    fall_distance,
+                    fall_location,
+                    damage_type,
+                    effective_amount,
+                    source,
+                    cause,
+                );
+            }
+        }
+
+        if new_health <= 0.0 && !self.check_totem_death_protection(caller, &damage_type) {
+            if let Some(player) = caller.get_player() {
+                player.set_health(0.0);
+            } else {
+                self.set_health(0.0);
+            }
+            let mut death_event =
+                crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
+                    self.entity.entity_id,
+                    0,
+                );
+            if let Some(server) = world.server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut death_event);
+            }
+            self.on_death(damage_type, source, cause);
+        }
+
+        if let Some(attacker_player) = cause.or(source).and_then(EntityBase::get_player) {
+            attacker_player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerHurtEntity {
+                    is_blocked: was_blocked,
+                    is_projectile: damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE),
+                    is_mace_smash: damage_type.has_tag(&tag::DamageType::MINECRAFT_MACE_SMASH),
+                    damage: f64::from(amount),
+                    direct_entity_type: source
+                        .map(|s| s.get_entity().entity_type.resource_name.to_string()),
+                },
+            );
+        }
+
+        true
+    }
+
+    pub fn damage(&self, caller: &dyn EntityBase, amount: f32, damage_type: DamageType) -> bool {
+        self.damage_with_context(caller, amount, damage_type, None, None, None)
+    }
+
+    /// Vanilla `LivingEntity.dealDefaultKnockback`.
+    // Callers pass the hit point as `position` for projectiles, so the source entity goes first.
+    pub(crate) fn deal_default_knockback(
+        &self,
+        caller: &dyn EntityBase,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+        damage: f32,
+    ) {
+        let target_pos = self.entity.pos.load();
+        let (dx, dz) = if let Some((x, z)) =
+            source.and_then(|source| source.hurt_knockback_direction(&self.entity))
+        {
+            (-x, -z)
+        } else {
+            source
+                .map(|source| source.get_entity().pos.load())
+                .or(position)
+                .map_or((0.0, 0.0), |pos| {
+                    (pos.x - target_pos.x, pos.z - target_pos.z)
+                })
+        };
+        if caller.get_mob().is_some_and(|mob| {
+            mob.mob_knockback(
+                0.4,
+                dx,
+                dz,
+                cause.or(source).map(EntityBase::get_entity),
+                damage,
+                false,
+            )
+        }) {
+            return;
+        }
+        let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+        self.entity.apply_knockback(
+            knockback_after_resistance(0.4, resistance),
+            dx,
+            dz,
+            source.map(EntityBase::get_entity),
+        );
+    }
+}
+
+impl EntityBase for LivingEntity {
+    fn damage_with_context(
+        &self,
+        caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.damage_with_context(caller, amount, damage_type, position, source, cause)
+    }
+
+    fn tick_in_void(&self, dyn_self: &dyn EntityBase) {
+        dyn_self.damage(dyn_self, 4.0, DamageType::OUT_OF_WORLD);
+    }
+
+    fn get_gravity(&self) -> f64 {
+        self.get_attribute_value(&Attributes::GRAVITY)
+    }
+
+    /// Advances the living entity by one tick: base entity tick, movement and
+    /// physics while alive (still applied during the 20-tick death animation so
+    /// knockback lands), velocity coalescing, status effects, void damage, and
+    /// death-animation completion.
+    #[allow(clippy::too_many_lines)]
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        let is_player = self.entity.entity_type == &EntityType::PLAYER;
+        // Vanilla `ServerEntity.sendChanges` runs after this tick's travel. Leave
+        // `velocity_dirty` / `sync_velocity` for the tracker so knockback sends
+        // post-friction motion together with the new position.
+
+        // Vanilla `LivingEntity.onAttributeUpdated(SCALE)`: resize when the attribute moves.
+        let scale = self.get_attribute_value(&Attributes::SCALE) as f32;
+        if (self.entity.scale.load() - scale).abs() > f32::EPSILON {
+            self.entity.scale.store(scale);
+            self.entity.refresh_dimensions();
+        }
+
+        let pre_tick_pos = self.entity.last_pos.load();
+        self.entity.tick(caller, server);
+        self.tick_last_hurt_by_mob();
+        if let Some(mob) = caller.get_mob() {
+            mob.tick_ambient_sound();
+            mob.base_tick();
+        }
+        self.tick_arrow_count();
+
+        // Only tick movement if the entity is alive. This prevents a dead "corpse"
+        // from continuing to be simulated (accumulating fall_distance/velocity).
+        // We allow movement during death animation (20 ticks) so knockback is applied.
+        let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
+        let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
+        if is_alive || in_death_animation {
+            let _ = self.current_impulse_context_reset_grace_time.fetch_update(
+                Relaxed,
+                Relaxed,
+                |grace_time| (grace_time > 0).then_some(grace_time - 1),
+            );
+        }
+        if (is_alive || in_death_animation) && !is_player {
+            let before_travel_box = self.entity.bounding_box.load();
+            self.tick_movement(caller);
+            // Vanilla-like order: freeze logic runs after movement/collisions.
+            self.entity.tick_frozen(caller);
+            if self.auto_spin_attack_ticks.load(Relaxed) > 0 {
+                self.auto_spin_attack_ticks.fetch_sub(1, Relaxed);
+                self.check_auto_spin_attack(
+                    caller,
+                    before_travel_box,
+                    self.entity.bounding_box.load(),
+                );
+            }
+        } else if is_alive {
+            // Vanilla `aiStep`: tiny leftovers stop before travel
+            self.entity.check_zero_velo();
+            // Vanilla server `travel` for a player, which has no input. Unsent knockback
+            // goes out undecayed.
+            if !self.entity.sync_velocity.load(Ordering::SeqCst) {
+                let old_y = self.entity.velocity.load().y;
+                let friction = self.travel(caller);
+                let player = caller.get_player();
+                if let Some(player) = player {
+                    player.tick_push_residual(friction);
+                }
+                // Vanilla `Player.travel` while flying keeps 0.6 of the old vertical speed
+                if player.is_some_and(super::player::Player::is_flying) {
+                    let velo = self.entity.velocity.load();
+                    self.entity
+                        .velocity
+                        .store(Vector3::new(velo.x, old_y * 0.6, velo.z));
+                }
+            }
+
+            let suffocating = self.entity.tick_block_collisions(caller);
+            // Vanilla `LivingEntity.isInWall`: sleeping entities are never in a wall.
+            if suffocating
+                && !caller
+                    .get_player()
+                    .is_some_and(super::player::Player::is_sleeping)
+            {
+                caller.damage(caller, 1.0, DamageType::IN_WALL);
+            }
+
+            // Players push from `World::tick` once all players ticked
+            self.entity.tick_frozen(caller);
+            if self.auto_spin_attack_ticks.load(Relaxed) > 0 {
+                self.auto_spin_attack_ticks.fetch_sub(1, Relaxed);
+                let before_travel_box = BoundingBox::new_from_pos(
+                    pre_tick_pos.x,
+                    pre_tick_pos.y,
+                    pre_tick_pos.z,
+                    &self.entity.entity_dimension.load(),
+                );
+                self.check_auto_spin_attack(
+                    caller,
+                    before_travel_box,
+                    self.entity.bounding_box.load(),
+                );
+            }
+        } else if self.is_auto_spin_attack() {
+            self.stop_auto_spin_attack();
+        }
+
+        // Fetch supporting blocks for players or other entities
+        let supporting_pos = caller.get_player().map_or_else(
+            || self.entity.get_supporting_block_pos(),
+            super::player::Player::get_supporting_block_pos,
+        );
+
+        // Notify the block under the entity each tick if a supporting block position is found
+        if self.entity.is_affected_by_blocks()
+            && let Some(supporting) = supporting_pos
+        {
+            let world = self.entity.world.load_full();
+            let (block, state) = world.get_block_and_state(&supporting);
+
+            world
+                .block_registry
+                .on_entity_step(block, &world, caller, &supporting, state, false);
+
+            // Check slightly below supporting_pos for additional supporting blocks (blocks under carpets and the like)
+            if !block.is_solid() {
+                let below_supporting = supporting.down();
+                let (below_block, below_state) = world.get_block_and_state(&below_supporting);
+
+                // If block is not air, notify it as well
+                world.block_registry.on_entity_step(
+                    below_block,
+                    &world,
+                    caller,
+                    &below_supporting,
+                    below_state,
+                    true, // below supporting block
+                );
+            }
+        }
+
+        let current_block_pos = self.entity.block_pos.load();
+        if is_alive && self.last_block_pos.load() != Some(current_block_pos) {
+            self.last_block_pos.store(Some(current_block_pos));
+            self.on_changed_block(caller, current_block_pos);
+        }
+
+        self.tick_effects();
+
+        let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+        if remaining_use_ticks > 0 {
+            let item_in_use = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(item) = item_in_use.as_ref() {
+                server
+                    .item_registry
+                    .on_use_tick(item, caller, remaining_use_ticks);
+            }
+        }
+
+        if caller.get_player().is_none() {
+            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+            if remaining_use_ticks > 0 {
+                let item_in_use = self
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(item) = item_in_use
+                    && item
+                        .get_data_component::<ConsumableImpl>()
+                        .is_some_and(|consumable| {
+                            consumable.should_emit_particles_and_sounds(remaining_use_ticks)
+                        })
+                {
+                    self.play_consume_sound(caller, &item);
+                }
+            }
+        }
+
+        // Current active item
+        if self.item_use_time.load(Ordering::Relaxed) > 0
+            && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 1
+        {
+            let item_in_use = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(item) = item_in_use.as_ref() {
+                // Consume item
+                if let Some(food) = item.get_data_component::<FoodImpl>()
+                    && let Some(player) = caller.get_player()
+                {
+                    player
+                        .hunger_manager
+                        .eat(player, food.nutrition as u8, food.saturation);
+                    self.entity.world.load().play_bedrock_level_sound(
+                        "burp",
+                        &self.entity.pos.load(),
+                        -1,
+                    );
+                }
+
+                if caller.get_player().is_none()
+                    && item.get_data_component::<ConsumableImpl>().is_some()
+                {
+                    self.play_consume_sound(caller, item);
+                }
+                self.apply_consumable_effects(caller, item);
+
+                // Handle potion consumption
+                if item
+                    .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+                    .is_some()
+                {
+                    let effects = crate::item::potion::PotionContents::read_potion_effects(item);
+                    crate::item::potion::PotionContents::apply_effects_to(
+                        self,
+                        effects,
+                        1.0,
+                        crate::item::potion::PotionApplicationSource::Normal,
+                        None,
+                    );
+                }
+
+                if let Some(ominous) = item
+                    .get_data_component::<pumpkin_data::data_component_impl::OminousBottleAmplifierImpl>()
+                {
+                    self.add_effect(Effect {
+                        effect_type: &StatusEffect::BAD_OMEN,
+                        duration: 120_000,
+                        amplifier: ominous.amplifier.clamp(0, 4) as u8,
+                        ambient: false,
+                        show_particles: false,
+                        show_icon: true,
+                        blend: false,
+                    });
+                }
+
+                if let Some(stew) = item
+                    .get_data_component::<pumpkin_data::data_component_impl::SuspiciousStewEffectsImpl>()
+                {
+                    for entry in stew.effects.iter() {
+                        if let Some(effect_type) = StatusEffect::from_minecraft_name(&entry.effect)
+                        {
+                            self.add_effect(Effect {
+                                effect_type,
+                                duration: entry.duration,
+                                amplifier: 0,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                                blend: false,
+                            });
+                        }
+                    }
+                }
+
+                if let Some(player) = caller.get_player() {
+                    player.trigger_advancement(
+                        crate::entity::player::advancement::trigger::AdvancementTrigger::ConsumeItem {
+                            item_id: format!("minecraft:{}", item.item.registry_key),
+                        },
+                    );
+
+                    // Vanilla `ItemStack.finishUsingItem`: consume one, then apply `use_remainder`.
+                    let finish_using = |mut stack: ItemStack| {
+                        let stack_count_before_using = stack.item_count;
+                        let gamemode = player.gamemode.load();
+                        stack.decrement_unless_creative(gamemode, 1);
+                        match item.get_data_component::<UseRemainderImpl>() {
+                            Some(use_remainder) => use_remainder.convert_into_remainder(
+                                stack,
+                                stack_count_before_using,
+                                gamemode == GameMode::Creative,
+                                |mut extra| {
+                                    if !player.inventory.insert_stack_anywhere(&mut extra)
+                                        && !extra.is_empty()
+                                    {
+                                        player.drop_item(extra);
+                                    }
+                                },
+                            ),
+                            None => stack,
+                        }
+                    };
+
+                    // Prefer modifying the exact stack that matches the consumed item:
+                    // 1) selected hotbar (held_item)
+                    // 2) off-hand
+                    // 3) fallback to active_hand if the above didn't match
+                    let mut handled = false;
+
+                    // Check main hand (hotbar selected)
+                    let held = player.inventory.held_item();
+                    if held.are_items_and_components_equal(item) {
+                        player.inventory.set_held_item(finish_using(held));
+                        handled = true;
+                    }
+
+                    if !handled {
+                        // Check off-hand
+                        let off_hand = player.inventory.off_hand_item();
+                        if off_hand.are_items_and_components_equal(item) {
+                            player
+                                .inventory
+                                .set_stack_in_hand(Hand::Left, finish_using(off_hand));
+                            handled = true;
+                        }
+                    }
+
+                    if !handled {
+                        // Use stored active_hand (as a fallback)
+                        let active_hand = *self
+                            .active_hand
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let hand_to_modify = active_hand.unwrap_or(Hand::Right);
+                        let item_stack = self.get_stack_in_hand(caller, hand_to_modify);
+                        player
+                            .inventory
+                            .set_stack_in_hand(hand_to_modify, finish_using(item_stack));
+                    }
+
+                    if let Some(cooldown) = item.get_use_cooldown() {
+                        let group = cooldown
+                            .cooldown_group
+                            .clone()
+                            .unwrap_or_else(|| item.item.registry_key.to_string());
+                        player.start_cooldown(group, (cooldown.seconds * 20.0) as i32);
+                    }
+                }
+
+                self.clear_active_hand();
+            }
+        }
+
+        if self.hurt_cooldown.load(Relaxed) > 0 {
+            self.hurt_cooldown.fetch_sub(1, Relaxed);
+        }
+
+        if self.last_hurt_by_player_memory_time.load(Relaxed) > 0 {
+            self.last_hurt_by_player_memory_time.fetch_sub(1, Relaxed);
+        } else {
+            self.last_hurt_by_player.store(None);
+        }
+
+        self.refresh_dirty_attributes(caller);
+
+        if self.health.load() <= 0.0 {
+            let time = self
+                .death_time
+                .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
+                .unwrap_or_else(|time| time)
+                .saturating_add(1);
+            if self.entity.entity_type == &EntityType::PLAYER {
+                // Bedrock keeps a dead remote player actor in its death pose.
+                // Remove Java players after the animation so respawn can
+                // recreate a live, interactable actor with the same identity.
+                if time == 10 {
+                    self.entity
+                        .world
+                        .load()
+                        .despawn_dead_java_player_for_bedrock(&self.entity);
+                }
+                // Players remain part of the world until their client requests a
+                // respawn. Removing one here breaks reconnecting while dead.
+                return;
+            }
+            // Vanilla `LivingEntity.tickDeath` sends the POOF (60) particle event
+            // once the death animation finished; the death event (3) was already
+            // broadcast in `on_death`. Sending it again here would restart the
+            // client-side death animation.
+            if time >= 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
+                self.entity.world.load().send_entity_status(
+                    &self.entity,
+                    EntityStatus::Poof,
+                    ActorEventID::GroundDust,
+                );
+                self.entity.remove();
+            }
+        }
+    }
+
+    fn get_entity(&self) -> &Entity {
+        &self.entity
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        Some(self)
+    }
+
+    fn is_pushable(&self) -> bool {
+        self.can_be_pushed(EntityBase::on_climbable(self))
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+const LAST_HURT_BY_PLAYER_MEMORY_TIME: i32 = 100;
+/// Ticks of the hurt animation; the damage cooldown runs twice as long.
+const HURT_DURATION: i32 = 10;
+
+pub const SPEED_MODIFIER_SPRINTING_ID: &str = "minecraft:sprinting";
+pub const SPEED_MODIFIER_SPRINTING_AMOUNT: f64 = 0.300_000_011_920_928_96;
+
+impl LivingEntity {
+    pub fn set_sprinting(&self, is_sprinting: bool) {
+        self.entity.set_sprinting(is_sprinting);
+        self.update_attribute(&Attributes::MOVEMENT_SPEED, |speed| {
+            speed.remove_modifier(SPEED_MODIFIER_SPRINTING_ID);
+            if is_sprinting {
+                speed.add_or_replace_modifier(Modifier {
+                    id: SPEED_MODIFIER_SPRINTING_ID.to_string(),
+                    amount: SPEED_MODIFIER_SPRINTING_AMOUNT,
+                    operation: ModifierOperation::MultiplyTotal,
+                });
+            }
+        });
+        crate::entity::attributes::send_attribute_updates_for_living(
+            self,
+            vec![Attributes::MOVEMENT_SPEED],
+        );
+    }
+
+    #[must_use]
+    pub fn get_block_speed_factor(&self) -> f32 {
+        let efficiency = self.get_attribute_value(&Attributes::MOVEMENT_EFFICIENCY) as f32;
+        let super_factor = self.entity.get_block_speed_factor();
+        super_factor + efficiency * (1.0 - super_factor)
+    }
+
+    fn play_consume_sound(&self, caller: &dyn EntityBase, item: &ItemStack) {
+        let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
+            return;
+        };
+        if self.entity.is_silent() {
+            return;
+        }
+        let mut rng = rand::rng();
+        let (volume, pitch) = if consumable.animation == ConsumeAnimation::Drink {
+            (0.5, 0.9 + rng.random::<f32>() * 0.1)
+        } else {
+            (
+                if rng.random::<bool>() { 0.5 } else { 1.0 },
+                0.2f32.mul_add(rng.random::<f32>() - rng.random::<f32>(), 1.0),
+            )
+        };
+        let world = self.entity.world.load();
+        let pos = self.entity.pos.load();
+        let category = caller.sound_source();
+        match caller.get_mob().and_then(|mob| mob.mob_consume_sound(item)) {
+            Some(sound) => world.play_sound_fine(sound, category, &pos, volume, pitch),
+            None => {
+                world.play_sound_event_fine(&consumable.sound_event, category, &pos, volume, pitch);
+            }
+        }
+    }
+
+    /// Applies data-driven `apply_effects` consume effects after an item completes use.
+    /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
+    fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {
+        let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
+            return;
+        };
+        self.apply_consume_effects_slice(caller, &consumable.effects);
+    }
+
+    /// Executes a slice of `ConsumeEffect`s on `self` (shared by `Consumable` and `DeathProtection`).
+    fn apply_consume_effects_slice(&self, caller: &dyn EntityBase, effects: &[ConsumeEffect]) {
+        for consume_effect in effects {
+            match consume_effect {
+                ConsumeEffect::ApplyEffects((effects, probability)) => {
+                    if !consume_effect_probability_applies(*probability, rand::random()) {
+                        continue;
+                    }
+
+                    for effect in effects.iter() {
+                        let Some(effect_type) =
+                            StatusEffect::from_minecraft_name(&effect.effect_id)
+                        else {
+                            continue;
+                        };
+                        let Ok(amplifier) = u8::try_from(effect.amplifier) else {
+                            continue;
+                        };
+
+                        self.add_effect(Effect {
+                            effect_type,
+                            duration: effect.duration,
+                            amplifier,
+                            ambient: effect.ambient,
+                            show_particles: effect.show_particles,
+                            show_icon: effect.show_icon,
+                            blend: false,
+                        });
+                    }
+                }
+                ConsumeEffect::ClearAllEffects => {
+                    self.reset_effects_and_attributes();
+                }
+                ConsumeEffect::RemoveEffects(idset) => {
+                    if let pumpkin_data::data_component_impl::IDSet::IDs(ids) = idset {
+                        for effect_type in ids.iter() {
+                            self.remove_effect(effect_type);
+                        }
+                    }
+                }
+                ConsumeEffect::TeleportRandomly(diameter) => {
+                    // Java Edition dismounts the consumer before random teleport attempts.
+                    if let Some(vehicle) = caller.get_entity().get_vehicle() {
+                        vehicle
+                            .get_entity()
+                            .remove_passenger_sync(caller.get_entity().entity_id);
+                        if caller.get_entity().has_vehicle() {
+                            continue;
+                        }
+                    }
+
+                    let center = self.entity.pos.load();
+                    let Some(pos) = self.find_random_teleport_target(*diameter) else {
+                        continue;
+                    };
+                    let (yaw, pitch) = (self.entity.yaw.load(), self.entity.pitch.load());
+                    let world = self.entity.world.load_full();
+                    caller.teleport(pos, Some(yaw), Some(pitch), world.clone());
+
+                    let destination = self.entity.pos.load();
+                    if destination != center {
+                        self.fall_distance.store(0.0);
+                        self.reset_current_impulse_context();
+                        // Vanilla broadcasts entity event 46 (teleport particles) on success.
+                        world.send_entity_status(
+                            &self.entity,
+                            EntityStatus::Teleport,
+                            ActorEventID::None,
+                        );
+                        world.emit_game_event("teleport", center);
+                        world.play_sound(
+                            Sound::ItemChorusFruitTeleport,
+                            SoundCategory::Players,
+                            &destination,
+                        );
+                    }
+                }
+                ConsumeEffect::PlaySound(sound) => {
+                    if let pumpkin_data::data_component_impl::IdOr::Id(sound) = sound {
+                        self.entity.world.load().play_sound(
+                            *sound,
+                            SoundCategory::Neutral,
+                            &self.entity.pos.load(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Teleports to the first standable block at or below the target, when the spot is free.
+    pub fn random_teleport(
+        &self,
+        caller: &dyn EntityBase,
+        target: Vector3<f64>,
+        show_particles: bool,
+        is_invalid: impl Fn(&pumpkin_data::Block) -> bool,
+    ) -> bool {
+        let entity = &self.entity;
+        let world = entity.world.load_full();
+        let (x, z) = world
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clamp_to_bound(target.x, target.z);
+        let block_x = x.floor() as i32;
+        let block_z = z.floor() as i32;
+        let min_y = world.dimension.min_y;
+        let mut block_y = target.y.floor() as i32;
+        let column_pos = BlockPos::new(
+            block_x,
+            block_y.clamp(min_y, min_y + world.dimension.height - 1),
+            block_z,
+        );
+        if !world.is_loaded(&column_pos) {
+            return false;
+        }
+
+        // Walks down to the first block an entity can stand on, keeping the fractional Y.
+        let mut y = target.y;
+        let ground = loop {
+            if block_y <= min_y {
+                return false;
+            }
+            block_y -= 1;
+            let block = world.get_block(&BlockPos::new(block_x, block_y, block_z));
+            if block.has_tag(&tag::Block::MINECRAFT_ENTITIES_CAN_TELEPORT_TO) {
+                break block;
+            }
+            y -= 1.0;
+        };
+        if is_invalid(ground) {
+            return false;
+        }
+        let bounding_box = BoundingBox::new_from_pos(x, y, z, &entity.entity_dimension.load());
+        if !world.is_space_empty(bounding_box)
+            || !world.no_entity_collision(caller, bounding_box)
+            || world.contains_any_liquid(bounding_box)
+            || BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos())
+                .any(|pos| is_invalid(world.get_block(&pos)))
+        {
+            return false;
+        }
+        if caller
+            .get_mob()
+            .is_some_and(|mob| !mob.can_randomly_teleport_to(x, y, z))
+        {
+            return false;
+        }
+
+        let new_pos = Vector3::new(x, y, z);
+        if let Some(server) = world.server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_teleport::EntityTeleportEvent::new(
+                    entity.entity_id,
+                    entity.pos.load(),
+                    new_pos,
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+        }
+        entity.teleport(new_pos, None, None, &world);
+        if show_particles {
+            world.send_entity_status(entity, EntityStatus::Teleport, ActorEventID::None);
+        }
+        if let Some(mob) = caller.get_mob() {
+            mob.get_mob_entity().steered().navigator().stop();
+        }
+        true
+    }
+
+    fn find_random_teleport_target(&self, diameter: f32) -> Option<Vector3<f64>> {
+        let center = self.entity.pos.load();
+        let world = self.entity.world.load();
+        let bottom_y = world.get_bottom_y();
+        let top_y = world.get_top_y();
+        let dimensions = self.entity.entity_dimension.load();
+        let mut rng = rand::rng();
+
+        'attempts: for _ in 0..Self::RANDOM_TELEPORT_ATTEMPTS {
+            let target_x = random_teleport_coordinate(center.x, diameter, rng.random());
+            let target_z = random_teleport_coordinate(center.z, diameter, rng.random());
+            let sampled_y = random_teleport_coordinate(center.y, diameter, rng.random())
+                .clamp(f64::from(bottom_y + 1), f64::from(top_y));
+            let mut block_y = sampled_y.floor() as i32;
+            let block_x = target_x.floor() as i32;
+            let block_z = target_z.floor() as i32;
+
+            loop {
+                if block_y <= bottom_y {
+                    continue 'attempts;
+                }
+
+                let below = BlockPos::new(block_x, block_y - 1, block_z);
+                let Some(below_state) = world.get_block_state_if_loaded(&below) else {
+                    continue 'attempts;
+                };
+                if below_state.is_solid() {
+                    break;
+                }
+                block_y -= 1;
+            }
+
+            let target = Vector3::new(target_x, f64::from(block_y), target_z);
+            let bounding_box = BoundingBox::new_from_pos(target.x, target.y, target.z, &dimensions);
+
+            for block_pos in
+                BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos())
+            {
+                if world.get_block_state_if_loaded(&block_pos).is_none()
+                    || world.get_fluid(&block_pos).id != Fluid::EMPTY.id
+                {
+                    continue 'attempts;
+                }
+            }
+
+            if world.is_space_empty(bounding_box) {
+                return Some(target);
+            }
+        }
+
+        None
+    }
+
+    /// Mirrors vanilla `LivingEntity.getVisibilityPercent`.
+    #[must_use]
+    pub fn visibility_percent(&self, targeting_entity_type: Option<&'static EntityType>) -> f64 {
+        use pumpkin_data::data_component_impl::{IDSet, MobVisibilityImpl};
+
+        let mut percent = 1.0;
+        if self.entity.is_sneaking() {
+            percent *= 0.8;
+        }
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self
+            .entity
+            .invisible
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let worn = [
+                EquipmentSlot::HEAD,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::FEET,
+            ]
+            .iter()
+            .filter(|slot| !equipment.get(slot).is_empty())
+            .count();
+            // Clamped in f32 like vanilla's `0.1F`.
+            let cover = (worn as f32 / 4.0).max(0.1);
+            percent *= 0.7 * f64::from(cover);
+        }
+        if let Some(target_type) = targeting_entity_type {
+            for slot in [
+                EquipmentSlot::MAIN_HAND,
+                EquipmentSlot::OFF_HAND,
+                EquipmentSlot::FEET,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::HEAD,
+                EquipmentSlot::BODY,
+                EquipmentSlot::SADDLE,
+            ] {
+                let stack = equipment.get(&slot);
+                if let Some(mob_visibility) = stack.get_data_component::<MobVisibilityImpl>()
+                    && let Some(equippable) = stack.get_data_component::<EquippableImpl>()
+                    && *equippable.slot == slot
+                {
+                    let matches_target = match &mob_visibility.targeting_entity_types {
+                        IDSet::Tag(tag) => target_type.is_tagged_with(tag).unwrap_or(false),
+                        IDSet::IDs(ids) => ids.iter().any(|id| id.id == target_type.id),
+                    };
+                    if matches_target {
+                        percent *= f64::from(mob_visibility.visibility);
+                    }
+                }
+            }
+        }
+        percent.clamp(0.0, 10.0)
+    }
+}
+
+fn random_teleport_coordinate(center: f64, diameter: f32, random: f64) -> f64 {
+    center + (random - 0.5) * f64::from(diameter)
+}
+
+pub(crate) fn attributes_by_id(id: u8) -> Option<&'static Attributes> {
+    Attributes::ALL.iter().find(|attr| attr.id == id)
+}
+
+fn push_unique_attribute(touched: &mut Vec<Attributes>, attr: &Attributes) {
+    if !touched.iter().any(|existing| existing.id == attr.id) {
+        touched.push(attr.clone());
+    }
+}
+
+pub(crate) const fn attribute_modifier_slot_matches(
+    modifier_slot: &AttributeModifierSlot,
+    equipment_slot: &EquipmentSlot,
+) -> bool {
+    match modifier_slot {
+        AttributeModifierSlot::Any => true,
+        AttributeModifierSlot::MainHand => matches!(equipment_slot, EquipmentSlot::MainHand(_)),
+        AttributeModifierSlot::OffHand => matches!(equipment_slot, EquipmentSlot::OffHand(_)),
+        AttributeModifierSlot::Hand => {
+            matches!(
+                equipment_slot,
+                EquipmentSlot::MainHand(_) | EquipmentSlot::OffHand(_)
+            )
+        }
+        AttributeModifierSlot::Feet => matches!(equipment_slot, EquipmentSlot::Feet(_)),
+        AttributeModifierSlot::Legs => matches!(equipment_slot, EquipmentSlot::Legs(_)),
+        AttributeModifierSlot::Chest => matches!(equipment_slot, EquipmentSlot::Chest(_)),
+        AttributeModifierSlot::Head => matches!(equipment_slot, EquipmentSlot::Head(_)),
+        AttributeModifierSlot::Armor => matches!(
+            equipment_slot,
+            EquipmentSlot::Feet(_)
+                | EquipmentSlot::Legs(_)
+                | EquipmentSlot::Chest(_)
+                | EquipmentSlot::Head(_)
+        ),
+        AttributeModifierSlot::Body => matches!(equipment_slot, EquipmentSlot::Body(_)),
+        AttributeModifierSlot::Saddle => matches!(equipment_slot, EquipmentSlot::Saddle(_)),
+    }
+}
+
+/// Mirrors vanilla's strict `random < probability` consume-effect gate.
+const fn consume_effect_probability_applies(probability: f32, random: f32) -> bool {
+    random < probability
+}
+
+#[cfg(test)]
+mod consumable_effect_tests {
+    use super::{consume_effect_probability_applies, random_teleport_coordinate};
+
+    #[test]
+    fn consumable_effect_probability_matches_vanilla_strict_threshold() {
+        assert!(!consume_effect_probability_applies(0.0, 0.0));
+        assert!(consume_effect_probability_applies(1.0, 0.999));
+        assert!(consume_effect_probability_applies(0.5, 0.499));
+        assert!(!consume_effect_probability_applies(0.5, 0.5));
+    }
+
+    #[test]
+    fn random_teleport_coordinate_uses_full_diameter() {
+        assert_eq!(random_teleport_coordinate(10.0, 16.0, 0.0), 2.0);
+        assert_eq!(random_teleport_coordinate(10.0, 16.0, 0.5), 10.0);
+        assert_eq!(random_teleport_coordinate(10.0, 16.0, 1.0), 18.0);
+    }
+}
+/// Returns `true` if `damage_type` is in `#minecraft:bypasses_armor` (1.21.11).
+/// These sources bypass armor entirely (fall, drown, freeze, etc.).
+pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
+    // Bitmask lookup: O(1) with two instructions (shift + AND), no array scan.
+    // DamageType IDs can exceed 31; use u64 for sufficient range.
+    // TODO: Make data-driven once the data pack system can handle it without performance regressions.
+    // Compile-time assertions: ensure all bypassing types fit in u64 bitmask.
+    const _: () = assert!(
+        DamageType::FALL.id < 64
+            && DamageType::FLY_INTO_WALL.id < 64
+            && DamageType::ON_FIRE.id < 64
+            && DamageType::IN_WALL.id < 64
+            && DamageType::CRAMMING.id < 64
+            && DamageType::DROWN.id < 64
+            && DamageType::GENERIC.id < 64
+            && DamageType::WITHER.id < 64
+            && DamageType::DRAGON_BREATH.id < 64
+            && DamageType::STARVE.id < 64
+            && DamageType::ENDER_PEARL.id < 64
+            && DamageType::FREEZE.id < 64
+            && DamageType::STALAGMITE.id < 64
+            && DamageType::MAGIC.id < 64
+            && DamageType::INDIRECT_MAGIC.id < 64
+            && DamageType::OUT_OF_WORLD.id < 64
+            && DamageType::GENERIC_KILL.id < 64
+            && DamageType::SONIC_BOOM.id < 64
+            && DamageType::OUTSIDE_BORDER.id < 64,
+        "One or more bypass DamageType IDs exceed u64 bitmask width (>= 64)"
+    );
+    const BYPASS_MASK: u64 = (1u64 << DamageType::FALL.id)
+        | (1u64 << DamageType::FLY_INTO_WALL.id)
+        | (1u64 << DamageType::ON_FIRE.id)
+        | (1u64 << DamageType::IN_WALL.id)
+        | (1u64 << DamageType::CRAMMING.id)
+        | (1u64 << DamageType::DROWN.id)
+        | (1u64 << DamageType::GENERIC.id)
+        | (1u64 << DamageType::WITHER.id)
+        | (1u64 << DamageType::DRAGON_BREATH.id)
+        | (1u64 << DamageType::STARVE.id)
+        | (1u64 << DamageType::ENDER_PEARL.id)
+        | (1u64 << DamageType::FREEZE.id)
+        | (1u64 << DamageType::STALAGMITE.id)
+        | (1u64 << DamageType::MAGIC.id)
+        | (1u64 << DamageType::INDIRECT_MAGIC.id)
+        | (1u64 << DamageType::OUT_OF_WORLD.id)
+        | (1u64 << DamageType::GENERIC_KILL.id)
+        | (1u64 << DamageType::SONIC_BOOM.id)
+        | (1u64 << DamageType::OUTSIDE_BORDER.id);
+    (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
+}
+
+pub(crate) fn prevents_armor_change(stack: &ItemStack) -> bool {
+    stack
+        .get_data_component::<EnchantmentsImpl>()
+        .is_some_and(|enchantments| {
+            enchantments
+                .enchantment
+                .iter()
+                .any(|(enchantment, level)| *level > 0 && enchantment.effects.prevent_armor_change)
+        })
+}
+
+pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
+    stack
+        .get_data_component::<EnchantmentsImpl>()
+        .is_some_and(|enchantments| {
+            enchantments.enchantment.iter().any(|(enchantment, level)| {
+                *level > 0 && enchantment.effects.prevent_equipment_drop
+            })
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── bypasses_armor_durability ─────────────────────────────────────
+
+    /// Every member of `minecraft:bypasses_armor` (1.21.11) must return `true`.
+    #[test]
+    fn bypasses_armor_durability_returns_true_for_tag_members() {
+        // Exact contents of the minecraft:bypasses_armor tag in 1.21.11.
+        let bypassing: &[DamageType] = &[
+            DamageType::ON_FIRE,
+            DamageType::IN_WALL,
+            DamageType::CRAMMING,
+            DamageType::DROWN,
+            DamageType::FLY_INTO_WALL,
+            DamageType::GENERIC,
+            DamageType::WITHER,
+            DamageType::DRAGON_BREATH,
+            DamageType::STARVE,
+            DamageType::FALL,
+            DamageType::ENDER_PEARL,
+            DamageType::FREEZE,
+            DamageType::STALAGMITE,
+            DamageType::MAGIC,
+            DamageType::INDIRECT_MAGIC,
+            DamageType::OUT_OF_WORLD,
+            DamageType::GENERIC_KILL,
+            DamageType::SONIC_BOOM,
+            DamageType::OUTSIDE_BORDER,
+        ];
+        for dt in bypassing {
+            assert!(
+                bypasses_armor_durability(dt),
+                "{} should bypass armor durability",
+                dt.message_id
+            );
+        }
+    }
+
+    /// Physical/combat damage types must NOT bypass armor durability.
+    #[test]
+    fn bypasses_armor_durability_returns_false_for_physical_sources() {
+        let physical: &[DamageType] = &[
+            DamageType::MOB_ATTACK,
+            DamageType::PLAYER_ATTACK,
+            DamageType::ARROW,
+            DamageType::CACTUS,
+            DamageType::SWEET_BERRY_BUSH,
+            DamageType::LAVA,
+            DamageType::EXPLOSION,
+            DamageType::PLAYER_EXPLOSION,
+            DamageType::LIGHTNING_BOLT,
+            DamageType::FIREBALL,
+            DamageType::THORNS,
+            DamageType::TRIDENT,
+        ];
+        for dt in physical {
+            assert!(
+                !bypasses_armor_durability(dt),
+                "{} should NOT bypass armor durability",
+                dt.message_id
+            );
+        }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_zombie_family_sounds() {
+        let cases = [
+            (&EntityType::ZOMBIE, Sound::EntityZombieHurt),
+            (&EntityType::DROWNED, Sound::EntityDrownedHurt),
+            (&EntityType::HUSK, Sound::EntityHuskHurt),
+            (
+                &EntityType::ZOMBIE_VILLAGER,
+                Sound::EntityZombieVillagerHurt,
+            ),
+        ];
+
+        for (entity_type, expected) in cases {
+            assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
+        }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_enderman_hurt_sound() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::ENDERMAN),
+            Sound::EntityEndermanHurt
+        );
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_skeleton_family_sounds() {
+        let cases = [
+            (&EntityType::SKELETON, Sound::EntitySkeletonHurt),
+            (&EntityType::BOGGED, Sound::EntityBoggedHurt),
+            (&EntityType::PARCHED, Sound::EntityParchedHurt),
+            (
+                &EntityType::WITHER_SKELETON,
+                Sound::EntityWitherSkeletonHurt,
+            ),
+            (&EntityType::STRAY, Sound::EntityStrayHurt),
+        ];
+
+        for (entity_type, expected) in cases {
+            assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
+        }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_defaults_to_generic_hurt() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::ITEM),
+            Sound::EntityGenericHurt
+        );
+    }
+
+    #[test]
+    fn regeneration_particle_metadata_uses_vanilla_argb_color() {
+        let effect = Effect {
+            effect_type: &StatusEffect::REGENERATION,
+            duration: 200,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        };
+        let metadata = pumpkin_protocol::java::client::play::Metadata::new(
+            tracked_data::living_entity::EFFECT_PARTICLES,
+            EffectParticles(vec![EffectParticle::from_effect(&effect)]),
+        );
+        let mut bytes = Vec::new();
+
+        metadata
+            .write(
+                &mut bytes,
+                &pumpkin_util::version::JavaMinecraftVersion::V_26_3,
+            )
+            .unwrap();
+
+        assert_eq!(bytes, [10, 17, 1, 28, 0xff, 0xcd, 0x5c, 0xab]);
+    }
+}
+
+#[cfg(test)]
+mod ai_step_tests {
+    use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    use crate::entity::ai::control::move_control::MoveControl;
+    use crate::entity::ai::control::{Control, MoveControlTrait};
+    use crate::entity::ai::goal::Goal;
+    use crate::entity::ai::pathfinder::node::Node;
+    use crate::entity::ai::pathfinder::path::Path;
+    use crate::entity::ai::pathfinder::{NavigationTarget, Navigator, NavigatorGoal};
+    use crate::entity::ai::test_support::world;
+    use crate::entity::mob::{Mob, MobEntity};
+    use crate::entity::{Entity, EntityBase};
+    use crate::world::World;
+    use pumpkin_data::{attributes::Attributes, entity::EntityType};
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector3::Vector3;
+
+    type TestResult = Result<(), Box<dyn Error>>;
+
+    struct ProbeMob {
+        mob: MobEntity,
+        immobile: bool,
+    }
+
+    impl Mob for ProbeMob {
+        fn get_mob_entity(&self) -> &MobEntity {
+            &self.mob
+        }
+
+        fn is_mob_immobile(&self) -> bool {
+            self.immobile || self.mob.living_entity.is_dead_or_dying()
+        }
+    }
+
+    #[derive(Default)]
+    struct Observation {
+        velocity: Vector3<f64>,
+        input: Vector3<f64>,
+    }
+
+    struct ObserveGoal(Arc<Mutex<Observation>>);
+
+    impl Goal for ObserveGoal {
+        fn can_start(&mut self, mob: &dyn Mob) -> bool {
+            let living = &mob.get_mob_entity().living_entity;
+            *self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Observation {
+                velocity: living.entity.velocity.load(),
+                input: living.movement_input.load(),
+            };
+            false
+        }
+    }
+
+    struct ProbeControl(Arc<AtomicUsize>);
+
+    struct TargetControl(Arc<Mutex<Option<NavigationTarget>>>);
+
+    impl Control for TargetControl {}
+
+    impl MoveControlTrait for TargetControl {
+        fn tick(&mut self, _mob: &dyn Mob) {}
+
+        fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64) {
+            *self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(NavigationTarget {
+                position: Vector3::new(x, y, z),
+                speed_modifier,
+            });
+        }
+    }
+
+    struct JumpOnceGoal(bool);
+
+    impl Goal for JumpOnceGoal {
+        fn can_start(&mut self, _mob: &dyn Mob) -> bool {
+            self.0
+        }
+
+        fn start(&mut self, mob: &dyn Mob) {
+            self.0 = false;
+            mob.get_mob_entity()
+                .jump_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .jump();
+        }
+    }
+
+    impl Control for ProbeControl {}
+
+    impl MoveControlTrait for ProbeControl {
+        fn tick(&mut self, mob: &dyn Mob) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            let living = &mob.get_mob_entity().living_entity;
+            living.entity.velocity.store(Vector3::new(0.002, 0.0, 0.0));
+            living.movement_input.store(Vector3::new(0.0, 0.0, 0.5));
+        }
+    }
+
+    fn probe(world: Arc<World>, calls: Arc<AtomicUsize>) -> ProbeMob {
+        let mob = MobEntity::new(Entity::new(
+            world,
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        *mob.move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(ProbeControl(calls));
+        ProbeMob {
+            mob,
+            immobile: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn bat_does_not_push_overlapping_mobs() -> TestResult {
+        use crate::entity::mob::bat::BatEntity;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bat = BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BAT,
+        ));
+        let other = Arc::new(probe(world.clone(), Arc::new(AtomicUsize::new(0))));
+        other.get_entity().set_pos(Vector3::new(0.1, 64.0, 0.0));
+        world.add_entity_silent(bat.clone());
+        world.add_entity_silent(other.clone());
+
+        bat.mob_entity.living_entity.push_entities(bat.as_ref());
+        let other_velocity = other.get_entity().velocity.load();
+        other.mob.living_entity.push_entities(other.as_ref());
+        let bat_velocity = bat.get_entity().velocity.load();
+        world.level.shutdown().await;
+
+        assert!(!bat.is_pushable());
+        assert_eq!(other_velocity, Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(bat_velocity, Vector3::new(0.0, 0.0, 0.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn follow_range_updates_resize_the_search_budget_even_when_reverted() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        *mob.mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Navigator::flying();
+        let reaches_target = || {
+            mob.mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .create_path(living, Vector3::new(8.0, 64.0, 0.0), 0)
+                .is_some_and(|path| path.can_reach())
+        };
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
+        let initial = reaches_target();
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 16.0);
+        living.set_attribute_base(&Attributes::FOLLOW_RANGE, 0.0);
+        living.refresh_dirty_attributes(&mob);
+        let updated = reaches_target();
+        world.level.shutdown().await;
+        assert!(!initial);
+        assert!(updated);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn ai_step_preserves_controller_motion_after_input_preparation() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mob = probe(world.clone(), calls.clone());
+        let observation = Arc::new(Mutex::new(Observation::default()));
+        mob.mob
+            .goals_selector
+            .add_goal(0, Box::new(ObserveGoal(observation.clone())));
+        let living = &mob.mob.living_entity;
+        living.entity.velocity.store(Vector3::new(0.001, 0.0, 0.0));
+        living.movement_input.store(Vector3::new(0.0, 0.25, 0.5));
+
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        let observed = observation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(observed.velocity.x, 0.0);
+        assert_eq!(observed.input.y, 0.25);
+        assert!((observed.input.z - 0.49).abs() < f64::EPSILON);
+        assert!((living.entity.pos.load().x - 0.002).abs() < f64::EPSILON);
+        assert_eq!(living.movement_input.load().z, 0.5);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn no_ai_skips_controller_and_travel() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mob = probe(world.clone(), calls.clone());
+        mob.mob.set_no_ai(true);
+        let living = &mob.mob.living_entity;
+        let position = living.entity.pos.load();
+        living.entity.velocity.store(Vector3::new(0.1, 0.0, 0.0));
+
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        assert_eq!(living.entity.pos.load(), position);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn goal_jump_survives_navigation_finish_and_expires_next_step() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        mob.mob
+            .goals_selector
+            .add_goal(0, Box::new(JumpOnceGoal(true)));
+        let living = &mob.mob.living_entity;
+        let position = living.entity.pos.load();
+        mob.mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_progress(NavigatorGoal::new(position, position, 1.0));
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+
+        living.tick_movement(&mob);
+        let first_jumping = living.jumping.load(Ordering::Relaxed);
+        let first_position = living.entity.pos.load();
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert!(first_jumping);
+        assert!(first_position.y > position.y);
+        assert!(!living.jumping.load(Ordering::Relaxed));
+        assert_eq!(living.jumping_cooldown.load(Ordering::Relaxed), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn move_control_jump_is_applied_in_the_same_step() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        let position = living.entity.pos.load();
+        let mut control = MoveControl::default();
+        control.set_wanted_position(position.x, position.y + 2.0, position.z, 1.0);
+        *mob.mob
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(control);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+
+        living.tick_movement(&mob);
+        let first_jumping = living.jumping.load(Ordering::Relaxed);
+        let first_position = living.entity.pos.load();
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert!(first_jumping);
+        assert!(first_position.y > position.y);
+        assert!(!living.jumping.load(Ordering::Relaxed));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn navigation_hands_the_next_waypoint_to_the_installed_control() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let target = Arc::new(Mutex::new(None));
+        *mob.mob
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(TargetControl(target.clone()));
+        let living = &mob.mob.living_entity;
+        living.entity.pos.store(Vector3::new(0.5, 64.0, 0.5));
+        living.entity.last_pos.store(living.entity.pos.load());
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        let destination = Vector3::new(2.5, 64.0, 0.5);
+        {
+            let mut navigator = mob
+                .mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.set_progress(NavigatorGoal::new(
+                living.entity.pos.load(),
+                destination,
+                1.5,
+            ));
+            navigator.move_to_path(
+                Some(Path::new(
+                    vec![
+                        Node::new(BlockPos::new(0, 64, 0)),
+                        Node::new(BlockPos::new(2, 64, 0)),
+                    ],
+                    BlockPos::new(2, 64, 0),
+                    true,
+                )),
+                1.5,
+                living,
+            );
+        };
+
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert_eq!(
+            target
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .map(|target| (target.position, target.speed_modifier)),
+            Some((destination, 1.5))
+        );
+        assert_eq!(living.entity.yaw.load(), 0.0);
+        assert_eq!(living.movement_input.load().z, 0.0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn finishing_navigation_stops_the_default_controller() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        *mob.mob
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(MoveControl::default());
+        let living = &mob.mob.living_entity;
+        living.entity.pos.store(Vector3::new(0.5, 64.0, 0.5));
+        living.entity.last_pos.store(living.entity.pos.load());
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        {
+            let mut navigator = mob
+                .mob
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.set_progress(NavigatorGoal::new(
+                living.entity.pos.load(),
+                Vector3::new(2.5, 64.0, 0.5),
+                1.0,
+            ));
+            navigator.move_to_path(
+                Some(Path::new(
+                    vec![Node::new(BlockPos::new(2, 64, 0))],
+                    BlockPos::new(2, 64, 0),
+                    true,
+                )),
+                1.0,
+                living,
+            );
+        };
+
+        living.tick_movement(&mob);
+        let moving_input = living.movement_input.load().z;
+        mob.mob
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stop();
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+
+        assert!(moving_input > 0.0);
+        assert_eq!(living.movement_input.load().z, 0.0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dead_ai_step_clears_input_without_discarding_knockback() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mut results = Vec::new();
+        for dead_flag in [false, true] {
+            let calls = Arc::new(AtomicUsize::new(0));
+            let mob = probe(world.clone(), calls.clone());
+            let living = &mob.mob.living_entity;
+            if dead_flag {
+                living.dead.store(true, Ordering::Relaxed);
+            } else {
+                living.health.store(0.0);
+            }
+            living.entity.velocity.store(Vector3::new(0.1, 0.0, 0.0));
+            living.movement_input.store(Vector3::new(0.5, 0.25, 0.5));
+            living.jumping.store(true, Ordering::Relaxed);
+
+            living.tick_movement(&mob);
+            results.push((
+                calls.load(Ordering::Relaxed),
+                living.movement_input.load(),
+                living.jumping.load(Ordering::Relaxed),
+                living.entity.pos.load().x,
+            ));
+        }
+        world.level.shutdown().await;
+
+        for (calls, input, jumping, position_x) in results {
+            assert_eq!(calls, 0);
+            assert_eq!(input, Vector3::new(0.0, 0.25, 0.0));
+            assert!(!jumping);
+            assert!(position_x > 0.05);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flying_applies_air_physics_before_bat_vertical_damping() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        let bat = crate::entity::mob::bat::BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::BAT,
+        ));
+        bat.set_roosting(false);
+        let entity = bat.get_entity();
+        entity.velocity.store(Vector3::new(0.0, 0.5, 0.0));
+        bat.mob_entity.living_entity.travel_in_air(bat.as_ref());
+        let moved_y = entity.pos.load().y;
+        bat.post_tick();
+        let velocity_y = entity.velocity.load().y;
+        world.level.shutdown().await;
+
+        assert!((moved_y - 64.5).abs() < 1.0e-7);
+        assert!((velocity_y - 0.24696).abs() < 1.0e-7);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn ground_control_speed_reaches_travel_without_losing_its_modifier() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, 0.4);
+        living.entity.on_ground.store(true, Ordering::Relaxed);
+        living.entity.set_has_no_gravity(true);
+        living.movement_input.store(Vector3::new(0.3, 0.25, 0.0));
+        let mut control = MoveControl::default();
+        control.set_wanted_position(0.0, 64.0, 8.0, 0.5);
+        control.tick(&mob);
+        assert_eq!(living.movement_input.load().x, 0.3);
+        assert_eq!(living.movement_input.load().y, 0.25);
+        living
+            .movement_input
+            .store(Vector3::new(0.0, 0.0, living.movement_input.load().z));
+        living.travel_in_air(&mob);
+        let moved = living.entity.pos.load().z;
+        world.level.shutdown().await;
+        assert!((moved - 0.04).abs() < 1.0e-8);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn strafe_checks_live_collision_before_publishing_original_inputs() -> TestResult {
+        use pumpkin_data::Block;
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.entity.set_pos(Vector3::new(0.5, 64.0, 0.5));
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, 1.0);
+        living.movement_input.store(Vector3::new(0.0, 0.25, 0.0));
+        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+        world.set_block_state(
+            &BlockPos::new(0, 63, 0),
+            Block::STONE.default_state.id,
+            flags,
+        );
+        let mut control = MoveControl::default();
+        control.strafe(0.5, 0.5);
+        control.tick(&mob);
+        assert_eq!(living.movement_input.load(), Vector3::new(0.5, 0.25, 0.5));
+        world.set_block_state(
+            &BlockPos::new(0, 64, 0),
+            Block::STONE.default_state.id,
+            flags,
+        );
+        control.strafe(0.5, 0.5);
+        control.tick(&mob);
+        let input = living.movement_input.load();
+        world.level.shutdown().await;
+        assert_eq!(input, Vector3::new(0.0, 0.25, 1.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flying_control_preserves_strafe_and_clears_only_its_owned_axes() -> TestResult {
+        use crate::entity::ai::control::flying_move_control::FlyingMoveControl;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.set_attribute_base(&Attributes::FLYING_SPEED, 0.8);
+        living.movement_input.store(Vector3::new(0.3, 0.25, 0.0));
+        let mut control = FlyingMoveControl::new(20, true);
+        control.set_wanted_position(0.0, 65.0, 8.0, 0.5);
+        control.tick(&mob);
+        let moving = living.movement_input.load();
+        assert_eq!(moving.x, 0.3);
+        assert!((moving.y - 0.4).abs() < 1.0e-7);
+        assert_eq!(moving.y, moving.z);
+        control.tick(&mob);
+        let idle = living.movement_input.load();
+        world.level.shutdown().await;
+        assert_eq!(idle, Vector3::new(0.3, 0.0, 0.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dolphin_water_travel_consumes_control_speed_and_unscaled_direction() -> TestResult {
+        use crate::entity::passive::dolphin::DolphinEntity;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let dolphin = DolphinEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::DOLPHIN,
+        ));
+        let living = &dolphin.mob_entity.living_entity;
+        living.set_attribute_base(&Attributes::MOVEMENT_SPEED, 0.4);
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        {
+            let mut navigator = dolphin
+                .mob_entity
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.move_to_path(
+                Some(Path::new(
+                    vec![Node::new(BlockPos::new(0, 64, 8))],
+                    BlockPos::new(0, 64, 8),
+                    true,
+                )),
+                0.5,
+                living,
+            )
+        };
+        let input = {
+            let mut control = dolphin
+                .mob_entity
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            control.set_wanted_position(0.0, 64.0, 8.0, 0.5);
+            control.tick(&*dolphin);
+            living.movement_input.load()
+        };
+        living.travel_in_fluid(&*dolphin, true);
+        let position = living.entity.pos.load();
+        let velocity = living.entity.velocity.load();
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        world.set_block_state(
+            &BlockPos::new(0, 64, 1),
+            pumpkin_data::Block::STONE.default_state.id,
+            pumpkin_world::world::BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+                | pumpkin_world::world::BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        living.entity.set_pos(Vector3::new(0.5, 64.0, 0.5));
+        living.entity.velocity.store(Vector3::new(0.0, 0.0, 1.0));
+        living.travel_in_fluid(&*dolphin, true);
+        let wall_velocity = living.entity.velocity.load();
+        let wall_collision = living.entity.horizontal_collision.load(Ordering::Relaxed);
+        world.level.shutdown().await;
+        assert!(wall_collision);
+        assert!(wall_velocity.y < 0.0);
+        assert!((input.z - 0.2).abs() < 1.0e-7);
+        assert!((position.z - 0.0008).abs() < 1.0e-9);
+        assert!((velocity.z - 0.00072).abs() < 1.0e-9);
+        assert!((velocity.y + 0.0005).abs() < 1.0e-9);
+        Ok(())
+    }
+    #[tokio::test]
+    async fn zero_air_drag_preserves_controller_velocity_in_travel() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mob = probe(world.clone(), Arc::new(AtomicUsize::new(0)));
+        let living = &mob.mob.living_entity;
+        living.set_attribute_base(&Attributes::AIR_DRAG_MODIFIER, 0.0);
+        living.entity.set_has_no_gravity(true);
+        living.entity.velocity.store(Vector3::new(1.0, 1.0, 1.0));
+        living.travel_in_air(&mob);
+        let velocity = living.entity.velocity.load();
+        world.level.shutdown().await;
+        assert_eq!(velocity, Vector3::new(1.0, 1.0, 1.0));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn installed_bee_look_control_pauses_while_angry() -> TestResult {
+        use crate::entity::passive::bee::BeeEntity;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bee = BeeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BEE,
+        ));
+        let entity = &bee.mob_entity.living_entity.entity;
+        entity.pitch.store(30.0);
+        bee.neutral_data
+            .anger_end_time
+            .store(100, Ordering::Relaxed);
+        let angry_pitch = {
+            let mut look = bee
+                .mob_entity
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            look.tick(&*bee);
+            entity.pitch.load()
+        };
+        assert_eq!(angry_pitch, 30.0);
+        bee.neutral_data.anger_end_time.store(-1, Ordering::Relaxed);
+        let pitch = {
+            let mut look = bee
+                .mob_entity
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            look.tick(&*bee);
+            entity.pitch.load()
+        };
+        world.level.shutdown().await;
+        assert_eq!(pitch, 0.0);
+        Ok(())
+    }
+    #[tokio::test]
+    async fn immobile_living_mobs_skip_ai_without_discarding_knockback() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut mob = probe(world.clone(), calls.clone());
+        mob.immobile = true;
+        let living = &mob.mob.living_entity;
+        living.movement_input.store(Vector3::new(0.5, 0.25, 0.5));
+        living.jumping.store(true, Ordering::Relaxed);
+        living.entity.velocity.store(Vector3::new(0.1, 0.0, 0.0));
+        living.tick_movement(&mob);
+        world.level.shutdown().await;
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        assert!(!living.is_dead_or_dying());
+        assert!(!living.jumping.load(Ordering::Relaxed));
+        assert_eq!(living.movement_input.load(), Vector3::new(0.0, 0.25, 0.0));
+        assert!(living.entity.pos.load().x > 0.05);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn no_ai_pauses_species_decisions_while_age_still_advances() -> TestResult {
+        use crate::entity::{ageable::AgeableMob, passive::bee::BeeEntity};
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bee = BeeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BEE,
+        ));
+        bee.set_age(-20);
+        bee.set_has_stung(true);
+        bee.time_since_sting.store(100, Ordering::Relaxed);
+        bee.mob_entity.set_no_ai(true);
+        bee.mob_tick(&*bee);
+        bee.mob_entity.living_entity.tick_movement(&*bee);
+        assert_eq!(bee.get_age(), -19);
+        assert_eq!(bee.time_since_sting.load(Ordering::Relaxed), 100);
+        bee.mob_entity.set_no_ai(false);
+        bee.mob_tick(&*bee);
+        bee.mob_entity.living_entity.tick_movement(&*bee);
+        let age = bee.get_age();
+        let sting = bee.time_since_sting.load(Ordering::Relaxed);
+        world.level.shutdown().await;
+        assert_eq!(age, -18);
+        assert_eq!(sting, 101);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn ageable_mobs_grow_once_per_ai_step_without_tick_count() -> TestResult {
+        use crate::entity::{ageable::AgeableMob, passive::cow::CowEntity};
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        cow.set_age(-20);
+        let entity = &cow.mob_entity.living_entity.entity;
+        entity.tick_count.store(7, Ordering::Relaxed);
+        cow.mob_entity.living_entity.tick_movement(&*cow);
+        let age = cow.get_age();
+        let tick_count = entity.tick_count.load(Ordering::Relaxed);
+        world.level.shutdown().await;
+        assert_eq!(age, -19);
+        assert_eq!(tick_count, 7);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod player_wall_tests {
+    use pumpkin_data::attributes::Attributes;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_world::world::BlockFlags;
+
+    use super::LivingEntity;
+    use crate::entity::Entity;
+    use crate::entity::ai::test_support::world;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[tokio::test]
+    async fn pushed_player_stops_at_a_wall() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        world.set_block_state(
+            &BlockPos::new(1, 64, 0),
+            pumpkin_data::Block::STONE.default_state.id,
+            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        let living = LivingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::PLAYER,
+        ));
+        let position = living.entity.pos.load();
+
+        // Into the wall on x: that axis stops, z keeps going, the position stays the client's
+        living.entity.velocity.store(Vector3::new(0.5, 0.0, 0.1));
+        living.make_move(&living);
+        assert_eq!(living.entity.velocity.load(), Vector3::new(0.0, 0.0, 0.1));
+        assert_eq!(living.entity.pos.load(), position);
+
+        // Bounciness 0.5 sends half of it back, sneaking suppresses that
+        living.set_attribute_base(&Attributes::BOUNCINESS, 0.5);
+        living.entity.velocity.store(Vector3::new(0.5, 0.0, 0.0));
+        living.make_move(&living);
+        assert_eq!(living.entity.velocity.load().x, -0.25);
+        living
+            .entity
+            .sneaking
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        living.entity.velocity.store(Vector3::new(0.5, 0.0, 0.0));
+        living.make_move(&living);
+        assert_eq!(living.entity.velocity.load().x, 0.0);
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn impulse_context_ignores_fall_damage_above_impact_and_persists_nbt() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let living = LivingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::ZOMBIE,
+        ));
+
+        let initial_impact = living.calculate_impact_position();
+        assert_eq!(initial_impact, Vector3::new(0.5, 64.0, 0.5));
+        living.set_ignore_fall_damage_from_current_impulse(true, initial_impact);
+        assert!(living.is_ignoring_fall_damage_from_current_impulse());
+        assert!(living.is_in_post_impulse_grace_time());
+
+        // Chaining a smash higher up preserves the original lower impact position.
+        living.entity.set_pos(Vector3::new(0.5, 70.0, 0.5));
+        assert_eq!(
+            living.calculate_impact_position(),
+            Vector3::new(0.5, 64.0, 0.5)
+        );
+
+        let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+        living.write_living_nbt(&mut nbt);
+        let restored = LivingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::ZOMBIE,
+        ));
+        restored.read_living_nbt_non_mut(&nbt);
+        assert_eq!(
+            restored.current_impulse_impact_pos.load(),
+            Some(Vector3::new(0.5, 64.0, 0.5))
+        );
+        assert_eq!(
+            restored
+                .current_impulse_context_reset_grace_time
+                .load(std::sync::atomic::Ordering::Relaxed),
+            40
+        );
+
+        // Landing at the impact height deals no fall damage and clears the impulse context.
+        assert!(!restored.cause_fall_damage(&restored, 12.0, 1.0));
+        assert!(!restored.is_ignoring_fall_damage_from_current_impulse());
+        assert!(!restored.is_in_post_impulse_grace_time());
+
+        // Landing 6 blocks below the impact height only counts the 6 blocks below impact (3 damage).
+        restored.set_ignore_fall_damage_from_current_impulse(true, Vector3::new(0.5, 64.0, 0.5));
+        restored.entity.set_pos(Vector3::new(0.5, 58.0, 0.5));
+        assert!(restored.cause_fall_damage(&restored, 20.0, 1.0));
+        assert!(!restored.is_ignoring_fall_damage_from_current_impulse());
+        assert_eq!(restored.last_damage_taken.load(), 3.0);
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+}

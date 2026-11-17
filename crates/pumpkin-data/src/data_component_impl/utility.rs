@@ -1,13 +1,427 @@
-use crate::data_component_impl::{DataComponentImpl, get_i32_hash, get_str_hash};
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
+use super::Digest;
+use crate::data_component_impl::combat::SwingAnimationImpl;
+use crate::data_component_impl::{DataComponentImpl, get_f32_hash, get_i32_hash, get_str_hash};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use std::borrow::Cow;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IntProvider {
+    Id(Cow<'static, str>),
+    Inline(i32),
+}
+
+impl std::hash::Hash for IntProvider {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Id(s) => {
+                0u8.hash(state);
+                s.hash(state);
+            }
+            Self::Inline(v) => {
+                1u8.hash(state);
+                v.hash(state);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum FloatProvider {
+    Id(Cow<'static, str>),
+    Inline(f32),
+}
+
+impl PartialEq for FloatProvider {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Id(a), Self::Id(b)) => a == b,
+            (Self::Inline(a), Self::Inline(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for FloatProvider {}
+
+impl std::hash::Hash for FloatProvider {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Id(s) => {
+                0u8.hash(state);
+                s.hash(state);
+            }
+            Self::Inline(v) => {
+                1u8.hash(state);
+                v.to_bits().hash(state);
+            }
+        }
+    }
+}
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DyeImpl;
+pub struct CookingFuelImpl {
+    pub burn_time: IntProvider,
+    pub speed_multiplier: FloatProvider,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompostableImpl {
+    pub chance: f32,
+}
+
+impl CompostableImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let layers = data.extract_compound()?.get_string("layers")?;
+        let chance = match layers.as_ref() {
+            "minecraft:compostable/low" => 0.3,
+            "minecraft:compostable/low_medium" => 0.5,
+            "minecraft:compostable/medium" => 0.65,
+            "minecraft:compostable/medium_high" => 0.85,
+            "minecraft:compostable/always_add_one" => 1.0,
+            _ => return None,
+        };
+        Some(Self { chance })
+    }
+}
+
+impl DataComponentImpl for CompostableImpl {
+    fn write_data(&self) -> NbtTag {
+        let layers = match self.chance {
+            0.3 => "minecraft:compostable/low",
+            0.5 => "minecraft:compostable/low_medium",
+            0.65 => "minecraft:compostable/medium",
+            0.85 => "minecraft:compostable/medium_high",
+            1.0 => "minecraft:compostable/always_add_one",
+            _ => return NbtTag::End,
+        };
+        let mut compound = NbtCompound::new();
+        compound.put_string("layers", layers.to_string());
+        NbtTag::Compound(compound)
+    }
+
+    default_impl!(Compostable);
+}
+
+impl std::hash::Hash for CompostableImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u32(self.chance.to_bits());
+    }
+}
+
+impl CookingFuelImpl {
+    #[must_use]
+    pub fn get_burn_ticks(&self, is_fast_cooking: bool) -> u16 {
+        let base_ticks: u32 = match &self.burn_time {
+            IntProvider::Inline(v) => (*v).max(0) as u32,
+            IntProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "cooking/time_lava_bucket" => 20000,
+                    "cooking/time_coal_block" => 16000,
+                    "cooking/time_dried_kelp_block" => 4001,
+                    "cooking/time_blaze_rod" => 2400,
+                    "cooking/time_coal" => 1600,
+                    "cooking/time_boats" => 1200,
+                    "cooking/time_hanging_signs" => 800,
+                    "cooking/time_roots"
+                    | "cooking/time_wood_blocks"
+                    | "cooking/time_wood_items_small" => 300,
+                    "cooking/time_wood_items_large" => 200,
+                    "cooking/time_wood_slabs" => 150,
+                    "cooking/time_dry_plants"
+                    | "cooking/time_wood_items_extra_small"
+                    | "cooking/time_wool" => 100,
+                    "cooking/time_wool_carpets" => 67,
+                    "cooking/time_bamboo" | "cooking/time_wool_slabs" => 50,
+                    _ => 0,
+                }
+            }
+        };
+
+        let factor = if is_fast_cooking { 2 } else { 1 };
+        (base_ticks / factor) as u16
+    }
+
+    #[must_use]
+    pub fn get_speed_multiplier(&self, is_fast_cooking: bool) -> f32 {
+        match &self.speed_multiplier {
+            FloatProvider::Inline(v) => *v,
+            FloatProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "cooking/fast_speed_multiplier" => 2.0,
+                    "cooking/normal_speed_multiplier" => 1.0,
+                    "cooking/speed_default" => {
+                        if is_fast_cooking {
+                            2.0
+                        } else {
+                            1.0
+                        }
+                    }
+                    _ => 1.0,
+                }
+            }
+        }
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        match data {
+            NbtTag::Compound(compound) => {
+                let burn_time = if let Some(id) = compound.get_string("burn_time") {
+                    IntProvider::Id(Cow::Owned(id.to_string()))
+                } else if let Some(val) = compound.get("burn_time").and_then(NbtTag::extract_int) {
+                    IntProvider::Inline(val)
+                } else {
+                    return None;
+                };
+
+                let speed_multiplier = if let Some(id) = compound.get_string("speed_multiplier") {
+                    FloatProvider::Id(Cow::Owned(id.to_string()))
+                } else if let Some(val) = compound
+                    .get("speed_multiplier")
+                    .and_then(NbtTag::extract_float)
+                {
+                    FloatProvider::Inline(val)
+                } else {
+                    FloatProvider::Id(Cow::Borrowed("minecraft:cooking/speed_default"))
+                };
+
+                Some(Self {
+                    burn_time,
+                    speed_multiplier,
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+impl DataComponentImpl for CookingFuelImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        match &self.burn_time {
+            IntProvider::Id(id) => compound.put_string("burn_time", id.to_string()),
+            IntProvider::Inline(val) => compound.put_int("burn_time", *val),
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => compound.put_string("speed_multiplier", id.to_string()),
+            FloatProvider::Inline(val) => compound.put_float("speed_multiplier", *val),
+        }
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        match &self.burn_time {
+            IntProvider::Id(id) => {
+                digest.update(&[1u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            IntProvider::Inline(val) => {
+                digest.update(&[2u8]);
+                digest.update(&get_i32_hash(*val).to_le_bytes());
+            }
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => {
+                digest.update(&[3u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            FloatProvider::Inline(val) => {
+                digest.update(&[4u8]);
+                digest.update(&get_f32_hash(*val).to_le_bytes());
+            }
+        }
+        digest.finalize() as i32
+    }
+
+    default_impl!(CookingFuel);
+}
+
+/// 26.3 `minecraft:waxed` marker.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct WaxedImpl;
+
+impl WaxedImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
+
+impl DataComponentImpl for WaxedImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
+    default_impl!(Waxed);
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct DyeImpl {
+    pub color: crate::dye_color::DyeColor,
+}
+impl DyeImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let color = if let Some(s) = data.extract_string() {
+            crate::dye_color::DyeColor::by_name(s)?
+        } else if let Some(id) = data.extract_int() {
+            crate::dye_color::DyeColor::by_id(id as u8)?
+        } else {
+            return None;
+        };
+        Some(Self { color })
+    }
+}
 impl DataComponentImpl for DyeImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.color.name().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.color.name()) as i32
+    }
     default_impl!(Dye);
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct BlockTransformerImpl {
+    pub transformer: Cow<'static, str>,
+}
+impl BlockTransformerImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|transformer| Self {
+            transformer: Cow::Owned(transformer.to_string()),
+        })
+    }
+
+    #[must_use]
+    pub fn get_transformer(&self) -> Option<&'static crate::block_transformer::BlockTransformer> {
+        crate::block_transformer::get_block_transformer(&self.transformer)
+    }
+}
+impl DataComponentImpl for BlockTransformerImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.transformer.to_string().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.transformer) as i32
+    }
+    default_impl!(BlockTransformer);
+}
+
+/// 26.3 `minecraft:brewing_fuel` (`BrewingFuel(ResolvableInt uses, ResolvableFloat speedMultiplier)`).
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct BrewingFuelImpl {
+    pub uses: IntProvider,
+    pub speed_multiplier: FloatProvider,
+}
+impl BrewingFuelImpl {
+    pub const DEFAULT: Self = Self {
+        uses: IntProvider::Id(Cow::Borrowed("minecraft:brewing/uses_default")),
+        speed_multiplier: FloatProvider::Id(Cow::Borrowed("minecraft:brewing/speed_default")),
+    };
+
+    #[must_use]
+    pub fn get_uses(&self) -> i32 {
+        match &self.uses {
+            IntProvider::Inline(v) => (*v).max(0),
+            IntProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "brewing/uses_default" => 20,
+                    _ => crate::context_provider::get_context_int_provider_json(id)
+                        .and_then(|s| s.trim().parse::<i32>().ok())
+                        .unwrap_or(20)
+                        .max(0),
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn get_speed_multiplier(&self) -> f32 {
+        match &self.speed_multiplier {
+            FloatProvider::Inline(v) => (*v).max(0.0),
+            FloatProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "brewing/speed_default" => 1.0,
+                    _ => crate::context_provider::get_context_float_provider_json(id)
+                        .and_then(|s| s.trim().parse::<f32>().ok())
+                        .unwrap_or(1.0)
+                        .max(0.0),
+                }
+            }
+        }
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        if compound.is_empty() {
+            return Some(Self::DEFAULT);
+        }
+        let uses = if let Some(id) = compound.get_string("uses") {
+            IntProvider::Id(Cow::Owned(id.to_string()))
+        } else if let Some(val) = compound.get("uses").and_then(NbtTag::extract_int) {
+            IntProvider::Inline(val)
+        } else {
+            return None;
+        };
+        let speed_multiplier = if let Some(id) = compound.get_string("speed_multiplier") {
+            FloatProvider::Id(Cow::Owned(id.to_string()))
+        } else if let Some(val) = compound
+            .get("speed_multiplier")
+            .and_then(NbtTag::extract_float)
+        {
+            FloatProvider::Inline(val)
+        } else {
+            FloatProvider::Id(Cow::Borrowed("minecraft:brewing/speed_default"))
+        };
+        Some(Self {
+            uses,
+            speed_multiplier,
+        })
+    }
+}
+impl DataComponentImpl for BrewingFuelImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        match &self.uses {
+            IntProvider::Id(id) => compound.put_string("uses", id.to_string()),
+            IntProvider::Inline(val) => compound.put_int("uses", *val),
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => compound.put_string("speed_multiplier", id.to_string()),
+            FloatProvider::Inline(val) => compound.put_float("speed_multiplier", *val),
+        }
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        match &self.uses {
+            IntProvider::Id(id) => {
+                digest.update(&[1u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            IntProvider::Inline(val) => {
+                digest.update(&[2u8]);
+                digest.update(&get_i32_hash(*val).to_le_bytes());
+            }
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => {
+                digest.update(&[3u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            FloatProvider::Inline(val) => {
+                digest.update(&[4u8]);
+                digest.update(&get_f32_hash(*val).to_le_bytes());
+            }
+        }
+        digest.finalize() as i32
+    }
+
+    default_impl!(BrewingFuel);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -27,12 +441,6 @@ impl DataComponentImpl for DyedColorImpl {
         get_i32_hash(self.rgb) as i32
     }
     default_impl!(DyedColor);
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct MapColorImpl;
-impl DataComponentImpl for MapColorImpl {
-    default_impl!(MapColor);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -56,13 +464,68 @@ impl DataComponentImpl for MapIdImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapDecorationsImpl;
+impl MapDecorationsImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for MapDecorationsImpl {
+    // TAG_End would close the surrounding components compound and corrupt the chunk.
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
     default_impl!(MapDecorations);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct MapPostProcessingImpl;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum MapPostProcessing {
+    Lock = 0,
+    Scale = 1,
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
+pub struct MapPostProcessingImpl {
+    pub processing: Option<MapPostProcessing>,
+}
+
+impl MapPostProcessingImpl {
+    pub const SCALE: Self = Self {
+        processing: Some(MapPostProcessing::Scale),
+    };
+    pub const LOCK: Self = Self {
+        processing: Some(MapPostProcessing::Lock),
+    };
+
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        if let Some(val) = data.extract_int() {
+            let processing = match val {
+                0 => Some(MapPostProcessing::Lock),
+                1 => Some(MapPostProcessing::Scale),
+                _ => None,
+            };
+            Some(Self { processing })
+        } else if let Some(val) = data.extract_string() {
+            let processing = match val {
+                "lock" => Some(MapPostProcessing::Lock),
+                "scale" => Some(MapPostProcessing::Scale),
+                _ => None,
+            };
+            Some(Self { processing })
+        } else {
+            None
+        }
+    }
+}
+
 impl DataComponentImpl for MapPostProcessingImpl {
+    fn write_data(&self) -> NbtTag {
+        match self.processing {
+            Some(MapPostProcessing::Lock) => NbtTag::Int(0),
+            Some(MapPostProcessing::Scale) => NbtTag::Int(1),
+            None => NbtTag::Int(0),
+        }
+    }
     default_impl!(MapPostProcessing);
 }
 
@@ -97,19 +560,92 @@ impl DataComponentImpl for ChargedProjectilesImpl {
 #[derive(Clone)]
 pub struct BundleContentsImpl {
     pub items: Vec<crate::item_stack::ItemStack>,
+    pub selected_item: i32,
 }
 impl PartialEq for BundleContentsImpl {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+    fn eq(&self, other: &Self) -> bool {
+        self.items.len() == other.items.len()
+            && self
+                .items
+                .iter()
+                .zip(&other.items)
+                .all(|(a, b)| a.are_equal(b))
     }
 }
 impl Eq for BundleContentsImpl {}
 impl std::fmt::Debug for BundleContentsImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BundleContentsImpl")
+        f.debug_struct("BundleContentsImpl")
+            .field("items_len", &self.items.len())
+            .field("selected_item", &self.selected_item)
+            .finish()
     }
 }
+
+const fn gcd_u64(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        let t = b;
+        b = a % b;
+        a = t;
+    }
+    a
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WeightFraction {
+    num: u64,
+    den: u64,
+}
+
+impl WeightFraction {
+    const ZERO: Self = Self { num: 0, den: 1 };
+    const ONE: Self = Self { num: 1, den: 1 };
+    const BUNDLE_IN_BUNDLE: Self = Self { num: 1, den: 16 };
+
+    const fn new(num: u64, den: u64) -> Option<Self> {
+        if den == 0 {
+            return None;
+        }
+        if num == 0 {
+            return Some(Self::ZERO);
+        }
+        let g = gcd_u64(num, den);
+        Some(Self {
+            num: num / g,
+            den: den / g,
+        })
+    }
+
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        let g = gcd_u64(self.den, rhs.den);
+        let left = self.num.checked_mul(rhs.den / g)?;
+        let right = rhs.num.checked_mul(self.den / g)?;
+        let num = left.checked_add(right)?;
+        let den = (self.den / g).checked_mul(rhs.den)?;
+        Self::new(num, den)
+    }
+
+    fn checked_mul_count(self, count: u64) -> Option<Self> {
+        let num = self.num.checked_mul(count)?;
+        Self::new(num, self.den)
+    }
+}
+
 impl BundleContentsImpl {
+    pub const NO_SELECTED_ITEM_INDEX: i32 = -1;
+    pub const EMPTY: Self = Self {
+        items: Vec::new(),
+        selected_item: Self::NO_SELECTED_ITEM_INDEX,
+    };
+
+    #[must_use]
+    pub const fn new(items: Vec<crate::item_stack::ItemStack>) -> Self {
+        Self {
+            items,
+            selected_item: Self::NO_SELECTED_ITEM_INDEX,
+        }
+    }
+
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
         let mut items = Vec::new();
         if let NbtTag::List(l) = tag {
@@ -121,42 +657,132 @@ impl BundleContentsImpl {
                 }
             }
         }
-        Some(Self { items })
+        Some(Self::new(items))
     }
-    pub fn get_weight(&self) -> u32 {
-        self.items
-            .iter()
-            .map(|item| item.item_count as u32 * (64 / item.get_max_stack_size() as u32).max(1))
-            .sum()
+
+    #[must_use]
+    pub fn can_item_be_in_bundle(stack: &crate::item_stack::ItemStack) -> bool {
+        !stack.is_empty()
+            && !crate::tag::Item::MINECRAFT_SHULKER_BOXES
+                .1
+                .contains(&stack.item.id)
     }
+
+    fn single_item_weight(stack: &crate::item_stack::ItemStack) -> Option<WeightFraction> {
+        if let Some(nested) = stack.get_data_component::<Self>() {
+            return nested
+                .content_weight()?
+                .checked_add(WeightFraction::BUNDLE_IN_BUNDLE);
+        }
+        if let Some(bees) = stack.get_data_component::<super::BeesImpl>()
+            && !bees.bees.is_empty()
+        {
+            return Some(WeightFraction::ONE);
+        }
+        WeightFraction::new(1, u64::from(stack.get_max_stack_size().max(1)))
+    }
+
+    fn content_weight(&self) -> Option<WeightFraction> {
+        let mut total = WeightFraction::ZERO;
+        for item in &self.items {
+            let item_weight =
+                Self::single_item_weight(item)?.checked_mul_count(u64::from(item.item_count))?;
+            total = total.checked_add(item_weight)?;
+        }
+        Some(total)
+    }
+
+    #[must_use]
+    pub fn max_amount_to_add(&self, stack: &crate::item_stack::ItemStack) -> u8 {
+        if !Self::can_item_be_in_bundle(stack) {
+            return 0;
+        }
+        let Some(current) = self.content_weight() else {
+            return 0;
+        };
+        if current.num >= current.den {
+            return 0;
+        }
+        let Some(item_weight) = Self::single_item_weight(stack) else {
+            return 0;
+        };
+        if item_weight.num == 0 {
+            return u8::MAX;
+        }
+        // Remaining capacity is (current.den - current.num) / current.den.
+        // Dividing by item_weight.num / item_weight.den gives:
+        // ((current.den - current.num) * item_weight.den) / (current.den * item_weight.num).
+        let rem_num = current.den - current.num;
+        let Some(numerator) = rem_num.checked_mul(item_weight.den) else {
+            return 0;
+        };
+        let Some(denominator) = current.den.checked_mul(item_weight.num) else {
+            return 0;
+        };
+        if denominator == 0 {
+            return 0;
+        }
+        u8::try_from(numerator / denominator).unwrap_or(u8::MAX)
+    }
+
+    #[must_use]
+    pub const fn index_is_outside_allowed_bounds(&self, index: i32) -> bool {
+        index < 0 || (index as usize) >= self.items.len()
+    }
+
+    pub const fn toggle_selected_item(&mut self, index: i32) {
+        self.selected_item =
+            if self.selected_item != index && !self.index_is_outside_allowed_bounds(index) {
+                index
+            } else {
+                Self::NO_SELECTED_ITEM_INDEX
+            };
+    }
+
+    #[must_use]
+    pub const fn get_selected_item_index(&self) -> i32 {
+        if self.index_is_outside_allowed_bounds(self.selected_item) {
+            Self::NO_SELECTED_ITEM_INDEX
+        } else {
+            self.selected_item
+        }
+    }
+
     pub fn try_insert(&mut self, stack: &mut crate::item_stack::ItemStack) -> bool {
-        if stack.is_empty() || stack.get_data_component::<BundleContentsImpl>().is_some() {
+        let count_to_add = stack.item_count.min(self.max_amount_to_add(stack));
+        if count_to_add == 0 {
             return false;
         }
-        let weight_per_item = (64 / stack.get_max_stack_size() as u32).max(1);
-        let mut inserted_anything = false;
-        while stack.item_count > 0 && self.get_weight() + weight_per_item <= 64 {
-            if let Some(top) = self.items.first_mut()
-                && crate::item_stack::ItemStack::are_items_and_components_equal(top, stack)
-                && top.item_count < top.get_max_stack_size()
-            {
-                top.item_count += 1;
-                stack.item_count -= 1;
-                inserted_anything = true;
-                continue;
-            }
-            self.items.insert(0, stack.copy_with_count(1));
-            stack.item_count -= 1;
-            inserted_anything = true;
+
+        if stack.get_max_stack_size() > 1
+            && let Some(existing_idx) = self.items.iter().position(|item| {
+                crate::item_stack::ItemStack::are_items_and_components_equal(item, stack)
+            })
+        {
+            let existing = self.items.remove(existing_idx);
+            let combined_count = existing.item_count.saturating_add(count_to_add);
+            let merged = existing.copy_with_count(combined_count);
+            stack.decrement(count_to_add);
+            self.items.insert(0, merged);
+        } else {
+            let split = stack.split(count_to_add);
+            self.items.insert(0, split);
         }
-        inserted_anything
+        true
     }
+
     pub fn try_extract(&mut self) -> Option<crate::item_stack::ItemStack> {
         if self.items.is_empty() {
-            None
-        } else {
-            Some(self.items.remove(0))
+            return None;
         }
+        let remove_index = if self.index_is_outside_allowed_bounds(self.selected_item) {
+            0
+        } else {
+            self.selected_item as usize
+        };
+        let removed = self.items.remove(remove_index);
+        self.toggle_selected_item(Self::NO_SELECTED_ITEM_INDEX);
+        Some(removed)
     }
 }
 impl DataComponentImpl for BundleContentsImpl {
@@ -320,7 +946,7 @@ impl DataComponentImpl for FireworkExplosionImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         digest.update(&[self.shape.to_id() as u8]);
         for color in &self.colors {
@@ -380,7 +1006,7 @@ impl DataComponentImpl for FireworksImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         digest.update(&get_i32_hash(self.flight_duration).to_le_bytes());
         for explosion in &self.explosions {
@@ -495,7 +1121,7 @@ impl DataComponentImpl for ProfileImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         if let Some(name) = &self.name {
             digest.update(&[1u8]);
             digest.update(&get_str_hash(name).to_le_bytes());
@@ -544,12 +1170,190 @@ impl DataComponentImpl for ProfileImpl {
 pub struct JukeboxPlayableImpl {
     pub song: &'static str,
 }
+impl JukeboxPlayableImpl {
+    #[must_use]
+    pub const fn song_registry_key(song: crate::jukebox_song::JukeboxSong) -> &'static str {
+        use crate::jukebox_song::JukeboxSong;
+        match song {
+            JukeboxSong::Id11 => "minecraft:11",
+            JukeboxSong::Id13 => "minecraft:13",
+            JukeboxSong::Id5 => "minecraft:5",
+            JukeboxSong::Blocks => "minecraft:blocks",
+            JukeboxSong::Bounce => "minecraft:bounce",
+            JukeboxSong::Cat => "minecraft:cat",
+            JukeboxSong::Chirp => "minecraft:chirp",
+            JukeboxSong::Creator => "minecraft:creator",
+            JukeboxSong::CreatorMusicBox => "minecraft:creator_music_box",
+            JukeboxSong::Far => "minecraft:far",
+            JukeboxSong::LavaChicken => "minecraft:lava_chicken",
+            JukeboxSong::Mall => "minecraft:mall",
+            JukeboxSong::Mellohi => "minecraft:mellohi",
+            JukeboxSong::Otherside => "minecraft:otherside",
+            JukeboxSong::Pigstep => "minecraft:pigstep",
+            JukeboxSong::Precipice => "minecraft:precipice",
+            JukeboxSong::Relic => "minecraft:relic",
+            JukeboxSong::Stal => "minecraft:stal",
+            JukeboxSong::Strad => "minecraft:strad",
+            JukeboxSong::Tears => "minecraft:tears",
+            JukeboxSong::Wait => "minecraft:wait",
+            JukeboxSong::Ward => "minecraft:ward",
+        }
+    }
+
+    #[must_use]
+    pub const fn song_from_id(id: u32) -> Option<crate::jukebox_song::JukeboxSong> {
+        use crate::jukebox_song::JukeboxSong;
+        match id {
+            0 => Some(JukeboxSong::Id11),
+            1 => Some(JukeboxSong::Id13),
+            2 => Some(JukeboxSong::Id5),
+            3 => Some(JukeboxSong::Blocks),
+            4 => Some(JukeboxSong::Bounce),
+            5 => Some(JukeboxSong::Cat),
+            6 => Some(JukeboxSong::Chirp),
+            7 => Some(JukeboxSong::Creator),
+            8 => Some(JukeboxSong::CreatorMusicBox),
+            9 => Some(JukeboxSong::Far),
+            10 => Some(JukeboxSong::LavaChicken),
+            11 => Some(JukeboxSong::Mall),
+            12 => Some(JukeboxSong::Mellohi),
+            13 => Some(JukeboxSong::Otherside),
+            14 => Some(JukeboxSong::Pigstep),
+            15 => Some(JukeboxSong::Precipice),
+            16 => Some(JukeboxSong::Relic),
+            17 => Some(JukeboxSong::Stal),
+            18 => Some(JukeboxSong::Strad),
+            19 => Some(JukeboxSong::Tears),
+            20 => Some(JukeboxSong::Wait),
+            21 => Some(JukeboxSong::Ward),
+            _ => None,
+        }
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let raw_song = data
+            .extract_string()
+            .or_else(|| data.extract_compound().and_then(|c| c.get_string("song")))?;
+        let song = crate::jukebox_song::JukeboxSong::from_name(
+            raw_song.strip_prefix("minecraft:").unwrap_or(raw_song),
+        )?;
+        Some(Self {
+            song: Self::song_registry_key(song),
+        })
+    }
+}
 impl DataComponentImpl for JukeboxPlayableImpl {
+    fn write_data(&self) -> NbtTag {
+        let song = if self.song.contains(':') {
+            self.song.to_string()
+        } else {
+            format!("minecraft:{}", self.song)
+        };
+        NbtTag::String(song.into())
+    }
     default_impl!(JukeboxPlayable);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RecipesImpl;
+pub struct RecipesImpl {
+    pub recipes: Cow<'static, [Cow<'static, str>]>,
+}
+#[allow(non_upper_case_globals)]
+pub const RecipesImpl: RecipesImpl = RecipesImpl {
+    recipes: Cow::Borrowed(&[]),
+};
+impl RecipesImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let mut recipes = Vec::new();
+        if let NbtTag::List(list) = data {
+            for tag in list {
+                if let NbtTag::String(s) = tag {
+                    recipes.push(Cow::Owned(s.to_string()));
+                }
+            }
+        } else if let Some(compound) = data.extract_compound()
+            && let Some(list) = compound
+                .get_list("recipes")
+                .or_else(|| compound.get_list("Recipes"))
+        {
+            for tag in list {
+                if let NbtTag::String(s) = tag {
+                    recipes.push(Cow::Owned(s.to_string()));
+                }
+            }
+        }
+        Some(Self {
+            recipes: Cow::Owned(recipes),
+        })
+    }
+}
 impl DataComponentImpl for RecipesImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(
+            self.recipes
+                .iter()
+                .map(|r| NbtTag::String(r.to_string().into()))
+                .collect(),
+        )
+    }
     default_impl!(Recipes);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BundleContentsImpl;
+    use crate::{item::Item, item_stack::ItemStack};
+
+    #[test]
+    fn bundle_toggle_selected_item_and_extract() {
+        let mut contents = BundleContentsImpl::EMPTY;
+        let mut diamonds = ItemStack::new(2, &Item::DIAMOND);
+        let mut emeralds = ItemStack::new(3, &Item::EMERALD);
+        let mut sticks = ItemStack::new(4, &Item::STICK);
+
+        assert!(contents.try_insert(&mut diamonds));
+        assert!(contents.try_insert(&mut emeralds));
+        assert!(contents.try_insert(&mut sticks));
+        // Inserted via addFirst -> [STICK(4), EMERALD(3), DIAMOND(2)]
+        assert_eq!(contents.items.len(), 3);
+        assert_eq!(
+            contents.get_selected_item_index(),
+            BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+        );
+
+        // Selecting index 1 (EMERALD), then toggling index 1 again resets to -1.
+        contents.toggle_selected_item(1);
+        assert_eq!(contents.get_selected_item_index(), 1);
+        contents.toggle_selected_item(1);
+        assert_eq!(
+            contents.get_selected_item_index(),
+            BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+        );
+
+        // Out-of-bounds index resets to -1.
+        contents.toggle_selected_item(2);
+        assert_eq!(contents.get_selected_item_index(), 2);
+        contents.toggle_selected_item(99);
+        assert_eq!(
+            contents.get_selected_item_index(),
+            BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+        );
+
+        // Extracting with selected index 1 removes EMERALD and resets selection to -1.
+        contents.toggle_selected_item(1);
+        let extracted = contents.try_extract().unwrap();
+        assert_eq!(extracted.item.id, Item::EMERALD.id);
+        assert_eq!(extracted.item_count, 3);
+        assert_eq!(
+            contents.get_selected_item_index(),
+            BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+        );
+        assert_eq!(contents.items.len(), 2);
+
+        // Inserting additional diamonds merges with non-top DIAMOND stack and moves it to index 0.
+        let mut more_diamonds = ItemStack::new(5, &Item::DIAMOND);
+        assert!(contents.try_insert(&mut more_diamonds));
+        assert_eq!(contents.items[0].item.id, Item::DIAMOND.id);
+        assert_eq!(contents.items[0].item_count, 7);
+    }
 }

@@ -127,6 +127,15 @@ impl PermissionRegistry {
         self.permissions.get(node)
     }
 
+    /// Returns a copy of every registered permission, in no particular order.
+    #[must_use]
+    pub fn get_permissions(&self) -> Vec<Permission> {
+        self.permissions
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
+    }
+
     /// Overrides the default behaviour of an already-registered permission.
     ///
     /// Used to apply per-command permission overrides from the server
@@ -442,6 +451,7 @@ impl<'de> Deserialize<'de> for PermissionLvl {
         let value = u8::deserialize(deserializer)?;
         match value {
             0 => Ok(Self::Zero),
+            1 => Ok(Self::One),
             2 => Ok(Self::Two),
             3 => Ok(Self::Three),
             4 => Ok(Self::Four),

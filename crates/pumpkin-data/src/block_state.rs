@@ -1,6 +1,9 @@
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
-use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
+use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument, SOUND_TYPES};
+use crate::blocks::SuffocationPredicate;
+use crate::sound::Sound;
+use crate::tag::{self, Taggable};
 use crate::{Block, BlockDirection, BlockId};
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
@@ -30,6 +33,8 @@ pub struct BlockState {
     pub outline_shapes: &'static [u16],
     /// How much light is subtracted as it passes through this block (0 for transparent, 15 for opaque).
     pub opacity: u8,
+    /// Index into [`SOUND_TYPES`], see [`Self::get_sound_type`].
+    pub sound_type: u8,
     /// The ID of the block entity associated with this state.
     /// Set to `u16::MAX` if the block does not hold NBT data.
     pub block_entity_type: u16,
@@ -40,6 +45,20 @@ pub struct BlockState {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct BlockStateId(u16);
+
+/// Vanilla `SoundType`: the sounds a block makes when broken, stepped on, placed, hit or fallen on.
+#[derive(Debug)]
+pub struct SoundType {
+    /// The vanilla `SoundType` constant name, e.g. `WOOD`.
+    pub name: &'static str,
+    pub volume: f32,
+    pub pitch: f32,
+    pub break_sound: Sound,
+    pub step_sound: Sound,
+    pub place_sound: Sound,
+    pub hit_sound: Sound,
+    pub fall_sound: Sound,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -126,6 +145,24 @@ impl BlockState {
         self.state_flags & HAS_RANDOM_TICKS != 0
     }
 
+    /// Returns whether this block state is a full opaque cube (`isSolidRender()` in Java).
+    #[must_use]
+    pub const fn is_solid_render(&self) -> bool {
+        self.state_flags & IS_SOLID_RENDER != 0
+    }
+
+    /// Returns whether this block state can occlude other blocks (`canOcclude` in Java).
+    #[must_use]
+    pub const fn can_occlude(&self) -> bool {
+        self.state_flags & CAN_OCCLUDE != 0
+    }
+
+    /// Returns whether this block produces an analog output signal for comparators (`hasAnalogOutputSignal()` in Java).
+    #[must_use]
+    pub const fn has_analog_output_signal(&self) -> bool {
+        self.state_flags & HAS_ANALOG_OUTPUT_SIGNAL != 0
+    }
+
     ///`isFaceSturdy()` in Java!
     #[must_use]
     pub const fn is_side_solid(&self, side: BlockDirection) -> bool {
@@ -139,10 +176,14 @@ impl BlockState {
         }
     }
 
-    ///isSideSolid(..., Direction.UP, SideShapeType.CENTER) in Java!
-    ///Only valid for UP and DOWN sides
+    /// Checks if a face of this block provides center support (`isFaceSturdy(..., Direction, SupportType.CENTER)` in Java).
+    /// Used for placing torches, levers, redstone components, lanterns, and wall fixtures.
     #[must_use]
     pub const fn is_center_solid(&self, side: BlockDirection) -> bool {
+        if self.is_side_solid(side) {
+            return true;
+        }
+
         match side {
             BlockDirection::Down => self.side_flags & DOWN_CENTER_SOLID != 0,
             BlockDirection::Up => self.side_flags & UP_CENTER_SOLID != 0,
@@ -150,25 +191,39 @@ impl BlockState {
         }
     }
 
+    /// `isSuffocating()` in Java. Shulker boxes don't check whether their lid is open.
     #[must_use]
-    pub fn is_waterlogged(&self) -> bool {
-        let block = Block::from_state_id(self.id);
+    pub fn is_suffocating(&self) -> bool {
+        let block = self.id.to_block();
+        match block.suffocation_predicate() {
+            // Flag first: the tag check scans about 1000 IDs.
+            SuffocationPredicate::Default => {
+                self.is_full_cube() && block.has_tag(&tag::Block::MINECRAFT_CAUSES_SUFFOCATION)
+            }
+            SuffocationPredicate::Never => false,
+            SuffocationPredicate::Always => true,
+        }
+    }
 
-        block.properties(self.id).is_some_and(|props| {
-            props
-                .to_props()
-                .iter()
-                .any(|(k, v)| k == &"waterlogged" && v == &"true")
-        })
+    #[must_use]
+    pub const fn is_waterlogged(&self) -> bool {
+        self.state_flags & IS_WATERLOGGED != 0
     }
 
     /// Produce a new state identical to `self` except the waterlogged property
-    /// is set to `true`.  If the block type does not support waterlogging or
-    /// the state was already waterlogged, `None` is returned.
+    /// is set to `value`. If the block type does not support waterlogging or
+    /// the state already had waterlogged set to `value`, `None` is returned.
     #[must_use]
-    pub fn with_waterlogged(&self) -> Option<&'static BlockState> {
-        let block = Block::from_state_id(self.id);
-        block.with_waterlogged(self.id)
+    pub fn set_waterlogged(&self, value: bool) -> Option<&'static BlockState> {
+        self.id
+            .to_block()
+            .set_waterlogged(self.id, value)
+            .map(BlockStateId::to_state)
+    }
+
+    #[must_use]
+    pub fn get_sound_type(&self) -> &'static SoundType {
+        &SOUND_TYPES[self.sound_type as usize]
     }
 
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
@@ -219,12 +274,12 @@ impl BlockState {
     }
 
     #[must_use]
-    pub const fn rotate(&self, rotation: crate::block_rotation::Rotation) -> &'static Self {
+    pub fn rotate(&self, rotation: crate::block_rotation::Rotation) -> &'static Self {
         Block::from_state_id(self.id).rotate(self.id, rotation)
     }
 
     #[must_use]
-    pub const fn mirror(&self, mirror: crate::block_rotation::Mirror) -> &'static Self {
+    pub fn mirror(&self, mirror: crate::block_rotation::Mirror) -> &'static Self {
         Block::from_state_id(self.id).mirror(self.id, mirror)
     }
 }
@@ -282,13 +337,49 @@ impl BlockStateId {
 
     #[inline]
     #[must_use]
-    pub const fn rotate(self, rotation: crate::block_rotation::Rotation) -> &'static BlockState {
+    pub const fn is_solid_render(self) -> bool {
+        self.to_state().is_solid_render()
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn can_occlude(self) -> bool {
+        self.to_state().can_occlude()
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn has_analog_output_signal(self) -> bool {
+        self.to_state().has_analog_output_signal()
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn is_waterlogged(self) -> bool {
+        self.to_state().is_waterlogged()
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn is_side_solid(self, side: BlockDirection) -> bool {
+        self.to_state().is_side_solid(side)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn is_center_solid(self, side: BlockDirection) -> bool {
+        self.to_state().is_center_solid(side)
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn rotate(self, rotation: crate::block_rotation::Rotation) -> &'static BlockState {
         Block::from_state_id(self).rotate(self, rotation)
     }
 
     #[inline]
     #[must_use]
-    pub const fn mirror(self, mirror: crate::block_rotation::Mirror) -> &'static BlockState {
+    pub fn mirror(self, mirror: crate::block_rotation::Mirror) -> &'static BlockState {
         Block::from_state_id(self).mirror(self, mirror)
     }
 }
@@ -323,6 +414,11 @@ const IS_SOLID: u16 = 1 << 6;
 const IS_FULL_CUBE: u16 = 1 << 7;
 const IS_SOLID_BLOCK: u16 = 1 << 8;
 const HAS_RANDOM_TICKS: u16 = 1 << 9;
+const IS_SOLID_RENDER: u16 = 1 << 10;
+const CAN_OCCLUDE: u16 = 1 << 11;
+const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
+// codegen flag
+const IS_WATERLOGGED: u16 = 1 << 13;
 
 // side_flags
 const DOWN_SIDE_SOLID: u8 = 1 << 0;
@@ -336,11 +432,43 @@ const UP_CENTER_SOLID: u8 = 1 << 7;
 
 #[cfg(test)]
 mod tests {
-    use crate::{Block, BlockStateId, block_state_remap::remap_block_state_for_version};
-    use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+    use super::{BlockState, BlockStateId};
+    use crate::{Block, BlockId};
+    use pumpkin_util::math::position::BlockPos;
 
     fn assert_close(actual: f64, expected: f64) {
         assert!((actual - expected).abs() < 1.0e-6, "{actual} != {expected}");
+    }
+
+    #[test]
+    fn waterlogged_flag_matches_properties() {
+        for raw in 0..BlockStateId::STATE_COUNT {
+            let id = BlockStateId::new(raw).unwrap();
+            let by_props = Block::from_state_id(id)
+                .properties(id)
+                .is_some_and(|props| {
+                    props
+                        .to_props()
+                        .contains(&crate::Property::Waterlogged(true))
+                });
+            assert_eq!(id.is_waterlogged(), by_props, "{id:?}");
+        }
+    }
+
+    #[test]
+    fn block_lookups_share_one_copy() {
+        let stone = Block::from_id(BlockId::STONE);
+        assert!(std::ptr::eq(
+            stone,
+            Block::from_name("minecraft:stone").unwrap()
+        ));
+        assert!(std::ptr::eq(
+            stone,
+            Block::from_item_id(stone.item_id).unwrap()
+        ));
+        let state = BlockState::from_id(stone.default_state.id);
+        assert!(std::ptr::eq(state, stone.default_state));
+        assert!(std::ptr::eq(state, &stone.states[0]));
     }
 
     #[test]
@@ -361,33 +489,5 @@ mod tests {
         assert_close(shifted_shape.max.x, 0.84375);
         assert_close(shifted_shape.min.z, 0.65625);
         assert_close(shifted_shape.max.z, 0.84375);
-    }
-
-    #[test]
-    fn supported_client_versions_keep_offset_collisions_mapped() {
-        let versions = [
-            JavaMinecraftVersion::V_1_20_5,
-            JavaMinecraftVersion::V_1_21,
-            JavaMinecraftVersion::V_1_21_2,
-            JavaMinecraftVersion::V_1_21_4,
-            JavaMinecraftVersion::V_1_21_5,
-            JavaMinecraftVersion::V_1_21_6,
-            JavaMinecraftVersion::V_1_21_7,
-            JavaMinecraftVersion::V_1_21_9,
-            JavaMinecraftVersion::V_1_21_11,
-            JavaMinecraftVersion::V_26_1,
-            JavaMinecraftVersion::V_26_2,
-        ];
-
-        for version in versions {
-            for block in [Block::BAMBOO, Block::POINTED_DRIPSTONE] {
-                assert_ne!(
-                    remap_block_state_for_version(block.default_state.id.as_u16(), version),
-                    BlockStateId::AIR.as_u16(),
-                    "{} mapped to air for {version}",
-                    block.name
-                );
-            }
-        }
     }
 }

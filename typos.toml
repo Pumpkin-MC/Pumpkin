@@ -8,3 +8,9 @@ ba = "ba"
 fo = "fo"
 undescore = "undescore"
 replaceables = "replaceables"
+convertable = "convertable"
+
+[default.extend-identifiers]
+# Vanilla method names
+areMergable = "areMergable"
+isMergable = "isMergable"

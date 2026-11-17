@@ -8,8 +8,10 @@
 
 use std::sync::{Arc, atomic::AtomicU8};
 
-use pumpkin_data::{fuels::is_fuel, item::Item, statistic::StatisticCategory};
-use pumpkin_world::{block::entities::ExperienceContainer, inventory::Inventory};
+use crate::{inventory::Inventory, window_property::ExperienceContainer};
+use pumpkin_data::{
+    data_component_impl::CookingFuelImpl, item::Item, statistic::StatisticCategory,
+};
 
 use tracing::debug;
 
@@ -73,8 +75,16 @@ impl Slot for FurnaceLikeSlot {
         match self.slot_type {
             FurnaceLikeSlotType::Top => true,
             FurnaceLikeSlotType::Bottom => {
-                is_fuel(stack.item.id) || stack.item.id == Item::BUCKET.id
+                stack.get_data_component::<CookingFuelImpl>().is_some()
+                    || stack.item.id == Item::BUCKET.id
             }
+        }
+    }
+
+    fn get_max_item_count_for_stack(&self, stack: &pumpkin_data::item_stack::ItemStack) -> u8 {
+        match self.slot_type {
+            FurnaceLikeSlotType::Bottom if stack.item.id == Item::BUCKET.id => 1,
+            _ => self.get_max_item_count().min(stack.get_max_stack_size()),
         }
     }
 

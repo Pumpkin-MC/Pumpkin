@@ -4,9 +4,11 @@ use pumpkin_macros::packet;
 
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 
+/// Sent by the server to synchronize the day-night cycle time (in ticks) with the client.
 #[derive(PacketWrite)]
 #[packet(10)]
 pub struct CSetTime {
+    /// In-game time of day in ticks.
     pub time: VarInt,
 }
 

@@ -1,0 +1,54 @@
+package pumpkin:plugin@0.1.0;
+
+interface datapack {
+    /// Information about a discovered or loaded datapack.
+    record datapack-info {
+        id: string,
+        name: string,
+        description: string,
+        pack-format: u32,
+        is-enabled: bool,
+        recipe-count: u32,
+        function-count: u32,
+    }
+
+    /// Position options for enabling a datapack relative to other packs.
+    variant enable-position {
+        first,
+        last,
+        before(string),
+        after(string),
+    }
+
+    /// Global manager for inspecting and controlling server datapacks.
+    resource datapack-manager {
+        /// Returns all known datapacks (both enabled and available/disabled).
+        list-all-packs: func() -> list<datapack-info>;
+
+        /// Returns only currently enabled datapacks.
+        list-enabled-packs: func() -> list<datapack-info>;
+
+        /// Returns available (disabled) datapacks.
+        list-available-packs: func() -> list<datapack-info>;
+
+        /// Retrieves details about a specific datapack by name or ID.
+        get-pack: func(name: string) -> option<datapack-info>;
+
+        /// Checks if a datapack is currently enabled.
+        is-enabled: func(name: string) -> bool;
+
+        /// Enables a datapack with a specific priority position.
+        enable-pack: func(name: string, position: enable-position) -> result<_, string>;
+
+        /// Disables an enabled datapack.
+        disable-pack: func(name: string) -> result<_, string>;
+
+        /// Reloads all enabled datapacks, recipes, and function tags,
+        /// synchronizes recipes with online players, and triggers `#minecraft:load`.
+        reload: func() -> result<_, string>;
+
+        /// Executes a datapack function or function tag (e.g. "namespace:fn" or "#namespace:tag").
+        /// Returns the number of commands executed.
+        execute-function: func(name: string) -> result<u32, string>;
+    }
+}

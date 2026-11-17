@@ -3,11 +3,10 @@
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site};
-use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_data::{Block, BlockId};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
+use syn::{self, Attribute, DeriveInput, Token, Type, parse_quote};
 use syn::{Block as SynBlock, Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
 
 /// Derives the `Payload` trait for an event struct, enabling it to be used in the plugin system.
@@ -314,25 +313,51 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Marks a struct as representing a specific block by its name.
+fn block_expr_to_id(expr: &Expr) -> proc_macro2::TokenStream {
+    match expr {
+        Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(lit_str),
+            ..
+        }) => {
+            let val = lit_str.value();
+            let name = val.strip_prefix("minecraft:").unwrap_or(&val);
+            let const_ident = format_ident!("{}", name.to_shouty_snake_case());
+            quote_spanned! { lit_str.span() => pumpkin_data::BlockId::#const_ident }
+        }
+        Expr::Path(syn::ExprPath { path, .. }) => {
+            if path.segments.len() == 1 {
+                let ident = &path.segments[0].ident;
+                quote_spanned! { expr.span() => pumpkin_data::BlockId::#ident }
+            } else if path.segments.len() == 2
+                && (path.segments[0].ident == "Block" || path.segments[0].ident == "BlockId")
+            {
+                let ident = &path.segments[1].ident;
+                quote_spanned! { expr.span() => pumpkin_data::BlockId::#ident }
+            } else {
+                quote_spanned! { expr.span() => pumpkin_data::BlockId::from(#expr) }
+            }
+        }
+        _ => {
+            quote_spanned! { expr.span() => pumpkin_data::BlockId::from(#expr) }
+        }
+    }
+}
+
+/// Marks a struct as representing a specific block (or blocks) by name, expression, or constant.
 ///
 /// # Arguments
-/// - `args` – The `TokenStream` representing the block name literal.
+/// - `args` – One or more block names (e.g. `"stone"`, `"minecraft:stone"`), constants (e.g. `Block::STONE`, `BlockId::STONE`, `STONE`), or expressions.
 /// - `item` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
 #[proc_macro_attribute]
 pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let input_item = item.clone();
 
-    let arg_lit = parse_macro_input!(args as LitStr);
-    let arg_value = arg_lit.value();
+    let args = parse_macro_input!(args with Punctuated<Expr, Token![,]>::parse_terminated);
+    if args.is_empty() {
+        abort_call_site!("expected at least one block argument");
+    }
 
-    let block_name = arg_value.strip_prefix("minecraft:").unwrap_or(&arg_value);
-    let Some(block) = Block::from_name(block_name) else {
-        return syn::Error::new(arg_lit.span(), "Invalid block name")
-            .to_compile_error()
-            .into();
-    };
-    let const_ident = format_ident!("{}", block.name.to_shouty_snake_case());
+    let id_tokens: Vec<_> = args.iter().map(block_expr_to_id).collect();
 
     let ast = parse_macro_input!(item as DeriveInput);
     let name = &ast.ident;
@@ -341,7 +366,7 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let generated = quote! {
         impl #impl_generics crate::block::BlockMetadata for #name #ty_generics #where_clause {
             fn ids() -> Box<[pumpkin_data::BlockId]> {
-                [pumpkin_data::BlockId::#const_ident].into()
+                Box::new([ #(#id_tokens),* ])
             }
         }
     };
@@ -355,37 +380,27 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
 /// Marks a struct as representing a set of blocks from a given tag.
 ///
 /// # Arguments
-/// - `args` – The `TokenStream` representing the block tag literal.
+/// - `args` – The `TokenStream` representing the block tag literal or expression.
 /// - `item` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
 #[proc_macro_attribute]
 pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStream {
     let original_item = item.clone();
 
-    let arg_lit = parse_macro_input!(args as LitStr);
+    let arg_expr = parse_macro_input!(args as Expr);
     let ast = parse_macro_input!(item as DeriveInput);
 
     let name = &ast.ident;
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
-    let full_tag = arg_lit.value();
-
-    let Some(values) = get_tag_ids(RegistryKey::Block, &full_tag) else {
-        return syn::Error::new(arg_lit.span(), format!("Failed to get tag IDs: {full_tag}"))
-            .to_compile_error()
-            .into();
-    };
-    let const_values: Vec<_> = values
-        .iter()
-        .map(|v| {
-            let block = BlockId::new_or_air(*v).to_block();
-            format_ident!("{}", block.name.to_shouty_snake_case())
-        })
-        .collect();
-
     let expanded = quote! {
         impl #impl_generics crate::block::BlockMetadata for #name #ty_generics #where_clause {
             fn ids() -> Box<[pumpkin_data::BlockId]> {
-                Box::new([ #(pumpkin_data::BlockId::#const_values),* ])
+                pumpkin_data::tag::get_tag_ids(pumpkin_data::tag::RegistryKey::Block, #arg_expr)
+                    .unwrap_or_else(|| panic!("Failed to get tag IDs for: {}", #arg_expr))
+                    .iter()
+                    .copied()
+                    .map(pumpkin_data::BlockId::new_or_air)
+                    .collect()
             }
         }
     };
@@ -553,6 +568,10 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
+    if let syn::Data::Enum(data) = &input.data {
+        return derive_enum_write(&input, data).into();
+    }
+
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
@@ -586,7 +605,7 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        return syn::Error::new(name.span(), "Only structs are supported")
+        return syn::Error::new(name.span(), "Only structs and enums are supported")
             .to_compile_error()
             .into();
     };
@@ -623,6 +642,10 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
+    if let syn::Data::Enum(data) = &input.data {
+        return derive_enum_read(&input, data).into();
+    }
+
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
@@ -646,7 +669,7 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        return syn::Error::new(name.span(), "Only structs are supported")
+        return syn::Error::new(name.span(), "Only structs and enums are supported")
             .to_compile_error()
             .into();
     };
@@ -685,6 +708,10 @@ pub fn derive_deserialize_from_slice(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
+    if let syn::Data::Enum(data) = &input.data {
+        return derive_enum_read_slice(&input, data).into();
+    }
+
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
@@ -707,7 +734,7 @@ pub fn derive_deserialize_from_slice(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        return syn::Error::new(name.span(), "Only structs are supported")
+        return syn::Error::new(name.span(), "Only structs and enums are supported")
             .to_compile_error()
             .into();
     };
@@ -723,6 +750,171 @@ pub fn derive_deserialize_from_slice(input: TokenStream) -> TokenStream {
     };
 
     expanded.into()
+}
+
+/// How a unit enum's discriminant is laid out on the wire.
+struct EnumRepr {
+    /// The integer type from `#[repr(..)]`.
+    ty: syn::Ident,
+    /// `Some(path)` when the discriminant is variable-length encoded.
+    varint: Option<proc_macro2::TokenStream>,
+    is_big_endian: bool,
+}
+
+impl EnumRepr {
+    fn read_expr(&self, reader: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let ty = &self.ty;
+        match (&self.varint, self.is_big_endian) {
+            (Some(codec), _) => quote! { #codec::read(#reader)?.0 },
+            (None, true) => quote! { <#ty as PacketRead>::read_be(#reader)? },
+            (None, false) => quote! { <#ty as PacketRead>::read(#reader)? },
+        }
+    }
+
+    fn read_slice_expr(&self) -> proc_macro2::TokenStream {
+        let ty = &self.ty;
+        match (&self.varint, self.is_big_endian) {
+            (Some(codec), _) => quote! { #codec::read_slice(buf)?.0 },
+            (None, true) => syn::Error::new(ty.span(), "Cannot read big-endian enums from a slice")
+                .to_compile_error(),
+            (None, false) => quote! { <#ty as PacketReadSlice>::read_slice(buf)? },
+        }
+    }
+
+    fn write_expr(&self) -> proc_macro2::TokenStream {
+        let ty = &self.ty;
+        match (&self.varint, self.is_big_endian) {
+            (Some(codec), _) => quote! { #codec(*self as #ty).write(writer) },
+            (None, true) => quote! { (*self as #ty).write_be(writer) },
+            (None, false) => quote! { (*self as #ty).write(writer) },
+        }
+    }
+}
+
+/// Reads the discriminant layout from `#[repr(..)]` plus an optional
+/// `#[serial(varint)]` / `#[serial(big_endian)]` on the enum itself.
+fn parse_enum_repr(input: &DeriveInput) -> EnumRepr {
+    let mut ty = None;
+    for attr in &input.attrs {
+        if attr.path().is_ident("repr")
+            && let Ok(ident) = attr.parse_args::<syn::Ident>()
+        {
+            ty = Some(ident);
+        }
+    }
+
+    let Some(ty) = ty else {
+        abort!(
+            input.ident,
+            "Serializable enums need an explicit `#[repr(..)]` integer type"
+        );
+    };
+
+    let (is_big_endian, _) = check_serial_attributes(&input.attrs);
+    let mut is_varint = false;
+    for attr in &input.attrs {
+        if attr.path().is_ident("serial") {
+            let _ = attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("varint") {
+                    is_varint = true;
+                }
+                Ok(())
+            });
+        }
+    }
+
+    let varint = is_varint.then(|| match ty.to_string().as_str() {
+        "i32" => quote! { crate::codec::var_int::VarInt },
+        "u32" => quote! { crate::codec::var_uint::VarUInt },
+        "i64" => quote! { crate::codec::var_long::VarLong },
+        "u64" => quote! { crate::codec::var_ulong::VarULong },
+        other => abort!(ty, "No variable-length encoding exists for `{}`", other),
+    });
+
+    EnumRepr {
+        ty,
+        varint,
+        is_big_endian,
+    }
+}
+
+/// Collects the variants of a field-less enum, aborting on anything else.
+fn unit_enum_variants(data: &syn::DataEnum) -> Vec<&syn::Ident> {
+    data.variants
+        .iter()
+        .map(|variant| {
+            if !matches!(variant.fields, Fields::Unit) {
+                abort!(variant, "Only field-less enum variants are supported");
+            }
+            &variant.ident
+        })
+        .collect()
+}
+
+fn derive_enum_read(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    let repr = parse_enum_repr(input);
+    let ty = &repr.ty;
+    let variants = unit_enum_variants(data);
+    let read = repr.read_expr(&quote! { reader });
+
+    quote! {
+        impl PacketRead for #name {
+            fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, std::io::Error> {
+                let value = #read;
+                #(
+                    if value == Self::#variants as #ty {
+                        return Ok(Self::#variants);
+                    }
+                )*
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(concat!("Invalid ", stringify!(#name), ": {}"), value),
+                ))
+            }
+        }
+    }
+}
+
+fn derive_enum_read_slice(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    let repr = parse_enum_repr(input);
+    let ty = &repr.ty;
+    let variants = unit_enum_variants(data);
+    let read = repr.read_slice_expr();
+
+    quote! {
+        impl<'a> PacketReadSlice<'a> for #name {
+            fn read_slice(buf: &mut &'a [u8]) -> Result<Self, std::io::Error> {
+                let value = #read;
+                #(
+                    if value == Self::#variants as #ty {
+                        return Ok(Self::#variants);
+                    }
+                )*
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(concat!("Invalid ", stringify!(#name), ": {}"), value),
+                ))
+            }
+        }
+    }
+}
+
+/// Emits `PacketWrite` for a field-less enum.
+fn derive_enum_write(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    let repr = parse_enum_repr(input);
+    let _ = unit_enum_variants(data);
+    let write = repr.write_expr();
+
+    quote! {
+        impl PacketWrite for #name {
+            fn write<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+                #write
+            }
+        }
+    }
 }
 
 /// Checks a field's `#[serial(...)]` attributes.
@@ -804,33 +996,6 @@ impl syn::parse::Parse for TranslateCrossInput {
 
 fn eval_translation_key_expr(expr: &syn::Expr) -> Option<(&'static str, proc_macro2::Span)> {
     match expr {
-        syn::Expr::Path(expr_path) => {
-            let segments: Vec<String> = expr_path
-                .path
-                .segments
-                .iter()
-                .map(|s| s.ident.to_string())
-                .collect();
-            let seg_refs: Vec<&str> = segments.iter().map(String::as_str).collect();
-
-            let (is_java, const_ident) = match seg_refs.as_slice() {
-                ["translation", "java", ident]
-                | ["pumpkin_data" | "crate", "translation", "java", ident] => (true, *ident),
-                ["translation", "bedrock", ident]
-                | ["pumpkin_data" | "crate", "translation", "bedrock", ident] => (false, *ident),
-                _ => return None,
-            };
-
-            let key = if is_java {
-                pumpkin_data::translation::java::get(const_ident)
-                    .and_then(pumpkin_data::translation::java::get_value)
-            } else {
-                pumpkin_data::translation::bedrock::get(const_ident)
-                    .and_then(pumpkin_data::translation::bedrock::get_value)
-            };
-
-            key.map(|k| (k, expr.span()))
-        }
         syn::Expr::Lit(syn::ExprLit {
             lit: syn::Lit::Str(lit_str),
             ..

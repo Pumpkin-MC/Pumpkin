@@ -9,11 +9,11 @@ use crate::{
     ser::NetworkWriteExt,
 };
 
-/// Encoder: Server -> Client
-/// Supports Zlib compression.
+/// Encodes outgoing Bedrock game packets and batches them into compressed frames.
 pub struct BedrockBatchEncoder {
     // compression and compression threshold
     compression: Option<(CompressionThreshold, CompressionLevel)>,
+    prefixed_compression: bool,
 }
 
 impl Default for BedrockBatchEncoder {
@@ -23,11 +23,16 @@ impl Default for BedrockBatchEncoder {
 }
 
 impl BedrockBatchEncoder {
+    /// Creates a new uncompressed batch encoder.
     #[must_use]
     pub const fn new() -> Self {
-        Self { compression: None }
+        Self {
+            compression: None,
+            prefixed_compression: true,
+        }
     }
 
+    /// Sets the compression threshold and Deflate level for batched frames.
     pub const fn set_compression(
         &mut self,
         compression_info: (CompressionThreshold, CompressionLevel),
@@ -35,6 +40,12 @@ impl BedrockBatchEncoder {
         self.compression = Some(compression_info);
     }
 
+    /// Sets whether compressed batch frames include the 1-byte compression method prefix (`1.20.60+`).
+    pub const fn set_prefixed_compression(&mut self, prefixed: bool) {
+        self.prefixed_compression = prefixed;
+    }
+
+    /// Encodes a raw packet payload with the 14-bit Bedrock game packet header into a batch frame.
     pub fn write_game_packet(
         &self,
         packet_id: u16,
@@ -70,8 +81,10 @@ impl BedrockBatchEncoder {
         let mut data_to_write = Vec::new();
 
         if let Some((_threshold, level)) = self.compression {
-            // Write Compression Method (0x00 for Zlib)
-            data_to_write.push(0x00);
+            if self.prefixed_compression {
+                // Write Compression Method (0x00 for Zlib)
+                data_to_write.push(0x00);
+            }
 
             let mut encoder = DeflateEncoder::new(Vec::new(), Compression::new(level));
             encoder.write_all(&inner_buffer)?;
@@ -87,6 +100,7 @@ impl BedrockBatchEncoder {
         Ok(())
     }
 
+    /// Encodes a typed Bedrock clientbound packet into a batch frame and writes it.
     pub fn write_packet<P: crate::BClientPacket + ?Sized>(
         &self,
         packet: &P,
@@ -103,6 +117,7 @@ impl BedrockBatchEncoder {
         )
     }
 
+    /// Serializes a typed Bedrock clientbound packet into an in-memory byte buffer.
     pub fn serialize_packet<P: crate::BClientPacket + ?Sized>(
         &self,
         packet: &P,
@@ -113,6 +128,7 @@ impl BedrockBatchEncoder {
     }
 }
 
+/// Encodes a typed Bedrock clientbound packet with default encoder settings.
 pub fn write_packet<P: crate::BClientPacket + ?Sized>(
     packet: &P,
     writer: impl Write,
@@ -120,6 +136,7 @@ pub fn write_packet<P: crate::BClientPacket + ?Sized>(
     BedrockBatchEncoder::new().write_packet(packet, writer)
 }
 
+/// Serializes a typed Bedrock clientbound packet to bytes with default encoder settings.
 pub fn serialize_packet<P: crate::BClientPacket + ?Sized>(
     packet: &P,
 ) -> Result<bytes::Bytes, Error> {
@@ -157,6 +174,36 @@ mod tests {
         let raw_packet = decoder.get_game_packet(&mut cursor)?;
 
         assert_eq!(raw_packet.id, packet_id as i32);
+        assert_eq!(raw_packet.payload.as_ref(), payload);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn bedrock_unprefixed_compression_cycle() -> Result<(), Box<dyn std::error::Error>> {
+        let mut encoder = BedrockBatchEncoder::new();
+        encoder.set_compression((256, 6));
+        encoder.set_prefixed_compression(false);
+
+        let packet_id = 300;
+        let payload = b"Legacy pre-1.20.60 Bedrock batch";
+        let mut encoded_buf = Vec::new();
+        encoder.write_game_packet(
+            packet_id,
+            SubClient::Main,
+            SubClient::Main,
+            payload,
+            &mut encoded_buf,
+        )?;
+
+        let mut decoder = BedrockBatchDecoder::new();
+        decoder.set_compression(256);
+        decoder.set_prefixed_compression(false);
+
+        let decompressed_payload = decoder.get_packet_payload(encoded_buf).await?;
+        let mut cursor = Cursor::new(decompressed_payload);
+        let raw_packet = decoder.get_game_packet(&mut cursor)?;
+
+        assert_eq!(raw_packet.id, i32::from(packet_id));
         assert_eq!(raw_packet.payload.as_ref(), payload);
         Ok(())
     }

@@ -49,7 +49,10 @@ use super::features::{
     nether_forest_vegetation::NetherForestVegetationFeature,
     netherrack_replace_blobs::ReplaceBlobsFeature,
     ore::OreFeature,
+    overlay::OverlayFeature,
+    projected_random_patchy_square::ProjectedRandomPatchySquareFeature,
     random_boolean_selector::RandomBooleanFeature,
+    random_neighbor_spread::RandomNeighborSpreadFeature,
     random_patch::RandomPatchFeature,
     random_selector::RandomFeature,
     replace_single_block::ReplaceSingleBlockFeature,
@@ -60,7 +63,9 @@ use super::features::{
     seagrass::SeagrassFeature,
     simple_block::SimpleBlockFeature,
     simple_random_selector::SimpleRandomFeature,
+    single_block_pillar::SingleBlockPillarFeature,
     spring_feature::SpringFeatureFeature,
+    stepped_column_cluster::SteppedColumnClusterFeature,
     tree::TreeFeature,
     twisting_vines::TwistingVinesFeature,
     underwater_magma::UnderwaterMagmaFeature,
@@ -71,6 +76,7 @@ use super::features::{
     waterlogged_vegetation_patch,
     waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
     weeping_vines::WeepingVinesFeature,
+    weighted_random_selector::WeightedRandomFeature,
 };
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::WorldPortalExt;
@@ -151,12 +157,18 @@ pub enum ConfiguredFeature {
     ScatteredOre(ScatteredOreFeature),
     RandomSelector(RandomFeature),
     SimpleRandomSelector(SimpleRandomFeature),
+    WeightedRandomSelector(WeightedRandomFeature),
     RandomBooleanSelector(RandomBooleanFeature),
     Geode(Box<GeodeFeature>),
     DripstoneCluster(DripstoneClusterFeature),
     LargeDripstone(LargeDripstoneFeature),
     PointedDripstone(SmallDripstoneFeature),
     SculkPatch(SculkPatchFeature),
+    Overlay(OverlayFeature),
+    ProjectedRandomPatchySquare(ProjectedRandomPatchySquareFeature),
+    RandomNeighborSpread(RandomNeighborSpreadFeature),
+    SingleBlockPillar(SingleBlockPillarFeature),
+    SteppedColumnCluster(SteppedColumnClusterFeature),
 }
 
 // Yes this may look ugly and you wonder why this is hard coded, but it makes sense to hardcode since we have to add logic for these in code
@@ -315,6 +327,15 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::WeightedRandomSelector(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::Vines(_feature) => VinesFeature::generate(
                 chunk,
                 block_registry,
@@ -422,21 +443,45 @@ impl ConfiguredFeature {
             Self::BonusChest(_feature) => {
                 BonusChestFeature::generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::DeltaFeature(_feature) => {
-                DeltaFeatureFeature::generate(chunk, min_y, height, feature_name, random, pos)
+            Self::DeltaFeature(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::BlockPile(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::DripstoneCluster(feature) => feature.generate(chunk, pos),
             Self::LargeDripstone(feature) => feature.generate(chunk, random, pos),
             Self::EndGateway(feature) => feature.generate(chunk, pos),
             Self::FillLayer(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::FallenTree(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::HugeBrownMushroom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            Self::HugeFungus(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
+            Self::HugeFungus(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::HugeRedMushroom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
@@ -452,7 +497,46 @@ impl ConfiguredFeature {
             Self::WeepingVines(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            _ => false,
+            Self::Overlay(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::ProjectedRandomPatchySquare(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::RandomNeighborSpread(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::SingleBlockPillar(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::SteppedColumnCluster(feature) => {
+                feature.generate(chunk, block_registry, random, pos)
+            }
+            Self::NoOp => false,
         }
     }
 }

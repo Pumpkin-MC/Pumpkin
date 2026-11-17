@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "#c:sands/colorless",
+      "required": false
+    },
+    {
+      "id": "#c:sands/red",
+      "required": false
+    }
+  ]
+}

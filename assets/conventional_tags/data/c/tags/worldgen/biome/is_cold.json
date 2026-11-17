@@ -1,0 +1,7 @@
+{
+  "values": [
+    "#c:is_cold/overworld",
+    "#c:is_cold/nether",
+    "#c:is_cold/end"
+  ]
+}

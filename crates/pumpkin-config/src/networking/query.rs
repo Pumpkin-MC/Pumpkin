@@ -17,7 +17,7 @@ pub struct QueryConfig {
 impl Default for QueryConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             address: SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 25565),
         }
     }

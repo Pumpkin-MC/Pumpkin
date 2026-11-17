@@ -1,0 +1,114 @@
+use std::sync::Weak;
+
+use super::{Goal, to_goal_ticks};
+use crate::entity::EntityBase;
+use crate::entity::mob::Mob;
+use crate::entity::mob::enderman::EndermanEntity;
+use crate::world::game_event::GameEventContext;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::game_event::GameEvent;
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_world::world::BlockFlags;
+use rand::RngExt;
+
+pub struct PickUpBlockGoal {
+    enderman: Weak<EndermanEntity>,
+}
+
+impl PickUpBlockGoal {
+    #[must_use]
+    pub const fn new(enderman: Weak<EndermanEntity>) -> Self {
+        Self { enderman }
+    }
+}
+
+impl Goal for PickUpBlockGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(enderman) = self.enderman.upgrade() else {
+            return false;
+        };
+        if enderman.get_carried_block().is_some() {
+            return false;
+        }
+
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        let world = entity.world.load();
+        if !world.level_info.load().game_rules.mob_griefing {
+            return false;
+        }
+
+        if mob.get_random().random_range(0..to_goal_ticks(20)) != 0 {
+            return false;
+        }
+
+        true
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        let Some(enderman) = self.enderman.upgrade() else {
+            return;
+        };
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        let pos = entity.pos.load();
+
+        let (bx, by, bz) = {
+            let mut rng = mob.get_random();
+            (
+                (pos.x - 2.0 + rng.random::<f64>() * 4.0).floor() as i32,
+                (pos.y + rng.random::<f64>() * 3.0).floor() as i32,
+                (pos.z - 2.0 + rng.random::<f64>() * 4.0).floor() as i32,
+            )
+        };
+
+        let world = entity.world.load_full();
+        let target_pos = BlockPos::new(bx, by, bz);
+
+        let block = world.get_block(&target_pos);
+
+        if !block.has_tag(&tag::Block::MINECRAFT_ENDERMAN_HOLDABLE) {
+            return;
+        }
+
+        let enderman_block = entity.block_pos.load();
+        let enderman_center = Vector3::new(
+            enderman_block.0.x as f64 + 0.5,
+            by as f64 + 0.5,
+            enderman_block.0.z as f64 + 0.5,
+        );
+        let block_center = Vector3::new(bx as f64 + 0.5, by as f64 + 0.5, bz as f64 + 0.5);
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            enderman_center,
+            block_center,
+            pumpkin_world::clip::ClipBlock::Outline,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
+        if !hit.is_miss && hit.block_pos != target_pos {
+            return;
+        }
+
+        let mut event =
+            crate::plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent::new(
+                entity.entity_id,
+                target_pos,
+                "minecraft:air".to_string(),
+            );
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return;
+        }
+
+        world.set_block_state(&target_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
+        let source: &dyn EntityBase = enderman.as_ref();
+        world.emit_game_event_with_context(
+            GameEvent::BlockDestroy.name(),
+            target_pos.to_f64(),
+            &GameEventContext {
+                source_entity: Some(source),
+            },
+        );
+        enderman.set_carried_block(Some(block.default_state.id));
+    }
+}

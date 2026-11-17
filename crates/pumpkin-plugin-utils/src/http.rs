@@ -31,10 +31,18 @@ impl HttpClient {
     /// Creates a new HTTP client with the specified User-Agent header.
     #[must_use]
     pub fn new(user_agent: &str) -> Self {
-        let client = reqwest::blocking::Client::builder()
-            .user_agent(user_agent)
-            .build()
-            .unwrap_or_default();
+        // reqwest is built with `rustls-no-provider`; install the ring provider (the
+        // one the rest of the workspace uses) before any client is constructed.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let builder = reqwest::blocking::Client::builder().user_agent(user_agent);
+        #[cfg(target_os = "android")]
+        let builder = {
+            let certs = webpki_root_certs::TLS_SERVER_ROOT_CERTS
+                .iter()
+                .filter_map(|c| reqwest::Certificate::from_der(c.as_ref()).ok());
+            builder.tls_certs_only(certs)
+        };
+        let client = builder.build().unwrap_or_default();
         Self { client }
     }
 
@@ -76,6 +84,44 @@ impl HttpClient {
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .body(json_payload.to_string())
+            .send()
+            .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
+
+        let status = response.status().as_u16();
+        if status < 200 || status >= 300 {
+            let body = response
+                .text()
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(HttpError::BadStatus(status, body));
+        }
+
+        response
+            .text()
+            .map_err(|e| HttpError::BodyRead(e.to_string()))
+    }
+
+    /// Performs an Ed25519-signed HTTP POST request to a marketplace telemetry/crash endpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns `HttpError` if the request fails or returns a non-2xx status code.
+    pub fn post_signed_telemetry(
+        &self,
+        url: &str,
+        json_bytes: &[u8],
+        public_key_hex: &str,
+        signature_hex: &str,
+        timestamp_str: &str,
+    ) -> Result<String, HttpError> {
+        let response = self
+            .client
+            .post(url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .header("X-Telemetry-Public-Key", public_key_hex)
+            .header("X-Telemetry-Signature", signature_hex)
+            .header("X-Telemetry-Timestamp", timestamp_str)
+            .body(json_bytes.to_vec())
             .send()
             .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
 

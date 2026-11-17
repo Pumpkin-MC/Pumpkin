@@ -1,13 +1,354 @@
 /* This file is generated. Do not edit manually. */
 use crate::data_component_impl::EnchantmentsImpl;
 use crate::item::Item;
+use crate::tag::DamageType as DamageTypeTag;
 use crate::tag::Enchantment as EnchantmentTag;
+use crate::tag::EntityType as EntityTypeTag;
 use crate::tag::Item as ItemTag;
 use crate::tag::{RegistryKey, Tag, Taggable};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
+#[derive(Clone, Debug, PartialEq)]
+pub enum LevelBasedValue {
+    Constant(f32),
+    Linear {
+        base: f32,
+        per_level_above_first: f32,
+    },
+    Clamped {
+        value: &'static Self,
+        min: f32,
+        max: f32,
+    },
+    Fraction {
+        numerator: &'static Self,
+        denominator: &'static Self,
+    },
+    LevelsSquared {
+        added: f32,
+    },
+    Lookup {
+        values: &'static [f32],
+        fallback: &'static Self,
+    },
+}
+impl LevelBasedValue {
+    #[must_use]
+    pub fn calculate(&self, level: i32) -> f32 {
+        match self {
+            Self::Constant(val) => *val,
+            Self::Linear {
+                base,
+                per_level_above_first,
+            } => base + (level.max(1) - 1) as f32 * per_level_above_first,
+            Self::Clamped { value, min, max } => value.calculate(level).clamp(*min, *max),
+            Self::Fraction {
+                numerator,
+                denominator,
+            } => {
+                let denom = denominator.calculate(level);
+                if denom == 0.0 {
+                    0.0
+                } else {
+                    numerator.calculate(level) / denom
+                }
+            }
+            Self::LevelsSquared { added } => ((level * level) as f32) + added,
+            Self::Lookup { values, fallback } => {
+                let idx = (level - 1) as usize;
+                values
+                    .get(idx)
+                    .copied()
+                    .unwrap_or_else(|| fallback.calculate(level))
+            }
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EnchantmentTarget {
+    Attacker,
+    DamagingEntity,
+    Victim,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TargetedConditionalEffect<T> {
+    pub enchanted: Option<EnchantmentTarget>,
+    pub affected: Option<EnchantmentTarget>,
+    pub effect: T,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConditionalEffect<T> {
+    pub effect: T,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum ReplaceDiskPredicate {
+    MatchingBlockTag {
+        offset: pumpkin_util::math::vector3::Vector3<i32>,
+        tag: &'static crate::tag::Tag,
+    },
+    MatchingBlocks {
+        offset: pumpkin_util::math::vector3::Vector3<i32>,
+        blocks: &'static [&'static str],
+    },
+    MatchingFluids {
+        offset: pumpkin_util::math::vector3::Vector3<i32>,
+        fluids: &'static [&'static str],
+    },
+    Unobstructed,
+    AllOf(&'static [ReplaceDiskPredicate]),
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum EnchantmentEntityEffect {
+    Ignite {
+        duration: LevelBasedValue,
+    },
+    DamageEntity {
+        min_damage: LevelBasedValue,
+        max_damage: LevelBasedValue,
+        damage_type: Option<&'static crate::damage::DamageType>,
+    },
+    ChangeItemDamage {
+        amount: LevelBasedValue,
+    },
+    PlaySound {
+        sound: &'static str,
+    },
+    ReplaceBlock {
+        offset_x: i32,
+        offset_y: i32,
+        offset_z: i32,
+        trigger_game_event: Option<crate::game_event::GameEvent>,
+    },
+    SetBlockProperties {
+        properties: &'static [(&'static str, &'static str)],
+        offset_x: i32,
+        offset_y: i32,
+        offset_z: i32,
+        trigger_game_event: Option<crate::game_event::GameEvent>,
+    },
+    ReplaceDisk {
+        radius: LevelBasedValue,
+        height: LevelBasedValue,
+        offset_x: i32,
+        offset_y: i32,
+        offset_z: i32,
+        predicate: Option<ReplaceDiskPredicate>,
+        block_state: &'static crate::block_state::BlockState,
+        trigger_game_event: Option<crate::game_event::GameEvent>,
+    },
+    SummonEntity {
+        entity_types: &'static [&'static crate::entity::EntityType],
+        join_team: bool,
+    },
+    SpawnParticles {
+        particle: crate::particle::Particle,
+        horizontal_position: PositionSource,
+        vertical_position: PositionSource,
+        horizontal_velocity: VelocitySource,
+        vertical_velocity: VelocitySource,
+        speed: pumpkin_util::math::float_provider::FloatProvider,
+    },
+    RunFunction {
+        function: &'static str,
+    },
+    ApplyExhaustion {
+        amount: LevelBasedValue,
+    },
+    ApplyImpulse {
+        direction: pumpkin_util::math::vector3::Vector3<f64>,
+        coordinate_scale: pumpkin_util::math::vector3::Vector3<f64>,
+        magnitude: LevelBasedValue,
+    },
+    ApplyMobEffect {
+        to_apply: &'static [&'static crate::effect::StatusEffect],
+        min_duration: LevelBasedValue,
+        max_duration: LevelBasedValue,
+        min_amplifier: LevelBasedValue,
+        max_amplifier: LevelBasedValue,
+    },
+    Explode {
+        attribute_to_user: bool,
+        damage_type: Option<&'static crate::damage::DamageType>,
+        knockback_multiplier: Option<LevelBasedValue>,
+        immune_blocks: Option<&'static str>,
+        offset_x: f64,
+        offset_y: f64,
+        offset_z: f64,
+        radius: LevelBasedValue,
+        create_fire: bool,
+        block_interaction: &'static str,
+        small_particle: Option<crate::particle::Particle>,
+        large_particle: Option<crate::particle::Particle>,
+        sound: Option<crate::sound::Sound>,
+    },
+    AllOf(&'static [EnchantmentEntityEffect]),
+    Other,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum PositionSourceType {
+    #[default]
+    EntityPosition,
+    InBoundingBox,
+}
+impl PositionSourceType {
+    #[must_use]
+    pub fn get_coordinate(
+        self,
+        position: f64,
+        center: f64,
+        bounding_box_span: f32,
+        random: &mut impl pumpkin_util::random::RandomImpl,
+    ) -> f64 {
+        match self {
+            Self::EntityPosition => position,
+            Self::InBoundingBox => {
+                let random_offset = f64::from(random.next_f32()) - 0.5;
+                center + random_offset * f64::from(bounding_box_span)
+            }
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PositionSource {
+    pub source_type: PositionSourceType,
+    pub offset: f32,
+    pub scale: f32,
+}
+impl PositionSource {
+    #[must_use]
+    pub const fn new(source_type: PositionSourceType, offset: f32, scale: f32) -> Self {
+        Self {
+            source_type,
+            offset,
+            scale,
+        }
+    }
+    #[must_use]
+    pub const fn offset_from_entity_position(offset: f32) -> Self {
+        Self {
+            source_type: PositionSourceType::EntityPosition,
+            offset,
+            scale: 1.0,
+        }
+    }
+    #[must_use]
+    pub const fn in_bounding_box() -> Self {
+        Self {
+            source_type: PositionSourceType::InBoundingBox,
+            offset: 0.0,
+            scale: 1.0,
+        }
+    }
+    #[must_use]
+    pub fn get_coordinate(
+        &self,
+        position: f64,
+        center: f64,
+        bounding_box_span: f32,
+        random: &mut impl pumpkin_util::random::RandomImpl,
+    ) -> f64 {
+        self.source_type
+            .get_coordinate(position, center, bounding_box_span * self.scale, random)
+            + f64::from(self.offset)
+    }
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct VelocitySource {
+    pub movement_scale: f32,
+    pub base: pumpkin_util::math::float_provider::FloatProvider,
+}
+impl VelocitySource {
+    #[must_use]
+    pub const fn new(
+        movement_scale: f32,
+        base: pumpkin_util::math::float_provider::FloatProvider,
+    ) -> Self {
+        Self {
+            movement_scale,
+            base,
+        }
+    }
+    #[must_use]
+    pub const fn movement_scaled(scale: f32) -> Self {
+        Self {
+            movement_scale: scale,
+            base: pumpkin_util::math::float_provider::FloatProvider::Constant(0.0),
+        }
+    }
+    #[must_use]
+    pub const fn fixed_velocity(
+        provider: pumpkin_util::math::float_provider::FloatProvider,
+    ) -> Self {
+        Self {
+            movement_scale: 0.0,
+            base: provider,
+        }
+    }
+    pub fn get_velocity(
+        &self,
+        movement: f64,
+        random: &mut impl pumpkin_util::random::RandomImpl,
+    ) -> f64 {
+        f64::from(self.movement_scale).mul_add(movement, f64::from(self.base.get(random)))
+    }
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum EnchantmentValueEffect {
+    Add(LevelBasedValue),
+    Multiply(LevelBasedValue),
+    Set(LevelBasedValue),
+    RemoveBinomial(LevelBasedValue),
+    Other,
+}
+impl EnchantmentValueEffect {
+    #[must_use]
+    pub fn process(&self, level: i32, current_value: f32) -> f32 {
+        match self {
+            Self::Add(val) => current_value + val.calculate(level),
+            Self::Multiply(val) => current_value * val.calculate(level),
+            Self::Set(val) => val.calculate(level),
+            Self::RemoveBinomial(val) => {
+                let prob = val.calculate(level);
+                if rand::random::<f32>() < prob {
+                    0.0
+                } else {
+                    current_value
+                }
+            }
+            Self::Other => current_value,
+        }
+    }
+}
+#[derive(Clone, Debug)]
+pub struct EnchantmentEffects {
+    pub projectile_spawned: &'static [ConditionalEffect<EnchantmentEntityEffect>],
+    pub post_attack: &'static [TargetedConditionalEffect<EnchantmentEntityEffect>],
+    pub projectile_count: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub projectile_spread: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub projectile_piercing: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub ammo_use: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub damage: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub knockback: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub armor_effectiveness: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub damage_protection: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub hit_block: &'static [ConditionalEffect<EnchantmentEntityEffect>],
+    pub item_damage: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub equipment_drops: &'static [TargetedConditionalEffect<EnchantmentValueEffect>],
+    pub fishing_time_reduction: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub fishing_luck_bonus: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub block_experience: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub mob_experience: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub repair_with_xp: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub smash_damage_per_fallen_block: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub trident_return_acceleration: &'static [ConditionalEffect<EnchantmentValueEffect>],
+    pub trident_spin_attack_strength: Option<EnchantmentValueEffect>,
+    pub crossbow_charge_time: Option<EnchantmentValueEffect>,
+    pub location_changed: &'static [ConditionalEffect<EnchantmentEntityEffect>],
+    pub prevent_armor_change: bool,
+    pub prevent_equipment_drop: bool,
+}
 pub struct Enchantment {
     pub id: u8,
     pub name: &'static str,
@@ -15,12 +356,14 @@ pub struct Enchantment {
     pub description: &'static str,
     pub anvil_cost: u32,
     pub supported_items: &'static Tag,
+    pub primary_items: Option<&'static Tag>,
     pub exclusive_set: Option<&'static Tag>,
     pub max_level: i32,
     pub slots: &'static [AttributeModifierSlot],
     pub weight: i32,
     pub min_cost: Cost,
     pub max_cost: Cost,
+    pub effects: EnchantmentEffects,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Cost {
@@ -127,6 +470,7 @@ impl Enchantment {
         registry_key: "aqua_affinity",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_HEAD_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Head],
@@ -139,6 +483,33 @@ impl Enchantment {
             base: 41i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const BANE_OF_ARTHROPODS: Self = Self {
         id: 1u8,
@@ -147,6 +518,7 @@ impl Enchantment {
         description: "enchantment.minecraft.bane_of_arthropods",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_WEAPON,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON),
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -159,6 +531,51 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: Some(EnchantmentTarget::Victim),
+                effect: EnchantmentEntityEffect::ApplyMobEffect {
+                    to_apply: &[&crate::effect::StatusEffect::SLOWNESS],
+                    min_duration: LevelBasedValue::Constant(1.5f32),
+                    max_duration: LevelBasedValue::Linear {
+                        base: 1.5f32,
+                        per_level_above_first: 0.5f32,
+                    },
+                    min_amplifier: LevelBasedValue::Constant(3f32),
+                    max_amplifier: LevelBasedValue::Constant(3f32),
+                },
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2.5f32,
+                    per_level_above_first: 2.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const BINDING_CURSE: Self = Self {
         id: 2u8,
@@ -167,6 +584,7 @@ impl Enchantment {
         registry_key: "binding_curse",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_EQUIPPABLE,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -179,6 +597,33 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: true,
+            prevent_equipment_drop: false,
+        },
     };
     pub const BLAST_PROTECTION: Self = Self {
         id: 3u8,
@@ -187,6 +632,7 @@ impl Enchantment {
         description: "enchantment.minecraft.blast_protection",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -199,6 +645,38 @@ impl Enchantment {
             base: 13i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2f32,
+                    per_level_above_first: 2f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const BREACH: Self = Self {
         id: 4u8,
@@ -207,6 +685,7 @@ impl Enchantment {
         description: "enchantment.minecraft.breach",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MACE,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -219,6 +698,38 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: -0.15f32,
+                    per_level_above_first: -0.15f32,
+                }),
+            }],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const CHANNELING: Self = Self {
         id: 5u8,
@@ -227,6 +738,7 @@ impl Enchantment {
         registry_key: "channeling",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_TRIDENT,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -239,6 +751,55 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: Some(EnchantmentTarget::Victim),
+                effect: EnchantmentEntityEffect::AllOf(&[
+                    EnchantmentEntityEffect::SummonEntity {
+                        entity_types: &[&crate::entity::EntityType::LIGHTNING_BOLT],
+                        join_team: false,
+                    },
+                    EnchantmentEntityEffect::PlaySound {
+                        sound: "minecraft:item.trident.thunder",
+                    },
+                ]),
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[ConditionalEffect {
+                effect: EnchantmentEntityEffect::AllOf(&[
+                    EnchantmentEntityEffect::SummonEntity {
+                        entity_types: &[&crate::entity::EntityType::LIGHTNING_BOLT],
+                        join_team: false,
+                    },
+                    EnchantmentEntityEffect::PlaySound {
+                        sound: "minecraft:item.trident.thunder",
+                    },
+                ]),
+            }],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const DENSITY: Self = Self {
         id: 6u8,
@@ -247,6 +808,7 @@ impl Enchantment {
         description: "enchantment.minecraft.density",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MACE,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -259,6 +821,38 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 0.5f32,
+                    per_level_above_first: 0.5f32,
+                }),
+            }],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const DEPTH_STRIDER: Self = Self {
         id: 7u8,
@@ -267,6 +861,7 @@ impl Enchantment {
         description: "enchantment.minecraft.depth_strider",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FOOT_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_BOOTS),
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Feet],
@@ -279,6 +874,33 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const EFFICIENCY: Self = Self {
         id: 8u8,
@@ -287,6 +909,7 @@ impl Enchantment {
         registry_key: "efficiency",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MINING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -299,6 +922,33 @@ impl Enchantment {
             base: 51i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const FEATHER_FALLING: Self = Self {
         id: 9u8,
@@ -307,6 +957,7 @@ impl Enchantment {
         registry_key: "feather_falling",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FOOT_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -319,6 +970,38 @@ impl Enchantment {
             base: 11i32,
             per_level_above_first: 6i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 3f32,
+                    per_level_above_first: 3f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const FIRE_ASPECT: Self = Self {
         id: 10u8,
@@ -327,6 +1010,7 @@ impl Enchantment {
         registry_key: "fire_aspect",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FIRE_ASPECT,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON),
         exclusive_set: None,
         max_level: 2i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -339,6 +1023,42 @@ impl Enchantment {
             base: 60i32,
             per_level_above_first: 20i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: Some(EnchantmentTarget::Victim),
+                effect: EnchantmentEntityEffect::Ignite {
+                    duration: LevelBasedValue::Linear {
+                        base: 4f32,
+                        per_level_above_first: 4f32,
+                    },
+                },
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const FIRE_PROTECTION: Self = Self {
         id: 11u8,
@@ -347,6 +1067,7 @@ impl Enchantment {
         description: "enchantment.minecraft.fire_protection",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -359,6 +1080,38 @@ impl Enchantment {
             base: 18i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2f32,
+                    per_level_above_first: 2f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const FLAME: Self = Self {
         id: 12u8,
@@ -367,6 +1120,7 @@ impl Enchantment {
         registry_key: "flame",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_BOW,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -379,6 +1133,37 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[ConditionalEffect {
+                effect: EnchantmentEntityEffect::Ignite {
+                    duration: LevelBasedValue::Constant(100f32),
+                },
+            }],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const FORTUNE: Self = Self {
         id: 13u8,
@@ -387,6 +1172,7 @@ impl Enchantment {
         description: "enchantment.minecraft.fortune",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MINING_LOOT,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_MINING),
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -399,6 +1185,33 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const FROST_WALKER: Self = Self {
         id: 14u8,
@@ -407,6 +1220,7 @@ impl Enchantment {
         description: "enchantment.minecraft.frost_walker",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FOOT_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_BOOTS),
         max_level: 2i32,
         slots: &[AttributeModifierSlot::Feet],
@@ -419,6 +1233,65 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[ConditionalEffect {
+                effect: EnchantmentEntityEffect::ReplaceDisk {
+                    radius: LevelBasedValue::Clamped {
+                        value: &LevelBasedValue::Linear {
+                            base: 3f32,
+                            per_level_above_first: 1f32,
+                        },
+                        min: 0f32,
+                        max: 16f32,
+                    },
+                    height: LevelBasedValue::Constant(1f32),
+                    offset_x: 0i32,
+                    offset_y: -1i32,
+                    offset_z: 0i32,
+                    predicate: Some(ReplaceDiskPredicate::AllOf(&[
+                        ReplaceDiskPredicate::MatchingBlockTag {
+                            offset: pumpkin_util::math::vector3::Vector3::new(0i32, 1i32, 0i32),
+                            tag: &crate::tag::Block::MINECRAFT_AIR,
+                        },
+                        ReplaceDiskPredicate::MatchingBlocks {
+                            offset: pumpkin_util::math::vector3::Vector3::new(0i32, 0i32, 0i32),
+                            blocks: &["minecraft:water"],
+                        },
+                        ReplaceDiskPredicate::MatchingFluids {
+                            offset: pumpkin_util::math::vector3::Vector3::new(0i32, 0i32, 0i32),
+                            fluids: &["minecraft:water"],
+                        },
+                        ReplaceDiskPredicate::Unobstructed,
+                    ])),
+                    block_state: crate::Block::AIR.default_state,
+                    trigger_game_event: Some(crate::game_event::GameEvent::BlockPlace),
+                },
+            }],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const IMPALING: Self = Self {
         id: 15u8,
@@ -427,6 +1300,7 @@ impl Enchantment {
         description: "enchantment.minecraft.impaling",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_TRIDENT,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -439,6 +1313,38 @@ impl Enchantment {
             base: 21i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2.5f32,
+                    per_level_above_first: 2.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const INFINITY: Self = Self {
         id: 16u8,
@@ -447,6 +1353,7 @@ impl Enchantment {
         description: "enchantment.minecraft.infinity",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_BOW,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_BOW),
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -459,6 +1366,35 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Set(LevelBasedValue::Constant(0f32)),
+            }],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const KNOCKBACK: Self = Self {
         id: 17u8,
@@ -467,6 +1403,7 @@ impl Enchantment {
         registry_key: "knockback",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON,
+        primary_items: None,
         exclusive_set: None,
         max_level: 2i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -479,6 +1416,38 @@ impl Enchantment {
             base: 55i32,
             per_level_above_first: 20i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const LOOTING: Self = Self {
         id: 18u8,
@@ -487,6 +1456,7 @@ impl Enchantment {
         registry_key: "looting",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -499,6 +1469,40 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: None,
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 0.01f32,
+                    per_level_above_first: 0.01f32,
+                }),
+            }],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const LOYALTY: Self = Self {
         id: 19u8,
@@ -507,6 +1511,7 @@ impl Enchantment {
         registry_key: "loyalty",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_TRIDENT,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -519,6 +1524,38 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const LUCK_OF_THE_SEA: Self = Self {
         id: 20u8,
@@ -527,6 +1564,7 @@ impl Enchantment {
         registry_key: "luck_of_the_sea",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FISHING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -539,6 +1577,38 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const LUNGE: Self = Self {
         id: 21u8,
@@ -547,6 +1617,7 @@ impl Enchantment {
         registry_key: "lunge",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_LUNGE,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Hand],
@@ -559,6 +1630,33 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const LURE: Self = Self {
         id: 22u8,
@@ -567,6 +1665,7 @@ impl Enchantment {
         registry_key: "lure",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FISHING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -579,6 +1678,38 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 5f32,
+                    per_level_above_first: 5f32,
+                }),
+            }],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const MENDING: Self = Self {
         id: 23u8,
@@ -587,6 +1718,7 @@ impl Enchantment {
         registry_key: "mending",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_DURABILITY,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Any],
@@ -599,6 +1731,35 @@ impl Enchantment {
             base: 75i32,
             per_level_above_first: 25i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Multiply(LevelBasedValue::Constant(2f32)),
+            }],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const MULTISHOT: Self = Self {
         id: 24u8,
@@ -607,6 +1768,7 @@ impl Enchantment {
         description: "enchantment.minecraft.multishot",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_CROSSBOW,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_CROSSBOW),
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -619,6 +1781,43 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2f32,
+                    per_level_above_first: 2f32,
+                }),
+            }],
+            projectile_spread: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 10f32,
+                    per_level_above_first: 10f32,
+                }),
+            }],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const PIERCING: Self = Self {
         id: 25u8,
@@ -627,6 +1826,7 @@ impl Enchantment {
         description: "enchantment.minecraft.piercing",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_CROSSBOW,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_CROSSBOW),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -639,6 +1839,38 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const POWER: Self = Self {
         id: 26u8,
@@ -647,6 +1879,7 @@ impl Enchantment {
         registry_key: "power",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_BOW,
+        primary_items: None,
         exclusive_set: None,
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -659,6 +1892,38 @@ impl Enchantment {
             base: 16i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 0.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const PROJECTILE_PROTECTION: Self = Self {
         id: 27u8,
@@ -667,6 +1932,7 @@ impl Enchantment {
         description: "enchantment.minecraft.projectile_protection",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -679,6 +1945,38 @@ impl Enchantment {
             base: 9i32,
             per_level_above_first: 6i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2f32,
+                    per_level_above_first: 2f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const PROTECTION: Self = Self {
         id: 28u8,
@@ -687,6 +1985,7 @@ impl Enchantment {
         description: "enchantment.minecraft.protection",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_ARMOR),
         max_level: 4i32,
         slots: &[AttributeModifierSlot::Armor],
@@ -699,6 +1998,38 @@ impl Enchantment {
             base: 12i32,
             per_level_above_first: 11i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const PUNCH: Self = Self {
         id: 29u8,
@@ -707,6 +2038,7 @@ impl Enchantment {
         registry_key: "punch",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_BOW,
+        primary_items: None,
         exclusive_set: None,
         max_level: 2i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -719,6 +2051,38 @@ impl Enchantment {
             base: 37i32,
             per_level_above_first: 20i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 1f32,
+                }),
+            }],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const QUICK_CHARGE: Self = Self {
         id: 30u8,
@@ -727,6 +2091,7 @@ impl Enchantment {
         registry_key: "quick_charge",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_CROSSBOW,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[
@@ -742,6 +2107,36 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: Some(EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                base: -0.25f32,
+                per_level_above_first: -0.25f32,
+            })),
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const RESPIRATION: Self = Self {
         id: 31u8,
@@ -750,6 +2145,7 @@ impl Enchantment {
         registry_key: "respiration",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_HEAD_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Head],
@@ -762,6 +2158,33 @@ impl Enchantment {
             base: 40i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const RIPTIDE: Self = Self {
         id: 32u8,
@@ -770,6 +2193,7 @@ impl Enchantment {
         description: "enchantment.minecraft.riptide",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_TRIDENT,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_RIPTIDE),
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Hand],
@@ -782,6 +2206,38 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: Some(EnchantmentValueEffect::Add(
+                LevelBasedValue::Linear {
+                    base: 1.5f32,
+                    per_level_above_first: 0.75f32,
+                },
+            )),
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const SHARPNESS: Self = Self {
         id: 33u8,
@@ -790,6 +2246,7 @@ impl Enchantment {
         description: "enchantment.minecraft.sharpness",
         anvil_cost: 1u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_SHARP_WEAPON,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON),
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -802,6 +2259,38 @@ impl Enchantment {
             base: 21i32,
             per_level_above_first: 11i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 1f32,
+                    per_level_above_first: 0.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const SILK_TOUCH: Self = Self {
         id: 34u8,
@@ -810,6 +2299,7 @@ impl Enchantment {
         description: "enchantment.minecraft.silk_touch",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MINING_LOOT,
+        primary_items: None,
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_MINING),
         max_level: 1i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -822,6 +2312,35 @@ impl Enchantment {
             base: 65i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Set(LevelBasedValue::Constant(0f32)),
+            }],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const SMITE: Self = Self {
         id: 35u8,
@@ -830,6 +2349,7 @@ impl Enchantment {
         description: "enchantment.minecraft.smite",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_WEAPON,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_MELEE_WEAPON),
         exclusive_set: Some(&EnchantmentTag::MINECRAFT_EXCLUSIVE_SET_DAMAGE),
         max_level: 5i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -842,6 +2362,38 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[ConditionalEffect {
+                effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
+                    base: 2.5f32,
+                    per_level_above_first: 2.5f32,
+                }),
+            }],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const SOUL_SPEED: Self = Self {
         id: 36u8,
@@ -850,6 +2402,7 @@ impl Enchantment {
         registry_key: "soul_speed",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_FOOT_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Feet],
@@ -862,6 +2415,45 @@ impl Enchantment {
             base: 25i32,
             per_level_above_first: 10i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[
+                ConditionalEffect {
+                    effect: EnchantmentEntityEffect::AllOf(&[
+                        EnchantmentEntityEffect::Other,
+                        EnchantmentEntityEffect::Other,
+                    ]),
+                },
+                ConditionalEffect {
+                    effect: EnchantmentEntityEffect::ChangeItemDamage {
+                        amount: LevelBasedValue::Constant(1f32),
+                    },
+                },
+            ],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const SWEEPING_EDGE: Self = Self {
         id: 37u8,
@@ -870,6 +2462,7 @@ impl Enchantment {
         registry_key: "sweeping_edge",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_SWEEPING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -882,6 +2475,33 @@ impl Enchantment {
             base: 20i32,
             per_level_above_first: 9i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const SWIFT_SNEAK: Self = Self {
         id: 38u8,
@@ -890,6 +2510,7 @@ impl Enchantment {
         registry_key: "swift_sneak",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_LEG_ARMOR,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Legs],
@@ -902,6 +2523,33 @@ impl Enchantment {
             base: 75i32,
             per_level_above_first: 25i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const THORNS: Self = Self {
         id: 39u8,
@@ -910,6 +2558,7 @@ impl Enchantment {
         registry_key: "thorns",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_ARMOR,
+        primary_items: Some(&ItemTag::MINECRAFT_ENCHANTABLE_CHEST_ARMOR),
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Any],
@@ -922,6 +2571,46 @@ impl Enchantment {
             base: 60i32,
             per_level_above_first: 20i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Victim),
+                affected: Some(EnchantmentTarget::Attacker),
+                effect: EnchantmentEntityEffect::AllOf(&[
+                    EnchantmentEntityEffect::DamageEntity {
+                        min_damage: LevelBasedValue::Constant(1f32),
+                        max_damage: LevelBasedValue::Constant(5f32),
+                        damage_type: Some(&crate::damage::DamageType::THORNS),
+                    },
+                    EnchantmentEntityEffect::ChangeItemDamage {
+                        amount: LevelBasedValue::Constant(2f32),
+                    },
+                ]),
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const UNBREAKING: Self = Self {
         id: 40u8,
@@ -930,6 +2619,7 @@ impl Enchantment {
         registry_key: "unbreaking",
         anvil_cost: 2u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_DURABILITY,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::Any],
@@ -942,6 +2632,58 @@ impl Enchantment {
             base: 55i32,
             per_level_above_first: 8i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[
+                ConditionalEffect {
+                    effect: EnchantmentValueEffect::RemoveBinomial(LevelBasedValue::Fraction {
+                        numerator: &LevelBasedValue::Linear {
+                            base: 2f32,
+                            per_level_above_first: 2f32,
+                        },
+                        denominator: &LevelBasedValue::Linear {
+                            base: 10f32,
+                            per_level_above_first: 5f32,
+                        },
+                    }),
+                },
+                ConditionalEffect {
+                    effect: EnchantmentValueEffect::RemoveBinomial(LevelBasedValue::Fraction {
+                        numerator: &LevelBasedValue::Linear {
+                            base: 1f32,
+                            per_level_above_first: 1f32,
+                        },
+                        denominator: &LevelBasedValue::Linear {
+                            base: 2f32,
+                            per_level_above_first: 1f32,
+                        },
+                    }),
+                },
+            ],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
+        },
     };
     pub const VANISHING_CURSE: Self = Self {
         id: 41u8,
@@ -950,6 +2692,7 @@ impl Enchantment {
         registry_key: "vanishing_curse",
         anvil_cost: 8u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_VANISHING,
+        primary_items: None,
         exclusive_set: None,
         max_level: 1i32,
         slots: &[AttributeModifierSlot::Any],
@@ -962,6 +2705,33 @@ impl Enchantment {
             base: 50i32,
             per_level_above_first: 0i32,
         },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: true,
+        },
     };
     pub const WIND_BURST: Self = Self {
         id: 42u8,
@@ -970,6 +2740,7 @@ impl Enchantment {
         registry_key: "wind_burst",
         anvil_cost: 4u32,
         supported_items: &ItemTag::MINECRAFT_ENCHANTABLE_MACE,
+        primary_items: None,
         exclusive_set: None,
         max_level: 3i32,
         slots: &[AttributeModifierSlot::MainHand],
@@ -981,6 +2752,57 @@ impl Enchantment {
         max_cost: Cost {
             base: 65i32,
             per_level_above_first: 9i32,
+        },
+        effects: EnchantmentEffects {
+            projectile_spawned: &[],
+            post_attack: &[TargetedConditionalEffect {
+                enchanted: Some(EnchantmentTarget::Attacker),
+                affected: Some(EnchantmentTarget::Attacker),
+                effect: EnchantmentEntityEffect::Explode {
+                    attribute_to_user: false,
+                    damage_type: None,
+                    knockback_multiplier: Some(LevelBasedValue::Lookup {
+                        values: &[1.2f32, 1.75f32, 2.2f32],
+                        fallback: &LevelBasedValue::Linear {
+                            base: 1.5f32,
+                            per_level_above_first: 0.35f32,
+                        },
+                    }),
+                    immune_blocks: Some("#minecraft:blocks_wind_charge_explosions"),
+                    offset_x: 0f64,
+                    offset_y: 0f64,
+                    offset_z: 0f64,
+                    radius: LevelBasedValue::Constant(3.5f32),
+                    create_fire: false,
+                    block_interaction: "trigger",
+                    small_particle: Some(crate::particle::Particle::GustEmitterSmall),
+                    large_particle: Some(crate::particle::Particle::GustEmitterLarge),
+                    sound: Some(crate::sound::Sound::EntityWindChargeWindBurst),
+                },
+            }],
+            projectile_count: &[],
+            projectile_spread: &[],
+            projectile_piercing: &[],
+            ammo_use: &[],
+            damage: &[],
+            knockback: &[],
+            armor_effectiveness: &[],
+            damage_protection: &[],
+            hit_block: &[],
+            item_damage: &[],
+            equipment_drops: &[],
+            fishing_time_reduction: &[],
+            fishing_luck_bonus: &[],
+            block_experience: &[],
+            mob_experience: &[],
+            repair_with_xp: &[],
+            smash_damage_per_fallen_block: &[],
+            trident_return_acceleration: &[],
+            trident_spin_attack_strength: None,
+            crossbow_charge_time: None,
+            location_changed: &[],
+            prevent_armor_change: false,
+            prevent_equipment_drop: false,
         },
     };
     pub fn from_name(name: &str) -> Option<&'static Self> {
@@ -1086,6 +2908,13 @@ impl Enchantment {
     pub fn can_enchant(&self, item: &'static Item) -> bool {
         self.supported_items.1.contains(&item.id)
     }
+    pub fn is_primary_item(&self, item: &'static Item) -> bool {
+        if let Some(primary) = self.primary_items {
+            primary.1.contains(&item.id)
+        } else {
+            self.can_enchant(item)
+        }
+    }
     pub fn are_compatible(&self, other: &'static Enchantment) -> bool {
         if self == other {
             return false;
@@ -1126,5 +2955,241 @@ impl Enchantment {
             ));
         }
         ret
+    }
+    pub fn modify_damage_protection(&self, level: i32, protection: &mut f32) {
+        for effect in self.effects.damage_protection {
+            *protection = effect.effect.process(level, *protection);
+        }
+    }
+    pub fn modify_damage(&self, level: i32, amount: &mut f64) {
+        for effect in self.effects.damage {
+            *amount = f64::from(effect.effect.process(level, *amount as f32));
+        }
+    }
+    pub fn modify_fall_based_damage(&self, level: i32, amount: &mut f64) {
+        for effect in self.effects.smash_damage_per_fallen_block {
+            *amount = f64::from(effect.effect.process(level, *amount as f32));
+        }
+    }
+    pub fn modify_knockback(&self, level: i32, amount: &mut f32) {
+        for effect in self.effects.knockback {
+            *amount = effect.effect.process(level, *amount);
+        }
+    }
+    pub fn modify_armor_effectiveness(&self, level: i32, amount: &mut f32) {
+        for effect in self.effects.armor_effectiveness {
+            *amount = effect.effect.process(level, *amount);
+        }
+    }
+    pub fn modify_durability_change(&self, level: i32, change: &mut f32) {
+        for effect in self.effects.item_damage {
+            *change = effect.effect.process(level, *change);
+        }
+    }
+    pub fn modify_ammo_count(&self, level: i32, change: &mut f32) {
+        for effect in self.effects.ammo_use {
+            *change = effect.effect.process(level, *change);
+        }
+    }
+    pub fn modify_piercing_count(&self, level: i32, count: &mut f32) {
+        for effect in self.effects.projectile_piercing {
+            *count = effect.effect.process(level, *count);
+        }
+    }
+    pub fn modify_block_experience(&self, level: i32, count: &mut f32) {
+        for effect in self.effects.block_experience {
+            *count = effect.effect.process(level, *count);
+        }
+    }
+    pub fn modify_mob_experience(&self, level: i32, experience: &mut f32) {
+        for effect in self.effects.mob_experience {
+            *experience = effect.effect.process(level, *experience);
+        }
+    }
+    pub fn modify_durability_to_repair_from_xp(&self, level: i32, change: &mut f32) {
+        for effect in self.effects.repair_with_xp {
+            *change = effect.effect.process(level, *change);
+        }
+    }
+    pub fn modify_trident_return_to_owner_acceleration(&self, level: i32, count: &mut f32) {
+        for effect in self.effects.trident_return_acceleration {
+            *count = effect.effect.process(level, *count);
+        }
+    }
+    pub fn modify_trident_spin_attack_strength(&self, level: i32, strength: &mut f32) {
+        if let Some(effect) = &self.effects.trident_spin_attack_strength {
+            *strength = effect.process(level, *strength);
+        }
+    }
+    pub fn modify_fishing_time_reduction(&self, level: i32, time_reduction: &mut f32) {
+        for effect in self.effects.fishing_time_reduction {
+            *time_reduction = effect.effect.process(level, *time_reduction);
+        }
+    }
+    pub fn modify_fishing_luck_bonus(&self, level: i32, luck: &mut f32) {
+        for effect in self.effects.fishing_luck_bonus {
+            *luck = effect.effect.process(level, *luck);
+        }
+    }
+    pub fn modify_projectile_count(&self, level: i32, count: &mut f32) {
+        for effect in self.effects.projectile_count {
+            *count = effect.effect.process(level, *count);
+        }
+    }
+    pub fn modify_projectile_spread(&self, level: i32, angle: &mut f32) {
+        for effect in self.effects.projectile_spread {
+            *angle = effect.effect.process(level, *angle);
+        }
+    }
+    pub fn modify_crossbow_charge_time(&self, level: i32, time: &mut f32) {
+        if let Some(effect) = &self.effects.crossbow_charge_time {
+            *time = effect.process(level, *time);
+        }
+    }
+    pub fn get_projectile_spawned_effects(
+        &self,
+    ) -> &'static [ConditionalEffect<EnchantmentEntityEffect>] {
+        self.effects.projectile_spawned
+    }
+    pub fn get_location_changed_effects(
+        &self,
+    ) -> &'static [ConditionalEffect<EnchantmentEntityEffect>] {
+        self.effects.location_changed
+    }
+    pub fn get_post_attack_effects(
+        &self,
+    ) -> &'static [TargetedConditionalEffect<EnchantmentEntityEffect>] {
+        self.effects.post_attack
+    }
+    pub fn modify_damage_against(
+        &self,
+        level: i32,
+        damage: &mut f64,
+        victim_type: Option<&crate::entity::EntityType>,
+    ) {
+        let is_applicable = if self == &Self::SHARPNESS {
+            true
+        } else if self == &Self::SMITE {
+            victim_type.is_some_and(|t| t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_SMITE))
+        } else if self == &Self::BANE_OF_ARTHROPODS {
+            victim_type.is_some_and(|t| {
+                t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_BANE_OF_ARTHROPODS)
+            })
+        } else if self == &Self::IMPALING {
+            victim_type.is_some_and(|t| t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_IMPALING))
+        } else {
+            false
+        };
+        if is_applicable {
+            self.modify_damage(level, damage);
+        }
+    }
+    pub fn modify_damage_protection_against(
+        &self,
+        level: i32,
+        damage_type: &crate::damage::DamageType,
+        protection: &mut f32,
+    ) {
+        let is_applicable = if self == &Self::PROTECTION {
+            !damage_type.has_tag(&DamageTypeTag::MINECRAFT_BYPASSES_INVULNERABILITY)
+                && damage_type != &crate::damage::DamageType::STARVE
+                && damage_type != &crate::damage::DamageType::GENERIC_KILL
+                && damage_type != &crate::damage::DamageType::OUT_OF_WORLD
+        } else if self == &Self::FIRE_PROTECTION {
+            damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_FIRE)
+        } else if self == &Self::BLAST_PROTECTION {
+            damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_EXPLOSION)
+        } else if self == &Self::PROJECTILE_PROTECTION {
+            damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_PROJECTILE)
+        } else if self == &Self::FEATHER_FALLING {
+            damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_FALL)
+        } else {
+            false
+        };
+        if is_applicable {
+            self.modify_damage_protection(level, protection);
+        }
+    }
+    pub fn modify_durability_damage(&self, level: i32, is_armor: bool, damage: &mut f32) {
+        if self == &Self::UNBREAKING {
+            let effect = if is_armor {
+                self.effects.item_damage.first()
+            } else {
+                self.effects
+                    .item_damage
+                    .get(1)
+                    .or_else(|| self.effects.item_damage.first())
+            };
+            if let Some(effect) = effect {
+                *damage = effect.effect.process(level, *damage);
+            }
+        } else {
+            self.modify_durability_change(level, damage);
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn sharpness_damage() {
+        let mut dmg = 0.0;
+        Enchantment::SHARPNESS.modify_damage_against(1, &mut dmg, None);
+        assert_eq!(dmg, 1.0);
+        let mut dmg5 = 0.0;
+        Enchantment::SHARPNESS.modify_damage_against(5, &mut dmg5, None);
+        assert_eq!(dmg5, 3.0);
+    }
+    #[test]
+    fn smite_damage() {
+        let mut dmg = 0.0;
+        Enchantment::SMITE.modify_damage_against(
+            1,
+            &mut dmg,
+            Some(&crate::entity::EntityType::ZOMBIE),
+        );
+        assert_eq!(dmg, 2.5);
+        let mut dmg_pig = 0.0;
+        Enchantment::SMITE.modify_damage_against(
+            1,
+            &mut dmg_pig,
+            Some(&crate::entity::EntityType::PIG),
+        );
+        assert_eq!(dmg_pig, 0.0);
+    }
+    #[test]
+    fn protection_absorb() {
+        let mut prot = 0.0;
+        Enchantment::PROTECTION.modify_damage_protection_against(
+            4,
+            &crate::damage::DamageType::GENERIC,
+            &mut prot,
+        );
+        assert_eq!(prot, 4.0);
+        let mut fire_prot = 0.0;
+        Enchantment::FIRE_PROTECTION.modify_damage_protection_against(
+            4,
+            &crate::damage::DamageType::IN_FIRE,
+            &mut fire_prot,
+        );
+        assert_eq!(fire_prot, 8.0);
+    }
+    #[test]
+    fn primary_items() {
+        assert!(Enchantment::SHARPNESS.primary_items.is_some());
+        assert!(Enchantment::SHARPNESS.is_primary_item(&crate::item::Item::DIAMOND_SWORD));
+        assert!(!Enchantment::SHARPNESS.is_primary_item(&crate::item::Item::BOOK));
+    }
+    #[test]
+    fn knockback() {
+        let mut kb = 0.0;
+        Enchantment::KNOCKBACK.modify_knockback(2, &mut kb);
+        assert_eq!(kb, 2.0);
+    }
+    #[test]
+    fn breach_armor_effectiveness() {
+        let mut eff = 1.0;
+        Enchantment::BREACH.modify_armor_effectiveness(4, &mut eff);
+        assert!((eff - 0.4).abs() < 1e-5);
     }
 }

@@ -7,9 +7,6 @@ use pumpkin_util::{
 
 use crate::generation::proto_chunk::GenerationCache;
 
-/// The three mob types that can appear in a dungeon spawner.
-///
-/// Skeleton 25%, Zombie 50%, Spider 25%.
 const DUNGEON_MOBS: [&str; 4] = [
     "minecraft:skeleton",
     "minecraft:zombie",
@@ -20,7 +17,6 @@ const DUNGEON_MOBS: [&str; 4] = [
 pub struct DungeonFeature;
 
 impl DungeonFeature {
-    /// Generate a monster room (dungeon) at `pos`.
     #[expect(clippy::too_many_lines)]
     pub fn generate<T: GenerationCache>(
         chunk: &mut T,
@@ -43,16 +39,17 @@ impl DungeonFeature {
             for dy in -1..=4i32 {
                 for dz in min_z..=max_z {
                     let check_pos = pos.0.add(&Vector3::new(dx, dy, dz));
-                    let solid = !chunk.is_air(&check_pos);
+                    let solid = GenerationCache::get_block_state(chunk, &check_pos)
+                        .to_state()
+                        .is_solid();
 
                     if dy == -1 && !solid {
-                        return false; // Floor has a gap
+                        return false;
                     }
                     if dy == 4 && !solid {
-                        return false; // Ceiling has a gap
+                        return false;
                     }
 
-                    // Wall openings
                     let on_wall = dx == min_x || dx == max_x || dz == min_z || dz == max_z;
                     if on_wall
                         && dy == 0
@@ -83,32 +80,31 @@ impl DungeonFeature {
 
                     if on_boundary {
                         let below_pos = wall_pos.add(&Vector3::new(0, -1, 0));
-                        let below_solid = !chunk.is_air(&below_pos);
-                        let cur_solid = !chunk.is_air(&wall_pos);
-                        let is_chest = GenerationCache::get_block_state(chunk, &wall_pos)
-                            .to_block()
-                            == &Block::CHEST;
+                        let below_solid = GenerationCache::get_block_state(chunk, &below_pos)
+                            .to_state()
+                            .is_solid();
+                        let cur_state =
+                            GenerationCache::get_block_state(chunk, &wall_pos).to_state();
+                        let cur_solid = cur_state.is_solid();
+                        let is_chest = cur_state.id.to_block() == &Block::CHEST;
 
                         let world_min_y = chunk.bottom_y() as i32;
                         if wall_pos.y >= world_min_y && !below_solid {
                             chunk.set_block_state(&wall_pos, Block::CAVE_AIR.default_state);
                         } else if cur_solid && !is_chest {
                             if dy == -1 && random.next_bounded_i32(4) != 0 {
-                                // 75% mossy cobblestone
                                 chunk.set_block_state(
                                     &wall_pos,
                                     Block::MOSSY_COBBLESTONE.default_state,
                                 );
                             } else {
-                                // 25% cobblestone (or 100% if it's not the floor)
                                 chunk.set_block_state(&wall_pos, Block::COBBLESTONE.default_state);
                             }
                         }
                     } else {
-                        // Clear interior, but preserve chests and spawners
-                        let state = GenerationCache::get_block_state(chunk, &wall_pos);
-                        let is_chest = state.to_block() == &Block::CHEST;
-                        let is_spawner = state.to_block() == &Block::SPAWNER;
+                        let state = GenerationCache::get_block_state(chunk, &wall_pos).to_state();
+                        let is_chest = state.id.to_block() == &Block::CHEST;
+                        let is_spawner = state.id.to_block() == &Block::SPAWNER;
                         if !is_chest && !is_spawner {
                             chunk.set_block_state(&wall_pos, Block::CAVE_AIR.default_state);
                         }
@@ -117,7 +113,6 @@ impl DungeonFeature {
             }
         }
 
-        // Chest placement attempts (rooms have 1-2 chests)
         for _ in 0..2 {
             for _ in 0..3 {
                 let cx = pos.0.x + random.next_bounded_i32(xr * 2 + 1) - xr;
@@ -129,33 +124,25 @@ impl DungeonFeature {
                     continue;
                 }
 
-                // Count solid horizontal neighbours
                 let wall_count = BlockDirection::horizontal()
                     .iter()
-                    .filter(|d| !chunk.is_air(&chest_pos.add(&d.to_offset())))
+                    .filter(|d| {
+                        GenerationCache::get_block_state(chunk, &chest_pos.add(&d.to_offset()))
+                            .to_state()
+                            .is_solid()
+                    })
                     .count();
 
                 if wall_count == 1 {
-                    // Orient the chest toward its single solid neighbor.
-                    let facing_dir = BlockDirection::horizontal()
-                        .iter()
-                        .find(|d| !chunk.is_air(&chest_pos.add(&d.to_offset())))
-                        .copied();
-
-                    // Build the chest state: face away from the wall.
-                    let chest_state = facing_dir.map_or(Block::CHEST.default_state, |dir| {
-                        use pumpkin_data::block_properties::{
-                            BlockProperties, ChestLikeProperties,
-                        };
-                        let mut props = ChestLikeProperties::default(&Block::CHEST);
-                        props.facing = dir.opposite();
-                        let state_id = props.to_state_id(&Block::CHEST);
-                        pumpkin_data::BlockState::from_id(state_id)
-                    });
+                    let chest_state =
+                        crate::generation::structure::structures::StructurePiece::reorient(
+                            &chest_pos,
+                            Block::CHEST.default_state,
+                            |p| GenerationCache::get_block_state(chunk, p),
+                        );
 
                     chunk.set_block_state(&chest_pos, chest_state);
 
-                    // Write the block-entity NBT with a deferred loot table.
                     let loot_seed = random.next_i64();
                     let mut chest_nbt = NbtCompound::new();
                     chest_nbt.put_string("id", "minecraft:chest".to_string());
@@ -172,7 +159,6 @@ impl DungeonFeature {
             }
         }
 
-        // TODO: set spawner entity type
         let mob = DUNGEON_MOBS[random.next_bounded_i32(DUNGEON_MOBS.len() as i32) as usize];
         chunk.set_block_state(&pos.0, Block::SPAWNER.default_state);
 

@@ -68,13 +68,20 @@ impl ClientPacket for CEntityPositionSync {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
+        // Since 26.3 the position is a path. 0 is a linear path, which is just the end position.
+        if version >= &JavaMinecraftVersion::V_26_3 {
+            write.write_var_int(&VarInt(0))?;
+        }
         write.write_f64_be(self.position.x)?;
         write.write_f64_be(self.position.y)?;
         write.write_f64_be(self.position.z)?;
         if version >= &JavaMinecraftVersion::V_1_21_2 {
-            write.write_f64_be(self.delta.x)?;
-            write.write_f64_be(self.delta.y)?;
-            write.write_f64_be(self.delta.z)?;
+            // The delta was replaced by the path in 26.3.
+            if version < &JavaMinecraftVersion::V_26_3 {
+                write.write_f64_be(self.delta.x)?;
+                write.write_f64_be(self.delta.y)?;
+                write.write_f64_be(self.delta.z)?;
+            }
             write.write_f32_be(self.yaw)?;
             write.write_f32_be(self.pitch)?;
         } else {

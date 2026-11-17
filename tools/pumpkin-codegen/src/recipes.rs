@@ -29,22 +29,211 @@ pub enum RecipeTypes {
     /// Furnace smelting recipe.
     #[serde(rename = "minecraft:smelting")]
     Smelting(CookingRecipeStruct),
-    /// Smithing table transform recipe (not yet codegen'd).
+    /// Smithing table transform recipe.
     #[serde(rename = "minecraft:smithing_transform")]
-    SmithingTransform,
-    /// Smithing table armor-trim recipe (not yet codegen'd).
+    SmithingTransform(SmithingTransformRecipeStruct),
+    /// Smithing table armor-trim recipe.
     #[serde(rename = "minecraft:smithing_trim")]
-    SmithingTrim,
+    SmithingTrim(SmithingTrimRecipeStruct),
     /// Smoker cooking recipe.
     #[serde(rename = "minecraft:smoking")]
     Smoking(CookingRecipeStruct),
     /// Stonecutter recipe.
     #[serde(rename = "minecraft:stonecutting")]
     Stonecutting(StonecuttingRecipeStruct),
-    /// Any special crafting recipe type (not yet codegen'd).
+    /// Special crafting recipe types.
+    #[serde(rename = "minecraft:crafting_special_bannerduplicate")]
+    CraftingSpecialBannerDuplicate(CraftingBannerDuplicateStruct),
+    #[serde(rename = "minecraft:crafting_special_bookcloning")]
+    CraftingSpecialBookCloning(CraftingBookCloningStruct),
+    #[serde(rename = "minecraft:crafting_special_firework_rocket")]
+    CraftingSpecialFireworkRocket(CraftingFireworkRocketStruct),
+    #[serde(rename = "minecraft:crafting_special_firework_star")]
+    CraftingSpecialFireworkStar(CraftingFireworkStarStruct),
+    #[serde(rename = "minecraft:crafting_special_firework_star_fade")]
+    CraftingSpecialFireworkStarFade(CraftingFireworkStarFadeStruct),
+    #[serde(rename = "minecraft:crafting_special_mapextending")]
+    CraftingSpecialMapExtending(CraftingMapExtendingStruct),
+    #[serde(rename = "minecraft:crafting_special_repairitem")]
+    CraftingSpecialRepairItem,
+    #[serde(rename = "minecraft:crafting_special_shielddecoration")]
+    CraftingSpecialShieldDecoration(CraftingShieldDecorationStruct),
+    #[serde(rename = "minecraft:crafting_dye")]
+    CraftingDye(CraftingDyeStruct),
+    #[serde(rename = "minecraft:crafting_imbue")]
+    CraftingImbue(CraftingImbueStruct),
+    /// Any other special crafting recipe type.
     #[serde(other)]
     #[serde(rename = "minecraft:crafting_special_*")]
     CraftingSpecial,
+}
+
+#[derive(Deserialize, Clone, Copy)]
+#[serde(untagged)]
+pub enum IntBoundsStruct {
+    Exact(i32),
+    Range {
+        #[serde(default)]
+        min: Option<i32>,
+        #[serde(default)]
+        max: Option<i32>,
+    },
+}
+
+impl IntBoundsStruct {
+    const fn to_u8_range(self, default_min: u8, default_max: u8) -> (u8, u8) {
+        match self {
+            Self::Exact(v) => (v as u8, v as u8),
+            Self::Range { min, max } => (
+                match min {
+                    Some(v) => v as u8,
+                    None => default_min,
+                },
+                match max {
+                    Some(v) => v as u8,
+                    None => default_max,
+                },
+            ),
+        }
+    }
+
+    const fn to_i32_range(self, default_min: i32, default_max: i32) -> (i32, i32) {
+        match self {
+            Self::Exact(v) => (v, v),
+            Self::Range { min, max } => (
+                match min {
+                    Some(v) => v,
+                    None => default_min,
+                },
+                match max {
+                    Some(v) => v,
+                    None => default_max,
+                },
+            ),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct CraftingDyeStruct {
+    target: RecipeIngredientTypes,
+    dye: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+#[derive(Deserialize)]
+pub struct CraftingImbueStruct {
+    source: RecipeIngredientTypes,
+    material: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+#[derive(Deserialize)]
+pub struct CraftingShieldDecorationStruct {
+    banner: RecipeIngredientTypes,
+    target: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+#[derive(Deserialize)]
+pub struct CraftingBannerDuplicateStruct {
+    banner: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+#[derive(Deserialize)]
+pub struct CraftingBookCloningStruct {
+    source: RecipeIngredientTypes,
+    material: RecipeIngredientTypes,
+    #[serde(default)]
+    allowed_generations: Option<IntBoundsStruct>,
+    result: RecipeResultStruct,
+}
+
+#[derive(Deserialize)]
+pub struct CraftingFireworkStarStruct {
+    shapes: BTreeMap<String, RecipeIngredientTypes>,
+    trail: RecipeIngredientTypes,
+    twinkle: RecipeIngredientTypes,
+    fuel: RecipeIngredientTypes,
+    dye: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+#[derive(Deserialize)]
+pub struct CraftingFireworkStarFadeStruct {
+    target: RecipeIngredientTypes,
+    dye: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+#[derive(Deserialize)]
+pub struct CraftingFireworkRocketStruct {
+    shell: RecipeIngredientTypes,
+    fuel: RecipeIngredientTypes,
+    star: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+#[derive(Deserialize)]
+pub struct CraftingMapExtendingStruct {
+    map: RecipeIngredientTypes,
+    material: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+/// Deserialized smithing table transform recipe.
+#[derive(Deserialize)]
+pub struct SmithingTransformRecipeStruct {
+    template: RecipeIngredientTypes,
+    base: RecipeIngredientTypes,
+    addition: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+impl ToTokens for SmithingTransformRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let template = self.template.to_token_stream();
+        let base = self.base.to_token_stream();
+        let addition = self.addition.to_token_stream();
+        let result = self.result.to_token_stream();
+
+        tokens.extend(quote! {
+            SmithingTransformRecipe {
+                template: #template,
+                base: #base,
+                addition: #addition,
+                result: #result,
+            }
+        });
+    }
+}
+
+/// Deserialized smithing table armor-trim recipe.
+#[derive(Deserialize)]
+pub struct SmithingTrimRecipeStruct {
+    template: RecipeIngredientTypes,
+    base: RecipeIngredientTypes,
+    addition: RecipeIngredientTypes,
+    pattern: String,
+}
+
+impl ToTokens for SmithingTrimRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let template = self.template.to_token_stream();
+        let base = self.base.to_token_stream();
+        let addition = self.addition.to_token_stream();
+        let pattern = &self.pattern;
+
+        tokens.extend(quote! {
+            SmithingTrimRecipe {
+                template: #template,
+                base: #base,
+                addition: #addition,
+                pattern: #pattern,
+            }
+        });
+    }
 }
 
 /// Deserialized stonecutter recipe.
@@ -99,11 +288,8 @@ impl CookingRecipeStruct {
     /// Generate a recipe ID based on result, ingredient, and cooking type
     /// Format: minecraft:{result}_from_{`cooking_type`}_{ingredient}
     fn generate_recipe_id(&self, cooking_type: &str) -> String {
-        let result_name = self
-            .result
-            .id
-            .strip_prefix("minecraft:")
-            .unwrap_or(&self.result.id);
+        let result_id = self.result.id.as_deref().unwrap_or("air");
+        let result_name = result_id.strip_prefix("minecraft:").unwrap_or(result_id);
         let ingredient_name = match &self.ingredient {
             RecipeIngredientTypes::Simple(s) => {
                 if s.starts_with('#') {
@@ -193,6 +379,33 @@ impl ToTokens for CookingRecipeStruct {
     }
 }
 
+/// Vanilla `ShapedRecipePattern.shrink`.
+fn shrink(pattern: &[String]) -> Vec<&str> {
+    let is_filled = |c: char| c != ' ';
+    let top = pattern
+        .iter()
+        .position(|row| row.contains(is_filled))
+        .expect("shaped recipe pattern has no ingredients");
+    let bottom = pattern
+        .iter()
+        .rposition(|row| row.contains(is_filled))
+        .unwrap();
+    let left = pattern
+        .iter()
+        .filter_map(|row| row.find(is_filled))
+        .min()
+        .unwrap();
+    let right = pattern
+        .iter()
+        .filter_map(|row| row.rfind(is_filled))
+        .max()
+        .unwrap();
+    pattern[top..=bottom]
+        .iter()
+        .map(|row| &row[left..=right])
+        .collect()
+}
+
 /// Deserialized shaped crafting recipe.
 #[derive(Deserialize)]
 pub struct CraftingShapedRecipeStruct {
@@ -230,11 +443,7 @@ impl ToTokens for CraftingShapedRecipeStruct {
                 quote! { (#key, #ingredient) }
             })
             .collect::<Vec<_>>();
-        let pattern = self
-            .pattern
-            .iter()
-            .map(quote::ToTokens::to_token_stream)
-            .collect::<Vec<_>>();
+        let pattern = shrink(&self.pattern);
         let result = self.result.to_token_stream();
 
         tokens.extend(quote! {
@@ -303,6 +512,12 @@ pub struct CraftingTransmuteRecipeStruct {
     input: RecipeIngredientTypes,
     /// The material item consumed alongside `input`.
     material: RecipeIngredientTypes,
+    /// Allowed number of material items (`1..=8`, defaults to `1..=1`).
+    #[serde(default)]
+    material_count: Option<IntBoundsStruct>,
+    /// Whether `material_count` is added to `result.count`.
+    #[serde(default)]
+    add_material_count_to_result: bool,
     /// The base item type of the result (inherits components from `input`).
     result: RecipeResultStruct,
 }
@@ -320,6 +535,10 @@ impl ToTokens for CraftingTransmuteRecipeStruct {
         };
         let input = self.input.to_token_stream();
         let material = self.material.to_token_stream();
+        let (min_mat, max_mat) = self
+            .material_count
+            .map_or((1u8, 1u8), |b| b.to_u8_range(1, 8));
+        let add_material_count_to_result = self.add_material_count_to_result;
         let result = self.result.to_token_stream();
 
         tokens.extend(quote! {
@@ -328,6 +547,8 @@ impl ToTokens for CraftingTransmuteRecipeStruct {
                 group: #group,
                 input: #input,
                 material: #material,
+                material_count: (#min_mat, #max_mat),
+                add_material_count_to_result: #add_material_count_to_result,
                 result: #result,
             }
         });
@@ -360,21 +581,69 @@ impl ToTokens for CraftingDecoratedPotStruct {
 #[derive(Deserialize)]
 pub struct RecipeResultStruct {
     /// Registry key of the result item.
-    id: String,
+    id: Option<String>,
     /// Number of result items produced (defaults to 1).
     count: Option<u8>,
-    // TODO: components: Option<RecipeResultComponentsStruct>,
+    /// Data components set on the result item.
+    components: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Deserialized `minecraft:suspicious_stew_effects` entry.
+#[derive(Deserialize)]
+struct SuspiciousStewEffectEntry {
+    id: String,
+    #[serde(default = "default_stew_effect_duration")]
+    duration: i32,
+}
+
+/// Vanilla `SuspiciousStewEffects.Entry` duration default.
+const fn default_stew_effect_duration() -> i32 {
+    160
+}
+
+fn result_component_tokens(name: &str, value: &serde_json::Value) -> TokenStream {
+    match name {
+        "minecraft:suspicious_stew_effects" => {
+            let entries: Vec<SuspiciousStewEffectEntry> =
+                serde_json::from_value(value.clone()).expect("Invalid suspicious_stew_effects");
+            let entries = entries.iter().map(|entry| {
+                let id = &entry.id;
+                let duration = entry.duration;
+                quote! {
+                    crate::data_component_impl::SuspiciousStewEffect {
+                        effect: std::borrow::Cow::Borrowed(#id),
+                        duration: #duration,
+                    }
+                }
+            });
+            quote! {
+                (
+                    crate::data_component::DataComponent::SuspiciousStewEffects,
+                    &crate::data_component_impl::SuspiciousStewEffectsImpl {
+                        effects: std::borrow::Cow::Borrowed(&[#(#entries),*]),
+                    },
+                )
+            }
+        }
+        _ => panic!("Unsupported recipe result component {name}"),
+    }
 }
 
 impl ToTokens for RecipeResultStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let id = self.id.to_token_stream();
+        let id = self.id.as_deref().unwrap_or("minecraft:air");
         let count = self.count.unwrap_or(1).to_token_stream();
+        let components = self
+            .components
+            .iter()
+            .flatten()
+            .map(|(name, value)| result_component_tokens(name, value));
 
         tokens.extend(quote! {
             RecipeResultStruct {
                 id: #id,
                 count: #count,
+                components: &[#(#components),*],
             }
         });
     }
@@ -465,7 +734,7 @@ impl ToTokens for RecipeCategoryTypes {
 
 /// Reads recipe JSON files from the 26.2 datapack and emits the complete recipe constants and helpers `TokenStream`.
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/recipe");
+    let dir = crate::asset_path("datapack/data/minecraft/recipe");
     let mut recipes_assets: BTreeMap<String, RecipeTypes> = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing recipe directory")
@@ -479,14 +748,16 @@ pub fn build() -> TokenStream {
         let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
         let key = format!("minecraft:{stem}");
         let content = fs::read_to_string(&path).expect("Failed to read recipe file");
-        if let Ok(recipe) = serde_json::from_str::<RecipeTypes>(&content) {
-            recipes_assets.insert(key, recipe);
-        }
+        let recipe = serde_json::from_str::<RecipeTypes>(&content)
+            .unwrap_or_else(|e| panic!("Failed to parse recipe {}: {e}", path.display()));
+        recipes_assets.insert(key, recipe);
     }
 
     let mut crafting_recipes = Vec::new();
     let mut cooking_recipes = Vec::new();
     let mut stonecutting_recipes = Vec::new();
+    let mut smithing_trim_recipes = Vec::new();
+    let mut smithing_transform_recipes = Vec::new();
 
     for (recipe_id, recipe) in recipes_assets {
         match recipe {
@@ -532,8 +803,12 @@ pub fn build() -> TokenStream {
                 };
                 cooking_recipes.push(smelting_token);
             }
-            RecipeTypes::SmithingTransform => {}
-            RecipeTypes::SmithingTrim => {}
+            RecipeTypes::SmithingTransform(recipe) => {
+                smithing_transform_recipes.push(recipe.to_token_stream());
+            }
+            RecipeTypes::SmithingTrim(recipe) => {
+                smithing_trim_recipes.push(recipe.to_token_stream());
+            }
             RecipeTypes::Smoking(recipe) => {
                 let mut common_cooking_token = TokenStream::new();
                 recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id, 100);
@@ -547,6 +822,136 @@ pub fn build() -> TokenStream {
             RecipeTypes::Stonecutting(recipe) => {
                 stonecutting_recipes.push(recipe.to_token_stream());
             }
+            RecipeTypes::CraftingDye(r) => {
+                let target = r.target.to_token_stream();
+                let dye = r.dye.to_token_stream();
+                let result = r.result.to_token_stream();
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::Dye {
+                        target: #target,
+                        dye: #dye,
+                        result: #result,
+                    })
+                });
+            }
+            RecipeTypes::CraftingImbue(r) => {
+                let source = r.source.to_token_stream();
+                let material = r.material.to_token_stream();
+                let result = r.result.to_token_stream();
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::Imbue {
+                        source: #source,
+                        material: #material,
+                        result: #result,
+                    })
+                });
+            }
+            RecipeTypes::CraftingSpecialShieldDecoration(r) => {
+                let banner = r.banner.to_token_stream();
+                let target = r.target.to_token_stream();
+                let result = r.result.to_token_stream();
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::ShieldDecoration {
+                        banner: #banner,
+                        target: #target,
+                        result: #result,
+                    })
+                });
+            }
+            RecipeTypes::CraftingSpecialBannerDuplicate(r) => {
+                let banner = r.banner.to_token_stream();
+                let result = r.result.to_token_stream();
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BannerDuplicate {
+                        banner: #banner,
+                        result: #result,
+                    })
+                });
+            }
+            RecipeTypes::CraftingSpecialBookCloning(r) => {
+                let source = r.source.to_token_stream();
+                let material = r.material.to_token_stream();
+                let (min_gen, max_gen) = r
+                    .allowed_generations
+                    .map_or((0i32, 1i32), |b| b.to_i32_range(0, 2));
+                let result = r.result.to_token_stream();
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::BookCloning {
+                        source: #source,
+                        material: #material,
+                        allowed_generations: (#min_gen, #max_gen),
+                        result: #result,
+                    })
+                });
+            }
+            RecipeTypes::CraftingSpecialFireworkStar(r) => {
+                let shapes: Vec<TokenStream> = r
+                    .shapes
+                    .iter()
+                    .map(|(shape, ing)| {
+                        let ing_tok = ing.to_token_stream();
+                        quote! { (#shape, #ing_tok) }
+                    })
+                    .collect();
+                let trail = r.trail.to_token_stream();
+                let twinkle = r.twinkle.to_token_stream();
+                let fuel = r.fuel.to_token_stream();
+                let dye = r.dye.to_token_stream();
+                let result = r.result.to_token_stream();
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::FireworkStar {
+                        shapes: &[#(#shapes),*],
+                        trail: #trail,
+                        twinkle: #twinkle,
+                        fuel: #fuel,
+                        dye: #dye,
+                        result: #result,
+                    })
+                });
+            }
+            RecipeTypes::CraftingSpecialFireworkStarFade(r) => {
+                let target = r.target.to_token_stream();
+                let dye = r.dye.to_token_stream();
+                let result = r.result.to_token_stream();
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::FireworkStarFade {
+                        target: #target,
+                        dye: #dye,
+                        result: #result,
+                    })
+                });
+            }
+            RecipeTypes::CraftingSpecialFireworkRocket(r) => {
+                let shell = r.shell.to_token_stream();
+                let fuel = r.fuel.to_token_stream();
+                let star = r.star.to_token_stream();
+                let result = r.result.to_token_stream();
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::FireworkRocket {
+                        shell: #shell,
+                        fuel: #fuel,
+                        star: #star,
+                        result: #result,
+                    })
+                });
+            }
+            RecipeTypes::CraftingSpecialMapExtending(r) => {
+                let map = r.map.to_token_stream();
+                let material = r.material.to_token_stream();
+                let result = r.result.to_token_stream();
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::MapExtending {
+                        map: #map,
+                        material: #material,
+                        result: #result,
+                    })
+                });
+            }
+            RecipeTypes::CraftingSpecialRepairItem => {
+                crafting_recipes.push(quote! {
+                    CraftingRecipeTypes::CraftingSpecial(SpecialCraftingRecipe::RepairItem)
+                });
+            }
             RecipeTypes::CraftingSpecial => {}
         }
     }
@@ -555,6 +960,60 @@ pub fn build() -> TokenStream {
         use crate::tag::Taggable;
         use crate::item::Item;
         use serde::{Serialize, Deserialize};
+
+        #[derive(Clone, Debug, Serialize)]
+        pub enum SpecialCraftingRecipe {
+            Dye {
+                target: RecipeIngredientTypes,
+                dye: RecipeIngredientTypes,
+                result: RecipeResultStruct,
+            },
+            Imbue {
+                source: RecipeIngredientTypes,
+                material: RecipeIngredientTypes,
+                result: RecipeResultStruct,
+            },
+            ShieldDecoration {
+                banner: RecipeIngredientTypes,
+                target: RecipeIngredientTypes,
+                result: RecipeResultStruct,
+            },
+            BannerDuplicate {
+                banner: RecipeIngredientTypes,
+                result: RecipeResultStruct,
+            },
+            BookCloning {
+                source: RecipeIngredientTypes,
+                material: RecipeIngredientTypes,
+                allowed_generations: (i32, i32),
+                result: RecipeResultStruct,
+            },
+            FireworkStar {
+                shapes: &'static [(&'static str, RecipeIngredientTypes)],
+                trail: RecipeIngredientTypes,
+                twinkle: RecipeIngredientTypes,
+                fuel: RecipeIngredientTypes,
+                dye: RecipeIngredientTypes,
+                result: RecipeResultStruct,
+            },
+            FireworkStarFade {
+                target: RecipeIngredientTypes,
+                dye: RecipeIngredientTypes,
+                result: RecipeResultStruct,
+            },
+            FireworkRocket {
+                shell: RecipeIngredientTypes,
+                fuel: RecipeIngredientTypes,
+                star: RecipeIngredientTypes,
+                result: RecipeResultStruct,
+            },
+            MapExtending {
+                map: RecipeIngredientTypes,
+                material: RecipeIngredientTypes,
+                result: RecipeResultStruct,
+            },
+            RepairItem,
+        }
 
         #[derive(Clone, Debug, Serialize)]
         pub enum CraftingRecipeTypes {
@@ -577,12 +1036,14 @@ pub fn build() -> TokenStream {
                 group: Option<&'static str>,
                 input: RecipeIngredientTypes,
                 material: RecipeIngredientTypes,
+                material_count: (u8, u8),
+                add_material_count_to_result: bool,
                 result: RecipeResultStruct,
             },
             CraftingDecoratedPot {
                 category: RecipeCategoryTypes,
             },
-            CraftingSpecial,
+            CraftingSpecial(SpecialCraftingRecipe),
         }
 
         #[allow(dead_code)]
@@ -654,10 +1115,21 @@ pub fn build() -> TokenStream {
             pub result: RecipeResultStruct,
         }
 
-        #[derive(Clone, Debug, Serialize)]
+        #[derive(Clone, Serialize)]
         pub struct RecipeResultStruct {
             pub id: &'static str,
             pub count: u8,
+            #[serde(skip)]
+            pub components: &'static [(crate::data_component::DataComponent, &'static dyn crate::data_component_impl::DataComponentImpl)],
+        }
+
+        impl std::fmt::Debug for RecipeResultStruct {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("RecipeResultStruct")
+                    .field("id", &self.id)
+                    .field("count", &self.count)
+                    .finish_non_exhaustive()
+            }
         }
 
         #[derive(Clone, Debug, Serialize)]
@@ -705,6 +1177,87 @@ pub fn build() -> TokenStream {
         pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
             #(#stonecutting_recipes),*
         ];
+        pub static RECIPES_SMITHING_TRIM: &[SmithingTrimRecipe] = &[
+            #(#smithing_trim_recipes),*
+        ];
+        pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
+            #(#smithing_transform_recipes),*
+        ];
+
+        #[derive(Clone, Debug, Serialize)]
+        pub struct SmithingTrimRecipe {
+            pub template: RecipeIngredientTypes,
+            pub base: RecipeIngredientTypes,
+            pub addition: RecipeIngredientTypes,
+            pub pattern: &'static str,
+        }
+
+        impl SmithingTrimRecipe {
+            #[must_use]
+            pub fn matches(&self, template: &Item, base: &Item, addition: &Item) -> bool {
+                self.template.match_item(template)
+                    && self.base.match_item(base)
+                    && self.addition.match_item(addition)
+            }
+        }
+
+        #[must_use]
+        pub fn get_smithing_trim_recipe(
+            template: &Item,
+            base: &Item,
+            addition: &Item,
+        ) -> Option<&'static SmithingTrimRecipe> {
+            RECIPES_SMITHING_TRIM
+                .iter()
+                .find(|recipe| recipe.matches(template, base, addition))
+        }
+
+        #[derive(Clone, Debug, Serialize)]
+        pub struct SmithingTransformRecipe {
+            pub template: RecipeIngredientTypes,
+            pub base: RecipeIngredientTypes,
+            pub addition: RecipeIngredientTypes,
+            pub result: RecipeResultStruct,
+        }
+
+        impl SmithingTransformRecipe {
+            #[must_use]
+            pub fn matches(&self, template: &Item, base: &Item, addition: &Item) -> bool {
+                self.template.match_item(template)
+                    && self.base.match_item(base)
+                    && self.addition.match_item(addition)
+            }
+        }
+
+        #[must_use]
+        pub fn get_smithing_transform_recipe(
+            template: &Item,
+            base: &Item,
+            addition: &Item,
+        ) -> Option<&'static SmithingTransformRecipe> {
+            RECIPES_SMITHING_TRANSFORM
+                .iter()
+                .find(|recipe| recipe.matches(template, base, addition))
+        }
+
+        /// Returns the trim material registry key for a given item, if it is a valid trim material.
+        #[must_use]
+        pub fn get_trim_material_for_item(item: &Item) -> Option<&'static str> {
+            match item.registry_key {
+                "amethyst_shard" => Some("minecraft:amethyst"),
+                "copper_ingot" => Some("minecraft:copper"),
+                "diamond" => Some("minecraft:diamond"),
+                "emerald" => Some("minecraft:emerald"),
+                "gold_ingot" => Some("minecraft:gold"),
+                "iron_ingot" => Some("minecraft:iron"),
+                "lapis_lazuli" => Some("minecraft:lapis"),
+                "netherite_ingot" => Some("minecraft:netherite"),
+                "quartz" => Some("minecraft:quartz"),
+                "redstone" => Some("minecraft:redstone"),
+                "resin_brick" | "resin_clump" => Some("minecraft:resin"),
+                _ => None,
+            }
+        }
 
         #[must_use]
         pub fn get_cooking_recipe_with_ingredient(ingredient: &Item, recipe_type: CookingRecipeKind) -> Option<&'static CookingRecipe> {
@@ -739,5 +1292,15 @@ pub fn build() -> TokenStream {
                 (cooking_recipe.recipe_id == recipe_id).then_some(cooking_recipe.experience)
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_recipes() {
+        let _ = build();
     }
 }

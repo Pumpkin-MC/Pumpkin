@@ -9,8 +9,11 @@ use crate::{codec::var_int::VarInt, serial::PacketWrite};
 #[derive(PacketWrite)]
 #[packet(26)]
 pub struct CBlockEvent {
+    /// World coordinates of the block undergoing the event.
     pub block_position: BlockPos,
+    /// Type identifier of the block action being executed.
     pub event_type: VarInt,
+    /// Type-specific integer parameter (e.g. 1 to open a chest lid, 0 to close it).
     pub event_value: VarInt,
 }
 

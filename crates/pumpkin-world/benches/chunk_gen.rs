@@ -55,8 +55,8 @@ impl WorldPortalExt for BlockRegistry {
     }
 }
 
-fn make_world_gen() -> Box<WorldGenerator> {
-    get_world_gen(SEED, Dimension::OVERWORLD, false, Vec::new(), String::new())
+fn make_world_gen() -> WorldGenerator {
+    *get_world_gen(SEED, Dimension::OVERWORLD, false, Vec::new(), String::new())
 }
 
 fn setup_cache(
@@ -64,7 +64,11 @@ fn setup_cache(
     world_gen: &WorldGenerator,
     block_registry: &dyn WorldPortalExt,
 ) -> Cache {
-    let radius = target_stage.get_direct_radius();
+    let radius = if target_stage as u8 >= StagedChunkEnum::Surface as u8 {
+        1
+    } else {
+        target_stage.get_direct_radius()
+    };
     let mut cache = Cache::new(-radius, -radius, radius * 2 + 1);
 
     for dx in -radius..=radius {

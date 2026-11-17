@@ -7,14 +7,22 @@ use crate::{
 };
 use pumpkin_macros::packet;
 
+/// Slot update information resulting from an approved item stack request.
 #[derive(Debug, Clone)]
 pub struct ItemStackResponseSlotInfo {
+    /// Slot index requested by the client.
     pub requested_slot: u8,
+    /// Destination slot index allocated by the server.
     pub slot: u8,
+    /// Item count in the slot.
     pub amount: u8,
+    /// Unique network stack ID assigned to the slot's item stack.
     pub item_stack_net_id: VarInt,
+    /// Custom display name assigned to the item.
     pub custom_name: String,
+    /// Filtered custom display name.
     pub filtered_custom_name: String,
+    /// Durability correction delta.
     pub durability_correction: VarInt,
 }
 
@@ -29,7 +37,6 @@ impl PacketWrite for ItemStackResponseSlotInfo {
         self.requested_slot.write(writer)?;
         self.slot.write(writer)?;
         self.amount.write(writer)?;
-        true.write(writer)?;
         (self.item_stack_net_id.0 > 0).write(writer)?;
         if self.item_stack_net_id.0 > 0 {
             self.item_stack_net_id.write(writer)?;
@@ -46,11 +53,15 @@ pub struct ItemStackResponseContainerInfo {
     pub slots: Vec<ItemStackResponseSlotInfo>,
 }
 
+/// Status result and slot updates for an individual item stack request.
 #[derive(Debug, Clone)]
 pub struct ItemStackResponseInfo {
     // TODO: proper enum
+    /// Status code of the response (`0` = Success, `1` = Error).
     pub result: u8, // 0 = SUCCESS, 1 = ERROR
+    /// Request ID matching the client's `ItemStackRequest`.
     pub client_request_id: VarInt,
+    /// Container slot updates applied as a consequence of the request.
     pub containers: Vec<ItemStackResponseContainerInfo>,
 }
 
@@ -58,7 +69,6 @@ impl PacketWrite for ItemStackResponseInfo {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.result.write(writer)?;
         self.client_request_id.write(writer)?;
-        true.write(writer)?;
         (!self.containers.is_empty()).write(writer)?;
         if !self.containers.is_empty() {
             VarUInt(self.containers.len() as u32).write(writer)?;
@@ -70,9 +80,11 @@ impl PacketWrite for ItemStackResponseInfo {
     }
 }
 
+/// Sent by the server to approve or reject item stack requests and sync modified slots.
 #[derive(Debug, Clone)]
 #[packet(148)]
 pub struct CItemStackResponse {
+    /// List of response statuses corresponding to client requests.
     pub responses: Vec<ItemStackResponseInfo>,
 }
 

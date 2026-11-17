@@ -1,0 +1,167 @@
+package pumpkin:plugin@0.2.0;
+
+interface inventory {
+    use item-stack.{item-stack};
+    use common.{hand};
+
+    /// Common inventory resource used across GUIs, player inventories, and containers.
+    resource inventory {
+        /// Returns the number of slots in this inventory.
+        get-size: func() -> u32;
+
+        /// Returns true if all slots in this inventory are empty.
+        is-empty: func() -> bool;
+
+        /// Returns the item in the specified slot index, or none if empty.
+        get-item: func(slot: u32) -> option<item-stack>;
+
+        /// Sets the item in the specified slot index.
+        set-item: async func(slot: u32, item: option<item-stack>);
+
+        /// Removes and returns the item in the specified slot index.
+        remove-item: async func(slot: u32) -> option<item-stack>;
+
+        /// Clears all items from this inventory.
+        clear: async func();
+
+        /// Returns all items in this inventory as a list of slots.
+        get-all-items: func() -> list<option<item-stack>>;
+
+        /// Sets all items in this inventory from a list.
+        set-all-items: async func(items: list<option<item-stack>>);
+
+        /// Returns all storage items in this inventory (excluding armor/offhand for player inventories).
+        get-storage-contents: func() -> list<option<item-stack>>;
+
+        /// Sets the storage items in this inventory from a list.
+        set-storage-contents: async func(items: list<option<item-stack>>);
+
+        /// Counts the total number of items with the given ID in this inventory.
+        count-item: func(item-id: string) -> u32;
+
+        /// Checks if the inventory contains at least one item with the given ID.
+        contains-item: func(item-id: string) -> bool;
+
+        /// Returns the maximum stack size allowed by this inventory.
+        get-max-stack-size: func() -> u8;
+
+        /// Inserts an item stack into the inventory, merging into existing partial matching stacks
+        /// first and then filling empty slots. Returns any leftover item stack that could not fit.
+        add-item: async func(item: item-stack) -> option<item-stack>;
+
+        /// Inserts multiple item stacks into the inventory and returns any leftover stacks that could not fit.
+        add-items: async func(items: list<item-stack>) -> list<item-stack>;
+
+        /// Removes matching items from this inventory up to the stack count of the given item stack.
+        /// Returns any leftover item stack that could not be removed (or none if all were removed).
+        remove-item-stack: async func(item: item-stack) -> option<item-stack>;
+
+        /// Removes matching items from this inventory for multiple item stacks.
+        /// Returns any leftover item stacks that could not be removed.
+        remove-item-stacks: async func(items: list<item-stack>) -> list<item-stack>;
+
+        /// Removes up to `item.get-count()` items matching the given item stack (including components)
+        /// across all slots. Returns the number of items that could not be removed (0 if all were removed).
+        remove-matching: async func(item: item-stack) -> u32;
+
+        /// Removes up to `amount` items matching the given item ID across all slots.
+        /// Returns the number of items that could not be removed (0 if all were removed).
+        remove-by-id: async func(item-id: string, amount: u32) -> u32;
+
+        /// Removes all items matching the given item ID from this inventory and returns the total count removed.
+        remove-all-by-id: async func(item-id: string) -> u32;
+
+        /// Returns the index of the first empty slot in this inventory, if any.
+        first-empty: func() -> option<u32>;
+
+        /// Returns the index of the first slot containing an item with the given ID, if any.
+        first-by-id: func(item-id: string) -> option<u32>;
+
+        /// Returns the index of the first slot containing an item matching the given item stack
+        /// (and optionally having at least the same stack count).
+        first-matching: async func(item: item-stack, check-amount: bool) -> option<u32>;
+
+        /// Returns the indices of all slots containing an item with the given ID.
+        all-slots-by-id: func(item-id: string) -> list<u32>;
+
+        /// Checks if the inventory contains at least `amount` items matching the given item stack (including components).
+        contains-at-least: async func(item: item-stack, amount: u32) -> bool;
+
+        /// Counts the total number of items matching the given item stack (including components) in this inventory.
+        count-matching: async func(item: item-stack) -> u32;
+
+        /// Checks if the entire given item stack can fit into this inventory.
+        has-space-for: async func(item: item-stack) -> bool;
+    }
+
+    /// Specialized player inventory handle providing access to main inventory, armor, offhand, and hotbar.
+    resource player-inventory {
+        /// Returns the generic 36-slot inventory handle (hotbar + main storage).
+        as-inventory: func() -> inventory;
+
+        /// Gives an item stack to the player using vanilla insertion priority (selected hotbar slot,
+        /// offhand if matching, then main inventory), syncing updated slots to the client.
+        /// If `drop-leftover` is true, any leftover items that do not fit are dropped into the world
+        /// at the player's position and `none` is returned; otherwise the leftover stack is returned.
+        give-item: async func(item: item-stack, drop-leftover: bool) -> option<item-stack>;
+
+        /// Returns the item currently held on the player's screen cursor, if any.
+        get-cursor-item: func() -> option<item-stack>;
+
+        /// Sets the item held on the player's screen cursor and syncs it to the client.
+        set-cursor-item: async func(item: option<item-stack>);
+
+        /// Synchronizes the full player inventory and open container slots to the client.
+        sync: func();
+
+        /// Returns the 36 main storage slots of the player inventory.
+        get-storage-contents: func() -> list<option<item-stack>>;
+
+        /// Sets the 36 main storage slots of the player inventory.
+        set-storage-contents: async func(items: list<option<item-stack>>);
+
+        /// Returns the armor contents as a list: [boots, leggings, chestplate, helmet].
+        get-armor-contents: func() -> list<option<item-stack>>;
+
+        /// Sets the armor contents from a list: [boots, leggings, chestplate, helmet].
+        set-armor-contents: async func(items: list<option<item-stack>>);
+
+        /// Returns the item currently held in the specified hand.
+        get-item-in-hand: func(hand: hand) -> option<item-stack>;
+        /// Sets the item in the specified hand.
+        set-item-in-hand: async func(hand: hand, item: option<item-stack>);
+
+        /// Returns the item currently held in the player's main hand.
+        get-main-hand: func() -> option<item-stack>;
+        /// Sets the item currently held in the player's main hand.
+        set-main-hand: async func(item: option<item-stack>);
+
+        /// Returns the currently selected hotbar slot index (0-8).
+        get-selected-slot: func() -> u8;
+        /// Sets the currently selected hotbar slot index (0-8).
+        set-selected-slot: func(slot: u8);
+
+        /// Armor slot accessors
+        get-helmet: func() -> option<item-stack>;
+        set-helmet: async func(item: option<item-stack>);
+
+        get-chestplate: func() -> option<item-stack>;
+        set-chestplate: async func(item: option<item-stack>);
+
+        get-leggings: func() -> option<item-stack>;
+        set-leggings: async func(item: option<item-stack>);
+
+        get-boots: func() -> option<item-stack>;
+        set-boots: async func(item: option<item-stack>);
+
+        get-off-hand: func() -> option<item-stack>;
+        set-off-hand: async func(item: option<item-stack>);
+
+        /// Clears all armor slots.
+        clear-armor: async func();
+        /// Clears the 36 main inventory slots.
+        clear-main: async func();
+        /// Clears all slots (main inventory, armor, offhand).
+        clear-all: async func();
+    }
+}

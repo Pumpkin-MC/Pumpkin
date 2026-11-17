@@ -6,12 +6,30 @@ use crate::data_component::DataComponent;
 use crate::entity_type::EntityType;
 use crate::sound::Sound;
 use crate::tag::Taggable;
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use std::any::Any;
 use std::borrow::Cow;
+
+/// CRC-32C state for vanilla's data component hashes.
+#[derive(Default)]
+pub struct Digest(u32);
+
+impl Digest {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn update(&mut self, bytes: &[u8]) {
+        self.0 = crc32c::crc32c_append(self.0, bytes);
+    }
+
+    #[must_use]
+    pub const fn finalize(&self) -> u64 {
+        self.0 as u64
+    }
+}
 
 pub trait DataComponentImpl: Send + Sync {
     fn write_data(&self) -> NbtTag {
@@ -40,7 +58,11 @@ impl Clone for Box<dyn DataComponentImpl> {
 
 #[inline]
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
-    value.as_any().downcast_ref::<T>().unwrap_or_else(|| {
+    if value.get_self_enum() == T::get_enum() {
+        // SAFETY: `DataComponent` variants have a 1-to-1 mapping to their `DataComponentImpl` type `T`.
+        // Checking `get_self_enum()` instead of `TypeId` works across `cdylib` plugin boundaries.
+        unsafe { &*(std::ptr::from_ref::<dyn DataComponentImpl>(value).cast::<T>()) }
+    } else {
         panic!(
             "you are trying to cast {} ({}) to {} ({})",
             value.get_self_enum().to_name(),
@@ -48,26 +70,36 @@ pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T 
             T::get_enum().to_name(),
             std::any::type_name::<T>()
         )
-    })
+    }
 }
 
 #[inline]
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
     let name = value.get_self_enum().to_name();
     let val_type = std::any::type_name_of_val(value);
-    value.as_mut_any().downcast_mut::<T>().unwrap_or_else(|| {
+    if value.get_self_enum() == T::get_enum() {
+        // SAFETY: `DataComponent` variants have a 1-to-1 mapping to their `DataComponentImpl` type `T`.
+        // Checking `get_self_enum()` instead of `TypeId` works across `cdylib` plugin boundaries.
+        unsafe { &mut *(std::ptr::from_mut::<dyn DataComponentImpl>(value).cast::<T>()) }
+    } else {
         panic!(
             "you are trying to cast {name} ({val_type}) to {} ({})",
             T::get_enum().to_name(),
             std::any::type_name::<T>()
         )
-    })
+    }
 }
 
 macro_rules! default_impl {
     ($t: ident) => {
         fn equal(&self, other: &dyn crate::data_component_impl::DataComponentImpl) -> bool {
-            if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            if other.get_self_enum() == Self::get_enum() {
+                let other = unsafe {
+                    &*(std::ptr::from_ref::<dyn crate::data_component_impl::DataComponentImpl>(
+                        other,
+                    )
+                    .cast::<Self>())
+                };
                 self == other
             } else {
                 false
@@ -99,7 +131,7 @@ macro_rules! default_impl {
 }
 
 pub fn get_str_hash(val: &str) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[12u8]);
     digest.update(&(val.len() as u32).to_le_bytes());
     let byte = val.as_bytes();
@@ -110,21 +142,21 @@ pub fn get_str_hash(val: &str) -> u32 {
 }
 
 pub fn get_i32_hash(val: i32) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[8u8]);
     digest.update(&val.to_le_bytes());
     digest.finalize() as u32
 }
 
 pub fn get_f32_hash(val: f32) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[7u8]);
     digest.update(&val.to_bits().to_le_bytes());
     digest.finalize() as u32
 }
 
 pub fn get_idor_hash(val: &IdOr<basic::SoundEvent>) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     digest.update(&[6u8]);
     match val {
         IdOr::Id(sound) => {
@@ -179,7 +211,7 @@ pub fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<basic::Sou
 }
 
 pub fn get_idset_hash<T: IDSetContent>(val: &IDSet<T>) -> u32 {
-    let mut digest = Digest::new(Crc32Iscsi);
+    let mut digest = Digest::new();
     match val {
         IDSet::Tag(tag) => {
             digest.update(&[1u8]);
@@ -218,6 +250,125 @@ impl IDSetContent for Block {
 
     fn to_string(&self) -> String {
         self.name.to_string()
+    }
+}
+
+impl IDSetContent for crate::item::Item {
+    fn registry_id(&self) -> u16 {
+        self.id
+    }
+
+    fn from_id(id: u16) -> Option<&'static Self> {
+        crate::item::Item::from_id(id)
+    }
+
+    fn from_str(name: &str) -> Option<&'static Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        crate::item::Item::from_registry_key(name)
+    }
+
+    fn to_string(&self) -> String {
+        self.registry_key.to_string()
+    }
+}
+
+const DAMAGE_TYPES_BY_ID: [(crate::damage::DamageType, &str); 51] = [
+    (crate::damage::DamageType::ARROW, "arrow"),
+    (
+        crate::damage::DamageType::BAD_RESPAWN_POINT,
+        "bad_respawn_point",
+    ),
+    (crate::damage::DamageType::CACTUS, "cactus"),
+    (crate::damage::DamageType::CAMPFIRE, "campfire"),
+    (crate::damage::DamageType::CRAMMING, "cramming"),
+    (crate::damage::DamageType::DRAGON_BREATH, "dragon_breath"),
+    (crate::damage::DamageType::DROWN, "drown"),
+    (crate::damage::DamageType::DRY_OUT, "dry_out"),
+    (crate::damage::DamageType::ENDER_PEARL, "ender_pearl"),
+    (crate::damage::DamageType::EXPLOSION, "explosion"),
+    (crate::damage::DamageType::FALL, "fall"),
+    (crate::damage::DamageType::FALLING_ANVIL, "falling_anvil"),
+    (crate::damage::DamageType::FALLING_BLOCK, "falling_block"),
+    (
+        crate::damage::DamageType::FALLING_STALACTITE,
+        "falling_stalactite",
+    ),
+    (crate::damage::DamageType::FIREBALL, "fireball"),
+    (crate::damage::DamageType::FIREWORKS, "fireworks"),
+    (crate::damage::DamageType::FLY_INTO_WALL, "fly_into_wall"),
+    (crate::damage::DamageType::FREEZE, "freeze"),
+    (crate::damage::DamageType::GENERIC, "generic"),
+    (crate::damage::DamageType::GENERIC_KILL, "generic_kill"),
+    (crate::damage::DamageType::HOT_FLOOR, "hot_floor"),
+    (crate::damage::DamageType::IN_FIRE, "in_fire"),
+    (crate::damage::DamageType::IN_WALL, "in_wall"),
+    (crate::damage::DamageType::INDIRECT_MAGIC, "indirect_magic"),
+    (crate::damage::DamageType::LAVA, "lava"),
+    (crate::damage::DamageType::LIGHTNING_BOLT, "lightning_bolt"),
+    (crate::damage::DamageType::MACE_SMASH, "mace_smash"),
+    (crate::damage::DamageType::MAGIC, "magic"),
+    (crate::damage::DamageType::MOB_ATTACK, "mob_attack"),
+    (
+        crate::damage::DamageType::MOB_ATTACK_NO_AGGRO,
+        "mob_attack_no_aggro",
+    ),
+    (crate::damage::DamageType::MOB_PROJECTILE, "mob_projectile"),
+    (crate::damage::DamageType::ON_FIRE, "on_fire"),
+    (crate::damage::DamageType::OUT_OF_WORLD, "out_of_world"),
+    (crate::damage::DamageType::OUTSIDE_BORDER, "outside_border"),
+    (crate::damage::DamageType::PLAYER_ATTACK, "player_attack"),
+    (
+        crate::damage::DamageType::PLAYER_EXPLOSION,
+        "player_explosion",
+    ),
+    (crate::damage::DamageType::SONIC_BOOM, "sonic_boom"),
+    (crate::damage::DamageType::SPEAR, "spear"),
+    (crate::damage::DamageType::SPIT, "spit"),
+    (crate::damage::DamageType::STALAGMITE, "stalagmite"),
+    (crate::damage::DamageType::STARVE, "starve"),
+    (crate::damage::DamageType::STING, "sting"),
+    (
+        crate::damage::DamageType::SULFUR_CUBE_HOT,
+        "sulfur_cube_hot",
+    ),
+    (
+        crate::damage::DamageType::SWEET_BERRY_BUSH,
+        "sweet_berry_bush",
+    ),
+    (crate::damage::DamageType::THORNS, "thorns"),
+    (crate::damage::DamageType::THROWN, "thrown"),
+    (crate::damage::DamageType::TRIDENT, "trident"),
+    (
+        crate::damage::DamageType::UNATTRIBUTED_FIREBALL,
+        "unattributed_fireball",
+    ),
+    (crate::damage::DamageType::WIND_CHARGE, "wind_charge"),
+    (crate::damage::DamageType::WITHER, "wither"),
+    (crate::damage::DamageType::WITHER_SKULL, "wither_skull"),
+];
+
+impl IDSetContent for crate::damage::DamageType {
+    fn registry_id(&self) -> u16 {
+        u16::from(self.id)
+    }
+
+    fn from_id(id: u16) -> Option<&'static Self> {
+        DAMAGE_TYPES_BY_ID.get(usize::from(id)).map(|(dt, _)| dt)
+    }
+
+    fn from_str(name: &str) -> Option<&'static Self> {
+        let key = name.strip_prefix("minecraft:").unwrap_or(name);
+        DAMAGE_TYPES_BY_ID
+            .iter()
+            .find(|(_, k)| *k == key)
+            .map(|(dt, _)| dt)
+    }
+
+    fn to_string(&self) -> String {
+        DAMAGE_TYPES_BY_ID.get(usize::from(self.id)).map_or_else(
+            || format!("minecraft:{}", self.message_id),
+            |(_, key)| format!("minecraft:{key}"),
+        )
     }
 }
 
@@ -266,6 +417,39 @@ impl<T: IDSetContent + 'static> IDSet<T> {
                     .collect();
                 compound.put_list(key, id_vec);
             }
+        }
+    }
+}
+
+impl IDSet<EntityType> {
+    /// Membership by id or entity type tag.
+    #[must_use]
+    pub fn contains(&self, entity_type: &EntityType) -> bool {
+        match self {
+            Self::Tag(tag) => entity_type.is_tagged_with(tag).unwrap_or(false),
+            Self::IDs(types) => types.iter().any(|t| t.id == entity_type.id),
+        }
+    }
+}
+
+impl IDSet<crate::damage::DamageType> {
+    /// Membership by id or damage type tag.
+    #[must_use]
+    pub fn contains(&self, damage_type: &crate::damage::DamageType) -> bool {
+        match self {
+            Self::Tag(tag) => damage_type.is_tagged_with(tag).unwrap_or(false),
+            Self::IDs(types) => types.iter().any(|t| t.id == damage_type.id),
+        }
+    }
+}
+
+impl IDSet<crate::item::Item> {
+    /// Membership by id or item tag.
+    #[must_use]
+    pub fn contains(&self, item: &crate::item::Item) -> bool {
+        match self {
+            Self::Tag(tag) => item.is_tagged_with(tag).unwrap_or(false),
+            Self::IDs(items) => items.iter().any(|i| i.id == item.id),
         }
     }
 }
@@ -544,11 +728,21 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         DataComponent::Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         DataComponent::Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
+        DataComponent::AttackRange => Some(AttackRangeImpl::read_data(data)?.to_dyn()),
+        DataComponent::KineticWeapon => Some(KineticWeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::PiercingWeapon => Some(PiercingWeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::MinimumAttackCharge => {
+            Some(MinimumAttackChargeImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::DamageType => Some(DamageTypeImpl::read_data(data)?.to_dyn()),
         DataComponent::StoredEnchantments => {
             Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn())
         }
         DataComponent::UseCooldown => Some(UseCooldownImpl::read_data(data)?.to_dyn()),
+        DataComponent::RepairCost => Some(RepairCostImpl::read_data(data)?.to_dyn()),
+        DataComponent::Repairable => Some(RepairableImpl::read_data(data)?.to_dyn()),
         DataComponent::MapId => Some(MapIdImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapPostProcessing => Some(MapPostProcessingImpl::read_data(data)?.to_dyn()),
         DataComponent::ChargedProjectiles => {
             Some(ChargedProjectilesImpl::read_data(data)?.to_dyn())
         }
@@ -620,7 +814,57 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::Trim => Some(TrimImpl::read_data(data)?.to_dyn()),
         DataComponent::CanPlaceOn => Some(CanPlaceOnImpl::read_data(data)?.to_dyn()),
         DataComponent::CanBreak => Some(CanBreakImpl::read_data(data)?.to_dyn()),
-        _ => None,
+        DataComponent::AttackAnimation => Some(SwingAnimationImpl::read_data(data)?.to_dyn()),
+        DataComponent::Rarity => Some(RarityImpl::read_data(data)?.to_dyn()),
+        DataComponent::BannerPatterns => Some(BannerPatternsImpl::read_data(data)?.to_dyn()),
+        DataComponent::UseEffects => Some(UseEffectsImpl::read_data(data)?.to_dyn()),
+        DataComponent::UseRemainder => Some(UseRemainderImpl::read_data(data)?.to_dyn()),
+        DataComponent::Weapon => Some(WeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::TooltipDisplay => Some(TooltipDisplayImpl::read_data(data)?.to_dyn()),
+        DataComponent::CreativeSlotLock => Some(CreativeSlotLockImpl::read_data(data)?.to_dyn()),
+        DataComponent::EnchantmentGlintOverride => {
+            Some(EnchantmentGlintOverrideImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::DeathProtection => Some(DeathProtectionImpl::read_data(data)?.to_dyn()),
+        DataComponent::BlocksAttacks => Some(BlocksAttacksImpl::read_data(data)?.to_dyn()),
+        DataComponent::AdditionalTradeCost => {
+            Some(AdditionalTradeCostImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::Dye => Some(DyeImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapDecorations => Some(MapDecorationsImpl::read_data(data)?.to_dyn()),
+        DataComponent::DebugStickState => Some(DebugStickStateImpl::read_data(data)?.to_dyn()),
+        DataComponent::EntityData => Some(EntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::BucketEntityData => Some(BucketEntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::Instrument => Some(InstrumentImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesTrimMaterial => {
+            Some(ProvidesTrimMaterialImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::JukeboxPlayable => Some(JukeboxPlayableImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesBannerPatterns => {
+            Some(ProvidesBannerPatternsImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::Recipes => Some(RecipesImpl::read_data(data)?.to_dyn()),
+        DataComponent::PotDecorations => Some(PotDecorationsImpl::read_data(data)?.to_dyn()),
+        DataComponent::Bees => Some(BeesImpl::read_data(data)?.to_dyn()),
+        DataComponent::SulfurCubeContent => Some(SulfurCubeContentImpl::read_data(data)?.to_dyn()),
+        DataComponent::BreakSound => Some(BreakSoundImpl::read_data(data)?.to_dyn()),
+        DataComponent::AttributeModifiers => {
+            Some(AttributeModifiersImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::BrewingFuel => Some(BrewingFuelImpl::read_data(data)?.to_dyn()),
+        DataComponent::CookingFuel => Some(CookingFuelImpl::read_data(data)?.to_dyn()),
+        DataComponent::Compostable => Some(CompostableImpl::read_data(data)?.to_dyn()),
+        DataComponent::Waxed => Some(WaxedImpl::read_data(data)?.to_dyn()),
+        DataComponent::InteractAnimation => Some(InteractAnimationImpl::read_data(data)?.to_dyn()),
+        DataComponent::BlockTransformer => Some(BlockTransformerImpl::read_data(data)?.to_dyn()),
+        DataComponent::VillagerFood => Some(VillagerFoodImpl::read_data(data)?.to_dyn()),
+        DataComponent::MobVisibility => Some(MobVisibilityImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesPotteryPattern => {
+            Some(ProvidesPotteryPatternImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::SignTextFront => Some(SignTextFrontImpl::read_data(data)?.to_dyn()),
+        DataComponent::SignTextBack => Some(SignTextBackImpl::read_data(data)?.to_dyn()),
+        DataComponent::CushionColor => Some(CushionColorImpl::read_data(data)?.to_dyn()),
     }
 }
 
@@ -679,6 +923,26 @@ mod tests {
         nbt.put_string("id", "minecraft:chest".to_string());
         nbt.put_int("x", 12);
         assert_round_trip(BlockEntityDataImpl { nbt }, BlockEntityDataImpl::read_data);
+    }
+
+    #[test]
+    fn entity_data_round_trip() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_bool("PlayerCreated", true);
+        assert_round_trip(
+            EntityDataImpl {
+                entity_type: Some(&EntityType::IRON_GOLEM),
+                nbt: Some(nbt),
+            },
+            EntityDataImpl::read_data,
+        );
+        assert_round_trip(
+            EntityDataImpl {
+                entity_type: Some(&EntityType::CHICKEN),
+                nbt: None,
+            },
+            EntityDataImpl::read_data,
+        );
     }
 
     #[test]
@@ -794,6 +1058,45 @@ mod tests {
             IntangibleProjectileImpl,
             IntangibleProjectileImpl::read_data,
         );
+        assert_round_trip(BrewingFuelImpl::DEFAULT, BrewingFuelImpl::read_data);
+        assert_round_trip(
+            BrewingFuelImpl {
+                uses: IntProvider::Inline(10),
+                speed_multiplier: FloatProvider::Inline(2.0),
+            },
+            BrewingFuelImpl::read_data,
+        );
+        assert_round_trip(BlocksAttacksImpl::DEFAULT, BlocksAttacksImpl::read_data);
+        assert_round_trip(
+            DeathProtectionImpl {
+                death_effects: Cow::Owned(vec![ConsumeEffect::ClearAllEffects]),
+            },
+            DeathProtectionImpl::read_data,
+        );
+        assert_round_trip(
+            TooltipDisplayImpl {
+                hide_tooltip: true,
+                hidden_components: Cow::Owned(vec![DataComponent::Enchantments]),
+            },
+            TooltipDisplayImpl::read_data,
+        );
+        assert_round_trip(WaxedImpl, WaxedImpl::read_data);
+        assert_round_trip(
+            CookingFuelImpl {
+                burn_time: IntProvider::Id(Cow::Borrowed("minecraft:cooking/time_coal")),
+                speed_multiplier: FloatProvider::Id(Cow::Borrowed(
+                    "minecraft:cooking/speed_default",
+                )),
+            },
+            CookingFuelImpl::read_data,
+        );
+        assert_round_trip(
+            CookingFuelImpl {
+                burn_time: IntProvider::Inline(1600),
+                speed_multiplier: FloatProvider::Inline(1.5),
+            },
+            CookingFuelImpl::read_data,
+        );
     }
 
     #[test]
@@ -844,5 +1147,152 @@ mod tests {
         assert_eq!(enc2.enchantment.len(), 1);
         assert!(enc2.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
         assert_eq!(enc2.enchantment[0].1, 2);
+    }
+
+    #[test]
+    fn swing_animation_round_trip() {
+        assert_round_trip(
+            SwingAnimationImpl {
+                animation_type: SwingAnimationType::Stab,
+                duration: 19,
+            },
+            SwingAnimationImpl::read_data,
+        );
+        assert_round_trip(SwingAnimationImpl::DEFAULT, SwingAnimationImpl::read_data);
+    }
+
+    #[test]
+    fn generated_item_components_complete_for_26_3() {
+        use crate::item::Item;
+        use crate::item_stack::ItemStack;
+
+        let cushion = ItemStack::new(1, &Item::ORANGE_CUSHION);
+        assert_eq!(
+            cushion
+                .get_data_component::<CushionColorImpl>()
+                .map(|c| c.color),
+            Some(crate::dye_color::DyeColor::Orange)
+        );
+
+        let shield = ItemStack::new(1, &Item::SHIELD);
+        let blocks = shield.get_data_component::<BlocksAttacksImpl>().unwrap();
+        assert_eq!(blocks.block_delay_ticks(), 5);
+        assert_eq!(blocks.item_damage.threshold, 3.0);
+        assert_eq!(blocks.item_damage.apply(2.5), 0);
+        assert_eq!(blocks.item_damage.apply(3.0), 4);
+        assert!(
+            blocks
+                .bypassed_by
+                .as_ref()
+                .is_some_and(|set| set.contains(&crate::damage::DamageType::GENERIC_KILL))
+        );
+
+        let totem = ItemStack::new(1, &Item::TOTEM_OF_UNDYING);
+        let dp = totem.get_data_component::<DeathProtectionImpl>().unwrap();
+        assert_eq!(dp.death_effects.len(), 2);
+
+        let blaze = ItemStack::new(1, &Item::BLAZE_POWDER);
+        let fuel = blaze.get_data_component::<BrewingFuelImpl>().unwrap();
+        assert_eq!(fuel.get_uses(), 20);
+        assert_eq!(fuel.get_speed_multiplier(), 1.0);
+
+        let egg = ItemStack::new(1, &Item::COW_SPAWN_EGG);
+        assert_eq!(
+            egg.get_data_component::<EntityDataImpl>()
+                .and_then(EntityDataImpl::get_entity_type)
+                .map(|e| e.id),
+            Some(crate::entity_type::EntityType::COW.id)
+        );
+
+        let pumpkin = ItemStack::new(1, &Item::CARVED_PUMPKIN);
+        let attrs = pumpkin
+            .get_data_component::<AttributeModifiersImpl>()
+            .unwrap();
+        assert_eq!(attrs.attribute_modifiers.len(), 1);
+        assert_eq!(
+            attrs.attribute_modifiers[0].display,
+            ModifierDisplay::Hidden
+        );
+        assert_round_trip(attrs.clone(), AttributeModifiersImpl::read_data);
+
+        let stew = ItemStack::new(1, &Item::MUSHROOM_STEW);
+        assert_eq!(
+            stew.get_data_component::<UseRemainderImpl>()
+                .and_then(|u| u.remainder.as_ref())
+                .map(|s| s.item),
+            Some(&Item::BOWL)
+        );
+
+        let sword = ItemStack::new(1, &Item::NETHERITE_SWORD);
+        assert!(!sword.can_be_hurt_by(crate::damage::DamageType::LAVA));
+        assert!(sword.can_be_hurt_by(crate::damage::DamageType::CACTUS));
+    }
+
+    #[test]
+    fn lock_predicate_and_written_book_roundtrips() {
+        use crate::item::Item;
+        use crate::item_stack::ItemStack;
+        use pumpkin_util::text::TextComponent;
+
+        let mut comp_pred = NbtCompound::new();
+        comp_pred.put_string("minecraft:custom_name", "Secret Key".to_string());
+        let mut count_bounds = NbtCompound::new();
+        count_bounds.put_int("min", 2);
+        count_bounds.put_int("max", 4);
+        let mut pred = NbtCompound::new();
+        pred.put_string("items", "minecraft:tripwire_hook".to_string());
+        pred.put_compound("count", count_bounds);
+        pred.put_compound("components", comp_pred);
+        let lock = LockImpl { predicate: pred };
+
+        assert!(!lock.unlocks_with(&ItemStack::EMPTY));
+
+        let mut key = ItemStack::new(2, &Item::TRIPWIRE_HOOK);
+        assert!(!lock.unlocks_with(&key));
+        key.set_data_component(CustomNameImpl {
+            name: TextComponent::text("Secret Key"),
+        });
+        assert!(lock.unlocks_with(&key));
+
+        let mut wrong_count = key.clone();
+        wrong_count.item_count = 1;
+        assert!(!lock.unlocks_with(&wrong_count));
+
+        let wrong_item = ItemStack::new_with_component(
+            2,
+            &Item::STICK,
+            vec![(
+                DataComponent::CustomName,
+                Some(Box::new(CustomNameImpl {
+                    name: TextComponent::text("Secret Key"),
+                })),
+            )],
+        );
+        assert!(!lock.unlocks_with(&wrong_item));
+
+        let legacy = LockImpl::read_data(&NbtTag::String("Vault".into())).unwrap();
+        let mut legacy_key = ItemStack::new(1, &Item::STICK);
+        assert!(!legacy.unlocks_with(&legacy_key));
+        legacy_key.set_data_component(CustomNameImpl {
+            name: TextComponent::text("Vault"),
+        });
+        assert!(legacy.unlocks_with(&legacy_key));
+
+        assert_round_trip(
+            WrittenBookContentImpl {
+                title: "Chronicle".to_string(),
+                author: "Alex".to_string(),
+                generation: 2,
+                pages: vec![TextComponent::text("Page 1")],
+                resolved: true,
+            },
+            WrittenBookContentImpl::read_data,
+        );
+        assert_round_trip(
+            JukeboxPlayableImpl {
+                song: "minecraft:precipice",
+            },
+            JukeboxPlayableImpl::read_data,
+        );
     }
 }

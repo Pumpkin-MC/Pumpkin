@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "#c:fences/wooden",
+      "required": false
+    },
+    {
+      "id": "#c:fences/nether_brick",
+      "required": false
+    }
+  ]
+}

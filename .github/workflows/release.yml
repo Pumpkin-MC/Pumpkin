@@ -6,6 +6,8 @@ on:
       - "*"
       - "!nightly"
       - "!nightly*"
+      - "!canary"
+      - "!canary*"
   workflow_dispatch:
     inputs:
       tag_name:
@@ -23,43 +25,38 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          [
-            ubuntu-latest,
-            ubuntu-26.04-arm,
-            windows-latest,
-            windows-11-arm,
-            macos-latest,
-          ]
-        toolchain:
-          - stable
+        include:
+          - os: ubuntu-latest
+            arch: X64
+          - os: ubuntu-latest
+            arch: X64-v3
+            rustflags: -C target-cpu=x86-64-v3
+          - os: ubuntu-26.04-arm
+            arch: ARM64
+          - os: windows-latest
+            arch: X64
+          - os: windows-latest
+            arch: X64-v3
+            rustflags: -C target-cpu=x86-64-v3
+          - os: windows-11-arm
+            arch: ARM64
+          - os: macos-latest
+            arch: ARM64
+    env:
+      RUSTFLAGS: -Dwarnings ${{ matrix.rustflags }}
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup update stable && rustup default stable
       - uses: Swatinem/rust-cache@v2
-
-      - name: Install musl-tools (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
+        with:
+          key: ${{ matrix.arch }}
 
       - name: Build Release
         shell: bash
-        run: |
-          cargo build --verbose --release
-          if [ "${{ runner.os }}" == "Linux" ]; then
-            if [ "${{ runner.arch }}" == "X64" ]; then
-              TARGET="x86_64-unknown-linux-musl"
-            elif [ "${{ runner.arch }}" == "ARM64" ]; then
-              TARGET="aarch64-unknown-linux-musl"
-            fi
-            rustup target add "$TARGET"
-            cargo build --verbose --release --target "$TARGET"
-          fi
+        run: cargo build --verbose --release
 
       - name: Prepare artifacts
         shell: bash
@@ -67,48 +64,68 @@ jobs:
           mkdir -p dist
           EXT=""
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
-          cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
-          if [ "${{ runner.os }}" == "Linux" ]; then
-            if [ "${{ runner.arch }}" == "X64" ]; then
-              TARGET="x86_64-unknown-linux-musl"
-            elif [ "${{ runner.arch }}" == "ARM64" ]; then
-              TARGET="aarch64-unknown-linux-musl"
-            fi
-            cp "target/$TARGET/release/pumpkin" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}-musl"
-          fi
+          cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ matrix.arch }}-${{ runner.os }}$EXT"
 
-      - name: Upload unsigned executable for SignPath (Windows only)
+      - name: Upload unsigned Windows executable
         if: runner.os == 'Windows'
-        id: upload_unsigned
         uses: actions/upload-artifact@v7
         with:
-          name: unsigned-${{ runner.arch }}-${{ runner.os }}
+          name: unsigned-${{ matrix.arch }}-${{ runner.os }}
           path: dist/pumpkin-*
-          retention-days: 1
+          retention-days: 14
 
-      - name: Submit SignPath signing request (Windows only)
-        if: runner.os == 'Windows'
+      - name: Export executable
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pumpkin-${{ matrix.arch }}-${{ runner.os }}
+          compression-level: 9
+          path: dist/pumpkin-*
+
+  sign_windows_release:
+    name: Sign Windows release
+    permissions:
+      actions: read
+    needs: build_release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            arch: X64
+          - os: windows-latest
+            arch: X64-v3
+          - os: windows-11-arm
+            arch: ARM64
+    steps:
+      - name: Find unsigned artifact
+        id: artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: unsigned-${{ matrix.arch }}-${{ runner.os }}
+        run: |
+          ARTIFACT_ID=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+            --jq '.artifacts | map(select(.name == env.ARTIFACT_NAME and .expired == false)) | first.id')
+          test -n "$ARTIFACT_ID"
+          echo "id=$ARTIFACT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Submit SignPath signing request
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
           organization-id: '${{ secrets.SIGNPATH_ORGANIZATION_ID }}'
           project-slug: '${{ secrets.SIGNPATH_PROJECT_SLUG }}'
           signing-policy-slug: '${{ secrets.SIGNPATH_RELEASE_SIGNING_POLICY_SLUG || secrets.SIGNPATH_SIGNING_POLICY_SLUG }}'
-          github-artifact-id: '${{ steps.upload_unsigned.outputs.artifact-id }}'
+          github-artifact-id: '${{ steps.artifact.outputs.id }}'
           wait-for-completion: true
-          output-artifact-directory: dist/signed/
+          output-artifact-directory: dist/
 
-      - name: Overwrite with signed version (Windows only)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          cp dist/signed/* dist/
-          rm -rf dist/signed/
-
-      - name: Export executable
+      - name: Export signed executable
         uses: actions/upload-artifact@v7
         with:
-          name: pumpkin-${{ runner.arch }}-${{ runner.os }}
+          name: pumpkin-${{ matrix.arch }}-${{ runner.os }}
           compression-level: 9
           path: dist/pumpkin-*
 
@@ -124,7 +141,7 @@ jobs:
           targets: aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r30
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
       - uses: Swatinem/rust-cache@v2
@@ -148,7 +165,7 @@ jobs:
     name: Publish GitHub Release
     permissions:
       contents: write
-    needs: [build_release, build_android_release]
+    needs: [build_release, sign_windows_release, build_android_release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -16,53 +16,69 @@ impl CoralClawFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        // First lets get a random coral
         let block = CoralFeature::get_random_tag_entry(tag::Block::MINECRAFT_CORAL_BLOCKS, random);
         if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
             return false;
         }
-        let direction = BlockDirection::random_horizontal(random);
-        let i = random.next_bounded_i32(2) + 2;
-        // TODO: vanilla iterates the first `i` of Util.toShuffledList([direction,
-        // direction.getClockWise(), direction.getCounterClockWise()], random) — the
-        // shuffle consumes RNG draws and the opposite of `direction` is never visited.
-        let directions = BlockDirection::horizontal_worldgen()
-            .into_iter()
-            .take(i as usize);
-        'block0: for direction2 in directions {
-            let mut pos = pos;
-            let j = random.next_bounded_i32(2) + 1;
-            pos = pos.offset(direction2.to_offset());
+        let claw_dir =
+            BlockDirection::from_cardinal_direction(BlockDirection::random_horizontal(random));
+        let n_branches = random.next_bounded_i32(2) + 2;
+        let mut possible_directions = [
+            claw_dir,
+            claw_dir.rotate_clockwise(),
+            claw_dir.rotate_counter_clockwise(),
+        ];
+        for i in (1..possible_directions.len()).rev() {
+            let j = random.next_bounded_i32(i as i32 + 1) as usize;
+            possible_directions.swap(i, j);
+        }
 
-            let branch_direction;
+        for &branch_direction in possible_directions.iter().take(n_branches as usize) {
+            let mut mut_pos = pos;
+            let sideway_length = random.next_bounded_i32(2) + 1;
+            mut_pos = mut_pos.offset(branch_direction.to_offset());
 
-            let k = if direction2 == direction {
-                branch_direction = direction;
-                random.next_bounded_i32(3) + 2
+            let (segment_direction, inway_length) = if branch_direction == claw_dir {
+                (claw_dir, random.next_bounded_i32(3) + 2)
             } else {
-                pos = pos.up();
-                //let _directions = [direction2, BlockDirection::Up];
-                branch_direction = direction2; // TODO: make this random
-                random.next_bounded_i32(3) + 5
+                mut_pos = mut_pos.up();
+                let seg_dir = if random.next_bool() {
+                    branch_direction
+                } else {
+                    BlockDirection::Up
+                };
+                (seg_dir, random.next_bounded_i32(3) + 3)
             };
 
-            for _ in 0..j {
-                if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
+            for _ in 0..sideway_length {
+                if !CoralFeature::generate_coral_piece(
+                    chunk,
+                    block_registry,
+                    random,
+                    block,
+                    mut_pos,
+                ) {
                     break;
                 }
-                pos = pos.offset(branch_direction.to_offset());
+                mut_pos = mut_pos.offset(segment_direction.to_offset());
             }
 
-            pos = pos.offset(branch_direction.to_offset());
-            pos = pos.up();
+            mut_pos = mut_pos.offset(segment_direction.opposite().to_offset());
+            mut_pos = mut_pos.up();
 
-            for _l in 0..k {
-                pos = pos.offset(direction.opposite().to_offset());
-                if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
-                    continue 'block0;
+            for _ in 0..inway_length {
+                mut_pos = mut_pos.offset(claw_dir.to_offset());
+                if !CoralFeature::generate_coral_piece(
+                    chunk,
+                    block_registry,
+                    random,
+                    block,
+                    mut_pos,
+                ) {
+                    break;
                 }
                 if random.next_f32() < 0.25 {
-                    pos = pos.up();
+                    mut_pos = mut_pos.up();
                 }
             }
         }

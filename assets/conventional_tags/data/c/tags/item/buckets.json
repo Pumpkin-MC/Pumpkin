@@ -1,0 +1,32 @@
+{
+  "values": [
+    {
+      "id": "#c:buckets/empty",
+      "required": false
+    },
+    {
+      "id": "#c:buckets/water",
+      "required": false
+    },
+    {
+      "id": "#c:buckets/lava",
+      "required": false
+    },
+    {
+      "id": "#c:buckets/milk",
+      "required": false
+    },
+    {
+      "id": "#c:buckets/powder_snow",
+      "required": false
+    },
+    {
+      "id": "#c:buckets/entity_water",
+      "required": false
+    },
+    {
+      "id": "#c:buckets/entity_dry",
+      "required": false
+    }
+  ]
+}

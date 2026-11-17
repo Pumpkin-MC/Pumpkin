@@ -1,0 +1,24 @@
+/// Provides functionality to schedule tasks to be executed later on the server.
+interface scheduler {
+    /// Schedules a task to be executed once after the specified number of ticks.
+    ///
+    /// * `handler-id`: The unique ID of the handler to call when the task executes.
+    /// * `delay-ticks`: The number of game ticks to wait before execution (20 ticks = 1 second).
+    ///
+    /// Returns a unique task ID that can be used to cancel the task.
+    schedule-delayed-task: func(handler-id: u32, delay-ticks: u64) -> u32;
+
+    /// Schedules a task to be executed repeatedly.
+    ///
+    /// * `handler-id`: The unique ID of the handler to call when the task executes.
+    /// * `delay-ticks`: The number of game ticks to wait before the first execution.
+    /// * `period-ticks`: The number of game ticks between subsequent executions.
+    ///
+    /// Returns a unique task ID that can be used to cancel the task.
+    schedule-repeating-task: func(handler-id: u32, delay-ticks: u64, period-ticks: u64) -> u32;
+
+    /// Cancels a scheduled task if it hasn't finished yet.
+    ///
+    /// * `task-id`: The ID of the task to cancel.
+    cancel-task: func(task-id: u32);
+}

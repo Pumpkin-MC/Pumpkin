@@ -1,3 +1,0 @@
-[submodule "pumpkin-plugin-wit"]
-	path = crates/pumpkin-plugin-wit
-	url = https://github.com/Pumpkin-MC/pumpkin-plugin-wit

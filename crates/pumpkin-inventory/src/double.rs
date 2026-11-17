@@ -10,8 +10,8 @@
 
 use std::{any::Any, sync::Arc};
 
+use crate::inventory::{Clearable, Inventory};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_world::inventory::{Clearable, Inventory};
 
 /// A composite inventory combining two inventories.
 ///
@@ -106,6 +106,20 @@ impl Inventory for DoubleInventory {
                 .is_valid_slot_for(slot - self.first.size(), stack)
         } else {
             self.first.is_valid_slot_for(slot, stack)
+        }
+    }
+
+    fn can_transfer_to(
+        &self,
+        hopper_inventory: &dyn Inventory,
+        slot: usize,
+        stack: &ItemStack,
+    ) -> bool {
+        if slot >= self.first.size() {
+            self.second
+                .can_transfer_to(hopper_inventory, slot - self.first.size(), stack)
+        } else {
+            self.first.can_transfer_to(hopper_inventory, slot, stack)
         }
     }
 

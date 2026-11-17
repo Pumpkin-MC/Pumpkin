@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum EntityPose {
     Standing,
     FallFlying,
