@@ -160,6 +160,39 @@ impl ItemStack {
         }
         None
     }
+
+    #[must_use]
+    pub fn get_data_component_by_id(
+        &self,
+        to_get_id: DataComponent,
+    ) -> Option<&dyn DataComponentImpl> {
+        for (id, component) in &self.patch {
+            if *id == to_get_id {
+                return component.as_deref();
+            }
+        }
+        for (id, component) in self.item.components {
+            if *id == to_get_id {
+                return Some(*component);
+            }
+        }
+        None
+    }
+
+    /// Vanilla `ItemStack.transmuteCopy(ItemLike, count)`: creates a new stack of `target_item`
+    /// with `count`, preserving `self.patch` (all explicit component overrides and removals).
+    #[must_use]
+    pub fn transmute_copy(&self, target_item: &'static Item, count: u8) -> Self {
+        if self.is_empty() {
+            return Self::EMPTY.clone();
+        }
+        Self {
+            item_count: count,
+            item: target_item,
+            patch: self.patch.clone(),
+            uid: ITEM_STACK_ID_GEN.next_id(),
+        }
+    }
     #[must_use]
     pub fn get_data_component_mut<T: DataComponentImpl + 'static>(&mut self) -> Option<&mut T> {
         let to_get_id = T::get_enum();
@@ -250,6 +283,15 @@ impl ItemStack {
 
     pub fn set_data_component<T: DataComponentImpl + 'static>(&mut self, component: T) {
         let to_set_id = T::get_enum();
+        if self
+            .item
+            .components
+            .iter()
+            .any(|(id, default_val)| *id == to_set_id && component.equal(*default_val))
+        {
+            self.patch.retain(|(id, _)| *id != to_set_id);
+            return;
+        }
         let boxed = Some(Box::new(component) as _);
         if let Some((_, c)) = self.patch.iter_mut().find(|(id, _)| *id == to_set_id) {
             *c = boxed;
@@ -333,6 +375,27 @@ impl ItemStack {
     }
 
     #[must_use]
+    pub fn has_enchantment_tag(&self, tag: &'static crate::tag::Tag) -> bool {
+        let Some(data) = self.get_data_component::<EnchantmentsImpl>() else {
+            return false;
+        };
+        data.enchantment
+            .iter()
+            .any(|(enc, level)| *level > 0 && enc.has_tag(tag))
+    }
+
+    /// Vanilla `EnchantmentHelper.has(stack, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE)`.
+    #[must_use]
+    pub fn has_prevent_armor_change(&self) -> bool {
+        let Some(data) = self.get_data_component::<EnchantmentsImpl>() else {
+            return false;
+        };
+        data.enchantment
+            .iter()
+            .any(|(enc, level)| *level > 0 && enc.effects.prevent_armor_change)
+    }
+
+    #[must_use]
     pub fn is_unbreakable(&self) -> bool {
         self.get_data_component::<UnbreakableImpl>().is_some()
     }
@@ -371,7 +434,7 @@ impl ItemStack {
     #[must_use]
     pub fn can_be_hurt_by(&self, damage_type: DamageType) -> bool {
         self.get_data_component::<DamageResistantImpl>()
-            .is_none_or(|res| damage_type.is_tagged_with(res.res_type.as_str()) != Some(true))
+            .is_none_or(|res| !res.types.contains(&damage_type))
     }
 
     pub fn repair_item(&mut self, amount: i32) -> i32 {
@@ -478,8 +541,17 @@ impl ItemStack {
         if let Some(value) = self.get_data_component::<ConsumableImpl>() {
             return value.consume_ticks();
         }
-        if self.get_data_component::<BlocksAttacksImpl>().is_some() {
+        if self.get_data_component::<BlocksAttacksImpl>().is_some()
+            || self
+                .get_data_component::<crate::data_component_impl::KineticWeaponImpl>()
+                .is_some()
+        {
             return 72000;
+        }
+        if let Some(inst) = self.get_data_component::<crate::data_component_impl::InstrumentImpl>()
+            && let Some(instrument) = crate::instrument::Instrument::from_name(&inst.instrument)
+        {
+            return i32::try_from(instrument.use_duration_ticks()).unwrap_or(i32::MAX);
         }
         0
     }
@@ -891,7 +963,20 @@ impl ItemStack {
         // Try to get item by registry key
         let item = Item::from_registry_key(registry_key)?;
 
-        let count = compound.get_int("count")? as u8;
+        // `ItemStack.MAP_CODEC` makes `count` optional with default 1 on decode.
+        let count = if let Some(c) = compound
+            .get_int("count")
+            .or_else(|| compound.get_byte("count").map(i32::from))
+        {
+            if !(0..=99).contains(&c) {
+                return None;
+            }
+            c as u8
+        } else if item == &Item::AIR {
+            0
+        } else {
+            1
+        };
 
         // Create the item stack
         let mut item_stack = Self::new(count, item);
@@ -914,6 +999,57 @@ impl ItemStack {
         }
 
         Some(item_stack)
+    }
+
+    /// Encodes a non-empty stack as vanilla `ItemStackTemplate.MAP_CODEC`.
+    #[must_use]
+    pub fn write_item_stack_template(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("id", format!("minecraft:{}", self.item.registry_key));
+        if self.item_count != 1 {
+            compound.put_int("count", i32::from(self.item_count));
+        }
+
+        let mut tag = NbtCompound::new();
+        for (id, data) in &self.patch {
+            if !id.is_persistent() {
+                continue;
+            }
+            if let Some(data) = data {
+                tag.put(id.to_name(), data.write_data());
+            } else {
+                let name = '!'.to_string() + id.to_name();
+                tag.put(name.as_str(), NbtCompound::new());
+            }
+        }
+        if !tag.child_tags.is_empty() {
+            compound.put_compound("components", tag);
+        }
+
+        NbtTag::Compound(compound)
+    }
+
+    /// Decodes a non-empty stack from vanilla `ItemStackTemplate.CODEC` (compound or item string).
+    #[must_use]
+    pub fn read_item_stack_template(tag: &NbtTag) -> Option<Self> {
+        match tag {
+            NbtTag::String(full_id) => {
+                let registry_key = full_id.strip_prefix("minecraft:").unwrap_or(full_id);
+                let item = Item::from_registry_key(registry_key)?;
+                if item == &Item::AIR {
+                    return None;
+                }
+                Some(Self::new(1, item))
+            }
+            NbtTag::Compound(compound) => {
+                let stack = Self::read_item_stack(compound)?;
+                if stack.is_empty() || stack.item_count > 99 {
+                    return None;
+                }
+                Some(stack)
+            }
+            _ => None,
+        }
     }
 }
 

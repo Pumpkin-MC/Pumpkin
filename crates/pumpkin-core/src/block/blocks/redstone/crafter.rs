@@ -20,13 +20,15 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, BlockStateId, FacingExt};
-use pumpkin_inventory::Inventory;
+use pumpkin_inventory::crafter_screen_handler::CrafterScreenHandler;
 use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
-use pumpkin_inventory::generic_container_screen_handler::create_crafter_3x3;
+use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
+use pumpkin_inventory::crafting::recipes::RecipeInputInventory;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
+use pumpkin_inventory::{Inventory, PropertyDelegate};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -34,7 +36,10 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
-struct CrafterScreenFactory(Arc<dyn Inventory>);
+struct CrafterScreenFactory {
+    crafter: Arc<CrafterBlockEntity>,
+    recipe_manager: Arc<crate::server::RecipeManager>,
+}
 
 impl ScreenHandlerFactory for CrafterScreenFactory {
     fn create_screen_handler(
@@ -43,7 +48,17 @@ impl ScreenHandlerFactory for CrafterScreenFactory {
         player_inventory: &Arc<PlayerInventory>,
         player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
-        let handler = create_crafter_3x3(sync_id, player_inventory, self.0.clone(), player);
+        let container: Arc<dyn RecipeInputInventory> = self.crafter.clone();
+        let property_delegate: Arc<dyn PropertyDelegate> = self.crafter.clone();
+        let recipe_provider: Arc<dyn RecipeProvider> = self.recipe_manager.clone();
+        let handler = CrafterScreenHandler::new(
+            sync_id,
+            player_inventory,
+            container,
+            property_delegate,
+            Some(recipe_provider),
+            player.is_spectator(),
+        );
         let screen_handler_arc = Arc::new(Mutex::new(handler));
 
         Some(screen_handler_arc as SharedScreenHandler)
@@ -114,7 +129,13 @@ impl CrafterBlock {
             return;
         };
 
-        let recipe = match_crafting_recipe(crafter, None);
+        let server = world.server.upgrade();
+        let recipe = match_crafting_recipe(
+            crafter,
+            server
+                .as_deref()
+                .map(|s| &*s.recipe_manager as &dyn RecipeProvider),
+        );
         if let Some(recipe_result) = recipe
             && Item::from_registry_key(
                 recipe_result
@@ -133,7 +154,10 @@ impl CrafterBlock {
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_LISTENERS);
 
             let mut result_stack = recipe_result.to_item_stack();
-            if let Some(server) = world.server.upgrade() {
+            if let Some(server) = server.as_deref() {
+                crate::world::map::resolve_map_post_processing(&mut result_stack, server);
+            }
+            if let Some(server) = server {
                 let mut event =
                     crate::plugin::api::events::block::crafter_craft::CrafterCraftEvent::new(
                         *pos,
@@ -149,10 +173,14 @@ impl CrafterBlock {
             Self::dispense_item(world, pos, crafter, &mut result_stack, props.orientation);
 
             let recipe_id = format!("minecraft:{}", result_stack.item.registry_key);
-            let check_pos = pos.to_f64();
+            let center_pos = pos.to_centered_f64();
             let players = world.players.load();
             for player in players.iter() {
-                if player.position().squared_distance_to_vec(&check_pos) <= 25.0 {
+                let p = player.position();
+                if (p.x - center_pos.x).abs() <= 8.5
+                    && (p.y - center_pos.y).abs() <= 8.5
+                    && (p.z - center_pos.z).abs() <= 8.5
+                {
                     player.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::CrafterRecipeCrafted {
                             recipe_id: recipe_id.clone(),
@@ -164,7 +192,8 @@ impl CrafterBlock {
             for i in 0..CrafterBlockEntity::INVENTORY_SIZE {
                 let stack = crafter.get_stack(i);
                 if !stack.is_empty()
-                    && let Some(mut remainder_stack) = stack.crafting_remainder()
+                    && let Some(mut remainder_stack) =
+                        recipe_result.remaining_item_for_slot(i, &stack)
                 {
                     Self::dispense_item(
                         world,
@@ -197,16 +226,42 @@ impl CrafterBlock {
         orientation: Orientation,
     ) {
         let direction = orientation_to_front(orientation);
+        let opposite_dir = direction.opposite();
         let target_pos = pos.offset(direction.to_offset());
 
-        if let Some(target_entity) = world.get_block_entity(&target_pos)
-            && let Some(target_inv) = target_entity.get_inventory()
-        {
-            while !stack.is_empty() {
-                let one_item = stack.split(1);
-                if !HopperBlockEntity::add_one_item(crafter, target_inv.as_ref(), &one_item) {
-                    stack.item_count += one_item.item_count;
-                    break;
+        if let Some(target_inv) = HopperBlockEntity::get_container_at(world, &target_pos) {
+            let max_stack = target_inv
+                .get_max_count_per_stack()
+                .min(stack.get_max_stack_size());
+            let is_crafter = target_inv.as_any().is::<CrafterBlockEntity>();
+            if is_crafter || stack.item_count > max_stack {
+                while !stack.is_empty() {
+                    let one_item = stack.split(1);
+                    if !HopperBlockEntity::add_item(
+                        Some(crafter),
+                        target_inv.as_ref(),
+                        one_item.clone(),
+                        Some(opposite_dir),
+                    )
+                    .is_empty()
+                    {
+                        stack.item_count += one_item.item_count;
+                        break;
+                    }
+                }
+            } else {
+                while !stack.is_empty() {
+                    let old_count = stack.item_count;
+                    let moved = std::mem::replace(stack, ItemStack::EMPTY.clone());
+                    *stack = HopperBlockEntity::add_item(
+                        Some(crafter),
+                        target_inv.as_ref(),
+                        moved,
+                        Some(opposite_dir),
+                    );
+                    if stack.item_count == old_count {
+                        break;
+                    }
                 }
             }
         }
@@ -263,8 +318,11 @@ impl BlockBehaviour for CrafterBlock {
         args: GetScreenHandlerFactoryArgs<'_>,
     ) -> Option<Box<dyn ScreenHandlerFactory>> {
         let block_entity = args.world.get_block_entity(args.position)?;
-        let inventory = block_entity.get_inventory()?;
-        Some(Box::new(CrafterScreenFactory(inventory)))
+        let crafter = Arc::downcast::<CrafterBlockEntity>(block_entity).ok()?;
+        Some(Box::new(CrafterScreenFactory {
+            crafter,
+            recipe_manager: args.server.recipe_manager.clone(),
+        }))
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {

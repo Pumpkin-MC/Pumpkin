@@ -22,6 +22,7 @@ pub struct ShulkerBoxBlockEntity {
 
     // Viewer
     pub viewers: ViewerCountTracker,
+    pub metadata: super::ContainerMetadata,
 }
 
 impl BlockEntity for ShulkerBoxBlockEntity {
@@ -43,6 +44,7 @@ impl BlockEntity for ShulkerBoxBlockEntity {
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
+            metadata: super::ContainerMetadata::from_nbt(nbt),
         };
 
         pumpkin_inventory::sync_read_items_from_nbt(
@@ -58,6 +60,7 @@ impl BlockEntity for ShulkerBoxBlockEntity {
 
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_inventory_nbt(nbt, true);
+        self.metadata.write_nbt(nbt);
     }
 
     fn tick(&self, world: &Arc<World>) {
@@ -74,6 +77,7 @@ impl BlockEntity for ShulkerBoxBlockEntity {
     }
 
     fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_item_components(stack);
         let items = self
             .items
             .read()
@@ -91,22 +95,28 @@ impl BlockEntity for ShulkerBoxBlockEntity {
     }
 
     fn apply_item_components(&self, stack: &ItemStack) {
-        let Some(container) = stack.get_data_component::<ContainerImpl>() else {
-            return;
-        };
+        self.metadata.apply_item_components(stack);
+        if let Some(container) = stack.get_data_component::<ContainerImpl>() {
+            let mut items = self
+                .items
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let mut items = self
-            .items
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        for (slot, item) in &container.items {
-            if let Some(target) = items.get_mut(*slot as usize) {
-                *target = item.clone();
+            for (slot, item) in &container.items {
+                if let Some(target) = items.get_mut(*slot as usize) {
+                    *target = item.clone();
+                }
             }
         }
-
         self.mark_dirty();
+    }
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.metadata.get_lock()
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.metadata.get_custom_name()
     }
 
     fn drops_for_creative_player(&self) -> bool {
@@ -189,6 +199,7 @@ impl ShulkerBoxBlockEntity {
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
+            metadata: super::ContainerMetadata::default(),
         }
     }
 
@@ -207,6 +218,11 @@ impl ShulkerBoxBlockEntity {
         world.play_sound(sound, SoundCategory::Blocks, &position.to_f64());
     }
 }
+
+const SHULKER_SLOTS: [usize; ShulkerBoxBlockEntity::INVENTORY_SIZE] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+    26,
+];
 
 impl Inventory for ShulkerBoxBlockEntity {
     fn size(&self) -> usize {
@@ -266,6 +282,14 @@ impl Inventory for ShulkerBoxBlockEntity {
         !stack
             .item
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_SHULKER_BOXES)
+    }
+
+    fn is_sided(&self) -> bool {
+        true
+    }
+
+    fn get_slots_for_face(&self, _direction: pumpkin_data::BlockDirection) -> &'static [usize] {
+        &SHULKER_SLOTS
     }
 
     fn on_open(&self) {

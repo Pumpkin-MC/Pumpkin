@@ -57,6 +57,20 @@ impl TemplateCache {
         self.cache.remove(&key);
     }
 
+    /// Removes a dynamically registered or cached template by name.
+    pub fn remove_dynamic(&self, name: &str) {
+        let key = canonicalize(name);
+        self.dynamic_templates.remove(&key);
+        self.cache.remove(&key);
+    }
+
+    /// Returns whether a dynamic template is currently registered for `name`.
+    #[must_use]
+    pub fn has_dynamic(&self, name: &str) -> bool {
+        let key = canonicalize(name);
+        self.dynamic_templates.contains_key(&key)
+    }
+
     /// Clears all dynamically registered templates (e.g. during datapack reload).
     pub fn clear_dynamic(&self) {
         self.dynamic_templates.clear();

@@ -20,96 +20,72 @@ const ERROR_FAILED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_SETBLOCK_FAILED,
 );
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
-    /// with particles + item drops
     Destroy,
-
-    /// only replaces air
     Keep,
-
-    /// default; without particles
     Replace,
-
-    /// places block without triggering updates around it
     Strict,
 }
+
+const STRICT_SKIP_FLAGS: BlockFlags = BlockFlags::from_bits_truncate(
+    BlockFlags::UPDATE_KNOWN_SHAPE.bits()
+        | BlockFlags::SKIP_DROPS.bits()
+        | BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK.bits()
+        | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK.bits(),
+);
 
 struct SetBlockExecutor(Mode);
 
 impl CommandExecutor for SetBlockExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let block = BlockArgumentType::get(context, "block")?;
-        let block_state_id = block.default_state.id;
-        let mode = self.0;
-        let world = context.source.world();
         let pos = BlockPosArgumentType::get_loaded_block_pos(context, "pos")?;
+        let block_input = BlockArgumentType::get(context, "block")?;
+        let mode = self.0;
+        let strict = mode == Mode::Strict;
+        let world = context.source.world();
 
-        let success = match mode {
-            Mode::Destroy => {
-                world.break_block(
-                    &pos,
-                    None,
-                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-                );
-                world.set_block_state(
-                    &pos,
-                    block_state_id,
-                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-                );
-                true
-            }
-            Mode::Replace => {
-                world.set_block_state(
-                    &pos,
-                    block_state_id,
-                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-                );
-                true
-            }
-            Mode::Keep => {
-                let old_state = world.get_block_state(&pos);
-                if old_state.is_air() {
-                    world.set_block_state(
-                        &pos,
-                        block_state_id,
-                        BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
-                    );
-                    true
-                } else {
-                    false
-                }
-            }
-            Mode::Strict => {
-                world.set_block_state(
-                    &pos,
-                    block_state_id,
-                    BlockFlags::NOTIFY_LISTENERS
-                        | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
-                        | BlockFlags::FORCE_STATE,
-                );
-                true
-            }
+        if mode == Mode::Keep && !world.get_block_state(&pos).is_air() {
+            return Err(ERROR_FAILED.create_without_context());
+        }
+
+        let place_needed = if mode == Mode::Destroy {
+            world.break_block(&pos, None, BlockFlags::NOTIFY_ALL);
+            !block_input.block.is_air() || !world.get_block_state(&pos).is_air()
+        } else {
+            true
         };
 
-        if success {
-            world.flush_block_updates();
-            context.source.send_feedback(
-                TextComponent::translate_cross(
-                    pumpkin_data::translation::java::COMMANDS_SETBLOCK_SUCCESS,
-                    pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_SUCCESS,
-                    [
-                        TextComponent::text(pos.0.x.to_string()),
-                        TextComponent::text(pos.0.y.to_string()),
-                        TextComponent::text(pos.0.z.to_string()),
-                    ],
-                ),
-                true,
-            );
-            Ok(1)
-        } else {
-            Err(ERROR_FAILED.create_without_context())
+        let old_state_id = world.get_block_state_id(&pos);
+        let place_flags = BlockFlags::NOTIFY_LISTENERS
+            | if strict {
+                STRICT_SKIP_FLAGS
+            } else {
+                BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK
+            };
+
+        if place_needed && !world.place_block_input(&pos, &block_input, place_flags) {
+            return Err(ERROR_FAILED.create_without_context());
         }
+
+        if !strict {
+            world.update_neighbours_on_block_set(&pos, old_state_id);
+        }
+
+        world.flush_block_updates();
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                pumpkin_data::translation::java::COMMANDS_SETBLOCK_SUCCESS,
+                pumpkin_data::translation::bedrock::COMMANDS_SETBLOCK_SUCCESS,
+                [
+                    TextComponent::text(pos.0.x.to_string()),
+                    TextComponent::text(pos.0.y.to_string()),
+                    TextComponent::text(pos.0.z.to_string()),
+                ],
+            ),
+            true,
+        );
+        Ok(1)
     }
 }
 
