@@ -35,7 +35,7 @@ impl HopperMinecart {
     }
 
     pub(super) fn tick(&self, entity: &Entity) {
-        if !self.enabled.load(Ordering::Relaxed) {
+        if !self.enabled.load(Ordering::Relaxed) || !entity.is_alive() {
             return;
         }
 
@@ -45,20 +45,14 @@ impl HopperMinecart {
         let inventory = &self.inventory;
         let cart_box = entity.bounding_box.load().expand(0.25, 0.0, 0.25);
 
-        if let Some(block_entity) = world.get_block_entity(&source_pos)
-            && let Some(source) = block_entity.get_inventory()
-        {
-            for slot in 0..source.size() {
-                let stack = source.get_stack(slot);
-                if stack.is_empty() || !source.can_transfer_to(inventory.as_ref(), slot, &stack) {
-                    continue;
-                }
-                let one = source.remove_stack_specific(slot, 1);
-                if HopperBlockEntity::add_one_item(source.as_ref(), inventory.as_ref(), &one) {
-                    return;
-                }
-                source.set_stack(slot, stack);
-            }
+        if let Some(source) = HopperBlockEntity::get_container_at_coords(
+            &world,
+            &source_pos,
+            pos.x,
+            pos.y + 1.5,
+            pos.z,
+        ) {
+            let _ = HopperBlockEntity::try_take_from_source(inventory.as_ref(), source.as_ref());
             return;
         }
 
@@ -78,37 +72,15 @@ impl HopperMinecart {
         search_box: &BoundingBox,
     ) -> bool {
         for entity in world.get_entities_at_box(search_box) {
+            if !entity.get_entity().is_alive() {
+                continue;
+            }
             let Some(item) = entity.get_item_entity() else {
                 continue;
             };
-            let (backup, one) = {
-                let mut stack = item
-                    .get_item_stack()
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if stack.is_empty() {
-                    continue;
-                }
-                (stack.clone(), stack.split(1))
-            };
-            if HopperBlockEntity::add_one_item(inventory.as_ref(), inventory.as_ref(), &one) {
-                let is_empty = {
-                    let stack = item
-                        .get_item_stack()
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    stack.is_empty()
-                };
-                if is_empty {
-                    item.get_entity().remove();
-                }
+            if HopperBlockEntity::pickup_item_entity(inventory.as_ref(), item) {
                 return true;
             }
-            let mut stack = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *stack = backup;
         }
         false
     }

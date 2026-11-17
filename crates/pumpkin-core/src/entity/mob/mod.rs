@@ -19,6 +19,7 @@ use crate::entity::living::prevents_armor_change;
 use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::entity::projectile::arrow::ArrowEntity;
+use crate::entity::projectile_deflection::{ProjectileDeflection, default_deflection};
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::plugin::api::events::entity::entity_target::{EntityTargetEvent, TargetReason};
 use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
@@ -1113,6 +1114,13 @@ impl MobEntity {
     ) -> bool {
         let entity = &self.living_entity.entity;
 
+        if item_stack.item.id == pumpkin_data::item::Item::SHEARS.id
+            && entity.shear_off_all_leash_connections(true)
+        {
+            let _ = player.damage_item_stack(item_stack, 1);
+            return true;
+        }
+
         // If already leashed to player, right-clicking unleashes the mob
         let currently_leashed = entity.is_leashed();
 
@@ -1135,8 +1143,9 @@ impl MobEntity {
             let diff = entity.pos.load() - player.get_entity().pos.load();
             let dist_sq = diff.length_squared();
             if dist_sq <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
-                entity.leash_to(player.clone() as Arc<dyn EntityBase>);
-                if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                if entity.leash_to(player.clone() as Arc<dyn EntityBase>)
+                    && player.gamemode.load() != pumpkin_util::GameMode::Creative
+                {
                     item_stack.decrement(1);
                 }
                 return true;
@@ -1680,12 +1689,15 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
-    /// Whether a projectile that starts inside this mob's box still hits it.
-    fn can_be_picked_from_inside(&self) -> bool {
+    /// Whether a piercing weapon (spear) skips this mob; invulnerable mobs by default.
+    fn deflection(&self, _projectile: &dyn EntityBase) -> ProjectileDeflection {
+        default_deflection(&self.get_mob_entity().living_entity.entity)
+    }
+
+    fn projectile_receives_side_effects_on_hit(&self, _was_hurt: bool) -> bool {
         true
     }
 
-    /// Whether a piercing weapon (spear) skips this mob; invulnerable mobs by default.
     fn is_invulnerable_to_piercing_weapon(&self) -> bool {
         self.get_entity().invulnerable.load(Ordering::Relaxed)
     }
@@ -2952,6 +2964,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn can_hit(&self) -> bool {
         true
+    }
+
+    fn deflection(&self, projectile: &dyn EntityBase) -> ProjectileDeflection {
+        Mob::deflection(self, projectile)
+    }
+
+    fn projectile_receives_side_effects_on_hit(&self, was_hurt: bool) -> bool {
+        Mob::projectile_receives_side_effects_on_hit(self, was_hurt)
     }
 
     fn damage_with_context(

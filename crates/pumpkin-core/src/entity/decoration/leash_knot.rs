@@ -73,12 +73,22 @@ impl LeashKnotEntity {
 use crate::server::Server;
 
 impl EntityBase for LeashKnotEntity {
+    fn can_hit(&self) -> bool {
+        true
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.entity
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn notify_leashee_removed(&self) {
+        if self.entity.leashable_leashed_to().is_empty() {
+            self.entity.remove();
+        }
     }
 
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
@@ -160,13 +170,12 @@ impl EntityBase for LeashKnotEntity {
 
         let mut any_dropped = false;
         if !attached_mob {
+            let player_holder = player.clone() as Arc<dyn EntityBase>;
             for entity_base in &entities {
-                let ent = entity_base.get_entity();
-                if let Ok(guard) = ent.leashed_to.try_lock()
-                    && let Some(holder) = guard.as_ref().and_then(std::sync::Weak::upgrade)
-                    && holder.get_entity().entity_id == knot_id
+                if entity_base
+                    .get_entity()
+                    .leash_to_if_held_by(knot_id, &player_holder)
                 {
-                    ent.leash_to(player.clone() as Arc<dyn EntityBase>);
                     any_dropped = true;
                 }
             }

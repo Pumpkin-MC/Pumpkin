@@ -25,6 +25,7 @@ pub struct BeaconBlockEntity {
     // Vanilla Parity Fields
     pub custom_name: Mutex<Option<String>>,
     pub lock_key: Mutex<Option<String>>,
+    pub metadata: super::ContainerMetadata,
     pub last_check_y: AtomicI32,
 }
 
@@ -48,6 +49,7 @@ impl BeaconBlockEntity {
             payment: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             custom_name: Mutex::new(None),
             lock_key: Mutex::new(None),
+            metadata: super::ContainerMetadata::default(),
             last_check_y: AtomicI32::new(position.0.y - 1),
         }
     }
@@ -278,6 +280,7 @@ impl BlockEntity for BeaconBlockEntity {
             payment: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             custom_name: Mutex::new(custom_name),
             lock_key: Mutex::new(lock_key),
+            metadata: super::ContainerMetadata::from_nbt(nbt),
             last_check_y: AtomicI32::new(position.0.y - 1),
         }
     }
@@ -315,6 +318,27 @@ impl BlockEntity for BeaconBlockEntity {
         {
             nbt.put_string("Lock", lock.clone());
         }
+        self.metadata.write_nbt(nbt);
+    }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        self.metadata.apply_item_components(stack);
+    }
+
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_name_only(stack);
+    }
+
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_item_components(stack);
+    }
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.metadata.get_lock()
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.metadata.get_custom_name()
     }
 
     fn tick(&self, world: &Arc<World>) {

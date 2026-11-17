@@ -86,18 +86,19 @@ impl JavaClient {
     fn prepare_hand_item_for_use(player: &Arc<Player>, hand: Hand, held: &mut ItemStack) {
         let inventory = player.inventory();
 
-        if let Some(cooldown) = held.get_use_cooldown() {
-            let group = cooldown
-                .cooldown_group
-                .clone()
-                .unwrap_or_else(|| held.item.registry_key.to_string());
-            if player.is_on_cooldown(&group) {
-                return;
-            }
+        let group = held
+            .get_use_cooldown()
+            .and_then(|c| c.cooldown_group.clone())
+            .unwrap_or_else(|| held.item.registry_key.to_string());
+        if player.is_on_cooldown(&group) {
+            return;
         }
 
         if held.get_data_component::<ConsumableImpl>().is_some()
             || held.get_data_component::<BlocksAttacksImpl>().is_some()
+            || held
+                .get_data_component::<pumpkin_data::data_component_impl::KineticWeaponImpl>()
+                .is_some()
         {
             // If its food we want to make sure we can actually consume it
             if let Some(food) = held.get_data_component::<FoodImpl>() {
@@ -116,7 +117,15 @@ impl JavaClient {
         }
         let equipment_slot = held
             .get_data_component::<EquippableImpl>()
-            .filter(|equippable| equippable.swappable)
+            .filter(|equippable| {
+                equippable.swappable
+                    && (equippable.slot.slot_type()
+                        == pumpkin_data::data_component_impl::EquipmentType::HumanoidArmor
+                        || matches!(equippable.slot, EquipmentSlot::OffHand(_)))
+                    && equippable.allowed_entities.as_ref().is_none_or(|allowed| {
+                        allowed.contains(&pumpkin_data::entity::EntityType::PLAYER)
+                    })
+            })
             .map(|equippable| equippable.slot.clone());
         if let Some(slot) = equipment_slot {
             // The equipment lock has to be released before touching the hand again:
@@ -126,25 +135,44 @@ impl JavaClient {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .get(&slot);
-            if current_equipped.are_items_and_components_equal(held) {
+            let gamemode = player.gamemode.load();
+            if (current_equipped.has_prevent_armor_change() && gamemode != GameMode::Creative)
+                || current_equipped.are_items_and_components_equal(held)
+            {
                 return;
             }
 
-            player.enqueue_equipment_change(&slot, held);
-
-            let equipped = if current_equipped.is_empty() {
-                let equipped = held.clone();
-                held.decrement_unless_creative(player.gamemode.load(), 1);
-                equipped
+            let equipped = if held.item_count <= 1 {
+                let swapped_to_eq = if gamemode == GameMode::Creative {
+                    held.clone()
+                } else {
+                    held.copy_with_count(1)
+                };
+                if gamemode != GameMode::Creative || !current_equipped.is_empty() {
+                    *held = current_equipped;
+                }
+                swapped_to_eq
             } else {
-                std::mem::replace(held, current_equipped)
+                let swapped_to_eq = held.copy_with_count(1);
+                held.decrement_unless_creative(gamemode, 1);
+                if !current_equipped.is_empty() {
+                    inventory.offer(current_equipped, false, player.as_ref());
+                }
+                swapped_to_eq
             };
+
+            player.enqueue_equipment_change(&slot, &equipped);
             inventory
                 .entity_equipment
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .put(&slot, equipped);
             inventory.set_stack_in_hand(hand, held.clone());
+            player
+                .player_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .send_content_updates();
         }
     }
 

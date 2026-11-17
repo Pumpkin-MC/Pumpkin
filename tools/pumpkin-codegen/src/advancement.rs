@@ -1250,23 +1250,45 @@ fn extract_damage_condition_tokens(val: &serde_json::Value) -> TokenStream {
         .get("taken")
         .and_then(|t| t.get("min"))
         .and_then(|v| v.as_f64());
-    let is_projectile = damage_val
+    let type_tags = damage_val
         .get("type")
         .and_then(|t| t.get("tags"))
-        .and_then(|tags| tags.as_array())
-        .map(|arr| {
-            arr.iter().any(|tag| {
-                tag.get("id").and_then(|s| s.as_str()) == Some("#minecraft:is_projectile")
+        .and_then(|tags| tags.as_array());
+    let is_projectile = type_tags.and_then(|arr| {
+        arr.iter()
+            .find(|tag| tag.get("id").and_then(|s| s.as_str()) == Some("#minecraft:is_projectile"))
+            .map(|tag| {
+                tag.get("expected")
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(true)
             })
-        });
+    });
+    let is_mace_smash = type_tags.and_then(|arr| {
+        arr.iter()
+            .find(|tag| tag.get("id").and_then(|s| s.as_str()) == Some("#minecraft:mace_smash"))
+            .map(|tag| {
+                tag.get("expected")
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(true)
+            })
+    });
+    let direct_entity = damage_val
+        .get("type")
+        .and_then(|t| t.get("direct_entity"))
+        .and_then(|de| de.get("minecraft:entity_type"))
+        .and_then(|s| s.as_str());
     let b_tok = opt_bool_tokens(blocked);
     let proj_tok = opt_bool_tokens(is_projectile);
+    let mace_tok = opt_bool_tokens(is_mace_smash);
+    let direct_tok = opt_str_tokens(direct_entity);
     let dealt_tok = opt_f64_tokens(dealt_min);
     let taken_tok = opt_f64_tokens(taken_min);
     quote! {
         DamageCondition {
             blocked: #b_tok,
             is_projectile: #proj_tok,
+            is_mace_smash: #mace_tok,
+            direct_entity: #direct_tok,
             dealt_min: #dealt_tok,
             taken_min: #taken_tok,
         }

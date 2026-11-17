@@ -306,8 +306,8 @@ impl BlockDataAccessor {
 
 impl DataAccessor for BlockDataAccessor {
     fn set_data(&self, tag: &NbtCompound) -> Result<(), CommandSyntaxError> {
-        if self.world.get_block_entity(&self.pos).is_some() {
-            self.world.add_block_entity_nbt(self.pos, tag);
+        if self.world.load_block_entity_nbt(self.pos, tag).is_some() {
+            self.world.flush_block_updates();
             Ok(())
         } else {
             Err(ERROR_BLOCK_INVALID.create_without_context())
@@ -328,10 +328,11 @@ impl DataAccessor for BlockDataAccessor {
         TextComponent::translate_cross(
             translation::java::COMMANDS_DATA_BLOCK_MODIFIED,
             translation::java::COMMANDS_DATA_BLOCK_MODIFIED,
-            [TextComponent::text(format!(
-                "{}, {}, {}",
-                self.pos.0.x, self.pos.0.y, self.pos.0.z
-            ))],
+            [
+                TextComponent::text(self.pos.0.x.to_string()),
+                TextComponent::text(self.pos.0.y.to_string()),
+                TextComponent::text(self.pos.0.z.to_string()),
+            ],
         )
     }
 
@@ -340,10 +341,9 @@ impl DataAccessor for BlockDataAccessor {
             translation::java::COMMANDS_DATA_BLOCK_QUERY,
             translation::java::COMMANDS_DATA_BLOCK_QUERY,
             [
-                TextComponent::text(format!(
-                    "{}, {}, {}",
-                    self.pos.0.x, self.pos.0.y, self.pos.0.z
-                )),
+                TextComponent::text(self.pos.0.x.to_string()),
+                TextComponent::text(self.pos.0.y.to_string()),
+                TextComponent::text(self.pos.0.z.to_string()),
                 snbt_colorful_display(data, 0),
             ],
         )
@@ -506,7 +506,7 @@ impl TargetKind {
                 Ok(Box::new(EntityDataAccessor::new(entity)))
             }
             Self::Block => {
-                let pos = BlockPosArgumentType::get_block_pos(context, prefix)?;
+                let pos = BlockPosArgumentType::get_loaded_block_pos(context, prefix)?;
                 let world = context.world().clone();
                 let accessor = BlockDataAccessor::new(pos, world)?;
                 Ok(Box::new(accessor))
