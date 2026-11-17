@@ -81,7 +81,7 @@ pub fn parse_startup_command(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::Path;
 
     use super::{GameTestOptions, StartupCommand, parse_startup_command};
 
@@ -97,7 +97,7 @@ mod tests {
                 Ok(StartupCommand::GameTestServer(GameTestOptions {
                     report: Some(path),
                     ..
-                })) if path == PathBuf::from(expected)
+                })) if path == Path::new(expected)
             ));
         }
     }
