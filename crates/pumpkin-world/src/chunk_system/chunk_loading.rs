@@ -3,7 +3,7 @@ use crate::chunk_system::chunk_state::StagedChunkEnum; // Fixed path
 use std::cmp::min;
 use std::collections::hash_map::Entry;
 use std::fmt::Write;
-use std::mem::swap;
+use std::mem::take;
 use std::sync::Arc;
 use tracing::debug;
 
@@ -11,6 +11,9 @@ pub struct ChunkLoading {
     pub is_priority_dirty: bool,
     pub pos_level: ChunkLevel,
     change: HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
+    /// Levels written to `pos_level` since the last send, in order, with `MAX_LEVEL` for
+    /// removed entries.
+    level_change: Vec<(ChunkPos, i8)>,
     pub ticket: HashMapType<ChunkPos, Vec<i8>>, // TODO lifetime & id
     pub high_priority: Vec<ChunkPos>,
     pub sender: Arc<LevelChannel>,
@@ -118,6 +121,7 @@ impl ChunkLoading {
             is_priority_dirty: true,
             pos_level: ChunkLevel::default(),
             change: HashMapType::default(),
+            level_change: Vec::new(),
             ticket: HashMapType::default(),
             high_priority: Vec::new(),
             sender,
@@ -126,6 +130,7 @@ impl ChunkLoading {
 
     fn record_change(
         change: &mut HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
+        level_change: &mut Vec<(ChunkPos, i8)>,
         pos: ChunkPos,
         old_level: i8,
         new_level: i8,
@@ -133,6 +138,7 @@ impl ChunkLoading {
         if old_level == new_level {
             return;
         }
+        level_change.push((pos, new_level));
         let old_stage = StagedChunkEnum::level_to_stage(old_level);
         let new_stage = StagedChunkEnum::level_to_stage(new_level);
         if old_stage == new_stage {
@@ -156,15 +162,14 @@ impl ChunkLoading {
 
     pub fn send_change(&mut self) {
         // debug!("sending change");
-        if !self.change.is_empty() {
-            let mut tmp = HashMapType::default();
-            swap(&mut tmp, &mut self.change);
+        // Stage changes can cancel out while their level writes stay, so check both.
+        if !self.change.is_empty() || !self.level_change.is_empty() {
+            let change = (take(&mut self.change), take(&mut self.level_change));
             if self.is_priority_dirty {
                 self.is_priority_dirty = false;
-                self.sender
-                    .set_both((tmp, self.pos_level.clone()), self.high_priority.clone());
+                self.sender.set_both(change, self.high_priority.clone());
             } else {
-                self.sender.set_level((tmp, self.pos_level.clone()));
+                self.sender.set_level(change);
             }
         }
         if self.is_priority_dirty {
@@ -216,12 +221,24 @@ impl ChunkLoading {
                         let cur = *entry.get();
                         if cur > ring_level {
                             *entry.get_mut() = ring_level;
-                            Self::record_change(&mut self.change, p, cur, ring_level);
+                            Self::record_change(
+                                &mut self.change,
+                                &mut self.level_change,
+                                p,
+                                cur,
+                                ring_level,
+                            );
                         }
                     }
                     Entry::Vacant(entry) => {
                         entry.insert(ring_level);
-                        Self::record_change(&mut self.change, p, Self::MAX_LEVEL, ring_level);
+                        Self::record_change(
+                            &mut self.change,
+                            &mut self.level_change,
+                            p,
+                            Self::MAX_LEVEL,
+                            ring_level,
+                        );
                     }
                 }
             }
@@ -286,7 +303,13 @@ impl ChunkLoading {
                         } else {
                             self.pos_level.insert(p, new_level);
                         }
-                        Self::record_change(&mut self.change, p, cur, new_level);
+                        Self::record_change(
+                            &mut self.change,
+                            &mut self.level_change,
+                            p,
+                            cur,
+                            new_level,
+                        );
                     }
                 }
             }
@@ -351,4 +374,64 @@ fn test() {
 
         println!("\nloading level:\n{header}\n{grid}");
     }
+}
+
+// The scheduler rebuilds the level map from the sent deltas, so every send must leave its
+// copy equal to `pos_level`, including levels that changed without a stage change.
+#[test]
+fn level_deltas_rebuild_pos_level() {
+    let channel = Arc::new(LevelChannel::new());
+    let mut loading = ChunkLoading::new(channel.clone());
+    let mut mirror = ChunkLevel::default();
+    let mut sends = 0;
+
+    let steps: [(bool, (i32, i32), i8); 8] = [
+        (true, (0, 0), ChunkLoading::FULL_CHUNK_LEVEL),
+        // Also lowers levels near the center whose stage stays `Full`.
+        (true, (0, 0), 30),
+        (true, (3, 2), ChunkLoading::FULL_CHUNK_LEVEL),
+        (false, (0, 0), 30),
+        (true, (20, 20), 27),
+        (false, (0, 0), ChunkLoading::FULL_CHUNK_LEVEL),
+        (false, (20, 20), 27),
+        (false, (3, 2), ChunkLoading::FULL_CHUNK_LEVEL),
+    ];
+    for (add, pos, level) in steps {
+        if add {
+            loading.add_ticket(pos.into(), level);
+        } else {
+            loading.remove_ticket(pos.into(), level);
+        }
+        loading.send_change();
+        if let (Some((_, levels)), _) = channel.get() {
+            sends += 1;
+            for (pos, level) in levels {
+                if level >= ChunkLoading::MAX_LEVEL {
+                    mirror.remove(&pos);
+                } else {
+                    mirror.insert(pos, level);
+                }
+            }
+            assert_eq!(mirror, loading.pos_level);
+        }
+    }
+    assert_eq!(sends, 7);
+    assert!(mirror.is_empty());
+}
+
+// Adding and removing a ticket in one batch cancels its stage changes, but its level writes
+// still have to be sent, or they pile up until the next stage change.
+#[test]
+fn canceled_stage_changes_still_send_levels() {
+    let channel = Arc::new(LevelChannel::new());
+    let mut loading = ChunkLoading::new(channel.clone());
+    loading.add_ticket((0, 0).into(), ChunkLoading::FULL_CHUNK_LEVEL);
+    loading.remove_ticket((0, 0).into(), ChunkLoading::FULL_CHUNK_LEVEL);
+    loading.send_change();
+    let (Some((stages, levels)), _) = channel.get() else {
+        panic!("level writes were not sent");
+    };
+    assert!(stages.is_empty());
+    assert!(!levels.is_empty());
+    assert!(loading.level_change.is_empty());
 }
