@@ -26,27 +26,8 @@ pub fn get_pos(
     )
 }
 
-pub fn get_air_pos_towards(
-    mob: &dyn Mob,
-    horizontal_dist: i32,
-    vertical_dist: i32,
-    flying_height: i32,
-    target: Vector3<f64>,
-    max_xz_radians_difference: f64,
-) -> Option<Vector3<f64>> {
-    let delta = target - mob.get_entity().pos.load();
-    find_pos(
-        mob,
-        horizontal_dist,
-        vertical_dist,
-        flying_height,
-        [delta.x, delta.z],
-        max_xz_radians_difference,
-        false,
-    )
-}
-
-fn find_pos(
+/// Shared by `get_pos` and `air_random_pos::get_pos_towards`, which also rejects water.
+pub(super) fn find_pos(
     mob: &dyn Mob,
     horizontal_dist: i32,
     vertical_dist: i32,

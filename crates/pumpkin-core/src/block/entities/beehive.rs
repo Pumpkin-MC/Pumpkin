@@ -1,4 +1,5 @@
 use super::BlockEntity;
+use crate::block::blocks::campfire::CampfireBlock;
 use crate::entity::ageable::AgeableMob;
 use crate::entity::passive::bee::BeeEntity;
 use crate::entity::{Entity, EntityBase};
@@ -13,12 +14,17 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{chunk::io::Dirtiable, world::BlockFlags};
-use std::sync::{Arc, Mutex, atomic::Ordering::Relaxed};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering::Relaxed},
+};
 
 const MAX_OCCUPANTS: usize = 3;
 const MIN_TICKS_IN_HIVE: i32 = 600;
 const MIN_TICKS_IN_HIVE_WITH_NECTAR: i32 = 2400;
 const MAX_HONEY_LEVEL: u8 = 5;
+/// Vanilla `BeehiveBlockEntity.MIN_TICKS_BEFORE_REENTERING_HIVE`.
+const SEDATED_STAY_OUT_TICKS: i32 = 400;
 const IGNORED_BEE_TAGS: &[&str] = &[
     "Air",
     "drop_chances",
@@ -51,6 +57,8 @@ pub struct BeehiveBlockEntity {
     pub position: BlockPos,
     pub bees: Mutex<Option<Vec<NbtTag>>>,
     pub flower_pos: Mutex<Option<BlockPos>>,
+    /// Set by fire next to the hive; the next tick empties it, the neighbour update has no `Arc<World>`.
+    fire_release_pending: AtomicBool,
 }
 
 impl BlockEntity for BeehiveBlockEntity {
@@ -88,6 +96,7 @@ impl BlockEntity for BeehiveBlockEntity {
             position,
             bees: Mutex::new(bees),
             flower_pos: Mutex::new(flower_pos),
+            fire_release_pending: AtomicBool::new(false),
         }
     }
 
@@ -126,6 +135,7 @@ impl BlockEntity for BeehiveBlockEntity {
     }
 
     fn tick(&self, world: &Arc<World>) {
+        let emergency = self.fire_release_pending.swap(false, Relaxed);
         if self.is_empty() {
             return;
         }
@@ -133,7 +143,7 @@ impl BlockEntity for BeehiveBlockEntity {
         if !block.has_tag(&tag::Block::MINECRAFT_BEEHIVES) {
             return;
         }
-        let has_bees = self.release_occupants(world, state, self.is_fire_nearby(world), None);
+        let has_bees = self.release_occupants(world, state, emergency, None);
         if has_bees && rand::random::<f64>() < 0.005 {
             let mut center = self.position.to_centered_f64();
             center.y -= 0.5;
@@ -190,7 +200,13 @@ impl BeehiveBlockEntity {
             position,
             bees: Mutex::new(None),
             flower_pos: Mutex::new(None),
+            fire_release_pending: AtomicBool::new(false),
         }
+    }
+
+    /// Vanilla `BeehiveBlock.updateShape`: fire next to the hive drives every bee out.
+    pub fn release_for_fire(&self) {
+        self.fire_release_pending.store(true, Relaxed);
     }
 
     pub fn is_full(&self) -> bool {
@@ -298,6 +314,7 @@ impl BeehiveBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut failed = Vec::new();
         let honey_before = props.honey_level;
+        let sedated = player.is_some() && CampfireBlock::is_smokey_pos(world, &self.position);
         for occupant in candidates {
             let Some(bee) = occupant
                 .extract_compound()
@@ -318,30 +335,17 @@ impl BeehiveBlockEntity {
                 f64::from(facing.z) * exit_distance,
             );
             entity.set_pos(pos);
-            let delivered_nectar = !emergency && bee.has_nectar();
-            if delivered_nectar {
+            if !emergency && bee.has_nectar() {
                 bee.drop_off_nectar();
-            }
-            if !world.spawn_entity(bee.clone()) {
-                failed.push(occupant);
-                continue;
-            }
-            if delivered_nectar && props.honey_level < MAX_HONEY_LEVEL {
-                let increase = if rand::random_range(0..100) == 0 {
-                    2
-                } else {
-                    1
-                };
-                props.honey_level = (props.honey_level + increase).min(MAX_HONEY_LEVEL);
-            }
-            if let Some(player) = player
-                && pos.squared_distance_to_vec(&player.get_entity().pos.load()) <= 16.0
-            {
-                use crate::entity::mob::Mob;
-                bee.set_mob_target(
-                    Some(player.clone()),
-                    crate::plugin::api::events::entity::entity_target::TargetReason::Angry,
-                );
+                // Every bee reads the hive state from before this tick, so the last one sets the level.
+                if honey_before < MAX_HONEY_LEVEL {
+                    let increase = if rand::random_range(0..100) == 0 {
+                        2
+                    } else {
+                        1
+                    };
+                    props.honey_level = (honey_before + increase).min(MAX_HONEY_LEVEL);
+                }
             }
             world.play_sound(
                 Sound::BlockBeehiveExit,
@@ -349,6 +353,24 @@ impl BeehiveBlockEntity {
                 &self.position.to_f64(),
             );
             world.emit_game_event(GameEvent::BlockChange.name(), self.position.to_f64());
+            if !world.spawn_entity(bee.clone()) {
+                failed.push(occupant);
+                continue;
+            }
+            if let Some(player) = player
+                && pos.squared_distance_to_vec(&player.get_entity().pos.load()) <= 16.0
+            {
+                if sedated {
+                    bee.cannot_enter_hive_ticks
+                        .store(SEDATED_STAY_OUT_TICKS, Relaxed);
+                } else {
+                    use crate::entity::mob::Mob;
+                    bee.set_mob_target(
+                        Some(player.clone()),
+                        crate::plugin::api::events::entity::entity_target::TargetReason::Angry,
+                    );
+                }
+            }
         }
 
         if props.honey_level != honey_before {

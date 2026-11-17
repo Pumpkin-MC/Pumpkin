@@ -537,33 +537,6 @@ impl Mob for BeeEntity {
         );
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
-        if self.has_nectar()
-            && self.crops_grown_since_pollination.load(Ordering::Relaxed) < MAX_CROPS_GROWABLE
-        {
-            let mut rng = self.get_random();
-            if rng.random::<f32>() < 0.05 {
-                let entity = self.get_entity();
-                let world = entity.world.load();
-                let pos = entity.pos.load();
-                for _ in 0..rng.random_range(1..=2) {
-                    let position = pos.add_raw(
-                        rng.random_range(-0.3..0.3),
-                        f64::from(entity.height()) * 0.5,
-                        rng.random_range(-0.3..0.3),
-                    );
-                    world.spawn_particle(
-                        position,
-                        Vector3::default(),
-                        0.0,
-                        1,
-                        pumpkin_data::particle::Particle::FallingNectar,
-                    );
-                }
-            }
-        }
-    }
-
     fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
         let living = &self.mob_entity.living_entity;
         let damage = living.get_attribute_value(&Attributes::ATTACK_DAMAGE) as i32;

@@ -17,13 +17,15 @@ use crate::block::{BonemealArgs, entities::beehive::BeehiveBlockEntity};
 use crate::entity::EntityBase;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::path::Path;
-use crate::entity::ai::util::{air_and_water_random_pos, hover_random_pos};
+use crate::entity::ai::util::{air_and_water_random_pos, air_random_pos, hover_random_pos};
 use crate::entity::mob::{Mob, neutral::NeutralMob};
 use crate::world::World;
 
 const COOLDOWN_BEFORE_LOCATING_NEW_FLOWER: i32 = 200;
 const MIN_POLLINATION_TICKS: i32 = 400;
 const MAX_POLLINATING_TICKS: i32 = 600;
+/// Vanilla `findNearbyFlower` skips an unreachable flower for this long (a bare `600L`).
+const UNREACHABLE_FLOWER_TICKS: i64 = 600;
 const FLOWER_SEARCH_RADIUS: i32 = 5;
 const ARRIVAL_THRESHOLD: f64 = 0.1;
 const POSITION_CHANGE_CHANCE: i32 = 25;
@@ -170,7 +172,7 @@ impl BeePollinateGoal {
                     return true;
                 } else {
                     self.unreachable_flowers
-                        .insert(*pos, tick + i64::from(MAX_POLLINATING_TICKS));
+                        .insert(*pos, tick + UNREACHABLE_FLOWER_TICKS);
                 }
                 false
             })
@@ -668,7 +670,7 @@ fn pathfind_randomly_towards(bee: &BeeEntity, target: BlockPos) {
         (6, 8)
     };
     let target = target.to_f64().add_raw(0.5, 0.0, 0.5);
-    if let Some(next) = air_and_water_random_pos::get_air_pos_towards(
+    if let Some(next) = air_random_pos::get_pos_towards(
         bee,
         xz,
         y,
@@ -750,5 +752,11 @@ fn grow_crop(world: &std::sync::Arc<World>, pos: &BlockPos) -> Option<BlockState
         }
     })?;
     *age += 1;
-    block.state_from_properties(&props).map(|state| state.id)
+    block
+        .state_from_properties(&props)
+        .map(|state| state.id)
+        .or_else(|| {
+            // `TorchflowerCropBlock.getStateForAge(2)` turns the crop into the flower.
+            (block == &Block::TORCHFLOWER_CROP).then_some(Block::TORCHFLOWER.default_state.id)
+        })
 }

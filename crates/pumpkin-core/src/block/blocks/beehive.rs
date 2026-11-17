@@ -4,8 +4,8 @@ use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::entities::beehive::BeehiveBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockMetadata, ExplodeArgs, GetComparatorOutputArgs, OnPlaceArgs, PlacedArgs,
-    UseWithItemArgs,
+    BlockBehaviour, BlockMetadata, ExplodeArgs, GetComparatorOutputArgs,
+    GetStateForNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::item::ItemEntity;
 use crate::entity::passive::bee::BeeEntity;
@@ -20,7 +20,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::StatisticCategory;
-use pumpkin_data::{BlockId, BlockState, BlockStateId};
+use pumpkin_data::{Block, BlockId, BlockState, BlockStateId};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -225,6 +225,19 @@ impl BlockBehaviour for BeehiveBlock {
 
     fn explode(&self, args: ExplodeArgs<'_>) {
         Self::anger_nearby_bees(args.world, args.position);
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if Block::from_state_id(args.neighbor_state_id) == &Block::FIRE
+            && let Some(entity) = args.world.get_block_entity(args.position)
+            && let Some(hive) = entity.as_any().downcast_ref::<BeehiveBlockEntity>()
+        {
+            hive.release_for_fire();
+        }
+        args.state_id
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
