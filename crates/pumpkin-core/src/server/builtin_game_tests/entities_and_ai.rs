@@ -4,6 +4,42 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use super::build_stone_floor;
 
+pub(super) async fn test_boats_pick_up_nearby_mobs(helper: GameTestHelper) -> GameTestResult<()> {
+    build_stone_floor(&helper, 5, 8).await?;
+    for (boat, z) in [
+        ("minecraft:oak_boat", 1.5),
+        ("minecraft:oak_chest_boat", 5.5),
+    ] {
+        helper
+            .spawn_entity_at(boat, Vector3::new(1.5, 1.0, z))
+            .await?;
+        for _ in 0..3 {
+            helper
+                .spawn_entity_at("minecraft:pig", Vector3::new(2.7, 1.0, z))
+                .await?;
+        }
+    }
+
+    helper.succeed_when(move |helper| async move {
+        for (boat, z, expected) in [("oak_boat", 1, 2), ("oak_chest_boat", 5, 1)] {
+            let passengers = helper
+                .execute_command(
+                    &BlockPos::new(1, 1, z),
+                    &format!(
+                        "execute as @e[type=minecraft:{boat},distance=..2] on passengers if entity @s[type=minecraft:pig]"
+                    ),
+                )
+                .await?;
+            helper.assert_true(
+                passengers == expected,
+                format!("Expected {expected} pigs riding {boat}, found {passengers}"),
+            )?;
+        }
+        Ok(())
+    })?;
+    Ok(())
+}
+
 pub(super) async fn test_item_entities_merge(helper: GameTestHelper) -> GameTestResult<()> {
     build_stone_floor(&helper, 4, 4).await?;
 

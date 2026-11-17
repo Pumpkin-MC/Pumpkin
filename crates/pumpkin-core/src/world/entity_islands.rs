@@ -6,7 +6,9 @@ use std::collections::VecDeque;
 #[cfg(debug_assertions)]
 use std::sync::Arc;
 
-use pumpkin_data::{Block, attributes::Attributes, entity::EntityType, tag, tag::Taggable};
+use pumpkin_data::{
+    Block, attributes::Attributes, entity::EntityType, game_event::GameEvent, tag, tag::Taggable,
+};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, get_section_cord, position::BlockPos, vector2::Vector2,
     vector3::Vector3,
@@ -17,13 +19,20 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
+use crate::entity::{
+    DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity, vehicle::boat::PICKUP_RANGE,
+};
 use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
+    entity_breed::EntityBreedEvent, entity_mount::EntityMountEvent,
+    entity_pose_change::EntityPoseChangeEvent, entity_target::EntityTargetEvent,
     entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
 };
 use crate::plugin::{
-    api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
+    api::events::{
+        vehicle::{vehicle_enter::VehicleEnterEvent, vehicle_update::VehicleUpdateEvent},
+        world::generic_game::GenericGameEvent,
+    },
+    server::packet::PacketSentEvent,
 };
 use crate::server::Server;
 use crate::world::World;
@@ -126,8 +135,7 @@ impl Schedule {
     }
 }
 
-/// A plugin listens to an event an entity tick can fire: targeting, breeding, anger, or a
-/// sit order dropped on damage. Its handler may touch anything, so the tick runs in list order.
+/// Plugin callbacks fired during entity ticks may touch anything, so those ticks run in list order.
 #[must_use]
 pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
     let plugins = &server.plugin_manager;
@@ -135,6 +143,12 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<EntityBreedEvent>()
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
+        || plugins.has_handlers::<EntityMountEvent>()
+        || plugins.has_handlers::<VehicleEnterEvent>()
+        || plugins.has_handlers::<VehicleUpdateEvent>()
+        || plugins.has_handlers::<EntityPoseChangeEvent>()
+        || plugins.has_handlers::<GenericGameEvent>()
+        || plugins.has_handlers::<PacketSentEvent>()
 }
 
 /// What one entity can read or change next tick.
@@ -325,8 +339,45 @@ impl EntityReach {
                     .get_attribute_value(&Attributes::FOLLOW_RANGE)
                     .max(0.0)
             });
+        let radius = if base.entity_type.boat.is_some() {
+            radius.max(movement + PICKUP_RANGE)
+        } else {
+            radius
+        };
         let mut reach =
             TickReach::conservative(&base.bounding_box.load(), radius, links_of(entity));
+        if base.entity_type.boat.is_some() {
+            let world = base.world.load();
+            let area = super::game_event::notified_area(
+                base.pos.load(),
+                GameEvent::EntityMount.notification_radius(),
+            );
+            reach.links.extend(
+                world
+                    .entity_index
+                    .listeners(world.entities.load_full(), area)
+                    .map(|listener| listener.get_entity().entity_id),
+            );
+            // Ride chains and a dropped leash's holder can extend beyond the pickup area.
+            reach.global = base.has_vehicle()
+                || world
+                    .get_entities_at_box(&base.bounding_box.load().expand(
+                        PICKUP_RANGE,
+                        0.0,
+                        PICKUP_RANGE,
+                    ))
+                    .iter()
+                    .any(|candidate| candidate.get_entity().is_leashed());
+        }
+        // A leashed mob can enter a boat's pickup area before the boat's turn.
+        if base.is_leashed() && entity.get_mob().is_some() {
+            reach.global |= base
+                .world
+                .load()
+                .get_entities_at_box(&reach.body.expand(PICKUP_RANGE, 0.0, PICKUP_RANGE))
+                .iter()
+                .any(|candidate| candidate.get_entity().entity_type.boat.is_some());
+        }
         if let Some(mob) = entity.get_mob() {
             let player_radius = radius.max(mob.player_tick_range() + movement);
             reach.players =
@@ -335,7 +386,7 @@ impl EntityReach {
                     .expand(player_radius, player_radius, player_radius);
         }
         // Blast power and chained block effects can exceed the configured margins.
-        reach.global = entity
+        reach.global |= entity
             .get_mob()
             .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
             || entity
@@ -1308,6 +1359,121 @@ mod tests {
             node(13, 200.0, 0.5),
         ];
         assert_eq!(islands(&nodes, &[], &[]), [vec![0, 2], vec![1], vec![3]]);
+    }
+
+    #[cfg(debug_assertions)]
+    #[tokio::test]
+    async fn boat_pickup_reach_includes_idle_mobs() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, passive::pig::PigEntity, vehicle::boat::BoatEntity};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let boat = BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        ));
+        let pig = PigEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(1.2, 64.0, 0.0),
+            &EntityType::PIG,
+        ));
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            knockback_reach: 0.0,
+        };
+        let reaches = resolve(vec![EntityReach::of(&boat, &config)], &config)
+            .ok_or("unexpected serial fallback")?;
+        let nodes = vec![(boat.get_entity().entity_id, reaches[0].clone())];
+        let idle = [(
+            pig.get_entity().entity_id,
+            pig.get_entity().bounding_box.load(),
+        )];
+        let result = partition(&nodes, &idle, &[]).ok_or("unexpected serial fallback")?;
+        assert_eq!(result.island_of.get(&pig.get_entity().entity_id), Some(&0));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn boat_mount_events_link_nearby_listeners() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, passive::allay::AllayEntity, vehicle::boat::BoatEntity};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let boat = BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        ));
+        let allay = AllayEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(10.0, 64.0, 0.0),
+            &EntityType::ALLAY,
+        ));
+        world.add_entity_silent(allay.clone());
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            knockback_reach: 0.0,
+        };
+        let EntityReach::Conservative(reach) = EntityReach::of(&boat, &config) else {
+            return Err("expected conservative boat reach".into());
+        };
+        assert!(reach.links.contains(&allay.get_entity().entity_id));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn boat_pickup_serializes_leash_side_effects() -> Result<(), Box<dyn std::error::Error>> {
+        use std::sync::Arc;
+
+        use crate::entity::{
+            Entity, decoration::leash_knot::LeashKnotEntity, passive::pig::PigEntity,
+            vehicle::boat::BoatEntity,
+        };
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let boat = Arc::new(BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        )));
+        let pig = PigEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(1.2, 64.0, 0.0),
+            &EntityType::PIG,
+        ));
+        let holder: Arc<dyn EntityBase> = Arc::new(LeashKnotEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(50.0, 64.0, 0.0),
+            &EntityType::LEASH_KNOT,
+        )));
+        pig.get_entity().attach_leash(&holder);
+        world.add_entity_silent(boat.clone());
+        world.add_entity_silent(pig.clone());
+        let config = EntityIslandsConfig::default();
+        assert!(resolve(vec![EntityReach::of(boat.as_ref(), &config)], &config).is_none());
+
+        pig.get_entity().set_pos(Vector3::new(1.35, 64.0, 0.0));
+        pig.get_entity()
+            .velocity
+            .store(Vector3::new(-0.25, 0.0, 0.0));
+        let boat_reach = EntityReach::of(boat.as_ref(), &config);
+        let EntityReach::Conservative(reach) = &boat_reach else {
+            return Err("expected conservative boat reach".into());
+        };
+        assert!(!reach.global);
+        assert!(
+            resolve(
+                vec![EntityReach::of(pig.as_ref(), &config), boat_reach],
+                &config,
+            )
+            .is_none()
+        );
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[test]

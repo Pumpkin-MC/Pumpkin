@@ -1010,6 +1010,13 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         self.get_entity().has_vehicle()
     }
 
+    fn can_ride(&self, vehicle: &dyn EntityBase) -> bool {
+        let entity = self.get_entity();
+        !entity.is_sneaking()
+            && entity.riding_cooldown.load(Ordering::Relaxed) <= 0
+            && self.get_mob().is_none_or(|mob| mob.mob_can_ride(vehicle))
+    }
+
     fn is_vehicle(&self) -> bool {
         self.get_entity().has_passengers()
     }

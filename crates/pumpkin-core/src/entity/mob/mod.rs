@@ -1485,6 +1485,14 @@ impl MobEntity {
 }
 
 pub trait Mob: EntityBase + Send + Sync {
+    /// Species-specific restrictions in addition to the common riding checks.
+    fn mob_can_ride(&self, _vehicle: &dyn EntityBase) -> bool {
+        true
+    }
+
+    /// Called before attempting to mount, including attempts that may fail.
+    fn on_start_riding(&self) {}
+
     fn is_sensitive_to_water(&self) -> bool {
         false
     }
