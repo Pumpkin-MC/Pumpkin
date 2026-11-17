@@ -21,6 +21,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:allay_interaction" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/allay_interaction.json"
         )),
+        "pumpkin:arrow_falls_onto_block_below" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/arrow_falls_onto_block_below.json"
+        )),
         "pumpkin:auto_command_block_executes_without_redstone" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/auto_command_block_executes_without_redstone.json"
         )),
@@ -38,6 +41,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         )),
         "pumpkin:block_tuning_and_invert" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/block_tuning_and_invert.json"
+        )),
+        "pumpkin:brewing_returns_glass_bottle_from_dragon_breath" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/brewing_returns_glass_bottle_from_dragon_breath.json"
         )),
         "pumpkin:bubble_column_upward_and_downward" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/bubble_column_upward_and_downward.json"
@@ -645,12 +651,14 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:activator_rail_deenergizes_beyond_8_blocks",
         "pumpkin:activator_rail_propagation",
         "pumpkin:allay_interaction",
+        "pumpkin:arrow_falls_onto_block_below",
         "pumpkin:auto_command_block_executes_without_redstone",
         "pumpkin:bamboo_crimson_warped_doors_redstone",
         "pumpkin:barrel_and_trapped_chest_store_items",
         "pumpkin:birch_and_jungle_doors_redstone",
         "pumpkin:blast_furnace_smelts_raw_iron",
         "pumpkin:block_tuning_and_invert",
+        "pumpkin:brewing_returns_glass_bottle_from_dragon_breath",
         "pumpkin:bubble_column_upward_and_downward",
         "pumpkin:button_breaks_when_support_removed",
         "pumpkin:button_floor_and_ceiling_power",

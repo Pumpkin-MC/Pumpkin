@@ -6,8 +6,6 @@ use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use super::build_stone_floor;
-
 fn command_nbt(id: &str, command: &str, auto: bool) -> NbtCompound {
     let mut nbt = NbtCompound::new();
     nbt.put_string("id", id.to_string());
@@ -19,7 +17,8 @@ fn command_nbt(id: &str, command: &str, auto: bool) -> NbtCompound {
 pub(super) async fn test_command_block_impulse_setblock(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let cmd_pos = BlockPos::new(1, 1, 1);
     let target = BlockPos::new(2, 1, 1);
     let abs = test.absolute_pos(&target);
@@ -50,7 +49,8 @@ pub(super) async fn test_command_block_impulse_setblock(
 pub(super) async fn test_command_block_chain_three_stages(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 4).await?;
+    test.set_dimensions(7, 4, 5).await?;
+    test.build_floor(6, 4, &Block::STONE).await?;
     let c1 = BlockPos::new(1, 1, 1);
     let c2 = BlockPos::new(2, 1, 1);
     let c3 = BlockPos::new(3, 1, 1);
@@ -105,7 +105,8 @@ pub(super) async fn test_command_block_chain_three_stages(
 pub(super) async fn test_command_block_unconditional_vs_conditional(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let c1 = BlockPos::new(1, 1, 1);
     let c2 = BlockPos::new(2, 1, 1);
     let target = BlockPos::new(2, 1, 2);
@@ -145,7 +146,8 @@ pub(super) async fn test_command_block_unconditional_vs_conditional(
 pub(super) async fn test_command_block_auto_executes_on_placement(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let cmd_pos = BlockPos::new(1, 1, 1);
     let target = BlockPos::new(2, 1, 1);
     let abs = test.absolute_pos(&target);
@@ -182,7 +184,8 @@ pub(super) async fn test_command_block_auto_executes_on_placement(
 pub(super) async fn test_falling_gravel_and_red_sand_land(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 6, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     test.set_block_default(&BlockPos::new(1, 4, 1), &Block::GRAVEL)
         .await?;
     test.set_block_default(&BlockPos::new(3, 4, 1), &Block::RED_SAND)
@@ -203,7 +206,8 @@ pub(super) async fn test_falling_gravel_and_red_sand_land(
 pub(super) async fn test_falling_concrete_powder_solidifies_in_water(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 6, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     // Place white_concrete_powder at (1, 3, 1) above air and let it land on the stone floor
     test.set_block_default(&BlockPos::new(1, 3, 1), &Block::WHITE_CONCRETE_POWDER)
         .await?;
@@ -221,7 +225,8 @@ pub(super) async fn test_falling_concrete_powder_solidifies_in_water(
 pub(super) async fn test_falling_anvil_lands_and_preserves_block(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 6, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     test.set_block_default(&BlockPos::new(1, 3, 1), &Block::ANVIL)
         .await?;
 
@@ -238,7 +243,8 @@ pub(super) async fn test_falling_anvil_lands_and_preserves_block(
 pub(super) async fn test_tnt_primed_by_redstone_torch_and_wire(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let tnt = BlockPos::new(1, 1, 1);
     test.set_block_default(&tnt, &Block::TNT).await?;
     test.set_block_default(&BlockPos::new(2, 1, 1), &Block::REDSTONE_TORCH)
@@ -253,7 +259,8 @@ pub(super) async fn test_tnt_primed_by_redstone_torch_and_wire(
 pub(super) async fn test_snow_golem_horizontal_pattern_spawns(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     test.set_block_default(&BlockPos::new(2, 1, 2), &Block::SNOW_BLOCK)
         .await?;
     test.set_block_default(&BlockPos::new(2, 2, 2), &Block::SNOW_BLOCK)
@@ -275,7 +282,8 @@ pub(super) async fn test_snow_golem_horizontal_pattern_spawns(
 pub(super) async fn test_iron_golem_clears_all_four_pattern_blocks(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let blocks = [
         BlockPos::new(2, 1, 2),
         BlockPos::new(2, 2, 2),
@@ -301,7 +309,8 @@ pub(super) async fn test_iron_golem_clears_all_four_pattern_blocks(
 pub(super) async fn test_item_entities_different_types_do_not_merge(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(4, 4, 4).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let pos = Vector3::new(2.0, 1.2, 2.0);
     test.spawn_item_at("minecraft:diamond", 2, pos).await?;
     test.spawn_item_at("minecraft:emerald", 2, pos).await?;

@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_6x4x5",
+  "structure": "minecraft:empty",
   "function": "pumpkin:dropper_transfers_into_hopper_and_barrel",
   "max_ticks": 30,
   "setup_ticks": 0

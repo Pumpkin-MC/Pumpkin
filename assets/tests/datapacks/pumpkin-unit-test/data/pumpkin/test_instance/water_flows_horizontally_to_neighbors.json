@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_6x4x6",
+  "structure": "minecraft:empty",
   "function": "pumpkin:water_flows_horizontally_to_neighbors",
   "max_ticks": 20,
   "setup_ticks": 0

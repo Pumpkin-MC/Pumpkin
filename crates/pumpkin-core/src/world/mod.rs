@@ -1152,7 +1152,7 @@ impl World {
             packet,
             players.filter_map(|player| match player.client.as_ref() {
                 ClientPlatform::Java(java_client) => Some(java_client),
-                ClientPlatform::Bedrock(_) => None,
+                ClientPlatform::Bedrock(_) | ClientPlatform::Simulated(_) => None,
             }),
         );
     }
@@ -3726,6 +3726,14 @@ impl World {
         }
         // Actors come from the tracker, in range only.
         self.pair_new_player_with_tracked_entities(&player);
+        for existing_player in players.iter().filter(|existing| {
+            matches!(existing.client.as_ref(), ClientPlatform::Simulated(_))
+                && !existing.tab_list_listed.load(Ordering::Relaxed)
+        }) {
+            client
+                .send_packet(&existing_player.bedrock_tab_list_update())
+                .await;
+        }
 
         player.has_played_before.store(true, Ordering::Relaxed);
 
@@ -5268,6 +5276,7 @@ impl World {
             });
             self.entity_tracker
                 .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
+            self.broadcast_simulated_tab_list_visibility(player);
         }
         Ok(())
     }
@@ -5319,6 +5328,23 @@ impl World {
 
         self.entity_tracker
             .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
+        if matches!(player.client.as_ref(), ClientPlatform::Simulated(_)) {
+            self.broadcast_simulated_tab_list_visibility(player);
+        }
+    }
+
+    pub(crate) fn broadcast_simulated_tab_list_visibility(&self, player: &Player) {
+        let packet = player.bedrock_tab_list_update();
+        let players = self.players.load();
+        Self::broadcast_bedrock_grouped(
+            &packet,
+            players
+                .iter()
+                .filter_map(|recipient| match recipient.client.as_ref() {
+                    ClientPlatform::Bedrock(client) => Some(client),
+                    ClientPlatform::Java(_) | ClientPlatform::Simulated(_) => None,
+                }),
+        );
     }
 
     /// Sends the centre chunk ahead of the teleport and records it as held.

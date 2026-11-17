@@ -2,10 +2,9 @@ use pumpkin_data::Block;
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use super::build_stone_floor;
-
 pub(super) async fn test_item_entities_merge(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(4, 4, 4).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
 
     for x in 0..4 {
         for z in 0..4 {
@@ -31,7 +30,8 @@ pub(super) async fn test_item_entities_merge(test: GameTestContext) -> GameTestR
 }
 
 pub(super) async fn test_zombie_pathfinds_to_villager(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 8).await?;
+    test.set_dimensions(5, 4, 8).await?;
+    test.build_floor(5, 8, &Block::STONE).await?;
 
     for x in 0..5 {
         for z in 0..8 {

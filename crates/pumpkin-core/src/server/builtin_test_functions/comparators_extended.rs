@@ -11,10 +11,8 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 async fn setup_four_comparators(test: &GameTestContext) -> GameTestResult<[BlockPos; 4]> {
-    build_stone_floor(test, 8, 5).await?;
+    test.build_floor(8, 5, &Block::STONE).await?;
     let mut wire_props = RedstoneWireLikeProperties::default(&Block::REDSTONE_WIRE);
     wire_props.north = NorthRedstone::Side;
     wire_props.south = SouthRedstone::Side;
@@ -46,6 +44,7 @@ async fn read_wire_power(test: &GameTestContext, pos: &BlockPos) -> u8 {
 pub(super) async fn test_comparator_composter_levels_1_to_4(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     for (i, (&x, level)) in [1, 3, 5, 7].iter().zip([1u8, 2, 3, 4]).enumerate() {
         let mut props = ComposterLikeProperties::default(&Block::COMPOSTER);
@@ -77,6 +76,7 @@ pub(super) async fn test_comparator_composter_levels_1_to_4(
 pub(super) async fn test_comparator_composter_levels_5_to_8(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     for (&x, level) in [1, 3, 5, 7].iter().zip([5u8, 6, 7, 8]) {
         let mut props = ComposterLikeProperties::default(&Block::COMPOSTER);
@@ -107,6 +107,7 @@ pub(super) async fn test_comparator_composter_levels_5_to_8(
 pub(super) async fn test_comparator_water_cauldron_levels_1_2_3(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     test.set_block_default(&BlockPos::new(1, 1, 1), &Block::CAULDRON)
         .await?;
@@ -139,6 +140,7 @@ pub(super) async fn test_comparator_water_cauldron_levels_1_2_3(
 pub(super) async fn test_comparator_powder_snow_cauldron_levels_1_2_3(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     test.set_block_default(&BlockPos::new(1, 1, 1), &Block::CAULDRON)
         .await?;
@@ -173,6 +175,7 @@ pub(super) async fn test_comparator_powder_snow_cauldron_levels_1_2_3(
 pub(super) async fn test_comparator_respawn_anchor_charges_0_1_3_4(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     for (&x, charges) in [1, 3, 5, 7].iter().zip([0u8, 1, 3, 4]) {
         let mut props = RespawnAnchorLikeProperties::default(&Block::RESPAWN_ANCHOR);
@@ -203,6 +206,7 @@ pub(super) async fn test_comparator_respawn_anchor_charges_0_1_3_4(
 pub(super) async fn test_comparator_cake_bites_0_2_4_6(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     for (&x, bites) in [1, 3, 5, 7].iter().zip([0u8, 2, 4, 6]) {
         let mut props = CakeLikeProperties::default(&Block::CAKE);
@@ -230,6 +234,7 @@ pub(super) async fn test_comparator_cake_bites_0_2_4_6(
 pub(super) async fn test_comparator_candle_cake_full_signal(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     for (&x, block) in [1, 3, 5, 7].iter().zip([
         &Block::CANDLE_CAKE,
@@ -260,6 +265,7 @@ pub(super) async fn test_comparator_candle_cake_full_signal(
 pub(super) async fn test_comparator_chest_single_item_signal_1(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     let chest = BlockPos::new(1, 1, 1);
     test.set_block_default(&chest, &Block::CHEST).await?;
@@ -285,6 +291,7 @@ pub(super) async fn test_comparator_chest_single_item_signal_1(
 pub(super) async fn test_comparator_chest_nine_swords_signal_5(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     let chest = BlockPos::new(1, 1, 1);
     test.set_block_default(&chest, &Block::CHEST).await?;
@@ -311,6 +318,7 @@ pub(super) async fn test_comparator_chest_nine_swords_signal_5(
 pub(super) async fn test_comparator_hopper_fill_levels_1_and_5(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     let h1 = BlockPos::new(1, 1, 1);
     let h2 = BlockPos::new(3, 1, 1);
@@ -348,6 +356,7 @@ pub(super) async fn test_comparator_hopper_fill_levels_1_and_5(
 pub(super) async fn test_comparator_dispenser_and_dropper_three_swords(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     let disp = BlockPos::new(1, 1, 1);
     let drop = BlockPos::new(3, 1, 1);
@@ -386,6 +395,7 @@ pub(super) async fn test_comparator_dispenser_and_dropper_three_swords(
 pub(super) async fn test_comparator_furnace_slot_signal(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     let furnace = BlockPos::new(1, 1, 1);
     let props = FurnaceLikeProperties::default(&Block::FURNACE);
@@ -412,6 +422,7 @@ pub(super) async fn test_comparator_furnace_slot_signal(
 pub(super) async fn test_comparator_copper_bulbs_oxidation_variants(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     let wires = setup_four_comparators(&test).await?;
     let bulbs = [
         (&Block::EXPOSED_COPPER_BULB, true),
@@ -445,7 +456,8 @@ pub(super) async fn test_comparator_copper_bulbs_oxidation_variants(
 pub(super) async fn test_comparator_subtract_mode_clamps_to_zero(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let mut wire_props = RedstoneWireLikeProperties::default(&Block::REDSTONE_WIRE);
     wire_props.north = NorthRedstone::Side;
     wire_props.south = SouthRedstone::Side;

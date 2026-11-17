@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_6x4x5",
+  "structure": "minecraft:empty",
   "function": "pumpkin:iron_bars_and_glass_pane_connections",
   "max_ticks": 20,
   "setup_ticks": 0

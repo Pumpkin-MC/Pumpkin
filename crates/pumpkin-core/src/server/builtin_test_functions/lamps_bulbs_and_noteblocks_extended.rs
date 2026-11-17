@@ -1,3 +1,5 @@
+use crate::block::blocks::redstone::daylight_detector::DaylightDetectorBlock;
+
 use pumpkin_data::{
     Block,
     block_properties::{
@@ -8,12 +10,11 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_copper_bulb_oxidation_variants_toggle(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 4).await?;
+    test.set_dimensions(8, 4, 5).await?;
+    test.build_floor(8, 4, &Block::STONE).await?;
     let bulbs = [
         (1, &Block::COPPER_BULB),
         (3, &Block::EXPOSED_COPPER_BULB),
@@ -44,7 +45,8 @@ pub(super) async fn test_copper_bulb_oxidation_variants_toggle(
 pub(super) async fn test_waxed_copper_bulb_variants_toggle(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 4).await?;
+    test.set_dimensions(8, 4, 5).await?;
+    test.build_floor(8, 4, &Block::STONE).await?;
     let bulbs = [
         (1, &Block::WAXED_COPPER_BULB),
         (3, &Block::WAXED_EXPOSED_COPPER_BULB),
@@ -66,7 +68,8 @@ pub(super) async fn test_waxed_copper_bulb_variants_toggle(
 pub(super) async fn test_redstone_lamp_stays_lit_while_powered(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let lamp = BlockPos::new(1, 1, 1);
     let pwr = BlockPos::new(2, 1, 1);
     test.set_block_default(&lamp, &Block::REDSTONE_LAMP).await?;
@@ -90,7 +93,7 @@ async fn assert_note_instruments(
     test: &GameTestContext,
     pairs: [(i32, &Block, NoteblockInstrument); 4],
 ) -> GameTestResult<()> {
-    build_stone_floor(test, 8, 4).await?;
+    test.build_floor(8, 4, &Block::STONE).await?;
     for (x, base_block, expected) in pairs {
         let base_pos = BlockPos::new(x, 1, 2);
         let note_pos = BlockPos::new(x, 2, 2);
@@ -110,6 +113,7 @@ async fn assert_note_instruments(
 pub(super) async fn test_note_block_instruments_basedrum_snare_hat_bass(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     assert_note_instruments(
         &test,
         [
@@ -127,6 +131,7 @@ pub(super) async fn test_note_block_instruments_basedrum_snare_hat_bass(
 pub(super) async fn test_note_block_instruments_flute_bell_guitar_chime(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     assert_note_instruments(
         &test,
         [
@@ -144,6 +149,7 @@ pub(super) async fn test_note_block_instruments_flute_bell_guitar_chime(
 pub(super) async fn test_note_block_instruments_xylophone_iron_cowbell_didgeridoo(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     assert_note_instruments(
         &test,
         [
@@ -161,6 +167,7 @@ pub(super) async fn test_note_block_instruments_xylophone_iron_cowbell_didgerido
 pub(super) async fn test_note_block_instruments_bit_banjo_pling_harp(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(8, 4, 5).await?;
     assert_note_instruments(
         &test,
         [
@@ -178,7 +185,8 @@ pub(super) async fn test_note_block_instruments_bit_banjo_pling_harp(
 pub(super) async fn test_note_block_top_mob_head_instruments(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 4).await?;
+    test.set_dimensions(8, 4, 5).await?;
+    test.build_floor(8, 4, &Block::STONE).await?;
     let heads = [
         (1, &Block::ZOMBIE_HEAD, NoteblockInstrument::Zombie),
         (3, &Block::SKELETON_SKULL, NoteblockInstrument::Skeleton),
@@ -205,8 +213,8 @@ pub(super) async fn test_note_block_top_mob_head_instruments(
 pub(super) async fn test_daylight_detector_signal_calculation(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    use crate::block::blocks::redstone::daylight_detector::DaylightDetectorBlock;
-    build_stone_floor(&test, 3, 3).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
     let noon_normal = DaylightDetectorBlock::calculate_signal_strength(15, 0.0, false);
     let noon_inverted = DaylightDetectorBlock::calculate_signal_strength(15, 0.0, true);
     let dark_inverted = DaylightDetectorBlock::calculate_signal_strength(0, 0.0, true);
@@ -223,7 +231,8 @@ pub(super) async fn test_daylight_detector_signal_calculation(
 pub(super) async fn test_observer_detects_repeater_and_lamp_changes(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let target_lamp = BlockPos::new(2, 1, 1);
     let observer = BlockPos::new(2, 1, 2);
     let bulb = BlockPos::new(2, 1, 3);
@@ -258,7 +267,8 @@ pub(super) async fn test_observer_detects_repeater_and_lamp_changes(
 pub(super) async fn test_observer_chain_propagates_pulse(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 6).await?;
+    test.set_dimensions(7, 4, 6).await?;
+    test.build_floor(5, 6, &Block::STONE).await?;
     let mut obs = ObserverLikeProperties::default(&Block::OBSERVER);
     obs.facing = Facing::North;
     obs.powered = false;
@@ -291,7 +301,8 @@ pub(super) async fn test_observer_chain_propagates_pulse(
 pub(super) async fn test_target_block_arrow_hit_20_tick_pulse(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let target = BlockPos::new(2, 1, 2);
     let disp = BlockPos::new(2, 1, 3);
 

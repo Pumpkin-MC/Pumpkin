@@ -1,5 +1,6 @@
 pub mod block_based;
 pub mod context;
+pub mod entity;
 pub mod error;
 pub mod manager;
 pub mod model;
@@ -12,6 +13,7 @@ pub use block_based::BlockBasedTest;
 pub use context::{
     GameTestContext, GameTestFunction, GameTestSequence, get_test_function, register_test_function,
 };
+pub use entity::GameTestEntity;
 pub use error::{GameTestError, GameTestResult};
 pub use manager::{
     GameTestBatchReport, GameTestManager, GameTestOutcome, GameTestOutcomeStatus, GameTestReporter,
@@ -56,6 +58,10 @@ mod tests {
 
     #[async_trait]
     impl GameTestWorld for InMemoryTestWorld {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
         async fn block_state_id(&self, position: &BlockPos) -> BlockStateId {
             self.blocks
                 .lock()

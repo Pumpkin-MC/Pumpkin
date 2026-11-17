@@ -5,10 +5,9 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_piston_and_sticky_piston(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 6).await?;
+    test.set_dimensions(6, 4, 6).await?;
+    test.build_floor(6, 6, &Block::STONE).await?;
 
     let piston_pos = BlockPos::new(1, 1, 1);
     let piston_front = BlockPos::new(2, 1, 1);

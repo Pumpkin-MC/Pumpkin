@@ -1,3 +1,4 @@
+use pumpkin_data::Block;
 use std::sync::Arc;
 
 use pumpkin_data::{dye_color::DyeColor, entity::EntityType, item::Item};
@@ -7,12 +8,10 @@ use pumpkin_util::{
 };
 
 use crate::{
-    entity::{Entity, EntityBase, passive::sheep::SheepEntity, player::Player},
-    server::{Server, server_test_manager::ServerSimulatedPlayer},
+    entity::{Entity, EntityBase, passive::sheep::SheepEntity},
+    server::{Server, server_test_manager::server_world},
     world::loot::LootContextParameters,
 };
-
-use super::build_stone_floor;
 
 const INNER_TABLE: &str = "pumpkin_gametest:loot_inner";
 const OUTER_TABLE: &str = "pumpkin_gametest:loot_outer";
@@ -28,42 +27,24 @@ impl Drop for RegisteredLootTables {
     }
 }
 
-fn count_item(player: &Player, item: &Item) -> u32 {
-    player
-        .inventory()
-        .main_inventory
-        .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .iter()
-        .filter(|stack| stack.item == item)
-        .map(|stack| u32::from(stack.item_count))
-        .sum()
-}
-
 pub(super) async fn test_loot_entity_context_and_nested_tables(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
-    let simulated = test
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
+    let player = test
         .spawn_simulated_player(
             "LootTester",
             Vector3::new(2.5, 1.0, 2.5),
             GameMode::Survival,
         )
         .await?;
-    let player = simulated
-        .as_any()
-        .downcast_ref::<ServerSimulatedPlayer>()
-        .ok_or_else(|| GameTestError::World("Expected server simulated player".to_string()))?
-        .player();
-    let world = player.world();
+    let world = server_world(&test)?;
     let server = world
         .server
         .upgrade()
         .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
-    let dispatcher = server.command_dispatcher.load();
-    player.set_permission_lvl(&server, PermissionLvl::Four, &dispatcher);
-    let source = player.get_command_source(&server).with_silent();
+    player.set_permission_level(PermissionLvl::Four)?;
 
     let sheep = SheepEntity::new(Entity::new(
         world.clone(),
@@ -72,14 +53,12 @@ pub(super) async fn test_loot_entity_context_and_nested_tables(
     ));
     sheep.set_color(DyeColor::Red.id());
     world.spawn_entity(sheep.clone());
-    dispatcher
-        .execute_input(
-            &format!("loot give @s kill {}", sheep.get_entity().entity_uuid),
-            &source,
-        )
-        .map_err(|error| GameTestError::World(error.message.get_text()))?;
+    player.run_command(&format!(
+        "loot give @s kill {}",
+        sheep.get_entity().entity_uuid
+    ))?;
     test.assert_true(
-        count_item(player, &Item::RED_WOOL) == 1,
+        player.inventory_count(&Item::RED_WOOL) == 1,
         "/loot kill lost the sheep's red wool component",
     )?;
 
@@ -94,12 +73,10 @@ pub(super) async fn test_loot_entity_context_and_nested_tables(
     server
         .datapack_manager
         .insert_loot_table(OUTER_TABLE.into(), Arc::new(outer));
-    let before = count_item(player, &Item::AMETHYST_SHARD);
-    dispatcher
-        .execute_input("loot give @s loot pumpkin_gametest:loot_outer", &source)
-        .map_err(|error| GameTestError::World(error.message.get_text()))?;
+    let before = player.inventory_count(&Item::AMETHYST_SHARD);
+    player.run_command("loot give @s loot pumpkin_gametest:loot_outer")?;
     test.assert_true(
-        count_item(player, &Item::AMETHYST_SHARD) == before + 15,
+        player.inventory_count(&Item::AMETHYST_SHARD) == before + 15,
         "Nested datapack loot did not produce fifteen amethyst shards",
     )?;
 

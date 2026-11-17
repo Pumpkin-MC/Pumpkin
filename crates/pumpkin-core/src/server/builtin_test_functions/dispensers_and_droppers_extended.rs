@@ -8,8 +8,6 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 fn east_dispenser_id(block: &Block) -> BlockStateId {
     let mut props = DispenserLikeProperties::default(block);
     props.facing = Facing::East;
@@ -19,7 +17,8 @@ fn east_dispenser_id(block: &Block) -> BlockStateId {
 pub(super) async fn test_dispenser_lava_bucket_place_and_pickup(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let disp = BlockPos::new(1, 1, 2);
     let target = BlockPos::new(2, 1, 2);
     let power = BlockPos::new(1, 2, 2);
@@ -63,7 +62,8 @@ pub(super) async fn test_dispenser_lava_bucket_place_and_pickup(
 pub(super) async fn test_dispenser_powder_snow_bucket_place_and_pickup(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let disp = BlockPos::new(1, 1, 2);
     let target = BlockPos::new(2, 1, 2);
     let power = BlockPos::new(1, 2, 2);
@@ -101,7 +101,8 @@ pub(super) async fn test_dispenser_powder_snow_bucket_place_and_pickup(
 pub(super) async fn test_dispenser_shears_full_beehive_drops_honeycomb(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let disp = BlockPos::new(1, 1, 1);
     let hive = BlockPos::new(2, 1, 1);
     test.set_block(&disp, east_dispenser_id(&Block::DISPENSER))
@@ -133,7 +134,8 @@ pub(super) async fn test_dispenser_shears_full_beehive_drops_honeycomb(
 pub(super) async fn test_dispenser_glass_bottle_fills_water_from_source(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let disp = BlockPos::new(1, 1, 2);
     let water = BlockPos::new(2, 1, 2);
     test.set_block(&disp, east_dispenser_id(&Block::DISPENSER))
@@ -164,7 +166,8 @@ pub(super) async fn test_dispenser_glass_bottle_fills_water_from_source(
 pub(super) async fn test_dispenser_flint_and_steel_primes_tnt(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let disp = BlockPos::new(1, 1, 1);
     let tnt = BlockPos::new(2, 1, 1);
     test.set_block(&disp, east_dispenser_id(&Block::DISPENSER))
@@ -188,7 +191,8 @@ pub(super) async fn test_dispenser_flint_and_steel_primes_tnt(
 pub(super) async fn test_dispenser_flint_and_steel_lights_campfire(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let disp = BlockPos::new(1, 1, 1);
     let campfire = BlockPos::new(2, 1, 1);
     test.set_block(&disp, east_dispenser_id(&Block::DISPENSER))
@@ -219,7 +223,8 @@ pub(super) async fn test_dispenser_flint_and_steel_lights_campfire(
 pub(super) async fn test_dispenser_armor_stand_spawns_entity(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let disp = BlockPos::new(1, 1, 1);
     test.set_block(&disp, east_dispenser_id(&Block::DISPENSER))
         .await?;
@@ -241,7 +246,8 @@ pub(super) async fn test_dispenser_armor_stand_spawns_entity(
 pub(super) async fn test_dispenser_tnt_spawns_primed_tnt(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let disp = BlockPos::new(1, 1, 1);
     test.set_block(&disp, east_dispenser_id(&Block::DISPENSER))
         .await?;
@@ -263,7 +269,8 @@ pub(super) async fn test_dispenser_tnt_spawns_primed_tnt(
 pub(super) async fn test_dispenser_minecart_places_on_rail(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let disp = BlockPos::new(1, 1, 1);
     let rail = BlockPos::new(2, 1, 1);
     test.set_block(&disp, east_dispenser_id(&Block::DISPENSER))
@@ -287,7 +294,8 @@ pub(super) async fn test_dispenser_minecart_places_on_rail(
 pub(super) async fn test_dispenser_boat_places_on_water(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(6, 5, &Block::STONE).await?;
     let disp = BlockPos::new(1, 2, 2);
     test.set_block(&disp, east_dispenser_id(&Block::DISPENSER))
         .await?;
@@ -315,7 +323,8 @@ pub(super) async fn test_dispenser_boat_places_on_water(
 pub(super) async fn test_dropper_drops_item_entity_into_air(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let dropper = BlockPos::new(1, 1, 1);
     test.set_block(&dropper, east_dispenser_id(&Block::DROPPER))
         .await?;
@@ -337,7 +346,8 @@ pub(super) async fn test_dropper_drops_item_entity_into_air(
 pub(super) async fn test_dropper_transfers_into_hopper_and_barrel(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let d1 = BlockPos::new(1, 1, 1);
     let hopper = BlockPos::new(2, 1, 1);
     let d2 = BlockPos::new(1, 1, 3);

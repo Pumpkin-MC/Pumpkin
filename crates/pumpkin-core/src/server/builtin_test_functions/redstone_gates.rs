@@ -9,10 +9,9 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_redstone_torch_inverter(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let support_pos = BlockPos::new(2, 1, 2);
     let torch_pos = BlockPos::new(2, 2, 2);
@@ -78,7 +77,8 @@ pub(super) async fn test_redstone_torch_inverter(test: GameTestContext) -> GameT
 }
 
 pub(super) async fn test_redstone_repeater_delay(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let input_pos = BlockPos::new(2, 1, 1);
     let repeater_pos = BlockPos::new(2, 1, 2);
@@ -121,7 +121,8 @@ pub(super) async fn test_redstone_repeater_delay(test: GameTestContext) -> GameT
 }
 
 pub(super) async fn test_redstone_comparator_modes(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let chest_pos = BlockPos::new(2, 1, 1);
     let main_comp_pos = BlockPos::new(2, 1, 2);

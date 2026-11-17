@@ -142,15 +142,23 @@ impl GameTestSession {
 
     pub async fn clear_placement(&self) -> GameTestResult<()> {
         self.world.disconnect_simulated_players().await?;
-        if let Some(placement) = &self.placement {
+        if let Some(placement) = self.current_placement() {
             clear_placed_test(
                 self.world.as_ref(),
-                placement,
+                &placement,
                 self.test.definition().padding,
             )
             .await?;
         }
         Ok(())
+    }
+
+    fn current_placement(&self) -> Option<TestStructureInstance> {
+        self.controller
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .placement
+            .or(self.placement)
     }
 
     pub async fn disconnect_simulated_players(&self) -> GameTestResult<()> {
@@ -405,6 +413,7 @@ impl GameTestSession {
             placement,
             tick,
             self.test.max_ticks(),
+            self.test.definition().sky_access,
             self.controller.clone(),
         ))
     }
@@ -746,10 +755,10 @@ impl GameTestSession {
     }
 
     async fn handle_attempt_pass(&mut self, tick: u32) {
-        if let Some(placement) = &self.placement {
+        if let Some(placement) = self.current_placement() {
             // GameTestInfo::succeed removes non-player entities before the listeners
             // report success or schedule a copyReset rerun.
-            if let Err(error) = clear_success_entities(self.world.as_ref(), placement).await {
+            if let Err(error) = clear_success_entities(self.world.as_ref(), &placement).await {
                 self.state = GameTestState::Failed { tick, error };
                 return;
             }
@@ -767,7 +776,7 @@ impl GameTestSession {
             // on every passed execution, including executions that will be rerun.
             if let Err(error) = remove_barriers(
                 self.world.as_ref(),
-                placement,
+                &placement,
                 self.test.definition().sky_access,
             )
             .await

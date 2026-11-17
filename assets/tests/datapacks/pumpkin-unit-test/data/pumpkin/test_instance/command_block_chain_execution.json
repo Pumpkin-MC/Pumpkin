@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_6x4x4",
+  "structure": "minecraft:empty",
   "function": "pumpkin:command_block_chain_execution",
   "max_ticks": 20,
   "setup_ticks": 0

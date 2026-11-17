@@ -1,10 +1,10 @@
 use pumpkin_data::entity::EntityType;
-use pumpkin_gametest::{GameTestContext, GameTestError, GameTestResult};
+use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::{GameMode, math::vector3::Vector3};
 
 use crate::{
     entity::{Entity, EntityBase, ageable::AgeableMob, passive::polar_bear::PolarBearEntity},
-    server::server_test_manager::ServerSimulatedPlayer,
+    server::server_test_manager::server_world,
 };
 
 type DefenseCase = (
@@ -96,26 +96,20 @@ const DEFENSE_CASES: [DefenseCase; 10] = [
 pub(super) async fn test_polar_bear_cub_defense_and_target_lifecycle(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    let simulated = test
+    test.set_dimensions(26, 9, 26).await?;
+    let player = test
         .spawn_simulated_player(
             "BearTester",
             Vector3::new(17.5, 2.0, 12.5),
             GameMode::Survival,
         )
         .await?;
-    let player = simulated
-        .as_any()
-        .downcast_ref::<ServerSimulatedPlayer>()
-        .ok_or_else(|| GameTestError::World("Expected server simulated player".to_string()))?
-        .player();
-    let world = player.world();
+    let world = server_world(&test)?;
     let position = test.absolute_vec(Vector3::new(12.5, 2.0, 12.5));
 
     for (name, baby, cub_offset, distance, mode, expected) in DEFENSE_CASES {
-        player.set_gamemode(mode);
-        player
-            .get_entity()
-            .set_pos(position.add_raw(distance, 0.0, 0.0));
+        player.set_gamemode(mode)?;
+        player.teleport_to(position.add_raw(distance, 0.0, 0.0))?;
         let bear = PolarBearEntity::new(Entity::new(
             world.clone(),
             position,
@@ -164,9 +158,7 @@ pub(super) async fn test_polar_bear_cub_defense_and_target_lifecycle(
                 bear.mob_entity.get_target().is_some(),
                 "Polar bear forgot its target as soon as the cub left",
             )?;
-            player
-                .get_entity()
-                .set_pos(position.add_raw(11.0, 0.0, 0.0));
+            player.teleport_to(position.add_raw(11.0, 0.0, 0.0))?;
             bear.mob_entity.server_ai_step(bear.as_ref(), bear.as_ref());
             test.assert_true(
                 bear.mob_entity.get_target().is_none(),

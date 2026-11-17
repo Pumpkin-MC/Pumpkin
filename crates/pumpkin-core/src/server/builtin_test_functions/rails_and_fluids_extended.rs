@@ -5,8 +5,6 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use super::build_stone_floor;
-
 fn ns_rail_state(block: &Block) -> BlockStateId {
     let mut props = PoweredRailLikeProperties::default(block);
     props.shape = RailShapeStraight::NorthSouth;
@@ -17,7 +15,8 @@ fn ns_rail_state(block: &Block) -> BlockStateId {
 pub(super) async fn test_powered_rail_deenergizes_beyond_8_blocks(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 12).await?;
+    test.set_dimensions(3, 4, 12).await?;
+    test.build_floor(3, 12, &Block::STONE).await?;
     let rail = ns_rail_state(&Block::POWERED_RAIL);
     for z in 1..=10 {
         test.set_block(&BlockPos::new(1, 1, z), rail).await?;
@@ -44,7 +43,8 @@ pub(super) async fn test_powered_rail_deenergizes_beyond_8_blocks(
 pub(super) async fn test_powered_rail_bidirectional_boost_from_center(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 11).await?;
+    test.set_dimensions(3, 4, 11).await?;
+    test.build_floor(3, 11, &Block::STONE).await?;
     let rail = ns_rail_state(&Block::POWERED_RAIL);
     for z in 1..=9 {
         test.set_block(&BlockPos::new(1, 1, z), rail).await?;
@@ -69,34 +69,42 @@ pub(super) async fn test_powered_rail_bidirectional_boost_from_center(
 pub(super) async fn test_activator_rail_deenergizes_beyond_8_blocks(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 12).await?;
+    test.set_dimensions(3, 4, 12).await?;
+    test.build_floor(3, 12, &Block::STONE).await?;
     let rail = ns_rail_state(&Block::ACTIVATOR_RAIL);
     for z in 1..=10 {
         test.set_block(&BlockPos::new(1, 1, z), rail).await?;
     }
-    test.set_block_default(&BlockPos::new(0, 1, 1), &Block::REDSTONE_BLOCK)
-        .await?;
 
-    let p9 = PoweredRailLikeProperties::from_state_id(
-        test.block_state_id(&BlockPos::new(1, 1, 9)).await,
-    )
-    .powered;
-    let p10 = PoweredRailLikeProperties::from_state_id(
-        test.block_state_id(&BlockPos::new(1, 1, 10)).await,
-    )
-    .powered;
-    test.assert_true(
-        p9 && !p10,
-        format!("Expected activator_rail powered at z=9 and unpowered at z=10, got {p9} and {p10}"),
-    )?;
-    test.succeed();
+    test.start_sequence()
+        .then_execute(move |test| async move {
+            test.set_block_default(&BlockPos::new(0, 1, 1), &Block::REDSTONE_BLOCK)
+                .await
+        })
+        .then_idle(1)
+        .then_execute(move |test| async move {
+            let p9 = PoweredRailLikeProperties::from_state_id(
+                test.block_state_id(&BlockPos::new(1, 1, 9)).await,
+            )
+            .powered;
+            let p10 = PoweredRailLikeProperties::from_state_id(
+                test.block_state_id(&BlockPos::new(1, 1, 10)).await,
+            )
+            .powered;
+            test.assert_true(
+                p9 && !p10,
+                format!("Expected activator_rail powered at z=9 and unpowered at z=10, got {p9} and {p10}"),
+            )
+        })
+        .then_succeed();
     Ok(())
 }
 
 pub(super) async fn test_detector_rail_powers_adjacent_powered_rail(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 5).await?;
+    test.set_dimensions(5, 4, 6).await?;
+    test.build_floor(4, 5, &Block::STONE).await?;
     let det = BlockPos::new(1, 1, 1);
     let pwr_rail = BlockPos::new(1, 1, 2);
     test.set_block(&det, ns_rail_state(&Block::DETECTOR_RAIL))
@@ -125,7 +133,8 @@ pub(super) async fn test_detector_rail_powers_adjacent_powered_rail(
 pub(super) async fn test_detector_rail_comparator_reads_chest_minecart(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 5, &Block::STONE).await?;
     let det = BlockPos::new(1, 1, 2);
     test.set_block(&det, ns_rail_state(&Block::DETECTOR_RAIL))
         .await?;
@@ -146,7 +155,8 @@ pub(super) async fn test_detector_rail_comparator_reads_chest_minecart(
 pub(super) async fn test_rail_breaks_when_support_block_removed(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let support = BlockPos::new(1, 1, 1);
     let rail = BlockPos::new(1, 2, 1);
     test.set_block_default(&support, &Block::STONE).await?;
@@ -161,7 +171,8 @@ pub(super) async fn test_rail_breaks_when_support_block_removed(
 pub(super) async fn test_water_flows_horizontally_and_decreases_level(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 5).await?;
+    test.set_dimensions(6, 4, 6).await?;
+    test.build_floor(6, 5, &Block::STONE).await?;
     // Build a 1-wide channel from x=1 to x=4 at z=2
     for x in 0..=5 {
         test.set_block_default(&BlockPos::new(x, 1, 1), &Block::STONE)
@@ -191,7 +202,8 @@ pub(super) async fn test_water_flows_horizontally_and_decreases_level(
 pub(super) async fn test_water_falls_downward_into_basin(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     // Build a raised basin at (2, 2, 2) with a hole at (2, 1, 2)
     for pos in [
         BlockPos::new(1, 2, 2),
@@ -221,7 +233,8 @@ pub(super) async fn test_water_falls_downward_into_basin(
 pub(super) async fn test_lava_meets_flowing_water_forms_cobblestone(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(6, 5, &Block::STONE).await?;
     for x in 0..=5 {
         test.set_block_default(&BlockPos::new(x, 1, 1), &Block::STONE)
             .await?;
@@ -252,7 +265,8 @@ pub(super) async fn test_lava_meets_flowing_water_forms_cobblestone(
 pub(super) async fn test_water_meets_lava_source_forms_obsidian(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     for pos in [
         BlockPos::new(1, 1, 2),
         BlockPos::new(4, 1, 2),
@@ -276,7 +290,8 @@ pub(super) async fn test_water_meets_lava_source_forms_obsidian(
 pub(super) async fn test_water_breaks_torch_and_carpet_in_path(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(6, 5, &Block::STONE).await?;
     for x in 0..=5 {
         test.set_block_default(&BlockPos::new(x, 1, 1), &Block::STONE)
             .await?;
@@ -305,7 +320,8 @@ pub(super) async fn test_water_breaks_torch_and_carpet_in_path(
 pub(super) async fn test_sponge_ignores_lava_and_stays_dry(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     for pos in [
         BlockPos::new(1, 1, 2),
         BlockPos::new(3, 1, 2),

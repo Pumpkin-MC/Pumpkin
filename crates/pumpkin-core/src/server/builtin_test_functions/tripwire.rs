@@ -5,10 +5,9 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use super::build_stone_floor;
-
 pub(super) async fn test_tripwire_entity_collision(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let west_wall = BlockPos::new(0, 1, 2);
     let west_hook = BlockPos::new(1, 1, 2);

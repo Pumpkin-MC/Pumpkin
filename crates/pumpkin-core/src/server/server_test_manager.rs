@@ -3,19 +3,19 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, Weak};
 
 use async_trait::async_trait;
-use pumpkin_data::{BlockState, BlockStateId};
+use pumpkin_data::{BlockDirection, BlockState, BlockStateId, dye_color::DyeColor, item::Item};
 use pumpkin_data::{data_component_impl::EquipmentSlot, item_stack::ItemStack, translation::java};
 use pumpkin_gametest::{
-    BlockBasedTest, GameTestError, GameTestManager, GameTestReporter, GameTestResult,
-    GameTestRotation, GameTestRunner, GameTestSession, GameTestStructureTemplate, GameTestWorld,
-    SimulatedPlayer, TestStructureInstance, TestType, clear_placed_test, place_existing_structure,
-    remove_barriers,
+    BlockBasedTest, GameTestContext, GameTestEntity, GameTestError, GameTestManager,
+    GameTestReporter, GameTestResult, GameTestRotation, GameTestRunner, GameTestSession,
+    GameTestStructureTemplate, GameTestWorld, SimulatedPlayer, TestStructureInstance, TestType,
+    clear_placed_test, place_existing_structure, remove_barriers,
 };
 pub use pumpkin_gametest::{GameTestBatchReport, GameTestRetryOptions};
 use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::{GameMode, Hand};
+use pumpkin_util::{GameMode, Hand, PermissionLvl};
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
@@ -23,11 +23,17 @@ use tracing::{info, warn};
 
 use crate::{
     block::entities::{
-        BlockEntity, block_entity_from_nbt, test_block::TestBlockBlockEntity,
-        test_instance_block::TestInstanceBlockBlockEntity,
+        BlockEntity, block_entity_from_nbt,
+        test_block::TestBlockBlockEntity,
+        test_instance_block::{MAX_TEST_STRUCTURE_SIZE, TestInstanceBlockBlockEntity},
     },
+    block::{BlockHitResult, registry::BlockActionResult},
     command::CommandSource,
-    entity::player::{ClientMove, ClientMoveOutcome, Player},
+    entity::{
+        EntityBase,
+        passive::sheep::SheepEntity,
+        player::{ClientMove, ClientMoveOutcome, Player},
+    },
     plugin::player::item_held::PlayerItemHeldEvent,
     server::Server,
     world::World,
@@ -814,9 +820,15 @@ pub async fn game_test_grid_spacing(
         .then(extra_rotation)
         .as_block_rotation()
         .transform_size(pumpkin_util::math::vector3::Vector3::new(x, y, z));
+    // Function tests can enlarge their structure after grid positions are assigned.
+    let (width, depth) = if test.instance_type == TestType::Function {
+        (MAX_TEST_STRUCTURE_SIZE, MAX_TEST_STRUCTURE_SIZE)
+    } else {
+        (size.x, size.z)
+    };
     Ok((
-        size.x + 2 * test.padding + SPACE_BETWEEN_COLUMNS,
-        size.z + 2 * test.padding + SPACE_BETWEEN_ROWS,
+        width + 2 * test.padding + SPACE_BETWEEN_COLUMNS,
+        depth + 2 * test.padding + SPACE_BETWEEN_ROWS,
     ))
 }
 
@@ -824,7 +836,12 @@ async fn load_game_test_template(
     server: &Arc<Server>,
     structure: &str,
 ) -> GameTestResult<GameTestStructureTemplate> {
-    match server.datapack_manager.load_structure(structure).await {
+    let world_path = server.basic_config.get_world_path();
+    match server
+        .datapack_manager
+        .load_structure(&world_path, structure)
+        .await
+    {
         Ok(structure) => GameTestStructureTemplate::from_nbt(&structure),
         Err(error) => {
             GameTestStructureTemplate::parse_empty_id(structure).ok_or(GameTestError::World(error))
@@ -1116,6 +1133,14 @@ pub(crate) struct ServerGameTestWorld {
     simulated_players: StdMutex<Vec<(String, Arc<ServerSimulatedPlayer>)>>,
 }
 
+pub(crate) fn server_world(test: &GameTestContext) -> GameTestResult<Arc<World>> {
+    test.world_as_ref()
+        .as_any()
+        .downcast_ref::<ServerGameTestWorld>()
+        .map(|adapter| adapter.world.clone())
+        .ok_or_else(|| GameTestError::World("Expected server GameTest world".to_string()))
+}
+
 static NEXT_SIMULATED_PLAYER_NAME: AtomicU64 = AtomicU64::new(1);
 
 fn unique_simulated_player_name(requested: &str) -> GameTestResult<String> {
@@ -1148,21 +1173,112 @@ fn unique_simulated_player_name(requested: &str) -> GameTestResult<String> {
     Ok(format!("{}{}", &requested[..prefix_bytes], suffix))
 }
 
+struct ServerGameTestEntity {
+    entity: Arc<dyn EntityBase>,
+}
+
+impl GameTestEntity for ServerGameTestEntity {
+    fn entity_id(&self) -> i32 {
+        self.entity.get_entity().entity_id
+    }
+
+    fn set_no_ai(&self, no_ai: bool) -> GameTestResult<()> {
+        let mob = self
+            .entity
+            .get_mob()
+            .ok_or_else(|| GameTestError::World("Entity is not a mob".to_string()))?;
+        mob.get_mob_entity().set_no_ai(no_ai);
+        Ok(())
+    }
+
+    fn held_item(&self, hand: Hand) -> GameTestResult<ItemStack> {
+        let living = self
+            .entity
+            .get_living_entity()
+            .ok_or_else(|| GameTestError::World("Entity is not living".to_string()))?;
+        Ok(living.get_stack_in_hand(self.entity.as_ref(), hand))
+    }
+
+    fn custom_name(&self) -> GameTestResult<Option<String>> {
+        Ok(self
+            .entity
+            .get_entity()
+            .custom_name
+            .load()
+            .as_ref()
+            .as_ref()
+            .map(|name| name.clone().get_text()))
+    }
+
+    fn is_leashed(&self) -> GameTestResult<bool> {
+        Ok(self.entity.get_entity().is_leashed())
+    }
+
+    fn set_health(&self, health: f32) -> GameTestResult<()> {
+        let living = self
+            .entity
+            .get_living_entity()
+            .ok_or_else(|| GameTestError::World("Entity is not living".to_string()))?;
+        living.set_health(health);
+        Ok(())
+    }
+
+    fn set_color(&self, color: DyeColor) -> GameTestResult<()> {
+        let sheep = self
+            .entity
+            .cast_any()
+            .downcast_ref::<SheepEntity>()
+            .ok_or_else(|| GameTestError::World("Entity is not a sheep".to_string()))?;
+        sheep.set_color(color.id());
+        Ok(())
+    }
+
+    fn set_sheared(&self, sheared: bool) -> GameTestResult<()> {
+        let sheep = self
+            .entity
+            .cast_any()
+            .downcast_ref::<SheepEntity>()
+            .ok_or_else(|| GameTestError::World("Entity is not a sheep".to_string()))?;
+        sheep.set_sheared(sheared);
+        Ok(())
+    }
+
+    fn is_sheared(&self) -> GameTestResult<bool> {
+        let sheep = self
+            .entity
+            .cast_any()
+            .downcast_ref::<SheepEntity>()
+            .ok_or_else(|| GameTestError::World("Entity is not a sheep".to_string()))?;
+        Ok(sheep.is_sheared())
+    }
+}
+
 pub(crate) struct ServerSimulatedPlayer {
     player: Arc<Player>,
     server: Weak<Server>,
 }
 
 impl ServerSimulatedPlayer {
-    pub(crate) const fn player(&self) -> &Arc<Player> {
-        &self.player
+    fn is_connected(&self) -> bool {
+        self.player
+            .world()
+            .get_player_by_uuid(self.player.gameprofile.id)
+            .is_some()
     }
 }
 
 #[async_trait]
 impl SimulatedPlayer for ServerSimulatedPlayer {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn entity_id(&self) -> i32 {
+        self.player.entity_id()
+    }
+
+    fn set_visible_in_list(&self, visible: bool) {
+        self.player.client.set_simulated_list_visible(visible);
+    }
+
+    fn set_visible_in_tab_list(&self, visible: bool) {
+        self.player.set_tab_list_listed(visible);
     }
 
     fn name(&self) -> &str {
@@ -1173,12 +1289,44 @@ impl SimulatedPlayer for ServerSimulatedPlayer {
         self.player.position()
     }
 
+    fn gamemode(&self) -> GameMode {
+        self.player.gamemode.load()
+    }
+
+    fn set_gamemode(&self, mode: GameMode) -> GameTestResult<()> {
+        self.player.set_gamemode(mode);
+        Ok(())
+    }
+
+    fn set_permission_level(&self, level: PermissionLvl) -> GameTestResult<()> {
+        let server = self
+            .server
+            .upgrade()
+            .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+        let dispatcher = server.command_dispatcher.load();
+        self.player.set_permission_lvl(&server, level, &dispatcher);
+        Ok(())
+    }
+
+    fn run_command(&self, command: &str) -> GameTestResult<()> {
+        let server = self
+            .server
+            .upgrade()
+            .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+        let dispatcher = server.command_dispatcher.load();
+        let source = self.player.get_command_source(&server).with_silent();
+        dispatcher
+            .execute_input(command, &source)
+            .map(|_| ())
+            .map_err(|error| GameTestError::World(error.message.get_text()))
+    }
+
     fn selected_hotbar_slot(&self) -> u8 {
         self.player.inventory.get_selected_slot()
     }
 
     fn set_selected_hotbar_slot(&self, slot: u8) -> GameTestResult<()> {
-        if self.player.client.closed() {
+        if !self.is_connected() {
             return Err(GameTestError::World(
                 "Simulated player is disconnected".to_string(),
             ));
@@ -1214,7 +1362,7 @@ impl SimulatedPlayer for ServerSimulatedPlayer {
     }
 
     fn set_held_item(&self, hand: Hand, stack: ItemStack) -> GameTestResult<()> {
-        if self.player.client.closed() {
+        if !self.is_connected() {
             return Err(GameTestError::World(
                 "Simulated player is disconnected".to_string(),
             ));
@@ -1230,11 +1378,158 @@ impl SimulatedPlayer for ServerSimulatedPlayer {
         Ok(())
     }
 
+    fn first_empty_inventory_slot(&self) -> Option<usize> {
+        self.player
+            .inventory
+            .main_inventory
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .position(ItemStack::is_empty)
+    }
+
+    fn inventory_item(&self, slot: usize) -> GameTestResult<ItemStack> {
+        self.player
+            .inventory
+            .main_inventory
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(slot)
+            .cloned()
+            .ok_or_else(|| GameTestError::World("Invalid inventory slot".to_string()))
+    }
+
+    fn inventory_count(&self, item: &Item) -> u32 {
+        self.player
+            .inventory
+            .main_inventory
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|stack| stack.item == item)
+            .map(|stack| u32::from(stack.item_count))
+            .sum()
+    }
+
+    fn interact_with(&self, entity: &Arc<dyn GameTestEntity>, hand: Hand) -> GameTestResult<()> {
+        if !self.is_connected() {
+            return Err(GameTestError::World(
+                "Simulated player is disconnected".to_string(),
+            ));
+        }
+        let world = self.player.world();
+        let entity_id = entity.entity_id();
+        let target: Arc<dyn EntityBase> = world
+            .get_player_by_id(entity_id)
+            .map(|player| player as Arc<dyn EntityBase>)
+            .or_else(|| world.get_entity_by_id(entity_id))
+            .ok_or_else(|| GameTestError::World("Entity not found".to_string()))?;
+        let server = self
+            .server
+            .upgrade()
+            .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+        let inventory = self.player.inventory();
+        let mut stack = inventory.get_stack_in_hand(hand);
+        let handled = target.interact_with_hand(&self.player, &mut stack, hand);
+        let interacted = handled.unwrap_or_else(|| target.interact(&self.player, &mut stack));
+        if !interacted {
+            server
+                .item_registry
+                .use_on_entity(&mut stack, &self.player, target);
+        }
+        inventory.set_stack_in_hand(hand, stack);
+        Ok(())
+    }
+
+    fn use_block(&self, position: &BlockPos, hand: Hand) -> GameTestResult<()> {
+        let world = self.player.world();
+        let server = self
+            .server
+            .upgrade()
+            .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+        let block = world.get_block(position);
+        let hit = BlockHitResult {
+            face: &BlockDirection::Up,
+            cursor_pos: &pumpkin_util::math::vector3::Vector3::new(0.5, 0.5, 0.5),
+        };
+        let mut held = self.player.inventory.get_stack_in_hand(hand);
+        let slot = match hand {
+            Hand::Right => EquipmentSlot::MAIN_HAND,
+            Hand::Left => EquipmentSlot::OFF_HAND,
+        };
+        let result = server.block_registry.use_with_item(
+            block,
+            &self.player,
+            position,
+            &hit,
+            &mut held,
+            &slot,
+            &server,
+            &world,
+        );
+        let result = if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+            server
+                .block_registry
+                .on_use(block, &self.player, position, &hit, &server, &world)
+        } else {
+            result
+        };
+        self.player.inventory.set_stack_in_hand(hand, held);
+        if result.consumes_action() {
+            Ok(())
+        } else {
+            Err(GameTestError::World(format!(
+                "Block use was not handled at {position:?}"
+            )))
+        }
+    }
+
+    fn break_block(&self, position: &BlockPos) -> GameTestResult<bool> {
+        let world = self.player.world();
+        let server = self
+            .server
+            .upgrade()
+            .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+        let (block, state) = world.get_block_and_state(position);
+        let broken = world.break_block(
+            position,
+            Some(&self.player),
+            BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
+        );
+        if broken.is_some() {
+            server
+                .block_registry
+                .broken(&world, block, &self.player, position, &server, state);
+        }
+        Ok(broken.is_some())
+    }
+
+    fn set_sprinting(&self, sprinting: bool) -> GameTestResult<()> {
+        let server = self
+            .server
+            .upgrade()
+            .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+        self.player.apply_sprint_input(&server, sprinting);
+        Ok(())
+    }
+
+    fn is_sprinting(&self) -> bool {
+        self.player.get_entity().is_sprinting()
+    }
+
+    fn teleport_to(
+        &self,
+        position: pumpkin_util::math::vector3::Vector3<f64>,
+    ) -> GameTestResult<()> {
+        self.player.get_entity().set_pos(position);
+        Ok(())
+    }
+
     async fn move_to(
         &self,
         position: pumpkin_util::math::vector3::Vector3<f64>,
     ) -> GameTestResult<()> {
-        if self.player.client.closed() {
+        if !self.is_connected() {
             return Err(GameTestError::World(
                 "Simulated player is disconnected".to_string(),
             ));
@@ -1265,21 +1560,23 @@ impl SimulatedPlayer for ServerSimulatedPlayer {
     }
 
     async fn disconnect(&self) -> GameTestResult<()> {
-        if !self.player.client.begin_simulated_disconnect() {
-            return Ok(());
-        }
-        if self
-            .player
-            .world()
-            .get_player_by_uuid(self.player.gameprofile.id)
-            .is_none()
-        {
+        if !self.is_connected() {
             return Ok(());
         }
         self.player.remove().await;
         if let Some(server) = self.server.upgrade() {
             server.remove_player(&self.player);
         }
+        Ok(())
+    }
+
+    async fn look_at_entity(
+        &self,
+        entity: &std::sync::Arc<dyn GameTestEntity>,
+    ) -> GameTestResult<()> {
+        self.player
+            .look_at_entity(entity.entity_id())
+            .map_err(|err| GameTestError::World(format!("Failed to look at entity: {err}")))?;
         Ok(())
     }
 }
@@ -1446,6 +1743,10 @@ fn release_forced_game_test_chunk(world: &Arc<World>, chunk: Vector2<i32>) {
 
 #[async_trait]
 impl GameTestWorld for ServerGameTestWorld {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn environment_world_key(&self) -> usize {
         Arc::as_ptr(&self.world) as usize
     }
@@ -1650,6 +1951,19 @@ impl GameTestWorld for ServerGameTestWorld {
         Ok(())
     }
 
+    async fn set_test_instance_size(
+        &self,
+        position: &BlockPos,
+        size: [i32; 3],
+    ) -> GameTestResult<()> {
+        let entity = self.test_instance_block_entity(position)?;
+        let mut data = entity.read_data();
+        data.size = size;
+        entity.set_data(&data);
+        self.sync_block_entity(entity);
+        Ok(())
+    }
+
     async fn set_test_instance_success(&self, position: &BlockPos) -> GameTestResult<()> {
         let entity = self.test_instance_block_entity(position)?;
         entity.clear_error_markers();
@@ -1713,7 +2027,7 @@ impl GameTestWorld for ServerGameTestWorld {
         &self,
         entity_name: &str,
         position: pumpkin_util::math::vector3::Vector3<f64>,
-    ) -> GameTestResult<()> {
+    ) -> GameTestResult<Arc<dyn GameTestEntity>> {
         let normalized = entity_name
             .strip_prefix("minecraft:")
             .unwrap_or(entity_name);
@@ -1732,8 +2046,10 @@ impl GameTestWorld for ServerGameTestWorld {
                 .persistence_required
                 .store(true, Ordering::Relaxed);
         }
-        self.world.spawn_entity(entity);
-        Ok(())
+        if !self.world.spawn_entity(entity.clone()) {
+            return Err(GameTestError::World("Could not spawn entity".to_string()));
+        }
+        Ok(Arc::new(ServerGameTestEntity { entity }))
     }
 
     async fn spawn_simulated_player(

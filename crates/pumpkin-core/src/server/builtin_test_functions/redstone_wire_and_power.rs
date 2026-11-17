@@ -8,8 +8,6 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 fn ew_wire_state() -> BlockStateId {
     let mut props = RedstoneWireLikeProperties::default(&Block::REDSTONE_WIRE);
     props.east = EastRedstone::Side;
@@ -35,7 +33,8 @@ async fn wire_power(test: &GameTestContext, pos: &BlockPos) -> u8 {
 pub(super) async fn test_redstone_wire_attenuation_1_to_4(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 7, 3).await?;
+    test.set_dimensions(7, 4, 4).await?;
+    test.build_floor(7, 3, &Block::STONE).await?;
     let wire = ew_wire_state();
     for x in 2..=5 {
         test.set_block(&BlockPos::new(x, 1, 1), wire).await?;
@@ -57,7 +56,8 @@ pub(super) async fn test_redstone_wire_attenuation_1_to_4(
 pub(super) async fn test_redstone_wire_attenuation_5_to_8(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 10, 3).await?;
+    test.set_dimensions(10, 4, 4).await?;
+    test.build_floor(10, 3, &Block::STONE).await?;
     let wire = ew_wire_state();
     for x in 1..=8 {
         test.set_block(&BlockPos::new(x, 1, 1), wire).await?;
@@ -79,7 +79,8 @@ pub(super) async fn test_redstone_wire_attenuation_5_to_8(
 pub(super) async fn test_redstone_wire_attenuation_9_to_12(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 8).await?;
+    test.set_dimensions(8, 4, 8).await?;
+    test.build_floor(8, 8, &Block::STONE).await?;
     // Snake path inside 8x8: (1,1)->(6,1) [6 blocks: 15..10], (6,2)->(6,7) [6 blocks: 9..4]
     for x in 1..=6 {
         test.set_block_default(&BlockPos::new(x, 1, 1), &Block::REDSTONE_WIRE)
@@ -106,7 +107,8 @@ pub(super) async fn test_redstone_wire_attenuation_9_to_12(
 pub(super) async fn test_redstone_wire_attenuation_13_to_15(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 8).await?;
+    test.set_dimensions(8, 4, 8).await?;
+    test.build_floor(8, 8, &Block::STONE).await?;
     // Snake path of 16 wires: (1..=6, 1) [6: 15..10], (6, 2..=6) [5: 9..5], (5..=1, 6) [5: 4..0]
     for x in 1..=6 {
         test.set_block_default(&BlockPos::new(x, 1, 1), &Block::REDSTONE_WIRE)
@@ -137,7 +139,8 @@ pub(super) async fn test_redstone_wire_attenuation_13_to_15(
 pub(super) async fn test_redstone_wire_corner_north_east(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 4, 6).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     for pos in [
         BlockPos::new(1, 1, 3),
         BlockPos::new(1, 1, 2),
@@ -163,7 +166,8 @@ pub(super) async fn test_redstone_wire_corner_north_east(
 pub(super) async fn test_redstone_wire_corner_south_west(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 4, 6).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     for pos in [
         BlockPos::new(3, 1, 1),
         BlockPos::new(3, 1, 2),
@@ -189,7 +193,8 @@ pub(super) async fn test_redstone_wire_corner_south_west(
 pub(super) async fn test_redstone_wire_t_junction_split(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     for pos in [
         BlockPos::new(2, 1, 1),
         BlockPos::new(2, 1, 2),
@@ -215,7 +220,8 @@ pub(super) async fn test_redstone_wire_t_junction_split(
 pub(super) async fn test_redstone_wire_cross_junction_four_way(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     for pos in [
         BlockPos::new(2, 1, 1),
         BlockPos::new(2, 1, 2),
@@ -242,7 +248,8 @@ pub(super) async fn test_redstone_wire_cross_junction_four_way(
 }
 
 pub(super) async fn test_redstone_wire_step_up_climb(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 4).await?;
+    test.set_dimensions(6, 5, 4).await?;
+    test.build_floor(6, 4, &Block::STONE).await?;
     test.set_block_default(&BlockPos::new(3, 1, 1), &Block::STONE)
         .await?;
     test.set_block_default(&BlockPos::new(4, 1, 1), &Block::STONE)
@@ -268,7 +275,8 @@ pub(super) async fn test_redstone_wire_step_up_climb(test: GameTestContext) -> G
 }
 
 pub(super) async fn test_redstone_wire_step_down_drop(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 4).await?;
+    test.set_dimensions(6, 5, 4).await?;
+    test.build_floor(6, 4, &Block::STONE).await?;
     test.set_block_default(&BlockPos::new(1, 1, 1), &Block::STONE)
         .await?;
     test.set_block_default(&BlockPos::new(2, 1, 1), &Block::STONE)
@@ -296,7 +304,8 @@ pub(super) async fn test_redstone_wire_step_down_drop(test: GameTestContext) -> 
 pub(super) async fn test_redstone_wire_dual_sources_max_power(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 7, 3).await?;
+    test.set_dimensions(7, 4, 4).await?;
+    test.build_floor(7, 3, &Block::STONE).await?;
     let wire = ew_wire_state();
     for x in 1..=5 {
         test.set_block(&BlockPos::new(x, 1, 1), wire).await?;
@@ -320,7 +329,8 @@ pub(super) async fn test_redstone_wire_dual_sources_max_power(
 pub(super) async fn test_redstone_wire_source_removal_deenergizes(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 3).await?;
+    test.set_dimensions(6, 4, 4).await?;
+    test.build_floor(6, 3, &Block::STONE).await?;
     let wire = ew_wire_state();
     for x in 2..=4 {
         test.set_block(&BlockPos::new(x, 1, 1), wire).await?;
@@ -347,7 +357,8 @@ pub(super) async fn test_redstone_wire_source_removal_deenergizes(
 pub(super) async fn test_redstone_wire_repeater_reboosts_signal(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 7).await?;
+    test.set_dimensions(5, 4, 8).await?;
+    test.build_floor(3, 7, &Block::STONE).await?;
     let wire = ns_wire_state();
     for z in 1..=3 {
         test.set_block(&BlockPos::new(1, 1, z), wire).await?;
@@ -379,7 +390,8 @@ pub(super) async fn test_redstone_wire_repeater_reboosts_signal(
 pub(super) async fn test_redstone_wire_strong_power_through_stone(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 6).await?;
+    test.set_dimensions(5, 4, 6).await?;
+    test.build_floor(3, 6, &Block::STONE).await?;
     let mut rep = RepeaterLikeProperties::default(&Block::REPEATER);
     rep.facing = HorizontalFacing::North;
     rep.delay = 1;

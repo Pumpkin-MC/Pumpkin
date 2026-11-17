@@ -9,12 +9,11 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_cobblestone_wall_connects_north_south_straight(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let n = BlockPos::new(2, 1, 1);
     let c = BlockPos::new(2, 1, 2);
     let s = BlockPos::new(2, 1, 3);
@@ -38,7 +37,8 @@ pub(super) async fn test_cobblestone_wall_connects_north_south_straight(
 pub(super) async fn test_cobblestone_wall_corner_raises_center_post(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let c = BlockPos::new(2, 1, 2);
     test.set_block_default(&c, &Block::COBBLESTONE_WALL).await?;
     test.set_block_default(&BlockPos::new(2, 1, 1), &Block::COBBLESTONE_WALL)
@@ -58,7 +58,8 @@ pub(super) async fn test_cobblestone_wall_corner_raises_center_post(
 pub(super) async fn test_cobblestone_wall_tall_side_under_full_block(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let c = BlockPos::new(2, 1, 2);
     test.set_block_default(&c, &Block::COBBLESTONE_WALL).await?;
     test.set_block_default(&BlockPos::new(2, 2, 2), &Block::STONE)
@@ -78,7 +79,8 @@ pub(super) async fn test_cobblestone_wall_tall_side_under_full_block(
 pub(super) async fn test_wall_connects_to_iron_bars_and_glass_pane(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let wall = BlockPos::new(2, 1, 2);
     test.set_block_default(&wall, &Block::COBBLESTONE_WALL)
         .await?;
@@ -97,7 +99,8 @@ pub(super) async fn test_wall_connects_to_iron_bars_and_glass_pane(
 }
 
 pub(super) async fn test_wall_connects_to_fence_gate(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let wall = BlockPos::new(2, 1, 2);
     let gate = BlockPos::new(3, 1, 2);
     test.set_block_default(&wall, &Block::COBBLESTONE_WALL)
@@ -118,7 +121,8 @@ pub(super) async fn test_wall_connects_to_fence_gate(test: GameTestContext) -> G
 pub(super) async fn test_stairs_inner_left_and_right_corner_shapes(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(6, 5, &Block::STONE).await?;
     let main = BlockPos::new(2, 1, 2);
     let front = BlockPos::new(2, 1, 3);
 
@@ -159,7 +163,8 @@ pub(super) async fn test_stairs_inner_left_and_right_corner_shapes(
 pub(super) async fn test_stairs_outer_left_and_right_corner_shapes(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(6, 5, &Block::STONE).await?;
     let main = BlockPos::new(2, 1, 2);
     let back = BlockPos::new(2, 1, 1);
 
@@ -200,7 +205,8 @@ pub(super) async fn test_stairs_outer_left_and_right_corner_shapes(
 pub(super) async fn test_stairs_revert_to_straight_when_neighbor_removed(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let main = BlockPos::new(2, 1, 2);
     let back = BlockPos::new(2, 1, 1);
 
@@ -229,7 +235,8 @@ pub(super) async fn test_stairs_revert_to_straight_when_neighbor_removed(
 pub(super) async fn test_dirt_path_turns_to_dirt_under_solid_block(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(4, 4, 4).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let path = BlockPos::new(1, 1, 1);
     let above = BlockPos::new(1, 2, 1);
     test.set_block_default(&path, &Block::DIRT_PATH).await?;
@@ -247,7 +254,8 @@ pub(super) async fn test_dirt_path_turns_to_dirt_under_solid_block(
 pub(super) async fn test_farmland_turns_to_dirt_under_solid_block(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(4, 4, 4).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let farm = BlockPos::new(1, 1, 1);
     let above = BlockPos::new(1, 2, 1);
     test.set_block_default(&farm, &Block::FARMLAND).await?;
@@ -265,7 +273,8 @@ pub(super) async fn test_farmland_turns_to_dirt_under_solid_block(
 pub(super) async fn test_campfire_signal_fire_over_hay_block(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let base = BlockPos::new(1, 1, 1);
     let fire = BlockPos::new(1, 2, 1);
     test.set_block_default(&fire, &Block::CAMPFIRE).await?;
@@ -290,7 +299,8 @@ pub(super) async fn test_campfire_signal_fire_over_hay_block(
 pub(super) async fn test_campfire_waterlogged_extinguishes_lit(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(4, 4, 4).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let fire = BlockPos::new(1, 1, 1);
     let mut props = CampfireLikeProperties::default(&Block::CAMPFIRE);
     props.lit = true;

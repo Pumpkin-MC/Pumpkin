@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_6x4x6",
+  "structure": "minecraft:empty",
   "function": "pumpkin:piston_and_sticky_piston",
   "max_ticks": 40,
   "setup_ticks": 0

@@ -2,10 +2,9 @@ use pumpkin_data::{Block, fluid::FluidProperties};
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_water_lava_interactions(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 7, 5).await?;
+    test.set_dimensions(7, 4, 5).await?;
+    test.build_floor(7, 5, &Block::STONE).await?;
 
     for x in 0..7 {
         for z in 0..5 {
@@ -61,7 +60,8 @@ pub(super) async fn test_water_lava_interactions(test: GameTestContext) -> GameT
 }
 
 pub(super) async fn test_sponge_absorbs_water(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     for x in 0..5 {
         for z in 0..5 {

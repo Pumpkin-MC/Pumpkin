@@ -136,7 +136,7 @@ pub fn decrement_pending_bytes(pending_bytes: &AtomicUsize, bytes: usize) {
 /// Server-side connection state for a simulated player.
 #[derive(Default)]
 pub struct SimulatedClient {
-    disconnect_started: AtomicBool,
+    list_visible: AtomicBool,
 }
 
 /// The connection used by a player.
@@ -153,10 +153,16 @@ impl ClientPlatform {
         Self::Simulated(SimulatedClient::default())
     }
 
-    pub(crate) fn begin_simulated_disconnect(&self) -> bool {
+    pub(crate) fn visible_in_list(&self) -> bool {
         match self {
-            Self::Simulated(client) => !client.disconnect_started.swap(true, Ordering::AcqRel),
-            _ => false,
+            Self::Simulated(client) => client.list_visible.load(Ordering::Relaxed),
+            Self::Java(_) | Self::Bedrock(_) => true,
+        }
+    }
+
+    pub(crate) fn set_simulated_list_visible(&self, visible: bool) {
+        if let Self::Simulated(client) = self {
+            client.list_visible.store(visible, Ordering::Relaxed);
         }
     }
 
@@ -193,7 +199,7 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.is_closed(),
             Self::Bedrock(bedrock) => bedrock.is_closed(),
-            Self::Simulated(client) => client.disconnect_started.load(Ordering::Acquire),
+            Self::Simulated(_) => false,
         }
     }
 

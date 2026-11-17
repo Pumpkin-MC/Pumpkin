@@ -5,8 +5,6 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 fn piston_state(block: &Block, facing: Facing) -> BlockStateId {
     let mut props = StickyPistonLikeProperties::default(block);
     props.facing = facing;
@@ -17,7 +15,8 @@ fn piston_state(block: &Block, facing: Facing) -> BlockStateId {
 pub(super) async fn test_piston_pushes_upward_and_retracts(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 6, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let piston = BlockPos::new(1, 1, 1);
     let cargo = BlockPos::new(1, 2, 1);
     let dest = BlockPos::new(1, 3, 1);
@@ -47,7 +46,8 @@ pub(super) async fn test_piston_pushes_upward_and_retracts(
 pub(super) async fn test_piston_pushes_downward_and_retracts(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 6, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let piston = BlockPos::new(1, 4, 1);
     let cargo = BlockPos::new(1, 3, 1);
     let dest = BlockPos::new(1, 2, 1);
@@ -71,7 +71,8 @@ pub(super) async fn test_piston_pushes_downward_and_retracts(
 pub(super) async fn test_piston_pushes_north_and_south(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 6).await?;
+    test.set_dimensions(6, 4, 6).await?;
+    test.build_floor(5, 6, &Block::STONE).await?;
     let p_north = BlockPos::new(1, 1, 3);
     let p_south = BlockPos::new(3, 1, 2);
 
@@ -102,7 +103,8 @@ pub(super) async fn test_piston_pushes_north_and_south(
 }
 
 pub(super) async fn test_piston_pushes_west_and_east(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 5).await?;
+    test.set_dimensions(6, 4, 6).await?;
+    test.build_floor(6, 5, &Block::STONE).await?;
     let p_west = BlockPos::new(3, 1, 1);
     let p_east = BlockPos::new(2, 1, 3);
 
@@ -135,7 +137,8 @@ pub(super) async fn test_piston_pushes_west_and_east(test: GameTestContext) -> G
 pub(super) async fn test_sticky_piston_pulls_upward_and_downward(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 6, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let piston = BlockPos::new(1, 1, 1);
     let cargo = BlockPos::new(1, 2, 1);
     let pushed = BlockPos::new(1, 3, 1);
@@ -168,7 +171,8 @@ pub(super) async fn test_sticky_piston_pulls_upward_and_downward(
 pub(super) async fn test_piston_pushes_multi_block_row(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 3).await?;
+    test.set_dimensions(8, 4, 5).await?;
+    test.build_floor(8, 3, &Block::STONE).await?;
     let piston = BlockPos::new(1, 1, 1);
     test.set_block(&piston, piston_state(&Block::PISTON, Facing::East))
         .await?;
@@ -193,7 +197,8 @@ pub(super) async fn test_piston_pushes_multi_block_row(
 }
 
 pub(super) async fn test_piston_blocked_by_obsidian(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 3).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 3, &Block::STONE).await?;
     let piston = BlockPos::new(1, 1, 1);
     let obsidian = BlockPos::new(2, 1, 1);
     test.set_block(&piston, piston_state(&Block::PISTON, Facing::East))
@@ -215,7 +220,8 @@ pub(super) async fn test_piston_blocked_by_obsidian(test: GameTestContext) -> Ga
 }
 
 pub(super) async fn test_piston_blocked_by_bedrock(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 3).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 3, &Block::STONE).await?;
     let piston = BlockPos::new(1, 1, 1);
     let bedrock = BlockPos::new(2, 1, 1);
     test.set_block(&piston, piston_state(&Block::PISTON, Facing::East))
@@ -239,7 +245,8 @@ pub(super) async fn test_piston_blocked_by_bedrock(test: GameTestContext) -> Gam
 pub(super) async fn test_piston_destroys_fragile_torch_and_moss(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let p1 = BlockPos::new(1, 1, 1);
     let torch = BlockPos::new(2, 1, 1);
     let p2 = BlockPos::new(1, 1, 2);
@@ -272,7 +279,8 @@ pub(super) async fn test_piston_destroys_fragile_torch_and_moss(
 pub(super) async fn test_sticky_piston_leaves_obsidian_unmoved(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 3).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(5, 3, &Block::STONE).await?;
     let piston = BlockPos::new(1, 1, 1);
     let obsidian = BlockPos::new(3, 1, 1);
     let power = BlockPos::new(1, 2, 1);
@@ -300,7 +308,8 @@ pub(super) async fn test_sticky_piston_leaves_obsidian_unmoved(
 pub(super) async fn test_piston_pushes_redstone_block_powers_lamp(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 4).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(6, 4, &Block::STONE).await?;
     let piston = BlockPos::new(1, 1, 1);
     let rs_block = BlockPos::new(2, 1, 1);
     let lamp = BlockPos::new(4, 1, 1);
@@ -330,7 +339,8 @@ pub(super) async fn test_piston_pushes_redstone_block_powers_lamp(
 pub(super) async fn test_sticky_piston_pulls_redstone_block_cuts_power(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 4).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(6, 4, &Block::STONE).await?;
     let piston = BlockPos::new(1, 1, 1);
     let rs_start = BlockPos::new(2, 1, 1);
     let lamp = BlockPos::new(4, 1, 1);

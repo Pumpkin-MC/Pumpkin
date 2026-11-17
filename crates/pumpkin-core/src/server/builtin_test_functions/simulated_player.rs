@@ -1,13 +1,11 @@
+use pumpkin_data::Block;
 use pumpkin_data::{item::Item, item_stack::ItemStack};
-use pumpkin_gametest::{GameTestContext, GameTestError, GameTestResult};
+use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::{GameMode, Hand, math::vector3::Vector3};
 
-use crate::{entity::EntityBase, server::server_test_manager::ServerSimulatedPlayer};
-
-use super::build_stone_floor;
-
 pub(super) async fn test_simulated_player_lifecycle(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let name = "GameTestPlayer";
     let start = test.absolute_vec(Vector3::new(1.5, 1.0, 1.5));
@@ -53,8 +51,9 @@ pub(super) async fn test_simulated_player_lifecycle(test: GameTestContext) -> Ga
 }
 
 pub(super) async fn test_simulated_player_actions(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
-    let simulated = test
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
+    let player = test
         .spawn_simulated_player(
             "ActionTester",
             Vector3::new(2.5, 1.0, 2.5),
@@ -64,46 +63,35 @@ pub(super) async fn test_simulated_player_actions(test: GameTestContext) -> Game
 
     let main_hand = ItemStack::new(2, &Item::DIAMOND);
     let off_hand = ItemStack::new(1, &Item::SHIELD);
-    simulated.set_selected_hotbar_slot(4)?;
-    simulated.set_held_item(Hand::Right, main_hand.clone())?;
-    simulated.set_held_item(Hand::Left, off_hand.clone())?;
+    player.set_selected_hotbar_slot(4)?;
+    player.set_held_item(Hand::Right, main_hand.clone())?;
+    player.set_held_item(Hand::Left, off_hand.clone())?;
     test.assert_true(
-        simulated.selected_hotbar_slot() == 4
-            && simulated.held_item(Hand::Right).are_equal(&main_hand)
-            && simulated.held_item(Hand::Left).are_equal(&off_hand),
+        player.selected_hotbar_slot() == 4
+            && player.held_item(Hand::Right).are_equal(&main_hand)
+            && player.held_item(Hand::Left).are_equal(&off_hand),
         "Simulated player did not equip the requested items",
     )?;
-    simulated.set_selected_hotbar_slot(0)?;
+    player.set_selected_hotbar_slot(0)?;
     test.assert_true(
-        simulated.held_item(Hand::Right).is_empty()
-            && simulated.held_item(Hand::Left).are_equal(&off_hand),
+        player.held_item(Hand::Right).is_empty()
+            && player.held_item(Hand::Left).are_equal(&off_hand),
         "Changing hotbar slot did not change the held item",
     )?;
-    simulated.set_selected_hotbar_slot(4)?;
+    player.set_selected_hotbar_slot(4)?;
     test.assert_true(
-        simulated.held_item(Hand::Right).are_equal(&main_hand),
+        player.held_item(Hand::Right).are_equal(&main_hand),
         "Returning to the hotbar slot did not restore its item",
     )?;
 
-    let player = simulated
-        .as_any()
-        .downcast_ref::<ServerSimulatedPlayer>()
-        .ok_or_else(|| GameTestError::World("Expected server simulated player".to_string()))?
-        .player();
-    let server = player
-        .world()
-        .server
-        .upgrade()
-        .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
-
-    player.apply_sprint_input(&server, true);
+    player.set_sprinting(true)?;
     test.assert_true(
-        player.get_entity().is_sprinting(),
+        player.is_sprinting(),
         "Starting sprint did not update player state",
     )?;
-    player.apply_sprint_input(&server, false);
+    player.set_sprinting(false)?;
     test.assert_true(
-        !player.get_entity().is_sprinting(),
+        !player.is_sprinting(),
         "Stopping sprint did not update player state",
     )?;
     test.succeed();

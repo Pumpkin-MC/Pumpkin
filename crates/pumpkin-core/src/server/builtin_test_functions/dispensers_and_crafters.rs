@@ -5,10 +5,9 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_dispenser_and_dropper(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 6).await?;
+    test.set_dimensions(6, 4, 6).await?;
+    test.build_floor(6, 6, &Block::STONE).await?;
 
     let dropper_pos = BlockPos::new(1, 1, 1);
     let chest_pos = BlockPos::new(2, 1, 1);
@@ -79,7 +78,8 @@ pub(super) async fn test_dispenser_and_dropper(test: GameTestContext) -> GameTes
 }
 
 pub(super) async fn test_crafter_crafts_into_chest(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let crafter_pos = BlockPos::new(1, 1, 2);
     let chest_pos = BlockPos::new(2, 1, 2);

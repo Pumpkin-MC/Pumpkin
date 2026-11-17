@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_3x6x3",
+  "structure": "minecraft:empty",
   "function": "pumpkin:falling_sand_lands",
   "max_ticks": 60,
   "setup_ticks": 0

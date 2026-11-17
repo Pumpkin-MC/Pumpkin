@@ -9,8 +9,6 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use super::build_stone_floor;
-
 fn ns_wire() -> BlockStateId {
     let mut props = RedstoneWireLikeProperties::default(&Block::REDSTONE_WIRE);
     props.north = NorthRedstone::Side;
@@ -21,7 +19,8 @@ fn ns_wire() -> BlockStateId {
 }
 
 pub(super) async fn test_oak_button_30_tick_pulse(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let btn_pos = BlockPos::new(1, 1, 1);
     let wire_pos = BlockPos::new(1, 1, 2);
     let mut btn = LeverLikeProperties::default(&Block::OAK_BUTTON);
@@ -60,7 +59,8 @@ pub(super) async fn test_oak_button_30_tick_pulse(test: GameTestContext) -> Game
 pub(super) async fn test_polished_blackstone_button_20_tick_pulse(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let btn_pos = BlockPos::new(1, 1, 1);
     let wire_pos = BlockPos::new(1, 1, 2);
     let mut btn = LeverLikeProperties::default(&Block::POLISHED_BLACKSTONE_BUTTON);
@@ -96,7 +96,8 @@ pub(super) async fn test_polished_blackstone_button_20_tick_pulse(
 pub(super) async fn test_stone_button_floor_mount_strong_power(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let support = BlockPos::new(2, 2, 2);
     let btn_pos = BlockPos::new(2, 3, 2);
     let wire_pos = BlockPos::new(2, 2, 3);
@@ -124,7 +125,8 @@ pub(super) async fn test_stone_button_floor_mount_strong_power(
 pub(super) async fn test_stone_button_ceiling_mount_strong_power(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let ceiling = BlockPos::new(2, 2, 2);
     let btn_pos = BlockPos::new(2, 1, 2);
     let wire_pos = BlockPos::new(2, 3, 2);
@@ -150,7 +152,8 @@ pub(super) async fn test_stone_button_ceiling_mount_strong_power(
 pub(super) async fn test_stone_button_wall_mount_strong_power(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let wall = BlockPos::new(2, 1, 2);
     let btn_pos = BlockPos::new(2, 1, 1);
     let wire_pos = BlockPos::new(2, 1, 3);
@@ -176,7 +179,8 @@ pub(super) async fn test_stone_button_wall_mount_strong_power(
 pub(super) async fn test_button_breaks_when_support_removed(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let wall = BlockPos::new(2, 1, 2);
     let btn_pos = BlockPos::new(2, 1, 1);
     test.set_block_default(&wall, &Block::STONE).await?;
@@ -196,7 +200,8 @@ pub(super) async fn test_button_breaks_when_support_removed(
 pub(super) async fn test_lever_wall_mount_strong_power(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let wall = BlockPos::new(2, 1, 2);
     let lever_pos = BlockPos::new(2, 1, 1);
     let wire_pos = BlockPos::new(2, 1, 3);
@@ -223,7 +228,8 @@ pub(super) async fn test_lever_wall_mount_strong_power(
 pub(super) async fn test_lever_ceiling_mount_strong_power(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let ceiling = BlockPos::new(2, 2, 2);
     let lever_pos = BlockPos::new(2, 1, 2);
     let wire_pos = BlockPos::new(2, 3, 2);
@@ -250,7 +256,8 @@ pub(super) async fn test_lever_ceiling_mount_strong_power(
 pub(super) async fn test_lever_breaks_when_support_removed(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let wall = BlockPos::new(2, 1, 2);
     let lever_pos = BlockPos::new(2, 1, 1);
     test.set_block_default(&wall, &Block::STONE).await?;
@@ -270,7 +277,8 @@ pub(super) async fn test_lever_breaks_when_support_removed(
 pub(super) async fn test_weighted_pressure_plate_light_scaling(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let plate_pos = BlockPos::new(2, 1, 2);
     test.set_block_default(&plate_pos, &Block::LIGHT_WEIGHTED_PRESSURE_PLATE)
         .await?;
@@ -298,7 +306,8 @@ pub(super) async fn test_weighted_pressure_plate_light_scaling(
 pub(super) async fn test_weighted_pressure_plate_heavy_scaling(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let plate_pos = BlockPos::new(2, 1, 2);
     test.set_block_default(&plate_pos, &Block::HEAVY_WEIGHTED_PRESSURE_PLATE)
         .await?;
@@ -325,7 +334,8 @@ pub(super) async fn test_weighted_pressure_plate_heavy_scaling(
 pub(super) async fn test_wooden_pressure_plate_item_activation(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let oak_plate = BlockPos::new(2, 1, 2);
     test.set_block_default(&oak_plate, &Block::OAK_PRESSURE_PLATE)
         .await?;

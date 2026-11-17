@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_3x4x10",
+  "structure": "minecraft:empty",
   "function": "pumpkin:powered_rail_propagation",
   "max_ticks": 20,
   "setup_ticks": 0

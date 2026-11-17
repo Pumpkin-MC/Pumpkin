@@ -86,6 +86,19 @@ impl TestStructureInstance {
     }
 
     #[must_use]
+    pub const fn with_source_size(self, source_size: [i32; 3]) -> Self {
+        let rotated = self
+            .rotation
+            .as_block_rotation()
+            .transform_size(Vector3::new(source_size[0], source_size[1], source_size[2]));
+        Self {
+            source_size,
+            size: [rotated.x, rotated.y, rotated.z],
+            ..self
+        }
+    }
+
+    #[must_use]
     pub const fn transform(&self, relative: &BlockPos) -> BlockPos {
         let transformed = self.rotation.as_block_rotation().transform_pos(
             Vector3::new(relative.0.x, relative.0.y, relative.0.z),
@@ -384,6 +397,43 @@ pub async fn remove_barriers(
         Ok(())
     })
     .await
+}
+
+/// Clears newly included blocks and rebuilds the barrier shell around the larger area.
+pub async fn expand_structure(
+    world: &dyn GameTestWorld,
+    old: &TestStructureInstance,
+    new: &TestStructureInstance,
+    sky_access: bool,
+) -> GameTestResult<()> {
+    remove_barriers(world, old, sky_access).await?;
+    let old_origin = old.origin();
+    let old_size = old.size();
+    let origin = new.origin();
+    let size = new.size();
+    for x in origin.0.x..origin.0.x + size[0] {
+        for y in origin.0.y..origin.0.y + size[1] {
+            for z in origin.0.z..origin.0.z + size[2] {
+                if x >= old_origin.0.x
+                    && x < old_origin.0.x + old_size[0]
+                    && y >= old_origin.0.y
+                    && y < old_origin.0.y + old_size[1]
+                    && z >= old_origin.0.z
+                    && z < old_origin.0.z + old_size[2]
+                {
+                    continue;
+                }
+                world
+                    .set_block_state(
+                        &BlockPos::new(x, y, z),
+                        Block::AIR.default_state.id,
+                        clear_flags(),
+                    )
+                    .await?;
+            }
+        }
+    }
+    encase_structure(world, new, sky_access).await
 }
 
 /// Vanilla `GameTestInfo::succeed` discards non-player entities inside the

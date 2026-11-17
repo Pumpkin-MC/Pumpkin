@@ -1,5 +1,6 @@
 mod allay_interaction;
 mod block_tuning_and_invert;
+mod brewing_stand;
 mod bubble_columns;
 mod buttons_levers_plates_variants;
 mod commands_and_entities_extended;
@@ -41,9 +42,7 @@ mod world_interaction;
 
 use std::sync::Once;
 
-use pumpkin_data::Block;
-use pumpkin_gametest::{GameTestContext, GameTestResult, register_test_function};
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_gametest::register_test_function;
 
 static REGISTER_BUILTIN_TEST_FUNCTIONS: Once = Once::new();
 
@@ -73,6 +72,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:lever_toggles_power", redstone_inputs::test_lever_toggles_power);
         register_test_function("pumpkin:pressure_plate_entity_activation", redstone_inputs::test_pressure_plate_entity_activation);
         register_test_function("pumpkin:target_block_projectile_hit", target_and_projectiles::test_target_block_projectile_hit);
+        register_test_function("pumpkin:arrow_falls_onto_block_below", target_and_projectiles::test_arrow_falls_onto_block_below);
         register_test_function("pumpkin:copper_bulb_toggles_and_comparator", redstone_lamps_and_bulbs::test_copper_bulb_toggles_and_comparator);
         register_test_function("pumpkin:redstone_lamp_delayed_off", redstone_lamps_and_bulbs::test_redstone_lamp_delayed_off);
         register_test_function("pumpkin:piston_and_sticky_piston", pistons::test_piston_and_sticky_piston);
@@ -89,6 +89,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:hopper_transfers_to_chest", containers_and_commands::test_hopper_transfers_to_chest);
         register_test_function("pumpkin:tnt_redstone_ignites", containers_and_commands::test_tnt_redstone_ignites);
         register_test_function("pumpkin:furnace_ignites_and_smelts", furnace_smelting::test_furnace_ignites_and_smelts);
+        register_test_function("pumpkin:brewing_returns_glass_bottle_from_dragon_breath", brewing_stand::test_brewing_returns_glass_bottle_from_dragon_breath);
         register_test_function("pumpkin:powered_rail_propagation", rails::test_powered_rail_propagation);
         register_test_function("pumpkin:activator_rail_propagation", rails::test_activator_rail_propagation);
         register_test_function("pumpkin:detector_rail_minecart", rails::test_detector_rail_minecart);
@@ -284,18 +285,4 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:different_item_entities_do_not_merge", commands_and_entities_extended::test_item_entities_different_types_do_not_merge);
         register_test_function("pumpkin:item_entities_stack_up_to_combined_count", commands_and_entities_extended::test_falling_anvil_lands_and_preserves_block);
     });
-}
-
-pub(super) async fn build_stone_floor(
-    test: &GameTestContext,
-    width: i32,
-    depth: i32,
-) -> GameTestResult<()> {
-    for x in 0..width {
-        for z in 0..depth {
-            test.set_block_default(&BlockPos::new(x, 0, z), &Block::STONE)
-                .await?;
-        }
-    }
-    Ok(())
 }

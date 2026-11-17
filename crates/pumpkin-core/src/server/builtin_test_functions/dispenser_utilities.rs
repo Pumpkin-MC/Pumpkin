@@ -7,12 +7,11 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_dispenser_honeycomb_beehive_and_shulker(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 6).await?;
+    test.set_dimensions(5, 4, 6).await?;
+    test.build_floor(5, 6, &Block::STONE).await?;
 
     let mut east_dispenser = DispenserLikeProperties::default(&Block::DISPENSER);
     east_dispenser.facing = Facing::East;

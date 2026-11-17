@@ -2,10 +2,9 @@ use pumpkin_data::Block;
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_snow_golem_pattern_spawns(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let base_pos = BlockPos::new(2, 1, 2);
     let mid_pos = BlockPos::new(2, 2, 2);
@@ -27,7 +26,8 @@ pub(super) async fn test_snow_golem_pattern_spawns(test: GameTestContext) -> Gam
 }
 
 pub(super) async fn test_iron_golem_pattern_spawns(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let base_pos = BlockPos::new(2, 1, 2);
     let mid_pos = BlockPos::new(2, 2, 2);
@@ -55,7 +55,8 @@ pub(super) async fn test_iron_golem_pattern_spawns(test: GameTestContext) -> Gam
 }
 
 pub(super) async fn test_wither_pattern_spawns(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let base_pos = BlockPos::new(2, 1, 2);
     let mid_pos = BlockPos::new(2, 2, 2);

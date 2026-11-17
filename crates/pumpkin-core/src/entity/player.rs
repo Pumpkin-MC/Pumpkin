@@ -1088,6 +1088,26 @@ impl Player {
         }
     }
 
+    pub fn look_at_entity(&self, entity_id: i32) -> Result<(), &'static str> {
+        let target = self
+            .world()
+            .get_entity_by_id(entity_id)
+            .ok_or("Entity not found")?;
+        let entity = self.get_entity();
+        let delta = target.get_eye_pos() - entity.get_eye_pos();
+        let yaw = (delta.z.atan2(delta.x) - std::f64::consts::FRAC_PI_2).to_degrees() as f32;
+        let pitch = -delta.y.atan2(delta.x.hypot(delta.z)).to_degrees() as f32;
+        self.apply_and_broadcast_look(ClientMove {
+            position: None,
+            yaw: Some(yaw),
+            pitch: Some(pitch),
+            head_yaw: Some(yaw),
+            on_ground: entity.on_ground.load(Ordering::Relaxed),
+            horizontal_collision: false,
+        });
+        Ok(())
+    }
+
     #[must_use]
     pub fn get_post_effects(&self) -> Vec<String> {
         self.post_effects
@@ -1300,6 +1320,9 @@ impl Player {
                 actions: &[PlayerAction::UpdateListed(listed)],
             }],
         ));
+        if matches!(self.client.as_ref(), ClientPlatform::Simulated(_)) {
+            world.broadcast_simulated_tab_list_visibility(self);
+        }
     }
 
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
@@ -1350,6 +1373,16 @@ impl Player {
                 player_color: [0; 4],
             }],
         }
+    }
+
+    /// Returns a Bedrock player-list update matching this player's tab visibility.
+    #[must_use]
+    pub fn bedrock_tab_list_update(&self) -> CPlayerList {
+        let mut packet = self.bedrock_player_list();
+        if !self.tab_list_listed.load(Ordering::Relaxed) {
+            packet.action = CPlayerList::ACTION_REMOVE;
+        }
+        packet
     }
 
     /// Bedrock remote-player spawn -> the `PlayerList` entry must precede `AddPlayer`.
@@ -5198,9 +5231,6 @@ impl Player {
                 return;
             }
             if matches!(self.client.as_ref(), ClientPlatform::Simulated(_)) {
-                if !self.client.begin_simulated_disconnect() {
-                    return;
-                }
                 let server_clone = server.clone();
                 server.spawn_task(async move {
                     player_arc.remove().await;
@@ -8210,6 +8240,12 @@ impl EntityBase for Player {
         ]
         .into_iter()
         .flatten()
+        {
+            client.try_enqueue_packet(data);
+        }
+        if matches!(self.client.as_ref(), ClientPlatform::Simulated(_))
+            && !self.tab_list_listed.load(Ordering::Relaxed)
+            && let Ok(data) = client.serialize_packet(&self.bedrock_tab_list_update())
         {
             client.try_enqueue_packet(data);
         }

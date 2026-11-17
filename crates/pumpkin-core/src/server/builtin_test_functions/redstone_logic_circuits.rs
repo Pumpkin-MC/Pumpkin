@@ -9,8 +9,6 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 fn ns_wire() -> BlockStateId {
     let mut props = RedstoneWireLikeProperties::default(&Block::REDSTONE_WIRE);
     props.north = NorthRedstone::Side;
@@ -23,7 +21,8 @@ fn ns_wire() -> BlockStateId {
 pub(super) async fn test_redstone_double_inverter_buffer(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 5, 8).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let s1 = BlockPos::new(2, 1, 2);
     let t1 = BlockPos::new(2, 2, 2);
     let s2 = BlockPos::new(2, 3, 2);
@@ -64,7 +63,8 @@ pub(super) async fn test_redstone_double_inverter_buffer(
 }
 
 pub(super) async fn test_redstone_wall_torch_inverter(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let support = BlockPos::new(1, 1, 1);
     let torch = BlockPos::new(1, 1, 2);
     let lamp = BlockPos::new(1, 1, 3);
@@ -95,7 +95,8 @@ pub(super) async fn test_redstone_wall_torch_inverter(test: GameTestContext) -> 
 }
 
 pub(super) async fn test_redstone_or_gate_two_inputs(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     for x in 1..=3 {
         test.set_block_default(&BlockPos::new(x, 1, 2), &Block::REDSTONE_WIRE)
             .await?;
@@ -134,7 +135,8 @@ pub(super) async fn test_redstone_or_gate_two_inputs(test: GameTestContext) -> G
 }
 
 pub(super) async fn test_redstone_nor_gate_two_inputs(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let gate_block = BlockPos::new(2, 1, 2);
     let torch_pos = BlockPos::new(2, 1, 3);
     let out_wire = BlockPos::new(2, 1, 4);
@@ -174,7 +176,8 @@ pub(super) async fn test_redstone_nor_gate_two_inputs(test: GameTestContext) -> 
 pub(super) async fn test_redstone_and_gate_three_torches(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let b1 = BlockPos::new(1, 1, 2);
     let b2 = BlockPos::new(3, 1, 2);
     let t1 = BlockPos::new(1, 2, 2);
@@ -228,7 +231,8 @@ pub(super) async fn test_redstone_and_gate_three_torches(
 pub(super) async fn test_redstone_nand_gate_two_torches(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let b1 = BlockPos::new(1, 1, 2);
     let b2 = BlockPos::new(3, 1, 2);
     let t1 = BlockPos::new(1, 2, 2);
@@ -284,7 +288,8 @@ pub(super) async fn test_redstone_nand_gate_two_torches(
 }
 
 pub(super) async fn test_redstone_rs_nor_latch_memory(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     // Two inverters cross-coupled or a repeater self-lock latch
     let mut rep = RepeaterLikeProperties::default(&Block::REPEATER);
     rep.facing = HorizontalFacing::North;
@@ -335,7 +340,7 @@ async fn run_repeater_delay_test(
     early_ticks: u32,
     late_ticks: u32,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 5).await?;
+    test.build_floor(3, 5, &Block::STONE).await?;
     let mut rep = RepeaterLikeProperties::default(&Block::REPEATER);
     rep.facing = HorizontalFacing::North;
     rep.delay = delay_setting;
@@ -376,25 +381,29 @@ async fn run_repeater_delay_test(
 pub(super) async fn test_redstone_repeater_delay_2_ticks(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(5, 4, 5).await?;
     run_repeater_delay_test(test, 2, 2, 4).await
 }
 
 pub(super) async fn test_redstone_repeater_delay_3_ticks(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(5, 4, 5).await?;
     run_repeater_delay_test(test, 3, 4, 4).await
 }
 
 pub(super) async fn test_redstone_repeater_delay_4_ticks(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    test.set_dimensions(5, 4, 5).await?;
     run_repeater_delay_test(test, 4, 6, 4).await
 }
 
 pub(super) async fn test_redstone_repeater_locking_holds_off(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let mut rep = RepeaterLikeProperties::default(&Block::REPEATER);
     rep.facing = HorizontalFacing::North;
     rep.delay = 1;
@@ -438,7 +447,8 @@ pub(super) async fn test_redstone_repeater_locking_holds_off(
 pub(super) async fn test_redstone_repeater_locking_holds_on(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let mut rep = RepeaterLikeProperties::default(&Block::REPEATER);
     rep.facing = HorizontalFacing::North;
     rep.delay = 1;

@@ -6,10 +6,9 @@ use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_falling_sand_lands(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 3).await?;
+    test.set_dimensions(3, 6, 3).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
 
     let spawn_pos = BlockPos::new(1, 4, 1);
     let land_pos = BlockPos::new(1, 1, 1);
@@ -25,7 +24,8 @@ pub(super) async fn test_falling_sand_lands(test: GameTestContext) -> GameTestRe
 pub(super) async fn test_command_block_chain_execution(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 4).await?;
+    test.set_dimensions(6, 4, 4).await?;
+    test.build_floor(6, 4, &Block::STONE).await?;
 
     let power_pos = BlockPos::new(1, 1, 1);
     let impulse_pos = BlockPos::new(2, 1, 1);
@@ -83,7 +83,8 @@ pub(super) async fn test_command_block_chain_execution(
 }
 
 pub(super) async fn test_hopper_transfers_to_chest(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 3).await?;
+    test.set_dimensions(3, 5, 3).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
 
     let bottom_chest = BlockPos::new(1, 1, 1);
     let hopper_pos = BlockPos::new(1, 2, 1);
@@ -111,7 +112,8 @@ pub(super) async fn test_hopper_transfers_to_chest(test: GameTestContext) -> Gam
 }
 
 pub(super) async fn test_tnt_redstone_ignites(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let tnt_pos = BlockPos::new(2, 1, 2);
     let power_pos = BlockPos::new(2, 1, 1);

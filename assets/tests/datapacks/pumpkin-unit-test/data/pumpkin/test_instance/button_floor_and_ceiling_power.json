@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_6x5x5",
+  "structure": "minecraft:empty",
   "function": "pumpkin:button_floor_and_ceiling_power",
   "max_ticks": 30,
   "setup_ticks": 0

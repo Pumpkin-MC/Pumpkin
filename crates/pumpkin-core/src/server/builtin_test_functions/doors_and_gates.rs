@@ -7,12 +7,11 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_doors_trapdoors_fence_gates_redstone(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 7, 4).await?;
+    test.set_dimensions(7, 4, 4).await?;
+    test.build_floor(7, 4, &Block::STONE).await?;
 
     let door_lower = BlockPos::new(1, 1, 1);
     let door_upper = BlockPos::new(1, 2, 1);

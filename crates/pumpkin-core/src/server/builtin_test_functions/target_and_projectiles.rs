@@ -6,12 +6,11 @@ use pumpkin_data::{
     },
 };
 use pumpkin_gametest::{GameTestContext, GameTestResult};
-use pumpkin_util::math::position::BlockPos;
-
-use super::build_stone_floor;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 pub(super) async fn test_target_block_projectile_hit(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let wire_pos = BlockPos::new(2, 1, 1);
     let target_pos = BlockPos::new(2, 1, 2);
@@ -84,40 +83,33 @@ pub(super) async fn test_target_block_projectile_hit(test: GameTestContext) -> G
 }
 
 /// An arrow stuck in a block that is broken falls and sticks in the block below it.
-pub(super) async fn test_arrow_falls_onto_block_below(
-    helper: GameTestHelper,
-) -> GameTestResult<()> {
-    build_stone_floor(&helper, 5, 5).await?;
+pub(super) async fn test_arrow_falls_onto_block_below(test: GameTestContext) -> GameTestResult<()> {
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let support_pos = BlockPos::new(2, 2, 2);
-    helper
-        .set_block_default(&support_pos, &Block::STONE)
-        .await?;
-    helper
-        .spawn_entity_at("minecraft:arrow", Vector3::new(2.5, 3.2, 2.5))
+    test.set_block_default(&support_pos, &Block::STONE).await?;
+    test.spawn_entity_at("minecraft:arrow", Vector3::new(2.5, 3.2, 2.5))
         .await?;
 
-    helper
-        .start_sequence()
+    test.start_sequence()
         .then_idle(20)
-        .then_execute(move |helper| async move {
-            helper
-                .assert_entity_present_in_box(
-                    "minecraft:arrow",
-                    BlockPos::new(0, 3, 0),
-                    BlockPos::new(5, 4, 5),
-                )
-                .await?;
-            helper.set_air(&support_pos).await
+        .then_execute(move |test| async move {
+            test.assert_entity_present_in_box(
+                "minecraft:arrow",
+                BlockPos::new(0, 3, 0),
+                BlockPos::new(5, 4, 5),
+            )
+            .await?;
+            test.set_air(&support_pos).await
         })
         .then_idle(40)
-        .then_execute(|helper| async move {
-            helper
-                .assert_entity_present_in_box(
-                    "minecraft:arrow",
-                    BlockPos::new(0, 1, 0),
-                    BlockPos::new(5, 2, 5),
-                )
-                .await
+        .then_execute(|test| async move {
+            test.assert_entity_present_in_box(
+                "minecraft:arrow",
+                BlockPos::new(0, 1, 0),
+                BlockPos::new(5, 2, 5),
+            )
+            .await
         })
         .then_succeed();
     Ok(())

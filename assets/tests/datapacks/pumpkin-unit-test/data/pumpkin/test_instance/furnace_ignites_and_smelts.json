@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_3x4x3",
+  "structure": "minecraft:empty",
   "function": "pumpkin:furnace_ignites_and_smelts",
   "max_ticks": 30,
   "setup_ticks": 0

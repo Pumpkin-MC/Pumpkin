@@ -78,7 +78,6 @@ pub enum DatapackEnablePosition {
 }
 
 pub struct DatapackManager {
-    generated_structure_root: RwLock<Option<PathBuf>>,
     loaded_packs: RwLock<Vec<LoadedDatapack>>,
     functions: RwLock<HashMap<String, Arc<[String]>>>,
     function_tags: RwLock<HashMap<String, Vec<String>>>,
@@ -116,7 +115,6 @@ impl DatapackManager {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            generated_structure_root: RwLock::new(None),
             loaded_packs: RwLock::new(Vec::new()),
             functions: RwLock::new(HashMap::new()),
             function_tags: RwLock::new(HashMap::new()),
@@ -147,11 +145,6 @@ impl DatapackManager {
         enabled_packs: &[String],
         recipe_manager: &RecipeManager,
     ) {
-        *self
-            .generated_structure_root
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Some(world_path.join("generated"));
         let datapacks_dir = world_path.join("datapacks");
         structure_loader::clear_dynamic_worldgen_data();
         let mut loaded_packs_vec = Vec::new();
@@ -972,18 +965,18 @@ impl DatapackManager {
         self.get_enabled_features(server).contains(&feature)
     }
 
-    /// Loads a Java Edition structure NBT from the currently enabled datapacks.
+    /// Loads a Java Edition structure NBT from generated data or enabled datapacks.
     ///
     /// Structure identifiers are resource locations such as
     /// `minecraft:village/plains/houses/plains_small_house_1`. Both the current
     /// `structure` directory and the legacy `structures` directory are checked.
-    pub async fn load_structure(&self, resource_location: &str) -> Result<NbtCompound, String> {
+    pub async fn load_structure(
+        &self,
+        world_path: &Path,
+        resource_location: &str,
+    ) -> Result<NbtCompound, String> {
         let (namespace, path) = parse_structure_resource_location(resource_location)?;
-        let generated_root = self
-            .generated_structure_root
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let generated_root = world_path.join("generated");
         let pack_roots = {
             let loaded_packs = self
                 .loaded_packs
@@ -1000,17 +993,18 @@ impl DatapackManager {
         let resource_location = resource_location.to_string();
 
         tokio::task::spawn_blocking(move || {
-            if let Some(root) = generated_root {
-                let candidate = root.join(&namespace).join("structure").join(format!("{path}.nbt"));
-                if candidate.is_file() {
-                    let display_path = candidate.display();
-                    let file = fs::File::open(&candidate).map_err(|error| {
-                        format!("Failed to open structure '{display_path}': {error}")
-                    })?;
-                    return read_gzip_compound_tag(file).map_err(|error| {
-                        format!("Failed to parse structure '{display_path}': {error}")
-                    });
-                }
+            let candidate = generated_root
+                .join(&namespace)
+                .join("structure")
+                .join(format!("{path}.nbt"));
+            if candidate.is_file() {
+                let display_path = candidate.display();
+                let file = fs::File::open(&candidate).map_err(|error| {
+                    format!("Failed to open structure '{display_path}': {error}")
+                })?;
+                return read_gzip_compound_tag(file).map_err(|error| {
+                    format!("Failed to parse structure '{display_path}': {error}")
+                });
             }
             // Runtime datapacks override embedded resources.
             for root in pack_roots {
@@ -1050,19 +1044,16 @@ impl DatapackManager {
         .map_err(|error| format!("Structure loader task failed: {error}"))?
     }
 
+    /// Saves a structure NBT under the world's generated data directory.
     pub async fn save_generated_structure(
         &self,
+        world_path: &Path,
         resource_location: &str,
         structure: NbtCompound,
     ) -> Result<PathBuf, String> {
         let (namespace, path) = parse_structure_resource_location(resource_location)?;
-        let root = self
-            .generated_structure_root
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
-            .ok_or_else(|| "World structure directory is unavailable".to_string())?;
-        let file_path = root
+        let file_path = world_path
+            .join("generated")
             .join(namespace)
             .join("structure")
             .join(format!("{path}.nbt"));

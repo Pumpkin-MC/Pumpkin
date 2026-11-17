@@ -821,7 +821,9 @@ impl Server {
                         Some(player.gameprofile.name.clone()),
                     );
                     self.management_hub.broadcast_player_joined(&player_dto);
-                    if self.telemetry_config.enabled {
+                    if self.telemetry_config.enabled
+                        && !matches!(player.client.as_ref(), ClientPlatform::Simulated(_))
+                    {
                         self.telemetry_sessions.record_join(player.gameprofile.id);
                     }
 
@@ -870,7 +872,7 @@ impl Server {
             profile_actions: None,
         };
         let config = PlayerConfig {
-            server_listing: true,
+            server_listing: false,
             ..PlayerConfig::default()
         };
         let player = Arc::new(Player::new(
@@ -880,6 +882,7 @@ impl Server {
             world,
             gamemode,
         ));
+        player.tab_list_listed.store(false, Ordering::Relaxed);
         player.living_entity.entity.set_pos(position);
         player.has_played_before.store(true, Ordering::Relaxed);
         player.on_screen_handler_opened(&player.player_screen_handler);
@@ -1196,17 +1199,22 @@ impl Server {
         None
     }
 
-    /// Counts the total number of players across all worlds.
+    /// Counts connected players across all worlds, excluding simulated players.
     ///
-    /// This function iterates through each world and sums up the number of players currently connected to that world.
+    /// This function iterates through each world and counts connected network players.
     ///
     /// # Returns
     ///
-    /// The total number of players connected to the server.
+    /// The number of connected network players.
     pub fn get_player_count(&self) -> usize {
         let mut count = 0;
         for world in self.worlds.load().iter() {
-            count += world.players.load().len();
+            count += world
+                .players
+                .load()
+                .iter()
+                .filter(|player| !matches!(player.client.as_ref(), ClientPlatform::Simulated(_)))
+                .count();
         }
         count
     }
@@ -1215,7 +1223,12 @@ impl Server {
     pub fn has_n_players(&self, n: usize) -> bool {
         let mut count = 0;
         for world in self.worlds.load().iter() {
-            count += world.players.load().len();
+            count += world
+                .players
+                .load()
+                .iter()
+                .filter(|player| !matches!(player.client.as_ref(), ClientPlatform::Simulated(_)))
+                .count();
             if count >= n {
                 return true;
             }

@@ -9,10 +9,9 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use super::build_stone_floor;
-
 pub(super) async fn test_redstone_observer_pulse(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let target_pos = BlockPos::new(2, 1, 1);
     let observer_pos = BlockPos::new(2, 1, 2);
@@ -50,7 +49,8 @@ pub(super) async fn test_redstone_observer_pulse(test: GameTestContext) -> GameT
 }
 
 pub(super) async fn test_stone_button_pulse(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let button_pos = BlockPos::new(2, 1, 1);
     let support_pos = BlockPos::new(2, 1, 2);
@@ -94,7 +94,8 @@ pub(super) async fn test_stone_button_pulse(test: GameTestContext) -> GameTestRe
 }
 
 pub(super) async fn test_lever_toggles_power(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let lever_pos = BlockPos::new(2, 1, 1);
     let wire_pos = BlockPos::new(2, 1, 2);
@@ -142,7 +143,8 @@ pub(super) async fn test_lever_toggles_power(test: GameTestContext) -> GameTestR
 pub(super) async fn test_pressure_plate_entity_activation(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 4).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
 
     let stone_plate_pos = BlockPos::new(1, 1, 1);
     let gold_plate_pos = BlockPos::new(3, 1, 1);

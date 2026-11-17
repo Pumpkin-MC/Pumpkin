@@ -2,10 +2,9 @@ use pumpkin_data::{Block, block_properties::FurnaceLikeProperties};
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_furnace_ignites_and_smelts(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 3).await?;
+    test.set_dimensions(3, 4, 3).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
 
     let furnace_pos = BlockPos::new(1, 1, 1);
     test.set_block_default(&furnace_pos, &Block::FURNACE)

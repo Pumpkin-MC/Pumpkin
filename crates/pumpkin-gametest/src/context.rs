@@ -9,8 +9,9 @@ use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
+use crate::entity::GameTestEntity;
 use crate::error::{GameTestError, GameTestResult};
-use crate::structure::TestStructureInstance;
+use crate::structure::{TestStructureInstance, expand_structure};
 use crate::world::{GameTestWorld, SimulatedPlayer};
 use pumpkin_util::GameMode;
 
@@ -119,6 +120,7 @@ pub(crate) struct SequenceState {
 
 #[derive(Default)]
 pub(crate) struct GameTestControllerState {
+    pub(crate) placement: Option<TestStructureInstance>,
     pub(crate) succeeded: bool,
     pub(crate) error: Option<GameTestError>,
     pub(crate) final_check_added: bool,
@@ -275,6 +277,7 @@ pub struct GameTestContext {
     placement: TestStructureInstance,
     tick: u32,
     max_ticks: u32,
+    sky_access: bool,
     controller: Arc<Mutex<GameTestControllerState>>,
 }
 
@@ -286,8 +289,14 @@ impl GameTestContext {
             placement,
             tick,
             max_ticks: 100,
+            sky_access: false,
             controller: Arc::new(Mutex::new(GameTestControllerState::default())),
         }
+    }
+
+    #[must_use]
+    pub fn world_as_ref(&self) -> &dyn GameTestWorld {
+        self.world.as_ref()
     }
 
     #[must_use]
@@ -296,6 +305,7 @@ impl GameTestContext {
         placement: TestStructureInstance,
         tick: u32,
         max_ticks: u32,
+        sky_access: bool,
         controller: Arc<Mutex<GameTestControllerState>>,
     ) -> Self {
         Self {
@@ -303,6 +313,7 @@ impl GameTestContext {
             placement,
             tick,
             max_ticks,
+            sky_access,
             controller,
         }
     }
@@ -325,8 +336,12 @@ impl GameTestContext {
     }
 
     #[must_use]
-    pub const fn placement(&self) -> &TestStructureInstance {
-        &self.placement
+    pub fn placement(&self) -> TestStructureInstance {
+        self.controller
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .placement
+            .unwrap_or(self.placement)
     }
 
     #[must_use]
@@ -335,19 +350,20 @@ impl GameTestContext {
     }
 
     #[must_use]
-    pub const fn absolute_pos(&self, relative: &BlockPos) -> BlockPos {
-        self.placement.transform(relative)
+    pub fn absolute_pos(&self, relative: &BlockPos) -> BlockPos {
+        self.placement().transform(relative)
     }
 
     #[must_use]
     pub fn absolute_vec(&self, relative: Vector3<f64>) -> Vector3<f64> {
-        self.placement.transform_vec(relative)
+        self.placement().transform_vec(relative)
     }
 
     #[must_use]
     pub fn absolute_bounds(&self) -> (Vector3<f64>, Vector3<f64>) {
-        let origin = self.placement.origin();
-        let size = self.placement.size();
+        let placement = self.placement();
+        let origin = placement.origin();
+        let size = placement.size();
         (
             Vector3::new(
                 f64::from(origin.0.x),
@@ -367,11 +383,57 @@ impl GameTestContext {
         self.world.block_state_id(&position).await
     }
 
+    /// Expands the test area to contain both the structure and the requested dimensions.
+    pub async fn set_dimensions(&self, width: i32, height: i32, depth: i32) -> GameTestResult<()> {
+        const MAX_TEST_AREA_SIZE: i32 = 128;
+        let requested = [width, height, depth];
+        if requested
+            .iter()
+            .any(|&size| !(1..=MAX_TEST_AREA_SIZE).contains(&size))
+        {
+            return Err(GameTestError::Assertion {
+                tick: self.tick,
+                position: None,
+                message: format!("test area dimensions must be between 1 and {MAX_TEST_AREA_SIZE}"),
+            });
+        }
+        let old = self.placement();
+        let old_size = old.source_size();
+        let size = std::array::from_fn(|axis| old_size[axis].max(requested[axis]));
+        if size == old_size {
+            return Ok(());
+        }
+        let new = old.with_source_size(size);
+        expand_structure(self.world.as_ref(), &old, &new, self.sky_access).await?;
+        self.world
+            .set_test_instance_size(new.test_instance_pos(), size)
+            .await?;
+        self.controller
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .placement = Some(new);
+        Ok(())
+    }
+
+    fn check_block_position(&self, relative: &BlockPos) -> GameTestResult<()> {
+        let size = self.placement().source_size();
+        let [x, y, z] = [relative.0.x, relative.0.y, relative.0.z];
+        if x < 0 || x >= size[0] || y < 0 || y >= size[1] || z < 0 || z >= size[2] {
+            return Err(GameTestError::Assertion {
+                tick: self.tick,
+                position: Some(self.absolute_pos(relative)),
+                message: format!("block position ({x}, {y}, {z}) is outside test area {size:?}"),
+            });
+        }
+        Ok(())
+    }
+
     pub async fn set_block(
         &self,
         relative: &BlockPos,
         block_state_id: BlockStateId,
     ) -> GameTestResult<()> {
+        self.check_block_position(relative)?;
         let position = self.absolute_pos(relative);
         self.world
             .set_block_state(&position, block_state_id, BlockFlags::NOTIFY_ALL)
@@ -392,10 +454,8 @@ impl GameTestContext {
         block_state_id: BlockStateId,
         nbt: &NbtCompound,
     ) -> GameTestResult<()> {
+        self.set_block(relative, block_state_id).await?;
         let position = self.absolute_pos(relative);
-        self.world
-            .set_block_state(&position, block_state_id, BlockFlags::NOTIFY_ALL)
-            .await?;
         self.world.set_block_entity_nbt(&position, nbt).await
     }
 
@@ -442,13 +502,33 @@ impl GameTestContext {
         self.world.random_tick(&position).await
     }
 
-    pub async fn spawn_entity(&self, entity_name: &str, relative: &BlockPos) -> GameTestResult<()> {
-        let center = Vector3::new(
-            f64::from(relative.0.x) + 0.5,
-            f64::from(relative.0.y),
-            f64::from(relative.0.z) + 0.5,
-        );
-        self.spawn_entity_at(entity_name, center).await
+    pub async fn build_floor(&self, width: i32, depth: i32, block: &Block) -> GameTestResult<()> {
+        let [area_width, _, area_depth] = self.placement().source_size();
+        if width < 1 || depth < 1 || width > area_width || depth > area_depth {
+            return Err(GameTestError::Assertion {
+                tick: self.tick,
+                position: None,
+                message: format!(
+                    "floor dimensions ({width}, {depth}) are outside test dimensions ({area_width}, {area_depth})"
+                ),
+            });
+        }
+        for x in 0..width {
+            for z in 0..depth {
+                self.set_block_default(&BlockPos::new(x, 0, z), block)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn spawn_entity(
+        &self,
+        entity_name: &str,
+        relative: Vector3<f64>,
+    ) -> GameTestResult<Arc<dyn GameTestEntity>> {
+        let position = self.absolute_vec(relative);
+        self.world.spawn_entity(entity_name, position).await
     }
 
     pub async fn spawn_entity_at(
@@ -456,8 +536,7 @@ impl GameTestContext {
         entity_name: &str,
         relative: Vector3<f64>,
     ) -> GameTestResult<()> {
-        let position = self.absolute_vec(relative);
-        self.world.spawn_entity(entity_name, position).await
+        self.spawn_entity(entity_name, relative).await.map(|_| ())
     }
 
     /// Spawns a player with a unique server-visible name derived from `name`.

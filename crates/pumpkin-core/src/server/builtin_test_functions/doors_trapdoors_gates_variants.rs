@@ -8,8 +8,6 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 async fn place_door(
     test: &GameTestContext,
     lower_pos: &BlockPos,
@@ -45,7 +43,8 @@ async fn assert_door_open(
 pub(super) async fn test_oak_and_spruce_doors_redstone(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(6, 4, 4).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let d1 = BlockPos::new(1, 1, 2);
     let d2 = BlockPos::new(3, 1, 2);
     place_door(&test, &d1, &Block::OAK_DOOR).await?;
@@ -71,7 +70,8 @@ pub(super) async fn test_oak_and_spruce_doors_redstone(
 pub(super) async fn test_birch_and_jungle_doors_redstone(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(6, 4, 4).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let d1 = BlockPos::new(1, 1, 2);
     let d2 = BlockPos::new(3, 1, 2);
     place_door(&test, &d1, &Block::BIRCH_DOOR).await?;
@@ -90,7 +90,8 @@ pub(super) async fn test_birch_and_jungle_doors_redstone(
 pub(super) async fn test_acacia_dark_oak_mangrove_cherry_doors(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 4).await?;
+    test.set_dimensions(8, 4, 4).await?;
+    test.build_floor(8, 4, &Block::STONE).await?;
     let doors = [
         (1, &Block::ACACIA_DOOR),
         (3, &Block::DARK_OAK_DOOR),
@@ -109,7 +110,8 @@ pub(super) async fn test_acacia_dark_oak_mangrove_cherry_doors(
 }
 
 pub(super) async fn test_bamboo_crimson_warped_doors(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 7, 4).await?;
+    test.set_dimensions(7, 4, 4).await?;
+    test.build_floor(7, 4, &Block::STONE).await?;
     let doors = [
         (1, &Block::BAMBOO_DOOR),
         (3, &Block::CRIMSON_DOOR),
@@ -129,7 +131,8 @@ pub(super) async fn test_bamboo_crimson_warped_doors(test: GameTestContext) -> G
 pub(super) async fn test_copper_doors_oxidation_variants(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 4).await?;
+    test.set_dimensions(8, 4, 4).await?;
+    test.build_floor(8, 4, &Block::STONE).await?;
     let doors = [
         (1, &Block::COPPER_DOOR),
         (3, &Block::EXPOSED_COPPER_DOOR),
@@ -150,7 +153,8 @@ pub(super) async fn test_copper_doors_oxidation_variants(
 pub(super) async fn test_door_breaks_when_lower_half_removed(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 4, 4).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let lower = BlockPos::new(1, 1, 2);
     let upper = BlockPos::new(1, 2, 2);
     place_door(&test, &lower, &Block::OAK_DOOR).await?;
@@ -164,7 +168,8 @@ pub(super) async fn test_door_breaks_when_lower_half_removed(
 pub(super) async fn test_wooden_trapdoors_variants_redstone(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 4).await?;
+    test.set_dimensions(8, 4, 4).await?;
+    test.build_floor(8, 4, &Block::STONE).await?;
     let trapdoors = [
         (1, &Block::SPRUCE_TRAPDOOR),
         (3, &Block::BIRCH_TRAPDOOR),
@@ -186,7 +191,8 @@ pub(super) async fn test_wooden_trapdoors_variants_redstone(
 pub(super) async fn test_copper_trapdoors_oxidation_variants(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 4).await?;
+    test.set_dimensions(8, 4, 4).await?;
+    test.build_floor(8, 4, &Block::STONE).await?;
     let trapdoors = [
         (1, &Block::COPPER_TRAPDOOR),
         (3, &Block::EXPOSED_COPPER_TRAPDOOR),
@@ -208,7 +214,8 @@ pub(super) async fn test_copper_trapdoors_oxidation_variants(
 pub(super) async fn test_fence_gates_wood_variants_redstone(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 8, 4).await?;
+    test.set_dimensions(8, 4, 4).await?;
+    test.build_floor(8, 4, &Block::STONE).await?;
     let gates = [
         (1, &Block::SPRUCE_FENCE_GATE),
         (3, &Block::BIRCH_FENCE_GATE),
@@ -230,7 +237,8 @@ pub(super) async fn test_fence_gates_wood_variants_redstone(
 pub(super) async fn test_fence_gate_in_wall_neighbor_update(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let gate_pos = BlockPos::new(2, 1, 2);
     test.set_block_default(&gate_pos, &Block::OAK_FENCE_GATE)
         .await?;
@@ -250,7 +258,8 @@ pub(super) async fn test_fence_gate_in_wall_neighbor_update(
 pub(super) async fn test_fence_horizontal_connections_update(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let center = BlockPos::new(2, 1, 2);
     test.set_block_default(&center, &Block::OAK_FENCE).await?;
     test.set_block_default(&BlockPos::new(2, 1, 1), &Block::OAK_FENCE)
@@ -270,7 +279,8 @@ pub(super) async fn test_fence_horizontal_connections_update(
 pub(super) async fn test_iron_bars_and_glass_pane_connections(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
     let bars = BlockPos::new(2, 1, 2);
     let pane = BlockPos::new(2, 1, 3);
     test.set_block_default(&bars, &Block::IRON_BARS).await?;

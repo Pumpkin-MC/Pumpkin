@@ -117,9 +117,10 @@ impl JavaClient {
             server.clone().spawn_task(async move {
                 let size = if query {
                     if let Some(test) = test {
+                        let world_path = server.basic_config.get_world_path();
                         server
                             .datapack_manager
-                            .load_structure(&test.structure)
+                            .load_structure(&world_path, &test.structure)
                             .await
                             .ok()
                             .and_then(|nbt| GameTestStructureTemplate::from_nbt(&nbt).ok())
@@ -169,14 +170,16 @@ impl JavaClient {
             pumpkin_protocol::java::server::play::TestInstanceBlockStatus::Running => {
                 TestInstanceStatus::Running
             }
-            pumpkin_protocol::java::server::play::TestInstanceBlockStatus::Success
-            | pumpkin_protocol::java::server::play::TestInstanceBlockStatus::Failed => {
+            pumpkin_protocol::java::server::play::TestInstanceBlockStatus::Finished => {
                 TestInstanceStatus::Finished
             }
         };
         data.put_string("status", status.serialized_name().to_string());
-        if let Some(error) = packet.data.error_message {
-            data.put_string("error_message", error.to_string());
+        if let Some(error) = packet.data.error_message.as_ref() {
+            data.put(
+                "error_message",
+                error.to_nbt_tag_for_version(&pumpkin_data::packet::CURRENT_MC_VERSION),
+            );
         }
         *controller
             .data
@@ -279,12 +282,13 @@ impl JavaClient {
                 let include_entities = !packet.data.ignore_entities;
                 let player = player.clone();
                 server.clone().spawn_task(async move {
+                    let world_path = server.basic_config.get_world_path();
                     let result =
                         match capture_structure(&world, origin, size, include_entities, true).await
                         {
                             Ok(nbt) => server
                                 .datapack_manager
-                                .save_generated_structure(&name, nbt)
+                                .save_generated_structure(&world_path, &name, nbt)
                                 .await
                                 .map(|_| ()),
                             Err(error) => Err(error),

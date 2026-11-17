@@ -8,10 +8,9 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use super::build_stone_floor;
-
 pub(super) async fn test_powered_rail_propagation(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 10).await?;
+    test.set_dimensions(3, 4, 10).await?;
+    test.build_floor(3, 10, &Block::STONE).await?;
 
     let mut unpowered_props = PoweredRailLikeProperties::default(&Block::POWERED_RAIL);
     unpowered_props.shape = RailShapeStraight::NorthSouth;
@@ -48,7 +47,8 @@ pub(super) async fn test_powered_rail_propagation(test: GameTestContext) -> Game
 }
 
 pub(super) async fn test_activator_rail_propagation(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 10).await?;
+    test.set_dimensions(3, 4, 10).await?;
+    test.build_floor(3, 10, &Block::STONE).await?;
 
     let mut unpowered_props = PoweredRailLikeProperties::default(&Block::ACTIVATOR_RAIL);
     unpowered_props.shape = RailShapeStraight::NorthSouth;
@@ -85,7 +85,8 @@ pub(super) async fn test_activator_rail_propagation(test: GameTestContext) -> Ga
 }
 
 pub(super) async fn test_detector_rail_minecart(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let rail_pos = BlockPos::new(2, 1, 2);
     let wire_pos = BlockPos::new(3, 1, 2);

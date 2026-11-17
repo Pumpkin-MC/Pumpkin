@@ -8,8 +8,6 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use super::build_stone_floor;
-
 fn hopper_state(facing: FacingHopper, enabled: bool) -> BlockStateId {
     let mut props = HopperLikeProperties::default(&Block::HOPPER);
     props.facing = facing;
@@ -20,7 +18,8 @@ fn hopper_state(facing: FacingHopper, enabled: bool) -> BlockStateId {
 pub(super) async fn test_hopper_pulls_item_entity_from_above(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let hopper = BlockPos::new(1, 1, 1);
     test.set_block(&hopper, hopper_state(FacingHopper::Down, true))
         .await?;
@@ -41,7 +40,8 @@ pub(super) async fn test_hopper_pulls_item_entity_from_above(
 pub(super) async fn test_hopper_pulls_from_chest_above(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 4, 4).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(4, 4, &Block::STONE).await?;
     let hopper = BlockPos::new(1, 1, 1);
     let top_chest = BlockPos::new(1, 2, 1);
     test.set_block(&hopper, hopper_state(FacingHopper::North, true))
@@ -64,7 +64,8 @@ pub(super) async fn test_hopper_pulls_from_chest_above(
 pub(super) async fn test_hopper_pushes_sideways_into_barrel(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let hopper = BlockPos::new(1, 1, 1);
     let barrel = BlockPos::new(2, 1, 1);
     test.set_block_default(&barrel, &Block::BARREL).await?;
@@ -87,7 +88,8 @@ pub(super) async fn test_hopper_pushes_sideways_into_barrel(
 pub(super) async fn test_hopper_chain_three_hoppers_to_chest(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 6, 4).await?;
+    test.set_dimensions(6, 4, 5).await?;
+    test.build_floor(6, 4, &Block::STONE).await?;
     let h1 = BlockPos::new(1, 1, 1);
     let h2 = BlockPos::new(2, 1, 1);
     let h3 = BlockPos::new(3, 1, 1);
@@ -116,7 +118,8 @@ pub(super) async fn test_hopper_chain_three_hoppers_to_chest(
 pub(super) async fn test_hopper_locked_by_redstone_stops_transfer(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let hopper = BlockPos::new(1, 1, 1);
     let chest = BlockPos::new(2, 1, 1);
     test.set_block_default(&chest, &Block::CHEST).await?;
@@ -142,7 +145,8 @@ pub(super) async fn test_hopper_locked_by_redstone_stops_transfer(
 pub(super) async fn test_hopper_unlocked_resumes_transfer(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let hopper = BlockPos::new(1, 1, 1);
     let chest = BlockPos::new(2, 1, 1);
     let power = BlockPos::new(1, 2, 1);
@@ -172,7 +176,8 @@ pub(super) async fn test_hopper_unlocked_resumes_transfer(
 pub(super) async fn test_hopper_feeds_furnace_top_and_side(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let furnace = BlockPos::new(2, 1, 1);
     let top_hopper = BlockPos::new(2, 2, 1);
     let side_hopper = BlockPos::new(1, 1, 1);
@@ -206,7 +211,8 @@ pub(super) async fn test_hopper_feeds_furnace_top_and_side(
 pub(super) async fn test_blast_furnace_smelts_raw_iron(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 3).await?;
+    test.set_dimensions(4, 4, 4).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
     let bf = BlockPos::new(1, 1, 1);
     test.set_block_default(&bf, &Block::BLAST_FURNACE).await?;
     test.set_container_item(&bf, 0, "minecraft:raw_iron", 1)
@@ -227,7 +233,8 @@ pub(super) async fn test_blast_furnace_smelts_raw_iron(
 }
 
 pub(super) async fn test_smoker_cooks_raw_beef(test: GameTestContext) -> GameTestResult<()> {
-    build_stone_floor(&test, 3, 3).await?;
+    test.set_dimensions(4, 4, 4).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
     let smoker = BlockPos::new(1, 1, 1);
     test.set_block_default(&smoker, &Block::SMOKER).await?;
     test.set_container_item(&smoker, 0, "minecraft:beef", 1)
@@ -248,7 +255,8 @@ pub(super) async fn test_smoker_cooks_raw_beef(test: GameTestContext) -> GameTes
 pub(super) async fn test_crafter_crafts_iron_ingot_from_nuggets(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let crafter = BlockPos::new(1, 1, 1);
     let chest = BlockPos::new(2, 1, 1);
     let mut props = CrafterLikeProperties::default(&Block::CRAFTER);
@@ -277,7 +285,8 @@ pub(super) async fn test_crafter_crafts_iron_ingot_from_nuggets(
 pub(super) async fn test_crafter_disabled_slots_skip_items(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let crafter = BlockPos::new(1, 1, 1);
     let chest = BlockPos::new(2, 1, 1);
     let mut props = CrafterLikeProperties::default(&Block::CRAFTER);
@@ -307,7 +316,8 @@ pub(super) async fn test_crafter_disabled_slots_skip_items(
 pub(super) async fn test_barrel_and_trapped_chest_inventories(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 4).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 4, &Block::STONE).await?;
     let barrel = BlockPos::new(1, 1, 1);
     let trapped = BlockPos::new(3, 1, 1);
     test.set_block_default(&barrel, &Block::BARREL).await?;

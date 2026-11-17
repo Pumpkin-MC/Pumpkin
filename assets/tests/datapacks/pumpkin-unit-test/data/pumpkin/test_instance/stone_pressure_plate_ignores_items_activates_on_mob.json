@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "structure": "pumpkin:empty_6x5x5",
+  "structure": "minecraft:empty",
   "function": "pumpkin:stone_pressure_plate_ignores_items_activates_on_mob",
   "max_ticks": 30,
   "setup_ticks": 0

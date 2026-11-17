@@ -28,8 +28,13 @@ struct ListCommandExecutor(ListMode);
 
 impl CommandExecutor for ListCommandExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let players: Vec<Arc<Player>> = context.server().get_all_players();
-        let players_len = players.len();
+        let players: Vec<Arc<Player>> = context
+            .server()
+            .get_all_players()
+            .into_iter()
+            .filter(|player| player.client.visible_in_list())
+            .collect();
+        let online_count = context.server().get_player_count();
 
         let list = match self.0 {
             ListMode::Names => get_player_names(&players),
@@ -58,7 +63,7 @@ impl CommandExecutor for ListCommandExecutor {
                 COMMANDS_LIST_PLAYERS,
                 COMMANDS_LIST_PLAYERS,
                 [
-                    TextComponent::text(players_len.to_string()),
+                    TextComponent::text(online_count.to_string()),
                     TextComponent::text(max_players.to_string()),
                     list,
                 ],
@@ -66,7 +71,7 @@ impl CommandExecutor for ListCommandExecutor {
             false,
         );
 
-        Ok(players_len as i32)
+        Ok(online_count as i32)
     }
 }
 

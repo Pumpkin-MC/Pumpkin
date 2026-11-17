@@ -9,12 +9,11 @@ use pumpkin_data::{
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
-use super::build_stone_floor;
-
 pub(super) async fn test_note_block_instrument_and_power(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let base_pos = BlockPos::new(1, 1, 2);
     let note_pos = BlockPos::new(1, 2, 2);
@@ -74,7 +73,8 @@ pub(super) async fn test_note_block_instrument_and_power(
 pub(super) async fn test_end_portal_frame_and_respawn_anchor_comparators(
     test: GameTestContext,
 ) -> GameTestResult<()> {
-    build_stone_floor(&test, 5, 5).await?;
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
 
     let mut wire_props = RedstoneWireLikeProperties::default(&Block::REDSTONE_WIRE);
     wire_props.north = NorthRedstone::Side;
