@@ -1,3 +1,4 @@
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 use std::sync::Arc;
 
 use pumpkin_data::translation;
@@ -109,7 +110,13 @@ impl CommandExecutor for SpectateTargetExecutor {
         let yaw = target_entity.yaw.load();
         let pitch = target_entity.pitch.load();
         player.try_send_client_packet(&CSetCamera::new(target_id.into()));
-        player.teleport(pos, Some(yaw), Some(pitch), player_world);
+        player.teleport_with_cause(
+            pos,
+            Some(yaw),
+            Some(pitch),
+            player_world,
+            TeleportCause::Spectate,
+        );
 
         let target_name = target.get_display_name();
         context.source.send_feedback(

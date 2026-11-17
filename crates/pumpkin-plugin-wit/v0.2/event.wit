@@ -77,10 +77,31 @@ interface event {
         cancelled: bool
     }
 
+    /// Why a player is teleported.
+    enum teleport-cause {
+        ender-pearl,
+        command,
+        plugin,
+        nether-portal,
+        end-portal,
+        end-gateway,
+        spectate,
+        /// chorus fruit
+        consumable-effect,
+        dismount,
+        exit-bed,
+        unknown,
+    }
+
     record player-teleport-event-data {
         player: player,
         from-position: position,
         to-position: position,
+        /// The yaw the player ends up with; none keeps the player's own view.
+        yaw: option<f32>,
+        /// The pitch the player ends up with; none keeps the player's own view.
+        pitch: option<f32>,
+        cause: teleport-cause,
         cancelled: bool
     }
 

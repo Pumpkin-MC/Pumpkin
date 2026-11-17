@@ -1,3 +1,4 @@
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 use std::sync::Arc;
 
 use pumpkin_data::translation;
@@ -41,7 +42,13 @@ fn rotate_entity(target: &Arc<dyn EntityBase>, yaw: f32, pitch: f32) {
     let pos = entity.pos.load();
     let world = entity.world.load_full();
     let clamped_pitch = pitch.clamp(-90.0, 90.0);
-    target.teleport(pos, Some(yaw), Some(clamped_pitch), world);
+    target.teleport_with_cause(
+        pos,
+        Some(yaw),
+        Some(clamped_pitch),
+        world,
+        TeleportCause::Command,
+    );
 }
 
 fn send_success_message(context: &CommandContext, target: &dyn EntityBase) {

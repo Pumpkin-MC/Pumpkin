@@ -1,3 +1,4 @@
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 use std::sync::Arc;
 
 use pumpkin_data::translation;
@@ -70,7 +71,13 @@ impl CommandExecutor for SelfToPosExecutor {
         let yaw = entity.get_entity().yaw.load();
         let pitch = entity.get_entity().pitch.load();
         let world = context.source.world();
-        entity.teleport(pos, Some(yaw), Some(pitch), world.clone());
+        entity.teleport_with_cause(
+            pos,
+            Some(yaw),
+            Some(pitch),
+            world.clone(),
+            TeleportCause::Command,
+        );
 
         context.source.send_feedback(
             TextComponent::translate_cross(
@@ -107,7 +114,7 @@ impl CommandExecutor for SelfToEntityExecutor {
             return Err(ERROR_INVALID_POSITION.create_without_context());
         }
 
-        entity.teleport(pos, Some(yaw), Some(pitch), world);
+        entity.teleport_with_cause(pos, Some(yaw), Some(pitch), world, TeleportCause::Command);
 
         context.source.send_feedback(
             TextComponent::translate_cross(
@@ -142,7 +149,13 @@ impl CommandExecutor for EntitiesToEntityExecutor {
         }
 
         for target in &targets {
-            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
+            target.teleport_with_cause(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+                TeleportCause::Command,
+            );
         }
 
         let (key, target_arg) = success_key_and_arg(
@@ -178,7 +191,13 @@ impl CommandExecutor for EntitiesToPosExecutor {
         for target in &targets {
             let yaw = target.get_entity().yaw.load();
             let pitch = target.get_entity().pitch.load();
-            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
+            target.teleport_with_cause(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+                TeleportCause::Command,
+            );
         }
 
         let (key, target_arg) = success_key_and_arg(
@@ -221,7 +240,13 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
         let world = context.source.world();
 
         for target in &targets {
-            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
+            target.teleport_with_cause(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+                TeleportCause::Command,
+            );
         }
 
         let (key, target_arg) = success_key_and_arg(
@@ -269,7 +294,13 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
             };
             let looking_from = Vector3::new(pos.x, pos.y + eye_offset, pos.z);
             let (yaw, pitch) = yaw_pitch_facing_position(&looking_from, &facing_pos);
-            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
+            target.teleport_with_cause(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+                TeleportCause::Command,
+            );
         }
 
         let (key, target_arg) = success_key_and_arg(
@@ -325,7 +356,13 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
             };
             let looking_from = Vector3::new(pos.x, pos.y + eye_offset, pos.z);
             let (yaw, pitch) = yaw_pitch_facing_position(&looking_from, &facing_pos);
-            target.teleport(pos, Some(yaw), Some(pitch), world.clone());
+            target.teleport_with_cause(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                world.clone(),
+                TeleportCause::Command,
+            );
         }
 
         let (key, target_arg) = success_key_and_arg(

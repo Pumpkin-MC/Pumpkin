@@ -1,3 +1,4 @@
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 use std::sync::Arc;
 
 use pumpkin_macros::pumpkin_block;
@@ -38,8 +39,13 @@ impl BlockBehaviour for EndGatewayBlock {
         if let Some(destination) = end_gateway.get_portal_position(args.world, *args.position) {
             let yaw = entity.yaw.load();
             let pitch = entity.pitch.load();
-            args.entity
-                .teleport(destination, Some(yaw), Some(pitch), args.world.clone());
+            args.entity.teleport_with_cause(
+                destination,
+                Some(yaw),
+                Some(pitch),
+                args.world.clone(),
+                TeleportCause::EndGateway,
+            );
         }
     }
 
