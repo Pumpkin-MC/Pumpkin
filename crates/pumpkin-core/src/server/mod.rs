@@ -1290,6 +1290,11 @@ impl Server {
             players.par_iter().for_each(|player| {
                 player.tick(self);
             });
+            // Vanilla `ServerChunkCache.tick` runs `ChunkMap.tick` while frozen too.
+            for player in players.iter() {
+                player.send_velocity_changes();
+            }
+            world.entity_tracker.update_all(world);
         }
     }
 

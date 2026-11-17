@@ -56,7 +56,7 @@ use pumpkin_protocol::{
 use pumpkin_util::math::vector3::Axis;
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
-    get_section_cord, pack_degrees,
+    get_section_cord,
     position::BlockPos,
     vector2::Vector2,
     vector3::Vector3,
@@ -3957,24 +3957,13 @@ impl Entity {
     }
 
     /// Vanilla `ClientboundAddEntityPacket(entity, serverEntity)`: tracker, not live.
-    /// Players live: tracker skips `send_changes` for them.
     fn spawn_state(&self) -> SpawnState {
-        if self.entity_type == &EntityType::PLAYER {
-            SpawnState {
-                pos: self.pos.load(),
-                velocity: self.velocity.load(),
-                pitch: pack_degrees(self.pitch.load()),
-                yaw: pack_degrees(self.yaw.load()),
-                head_yaw: pack_degrees(self.head_yaw.load()),
-            }
-        } else {
-            SpawnState {
-                pos: self.last_sent_pos.load(),
-                velocity: self.last_sent_velocity.load(),
-                pitch: self.last_sent_pitch.load(Relaxed),
-                yaw: self.last_sent_yaw.load(Relaxed),
-                head_yaw: self.last_sent_head_yaw.load(Relaxed),
-            }
+        SpawnState {
+            pos: self.last_sent_pos.load(),
+            velocity: self.last_sent_velocity.load(),
+            pitch: self.last_sent_pitch.load(Relaxed),
+            yaw: self.last_sent_yaw.load(Relaxed),
+            head_yaw: self.last_sent_head_yaw.load(Relaxed),
         }
     }
 

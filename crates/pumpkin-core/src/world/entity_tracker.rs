@@ -9,13 +9,13 @@ use crossbeam::atomic::AtomicCell;
 use dashmap::DashMap;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
-use pumpkin_protocol::bedrock::client::CSetActorMotion;
 use pumpkin_protocol::bedrock::client::move_actor_delta::{
     CMoveActorDelta, MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW, MOVE_ACTOR_DELTA_FLAG_HAS_PITCH,
     MOVE_ACTOR_DELTA_FLAG_HAS_X, MOVE_ACTOR_DELTA_FLAG_HAS_Y, MOVE_ACTOR_DELTA_FLAG_HAS_YAW,
     MOVE_ACTOR_DELTA_FLAG_HAS_Z, MOVE_ACTOR_DELTA_FLAG_ON_GROUND,
 };
 use pumpkin_protocol::bedrock::client::remove_actor::CRemoveActor;
+use pumpkin_protocol::bedrock::client::{CMovePlayer, CSetActorMotion};
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
@@ -53,7 +53,8 @@ enum MoveSync {
     Pos(Vector3<i16>),
     Rot,
     PosRot(Vector3<i16>),
-    Absolute,
+    /// The position sent, which is also the next delta base.
+    Absolute(Vector3<f64>),
 }
 
 impl MoveSync {
@@ -161,13 +162,12 @@ impl TrackedEntity {
             .contains_key(uuid)
     }
 
-    /// Vanilla `ServerEntity.sendChanges`. Non-player entities only.
+    /// Vanilla `ServerEntity.sendChanges`.
     pub fn send_changes(&self, world: &World) {
         let entity = self.entity.get_entity();
         self.send_bedrock_move(entity, world);
         let tick = self.tick_count.fetch_add(1, Relaxed);
         let needs_sync = entity.velocity_dirty.swap(false, Ordering::SeqCst);
-        // Head yaw stays live every tick, only position/rotation sync is throttled.
         if tick.is_multiple_of(self.update_interval.max(1))
             || needs_sync
             || entity.synched_data.is_dirty()
@@ -207,20 +207,23 @@ impl TrackedEntity {
                 }
                 self.was_riding.store(false, Relaxed);
             }
+
+            // Bedrock watchers of this entity get head yaw from `send_bedrock_move`
+            // (`MoveActorDelta` HAS_HEAD_YAW), not from this packet.
+            let head_yaw = pack_degrees(entity.head_yaw.load());
+            if head_yaw != entity.last_sent_head_yaw.load(Relaxed) {
+                self.send_to_tracking_players(
+                    &CHeadRot::new(VarInt(self.entity_id), head_yaw),
+                    world,
+                );
+                entity.last_sent_head_yaw.store(head_yaw, Relaxed);
+            }
         }
 
         // Vanilla `ServerEntity.sendChanges`: after the needsSync block, `syncVelocity`
         // (`hurtMarked`) sends motion to tracking players (and self, for players).
         if entity.sync_velocity.swap(false, Ordering::SeqCst) {
             self.send_motion(entity, world);
-        }
-
-        // Java `CHeadRot` is per-tick. Bedrock watchers of this entity get head yaw from
-        // `send_bedrock_move` (`MoveActorDelta` HAS_HEAD_YAW), not from this packet.
-        let head_yaw = pack_degrees(entity.head_yaw.load());
-        if head_yaw != entity.last_sent_head_yaw.load(Relaxed) {
-            self.send_to_tracking_players(&CHeadRot::new(VarInt(self.entity_id), head_yaw), world);
-            entity.last_sent_head_yaw.store(head_yaw, Relaxed);
         }
     }
 
@@ -270,7 +273,7 @@ impl TrackedEntity {
             _ => {
                 self.was_on_ground.store(on_ground, Relaxed);
                 self.teleport_delay.store(0, Relaxed);
-                Some(MoveSync::Absolute)
+                Some(MoveSync::Absolute(pos))
             }
         }
     }
@@ -309,10 +312,10 @@ impl TrackedEntity {
                 &CUpdateEntityPosRot::new(id, delta, yaw, pitch, on_ground),
                 world,
             ),
-            MoveSync::Absolute => self.send_to_tracking_players(
+            MoveSync::Absolute(pos) => self.send_to_tracking_players(
                 &CEntityPositionSync::new(
                     id,
-                    entity.pos.load(),
+                    pos,
                     entity.velocity.load(),
                     entity.yaw.load(),
                     entity.pitch.load(),
@@ -374,6 +377,22 @@ impl TrackedEntity {
         if !self.has_bedrock_watchers() {
             return;
         }
+        if let Some(player) = self.entity.get_player() {
+            let on_ground = entity.on_ground.load(Relaxed);
+            // Bedrock moves remote players with `MovePlayer`, a jump of 8 blocks as a teleport.
+            if (pos - last_pos).length_squared() >= 64.0 {
+                self.send_to_tracking_players_bedrock(
+                    &player.bedrock_move_packet(CMovePlayer::MODE_TELEPORT, on_ground, 0),
+                    world,
+                );
+            }
+            // Bedrock ignores head yaw on teleport -> a normal move re-asserts it
+            self.send_to_tracking_players_bedrock(
+                &player.bedrock_move_packet(CMovePlayer::MODE_NORMAL, on_ground, 0),
+                world,
+            );
+            return;
+        }
         if entity.on_ground.load(Relaxed) {
             flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
         }
@@ -404,13 +423,14 @@ impl TrackedEntity {
         }
     }
 
-    #[must_use]
-    pub fn get_effective_range(&self) -> u32 {
-        let mut effective_range = self.tracking_range;
+    /// Vanilla `TrackedEntity.getEffectiveRange`, in blocks.
+    fn scaled_effective_range(&self, world: &World) -> u32 {
+        let tracker = &world.entity_tracker;
+        let mut effective_range = tracker.scaled_range(self.entity.get_entity().entity_type);
         let mut passengers = Vec::new();
         Self::collect_indirect_passengers(&self.entity, &mut passengers);
         for passenger in passengers {
-            let passenger_range = passenger.get_entity().entity_type.client_tracking_range;
+            let passenger_range = tracker.scaled_range(passenger.get_entity().entity_type);
             if passenger_range > effective_range {
                 effective_range = passenger_range;
             }
@@ -425,7 +445,7 @@ impl TrackedEntity {
         })
     }
 
-    pub fn update_player(&self, player: &Arc<Player>, _world: &World) {
+    pub fn update_player(&self, player: &Arc<Player>, world: &World) {
         if player.get_entity().entity_id == self.entity_id {
             return;
         }
@@ -447,7 +467,7 @@ impl TrackedEntity {
             player_vd,
             entity_chunk,
             entity_pos,
-            self.get_effective_range(),
+            self.scaled_effective_range(world),
             true,
         );
     }
@@ -467,7 +487,7 @@ impl TrackedEntity {
         let dz = player_pos.z - entity_pos.z;
         let dist_sq = dx.mul_add(dx, dz * dz);
 
-        let visible_range_blocks = f64::from((effective_range as i32).min(player_vd) * 16);
+        let visible_range_blocks = f64::from((effective_range as i32).min(player_vd * 16));
         let range_sq = visible_range_blocks * visible_range_blocks;
 
         if dist_sq <= range_sq && self.broadcast_to_player(player) {
@@ -514,7 +534,7 @@ impl TrackedEntity {
         self.remove_player(player);
     }
 
-    pub fn update_players(&self, players: &[Arc<Player>], _world: &World) {
+    pub fn update_players(&self, players: &[Arc<Player>], world: &World) {
         if players.is_empty() {
             return;
         }
@@ -536,7 +556,7 @@ impl TrackedEntity {
             let (entity_pos, effective_range) = *lazy_state.get_or_insert_with(|| {
                 (
                     self.entity.get_entity().pos.load(),
-                    self.get_effective_range(),
+                    self.scaled_effective_range(world),
                 )
             });
             let player_pos = player_entity.pos.load();
@@ -557,6 +577,7 @@ impl TrackedEntity {
         &self,
         snapshots: &[PlayerViewSnapshot<'_>],
         chunk_changed: bool,
+        world: &World,
     ) {
         if snapshots.is_empty() {
             return;
@@ -577,7 +598,7 @@ impl TrackedEntity {
             let (entity_pos, effective_range) = *lazy_state.get_or_insert_with(|| {
                 (
                     self.entity.get_entity().pos.load(),
-                    self.get_effective_range(),
+                    self.scaled_effective_range(world),
                 )
             });
             self.update_player_in_view(
@@ -1131,8 +1152,13 @@ impl TrackedEntity {
     }
 }
 
+/// Vanilla clamps `entity-broadcast-range-percentage` to this range.
+pub const ENTITY_BROADCAST_RANGE_PERCENTAGE: std::ops::RangeInclusive<u32> = 10..=1000;
+
 pub struct EntityTracker {
     pub entity_map: DashMap<i32, Arc<TrackedEntity>>,
+    /// Vanilla `entity-broadcast-range-percentage`.
+    entity_broadcast_range: AtomicU32,
 }
 
 impl Default for EntityTracker {
@@ -1146,6 +1172,23 @@ impl EntityTracker {
     pub fn new() -> Self {
         Self {
             entity_map: DashMap::new(),
+            entity_broadcast_range: AtomicU32::new(100),
+        }
+    }
+
+    /// Blocks from which entities of this type are tracked.
+    /// Vanilla `MinecraftServer.getScaledTrackingDistance`.
+    fn scaled_range(&self, entity_type: &EntityType) -> u32 {
+        self.entity_broadcast_range.load(Relaxed) * (entity_type.client_tracking_range * 16) / 100
+    }
+
+    /// Scales every tracking range to `percentage` of its vanilla value.
+    pub fn set_entity_broadcast_range(&self, percentage: u32) {
+        if self.entity_broadcast_range.swap(percentage, Relaxed) != percentage {
+            // The next tick pairs every entity again with the new ranges.
+            for entry in &self.entity_map {
+                entry.value().pos_dirty.store(true, Relaxed);
+            }
         }
     }
 
@@ -1315,7 +1358,7 @@ impl EntityTracker {
                 } else {
                     *moved_slot = true;
                     let chunk_changed = old_pos.x != new_pos.x || old_pos.z != new_pos.z;
-                    tracked.update_players_from_snapshots(&all_snapshots, chunk_changed);
+                    tracked.update_players_from_snapshots(&all_snapshots, chunk_changed, world);
                     if section_changed {
                         tracked.last_section_pos.store(new_pos);
                     }
@@ -1335,17 +1378,16 @@ impl EntityTracker {
                 .zip(entity_moved.par_iter())
                 .for_each(|(tracked, &moved)| {
                     if !moved {
-                        tracked.update_players_from_snapshots(&moved_snapshots, false);
+                        tracked.update_players_from_snapshots(&moved_snapshots, false, world);
                     }
                 });
         }
 
-        tracked_entities.par_iter().for_each(|tracked| {
-            if tracked.entity.get_player().is_none() {
-                tracked.send_changes(world);
-            } else if tracked.entity.get_entity().synched_data.is_dirty() {
-                tracked.entity.get_entity().send_dirty_entity_data();
-            }
-        });
+        tracked_entities
+            .par_iter()
+            .for_each(|tracked| tracked.send_changes(world));
     }
 }
+
+#[cfg(test)]
+mod tests;
