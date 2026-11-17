@@ -873,9 +873,17 @@ impl Mob for SulfurCubeEntity {
             return;
         }
         let living = &self.mob_entity.living_entity;
-        let Some(taken) = living.pick_up_from(item, 1, |ground| ground.split(1)) else {
+        let Some(taken) = living.pick_up_from(item, 1, |ground| {
+            // Event already dispatched, a concurrent insert may have filled BODY.
+            if self.has_body_item() {
+                return ItemStack::EMPTY.clone();
+            }
+            ground.split(1)
+        }) else {
             return;
         };
+        // TODO vanilla `SulfurCube.pickUpItem`: onItemPickup, setItemSlot(BODY, split(1)), absorb sound,
+        // setGuaranteedDrop, take. Pickup animation is after the body item is set.
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::BODY, taken);
         self.play_sound(Sound::EntitySulfurCubeAbsorb);

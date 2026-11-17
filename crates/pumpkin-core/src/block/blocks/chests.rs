@@ -36,7 +36,7 @@ use crate::entity::passive::tamable::TamableAnimal;
 use crate::entity::player::Player;
 use crate::plugin::api::events::world::loot_generate::LootGenerateEvent;
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, generate_loot_from_handle, place_items_in_slots};
+use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 use pumpkin_data::BlockState;
 
 // TODO vanilla `BaseContainerBlockEntity.canOpen`: the `lock` component, with `container.isLocked` and the
@@ -217,14 +217,18 @@ fn unpack_loot_table(world: &World, entity: &Arc<dyn BlockEntity>, player: Optio
         world.cancelled_by_plugin(|| LootGenerateEvent::new(key.clone()))
     });
     let mut unpacked = None;
-    entity.unpack_loot_table_with(&mut |loot_key, seed, slots| {
+    entity.unpack_loot_table_with(&mut |loot_key, seed| {
         // The cancel only covers the key the event saw.
-        if cancelled_key.as_deref() != Some(loot_key.as_str()) {
-            fill_loot_into_slots(world, entity, player, &loot_key, seed, slots);
-        }
+        let items = if cancelled_key.as_deref() == Some(loot_key.as_str()) {
+            Vec::new()
+        } else {
+            generate_chest_loot(world, entity, player, &loot_key, seed)
+        };
         unpacked = Some(loot_key);
+        items
     });
     // Outside the loot lock: advancement handlers must not run while it is held.
+    // TODO vanilla `CriteriaTriggers.GENERATE_LOOT` runs before `setLootTable(null)` and `LootTable.fill`.
     if let (Some(player), Some(loot_key)) = (player, unpacked) {
         player.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
@@ -234,17 +238,16 @@ fn unpack_loot_table(world: &World, entity: &Arc<dyn BlockEntity>, player: Optio
     }
 }
 
-fn fill_loot_into_slots(
+fn generate_chest_loot(
     world: &World,
     entity: &Arc<dyn BlockEntity>,
     player: Option<&Player>,
     loot_key: &str,
     seed: i64,
-    slots: &mut [ItemStack],
-) {
+) -> Vec<ItemStack> {
     // Vanilla resolves an unknown key to `LootTable.EMPTY`: the key is cleared, nothing is placed.
     let Some(table) = world.get_loot_table(loot_key) else {
-        return;
+        return Vec::new();
     };
     let params = LootContextParameters {
         world: Some(world),
@@ -258,8 +261,7 @@ fn fill_loot_into_slots(
         }),
         ..Default::default()
     };
-    let items = generate_loot_from_handle(&table, seed, &params);
-    place_items_in_slots(slots, items, seed);
+    generate_loot_from_handle(&table, seed, &params)
 }
 
 /// Vanilla `ChestBlock.getContainer` with `ignoreBeingBlocked = true`: a double chest is one container.

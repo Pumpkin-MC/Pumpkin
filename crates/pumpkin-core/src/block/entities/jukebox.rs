@@ -20,6 +20,8 @@ pub struct JukeboxBlockEntity {
     world: OnceLock<Weak<World>>,
     /// The record item stored in the jukebox (`RecordItem` in NBT)
     record_stack: Arc<Mutex<ItemStack>>,
+    /// Serializes record snapshots, storage, playback, and `has_record` updates.
+    record_transition: Mutex<()>,
     /// Ticks since the current song started playing
     ticks_since_song_started: AtomicU64,
     /// Length of the current song in ticks (0 if not playing)
@@ -72,6 +74,7 @@ impl BlockEntity for JukeboxBlockEntity {
             position,
             world: OnceLock::new(),
             record_stack: Arc::new(Mutex::new(record_stack)),
+            record_transition: Mutex::new(()),
             ticks_since_song_started: AtomicU64::new(ticks_since_song_started),
             song_length_ticks: AtomicU64::new(song_length_ticks),
             dirty: AtomicBool::new(false),
@@ -216,6 +219,7 @@ impl JukeboxBlockEntity {
             position,
             world: OnceLock::new(),
             record_stack: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
+            record_transition: Mutex::new(()),
             ticks_since_song_started: AtomicU64::new(0),
             song_length_ticks: AtomicU64::new(0),
             dirty: AtomicBool::new(false),
@@ -243,6 +247,7 @@ impl JukeboxBlockEntity {
 
     /// Clear the stack and return what was there - used for dropping
     pub fn clear_record(&self) -> ItemStack {
+        let _transition = self.lock_record_transition();
         self.stop_playing();
         let mut record = self
             .record_stack
@@ -252,6 +257,12 @@ impl JukeboxBlockEntity {
         *record = ItemStack::EMPTY.clone();
         self.mark_dirty();
         taken
+    }
+
+    fn lock_record_transition(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.record_transition
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Start playing a song with the given length in ticks
@@ -345,8 +356,8 @@ impl JukeboxBlockEntity {
 }
 
 /// Implements single-slot inventory for jukebox (matches vanilla's `SingleStackInventory`)
-// TODO vanilla automation: `canPlaceItem` only takes a `JUKEBOX_PLAYABLE` item into an empty slot, and `setTheItem`
-// starts or stops the song and sets `HAS_RECORD`. Now any item goes in, nothing plays and the block state stays.
+// TODO vanilla `splitTheItem` is `setTheItem(EMPTY)`: `HAS_RECORD` then song stop. `remove_stack` stops first.
+// TODO vanilla `setTheItem` always notifies and play/stop. `update_stack` only syncs when emptiness flips.
 impl Inventory for JukeboxBlockEntity {
     fn size(&self) -> usize {
         1
@@ -367,6 +378,7 @@ impl Inventory for JukeboxBlockEntity {
     }
 
     fn remove_stack(&self, _slot: usize) -> ItemStack {
+        let _transition = self.lock_record_transition();
         self.stop_playing();
         let taken = {
             let mut record = self
@@ -411,6 +423,7 @@ impl Inventory for JukeboxBlockEntity {
     }
 
     fn set_stack(&self, _slot: usize, stack: ItemStack) {
+        let _transition = self.lock_record_transition();
         let record = stack.clone();
         *self
             .record_stack
@@ -424,6 +437,7 @@ impl Inventory for JukeboxBlockEntity {
         if slot >= self.size() {
             return false;
         }
+        let _transition = self.lock_record_transition();
         let (updated, inserted_or_removed, record) = {
             let mut record = self
                 .record_stack
@@ -478,6 +492,7 @@ impl Inventory for JukeboxBlockEntity {
 
 impl Clearable for JukeboxBlockEntity {
     fn clear(&self) {
+        let _transition = self.lock_record_transition();
         self.stop_playing();
         *self
             .record_stack

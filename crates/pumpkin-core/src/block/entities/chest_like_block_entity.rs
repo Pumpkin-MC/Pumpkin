@@ -140,22 +140,20 @@ macro_rules! impl_block_entity_for_chest {
                 self
             }
 
-            fn unpack_loot_table_with(&self, fill: &mut dyn FnMut(String, i64, &mut [ItemStack])) {
-                let mut loot = self
-                    .loot_table
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let Some(key) = loot.take() else {
-                    return;
-                };
-                // Items lock under loot lock: same order everywhere.
-                let mut items = self
-                    .items
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                fill(key, self.loot_table_seed, &mut *items);
-                drop(items);
-                pumpkin_inventory::Inventory::mark_dirty(self);
+            fn unpack_loot_table_with(
+                &self,
+                generate: &mut dyn FnMut(String, i64) -> Vec<ItemStack>,
+            ) {
+                if $crate::world::loot::unpack_loot_into_slots(
+                    &self.loot_table,
+                    self.loot_table_seed,
+                    &self.items,
+                    |key, seed| generate(key, seed),
+                )
+                .is_some()
+                {
+                    pumpkin_inventory::Inventory::mark_dirty(self);
+                }
             }
 
             fn loot_table_key(&self) -> Option<String> {
@@ -510,5 +508,52 @@ mod tests {
         assert_eq!(single.get_string("id"), Some("Chest"));
         assert_eq!(single.get_bool("isMovable"), Some(true));
         assert!(single.get_int("pairx").is_none());
+    }
+
+    #[test]
+    fn unpack_preserves_items_inserted_during_generation() {
+        use crate::block::entities::BlockEntity;
+        use crate::block::entities::chest::ChestBlockEntity;
+        use pumpkin_data::item::Item;
+        use pumpkin_data::item_stack::ItemStack;
+        use pumpkin_inventory::Inventory;
+
+        let chest = ChestBlockEntity::new(BlockPos::new(0, 64, 0));
+        *chest
+            .loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some("minecraft:chests/simple_dungeon".into());
+        chest.set_stack(0, ItemStack::new(1, &Item::DIAMOND));
+        chest.unpack_loot_table_with(&mut |_key, _seed| {
+            vec![
+                ItemStack::new(1, &Item::STONE),
+                ItemStack::new(1, &Item::DIRT),
+            ]
+        });
+        assert_eq!(chest.get_stack(0).item.id, Item::DIAMOND.id);
+        let placed: Vec<_> = (1..ChestBlockEntity::INVENTORY_SIZE)
+            .filter_map(|slot| {
+                let stack = chest.get_stack(slot);
+                (!stack.is_empty()).then_some(stack.item.id)
+            })
+            .collect();
+        assert_eq!(placed.len(), 2);
+        assert!(placed.contains(&Item::STONE.id));
+        assert!(placed.contains(&Item::DIRT.id));
+        assert!(
+            chest
+                .loot_table
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_none()
+        );
+
+        chest.unpack_loot_table_with(&mut |_key, _seed| vec![ItemStack::new(1, &Item::GOLD_INGOT)]);
+        assert_eq!(chest.get_stack(0).item.id, Item::DIAMOND.id);
+        assert!(
+            (0..ChestBlockEntity::INVENTORY_SIZE)
+                .all(|slot| chest.get_stack(slot).item.id != Item::GOLD_INGOT.id)
+        );
     }
 }

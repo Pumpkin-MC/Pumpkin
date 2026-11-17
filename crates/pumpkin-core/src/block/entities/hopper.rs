@@ -1,6 +1,7 @@
 use crate::block::blocks::chests::chest_container;
 use crate::block::blocks::composter::ComposterBlock;
 use crate::block::entities::BlockEntity;
+use crate::block::entities::decorated_pot::DecoratedPotBlockEntity;
 use crate::entity::EntityBase;
 use crate::entity::item::ItemEntity;
 use crate::plugin::api::events::inventory::hopper_inventory_search::HopperInventorySearchEvent;
@@ -272,7 +273,13 @@ impl HopperBlockEntity {
         let entity = world.get_block_entity(pos)?;
         if ChestLikeProperties::handles_block_id(block.id) {
             chest_container(world, block, pos, state.id, &entity)
+        } else if let Ok(pot) = Arc::downcast::<DecoratedPotBlockEntity>(entity.clone()) {
+            // Vanilla `DecoratedPotBlockEntity.getTheItem` unpacks before hopper slot access.
+            DecoratedPotBlockEntity::unpack_loot_table(&pot, world);
+            pot.get_container()
         } else {
+            // TODO vanilla `RandomizableContainerBlockEntity.getItem` unpacks barrels, shulker boxes,
+            // dispensers, droppers, hoppers and crafters. Only chests unpack in `chest_container`.
             entity.get_container()
         }
     }

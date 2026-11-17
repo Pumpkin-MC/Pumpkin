@@ -23,8 +23,8 @@ pub struct DecoratedPotBlockEntity {
     pub comparator_dirty: AtomicBool,
 }
 
-// TODO vanilla `DecoratedPotBlockEntity` is a `ContainerSingleItem`: hoppers and droppers fill and empty it,
-// and it can hold a loot table. Without an inventory automation skips it.
+// TODO vanilla `getTheItem`/`setTheItem`/`splitTheItem` unpack the loot table on every slot access.
+// Hopper `get_container` unpacks once; other inventory reads still skip it.
 impl BlockEntity for DecoratedPotBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
@@ -247,6 +247,7 @@ impl DecoratedPotBlockEntity {
                 seed,
                 &LootContextParameters {
                     world: Some(world),
+                    // TODO vanilla `RandomizableContainer.unpackLootTable` ORIGIN is `Vec3.atCenterOf`.
                     position: Some(this.position.to_f64()),
                     ..Default::default()
                 },

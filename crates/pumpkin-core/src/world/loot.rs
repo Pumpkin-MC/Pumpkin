@@ -529,6 +529,32 @@ pub fn place_items_in_slots(slots: &mut [ItemStack], items_to_place: Vec<ItemSta
     });
 }
 
+/// Vanilla `RandomizableContainer.unpackLootTable` lock protocol for concurrent containers.
+///
+/// Takes the pending loot-table key so another unpack cannot run, runs `generate` with neither
+/// chest lock held, then places into still-empty slots so concurrent inserts stay.
+// TODO vanilla `LootTable.fill` shuffles empty slots with the loot-context RNG after `getRandomItems`,
+// not a fresh generator from the same seed.
+pub fn unpack_loot_into_slots<const N: usize>(
+    loot_table: &std::sync::Mutex<Option<String>>,
+    seed: i64,
+    items: &std::sync::RwLock<[ItemStack; N]>,
+    generate: impl FnOnce(String, i64) -> Vec<ItemStack>,
+) -> Option<String> {
+    let key = {
+        let mut loot = loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        loot.take()?
+    };
+    let generated = generate(key.clone(), seed);
+    let mut slots = items
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    place_items_in_slots(&mut *slots, generated, seed);
+    Some(key)
+}
+
 fn place_items_in_chest(
     inventory: &std::sync::Arc<dyn pumpkin_inventory::Inventory>,
     items_to_place: Vec<ItemStack>,
