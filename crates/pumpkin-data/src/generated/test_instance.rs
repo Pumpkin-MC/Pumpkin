@@ -342,12 +342,6 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:note_block_mob_head_above_sets_instrument" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/note_block_mob_head_above_sets_instrument.json"
         )),
-        "pumpkin:npc_actions" => Some(include_str!(
-            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/npc_actions.json"
-        )),
-        "pumpkin:npc_lifecycle" => Some(include_str!(
-            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/npc_lifecycle.json"
-        )),
         "pumpkin:oak_and_spruce_doors_redstone" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/oak_and_spruce_doors_redstone.json"
         )),
@@ -518,6 +512,12 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         )),
         "pumpkin:shearing_tool_loot_and_item_events" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/shearing_tool_loot_and_item_events.json"
+        )),
+        "pumpkin:simulated_player_actions" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/simulated_player_actions.json"
+        )),
+        "pumpkin:simulated_player_lifecycle" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/simulated_player_lifecycle.json"
         )),
         "pumpkin:smoker_cooks_raw_beef" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/smoker_cooks_raw_beef.json"
@@ -758,8 +758,6 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:note_block_instruments_emerald_hay_glowstone_default",
         "pumpkin:note_block_instruments_rock_sand_glass_wood",
         "pumpkin:note_block_mob_head_above_sets_instrument",
-        "pumpkin:npc_actions",
-        "pumpkin:npc_lifecycle",
         "pumpkin:oak_and_spruce_doors_redstone",
         "pumpkin:oak_button_30_tick_pulse",
         "pumpkin:observer_chain_propagates_pulse",
@@ -817,6 +815,8 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:referenced_environment",
         "pumpkin:scaffolding_distance_and_collapse",
         "pumpkin:shearing_tool_loot_and_item_events",
+        "pumpkin:simulated_player_actions",
+        "pumpkin:simulated_player_lifecycle",
         "pumpkin:smoker_cooks_raw_beef",
         "pumpkin:snow_golem_horizontal_pattern_spawns",
         "pumpkin:snow_golem_pattern_spawns",

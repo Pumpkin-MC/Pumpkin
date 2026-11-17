@@ -154,7 +154,7 @@ impl PortalType {
                                         client.try_enqueue_packet(data);
                                     }
                                 }
-                                crate::net::ClientPlatform::Npc(_) => {},
+                                crate::net::ClientPlatform::SimulatedPlayer(_) => {},
                             }
                         }
 

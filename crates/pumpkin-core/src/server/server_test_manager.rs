@@ -8,8 +8,8 @@ use pumpkin_data::{item_stack::ItemStack, translation::java};
 use pumpkin_gametest::{
     BlockBasedTest, GameTestContext, GameTestEntity, GameTestError, GameTestManager,
     GameTestReporter, GameTestResult, GameTestRotation, GameTestRunner, GameTestSession,
-    GameTestStructureTemplate, GameTestWorld, Npc as GameTestNpc, TestStructureInstance, TestType,
-    clear_placed_test, place_existing_structure, remove_barriers,
+    GameTestStructureTemplate, GameTestWorld, SimulatedPlayer as GameTestSimulatedPlayer,
+    TestStructureInstance, TestType, clear_placed_test, place_existing_structure, remove_barriers,
 };
 pub use pumpkin_gametest::{GameTestBatchReport, GameTestRetryOptions};
 use pumpkin_nbt::NbtCompound;
@@ -28,7 +28,7 @@ use crate::{
         test_instance_block::{MAX_TEST_STRUCTURE_SIZE, TestInstanceBlockBlockEntity},
     },
     command::CommandSource,
-    entity::{EntityBase, passive::sheep::SheepEntity, player::npc::Npc},
+    entity::{EntityBase, passive::sheep::SheepEntity, player::simulated_player::SimulatedPlayer},
     server::Server,
     world::World,
 };
@@ -899,7 +899,7 @@ async fn clear_test_instance(
     let adapter = ServerGameTestWorld {
         world,
         forced_chunks: StdMutex::new(HashSet::new()),
-        npcs: StdMutex::new(Vec::new()),
+        simulated_players: StdMutex::new(Vec::new()),
     };
     clear_placed_test(&adapter, &placement, padding).await?;
     Ok(true)
@@ -948,7 +948,7 @@ pub async fn reset_test_instance(
     let adapter = ServerGameTestWorld {
         world: world.clone(),
         forced_chunks: StdMutex::new(HashSet::new()),
-        npcs: StdMutex::new(Vec::new()),
+        simulated_players: StdMutex::new(Vec::new()),
     };
     let placed = async {
         remove_barriers(&adapter, &placement, definition.sky_access).await?;
@@ -1098,7 +1098,7 @@ pub async fn prepare_test_run_with_reporter(
     let adapter_world: Arc<dyn GameTestWorld> = Arc::new(ServerGameTestWorld {
         world: request.world,
         forced_chunks: StdMutex::new(HashSet::new()),
-        npcs: StdMutex::new(Vec::new()),
+        simulated_players: StdMutex::new(Vec::new()),
     });
     let extra_rotation = GameTestRotation::from_steps(request.rotation_steps);
     let run = GameTestSession::new_with_extra_rotation(
@@ -1124,7 +1124,7 @@ pub(crate) struct ServerGameTestWorld {
     world: Arc<World>,
     /// Chunks leased by this test across copy-reset retries.
     forced_chunks: StdMutex<HashSet<(i32, i32)>>,
-    npcs: StdMutex<Vec<(String, Arc<ServerGameTestNpc>)>>,
+    simulated_players: StdMutex<Vec<(String, Arc<ServerGameTestSimulatedPlayer>)>>,
 }
 
 pub(crate) fn server_world(test: &GameTestContext) -> GameTestResult<Arc<World>> {
@@ -1135,19 +1135,24 @@ pub(crate) fn server_world(test: &GameTestContext) -> GameTestResult<Arc<World>>
         .ok_or_else(|| GameTestError::World("Expected server GameTest world".to_string()))
 }
 
-static NEXT_NPC_NAME: AtomicU64 = AtomicU64::new(1);
+static NEXT_SIMULATED_PLAYER_NAME: AtomicU64 = AtomicU64::new(1);
 
-fn unique_npc_name(requested: &str) -> GameTestResult<String> {
+fn unique_simulated_player_name(requested: &str) -> GameTestResult<String> {
     if requested.is_empty() || requested.len() > 16 || requested.chars().any(char::is_control) {
-        return Err(GameTestError::World("Invalid NPC name".to_string()));
+        return Err(GameTestError::World(
+            "Invalid simulated player name".to_string(),
+        ));
     }
-    let suffix = format!("_{:x}", NEXT_NPC_NAME.fetch_add(1, Ordering::Relaxed));
+    let suffix = format!(
+        "_{:x}",
+        NEXT_SIMULATED_PLAYER_NAME.fetch_add(1, Ordering::Relaxed)
+    );
     let Some(max_prefix_bytes) = 16usize
         .checked_sub(suffix.len())
         .filter(|length| *length > 0)
     else {
         return Err(GameTestError::World(
-            "NPC name IDs are exhausted".to_string(),
+            "Simulated player name IDs are exhausted".to_string(),
         ));
     };
     let mut prefix_bytes = requested.len().min(max_prefix_bytes);
@@ -1156,7 +1161,7 @@ fn unique_npc_name(requested: &str) -> GameTestResult<String> {
     }
     if prefix_bytes == 0 {
         return Err(GameTestError::World(
-            "NPC name cannot fit a unique suffix".to_string(),
+            "Simulated player name cannot fit a unique suffix".to_string(),
         ));
     }
     Ok(format!("{}{}", &requested[..prefix_bytes], suffix))
@@ -1242,120 +1247,123 @@ impl GameTestEntity for ServerGameTestEntity {
     }
 }
 
-struct ServerGameTestNpc {
-    npc: Arc<Npc>,
+struct ServerGameTestSimulatedPlayer {
+    simulated_player: Arc<SimulatedPlayer>,
 }
 
-fn npc_result<T>(result: Result<T, String>) -> GameTestResult<T> {
+fn simulated_player_result<T>(result: Result<T, String>) -> GameTestResult<T> {
     result.map_err(GameTestError::World)
 }
 
 #[async_trait]
-impl GameTestNpc for ServerGameTestNpc {
+impl GameTestSimulatedPlayer for ServerGameTestSimulatedPlayer {
     fn entity_id(&self) -> i32 {
-        self.npc.entity_id()
+        self.simulated_player.entity_id()
     }
 
     fn set_visible_in_list(&self, visible: bool) {
-        self.npc.set_visible_in_list(visible);
+        self.simulated_player.set_visible_in_list(visible);
     }
 
     fn set_visible_in_tab_list(&self, visible: bool) {
-        self.npc.set_visible_in_tab_list(visible);
+        self.simulated_player.set_visible_in_tab_list(visible);
     }
 
     fn name(&self) -> &str {
-        self.npc.name()
+        self.simulated_player.name()
     }
 
     fn position(&self) -> pumpkin_util::math::vector3::Vector3<f64> {
-        self.npc.position()
+        self.simulated_player.position()
     }
 
     fn gamemode(&self) -> GameMode {
-        self.npc.gamemode()
+        self.simulated_player.gamemode()
     }
 
     fn set_gamemode(&self, mode: GameMode) -> GameTestResult<()> {
-        npc_result(self.npc.set_gamemode(mode))
+        simulated_player_result(self.simulated_player.set_gamemode(mode))
     }
 
     fn set_permission_level(&self, level: pumpkin_util::PermissionLvl) -> GameTestResult<()> {
-        npc_result(self.npc.set_permission_level(level))
+        simulated_player_result(self.simulated_player.set_permission_level(level))
     }
 
     fn run_command(&self, command: &str) -> GameTestResult<()> {
-        npc_result(self.npc.run_command(command))
+        simulated_player_result(self.simulated_player.run_command(command))
     }
 
     fn selected_hotbar_slot(&self) -> u8 {
-        self.npc.selected_hotbar_slot()
+        self.simulated_player.selected_hotbar_slot()
     }
 
     fn set_selected_hotbar_slot(&self, slot: u8) -> GameTestResult<()> {
-        npc_result(self.npc.set_selected_hotbar_slot(slot))
+        simulated_player_result(self.simulated_player.set_selected_hotbar_slot(slot))
     }
 
     fn held_item(&self, hand: Hand) -> ItemStack {
-        self.npc.held_item(hand)
+        self.simulated_player.held_item(hand)
     }
 
     fn set_held_item(&self, hand: Hand, stack: ItemStack) -> GameTestResult<()> {
-        npc_result(self.npc.set_held_item(hand, stack))
+        simulated_player_result(self.simulated_player.set_held_item(hand, stack))
     }
 
     fn first_empty_inventory_slot(&self) -> Option<usize> {
-        self.npc.first_empty_inventory_slot()
+        self.simulated_player.first_empty_inventory_slot()
     }
 
     fn inventory_item(&self, slot: usize) -> GameTestResult<ItemStack> {
-        npc_result(self.npc.inventory_item(slot))
+        simulated_player_result(self.simulated_player.inventory_item(slot))
     }
 
     fn inventory_count(&self, item: &Item) -> u32 {
-        self.npc.inventory_count(item)
+        self.simulated_player.inventory_count(item)
     }
 
     fn interact_with(&self, entity: &Arc<dyn GameTestEntity>, hand: Hand) -> GameTestResult<()> {
-        npc_result(self.npc.interact_with(entity.entity_id(), hand))
+        simulated_player_result(
+            self.simulated_player
+                .interact_with(entity.entity_id(), hand),
+        )
     }
 
     fn use_block(&self, position: &BlockPos, hand: Hand) -> GameTestResult<()> {
-        npc_result(self.npc.use_block(position, hand))
+        simulated_player_result(self.simulated_player.use_block(position, hand))
     }
 
     fn break_block(&self, position: &BlockPos) -> GameTestResult<bool> {
-        npc_result(self.npc.break_block(position))
+        simulated_player_result(self.simulated_player.break_block(position))
     }
 
     fn set_sprinting(&self, sprinting: bool) -> GameTestResult<()> {
-        npc_result(self.npc.set_sprinting(sprinting))
+        simulated_player_result(self.simulated_player.set_sprinting(sprinting))
     }
 
     fn is_sprinting(&self) -> bool {
-        self.npc.is_sprinting()
+        self.simulated_player.is_sprinting()
     }
 
     fn teleport_to(
         &self,
         position: pumpkin_util::math::vector3::Vector3<f64>,
     ) -> GameTestResult<()> {
-        npc_result(self.npc.teleport_to(position))
+        simulated_player_result(self.simulated_player.teleport_to(position))
     }
 
     async fn move_to(
         &self,
         position: pumpkin_util::math::vector3::Vector3<f64>,
     ) -> GameTestResult<()> {
-        npc_result(self.npc.move_to(position))
+        simulated_player_result(self.simulated_player.move_to(position))
     }
 
     async fn disconnect(&self) -> GameTestResult<()> {
-        npc_result(self.npc.disconnect().await)
+        simulated_player_result(self.simulated_player.disconnect().await)
     }
 
     async fn look_at_entity(&self, entity: &Arc<dyn GameTestEntity>) -> GameTestResult<()> {
-        npc_result(self.npc.look_at_entity(entity.entity_id()))
+        simulated_player_result(self.simulated_player.look_at_entity(entity.entity_id()))
     }
 }
 
@@ -1364,7 +1372,7 @@ impl ServerGameTestWorld {
         Self {
             world,
             forced_chunks: StdMutex::new(HashSet::new()),
-            npcs: StdMutex::new(Vec::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         }
     }
 
@@ -1830,12 +1838,12 @@ impl GameTestWorld for ServerGameTestWorld {
         Ok(Arc::new(ServerGameTestEntity { entity }))
     }
 
-    async fn spawn_npc(
+    async fn spawn_simulated_player(
         &self,
         name: &str,
         position: pumpkin_util::math::vector3::Vector3<f64>,
         gamemode: GameMode,
-    ) -> GameTestResult<Arc<dyn GameTestNpc>> {
+    ) -> GameTestResult<Arc<dyn GameTestSimulatedPlayer>> {
         self.ensure_chunk_loaded(&BlockPos::floored_v(position))
             .await;
         let server = self
@@ -1843,46 +1851,57 @@ impl GameTestWorld for ServerGameTestWorld {
             .server
             .upgrade()
             .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
-        let unique_name = unique_npc_name(name)?;
-        let npc = server
-            .spawn_npc(&self.world, &unique_name, position, gamemode)
+        let unique_name = unique_simulated_player_name(name)?;
+        let simulated_player = server
+            .spawn_simulated_player(&self.world, &unique_name, position, gamemode)
             .await
             .map_err(GameTestError::World)?;
-        let game_test_npc = Arc::new(ServerGameTestNpc { npc });
-        self.npcs
+        let game_test_simulated_player =
+            Arc::new(ServerGameTestSimulatedPlayer { simulated_player });
+        self.simulated_players
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push((name.to_string(), game_test_npc.clone()));
-        Ok(game_test_npc)
+            .push((name.to_string(), game_test_simulated_player.clone()));
+        Ok(game_test_simulated_player)
     }
 
-    async fn disconnect_npcs(&self) -> GameTestResult<()> {
-        let npcs = std::mem::take(
+    async fn disconnect_simulated_players(&self) -> GameTestResult<()> {
+        let simulated_players = std::mem::take(
             &mut *self
-                .npcs
+                .simulated_players
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
-        for (_, npc) in npcs {
-            npc.disconnect().await?;
+        for (_, simulated_player) in simulated_players {
+            simulated_player.disconnect().await?;
         }
         Ok(())
     }
 
-    async fn npc_position(&self, name: &str) -> Option<pumpkin_util::math::vector3::Vector3<f64>> {
-        let npcs = self
-            .npcs
+    async fn simulated_player_position(
+        &self,
+        name: &str,
+    ) -> Option<pumpkin_util::math::vector3::Vector3<f64>> {
+        let simulated_players = self
+            .simulated_players
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        npcs.iter()
+        simulated_players
+            .iter()
             .rev()
-            .filter(|(requested, game_test_npc)| {
+            .filter(|(requested, game_test_simulated_player)| {
                 requested.eq_ignore_ascii_case(name)
-                    || game_test_npc.name().eq_ignore_ascii_case(name)
+                    || game_test_simulated_player.name().eq_ignore_ascii_case(name)
             })
-            .find_map(|(_, game_test_npc)| {
+            .find_map(|(_, game_test_simulated_player)| {
                 self.world
-                    .get_player_by_uuid(game_test_npc.npc.player().gameprofile.id)
+                    .get_player_by_uuid(
+                        game_test_simulated_player
+                            .simulated_player
+                            .player()
+                            .gameprofile
+                            .id,
+                    )
                     .map(|player| player.position())
             })
     }
@@ -2169,7 +2188,7 @@ mod tests {
         let adapter = ServerGameTestWorld {
             world: world.clone(),
             forced_chunks: StdMutex::new(HashSet::new()),
-            npcs: StdMutex::new(Vec::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         };
         let min = BlockPos::new(0, 64, 0);
         let max = BlockPos::new(16, 65, 16);
@@ -2206,7 +2225,7 @@ mod tests {
         let adapter = ServerGameTestWorld {
             world: world.clone(),
             forced_chunks: StdMutex::new(HashSet::new()),
-            npcs: StdMutex::new(Vec::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         };
         adapter
             .spawn_entity("minecraft:pig", Vector3::new(8.5, 65.0, 8.5))
@@ -2235,7 +2254,7 @@ mod tests {
         let adapter = ServerGameTestWorld {
             world: world.clone(),
             forced_chunks: StdMutex::new(HashSet::new()),
-            npcs: StdMutex::new(Vec::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         };
         adapter.clear_non_player_entities(&min, &max).await?;
         assert!(world.entities.load().is_empty());
@@ -2273,7 +2292,7 @@ mod tests {
         let adapter = ServerGameTestWorld {
             world: world.clone(),
             forced_chunks: StdMutex::new(HashSet::new()),
-            npcs: StdMutex::new(Vec::new()),
+            simulated_players: StdMutex::new(Vec::new()),
         };
         let mut nbt = NbtCompound::new();
         nbt.put_string("id", "minecraft:unknown_block_entity".to_string());

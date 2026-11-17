@@ -11,7 +11,7 @@ pub(super) async fn test_commands_gamemode_give_setblock(
     test.set_dimensions(5, 5, 5).await?;
     test.build_floor(5, 5, &Block::STONE).await?;
     let player = test
-        .spawn_npc(
+        .spawn_simulated_player(
             "CommandTester",
             Vector3::new(2.5, 1.0, 2.5),
             GameMode::Survival,

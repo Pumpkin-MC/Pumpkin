@@ -1,8 +1,8 @@
 pub mod advancement;
 pub mod client_move;
 pub mod client_push;
-pub mod npc;
 mod shoulders;
+pub mod simulated_player;
 pub mod statistics;
 
 pub use client_move::{ClientMove, ClientMoveOutcome};
@@ -957,7 +957,7 @@ impl Player {
         let supports_player_loaded = match client.as_ref() {
             ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
             ClientPlatform::Bedrock(_) => true,
-            ClientPlatform::Npc(_) => false,
+            ClientPlatform::SimulatedPlayer(_) => false,
         };
         let initially_loaded = !supports_player_loaded;
 
@@ -1322,8 +1322,8 @@ impl Player {
                 actions: &[PlayerAction::UpdateListed(listed)],
             }],
         ));
-        if matches!(self.client.as_ref(), ClientPlatform::Npc(_)) {
-            world.broadcast_npc_tab_list_visibility(self);
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
+            world.broadcast_simulated_player_tab_list_visibility(self);
         }
     }
 
@@ -1488,7 +1488,7 @@ impl Player {
         let world = self.world();
         world.remove_player(self, true).await;
 
-        if matches!(self.client.as_ref(), ClientPlatform::Npc(_)) {
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
             return;
         }
 
@@ -2002,7 +2002,7 @@ impl Player {
                 }
             }
 
-            ClientPlatform::Npc(_) => {}
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -3155,7 +3155,7 @@ impl Player {
             return;
         }
 
-        if matches!(self.client.as_ref(), ClientPlatform::Npc(_)) {
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
             return;
         }
         let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
@@ -3224,7 +3224,7 @@ impl Player {
                     }
                 }
 
-                ClientPlatform::Npc(_) => {}
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
 
             count += 1;
@@ -3334,11 +3334,11 @@ impl Player {
         let version = match self.client.as_ref() {
             ClientPlatform::Java(java_client) => java_client.version.load(),
             ClientPlatform::Bedrock(_) => JavaMinecraftVersion::V_1_20_2,
-            ClientPlatform::Npc(_) => JavaMinecraftVersion::Unknown,
+            ClientPlatform::SimulatedPlayer(_) => JavaMinecraftVersion::Unknown,
         };
 
         let view_distance = self.watched_section.load().view_distance;
-        let prepared_batch = if matches!(self.client.as_ref(), ClientPlatform::Npc(_)) {
+        let prepared_batch = if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
             None
         } else {
             self.chunk_sender.try_lock().ok().and_then(|mut sender| {
@@ -3408,7 +3408,7 @@ impl Player {
                         });
                     }
                 }
-                ClientPlatform::Npc(_) => {}
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
         }
 
@@ -3885,7 +3885,7 @@ impl Player {
         match self.client.as_ref() {
             ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
             ClientPlatform::Bedrock(_) => true,
-            ClientPlatform::Npc(_) => false,
+            ClientPlatform::SimulatedPlayer(_) => false,
         }
     }
 
@@ -4158,7 +4158,7 @@ impl Player {
                 }
             }
 
-            ClientPlatform::Npc(_) => {}
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -4982,7 +4982,7 @@ impl Player {
                         self.bedrock_spawned.store(false, Ordering::Relaxed);
                     }
 
-                    ClientPlatform::Npc(_) => {}
+                    ClientPlatform::SimulatedPlayer(_) => {}
                 }
 
                 self.send_permission_lvl_update();
@@ -5078,7 +5078,7 @@ impl Player {
             ClientPlatform::Bedrock(client) => {
                 self.send_bedrock_teleport(client);
             }
-            ClientPlatform::Npc(_) => {
+            ClientPlatform::SimulatedPlayer(_) => {
                 *self
                     .awaiting_teleport
                     .lock()
@@ -5232,7 +5232,7 @@ impl Player {
             if event.cancelled {
                 return;
             }
-            if matches!(self.client.as_ref(), ClientPlatform::Npc(_)) {
+            if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
                 let server_clone = server.clone();
                 server.spawn_task(async move {
                     player_arc.remove().await;
@@ -8263,7 +8263,7 @@ impl EntityBase for Player {
         {
             client.try_enqueue_packet(data);
         }
-        if matches!(self.client.as_ref(), ClientPlatform::Npc(_))
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_))
             && !self.tab_list_listed.load(Ordering::Relaxed)
             && let Ok(data) = client.serialize_packet(&self.bedrock_tab_list_update())
         {
@@ -9260,7 +9260,7 @@ impl InventoryPlayer for Player {
                 }
             }
 
-            ClientPlatform::Npc(_) => {}
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -9340,7 +9340,7 @@ impl InventoryPlayer for Player {
                 }
             }
 
-            ClientPlatform::Npc(_) => {}
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -9373,7 +9373,7 @@ impl InventoryPlayer for Player {
                 }
             }
 
-            ClientPlatform::Npc(_) => {}
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -9446,7 +9446,7 @@ impl InventoryPlayer for Player {
                 }
             }
 
-            ClientPlatform::Npc(_) => {}
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 

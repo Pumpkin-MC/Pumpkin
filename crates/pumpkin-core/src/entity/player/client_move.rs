@@ -177,7 +177,7 @@ impl Player {
             ClientPlatform::Bedrock(client) => {
                 self.send_bedrock_teleport(client);
             }
-            ClientPlatform::Npc(_) => {
+            ClientPlatform::SimulatedPlayer(_) => {
                 *self
                     .awaiting_teleport
                     .lock()

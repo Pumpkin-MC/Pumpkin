@@ -20,7 +20,7 @@ pub fn get_view_distance(player: &Player) -> NonZero<u8> {
     let max_view_distance = match player.client.as_ref() {
         ClientPlatform::Java(_) => server.advanced_config.networking.java.view_distance,
         ClientPlatform::Bedrock(_) => server.advanced_config.networking.bedrock.view_distance,
-        ClientPlatform::Npc(_) => fallback,
+        ClientPlatform::SimulatedPlayer(_) => fallback,
     };
     player
         .config
@@ -42,7 +42,7 @@ pub fn is_within_chebyshev_distance(
 
 #[allow(clippy::too_many_lines)]
 pub fn update_position(player: &Arc<Player>) {
-    if matches!(player.client.as_ref(), ClientPlatform::Npc(_)) {
+    if matches!(player.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
         return;
     }
     let entity = &player.get_entity();
@@ -80,7 +80,7 @@ pub fn update_position(player: &Arc<Player>) {
                 bedrock_client.try_enqueue_packet(data);
             }
         }
-        ClientPlatform::Npc(_) => {}
+        ClientPlatform::SimulatedPlayer(_) => {}
     }
     let (loading_iter, unloading_iter) =
         Cylindrical::changed_chunks(old_cylindrical, new_cylindrical);

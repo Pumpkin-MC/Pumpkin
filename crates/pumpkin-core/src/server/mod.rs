@@ -4,7 +4,7 @@ use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::VanillaData;
 use crate::data::player_server::ServerPlayerData;
 use crate::entity::NBTStorage;
-use crate::entity::player::npc::Npc;
+use crate::entity::player::simulated_player::SimulatedPlayer;
 use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
@@ -823,7 +823,7 @@ impl Server {
                     );
                     self.management_hub.broadcast_player_joined(&player_dto);
                     if self.telemetry_config.enabled
-                        && !matches!(player.client.as_ref(), ClientPlatform::Npc(_))
+                        && !matches!(player.client.as_ref(), ClientPlatform::SimulatedPlayer(_))
                     {
                         self.telemetry_sessions.record_join(player.gameprofile.id);
                     }
@@ -841,18 +841,18 @@ impl Server {
     }
 
     /// Admits a server-controlled player without a network connection.
-    pub async fn spawn_npc(
+    pub async fn spawn_simulated_player(
         self: &Arc<Self>,
         world: &Arc<World>,
         name: &str,
         position: Vector3<f64>,
         gamemode: GameMode,
-    ) -> Result<Arc<Npc>, String> {
+    ) -> Result<Arc<SimulatedPlayer>, String> {
         if name.is_empty() || name.len() > 16 || name.chars().any(char::is_control) {
-            return Err("Invalid NPC name".to_string());
+            return Err("Invalid simulated player name".to_string());
         }
         if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
-            return Err("Invalid NPC position".to_string());
+            return Err("Invalid simulated player position".to_string());
         }
         if !self
             .worlds
@@ -860,7 +860,7 @@ impl Server {
             .iter()
             .any(|candidate| Arc::ptr_eq(candidate, world))
         {
-            return Err("NPC world is not loaded by this server".to_string());
+            return Err("Simulated player world is not loaded by this server".to_string());
         }
         if self.get_player_by_name(name).is_some() {
             return Err(format!("Player '{name}' is already online"));
@@ -877,7 +877,7 @@ impl Server {
             ..PlayerConfig::default()
         };
         let player = Arc::new(Player::new(
-            Arc::new(ClientPlatform::npc()),
+            Arc::new(ClientPlatform::simulated_player()),
             profile,
             config.clone(),
             world,
@@ -895,10 +895,10 @@ impl Server {
 
         let Some((player, world)) = self.admit_new_player(player, world.clone(), Some(config))
         else {
-            return Err("NPC login was cancelled".to_string());
+            return Err("Simulated player login was cancelled".to_string());
         };
         world.announce_player_join(&player, self).await;
-        Ok(Arc::new(Npc::new(player, Arc::downgrade(self))))
+        Ok(Arc::new(SimulatedPlayer::new(player, Arc::downgrade(self))))
     }
 
     pub fn remove_player(&self, player: &Player) {
@@ -1214,7 +1214,9 @@ impl Server {
                 .players
                 .load()
                 .iter()
-                .filter(|player| !matches!(player.client.as_ref(), ClientPlatform::Npc(_)))
+                .filter(|player| {
+                    !matches!(player.client.as_ref(), ClientPlatform::SimulatedPlayer(_))
+                })
                 .count();
         }
         count
@@ -1228,7 +1230,9 @@ impl Server {
                 .players
                 .load()
                 .iter()
-                .filter(|player| !matches!(player.client.as_ref(), ClientPlatform::Npc(_)))
+                .filter(|player| {
+                    !matches!(player.client.as_ref(), ClientPlatform::SimulatedPlayer(_))
+                })
                 .count();
             if count >= n {
                 return true;

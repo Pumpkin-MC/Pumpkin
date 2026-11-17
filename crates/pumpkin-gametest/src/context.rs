@@ -12,7 +12,7 @@ use pumpkin_world::world::BlockFlags;
 use crate::entity::GameTestEntity;
 use crate::error::{GameTestError, GameTestResult};
 use crate::structure::{TestStructureInstance, expand_structure};
-use crate::world::{GameTestWorld, Npc};
+use crate::world::{GameTestWorld, SimulatedPlayer};
 use pumpkin_util::GameMode;
 
 pub type BoxedGameTestFuture = Pin<Box<dyn Future<Output = GameTestResult<()>> + Send>>;
@@ -539,21 +539,21 @@ impl GameTestContext {
         self.spawn_entity(entity_name, relative).await.map(|_| ())
     }
 
-    /// Spawns an NPC with a unique server-visible name derived from `name`.
-    /// Use the returned NPC's `name()` when referring to it outside this test.
-    pub async fn spawn_npc(
+    /// Spawns a simulated player with a unique server-visible name derived from `name`.
+    /// Use the returned simulated player's `name()` when referring to it outside this test.
+    pub async fn spawn_simulated_player(
         &self,
         name: &str,
         relative: Vector3<f64>,
         gamemode: GameMode,
-    ) -> GameTestResult<Arc<dyn Npc>> {
+    ) -> GameTestResult<Arc<dyn SimulatedPlayer>> {
         self.world
-            .spawn_npc(name, self.absolute_vec(relative), gamemode)
+            .spawn_simulated_player(name, self.absolute_vec(relative), gamemode)
             .await
     }
 
-    pub async fn npc_position(&self, name: &str) -> Option<Vector3<f64>> {
-        self.world.npc_position(name).await
+    pub async fn simulated_player_position(&self, name: &str) -> Option<Vector3<f64>> {
+        self.world.simulated_player_position(name).await
     }
 
     pub async fn spawn_item(

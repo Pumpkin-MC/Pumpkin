@@ -16,7 +16,7 @@ pub(super) async fn test_world_block_use_and_break(test: GameTestContext) -> Gam
         .await?;
 
     let player = test
-        .spawn_npc(
+        .spawn_simulated_player(
             "WorldTester",
             Vector3::new(2.5, 1.0, 2.5),
             GameMode::Creative,

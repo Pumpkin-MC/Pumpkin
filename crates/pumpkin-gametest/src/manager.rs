@@ -674,7 +674,7 @@ impl GameTestRunner {
 
             managed.run.tick().await;
             if managed.run.state.is_finished() {
-                if let Err(error) = managed.run.disconnect_npcs().await {
+                if let Err(error) = managed.run.disconnect_simulated_players().await {
                     let tick = match &managed.run.state {
                         GameTestState::Passed { tick } | GameTestState::Failed { tick, .. } => {
                             *tick

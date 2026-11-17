@@ -16,16 +16,16 @@ use crate::entity::{
 use crate::plugin::player::item_held::PlayerItemHeldEvent;
 use crate::server::Server;
 
-/// The result of an NPC action.
-pub type NpcResult<T> = Result<T, String>;
+/// The result of a simulated player action.
+pub type SimulatedPlayerResult<T> = Result<T, String>;
 
 /// Controls a player admitted to the server without a network connection.
-pub struct Npc {
+pub struct SimulatedPlayer {
     player: Arc<Player>,
     server: Weak<Server>,
 }
 
-impl Npc {
+impl SimulatedPlayer {
     pub(crate) const fn new(player: Arc<Player>, server: Weak<Server>) -> Self {
         Self { player, server }
     }
@@ -49,7 +49,9 @@ impl Npc {
     }
 
     pub fn set_visible_in_list(&self, visible: bool) {
-        self.player.client.set_npc_list_visible(visible);
+        self.player
+            .client
+            .set_simulated_player_list_visible(visible);
     }
 
     pub fn set_visible_in_tab_list(&self, visible: bool) {
@@ -71,12 +73,12 @@ impl Npc {
         self.player.gamemode.load()
     }
 
-    pub fn set_gamemode(&self, mode: GameMode) -> NpcResult<()> {
+    pub fn set_gamemode(&self, mode: GameMode) -> SimulatedPlayerResult<()> {
         self.player.set_gamemode(mode);
         Ok(())
     }
 
-    pub fn set_permission_level(&self, level: PermissionLvl) -> NpcResult<()> {
+    pub fn set_permission_level(&self, level: PermissionLvl) -> SimulatedPlayerResult<()> {
         let server = self
             .server
             .upgrade()
@@ -86,7 +88,7 @@ impl Npc {
         Ok(())
     }
 
-    pub fn run_command(&self, command: &str) -> NpcResult<()> {
+    pub fn run_command(&self, command: &str) -> SimulatedPlayerResult<()> {
         let server = self
             .server
             .upgrade()
@@ -104,9 +106,9 @@ impl Npc {
         self.player.inventory.get_selected_slot()
     }
 
-    pub fn set_selected_hotbar_slot(&self, slot: u8) -> NpcResult<()> {
+    pub fn set_selected_hotbar_slot(&self, slot: u8) -> SimulatedPlayerResult<()> {
         if !self.is_connected() {
-            return Err("NPC is disconnected".to_string());
+            return Err("Simulated player is disconnected".to_string());
         }
         if slot > 8 {
             return Err("Invalid held slot".to_string());
@@ -137,9 +139,9 @@ impl Npc {
         self.player.inventory.get_stack_in_hand(hand)
     }
 
-    pub fn set_held_item(&self, hand: Hand, stack: ItemStack) -> NpcResult<()> {
+    pub fn set_held_item(&self, hand: Hand, stack: ItemStack) -> SimulatedPlayerResult<()> {
         if !self.is_connected() {
-            return Err("NPC is disconnected".to_string());
+            return Err("Simulated player is disconnected".to_string());
         }
         self.player.inventory.set_stack_in_hand(hand, stack.clone());
         let slot = match hand {
@@ -162,7 +164,7 @@ impl Npc {
             .position(ItemStack::is_empty)
     }
 
-    pub fn inventory_item(&self, slot: usize) -> NpcResult<ItemStack> {
+    pub fn inventory_item(&self, slot: usize) -> SimulatedPlayerResult<ItemStack> {
         self.player
             .inventory
             .main_inventory
@@ -186,9 +188,9 @@ impl Npc {
             .sum()
     }
 
-    pub fn interact_with(&self, entity_id: i32, hand: Hand) -> NpcResult<()> {
+    pub fn interact_with(&self, entity_id: i32, hand: Hand) -> SimulatedPlayerResult<()> {
         if !self.is_connected() {
-            return Err("NPC is disconnected".to_string());
+            return Err("Simulated player is disconnected".to_string());
         }
         let world = self.player.world();
         let target: Arc<dyn EntityBase> = world
@@ -213,7 +215,7 @@ impl Npc {
         Ok(())
     }
 
-    pub fn use_block(&self, position: &BlockPos, hand: Hand) -> NpcResult<()> {
+    pub fn use_block(&self, position: &BlockPos, hand: Hand) -> SimulatedPlayerResult<()> {
         let world = self.player.world();
         let server = self
             .server
@@ -254,7 +256,7 @@ impl Npc {
         }
     }
 
-    pub fn break_block(&self, position: &BlockPos) -> NpcResult<bool> {
+    pub fn break_block(&self, position: &BlockPos) -> SimulatedPlayerResult<bool> {
         let world = self.player.world();
         let server = self
             .server
@@ -274,7 +276,7 @@ impl Npc {
         Ok(broken.is_some())
     }
 
-    pub fn set_sprinting(&self, sprinting: bool) -> NpcResult<()> {
+    pub fn set_sprinting(&self, sprinting: bool) -> SimulatedPlayerResult<()> {
         let server = self
             .server
             .upgrade()
@@ -291,14 +293,17 @@ impl Npc {
     pub fn teleport_to(
         &self,
         position: pumpkin_util::math::vector3::Vector3<f64>,
-    ) -> NpcResult<()> {
+    ) -> SimulatedPlayerResult<()> {
         self.player.get_entity().set_pos(position);
         Ok(())
     }
 
-    pub fn move_to(&self, position: pumpkin_util::math::vector3::Vector3<f64>) -> NpcResult<()> {
+    pub fn move_to(
+        &self,
+        position: pumpkin_util::math::vector3::Vector3<f64>,
+    ) -> SimulatedPlayerResult<()> {
         if !self.is_connected() {
-            return Err("NPC is disconnected".to_string());
+            return Err("Simulated player is disconnected".to_string());
         }
         let server = self
             .server
@@ -320,12 +325,12 @@ impl Npc {
         match self.player.apply_client_move(&server, movement) {
             ClientMoveOutcome::Applied => Ok(()),
             ClientMoveOutcome::Rejected | ClientMoveOutcome::Ignored => {
-                Err("NPC movement was not applied".to_string())
+                Err("Simulated player movement was not applied".to_string())
             }
         }
     }
 
-    pub async fn disconnect(&self) -> NpcResult<()> {
+    pub async fn disconnect(&self) -> SimulatedPlayerResult<()> {
         if !self.is_connected() {
             return Ok(());
         }
@@ -336,7 +341,7 @@ impl Npc {
         Ok(())
     }
 
-    pub fn look_at_entity(&self, entity_id: i32) -> NpcResult<()> {
+    pub fn look_at_entity(&self, entity_id: i32) -> SimulatedPlayerResult<()> {
         self.player
             .look_at_entity(entity_id)
             .map_err(|err| format!("Failed to look at entity: {err}"))?;

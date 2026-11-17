@@ -93,7 +93,7 @@ pub(super) async fn test_shearing_tool_loot_and_item_events(
     test.set_dimensions(7, 5, 7).await?;
     test.build_floor(7, 7, &Block::STONE).await?;
     let player = test
-        .spawn_npc(
+        .spawn_simulated_player(
             "ShearTester",
             Vector3::new(2.5, 1.0, 3.5),
             GameMode::Survival,
