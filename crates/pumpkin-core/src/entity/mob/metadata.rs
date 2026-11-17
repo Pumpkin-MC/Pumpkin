@@ -308,14 +308,14 @@ impl MobMetadata {
         self
     }
 
-    /// Sets bat roosting state.
+    /// Sets the full bat flags byte and the corresponding Bedrock resting state.
     #[must_use]
-    pub fn bat_roosting(mut self, roosting: bool) -> Self {
+    pub fn bat_flags(mut self, flags: i8) -> Self {
         self.bedrock_data
-            .set_actor_flag(entity_data_flag::RESTING, roosting);
+            .set_actor_flag(entity_data_flag::RESTING, flags & 1 != 0);
         self.java_entries.push(JavaMetadataEntry::Byte(
             tracked_data::bat::DATA_ID_FLAGS,
-            i8::from(roosting),
+            flags,
         ));
         self
     }

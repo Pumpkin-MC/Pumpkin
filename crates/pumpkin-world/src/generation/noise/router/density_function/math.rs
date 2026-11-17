@@ -224,6 +224,27 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
             buffer,
             volume,
         );
+        match self.data.operation {
+            BinaryOperation::Mul => {
+                if buffer.iter().all(|&v| v == 0.0) {
+                    buffer.fill(0.0);
+                    return;
+                }
+            }
+            BinaryOperation::Min => {
+                let input2_min = component_stack[self.input2_index].min();
+                if buffer.iter().all(|&v| v < input2_min) {
+                    return;
+                }
+            }
+            BinaryOperation::Max => {
+                let input2_max = component_stack[self.input2_index].max();
+                if buffer.iter().all(|&v| v > input2_max) {
+                    return;
+                }
+            }
+            _ => {}
+        }
         let mut input2 = DensityBuffer::acquire(volume);
         ChunkNoiseFunctionComponent::sample_volume_from_stack(
             &mut component_stack[..=self.input2_index],
@@ -231,24 +252,39 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
             volume,
         );
         match self.data.operation {
+            BinaryOperation::Add => {
+                for (value, &input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value += input2;
+                }
+            }
+            BinaryOperation::Sub => {
+                for (value, &input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value -= input2;
+                }
+            }
             BinaryOperation::Mul => {
-                for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
+                for (value, &input2) in buffer.iter_mut().zip(input2.iter()) {
                     *value *= input2;
                 }
             }
             BinaryOperation::Div => {
-                for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
+                for (value, &input2) in buffer.iter_mut().zip(input2.iter()) {
                     *value /= input2;
                 }
             }
-            BinaryOperation::Pow => {
-                for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
-                    *value = f64::from(*value).powf(f64::from(*input2)) as f32;
+            BinaryOperation::Min => {
+                for (value, &input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value = value.min(input2);
                 }
             }
-            _ => {
-                for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
-                    *value = self.data.apply_density(*value, *input2);
+            BinaryOperation::Max => {
+                for (value, &input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value = value.max(input2);
+                }
+            }
+            BinaryOperation::Pow => {
+                for (value, &input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value = f64::from(*value).powf(f64::from(input2)) as f32;
                 }
             }
         }

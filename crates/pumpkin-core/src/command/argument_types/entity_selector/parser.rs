@@ -635,4 +635,10 @@ mod tests {
         assert!(!parse("@e[type=pumpkin:iron_golem]"));
         assert!(!parse("@e[type=minecraft:not_an_entity]"));
     }
+
+    #[test]
+    fn parse_predicate_option() {
+        assert!(parse("@e[predicate=minecraft:tool/can_shear]"));
+        assert!(parse("@e[predicate=!minecraft:tool/can_shear]"));
+    }
 }

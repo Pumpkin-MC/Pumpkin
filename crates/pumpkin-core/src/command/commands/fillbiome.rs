@@ -3,6 +3,7 @@ use crate::command::argument_types::coordinates::block_pos::{
     BlockPosArgumentType, OUT_OF_BOUNDS_ERROR_TYPE,
 };
 use crate::command::argument_types::resource_key::{BIOME_REGISTRY, ResourceKeyArgument};
+use crate::command::argument_types::resource_or_tag::{ResourceOrTag, ResourceOrTagArgument};
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
@@ -66,8 +67,8 @@ impl CommandExecutor for FillBiomeExecutor {
 
         let target_biome = ResourceKeyArgument::get_biome(context, "biome")?;
 
-        let replace_biome = if self.has_replace {
-            Some(ResourceKeyArgument::get_biome(context, "filter")?)
+        let replace_biomes = if self.has_replace {
+            Some(context.get_argument::<ResourceOrTag>("filter")?.biome_ids())
         } else {
             None
         };
@@ -90,7 +91,6 @@ impl CommandExecutor for FillBiomeExecutor {
         }
 
         let target_biome_id = target_biome.id;
-        let replace_biome_id = replace_biome.map(|b| b.id);
         let world = context.world().clone();
 
         let mut changed_count = 0;
@@ -105,7 +105,9 @@ impl CommandExecutor for FillBiomeExecutor {
                         chunk
                             .section
                             .get_noise_biome(section_index, rel_x, scale_y, rel_z)
-                        && replace_biome_id.is_none_or(|rep| current_id == rep)
+                        && replace_biomes
+                            .as_ref()
+                            .is_none_or(|replace| replace.contains(&current_id))
                     {
                         chunk
                             .section
@@ -156,7 +158,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                     .executes(FillBiomeExecutor { has_replace: false })
                     .then(
                         literal("replace").then(
-                            argument("filter", ResourceKeyArgument(BIOME_REGISTRY))
+                            argument("filter", ResourceOrTagArgument(BIOME_REGISTRY.clone()))
                                 .executes(FillBiomeExecutor { has_replace: true }),
                         ),
                     ),

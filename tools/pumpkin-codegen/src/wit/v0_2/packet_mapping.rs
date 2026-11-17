@@ -13,6 +13,7 @@ pub fn build_java_mapping() -> String {
         "use crate::pumpkin::plugin::java_packets::{ClientboundPacket, ServerboundPacket};\n",
     );
     output.push_str("use pumpkin_protocol::codec::var_int::VarInt;\n");
+    output.push_str("use pumpkin_protocol::ConnectionState;\n");
     output.push_str("use pumpkin_util::version::JavaMinecraftVersion;\n");
     output.push_str("use bytes::Bytes;\n");
     output.push_str("use std::io::Cursor;\n");
@@ -25,7 +26,6 @@ pub fn build_java_mapping() -> String {
     output.push_str("    match packet {\n");
 
     let client_states = &["config", "login", "play", "status"];
-    let server_states = &["config", "handshake", "login", "play", "status"];
 
     for state in client_states {
         process_packets(
@@ -35,7 +35,6 @@ pub fn build_java_mapping() -> String {
             "java_packet",
             "ClientboundPacket",
             &format!("pumpkin_protocol::java::client::{}", state),
-            false,
             MappingMode::Serialize,
         );
     }
@@ -45,23 +44,40 @@ pub fn build_java_mapping() -> String {
     output.push_str("}\n\n");
 
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, mut payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
-    output.push_str("    match id {\n");
+    output.push_str("pub fn deserialize_java_serverbound_packet(state: ConnectionState, id: i32, mut payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
+    output.push_str("    match state {\n");
 
-    for state in server_states {
+    let server_state_variants = &[
+        ("config", "Config"),
+        ("handshake", "HandShake"),
+        ("login", "Login"),
+        ("play", "Play"),
+        ("status", "Status"),
+    ];
+    for (state, variant) in server_state_variants {
+        let mut arms = String::new();
         process_packets(
             &format!("../../crates/pumpkin-protocol/src/java/server/{}", state),
             state,
-            &mut output,
+            &mut arms,
             "java_packet",
             "ServerboundPacket",
             &format!("pumpkin_protocol::java::server::{}", state),
-            false,
             MappingMode::Deserialize,
         );
+        if arms.is_empty() {
+            output.push_str(&format!("        ConnectionState::{variant} => None,\n"));
+        } else {
+            output.push_str(&format!(
+                "        ConnectionState::{variant} => match id {{\n"
+            ));
+            output.push_str(&arms);
+            output.push_str("            _ => None,\n");
+            output.push_str("        },\n");
+        }
     }
 
-    output.push_str("        _ => None,\n");
+    output.push_str("        ConnectionState::Transfer => None,\n");
     output.push_str("    }\n");
     output.push_str("}\n\n");
 
@@ -77,7 +93,6 @@ pub fn build_java_mapping() -> String {
             "java_packet",
             "ClientboundPacket",
             &format!("pumpkin_protocol::java::client::{}", state),
-            false,
             MappingMode::ToWit,
         );
     }
@@ -94,7 +109,6 @@ pub fn build_java_mapping() -> String {
             "java_packet",
             "ClientboundPacket",
             &format!("pumpkin_protocol::java::client::{}", state),
-            false,
             MappingMode::Downcast,
         );
     }
@@ -120,7 +134,6 @@ pub fn build_bedrock_mapping() -> String {
         "packet",
         "BClientboundPacket",
         "pumpkin_protocol::bedrock::client",
-        true,
         MappingMode::Serialize,
     );
 
@@ -139,7 +152,6 @@ pub fn build_bedrock_mapping() -> String {
         "packet",
         "BServerboundPacket",
         "pumpkin_protocol::bedrock::server",
-        true,
         MappingMode::Deserialize,
     );
 
@@ -158,7 +170,6 @@ pub fn build_bedrock_mapping() -> String {
         "packet",
         "BClientboundPacket",
         "pumpkin_protocol::bedrock::client",
-        true,
         MappingMode::ToWit,
     );
 
@@ -173,13 +184,20 @@ pub fn build_bedrock_mapping() -> String {
         "packet",
         "BClientboundPacket",
         "pumpkin_protocol::bedrock::client",
-        true,
         MappingMode::Downcast,
     );
     output.push_str("    None\n");
     output.push_str("}\n\n");
 
     output
+}
+
+fn narrow(mode: MappingMode) -> &'static str {
+    if mode == MappingMode::Deserialize {
+        "ok()?"
+    } else {
+        "unwrap()"
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -300,7 +318,7 @@ fn convert_value(
                 )
             }
             MappingMode::Deserialize | MappingMode::ToWit => {
-                format!("{}.0.try_into().unwrap()", src)
+                format!("{}.0.try_into().{}", src, narrow(mode))
             }
             MappingMode::Downcast => String::new(),
         },
@@ -339,7 +357,7 @@ fn convert_value(
                 if is_slice {
                     format!("{}.iter().map(|v| v.0 as _).collect()", src)
                 } else {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0.try_into().{}", src, narrow(mode))
                 }
             } else {
                 // ToWit
@@ -507,6 +525,12 @@ fn convert_value(
                     } else {
                         format!("VarInt({})", src)
                     }
+                } else if type_ident == "i8" {
+                    if is_ref {
+                        format!("&{}", src)
+                    } else {
+                        src.to_string()
+                    }
                 } else {
                     if is_ref {
                         prep.push_str(&format!(
@@ -527,9 +551,15 @@ fn convert_value(
                         format!("{}.iter().map(|v| *v as _).collect()", src)
                     }
                 } else if type_ident == "VarInt" {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0.try_into().{}", src, narrow(mode))
+                } else if type_ident == "i8" {
+                    if is_ref {
+                        format!("*{}", src)
+                    } else {
+                        src.to_string()
+                    }
                 } else {
-                    format!("{}.try_into().unwrap()", src)
+                    format!("{}.try_into().{}", src, narrow(mode))
                 }
             }
             MappingMode::Downcast => String::new(),
@@ -551,7 +581,6 @@ fn process_packets(
     attr_name: &str,
     variant_prefix: &str,
     rust_path_prefix: &str,
-    skip_raknet: bool,
     mode: MappingMode,
 ) {
     let paths = fs::read_dir(dir).expect("Failed to read packet directory");
@@ -562,9 +591,6 @@ fn process_packets(
 
     for path in sorted_paths {
         if path.is_dir() {
-            if skip_raknet && path.file_name().unwrap() == "raknet" {
-                continue;
-            }
             process_packets(
                 path.to_str().unwrap(),
                 state,
@@ -572,7 +598,6 @@ fn process_packets(
                 attr_name,
                 variant_prefix,
                 rust_path_prefix,
-                skip_raknet,
                 mode,
             );
             continue;

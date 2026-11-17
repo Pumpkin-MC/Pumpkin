@@ -42,6 +42,7 @@ impl SSetStructureBlock<'_> {
     pub const FLAG_IGNORE_ENTITIES: u8 = 0x01;
     pub const FLAG_SHOW_AIR: u8 = 0x02;
     pub const FLAG_SHOW_BOUNDING_BOX: u8 = 0x04;
+    pub const FLAG_STRICT: u8 = 0x08;
 
     #[must_use]
     pub const fn ignore_entities(&self) -> bool {
@@ -57,27 +58,54 @@ impl SSetStructureBlock<'_> {
     pub const fn show_bounding_box(&self) -> bool {
         (self.flags & Self::FLAG_SHOW_BOUNDING_BOX) != 0
     }
+
+    #[must_use]
+    pub const fn strict(&self) -> bool {
+        (self.flags & Self::FLAG_STRICT) != 0
+    }
 }
 
 impl<'a> ServerPacket<'a> for SSetStructureBlock<'a> {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let location = bytebuf.get_block_pos(version)?;
+        let action = bytebuf.get_var_int()?;
+        let mode = bytebuf.get_var_int()?;
+        let name = bytebuf.get_str_borrowed()?;
+        let offset_x = bytebuf.get_i8()?.clamp(-48, 48);
+        let offset_y = bytebuf.get_i8()?.clamp(-48, 48);
+        let offset_z = bytebuf.get_i8()?.clamp(-48, 48);
+        let size_x = bytebuf.get_i8()?.clamp(0, 48) as u8;
+        let size_y = bytebuf.get_i8()?.clamp(0, 48) as u8;
+        let size_z = bytebuf.get_i8()?.clamp(0, 48) as u8;
+        let mirror = bytebuf.get_var_int()?;
+        let rotation = bytebuf.get_var_int()?;
+        let metadata = bytebuf.get_str_bounded_borrowed(128)?;
+        let raw_integrity = bytebuf.get_f32()?;
+        let integrity = if raw_integrity.is_nan() {
+            0.0
+        } else {
+            raw_integrity.clamp(0.0, 1.0)
+        };
+        let seed = bytebuf.get_var_long()?;
+        let flags = bytebuf.get_u8()?;
+
         Ok(Self {
-            location: bytebuf.get_block_pos(version)?,
-            action: bytebuf.get_var_int()?,
-            mode: bytebuf.get_var_int()?,
-            name: bytebuf.get_str_borrowed()?,
-            offset_x: bytebuf.get_i8()?,
-            offset_y: bytebuf.get_i8()?,
-            offset_z: bytebuf.get_i8()?,
-            size_x: bytebuf.get_u8()?,
-            size_y: bytebuf.get_u8()?,
-            size_z: bytebuf.get_u8()?,
-            mirror: bytebuf.get_var_int()?,
-            rotation: bytebuf.get_var_int()?,
-            metadata: bytebuf.get_str_borrowed()?,
-            integrity: bytebuf.get_f32()?,
-            seed: bytebuf.get_var_long()?,
-            flags: bytebuf.get_u8()?,
+            location,
+            action,
+            mode,
+            name,
+            offset_x,
+            offset_y,
+            offset_z,
+            size_x,
+            size_y,
+            size_z,
+            mirror,
+            rotation,
+            metadata,
+            integrity,
+            seed,
+            flags,
         })
     }
 }
@@ -106,5 +134,54 @@ impl crate::ClientPacket for SSetStructureBlock<'_> {
         write.write_var_long(&self.seed)?;
         write.write_u8(self.flags)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SSetStructureBlock;
+    use crate::{ClientPacket, ServerPacket, codec::var_int::VarInt, codec::var_long::VarLong};
+    use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+
+    #[test]
+    fn set_structure_block_clamps_bounds_and_decodes_strict_flag() {
+        let raw = SSetStructureBlock {
+            location: BlockPos::new(10, 64, -5),
+            action: VarInt(SSetStructureBlock::ACTION_SAVE_AREA),
+            mode: VarInt(SSetStructureBlock::MODE_SAVE),
+            name: "test:box",
+            offset_x: -100,
+            offset_y: 12,
+            offset_z: 90,
+            size_x: 250, // -6 as signed i8 -> clamped to 0
+            size_y: 60,  // clamped to 48
+            size_z: 16,
+            mirror: VarInt(1),
+            rotation: VarInt(2),
+            metadata: "chest_loot",
+            integrity: 1.5,
+            seed: VarLong(42),
+            flags: SSetStructureBlock::FLAG_IGNORE_ENTITIES | SSetStructureBlock::FLAG_STRICT,
+        };
+
+        let mut buf = Vec::new();
+        raw.write_packet_data(&mut buf, &JavaMinecraftVersion::V_26_3)
+            .unwrap();
+
+        let mut slice = buf.as_slice();
+        let decoded = SSetStructureBlock::read(&mut slice, &JavaMinecraftVersion::V_26_3).unwrap();
+        assert!(slice.is_empty());
+        assert_eq!(decoded.location, BlockPos::new(10, 64, -5));
+        assert_eq!(decoded.offset_x, -48);
+        assert_eq!(decoded.offset_y, 12);
+        assert_eq!(decoded.offset_z, 48);
+        assert_eq!(decoded.size_x, 0);
+        assert_eq!(decoded.size_y, 48);
+        assert_eq!(decoded.size_z, 16);
+        assert!((decoded.integrity - 1.0).abs() < f32::EPSILON);
+        assert!(decoded.ignore_entities());
+        assert!(decoded.strict());
+        assert!(!decoded.show_air());
+        assert!(!decoded.show_bounding_box());
     }
 }

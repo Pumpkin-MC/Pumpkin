@@ -22,7 +22,21 @@ impl JavaClient {
         let Some(item) = Item::from_id(block.item_id) else {
             return;
         };
-        let stack = ItemStack::new(1, item);
+        let mut stack = ItemStack::new(1, item);
+        if player.gamemode.load() == GameMode::Creative
+            && pick_item.include_data
+            && let Some(block_entity) = world.get_block_entity(&pick_item.pos)
+        {
+            let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+            block_entity.write_nbt(&mut nbt);
+            if !nbt.is_empty() {
+                nbt.put_string("id", block_entity.resource_location().to_string());
+                stack.set_data_component(pumpkin_data::data_component_impl::BlockEntityDataImpl {
+                    nbt,
+                });
+            }
+            block_entity.collect_pick_item_components(&mut stack);
+        }
 
         let slot_with_stack = player.inventory().get_slot_with_stack(&stack);
 

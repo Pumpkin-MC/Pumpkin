@@ -3,9 +3,10 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::sound::Sound;
+use pumpkin_protocol::bedrock::server::ActorEventID;
 
 use crate::{
-    entity::{Entity, EntityBase},
+    entity::{Entity, EntityBase, projectile::owner::EntityReference},
     server::Server,
 };
 
@@ -13,19 +14,19 @@ pub struct EvokerFangsEntity {
     pub entity: Entity,
     pub warmup_delay_ticks: AtomicI32,
     pub life_ticks: AtomicI32,
-    pub owner_id: Option<i32>,
+    pub owner: EntityReference,
     pub sent_spike_event: AtomicBool,
 }
 
 impl EvokerFangsEntity {
     #[must_use]
-    pub fn new(entity: Entity, warmup_ticks: u32, yaw: f32, owner_id: Option<i32>) -> Self {
+    pub fn new(entity: Entity, warmup_ticks: u32, yaw: f32, owner: Option<&Entity>) -> Self {
         entity.set_rotation(yaw, 0.0);
         Self {
             entity,
             warmup_delay_ticks: AtomicI32::new(warmup_ticks as i32),
             life_ticks: AtomicI32::new(22),
-            owner_id,
+            owner: EntityReference::new(owner),
             sent_spike_event: AtomicBool::new(false),
         }
     }
@@ -34,11 +35,19 @@ impl EvokerFangsEntity {
 impl EntityBase for EvokerFangsEntity {
     fn write_custom_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         nbt.put_int("Warmup", self.warmup_delay_ticks.load(Ordering::Relaxed));
+        self.owner.write_nbt(nbt, "Owner");
     }
 
     fn read_custom_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         if let Some(warmup) = nbt.get_int("Warmup") {
             self.warmup_delay_ticks.store(warmup, Ordering::Relaxed);
+        }
+        self.owner.read_nbt(nbt, "Owner");
+    }
+
+    fn remove_custom_nbt(&self, removed: &[Box<str>]) {
+        if removed.iter().any(|key| &**key == "Owner") {
+            self.owner.clear();
         }
     }
 
@@ -50,37 +59,49 @@ impl EntityBase for EvokerFangsEntity {
         if warmup < 0 {
             if warmup == -8 {
                 let bb = entity.bounding_box.load().expand(0.2, 0.0, 0.2);
-                let candidates = world.get_entities_at_box(&bb);
-
-                let owner = self.owner_id.and_then(|id| world.get_entity_by_id(id));
+                // Players count as targets, spectators don't.
+                let candidates = world.get_all_at_box(&bb);
+                let owner = self
+                    .owner
+                    .get(&world)
+                    .filter(|owner| owner.get_living_entity().is_some());
 
                 for cand in candidates {
                     let cand_ent = cand.get_entity();
-                    if Some(cand_ent.entity_id) == self.owner_id {
+                    if cand.get_living_entity().is_none()
+                        || cand.is_spectator()
+                        || !cand_ent.is_alive()
+                        || cand_ent.invulnerable.load(Ordering::Relaxed)
+                        || owner
+                            .as_ref()
+                            .is_some_and(|owner| owner.get_entity().entity_id == cand_ent.entity_id)
+                    {
                         continue;
                     }
-
-                    if cand_ent.entity_id != entity.entity_id && cand.get_living_entity().is_some()
-                    {
-                        let damage_type = if owner.is_some() {
-                            DamageType::INDIRECT_MAGIC
-                        } else {
-                            DamageType::MAGIC
-                        };
-                        let _ = cand.damage_with_context(
+                    if let Some(owner) = &owner {
+                        if owner.as_ref().is_allied_to(cand.as_ref()) {
+                            continue;
+                        }
+                        cand.damage_with_context(
                             cand.as_ref(),
                             6.0,
-                            damage_type,
+                            DamageType::INDIRECT_MAGIC,
                             Some(entity.pos.load()),
-                            Some(entity),
-                            owner.as_deref(),
+                            Some(self),
+                            Some(owner.as_ref()),
                         );
+                    } else {
+                        cand.damage(cand.as_ref(), 6.0, DamageType::MAGIC);
                     }
                 }
             }
 
             if !self.sent_spike_event.swap(true, Ordering::SeqCst) {
-                world.send_entity_status(entity, EntityStatus::StartAttacking, None);
+                world.send_entity_status(
+                    entity,
+                    EntityStatus::StartAttacking,
+                    ActorEventID::StartAttacking,
+                );
                 if !entity.silent.load(Ordering::Relaxed) {
                     entity.play_sound(Sound::EntityEvokerFangsAttack);
                 }

@@ -46,7 +46,7 @@ impl BrewingScreenHandler {
     pub const INGREDIENT_SLOT: usize = 3;
     pub const FUEL_SLOT: usize = 4;
     pub const SLOT_COUNT: usize = 5;
-    pub const DATA_COUNT: usize = 2;
+    pub const DATA_COUNT: usize = 4;
     pub const INV_SLOT_START: usize = 5;
     pub const INV_SLOT_END: usize = 32;
     pub const USE_ROW_SLOT_START: usize = 32;
@@ -80,6 +80,8 @@ impl BrewingScreenHandler {
 
         handler.add_property(ScreenProperty::new(property_delegate.clone(), 0));
         handler.add_property(ScreenProperty::new(property_delegate.clone(), 1));
+        handler.add_property(ScreenProperty::new(property_delegate.clone(), 2));
+        handler.add_property(ScreenProperty::new(property_delegate.clone(), 3));
 
         handler.add_listener(Arc::new(BrewingScreenListener));
 
@@ -258,6 +260,12 @@ impl Slot for BrewingPotionSlot {
 
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
+    }
+
+    fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        if is_potion_item(stack.item) && stack.item.id != Item::GLASS_BOTTLE.id {
+            player.on_brewed_potion();
+        }
     }
 }
 

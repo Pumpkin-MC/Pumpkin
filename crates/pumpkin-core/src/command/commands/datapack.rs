@@ -8,6 +8,7 @@ use pumpkin_util::text::color::NamedColor;
 use tracing::error;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::component::ComponentArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
@@ -418,8 +419,9 @@ struct DatapackCreateExecutor;
 
 impl CommandExecutor for DatapackCreateExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let name_str = StringArgumentType::get(context, "name")?;
-        let description = StringArgumentType::get(context, "description").unwrap_or(name_str);
+        let name_str = StringArgumentType::get(context, "id")?;
+        let description = serde_json::to_value(ComponentArgumentType::get(context, "description")?)
+            .unwrap_or_else(|_| serde_json::Value::String(name_str.to_owned()));
 
         if !is_valid_pack_name(name_str) {
             return Err(ERROR_CREATE_INVALID_NAME
@@ -519,12 +521,9 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     );
 
     let create_builder = literal("create").then(
-        argument("name", StringArgumentType::SingleWord)
-            .then(
-                argument("description", StringArgumentType::GreedyPhrase)
-                    .executes(DatapackCreateExecutor),
-            )
-            .executes(DatapackCreateExecutor),
+        // `datapack create <id> <description>`: both required, as vanilla.
+        argument("id", StringArgumentType::SingleWord)
+            .then(argument("description", ComponentArgumentType).executes(DatapackCreateExecutor)),
     );
 
     dispatcher.register(

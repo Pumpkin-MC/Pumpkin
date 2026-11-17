@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicI32, AtomicI64, Ordering},
 };
 
+use pumpkin_data::BlockState;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -10,6 +12,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -21,6 +24,8 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+
+pub const EQUIPMENT_SLOT_ANTENNA: EquipmentSlot = EquipmentSlot::SADDLE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(i32)]
@@ -172,6 +177,42 @@ impl CopperGolemEntity {
             WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedStep,
         }
     }
+
+    #[must_use]
+    pub fn ready_for_shearing(&self) -> bool {
+        self.mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&EQUIPMENT_SLOT_ANTENNA)
+            .item
+            .has_tag(&tag::Item::MINECRAFT_SHEARABLE_FROM_COPPER_GOLEM)
+    }
+
+    pub fn shear(&self, category: SoundCategory) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        world.play_sound(Sound::EntityCopperGolemShear, category, &pos);
+        let antenna_item = self
+            .mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&EQUIPMENT_SLOT_ANTENNA);
+        self.mob_entity
+            .set_item_slot(&EQUIPMENT_SLOT_ANTENNA, ItemStack::EMPTY.clone());
+        if !antenna_item.is_empty() {
+            let drop_pos = pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y + 1.5, pos.z);
+            let item_entity = Arc::new(crate::entity::item::ItemEntity::new(
+                Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                antenna_item,
+            ));
+            world.spawn_entity(item_entity);
+        }
+    }
 }
 
 impl CustomSound for CopperGolemEntity {
@@ -193,6 +234,10 @@ impl CustomSound for CopperGolemEntity {
 }
 
 impl Mob for CopperGolemEntity {
+    fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
+        self.play_entity_sound(self.step_sound(), 1.0, 1.0);
+    }
+
     fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
         Some(self)
     }
@@ -241,9 +286,31 @@ impl Mob for CopperGolemEntity {
         );
     }
 
-    fn mob_interact(&self, _player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         let entity = self.get_entity();
         let world = entity.world.load();
+
+        if item_stack.item.id == Item::SHEARS.id && self.ready_for_shearing() {
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                    player: player.clone(),
+                    entity_id: entity.entity_id,
+                    hand: 0,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
+            self.shear(SoundCategory::Players);
+            world.emit_game_event(
+                pumpkin_data::game_event::GameEvent::Shear.name(),
+                entity.pos.load(),
+            );
+            let _ = player.damage_item_stack(item_stack, 1);
+            return true;
+        }
 
         // Honeycomb waxing
         if item_stack.item.id == Item::HONEYCOMB.id

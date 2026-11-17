@@ -1,14 +1,62 @@
 use std::sync::Arc;
 
+use pumpkin_data::dimension::Dimension;
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
-use crate::entity::EntityBase;
+use crate::entity::ai::pathfinder::node::PathComputationType;
+use crate::entity::ai::util::default_random_pos;
+use crate::entity::item::ItemEntity;
+use crate::entity::mob::Mob;
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
 use super::super::memory::position_tracker::{BlockPosTracker, EntityTracker, PositionTracker};
 use super::super::memory::walk_target::WalkTarget;
 use super::super::memory::{MemoryModuleType, types};
-use super::super::{BrainState, VisibilityContext};
+use super::super::{BrainState, BrainTick, VisibilityContext};
+
+#[must_use]
+pub fn world_for_dimension(world: &Arc<World>, dimension: &Dimension) -> Option<Arc<World>> {
+    if world.dimension.id == dimension.id {
+        return Some(Arc::clone(world));
+    }
+    let server = world.server.upgrade()?;
+    let worlds = server.worlds.load();
+    worlds
+        .iter()
+        .find(|candidate| candidate.dimension.id == dimension.id)
+        .cloned()
+}
+
+const MAX_SWIMMABLE_POS_ATTEMPTS: i32 = 10;
+
+#[must_use]
+pub fn get_random_swimmable_pos(
+    mob: &dyn Mob,
+    max_horizontal_distance: i32,
+    max_vertical_distance: i32,
+) -> Option<Vector3<f64>> {
+    let world = mob.get_entity().world.load();
+    let mut target =
+        default_random_pos::get_pos(mob, max_horizontal_distance, max_vertical_distance);
+    let mut count = 0;
+    while let Some(pos) = target {
+        let (block, state) = world.get_block_and_state(&pos.to_block_pos());
+        if world
+            .block_registry
+            .is_pathfindable(block, state, PathComputationType::Water)
+            || count >= MAX_SWIMMABLE_POS_ATTEMPTS
+        {
+            break;
+        }
+        count += 1;
+        target = default_random_pos::get_pos(mob, max_horizontal_distance, max_vertical_distance);
+    }
+    target
+}
 
 #[must_use]
 pub fn entity_is_visible(ctx: &VisibilityContext<'_>, target: &dyn EntityBase) -> bool {
@@ -141,4 +189,58 @@ pub fn is_other_target_much_further_away_than_current_attack_target(
 #[must_use]
 pub fn is_breeding(brain: &BrainState) -> bool {
     brain.has_memory_value(types::BREED_TARGET.id())
+}
+
+const THROW_SPEED: f64 = 0.3;
+const HAND_Y_DISTANCE_FROM_EYE: f64 = 0.3;
+
+pub fn lock_gaze_and_walk_to_each_other(
+    tick: &mut BrainTick<'_>,
+    partner: &Arc<dyn EntityBase>,
+    speed_modifier: f32,
+    close_enough_distance: i32,
+) {
+    set_walk_and_look_target_memories_to_entity(
+        tick.state,
+        partner.clone(),
+        speed_modifier,
+        close_enough_distance,
+    );
+    let Some(partner_mob) = partner.get_mob() else {
+        return;
+    };
+    let Some(body) = tick.world.get_entity_by_id(tick.mob.get_entity().entity_id) else {
+        return;
+    };
+    partner_mob
+        .get_mob_entity()
+        .with_brain(partner_mob, |brain| {
+            set_walk_and_look_target_memories_to_entity(
+                brain,
+                body,
+                speed_modifier,
+                close_enough_distance,
+            );
+        });
+}
+
+pub fn throw_item(thrower: &dyn Mob, stack: ItemStack, target_pos: Vector3<f64>) {
+    if stack.is_empty() {
+        return;
+    }
+    let entity = thrower.get_entity();
+    let world = entity.world.load();
+    let pos = entity.pos.load();
+    let hand_pos = Vector3::new(pos.x, entity.get_eye_y() - HAND_Y_DISTANCE_FROM_EYE, pos.z);
+    let velocity = (target_pos - pos)
+        .normalize()
+        .multiply(THROW_SPEED, THROW_SPEED, THROW_SPEED);
+    let item_entity = ItemEntity::new_with_velocity(
+        Entity::new(world.clone(), hand_pos, &EntityType::ITEM),
+        stack,
+        velocity,
+        ItemEntity::DEFAULT_PICKUP_DELAY,
+    );
+    item_entity.set_thrower(entity.entity_uuid);
+    world.spawn_entity(Arc::new(item_entity));
 }

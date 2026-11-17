@@ -434,7 +434,13 @@ impl EntitySelectorOption {
             }
             Self::Predicate => {
                 let invert = parser.consume_inverted_start();
-                let string = parser.reader.read_unquoted_string();
+                let start = parser.reader.cursor();
+                while let Some(c) = parser.reader.peek()
+                    && Identifier::is_valid_char(c)
+                {
+                    parser.reader.skip();
+                }
+                let string = parser.reader.string()[start..parser.reader.cursor()].to_string();
                 parser.add_predicate(EntitySelectorPredicate::Predicate(string, invert));
                 Ok(())
             }

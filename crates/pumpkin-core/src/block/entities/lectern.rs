@@ -12,6 +12,7 @@ use std::{
 };
 
 use crate::block::entities::BlockEntity;
+use crate::world::World;
 use pumpkin_inventory::{Clearable, Inventory};
 
 pub struct LecternBlockEntity {
@@ -69,8 +70,9 @@ impl BlockEntity for LecternBlockEntity {
         nbt.put_int("Page", self.page.load(Ordering::Relaxed) as i32);
     }
 
-    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
-        Some(self)
+    fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        let inventory: Arc<dyn Inventory> = self;
+        world.scatter_inventory(position, &inventory);
     }
 
     fn is_comparator_dirty(&self) -> bool {
@@ -109,7 +111,7 @@ impl BlockEntity for LecternBlockEntity {
         let book_guard = self.book.lock().ok();
         let book = book_guard.as_deref();
         let total_pages = book.map_or(0, Self::page_count_of);
-        Some(crate::block::entities::bedrock::build_lectern_actor(
+        Some(build_lectern_actor(
             self.position,
             book,
             self.page.load(Ordering::Relaxed) as i32,
@@ -134,6 +136,11 @@ impl LecternBlockEntity {
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
         }
+    }
+
+    #[must_use]
+    pub fn book_inventory(self: Arc<Self>) -> Arc<dyn Inventory> {
+        self
     }
 
     /// Number of pages in a writable or written book, `0` for anything else.
@@ -250,5 +257,46 @@ impl Clearable for LecternBlockEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = ItemStack::EMPTY.clone();
         self.mark_dirty();
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for lecterns.
+#[must_use]
+pub fn build_lectern_actor(
+    position: BlockPos,
+    book: Option<&ItemStack>,
+    page: i32,
+    total_pages: i32,
+) -> NbtCompound {
+    let has_book = book.is_some_and(|b| !b.is_empty());
+    let mut builder = super::bedrock::BedrockBlockActorBuilder::new("Lectern", position)
+        .put_bool("hasBook", has_book)
+        .put_int("page", page)
+        .put_int("totalPages", total_pages);
+
+    if has_book && let Some(book_stack) = book {
+        let mut book_nbt = NbtCompound::new();
+        book_stack.write_item_stack(&mut book_nbt);
+        builder = builder.put_compound("book", book_nbt);
+    }
+
+    builder.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::item::Item;
+
+    #[test]
+    fn lectern_actor_builder() {
+        let pos = BlockPos::new(10, 64, 10);
+        let book = ItemStack::new(1, &Item::WRITTEN_BOOK);
+        let nbt = build_lectern_actor(pos, Some(&book), 2, 5);
+        assert_eq!(nbt.get_string("id"), Some("Lectern"));
+        assert_eq!(nbt.get_bool("hasBook"), Some(true));
+        assert_eq!(nbt.get_int("page"), Some(2));
+        assert_eq!(nbt.get_int("totalPages"), Some(5));
+        assert!(nbt.get_compound("book").is_some());
     }
 }

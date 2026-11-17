@@ -182,6 +182,6 @@ fn shoot_fireball(blaze: &Entity, dx: f64, yd: f64, dz: f64, distance_sq: f64) {
 
     let fireball = SmallFireballEntity::new_shot(base_entity, blaze, direction);
     // `ThrownItemEntity::new` puts the projectile at the shooter's eye, re-anchor it.
-    fireball.thrown.entity.pos.store(spawn_pos);
+    fireball.thrown.entity.set_pos(spawn_pos);
     world.spawn_entity(Arc::new(fireball));
 }

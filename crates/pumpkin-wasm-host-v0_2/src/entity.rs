@@ -403,9 +403,8 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<Entity>>> {
         let entity = self.get(&entity)?.clone();
-        let vehicle = entity.get_entity().vehicle.lock_ignore_poison();
-        if let Some(v) = vehicle.as_ref() {
-            Ok(Some(self.add(Arc::clone(v)).map_err(|_| {
+        if let Some(v) = entity.get_entity().get_vehicle() {
+            Ok(Some(self.add(v).map_err(|_| {
                 wasmtime::Error::msg("failed to add entity resource")
             })?))
         } else {
@@ -452,6 +451,84 @@ impl HostEntity for PluginHostState {
             .get_entity()
             .touching_lava
             .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    fn is_in_water_or_rain(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&entity)?;
+        Ok(entity.get_entity().is_in_water_or_rain())
+    }
+
+    fn is_valid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&entity)?;
+        Ok(entity.get_entity().is_alive()
+            && entity
+                .get_living_entity()
+                .is_none_or(|l| !l.dead.load(std::sync::atomic::Ordering::Relaxed)))
+    }
+
+    fn is_dead(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&entity)?;
+        Ok(entity.get_entity().is_removed()
+            || entity
+                .get_living_entity()
+                .is_some_and(|l| l.dead.load(std::sync::atomic::Ordering::Relaxed)))
+    }
+
+    fn get_freeze_ticks(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
+        let entity = self.get(&entity)?;
+        Ok(entity.get_entity().get_frozen_ticks())
+    }
+
+    fn set_freeze_ticks(&mut self, entity: Resource<Entity>, ticks: i32) -> wasmtime::Result<()> {
+        let entity = self.get(&entity)?;
+        entity.get_entity().set_frozen_ticks(ticks);
+        Ok(())
+    }
+
+    fn get_max_freeze_ticks(&mut self, _entity: Resource<Entity>) -> wasmtime::Result<i32> {
+        Ok(pumpkin_core::entity::Entity::MAX_FROZEN_TICKS)
+    }
+
+    fn is_frozen(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = self.get(&entity)?;
+        Ok(
+            entity.get_entity().get_frozen_ticks()
+                >= pumpkin_core::entity::Entity::MAX_FROZEN_TICKS,
+        )
+    }
+
+    fn add_scoreboard_tag(
+        &mut self,
+        entity: Resource<Entity>,
+        tag: String,
+    ) -> wasmtime::Result<bool> {
+        let entity = self.get(&entity)?;
+        Ok(entity.get_entity().add_scoreboard_tag(&tag))
+    }
+
+    fn remove_scoreboard_tag(
+        &mut self,
+        entity: Resource<Entity>,
+        tag: String,
+    ) -> wasmtime::Result<bool> {
+        let entity = self.get(&entity)?;
+        Ok(entity.get_entity().remove_scoreboard_tag(&tag))
+    }
+
+    fn get_scoreboard_tags(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Vec<String>> {
+        let entity = self.get(&entity)?;
+        let tags = entity.get_entity().scoreboard_tags.lock_ignore_poison();
+        Ok(tags.iter().cloned().collect())
+    }
+
+    fn has_scoreboard_tag(
+        &mut self,
+        entity: Resource<Entity>,
+        tag: String,
+    ) -> wasmtime::Result<bool> {
+        let entity = self.get(&entity)?;
+        let tags = entity.get_entity().scoreboard_tags.lock_ignore_poison();
+        Ok(tags.contains(&tag))
     }
 
     fn get_ticks_lived(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
@@ -807,8 +884,7 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
             Ok((entity, vehicle))
         })?;
         run_blocking(accessor, move || {
-            let current_vehicle = entity.get_entity().vehicle.lock_ignore_poison().clone();
-            if let Some(current_vehicle) = current_vehicle {
+            if let Some(current_vehicle) = entity.get_entity().get_vehicle() {
                 current_vehicle
                     .get_entity()
                     .remove_passenger(entity.get_entity().entity_id);

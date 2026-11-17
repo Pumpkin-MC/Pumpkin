@@ -17,6 +17,7 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::GameMode;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
@@ -29,6 +30,8 @@ use crate::block::{
     registry::BlockActionResult,
 };
 use crate::entity::EntityBase;
+use crate::entity::passive::cat::CatEntity;
+use crate::entity::passive::tamable::TamableAnimal;
 use crate::entity::player::Player;
 use crate::world::World;
 use crate::world::loot::{LootContextParameters, fill_chest_inventory_handle};
@@ -130,49 +133,100 @@ fn placed_chest_impl<E: BlockEntity + 'static>(
     }
 }
 
-/// Computes the comparator output for a chest, combining both halves for double chests.
-fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8> {
-    let state = args.world.get_block_state_id(args.position);
-    let first_chest = args.world.get_block_entity(args.position);
-    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
-
-    let chest_props = ChestLikeProperties::from_state_id(state);
+/// Resolves a single or double chest inventory (`ChestBlock.getContainer`), optionally
+/// ignoring obstruction checks (used by hoppers, droppers, and crafters).
+pub(crate) fn get_chest_inventory(
+    world: &World,
+    unpack_world: Option<&Arc<World>>,
+    position: &BlockPos,
+    state_id: BlockStateId,
+    ignore_being_blocked: bool,
+) -> Option<Arc<dyn Inventory>> {
+    let first_chest = world.get_block_entity(position)?;
+    let block = Block::from_state_id(state_id);
+    let chest_props = ChestLikeProperties::from_state_id(state_id);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => None,
         ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
+    }
+    .filter(|&direction| {
+        get_chest_properties_if_can_connect(
+            world,
+            block,
+            position,
+            chest_props.facing,
+            direction,
+            chest_props.r#type.opposite(),
+        )
+        .is_some()
+    });
+
+    if !ignore_being_blocked {
+        if is_chest_blocked(world, position) {
+            return None;
+        }
+        if let Some(direction) = connected_towards
+            && is_chest_blocked(world, &position.offset(direction.to_offset()))
+        {
+            return None;
+        }
+    }
+
+    let unpack_non_player = |entity: &Arc<dyn BlockEntity>, pos: &BlockPos| {
+        if let Some(world_arc) = unpack_world
+            && let Some((loot_key, seed)) = entity.take_loot_table()
+            && let Some(table) = get_loot_table(&loot_key)
+            && let Some(inv) = entity.clone().get_inventory()
+        {
+            fill_chest_inventory_handle(
+                &inv,
+                &crate::world::loot::LootTableHandle::Static(table),
+                seed,
+                &LootContextParameters {
+                    world: Some(world_arc),
+                    position: Some(pos.to_f64()),
+                    ..Default::default()
+                },
+            );
+            inv.mark_dirty();
+        }
     };
 
-    // Vanilla passes `ignoreBeingBlocked = false`, so a blocked half reads zero.
-    if is_chest_blocked(args.world, args.position) {
-        return Some(0);
+    unpack_non_player(&first_chest, position);
+    let first_inventory = first_chest.get_inventory()?;
+
+    if let Some(direction) = connected_towards {
+        let neighbor_pos = position.offset(direction.to_offset());
+        if let Some(second_chest) = world.get_block_entity(&neighbor_pos) {
+            unpack_non_player(&second_chest, &neighbor_pos);
+            if let Some(second_inventory) = second_chest.get_inventory() {
+                return Some(if matches!(chest_props.r#type, ChestType::Right) {
+                    DoubleInventory::new(first_inventory, second_inventory)
+                } else {
+                    DoubleInventory::new(second_inventory, first_inventory)
+                });
+            }
+        }
     }
 
-    if let Some(direction) = connected_towards
-        && is_chest_blocked(args.world, &args.position.offset(direction.to_offset()))
-    {
-        return Some(0);
-    }
+    Some(first_inventory)
+}
 
-    if let Some(direction) = connected_towards
-        && let Some(second_inventory) = args
+/// Computes the comparator output for a chest, combining both halves for double chests.
+fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8> {
+    let state = args.world.get_block_state_id(args.position);
+    let Some(inventory) = get_chest_inventory(args.world, None, args.position, state, false) else {
+        // Vanilla passes `ignoreBeingBlocked = false`, so a blocked half reads zero if a chest BE exists.
+        return args
             .world
-            .get_block_entity(&args.position.offset(direction.to_offset()))
+            .get_block_entity(args.position)
             .and_then(BlockEntity::get_inventory)
-    {
-        let double_inventory = if matches!(chest_props.r#type, ChestType::Right) {
-            DoubleInventory::new(first_inventory, second_inventory)
-        } else {
-            DoubleInventory::new(second_inventory, first_inventory)
-        };
-        Some(crate::block::calculate_comparator_output(
-            double_inventory.as_ref(),
-        ))
-    } else {
-        Some(crate::block::calculate_comparator_output(
-            first_inventory.as_ref(),
-        ))
-    }
+            .map(|_| 0);
+    };
+    Some(crate::block::calculate_comparator_output(
+        inventory.as_ref(),
+    ))
 }
 
 /// Returns a screen handler factory for opening a chest or double chest inventory.
@@ -199,6 +253,11 @@ fn get_chest_screen_handler_factory(
             && let Some(table) = get_loot_table(&loot_key)
             && let Some(inv) = entity.clone().get_inventory()
         {
+            args.player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerGeneratesContainerLoot {
+                    loot_table_id: loot_key.clone(),
+                },
+            );
             fill_chest_inventory_handle(
                 &inv,
                 &crate::world::loot::LootTableHandle::Static(table),
@@ -653,13 +712,22 @@ fn get_chest_properties_if_can_connect(
 }
 
 fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
-    // TODO: Block opening when a cat is sitting on top.
-    has_block_on_top(world, block_pos)
+    has_block_on_top(world, block_pos) || is_cat_sitting_on_chest(world, block_pos)
 }
 fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_pos = block_pos.up();
     let above_state = world.get_block_state(&above_pos);
     above_state.is_solid_block()
+}
+
+fn is_cat_sitting_on_chest(world: &World, block_pos: &BlockPos) -> bool {
+    let search_box = BoundingBox::from_block(&block_pos.up());
+    world.get_entities_at_box(&search_box).iter().any(|entity| {
+        entity
+            .cast_any()
+            .downcast_ref::<CatEntity>()
+            .is_some_and(TamableAnimal::is_in_sitting_pose)
+    })
 }
 
 trait ChestTypeExt {

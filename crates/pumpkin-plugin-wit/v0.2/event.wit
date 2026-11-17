@@ -4,7 +4,7 @@ interface event {
     use enchantments.{enchantment};
     use damage-types.{damage-type};
     use screens.{screen};
-    use player.{player};
+    use player.{player, java-minecraft-version, bedrock-minecraft-version};
     use text.{text-component};
     use %world.{%world};
     use java-packets.{serverbound-packet as java-serverbound-packet, clientbound-packet as java-clientbound-packet};
@@ -365,11 +365,65 @@ interface event {
         cancelled: bool
     }
 
+    /// A packet already in the client's format.
+    record raw-packet {
+        packet-id: s32,
+        payload: list<u8>,
+    }
+
     record packet-sent-event-data {
         player: player,
         packet: clientbound-packet,
         packet-id: s32,
         raw-payload: list<u8>,
+        /// Sent right after this packet, even when it is cancelled.
+        extra-packets: list<raw-packet>,
+        cancelled: bool
+    }
+
+    enum java-connection-state {
+        handshake,
+        status,
+        login,
+        config,
+        play,
+    }
+
+    record java-connection-packet-received-event-data {
+        connection-id: u64,
+        version: java-minecraft-version,
+        state: java-connection-state,
+        packet-id: s32,
+        raw-payload: list<u8>,
+        cancelled: bool
+    }
+
+    record java-connection-packet-sent-event-data {
+        connection-id: u64,
+        version: java-minecraft-version,
+        state: java-connection-state,
+        packet-id: s32,
+        raw-payload: list<u8>,
+        extra-packets: list<raw-packet>,
+        cancelled: bool
+    }
+
+    record bedrock-connection-packet-received-event-data {
+        connection-id: u64,
+        protocol-version: u32,
+        version: bedrock-minecraft-version,
+        packet-id: s32,
+        raw-payload: list<u8>,
+        cancelled: bool
+    }
+
+    record bedrock-connection-packet-sent-event-data {
+        connection-id: u64,
+        protocol-version: u32,
+        version: bedrock-minecraft-version,
+        packet-id: s32,
+        raw-payload: list<u8>,
+        extra-packets: list<raw-packet>,
         cancelled: bool
     }
 
@@ -452,6 +506,7 @@ interface event {
         father-id: s32,
         mother-id: s32,
         child-id: s32,
+        experience: s32,
         cancelled: bool
     }
 
@@ -519,9 +574,25 @@ interface event {
         cancelled: bool
     }
 
+    enum target-reason {
+        closest-player,
+        closest-entity,
+        random-target,
+        target-attacked-entity,
+        target-attacked-nearby-entity,
+        target-attacked-owner,
+        owner-attacked-target,
+        pig-zombie-target,
+        angry,
+        forgot-target,
+        fleeing,
+        unknown,
+    }
+
     record entity-target-event-data {
         entity-id: s32,
         target-id: option<s32>,
+        reason: target-reason,
         cancelled: bool
     }
 
@@ -654,6 +725,12 @@ interface event {
         entity-id: s32,
         target-id: option<s32>,
         reason: string,
+        cancelled: bool
+    }
+
+    record entity-toggle-sit-event-data {
+        entity-id: s32,
+        sitting: bool,
         cancelled: bool
     }
 
@@ -815,6 +892,7 @@ interface event {
         hit-by-id: s32,
         force: f64,
         x: f64,
+        y: f64,
         z: f64,
         cancelled: bool
     }
@@ -1929,6 +2007,10 @@ interface event {
         server-tick-end-event,
         packet-received-event,
         packet-sent-event,
+        java-connection-packet-received-event,
+        java-connection-packet-sent-event,
+        bedrock-connection-packet-received-event,
+        bedrock-connection-packet-sent-event,
         chunk-load-event,
         chunk-save-event,
         chunk-send-event,
@@ -2070,6 +2152,7 @@ interface event {
         entity-potion-effect-event,
         entity-spell-cast-event,
         entity-target-living-entity-event,
+        entity-toggle-sit-event,
         entity-toggle-swim-event,
         explosion-prime-event,
         firework-explode-event,
@@ -2205,6 +2288,10 @@ interface event {
         server-tick-end-event(server-tick-end-event-data),
         packet-received-event(packet-received-event-data),
         packet-sent-event(packet-sent-event-data),
+        java-connection-packet-received-event(java-connection-packet-received-event-data),
+        java-connection-packet-sent-event(java-connection-packet-sent-event-data),
+        bedrock-connection-packet-received-event(bedrock-connection-packet-received-event-data),
+        bedrock-connection-packet-sent-event(bedrock-connection-packet-sent-event-data),
         chunk-load-event(chunk-load-event-data),
         chunk-save-event(chunk-save-event-data),
         chunk-send-event(chunk-send-event-data),
@@ -2346,6 +2433,7 @@ interface event {
         entity-potion-effect-event(entity-potion-effect-event-data),
         entity-spell-cast-event(entity-spell-cast-event-data),
         entity-target-living-entity-event(entity-target-living-entity-event-data),
+        entity-toggle-sit-event(entity-toggle-sit-event-data),
         entity-toggle-swim-event(entity-toggle-swim-event-data),
         explosion-prime-event(explosion-prime-event-data),
         firework-explode-event(firework-explode-event-data),

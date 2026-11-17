@@ -4,6 +4,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::client_parsed::MessageArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
@@ -41,6 +42,6 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     dispatcher.register(
         command("me", DESCRIPTION)
             .requires(PERMISSION)
-            .then(argument("action", StringArgumentType::GreedyPhrase).executes(MeExecutor)),
+            .then(argument("action", MessageArgumentType).executes(MeExecutor)),
     );
 }

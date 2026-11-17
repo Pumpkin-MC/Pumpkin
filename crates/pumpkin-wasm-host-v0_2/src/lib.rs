@@ -550,3 +550,49 @@ pub async fn init_plugin(
 
     Ok((plugin, store, metadata))
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::generated_packets::{clientbound_java_any_to_wit, serialize_java_packet};
+    use crate::pumpkin::plugin::java_packets::{CSetBlockDestroyStage, ClientboundPacket};
+    use pumpkin_protocol::VarInt;
+    use pumpkin_protocol::java::client::play::CSetBlockDestroyStage as ProtocolCSetBlockDestroyStage;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    #[test]
+    fn serializes_destroy_stage() {
+        for destroy_stage in -1..=9 {
+            let packet = ClientboundPacket::CSetBlockDestroyStage(CSetBlockDestroyStage {
+                entity_id: 1,
+                location: (0, 64, 0),
+                destroy_stage,
+            });
+
+            let bytes = serialize_java_packet(&packet, JavaMinecraftVersion::V_26_3);
+            assert_eq!(
+                bytes.as_ref().and_then(|bytes| bytes.last()),
+                Some(&(destroy_stage as u8))
+            );
+        }
+    }
+
+    #[test]
+    fn converts_negative_destroy_stage_to_wit() {
+        let packet = ProtocolCSetBlockDestroyStage {
+            entity_id: VarInt(1),
+            location: BlockPos::new(0, 64, 0),
+            destroy_stage: -1,
+        };
+
+        assert!(matches!(
+            clientbound_java_any_to_wit(&packet),
+            Some(ClientboundPacket::CSetBlockDestroyStage(
+                CSetBlockDestroyStage {
+                    destroy_stage: -1,
+                    ..
+                }
+            ))
+        ));
+    }
+}

@@ -267,6 +267,18 @@ impl BlockEntity for ConduitBlockEntity {
         }
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(
+            super::bedrock::BedrockBlockActorBuilder::new("Conduit", self.position)
+                .put_bool("Active", self.active.load(Ordering::Relaxed))
+                .put_long("Target", -1)
+                .finish(),
+        )
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

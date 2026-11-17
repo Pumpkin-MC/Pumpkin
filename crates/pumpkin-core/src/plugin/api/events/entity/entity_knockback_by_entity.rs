@@ -12,18 +12,21 @@ pub struct EntityKnockbackByEntityEvent {
     pub force: f64,
     /// X velocity change.
     pub x: f64,
+    /// Y velocity change.
+    pub y: f64,
     /// Z velocity change.
     pub z: f64,
 }
 
 impl EntityKnockbackByEntityEvent {
     #[must_use]
-    pub const fn new(entity_id: i32, hit_by_id: i32, force: f64, x: f64, z: f64) -> Self {
+    pub const fn new(entity_id: i32, hit_by_id: i32, force: f64, x: f64, y: f64, z: f64) -> Self {
         Self {
             entity_id,
             hit_by_id,
             force,
             x,
+            y,
             z,
             cancelled: false,
         }

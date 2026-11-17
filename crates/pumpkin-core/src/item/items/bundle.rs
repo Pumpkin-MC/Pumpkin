@@ -44,7 +44,15 @@ impl ItemBehaviour for BundleItem {
             .set_active_hand(hand, stack, Self::USE_DURATION);
     }
 
-    fn on_use_tick(&self, stack: &ItemStack, player: &Player, remaining_use_ticks: i32) {
+    fn on_use_tick(
+        &self,
+        stack: &ItemStack,
+        user: &dyn crate::entity::EntityBase,
+        remaining_use_ticks: i32,
+    ) {
+        let Some(player) = user.get_player() else {
+            return;
+        };
         let is_first_tick = remaining_use_ticks == Self::USE_DURATION;
         if !is_first_tick
             && (remaining_use_ticks >= Self::USE_DURATION - 10 || remaining_use_ticks % 2 != 0)
