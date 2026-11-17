@@ -134,6 +134,7 @@ pub fn to_registry_entry(entry_id: String, instance: &TestInstance) -> RegistryE
     let mut nbt = NbtCompound::new();
     nbt.put_string("type", instance.instance_type.serialized_name().to_string());
     nbt.put("environment", json_value_to_nbt(&instance.environment));
+    nbt.put_string("dimension", instance.dimension.clone());
     if let Some(function) = &instance.function {
         nbt.put_string("function", function.clone());
     }
@@ -225,6 +226,7 @@ mod tests {
             instance.environment,
             Value::String("minecraft:default".into())
         );
+        assert_eq!(instance.dimension, "minecraft:overworld");
         assert_eq!(instance.structure, "pumpkin:some_ai_test");
         assert_eq!(instance.max_ticks, 200);
         assert_eq!(instance.setup_ticks, 0);
@@ -246,6 +248,7 @@ mod tests {
             r#"{
                 "type": "minecraft:function",
                 "environment": "minecraft:default",
+                "dimension": "minecraft:the_nether",
                 "function": "minecraft:always_pass",
                 "max_ticks": 1,
                 "required": false,
@@ -269,6 +272,7 @@ mod tests {
             instance.environment,
             Value::String("minecraft:default".into())
         );
+        assert_eq!(instance.dimension, "minecraft:the_nether");
         assert_eq!(instance.function.as_deref(), Some("minecraft:always_pass"));
         assert_eq!(instance.structure, "minecraft:empty");
         assert_eq!(instance.max_ticks, 1);

@@ -99,6 +99,8 @@ pub struct GameTestDefinition {
     #[serde(rename = "type")]
     pub instance_type: TestType,
     pub environment: Value,
+    #[serde(default = "default_dimension")]
+    pub dimension: String,
     pub structure: String,
     #[serde(default)]
     pub function: Option<String>,
@@ -119,6 +121,10 @@ pub struct GameTestDefinition {
     pub sky_access: bool,
     #[serde(default)]
     pub padding: i32,
+}
+
+fn default_dimension() -> String {
+    "minecraft:overworld".to_string()
 }
 
 impl GameTestDefinition {

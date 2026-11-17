@@ -42,7 +42,7 @@ fn test_instance_description(test: &GameTestDefinition) -> TextComponent {
         ))
         .add_child(description_row(
             pumpkin_data::translation::java::TEST_INSTANCE_DESCRIPTION_DIMENSION,
-            TextComponent::text("minecraft:overworld"),
+            TextComponent::text(test.dimension.clone()),
         ))
 }
 
@@ -194,6 +194,7 @@ impl JavaClient {
                     test_id.filter(|id| server.datapack_manager.get_test_instance(id).is_some())
                 {
                     let player = player.clone();
+                    let world = world.clone();
                     let position = packet.pos;
                     let ignore_entities = packet.data.ignore_entities;
                     server.clone().spawn_task(async move {
@@ -265,47 +266,61 @@ impl JavaClient {
                             .map(|test| test.structure)
                     })
                     .or(test_id);
-                let Some(name) = name else {
-                    player.send_system_message(&TextComponent::text("No test instance selected"));
-                    return;
-                };
-                let padding = packet
-                    .data
-                    .test
-                    .and_then(|id| server.datapack_manager.get_test_instance(id))
-                    .map_or(0, |test| test.padding);
-                let origin = BlockPos::new(
-                    packet.pos.0.x + padding,
-                    packet.pos.0.y + padding + 1,
-                    packet.pos.0.z + padding + 1,
-                );
-                let include_entities = !packet.data.ignore_entities;
-                let player = player.clone();
-                server.clone().spawn_task(async move {
-                    let world_path = server.basic_config.get_world_path();
-                    let result =
-                        match capture_structure(&world, origin, size, include_entities, true).await
-                        {
-                            Ok(nbt) => server
-                                .datapack_manager
-                                .save_generated_structure(&world_path, &name, nbt)
+                if let Some(name) = name {
+                    let padding = packet
+                        .data
+                        .test
+                        .and_then(|id| server.datapack_manager.get_test_instance(id))
+                        .map_or(0, |test| test.padding);
+                    let origin = BlockPos::new(
+                        packet.pos.0.x + padding,
+                        packet.pos.0.y + padding + 1,
+                        packet.pos.0.z + padding + 1,
+                    );
+                    let include_entities = !packet.data.ignore_entities;
+                    let player = player.clone();
+                    let world = world.clone();
+                    server.clone().spawn_task(async move {
+                        let world_path = server.basic_config.get_world_path();
+                        let result =
+                            match capture_structure(&world, origin, size, include_entities, true)
                                 .await
-                                .map(|_| ()),
-                            Err(error) => Err(error),
-                        };
-                    if let Err(error) = result {
-                        player.send_system_message(&TextComponent::text(format!(
-                            "Failed to save test structure '{name}': {error}"
-                        )));
-                    } else if export {
-                        player.send_system_message(&TextComponent::text(
-                            "Test structure exporting is disabled",
-                        ));
-                    }
-                });
+                            {
+                                Ok(nbt) => server
+                                    .datapack_manager
+                                    .save_generated_structure(&world_path, &name, nbt)
+                                    .await
+                                    .map(|_| ()),
+                                Err(error) => Err(error),
+                            };
+                        if let Err(error) = result {
+                            tracing::warn!("Failed to save test structure '{name}': {error}");
+                        }
+                        if export {
+                            player.send_system_message(
+                                &TextComponent::text("Test structure exporting is disabled")
+                                    .color_named(NamedColor::Red),
+                            );
+                        }
+                    });
+                } else {
+                    player.send_system_message(
+                        &TextComponent::translate_cross(
+                            pumpkin_data::translation::java::TEST_INSTANCE_BLOCK_ERROR_UNABLE_TO_SAVE,
+                            pumpkin_data::translation::java::TEST_INSTANCE_BLOCK_ERROR_UNABLE_TO_SAVE,
+                            [
+                                TextComponent::text(packet.pos.0.x.to_string()),
+                                TextComponent::text(packet.pos.0.y.to_string()),
+                                TextComponent::text(packet.pos.0.z.to_string()),
+                            ],
+                        )
+                        .color_named(NamedColor::Red),
+                    );
+                }
             }
             TestInstanceBlockAction::Reset => {
                 let player = player.clone();
+                let world = world.clone();
                 let position = packet.pos;
                 let test_name = test_id.unwrap_or_default();
                 server.clone().spawn_task(async move {
@@ -330,5 +345,7 @@ impl JavaClient {
             TestInstanceBlockAction::Set => {}
             TestInstanceBlockAction::Query | TestInstanceBlockAction::Init => (),
         }
+        let state_id = world.get_block_state_id(&packet.pos);
+        world.register_block_change(packet.pos, state_id);
     }
 }

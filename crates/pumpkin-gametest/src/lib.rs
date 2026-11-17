@@ -279,6 +279,7 @@ mod tests {
         let definition = GameTestDefinition {
             instance_type: TestType::Function,
             environment: serde_json::Value::String("minecraft:default".to_string()),
+            dimension: "minecraft:overworld".to_string(),
             function: Some("test:seq".to_string()),
             structure: "minecraft:empty_3x3x3".to_string(),
             max_ticks: 10,
@@ -368,6 +369,7 @@ mod tests {
         let definition = GameTestDefinition {
             instance_type: TestType::Function,
             environment: serde_json::Value::String("minecraft:default".to_string()),
+            dimension: "minecraft:overworld".to_string(),
             function: Some("test:flaky".to_string()),
             structure: "minecraft:empty".to_string(),
             max_ticks: 5,
@@ -448,6 +450,7 @@ mod tests {
         let definition = GameTestDefinition {
             instance_type: TestType::BlockBased,
             environment: serde_json::Value::String("minecraft:default".to_string()),
+            dimension: "minecraft:overworld".to_string(),
             function: None,
             structure: "test:stop".to_string(),
             max_ticks: 20,
@@ -602,6 +605,7 @@ mod tests {
             let definition = GameTestDefinition {
                 instance_type: TestType::Function,
                 environment: serde_json::Value::String("minecraft:default".to_string()),
+                dimension: "minecraft:overworld".to_string(),
                 function: Some(format!("test:{name}")),
                 structure: "minecraft:empty".to_string(),
                 max_ticks: 10,
