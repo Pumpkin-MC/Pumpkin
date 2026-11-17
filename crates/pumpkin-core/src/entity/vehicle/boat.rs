@@ -255,14 +255,15 @@ impl EntityBase for BoatEntity {
                     .entity_type
                     .has_tag(&tag::EntityType::MINECRAFT_CANNOT_BE_PUSHED_ONTO_BOATS)
             {
-                if let Some(mob) = other.get_mob() {
-                    mob.on_start_riding();
-                }
                 // The remaining Entity.startRiding checks may reject boarding without a push.
                 if !other.can_ride(self)
                     || entity.is_submerged_in_water()
                     || self.is_passenger_of_same_vehicle(other.as_ref())
                 {
+                    // Shulker.startRiding resets its attachment even when vanilla checks fail.
+                    if let Some(mob) = other.get_mob() {
+                        mob.on_start_riding();
+                    }
                     continue;
                 }
                 let Some(vehicle) = world.get_entity_by_id(entity.entity_id) else {

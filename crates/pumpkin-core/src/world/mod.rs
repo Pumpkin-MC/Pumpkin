@@ -6797,6 +6797,24 @@ impl World {
         }
     }
 
+    /// `FluidState#getHeightForCamera` fills source fluid up to a sturdy ceiling.
+    pub fn get_fluid_height_for_camera(
+        &self,
+        position: &BlockPos,
+        fluid: &Fluid,
+        state: &FluidState,
+    ) -> f32 {
+        if state.is_source
+            && self
+                .get_block_state(&position.up())
+                .is_side_solid(BlockDirection::Down)
+        {
+            1.0
+        } else {
+            self.get_fluid_height(position, fluid, state)
+        }
+    }
+
     pub fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
         self.get_block_state_id_if_loaded(position)
             .unwrap_or(Block::AIR.default_state.id)

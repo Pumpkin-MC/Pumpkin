@@ -82,6 +82,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:iron_golem_pattern_spawns",
     "pumpkin:wither_pattern_spawns",
     "pumpkin:boats_pick_up_nearby_mobs",
+    "pumpkin:boats_reject_submerged_mob_pickup",
     "pumpkin:riding_shulker_keeps_attach_face",
     "pumpkin:item_entities_merge",
     "pumpkin:zombie_pathfinds_to_villager",
@@ -542,6 +543,13 @@ pub fn ensure_builtin_game_tests_registered() {
             20,
             0,
             entities_and_ai::test_boats_pick_up_nearby_mobs,
+        );
+        register_function_test(
+            "pumpkin:boats_reject_submerged_mob_pickup",
+            "pumpkin:empty_5x4x8",
+            20,
+            0,
+            entities_and_ai::test_boats_reject_submerged_mob_pickup,
         );
         register_function_test(
             "pumpkin:riding_shulker_keeps_attach_face",

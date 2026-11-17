@@ -23,13 +23,17 @@ use crate::entity::{
     DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity, vehicle::boat::PICKUP_RANGE,
 };
 use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_mount::EntityMountEvent,
-    entity_pose_change::EntityPoseChangeEvent, entity_target::EntityTargetEvent,
-    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+    entity_breed::EntityBreedEvent, entity_dismount::EntityDismountEvent,
+    entity_mount::EntityMountEvent, entity_pose_change::EntityPoseChangeEvent,
+    entity_target::EntityTargetEvent, entity_toggle_sit::EntityToggleSitEvent,
+    pig_zombie_anger::PigZombieAngerEvent,
 };
 use crate::plugin::{
     api::events::{
-        vehicle::{vehicle_enter::VehicleEnterEvent, vehicle_update::VehicleUpdateEvent},
+        vehicle::{
+            vehicle_enter::VehicleEnterEvent, vehicle_exit::VehicleExitEvent,
+            vehicle_update::VehicleUpdateEvent,
+        },
         world::generic_game::GenericGameEvent,
     },
     server::packet::PacketSentEvent,
@@ -144,7 +148,9 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
         || plugins.has_handlers::<EntityMountEvent>()
+        || plugins.has_handlers::<EntityDismountEvent>()
         || plugins.has_handlers::<VehicleEnterEvent>()
+        || plugins.has_handlers::<VehicleExitEvent>()
         || plugins.has_handlers::<VehicleUpdateEvent>()
         || plugins.has_handlers::<EntityPoseChangeEvent>()
         || plugins.has_handlers::<GenericGameEvent>()
@@ -369,14 +375,15 @@ impl EntityReach {
                     .iter()
                     .any(|candidate| candidate.get_entity().has_leash_data());
         }
-        // A mob can restore a leash and enter pickup range before the boat's turn.
+        // Restoring a leash can dismount a rider or precede a nearby boat's pickup.
         if base.has_leash_data() && entity.get_mob().is_some() {
-            reach.global |= base
-                .world
-                .load()
-                .get_entities_at_box(&reach.body.expand(PICKUP_RANGE, 0.0, PICKUP_RANGE))
-                .iter()
-                .any(|candidate| candidate.get_entity().entity_type.boat.is_some());
+            reach.global |= base.has_vehicle()
+                || base
+                    .world
+                    .load()
+                    .get_entities_at_box(&reach.body.expand(PICKUP_RANGE, 0.0, PICKUP_RANGE))
+                    .iter()
+                    .any(|candidate| candidate.get_entity().entity_type.boat.is_some());
         }
         if let Some(mob) = entity.get_mob() {
             let player_radius = radius.max(mob.player_tick_range() + movement);
@@ -1505,8 +1512,11 @@ mod tests {
                     .is_none()
                 );
             }
+            boat.get_entity().add_passenger(boat.clone(), pig.clone());
             entity.tick_leash(pig.as_ref());
             assert!(entity.is_leashed());
+            assert!(!entity.has_vehicle());
+            assert!(!boat.get_entity().has_passenger(entity.entity_id));
         }
         world.level.shutdown().await;
         Ok(())

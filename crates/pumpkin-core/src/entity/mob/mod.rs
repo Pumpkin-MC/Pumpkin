@@ -1490,7 +1490,7 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
-    /// Called before attempting to mount, including attempts that may fail.
+    /// Applies species-specific riding state, including attempts rejected by vanilla checks.
     fn on_start_riding(&self) {}
 
     fn is_sensitive_to_water(&self) -> bool {

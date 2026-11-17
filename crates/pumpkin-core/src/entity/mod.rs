@@ -4054,13 +4054,25 @@ impl Entity {
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
         let eye_y = pos.y + self.get_eye_height();
-        let eye_pos = BlockPos::floored(pos.x, eye_y, pos.z);
+        let fluid_box = self.bounding_box.load().contract_all(0.001);
+        // Include the block below an exact eye boundary, within vanilla's fluid scan box.
+        let min_y = (eye_y - 1.0).ceil().max(fluid_box.min.y.floor()) as i32;
+        let max_y = eye_y.floor().min(fluid_box.max.y.ceil() - 1.0) as i32;
         let world = self.world.load();
-        let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
-        fluid.matches_type(&Fluid::WATER)
-            && eye_y
-                <= f64::from(eye_pos.0.y)
-                    + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
+        for y in min_y..=max_y {
+            let eye_pos = BlockPos::floored(pos.x, f64::from(y), pos.z);
+            let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
+            if fluid.matches_type(&Fluid::WATER)
+                && f64::from(y) + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
+                    >= fluid_box.min.y
+                && eye_y
+                    <= f64::from(y)
+                        + f64::from(world.get_fluid_height_for_camera(&eye_pos, fluid, &state))
+            {
+                return true;
+            }
+        }
+        false
     }
 
     #[must_use]
@@ -4943,6 +4955,9 @@ impl Entity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(holder));
         self.send_leash_attached(holder);
+        if let Some(vehicle) = self.get_vehicle() {
+            vehicle.get_entity().remove_passenger(self.entity_id);
+        }
     }
 
     /// Resets the leash motion and tells clients about the new holder. Call it without holding
@@ -5485,6 +5500,10 @@ impl Entity {
             return;
         }
 
+        if let Some(mob) = passenger.get_mob() {
+            mob.on_start_riding();
+        }
+
         let passenger_entity = passenger.get_entity();
         *passenger_entity
             .vehicle
@@ -5574,6 +5593,9 @@ impl Entity {
         vehicle: Arc<dyn EntityBase>,
         passenger: Arc<dyn EntityBase>,
     ) {
+        if let Some(mob) = passenger.get_mob() {
+            mob.on_start_riding();
+        }
         *passenger
             .get_entity()
             .vehicle
