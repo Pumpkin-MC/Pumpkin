@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-pub fn load_embedded_test_functions<S: std::hash::BuildHasher>(
+pub fn load_test_functions<S: std::hash::BuildHasher>(
     functions: &mut HashMap<String, Vec<String>, S>,
 ) -> usize {
     let before = functions.len();

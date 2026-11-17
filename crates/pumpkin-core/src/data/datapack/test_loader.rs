@@ -11,14 +11,14 @@ use tracing::warn;
 
 pub type TestInstanceRegistry = HashMap<String, TestInstance>;
 
-/// Loads embedded test environments into the dynamic registry before on-disk packs.
-pub fn load_embedded_test_environments<S: std::hash::BuildHasher>(
+/// Loads test environments into the dynamic registry before on-disk packs.
+pub fn load_test_environments<S: std::hash::BuildHasher>(
     registry: &mut HashMap<String, RegistryEntryData, S>,
 ) -> usize {
     let before = registry.len();
     for &id in pumpkin_data::test_environment::all_test_environment_names() {
         let Some(content) = pumpkin_data::test_environment::get_test_environment_json(id) else {
-            warn!("Embedded test environment '{id}' has no JSON payload");
+            warn!("Test environment '{id}' has no JSON payload");
             continue;
         };
         match serde_json::from_str::<Value>(content) {
@@ -33,7 +33,7 @@ pub fn load_embedded_test_environments<S: std::hash::BuildHasher>(
                     },
                 );
             }
-            Err(error) => warn!("Failed to parse embedded test environment '{id}': {error}"),
+            Err(error) => warn!("Failed to parse test environment '{id}': {error}"),
         }
     }
     registry.len() - before
