@@ -108,7 +108,7 @@ pub use enchantment::{
     EnchantmentBuilder, EnchantmentError, EnchantmentManager, RegistrableEnchantment,
 };
 pub use entity_statuses_wit::EntityStatus;
-pub use events::{EventHandler, FromIntoEvent};
+pub use events::{EventAccessError, EventHandler, EventKind, EventRef};
 pub use ext::player::{PlayerCooldownExt, PlayerEnderChestExt};
 pub use game_events_wit::GameEvent;
 pub use host::game_rules::{GameRule, GameRuleValue};
