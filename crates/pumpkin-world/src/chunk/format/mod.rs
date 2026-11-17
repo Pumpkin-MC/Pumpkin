@@ -33,6 +33,7 @@ use super::{
 pub mod anvil;
 pub mod linear;
 pub mod pump;
+mod zstd;
 
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
