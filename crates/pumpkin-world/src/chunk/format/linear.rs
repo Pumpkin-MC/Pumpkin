@@ -1,5 +1,5 @@
 use rustc_hash::FxHashMap;
-use std::io::{ErrorKind, Read};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -7,12 +7,10 @@ use crate::chunk::io::{RegionFile, sync_file, write_file_atomically};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::{Buf, BufMut, Bytes};
 use pumpkin_util::math::vector2::Vector2;
-use ruzstd::decoding::StreamingDecoder;
-use ruzstd::encoding::{CompressionLevel, compress_to_vec};
 use tracing::{error, warn};
 use xxhash_rust::xxh64::xxh64;
 
-use super::anvil::CHUNK_COUNT;
+use super::{anvil::CHUNK_COUNT, zstd};
 
 /// The signature used as both header and footer.
 /// <https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98>
@@ -467,14 +465,8 @@ impl LinearV2File {
                 continue;
             }
 
-            let mut decompressed = Vec::new();
-            {
-                let mut decoder = StreamingDecoder::new(compressed_slice)
-                    .map_err(|_| ChunkReadingError::RegionIsInvalid)?;
-                decoder
-                    .read_to_end(&mut decompressed)
-                    .map_err(ChunkReadingError::IoError)?
-            };
+            let decompressed = zrip::decompress(compressed_slice)
+                .map_err(|_| ChunkReadingError::RegionIsInvalid)?;
             buf.advance(compressed_size);
 
             let mut bucket_buf: Bytes = decompressed.into();
@@ -575,8 +567,9 @@ impl RegionFile for LinearV2File {
         for bucket_idx in 0..self.buckets.len() {
             if self.buckets[bucket_idx].is_none() {
                 let raw = self.serialise_bucket(bucket_idx);
-                let data =
-                    compress_to_vec(raw.as_slice(), CompressionLevel::Fastest).into_boxed_slice();
+                let mut data = Vec::new();
+                zstd::compress_append(&raw, &mut data).map_err(std::io::Error::other)?;
+                let data = data.into_boxed_slice();
                 let xxhash = xxh64(&data, 0);
                 self.buckets[bucket_idx] = Some(CompressedBucket {
                     data,
