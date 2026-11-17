@@ -14,9 +14,8 @@
 //! Dropping a future does not undo host operations that have already completed.
 //!
 //! ## Early Development Warning
-//! This SDK is in preview. Event-resource integration and the complete event catalogue
-//! are still pending. Build components for `wasm32-wasip2` with release mode or at least
-//! optimization level 1; the current event variant fails validation without optimization.
+//! This SDK is in preview. Events are borrowed host resources that handlers read and edit
+//! through [`events::EventRef`]. Build components for `wasm32-wasip2`.
 //!
 
 use std::sync::{Arc, OnceLock};
@@ -336,8 +335,8 @@ pub mod runtime {
         plugin().on_unload(context).await
     }
 
-    pub async fn handle_event(event_id: u32, server: Server, event: Event) -> Event {
-        events::dispatch(event_id, server, event).await
+    pub async fn handle_event(event_id: u32, server: Server, event: &Event) {
+        events::dispatch(event_id, server, event).await;
     }
 
     pub async fn handle_command(
@@ -444,9 +443,9 @@ macro_rules! register_plugin {
                 async fn handle_event(
                     event_id: u32,
                     server: $crate::host::server::Server,
-                    event: $crate::host::event::Event,
-                ) -> $crate::host::event::Event {
-                    $crate::runtime::handle_event(event_id, server, event).await
+                    event: &$crate::host::event::Event,
+                ) {
+                    $crate::runtime::handle_event(event_id, server, event).await;
                 }
 
                 async fn handle_command(

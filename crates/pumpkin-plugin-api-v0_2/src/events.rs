@@ -4,18 +4,29 @@
 //!
 //! The server fires an event, the host calls the `handle-event(id, server, event)` export, and
 //! the dispatcher looks `id` up in the table that [`Context::register_event_handler`] filled; your
-//! [`EventHandler`] gets the event data by value and hands back the data the host should use
+//! [`EventHandler`] gets an [`EventRef`] to the live event and reads or edits it through that
 //!
-//! Nothing is borrowed from the host across that call, so a handler can `.await` as often as it
-//! likes and the event data is still its own afterwards
+//! The event is a borrowed host resource, not a value that moves through the call. It stays
+//! valid for the whole callback, awaits included, and the host takes it back when the handler
+//! returns
+//!
+//! # Reading and editing
+//!
+//! An event kind is the WIT record for that event, such as [`PlayerChatEvent`]
+//! [`EventRef::get`] reads the whole record and [`EventRef::set`] writes it back, and a `set`
+//! takes effect immediately, so later handlers for the same event see it
+//!
+//! `blocking` on registration decides whether `set` is allowed: a blocking handler can edit the
+//! event, and a notification handler gets an [`EventAccessError`] from `set`, which makes a
+//! notification that tries to change the event visible instead of silently ignored
 //!
 //! # Where to look
 //!
 //! * [`EventHandler`] is the trait you implement
 //! * [`Context::register_event_handler`] registers it and explains `blocking`
-//! * [`define_event!`](crate::define_event) adds an event marker that this module does not ship
+//! * [`unregister_event_handler`] drops a handler again
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{fmt, marker::PhantomData, sync::Arc};
 
 pub use crate::host::event::{Event, EventPriority, EventType};
 use crate::{
@@ -25,37 +36,109 @@ use crate::{
 
 static EVENT_HANDLERS: Registry<dyn ErasedEventHandler> = Registry::new();
 
-/// Ties an event marker type to its WIT data record and [`EventType`] discriminant
+/// The host refused a read or a write of an event
 ///
-/// Implement it with [`define_event!`](crate::define_event) instead of by hand; a marker is a unit
-/// struct that exists so [`EventHandler`] and [`Context::register_event_handler`] can name an
-/// event type
-pub trait FromIntoEvent: Sized {
+/// Reading fails when the event is a different kind than the one asked for, and writing also
+/// fails when the handler was registered as a notification and so may not edit the event
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EventAccessError;
+
+impl fmt::Display for EventAccessError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("the event is a different kind or cannot be edited by this handler")
+    }
+}
+
+impl std::error::Error for EventAccessError {}
+
+/// A kind of event the host can dispatch, implemented by the WIT record for that event
+///
+/// Every record in the WIT `event` resource has an implementation, so you name an event by its
+/// record: `EventHandler<PlayerChatEvent>`
+pub trait EventKind: Sized {
     /// The discriminant the host uses to identify this event when a handler is registered
     const EVENT_TYPE: EventType;
 
-    /// The WIT record this event carries
-    type Data;
-
-    /// Extracts the event data from an [`Event`]
+    /// Reads this kind of record from the event
     ///
     /// # Errors
     ///
-    /// Returns the event back, boxed because [`Event`] is over 900 bytes, when it is a different
-    /// variant than this marker
-    ///
-    /// The dispatcher hands that event to the host untouched, so an id that points at the wrong
-    /// handler is a host bug the plugin survives instead of a trap
-    fn data_from_event(event: Event) -> Result<Self::Data, Box<Event>>;
+    /// Returns [`EventAccessError`] when the event is a different kind
+    fn get(event: &Event) -> Result<Self, EventAccessError>;
 
-    /// Wraps event data back into the matching [`Event`] variant
-    fn data_into_event(data: Self::Data) -> Event;
+    /// Writes this record into the event, replacing what the host holds
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventAccessError`] when the event is a different kind or the handler is not
+    /// allowed to edit it
+    fn set(self, event: &Event) -> Result<(), EventAccessError>;
 }
 
-/// The data type carried by an event
-pub type EventData<E> = <E as FromIntoEvent>::Data;
+/// A handler's view of the event being dispatched
+///
+/// It borrows the host's event for the length of the callback, so it cannot be kept past the
+/// handler
+pub struct EventRef<'a, E> {
+    event: &'a Event,
+    _kind: PhantomData<fn() -> E>,
+}
 
-/// A handler for one event type
+impl<'a, E: EventKind> EventRef<'a, E> {
+    fn new(event: &'a Event) -> Self {
+        Self {
+            event,
+            _kind: PhantomData,
+        }
+    }
+
+    /// Reads the whole event record from the host
+    ///
+    /// Every call builds the record again, resource handles included, so read it once and keep it
+    /// instead of calling this repeatedly
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventAccessError`] when the host dispatched a different kind of event than this
+    /// handler was registered for
+    pub fn get(&self) -> Result<E, EventAccessError> {
+        E::get(self.event)
+    }
+
+    /// Replaces the event record on the host with `data`
+    ///
+    /// The change is visible to later handlers right away. The record is moved, including any
+    /// resource handles in it
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventAccessError`] when this handler was registered as a notification
+    pub fn set(&self, data: E) -> Result<(), EventAccessError> {
+        data.set(self.event)
+    }
+
+    /// Reads the record, applies `change` and writes it back
+    ///
+    /// `change` is synchronous. To await between the read and the write, use [`get`](Self::get)
+    /// and [`set`](Self::set)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventAccessError`] if either the read or the write is refused
+    pub fn update(&self, change: impl FnOnce(&mut E)) -> Result<(), EventAccessError> {
+        let mut data = self.get()?;
+        change(&mut data);
+        self.set(data)
+    }
+
+    /// The underlying host resource, for calls this wrapper does not cover
+    #[must_use]
+    pub const fn raw(&self) -> &'a Event {
+        self.event
+    }
+}
+
+/// A handler for one kind of event
 ///
 /// Register an implementation with [`Context::register_event_handler`]
 ///
@@ -67,63 +150,50 @@ pub type EventData<E> = <E as FromIntoEvent>::Data;
 /// struct ChatGuard;
 ///
 /// impl EventHandler<PlayerChatEvent> for ChatGuard {
-///     async fn handle(
-///         &self,
-///         _server: Server,
-///         mut event: EventData<PlayerChatEvent>,
-///     ) -> EventData<PlayerChatEvent> {
-///         if !event.player.has_permission("chat.send".to_string()).await {
-///             event.cancelled = true;
+///     async fn handle(&self, _server: Server, event: EventRef<'_, PlayerChatEvent>) {
+///         let Ok(mut chat) = event.get() else { return };
+///         if !chat.player.has_permission("chat.send".to_string()).await {
+///             chat.cancelled = true;
+///             let _ = event.set(chat);
 ///         }
-///         event
 ///     }
 /// }
 /// ```
 #[allow(async_fn_in_trait, reason = "guest futures are intentionally not Send")]
-pub trait EventHandler<E: FromIntoEvent>: Send + Sync + 'static {
-    /// Processes an event and returns the data the host should use afterwards
+pub trait EventHandler<E: EventKind>: Send + Sync + 'static {
+    /// Handles one dispatch of the event
     ///
-    /// The server handle and the event data are owned, so nothing is borrowed from the host across
-    /// an await and the handler can suspend as often as it needs to
-    ///
-    /// The host treats a returned variant that differs from the dispatched one as a handler error
-    /// and keeps the original event; the data type pins the variant, so this signature cannot
-    /// produce one
+    /// The server handle is owned and the event is borrowed for the whole call, so the handler can
+    /// suspend as often as it needs to. Nothing is returned: edits go through [`EventRef::set`]
     ///
     /// # Reentry
     ///
     /// The host can start another dispatch while this one is suspended, which is why the receiver
     /// is `&self`; shared mutable state needs interior mutability, and no lock guard may be held
     /// across an await
-    async fn handle(&self, server: Server, event: E::Data) -> E::Data;
+    async fn handle(&self, server: Server, event: EventRef<'_, E>);
 }
 
 trait ErasedEventHandler: Send + Sync {
-    fn handle_erased(&self, server: Server, event: Event) -> LocalBoxFuture<'_, Event>;
+    fn handle_erased<'a>(&'a self, server: Server, event: &'a Event) -> LocalBoxFuture<'a, ()>;
 }
 
 struct HandlerWrapper<E, H> {
     handler: H,
-    _event: PhantomData<fn() -> E>,
+    _kind: PhantomData<fn() -> E>,
 }
 
-impl<E: FromIntoEvent, H: EventHandler<E>> ErasedEventHandler for HandlerWrapper<E, H> {
-    fn handle_erased(&self, server: Server, event: Event) -> LocalBoxFuture<'_, Event> {
-        Box::pin(async move {
-            match E::data_from_event(event) {
-                Ok(data) => E::data_into_event(self.handler.handle(server, data).await),
-                Err(event) => *event,
-            }
-        })
+impl<E: EventKind, H: EventHandler<E>> ErasedEventHandler for HandlerWrapper<E, H> {
+    fn handle_erased<'a>(&'a self, server: Server, event: &'a Event) -> LocalBoxFuture<'a, ()> {
+        Box::pin(self.handler.handle(server, EventRef::new(event)))
     }
 }
 
-pub(crate) async fn dispatch(event_id: u32, server: Server, event: Event) -> Event {
+pub(crate) async fn dispatch(event_id: u32, server: Server, event: &Event) {
     // The registry lock is released before the handler runs
-    let Some(handler) = EVENT_HANDLERS.get(event_id) else {
-        return event;
-    };
-    handler.handle_erased(server, event).await
+    if let Some(handler) = EVENT_HANDLERS.get(event_id) {
+        handler.handle_erased(server, event).await;
+    }
 }
 
 impl Context {
@@ -133,10 +203,11 @@ impl Context {
     /// event type, the priority and `blocking`; registering is a synchronous host call, and only
     /// the handler is async
     ///
-    /// `blocking` says whether the dispatcher uses the value the handler returns, and it does not
-    /// say the callback blocks an operating system thread: the host applies the returned event for
-    /// a blocking handler and ignores it for a notification handler, so a notification handler
-    /// must not count on its edits being seen
+    /// The handler lives until [`unregister_event_handler`] is called or the plugin unloads
+    ///
+    /// `blocking` says whether the handler may edit the event, and it does not say the callback
+    /// blocks an operating system thread: a blocking handler's [`EventRef::set`] changes the
+    /// event, and a notification handler's `set` fails with [`EventAccessError`]
     ///
     /// `event_priority` decides when this handler runs relative to the others for the same event
     ///
@@ -156,68 +227,103 @@ impl Context {
         blocking: bool,
     ) -> u32
     where
-        E: FromIntoEvent + 'static,
+        E: EventKind + 'static,
         H: EventHandler<E>,
     {
         let id = EVENT_HANDLERS.register(Arc::new(HandlerWrapper {
             handler,
-            _event: PhantomData::<fn() -> E>,
+            _kind: PhantomData::<fn() -> E>,
         }));
         self.register_event(id, E::EVENT_TYPE, event_priority, blocking);
         id
     }
 }
 
-/// Defines an event marker type that implements [`FromIntoEvent`]
+/// Drops the handler registered under `handler_id` and returns whether there was one
 ///
-/// The marker name has to match both the [`Event`] variant and the [`EventType`] case, because the
-/// macro uses it for all three
+/// The handler, and everything its struct owns, is released; a dispatch already running keeps its
+/// own handle and finishes
 ///
-/// # Examples
-///
-/// ```rust,ignore
-/// pumpkin_plugin_api_v0_2::define_event! {
-///     /// A player finished joining the server
-///     PlayerJoinEvent => pumpkin_plugin_api_v0_2::host::event::PlayerJoinEventData
-/// }
-/// ```
-#[macro_export]
-macro_rules! define_event {
-    ($(#[$meta:meta])* $name:ident => $data:ty) => {
-        $(#[$meta])*
-        pub struct $name;
+/// The v0.2 WIT has no `unregister-event`, so the host is not told: it keeps dispatching to the
+/// id until the plugin unloads, and each of those calls now does nothing. For a blocking handler
+/// that is a round trip with no effect
+pub fn unregister_event_handler(handler_id: u32) -> bool {
+    EVENT_HANDLERS.take(handler_id).is_some()
+}
 
-        impl $crate::events::FromIntoEvent for $name {
-            const EVENT_TYPE: $crate::events::EventType = $crate::events::EventType::$name;
-            type Data = $data;
+// Implements `EventKind` for each record and re-exports it from this module
+macro_rules! event_kinds {
+    (
+        by_value { $($vrecord:ident => $vvariant:ident, $vget:ident, $vset:ident;)* }
+        by_ref { $($rrecord:ident => $rvariant:ident, $rget:ident, $rset:ident;)* }
+    ) => {
+        $(
+            pub use crate::host::event::$vrecord;
 
-            fn data_from_event(
-                event: $crate::events::Event,
-            ) -> ::core::result::Result<Self::Data, ::std::boxed::Box<$crate::events::Event>> {
-                match event {
-                    $crate::events::Event::$name(data) => Ok(data),
-                    other => Err(::std::boxed::Box::new(other)),
+            impl EventKind for $vrecord {
+                const EVENT_TYPE: EventType = EventType::$vvariant;
+
+                fn get(event: &Event) -> Result<Self, EventAccessError> {
+                    event.$vget().map_err(|()| EventAccessError)
+                }
+
+                fn set(self, event: &Event) -> Result<(), EventAccessError> {
+                    event.$vset(self).map_err(|()| EventAccessError)
                 }
             }
+        )*
 
-            fn data_into_event(data: Self::Data) -> $crate::events::Event {
-                $crate::events::Event::$name(data)
+        $(
+            pub use crate::host::event::$rrecord;
+
+            impl EventKind for $rrecord {
+                const EVENT_TYPE: EventType = EventType::$rvariant;
+
+                fn get(event: &Event) -> Result<Self, EventAccessError> {
+                    event.$rget().map_err(|()| EventAccessError)
+                }
+
+                fn set(self, event: &Event) -> Result<(), EventAccessError> {
+                    event.$rset(&self).map_err(|()| EventAccessError)
+                }
             }
-        }
+        )*
+
+        #[cfg(test)]
+        pub(super) const KIND_GETTERS: &[&str] =
+            &[$(stringify!($vget),)* $(stringify!($rget),)*];
     };
 }
 
-define_event! {
-    /// A player finished joining the server
-    PlayerJoinEvent => crate::host::event::PlayerJoinEventData
-}
+mod kinds;
+pub use kinds::*;
 
-define_event! {
-    /// A player sent a chat message
-    PlayerChatEvent => crate::host::event::PlayerChatEventData
-}
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
 
-define_event! {
-    /// A server tick is about to run
-    ServerTickStartEvent => crate::host::event::ServerTickStartEventData
+    use super::kinds::KIND_GETTERS;
+
+    #[test]
+    fn every_event_in_the_wit_has_a_kind() {
+        let wit = include_str!("../../pumpkin-plugin-wit/v0.2/event.wit");
+        let resource = wit.split("resource event {").nth(1).unwrap_or_default();
+        let in_wit: BTreeSet<String> = resource
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("get-"))
+            .filter_map(|rest| rest.split(':').next())
+            .map(|name| format!("get_{}", name.replace('-', "_")))
+            .collect();
+        let in_sdk: BTreeSet<String> = KIND_GETTERS.iter().map(|name| (*name).to_owned()).collect();
+
+        assert!(
+            !in_wit.is_empty(),
+            "found no get- methods in the event resource"
+        );
+        let missing: Vec<_> = in_wit.difference(&in_sdk).collect();
+        assert!(
+            missing.is_empty(),
+            "events in event.wit with no kind in events/kinds.rs: {missing:?}"
+        );
+    }
 }
