@@ -1447,6 +1447,7 @@ impl AgeableMob for VillagerEntity {
     }
 
     fn age_boundary_reached(&self) {
+        self.age_boundary_reached_super();
         self.mob_entity.request_refresh_brain();
     }
 }

@@ -330,7 +330,11 @@ impl EntityReach {
 
     #[must_use]
     pub fn of(entity: &dyn EntityBase, config: &EntityIslandsConfig) -> Self {
-        if let Some(reach) = entity.audited_reach() {
+        let grows_up = entity
+            .get_mob()
+            .and_then(|mob| mob.as_ageable())
+            .is_some_and(|ageable| ageable.get_age() == -1 && ageable.can_age_up());
+        if !grows_up && let Some(reach) = entity.audited_reach() {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
@@ -375,6 +379,8 @@ impl EntityReach {
                     .iter()
                     .any(|candidate| candidate.get_entity().has_leash_data());
         }
+        // Growth can dismount a mob, including one picked up before its turn this tick.
+        reach.global |= grows_up;
         // Restoring a leash can dismount a rider or precede a nearby boat's pickup.
         if base.has_leash_data() && entity.get_mob().is_some() {
             reach.global |= base.has_vehicle()

@@ -335,6 +335,7 @@ impl AgeableMob for SnifferEntity {
 
     fn age_boundary_reached(&self) {
         self.update_dimensions();
+        self.age_boundary_reached_super();
     }
 }
 

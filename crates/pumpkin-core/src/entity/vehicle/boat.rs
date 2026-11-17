@@ -79,6 +79,10 @@ impl BoatEntity {
         if self.inventory.is_some() { 1 } else { 2 }
     }
 
+    pub(crate) fn has_enough_space_for(&self, passenger: &Entity) -> bool {
+        passenger.width() < self.vehicle.entity.width()
+    }
+
     pub fn open_custom_inventory_screen(&self, player: &Arc<Player>) -> bool {
         let Some(inventory) = &self.inventory else {
             return false;
@@ -249,7 +253,7 @@ impl EntityBase for BoatEntity {
             if add_new_passengers
                 && has_room
                 && !other.is_passenger()
-                && passenger.entity_dimension.load().width < entity.entity_dimension.load().width
+                && self.has_enough_space_for(passenger)
                 && other.get_living_entity().is_some()
                 && !passenger
                     .entity_type
