@@ -237,7 +237,10 @@ impl JukeboxBlockEntity {
 
     /// Set the record stack - matches vanilla's `setStack()`
     /// Note: The caller is responsible for updating block state and playing music
+    // TODO vanilla `JukeboxPlayable.tryInsertIntoJukebox` uses `setTheItem` (item, HAS_RECORD, play).
+    // This only writes the stack; the block applies HAS_RECORD and playback afterwards.
     pub fn set_record(&self, stack: ItemStack) {
+        let _transition = self.lock_record_transition();
         *self
             .record_stack
             .lock()
