@@ -5,7 +5,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Weak};
 
 use pumpkin_config::telemetry::TelemetryConfig;
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, EntityTrackingConfig};
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::java::packet_decoder::TCPNetworkDecoder;
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
@@ -32,6 +32,17 @@ const MARKER: i32 = i32::MAX;
 
 pub async fn server(folder: &tempfile::TempDir) -> Result<Arc<Server>, Box<dyn std::error::Error>> {
     server_advanced(folder, |_| {}).await
+}
+
+/// A server with the given entity tracking options.
+pub async fn server_with_entity_tracking(
+    folder: &tempfile::TempDir,
+    entity_tracking: EntityTrackingConfig,
+) -> Result<Arc<Server>, Box<dyn std::error::Error>> {
+    server_advanced(folder, |advanced| {
+        advanced.entity_tracking = entity_tracking;
+    })
+    .await
 }
 
 /// A server with the values `configure` sets.

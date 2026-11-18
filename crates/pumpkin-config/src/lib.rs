@@ -15,6 +15,8 @@ use std::path::PathBuf;
 use std::{fs, num::NonZero, path::Path};
 use tracing::{debug, error, warn};
 
+/// How often the entity tracker sends player movement.
+pub mod entity_tracking;
 /// Fun and experimental configuration options.
 pub mod fun;
 /// Server logging configuration options.
@@ -31,6 +33,7 @@ pub mod resource_pack;
 
 pub use chat::{AntiSpamConfig, ChatConfig};
 pub use commands::{CommandOverride, CommandsConfig};
+pub use entity_tracking::EntityTrackingConfig;
 pub use networking::auth::AuthenticationConfig;
 pub use networking::bedrock::BedrockConfig;
 pub use networking::compression::CompressionConfig;
@@ -181,6 +184,8 @@ pub struct AdvancedConfiguration {
     pub advancement: AdvancementConfig,
     /// Update checker configuration.
     pub update_checker: UpdateCheckerConfig,
+    /// How often the entity tracker sends player movement, off by default.
+    pub entity_tracking: EntityTrackingConfig,
 }
 
 /// Basic configuration for core server settings.
@@ -268,8 +273,9 @@ impl BasicConfiguration {
 
 impl AdvancedConfiguration {
     /// Validates advanced configuration options.
-    pub const fn validate(&self) {
+    pub fn validate(&self) {
         //self.resource_pack.validate();
+        self.entity_tracking.validate();
     }
 }
 

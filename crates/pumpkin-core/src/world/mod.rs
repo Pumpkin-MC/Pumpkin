@@ -411,6 +411,10 @@ impl World {
         if let Some(server_arc) = server.upgrade() {
             let _ = level.rt_handle.set(server_arc.runtime.clone());
         }
+        let entity_tracking = server
+            .upgrade()
+            .map(|server| server.advanced_config.entity_tracking)
+            .unwrap_or_default();
 
         Self {
             uuid: Uuid::new_v4(),
@@ -458,7 +462,7 @@ impl World {
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
             encoded_chunk_cache: DashMap::new(),
-            entity_tracker: entity_tracker::EntityTracker::new(),
+            entity_tracker: entity_tracker::EntityTracker::new(entity_tracking),
         }
     }
 

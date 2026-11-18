@@ -1,3 +1,4 @@
+use pumpkin_config::EntityTrackingConfig;
 use pumpkin_protocol::java::client::play::CSpawnEntity;
 use pumpkin_protocol::ser::NetworkReadExt;
 use pumpkin_protocol::{RawPacket, ServerPacket};
@@ -7,7 +8,9 @@ use crate::entity::passive::cow::CowEntity;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::plugin::{BoxFuture, EventHandler, EventPriority};
 use crate::server::Server;
-use crate::test_support::{Client, TestResult, count, id, server, shutdown};
+use crate::test_support::{
+    Client, TestResult, count, id, server, server_with_entity_tracking, shutdown,
+};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Where a client that got `packets` draws entity `entity_id`, starting from `pos`.
@@ -266,6 +269,166 @@ async fn the_entity_broadcast_range_scales_tracking_ranges() -> TestResult {
     world.entity_tracker.set_entity_broadcast_range(100);
     world.entity_tracker.update_all(&world);
     assert_eq!(count::<CSpawnEntity>(&watcher.received().await?), 1);
+    shutdown(&server).await;
+    Ok(())
+}
+
+/// A walker at the origin, one watcher 3 blocks away and one 40 blocks away, with players
+/// from 16 blocks on the far rhythm of 4 ticks.
+async fn near_and_far_watchers(
+    folder: &tempfile::TempDir,
+) -> Result<(Arc<Server>, Client, Client, Client), Box<dyn std::error::Error>> {
+    let entity_tracking = EntityTrackingConfig {
+        far_player_distance: 16,
+        far_player_update_interval: 4,
+    };
+    let server = server_with_entity_tracking(folder, entity_tracking).await?;
+    let walker = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+    let near = Client::join(&server, 2, Vector3::new(3.5, 100.0, 0.5));
+    let far = Client::join(&server, 3, Vector3::new(40.5, 100.0, 0.5));
+    Ok((server, walker, near, far))
+}
+
+#[tokio::test]
+async fn far_watchers_follow_a_player_on_a_slower_rhythm() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let (server, walker, mut near, mut far) = near_and_far_watchers(&folder).await?;
+    let world = server.worlds.load()[0].clone();
+    let entity = walker.player.get_entity();
+    world.entity_tracker.update_all(&world);
+    let mut drawn_near = drawn_at(None, walker.entity_id(), &near.received().await?)?;
+    let mut drawn_far = drawn_at(None, walker.entity_id(), &far.received().await?)?;
+
+    let (mut near_moves, mut far_moves) = (0, 0);
+    for step in 1..=8 {
+        entity.set_pos(Vector3::new(
+            0.5,
+            100.0,
+            0.2f64.mul_add(f64::from(step), 0.5),
+        ));
+        world.entity_tracker.update_all(&world);
+        let (near_packets, far_packets) = (near.received().await?, far.received().await?);
+        near_moves += count::<CUpdateEntityPos>(&near_packets);
+        far_moves += count::<CUpdateEntityPos>(&far_packets);
+        drawn_near = drawn_at(drawn_near, walker.entity_id(), &near_packets)?;
+        drawn_far = drawn_at(drawn_far, walker.entity_id(), &far_packets)?;
+    }
+    assert_eq!((near_moves, far_moves), (4, 2));
+    assert_close(drawn_near, entity.pos.load());
+    assert_close(drawn_far, entity.pos.load());
+
+    // A jump too long for a delta reaches the far watcher in the same tick.
+    entity.set_pos(Vector3::new(0.5, 100.0, 12.5));
+    world.entity_tracker.update_all(&world);
+    let packets = far.received().await?;
+    assert_eq!(count::<CEntityPositionSync>(&packets), 1);
+    assert_close(
+        drawn_at(drawn_far, walker.entity_id(), &packets)?,
+        entity.pos.load(),
+    );
+    shutdown(&server).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_watcher_changes_rhythm_without_losing_the_player() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let (server, walker, _near, mut watcher) = near_and_far_watchers(&folder).await?;
+    let world = server.worlds.load()[0].clone();
+    let entity = walker.player.get_entity();
+    world.entity_tracker.update_all(&world);
+    let mut drawn = drawn_at(None, walker.entity_id(), &watcher.received().await?)?;
+    let mut z = 0.5;
+    // The walker takes `ticks` steps; returns how many moves the watcher got.
+    let mut walk = async |watcher: &mut Client,
+                          drawn: &mut Option<Vector3<f64>>,
+                          ticks: u32|
+           -> Result<usize, Box<dyn std::error::Error>> {
+        let mut moves = 0;
+        for _ in 0..ticks {
+            z += 0.2;
+            entity.set_pos(Vector3::new(0.5, 100.0, z));
+            world.entity_tracker.update_all(&world);
+            let packets = watcher.received().await?;
+            moves += count::<CUpdateEntityPos>(&packets);
+            *drawn = drawn_at(*drawn, walker.entity_id(), &packets)?;
+        }
+        Ok(moves)
+    };
+    let come_to = async |watcher: &Client, x: f64| {
+        watcher
+            .player
+            .get_entity()
+            .set_pos(Vector3::new(x, 100.0, 0.5));
+        world
+            .entity_tracker
+            .update_player_position(&watcher.player, &world);
+    };
+
+    // Far: every fourth tick. Close by: every other tick, from the right place.
+    assert_eq!(walk(&mut watcher, &mut drawn, 7).await?, 1);
+    come_to(&watcher, 6.5).await;
+    assert_eq!(walk(&mut watcher, &mut drawn, 9).await?, 4);
+    assert_close(drawn, entity.pos.load());
+
+    // Away again, and the far rhythm picks up from its own base.
+    come_to(&watcher, 40.5).await;
+    assert_eq!(walk(&mut watcher, &mut drawn, 8).await?, 1);
+    assert_close(drawn, entity.pos.load());
+
+    // A player it fights is followed at full rate from any distance.
+    let attacker = walker.player.gameprofile.id;
+    watcher
+        .player
+        .living_entity
+        .last_hurt_by_player
+        .store(Some(attacker));
+    come_to(&watcher, 40.5).await;
+    assert_eq!(walk(&mut watcher, &mut drawn, 8).await?, 3);
+    assert_close(drawn, entity.pos.load());
+    shutdown(&server).await;
+    Ok(())
+}
+
+/// The far interval is not a multiple of the near one, so a far update can come between a
+/// watcher's return and the near update that places the player for it again.
+#[tokio::test]
+async fn a_watcher_back_before_its_first_far_update_gets_no_far_delta() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let entity_tracking = EntityTrackingConfig {
+        far_player_distance: 16,
+        far_player_update_interval: 5,
+    };
+    let server = server_with_entity_tracking(&folder, entity_tracking).await?;
+    let walker = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+    let mut watcher = Client::join(&server, 2, Vector3::new(6.5, 100.0, 0.5));
+    let world = server.worlds.load()[0].clone();
+    let entity = walker.player.get_entity();
+    world.entity_tracker.update_all(&world);
+    let mut drawn = drawn_at(None, walker.entity_id(), &watcher.received().await?)?;
+
+    // Near updates in every other tick, far updates in tick 5.
+    for tick in 1..=8 {
+        // Away after the near update of tick 2, back before the far update of tick 5.
+        if let Some(x) = [(3, 40.5), (5, 6.5)]
+            .iter()
+            .find_map(|&(at, x)| (at == tick).then_some(x))
+        {
+            let watcher = &watcher.player;
+            watcher.get_entity().set_pos(Vector3::new(x, 100.0, 0.5));
+            world.entity_tracker.update_player_position(watcher, &world);
+        }
+        let z = 0.2f64.mul_add(f64::from(tick), 0.5);
+        entity.set_pos(Vector3::new(0.5, 100.0, z));
+        world.entity_tracker.update_all(&world);
+        drawn = drawn_at(drawn, walker.entity_id(), &watcher.received().await?)?;
+        // A delta from a base the watcher never got would draw the walker ahead of itself.
+        assert!(
+            drawn.is_some_and(|drawn| drawn.z < z + 0.001),
+            "tick {tick}: drawn at {drawn:?}, is at z {z}"
+        );
+    }
+    assert_close(drawn, entity.pos.load());
     shutdown(&server).await;
     Ok(())
 }

@@ -191,6 +191,20 @@ impl Server {
             advanced_config.commands.broadcast_console_to_ops,
         );
 
+        let entity_tracking = &advanced_config.entity_tracking;
+        if let Some(warning) = entity_tracking.far_player_update_interval_warning() {
+            warn!("{warning}");
+        }
+        if let Some(note) = entity_tracking.far_player_distance_note() {
+            info!("{note}");
+        }
+        if !entity_tracking.is_vanilla() {
+            info!(
+                "Entity tracking: far_player_distance = {}, far_player_update_interval = {}",
+                entity_tracking.far_player_distance, entity_tracking.far_player_update_interval
+            );
+        }
+
         let world_path = basic_config.get_world_path();
 
         let block_registry = super::block::registry::default_registry();
