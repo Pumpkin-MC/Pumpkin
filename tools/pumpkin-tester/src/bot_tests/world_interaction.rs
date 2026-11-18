@@ -101,6 +101,7 @@ async fn run_shulker_box_open_test(
     let base_z = bot.position.z.floor() as i32;
     let shulker_pos = BlockPos::new(base_x + 2, base_y, base_z);
     let above_pos = BlockPos::new(base_x + 2, base_y + 1, base_z);
+    let barrier_pos = BlockPos::new(base_x + 2, base_y, base_z + 1);
 
     player.inventory.set_held_item(ItemStack::EMPTY.clone());
     world.set_block_state(
@@ -113,11 +114,27 @@ async fn run_shulker_box_open_test(
         Block::STONE.default_state.id,
         BlockFlags::NOTIFY_ALL,
     );
+    world.set_block_state(
+        &barrier_pos,
+        Block::OAK_TRAPDOOR.default_state.id,
+        BlockFlags::NOTIFY_ALL,
+    );
 
     bot.use_block(shulker_pos, 3).await?;
-    for _ in 0..10 {
+    // Packets on one connection are handled in order. Toggling the trapdoor proves the
+    // blocked shulker use was already evaluated while the stone was still in place.
+    bot.use_block(barrier_pos, 4).await?;
+    let mut barrier_toggled = false;
+    for _ in 0..MAX_POLL_TICKS {
         tokio::time::sleep(Duration::from_millis(5)).await;
         server.tick();
+        if OakTrapdoorLikeProperties::from_state_id(world.get_block_state(&barrier_pos).id).open {
+            barrier_toggled = true;
+            break;
+        }
+    }
+    if !barrier_toggled {
+        return Err("Bot could not toggle the trapdoor after the blocked shulker use".to_string());
     }
     if player.open_container_pos.load() == Some(shulker_pos) {
         return Err("Bot opened a shulker box with a solid block above it".to_string());
@@ -128,7 +145,7 @@ async fn run_shulker_box_open_test(
         Block::AIR.default_state.id,
         BlockFlags::NOTIFY_ALL,
     );
-    bot.use_block(shulker_pos, 4).await?;
+    bot.use_block(shulker_pos, 5).await?;
     let mut opened = false;
     for _ in 0..MAX_POLL_TICKS {
         tokio::time::sleep(Duration::from_millis(5)).await;
