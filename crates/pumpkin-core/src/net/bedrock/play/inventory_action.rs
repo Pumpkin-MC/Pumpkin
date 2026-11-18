@@ -192,6 +192,7 @@ impl BedrockClient {
                         held_item = client_stack;
                     }
 
+                    let before_use = held_item.clone();
                     let result = server.block_registry.use_with_item(
                         block,
                         player,
@@ -207,6 +208,25 @@ impl BedrockClient {
                     );
 
                     if result.consumes_action() {
+                        if !held_item.are_equal(&before_use) {
+                            if before_use.is_damageable() && held_item.is_empty() {
+                                player.increment_stat(
+                                    pumpkin_data::statistic::StatisticCategory::Broken,
+                                    i32::from(before_use.item.id),
+                                    1,
+                                );
+                                player.world().send_entity_status(
+                                    player.get_entity(),
+                                    crate::entity::equipment_break_status(
+                                        &EquipmentSlot::MAIN_HAND,
+                                    ),
+                                    ActorEventID::None,
+                                );
+                            }
+                            let selected = player.inventory().get_selected_slot() as usize;
+                            player.inventory().set_held_item(held_item.clone());
+                            player.sync_hand_slot(selected, held_item);
+                        }
                         return;
                     }
 

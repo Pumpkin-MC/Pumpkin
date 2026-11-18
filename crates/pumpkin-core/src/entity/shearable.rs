@@ -4,7 +4,7 @@ use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 
-use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
@@ -63,14 +63,19 @@ pub fn shear_by_player(
 
 /// Vanilla `Entity.dropFromShearingLootTable`
 #[must_use]
-pub fn shearing_loot(entity: &Entity, loot_key: &str, tool: &ItemStack) -> Vec<ItemStack> {
+pub fn shearing_loot(
+    shearable: &dyn EntityBase,
+    loot_key: &str,
+    tool: &ItemStack,
+) -> Vec<ItemStack> {
+    let entity = shearable.get_entity();
     let world = entity.world.load();
     let Some(loot_table) = world.get_loot_table(loot_key) else {
         return Vec::new();
     };
     let params = LootContextParameters {
         world: Some(&world),
-        this_entity: Some(entity),
+        this_entity: Some(shearable),
         position: Some(entity.pos.load()),
         tool: Some(tool.clone()),
         ..Default::default()

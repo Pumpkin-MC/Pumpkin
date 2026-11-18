@@ -189,7 +189,7 @@ fn apply_vertical_position_angle_power_rotation(
     }
 }
 
-fn is_swallowable_item(stack: &ItemStack) -> bool {
+pub(crate) fn is_swallowable_item(stack: &ItemStack) -> bool {
     stack
         .item
         .has_tag(&pumpkin_data::tag::Item::MINECRAFT_SULFUR_CUBE_SWALLOWABLE)
@@ -379,7 +379,7 @@ impl SulfurCubeEntity {
         world.spawn_entity(Arc::new(item_entity));
     }
 
-    fn detect_body_item_change(&self) {
+    pub(crate) fn detect_body_item_change(&self) {
         let current = self.body_item();
         let previous = {
             let mut last = self
@@ -468,7 +468,7 @@ impl SulfurCubeEntity {
         }
     }
 
-    fn can_explode(&self) -> bool {
+    pub(crate) fn can_explode(&self) -> bool {
         let has_explosion = self
             .archetype
             .lock()
@@ -534,7 +534,7 @@ impl SulfurCubeEntity {
         }
     }
 
-    fn prime_time(&self, imminent: bool) -> bool {
+    pub(crate) fn prime_time(&self, imminent: bool) -> bool {
         let explosion = self
             .archetype
             .lock()
@@ -568,7 +568,7 @@ impl SulfurCubeEntity {
         true
     }
 
-    fn equip_item(&self, held_item: &ItemStack) -> bool {
+    pub(crate) fn equip_item(&self, held_item: &ItemStack) -> bool {
         if AgeableMob::is_baby(self) {
             return false;
         }
@@ -582,6 +582,7 @@ impl SulfurCubeEntity {
 
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::BODY, held_item.copy_with_count(1));
+        self.detect_body_item_change();
         self.play_sound(Sound::EntitySulfurCubeAbsorb);
         true
     }
@@ -595,6 +596,7 @@ impl SulfurCubeEntity {
         if body_item.is_empty() {
             return None;
         }
+        self.detect_body_item_change();
         self.spawn_at_attachment(body_item.clone());
         self.play_sound(Sound::EntitySulfurCubeEject);
         self.pickup_timer
@@ -893,29 +895,20 @@ impl Mob for SulfurCubeEntity {
             return;
         }
         let living = &self.mob_entity.living_entity;
-        if !living.pickup(item.get_entity(), 1) {
+        let Some(taken) = living.pick_up_from(item, 1, |ground| {
+            // Event already dispatched, a concurrent insert may have filled BODY.
+            if self.has_body_item() {
+                return ItemStack::EMPTY.clone();
+            }
+            ground.split(1)
+        }) else {
             return;
-        }
-        living.on_item_pickup(item);
-        let taken = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .split(1);
+        };
+        // TODO vanilla `SulfurCube.pickUpItem`: onItemPickup, setItemSlot(BODY, split(1)), absorb sound,
+        // setGuaranteedDrop, take. Pickup animation is after the body item is set.
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::BODY, taken);
         self.play_sound(Sound::EntitySulfurCubeAbsorb);
-
-        let empty = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_empty();
-        if empty {
-            item.get_entity().remove();
-        } else {
-            item.init_data_tracker();
-        }
     }
 
     fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {

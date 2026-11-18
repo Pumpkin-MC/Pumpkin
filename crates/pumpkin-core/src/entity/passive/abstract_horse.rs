@@ -1432,3 +1432,26 @@ macro_rules! abstract_horse_mob_hooks {
         }
     };
 }
+
+pub(crate) fn try_equip_dispenser_chest(entity: &dyn EntityBase) -> bool {
+    fn equip_if_eligible<H: AbstractHorse>(horse: &H) -> bool {
+        if !horse.get_entity().is_alive()
+            || !horse.is_tamed()
+            || !horse.can_carry_chest()
+            || horse.has_chest()
+        {
+            return false;
+        }
+        horse.set_chest(true);
+        horse.create_inventory();
+        true
+    }
+
+    let any = entity.cast_any();
+    any.downcast_ref::<crate::entity::passive::donkey::DonkeyEntity>()
+        .is_some_and(equip_if_eligible)
+        || any
+            .downcast_ref::<crate::entity::passive::mule::MuleEntity>()
+            .is_some_and(equip_if_eligible)
+        || crate::entity::passive::llama::as_llama(entity).is_some_and(equip_if_eligible)
+}

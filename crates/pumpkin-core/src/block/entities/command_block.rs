@@ -81,8 +81,14 @@ impl BlockEntity for CommandBlockEntity {
         let auto = AtomicBool::new(nbt.get_bool("auto").unwrap_or(false));
         let powered = AtomicBool::new(nbt.get_bool("powered").unwrap_or(false));
         let command = StdMutex::new(nbt.get_string("Command").unwrap_or("").to_string());
-        let last_output = StdMutex::new(nbt.get_string("LastOutput").unwrap_or("").to_string());
-        let track_output = AtomicBool::new(nbt.get_bool("TrackOutput").unwrap_or(false));
+        let track_output_val = nbt.get_bool("TrackOutput").unwrap_or(true);
+        let last_output_str = if track_output_val {
+            nbt.get_string("LastOutput").unwrap_or("").to_string()
+        } else {
+            String::new()
+        };
+        let last_output = StdMutex::new(last_output_str);
+        let track_output = AtomicBool::new(track_output_val);
         let success_count =
             AtomicU32::new(nbt.get_int("SuccessCount").unwrap_or(0).cast_unsigned());
 
@@ -142,6 +148,22 @@ impl BlockEntity for CommandBlockEntity {
 
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
+    }
+
+    fn on_nbt_loaded(
+        &self,
+        world: &std::sync::Arc<crate::world::World>,
+        previous: Option<&dyn BlockEntity>,
+    ) {
+        let previous_auto = previous
+            .and_then(|prev| prev.as_any().downcast_ref::<Self>())
+            .is_some_and(|prev| prev.auto.load(Ordering::Relaxed));
+        crate::block::blocks::command::CommandBlock::schedule_auto_if_needed(
+            world,
+            self,
+            &self.position,
+            previous_auto,
+        );
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

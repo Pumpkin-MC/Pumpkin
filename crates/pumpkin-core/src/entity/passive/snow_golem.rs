@@ -126,7 +126,7 @@ impl Shearable for SnowGolemEntity {
 
         let eye_height = f64::from(entity.entity_dimension.load().eye_height);
         let drop_pos = Vector3::new(pos.x, pos.y + eye_height, pos.z);
-        for drop in shearing_loot(entity, "minecraft:shearing/snow_golem", tool) {
+        for drop in shearing_loot(self, "minecraft:shearing/snow_golem", tool) {
             world.spawn_entity(Arc::new(ItemEntity::new(
                 Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
                 drop,

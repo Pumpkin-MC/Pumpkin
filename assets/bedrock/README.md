@@ -3,8 +3,17 @@
 This directory contains a number of different data files used to help support connecting via Bedrock Edition clients (including Java => Bedrock remapping).
 
 - `block_states.nbt`
-    - converted from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `block_palette.nbt` into concatenated Bedrock network NBT; the same dump supplies `runtime_item_states.json`, `item_components.nbt`, and `creative_items.json`.
+    - converted from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `block_palette.nbt` into concatenated Bedrock network NBT; the same dump supplies `runtime_item_states.json`, `item_components.nbt`, `creative_items.json`, `recipes.json.gz`, `jigsaw_structure_data.nbt`, and `voxel_shapes.json.gz`.
     - Provides a listing of all blocks and block states that exist in Bedrock. Used to build a mapping from Java block states to Bedrock ones by matching (string) identifiers and data components.
+- `recipes.json.gz`
+    - minified and gzip-compressed from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `recipes.json` (mined from BDS).
+    - Validated and converted by `pumpkin-codegen` into the static `CCraftingData` wire sections and stonecutter lookup table.
+- `jigsaw_structure_data.nbt`
+    - downloaded from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `jigsaw_structure_data.nbt` (gzip-compressed BDS jigsaw rules, processors, structure sets, and template pools).
+    - Validated and converted by `pumpkin-codegen` into the static `CJigsawStructureData` Bedrock network NBT payload.
+- `voxel_shapes.json.gz`
+    - minified and gzip-compressed from [CloudburstMC/Data's 26.60 dump](https://github.com/CloudburstMC/Data) `voxel_shapes.json` (mined from BDS).
+    - Validated and converted by `pumpkin-codegen` into the static `CVoxelShapes` wire payload.
 - `blocks.nbt`
     - downloaded from [GeyserMC/mappings for Java 26.3 and Bedrock 26.60](https://github.com/GeyserMC/mappings/blob/b4cec82d49fe75f222e1ad6dc0fd2a23ee89626c/blocks.nbt)
     - Defines the exact Bedrock block identifier and property mappings for every Java Edition block state ID. Used in code generation to translate Java block states to Bedrock counterparts.
@@ -20,8 +29,8 @@ This directory contains a number of different data files used to help support co
     - downloaded from [GeyserMC/mappings](https://github.com/GeyserMC/mappings/blob/ba81ded46ea9920a206847e51e0a939fb3dbbdda/biomes.json)
     - Maps Java Edition biome identifiers to their corresponding Bedrock Edition biome ID. Used in code generation to translate Java biomes to Bedrock counterparts.
 - `biome_definitions.nbt`
-    - downloaded from [Kaooot/bedrock-network-data](https://github.com/Kaooot/bedrock-network-data/blob/master/release/1.26.40/biome_definitions.nbt)
-    - Contains the gzip-compressed vanilla biome registry extracted from Bedrock Dedicated Server 1.26.40.
+    - downloaded from [Kaooot/bedrock-network-data](https://github.com/Kaooot/bedrock-network-data/blob/427acba7044a75fb9ee884ec347704927968098f/release/1.26.60/biome_definitions.nbt)
+    - Contains the gzip-compressed vanilla biome registry extracted from Bedrock Dedicated Server 1.26.60 (unchanged through 1.26.63).
     - Validated and converted by `pumpkin-codegen` into the static `BiomeDefinitionList` wire payload used during Bedrock world initialization.
 - `player_geometry.json`
     - adapted from [GeyserMC/Geyser](https://github.com/GeyserMC/Geyser/blob/master/core/src/main/resources/bedrock/geometries/geo.json) (MIT License)

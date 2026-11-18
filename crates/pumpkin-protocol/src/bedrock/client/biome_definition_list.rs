@@ -29,7 +29,7 @@ mod tests {
             biome_count.0 as usize,
             pumpkin_data::bedrock_biome::BIOME_COUNT
         );
-        assert_eq!(biome_count.0, 88);
+        assert_eq!(biome_count.0, 89);
         assert!(BIOME_DEFINITIONS.len() > 100_000);
     }
 }

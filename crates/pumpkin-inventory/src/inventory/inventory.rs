@@ -1,3 +1,4 @@
+use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -19,6 +20,25 @@ pub trait Inventory: Send + Sync + Clearable {
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack;
 
     fn set_stack(&self, slot: usize, stack: ItemStack);
+
+    /// Runs `update` on one slot and writes the result back when it returns `true`. `false` for a
+    /// slot outside the inventory.
+    ///
+    /// The caller marks the inventory dirty afterwards.
+    ///
+    /// The default reads and writes separately and can lose a parallel write. Inventories behind
+    /// one lock override it with [`crate::update_locked_stack`].
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot >= self.size() {
+            return false;
+        }
+        let mut stack = self.get_stack(slot);
+        let changed = update(&mut stack);
+        if changed {
+            self.set_stack(slot, stack);
+        }
+        changed
+    }
 
     fn on_open(&self) {}
     fn on_close(&self) {}
@@ -58,10 +78,8 @@ pub trait Inventory: Send + Sync + Clearable {
         for i in 0..size {
             let stack = self.get_stack(i);
 
-            if !stack.is_empty() {
-                let mut item_compound = NbtCompound::new();
+            if let Some(mut item_compound) = stack.to_nbt() {
                 item_compound.put_byte("Slot", i as i8);
-                stack.write_item_stack(&mut item_compound);
                 slots.push(NbtTag::Compound(item_compound));
             }
         }
@@ -94,6 +112,32 @@ pub trait Inventory: Send + Sync + Clearable {
         true
     }
 
+    fn is_sided(&self) -> bool {
+        false
+    }
+
+    fn get_slots_for_face(&self, _direction: BlockDirection) -> &'static [usize] {
+        &[]
+    }
+
+    fn can_place_item_through_face(
+        &self,
+        slot: usize,
+        stack: &ItemStack,
+        _direction: Option<BlockDirection>,
+    ) -> bool {
+        self.is_valid_slot_for(slot, stack)
+    }
+
+    fn can_take_item_through_face(
+        &self,
+        _slot: usize,
+        _stack: &ItemStack,
+        _direction: BlockDirection,
+    ) -> bool {
+        true
+    }
+
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -121,10 +165,8 @@ pub fn sync_read_items_from_nbt(nbt: &NbtCompound, stacks: &mut [ItemStack]) {
 pub fn sync_write_items_to_nbt(items: &[ItemStack], nbt: &mut NbtCompound) {
     let mut slots = Vec::new();
     for (i, stack) in items.iter().enumerate() {
-        if !stack.is_empty() {
-            let mut item_nbt = NbtCompound::new();
+        if let Some(mut item_nbt) = stack.to_nbt() {
             item_nbt.put_byte("Slot", i as i8);
-            stack.write_item_stack(&mut item_nbt);
             slots.push(NbtTag::Compound(item_nbt));
         }
     }
