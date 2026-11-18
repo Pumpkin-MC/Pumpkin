@@ -5316,18 +5316,12 @@ impl Entity {
 
         let distance = self.leash_distance_to(holder_entity);
         if distance > Self::LEASH_SNAP_DISTANCE {
-            if !self.unleash() {
-                return LeashTick::NotLeashed;
-            }
             let holder_pos = holder_entity.pos.load();
             self.world
                 .load()
                 .play_sound(Sound::ItemLeadBreak, SoundCategory::Neutral, &holder_pos);
-            let lead_item =
-                pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-            self.world
-                .load()
-                .drop_stack(&self.block_pos.load(), lead_item);
+            // Vanilla `leashTooFarBehaviour`
+            self.drop_leash();
             return LeashTick::Snapped;
         }
         let elastic_threshold = Self::LEASH_ELASTIC_DISTANCE
