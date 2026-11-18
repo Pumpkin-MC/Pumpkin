@@ -129,6 +129,10 @@ impl Inventory for PluginInventory {
         }
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        pumpkin_inventory::update_locked_stack(&self.slots, slot, update)
+    }
+
     fn on_open(&self) {}
 
     fn on_close(&self) {}

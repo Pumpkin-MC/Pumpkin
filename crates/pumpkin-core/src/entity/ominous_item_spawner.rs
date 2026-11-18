@@ -372,10 +372,7 @@ impl EntityBase for OminousItemSpawnerEntity {
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
-        let item = self.get_item();
-        if !item.is_empty() {
-            let mut item_nbt = NbtCompound::new();
-            item.write_item_stack(&mut item_nbt);
+        if let Some(item_nbt) = self.get_item().to_nbt() {
             nbt.put_compound(TAG_ITEM, item_nbt);
         }
         nbt.put_long(
