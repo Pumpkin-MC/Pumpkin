@@ -164,6 +164,12 @@ pub fn set_enchantments(result: &mut ItemStack, enchantments: Vec<(&'static Ench
     if result.is_empty() {
         return;
     }
+    if enchantments.is_empty() {
+        result.patch.retain(|(id, _)| {
+            *id != DataComponent::Enchantments && *id != DataComponent::StoredEnchantments
+        });
+        return;
+    }
     if result.item == &Item::ENCHANTED_BOOK
         || result
             .get_data_component::<StoredEnchantmentsImpl>()
@@ -548,10 +554,8 @@ impl ScreenHandler for AnvilScreenHandler {
         player: &dyn InventoryPlayer,
     ) {
         self.internal_on_slot_click(slot_index, button, action_type, player);
-        if slot_index == 0 || slot_index == 1 || slot_index == 2 {
-            self.create_result(player.has_infinite_materials());
-            self.send_content_updates();
-        }
+        self.create_result(player.has_infinite_materials());
+        self.send_content_updates();
     }
 }
 

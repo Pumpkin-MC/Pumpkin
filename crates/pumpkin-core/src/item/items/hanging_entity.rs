@@ -84,6 +84,11 @@ impl ItemBehaviour for HangingEntityItem {
                 .data
                 .store(i32::from(face.to_index()), Ordering::Relaxed);
             let painting = Arc::new(PaintingEntity::new_with_variant(entity, variant));
+            crate::item::items::spawn_egg::apply_entity_variant(
+                item,
+                painting.as_ref(),
+                Some(player),
+            );
             world.play_sound(
                 Sound::EntityPaintingPlace,
                 SoundCategory::Blocks,
@@ -116,6 +121,7 @@ impl ItemBehaviour for HangingEntityItem {
             );
             let entity = Entity::new(world.clone(), frame_pos, entity_type);
             let frame = ItemFrameEntity::new(entity);
+            crate::item::items::spawn_egg::apply_entity_variant(item, &frame, Some(player));
             frame.set_facing(face);
             let sound = frame.get_place_sound();
             let frame_arc = Arc::new(frame);

@@ -17,6 +17,7 @@ use pumpkin_data::{
     item_stack::ItemStack,
     sound::{Sound, SoundCategory},
     statistic::StatisticCategory,
+    tag::{self, Taggable},
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
@@ -136,12 +137,17 @@ pub(crate) fn create_filled_result(
         if has_item {
             return;
         }
-        player.inventory.insert_stack_anywhere(&mut filled);
+        if player.inventory.insert_stack_anywhere(&mut filled) {
+            player.sync_inventory_to_client();
+        }
     } else if stack.item_count == 1 && player.gamemode.load() != GameMode::Creative {
         *stack = filled;
     } else {
         stack.decrement_unless_creative(player.gamemode.load(), 1);
         let was_added = player.inventory.insert_stack_anywhere(&mut filled);
+        if was_added {
+            player.sync_inventory_to_client();
+        }
         if !was_added && !filled.is_empty() {
             player
                 .world()
@@ -404,9 +410,41 @@ fn try_place_liquid(
     }
 
     if can_waterlog_target {
-        let state_id = target_block
-            .set_waterlogged(target_state.id, true)
-            .unwrap_or(target_state.id);
+        let state_id = if target_block.has_tag(&tag::Block::MINECRAFT_CAMPFIRES) {
+            let mut props = pumpkin_data::block_properties::CampfireLikeProperties::from_state_id(
+                target_state.id,
+            );
+            if props.lit {
+                world.play_sound(
+                    Sound::EntityGenericExtinguishFire,
+                    SoundCategory::Blocks,
+                    &place_pos.to_centered_f64(),
+                );
+                world.emit_game_event(GameEvent::BlockChange.name(), place_pos.to_centered_f64());
+                props.lit = false;
+            }
+            props.waterlogged = true;
+            props.to_state_id(target_block)
+        } else if target_block.has_tag(&tag::Block::MINECRAFT_CANDLES) {
+            let mut props = pumpkin_data::block_properties::CandleLikeProperties::from_state_id(
+                target_state.id,
+            );
+            if props.lit {
+                world.play_sound(
+                    Sound::BlockCandleExtinguish,
+                    SoundCategory::Blocks,
+                    &place_pos.to_centered_f64(),
+                );
+                world.emit_game_event(GameEvent::BlockChange.name(), place_pos.to_centered_f64());
+                props.lit = false;
+            }
+            props.waterlogged = true;
+            props.to_state_id(target_block)
+        } else {
+            target_block
+                .set_waterlogged(target_state.id, true)
+                .unwrap_or(target_state.id)
+        };
         world.set_block_state(&place_pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, place_pos, 5, TickPriority::Normal);
         return Some(place_pos);
