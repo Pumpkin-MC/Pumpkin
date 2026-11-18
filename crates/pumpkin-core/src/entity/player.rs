@@ -2000,6 +2000,26 @@ impl Player {
         self.damage_item_stack_internal(stack, amount, true)
     }
 
+    /// Vanilla `hurtAndBreak` on a held stack: also counts the break and plays it for `hand`.
+    pub fn damage_held_stack(
+        &self,
+        stack: &mut ItemStack,
+        amount: i32,
+        hand: Hand,
+    ) -> DamageResult {
+        let item_id = stack.item.id;
+        let result = self.damage_item_stack(stack, amount);
+        if result == DamageResult::Broken {
+            self.increment_stat(statistics::StatisticCategory::Broken, i32::from(item_id), 1);
+            self.world().send_entity_status(
+                &self.living_entity.entity,
+                super::equipment_break_status(&super::hand_equipment_slot(hand)),
+                ActorEventID::None,
+            );
+        }
+        result
+    }
+
     /// Vanilla `ItemStack.hurtWithoutBreaking`: applies durability damage clamped at `max_damage - 1`.
     pub fn hurt_item_stack_without_breaking(
         &self,

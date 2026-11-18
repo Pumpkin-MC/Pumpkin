@@ -55,16 +55,20 @@ impl EntityBase for SnowballEntity {
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) {
         let world = self.get_entity().world.load();
 
-        if let ProjectileHit::Entity { ref entity, .. } = hit {
+        if let ProjectileHit::Entity {
+            ref entity,
+            hit_pos,
+            ..
+        } = hit
+        {
             let is_blaze = entity.get_entity().entity_type.id == EntityType::BLAZE.id;
-            let damage = if is_blaze { 3.0 } else { 0.0 }; // Only damage blazes
-
+            let damage = if is_blaze { 3.0 } else { 0.0 };
             let owner = self.thrown.owner.get(&world);
             entity.damage_with_context(
                 entity.as_ref(),
                 damage,
                 DamageType::THROWN,
-                None,
+                Some(hit_pos),
                 Some(self),
                 owner.as_deref(),
             );

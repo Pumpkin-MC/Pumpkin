@@ -164,12 +164,12 @@ impl Goal for RangedAttackGoal {
 
             let min = self.attack_interval_min as f32;
             let max = self.attack_interval_max as f32;
-            self.attack_time = (dist.mul_add(max - min, min)).floor() as i32;
+            self.attack_time = (dist * (max - min) + min).floor() as i32;
         } else if self.attack_time < 0 {
-            let ratio = (target_dist_sq.sqrt() as f32) / self.attack_radius;
-            let min = self.attack_interval_min as f32;
-            let max = self.attack_interval_max as f32;
-            self.attack_time = (ratio.mul_add(max - min, min)).floor() as i32;
+            let ratio = target_dist_sq.sqrt() / f64::from(self.attack_radius);
+            let min = f64::from(self.attack_interval_min);
+            let max = f64::from(self.attack_interval_max);
+            self.attack_time = (min + ratio * (max - min)).floor() as i32;
         }
     }
 }

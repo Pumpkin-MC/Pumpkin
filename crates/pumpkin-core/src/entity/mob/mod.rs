@@ -1135,6 +1135,7 @@ impl MobEntity {
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                 entity.spawn_at_location(ItemStack::new(1, &Item::LEAD));
             }
+            emit_entity_interact(entity, player);
             entity.world.load().play_sound(
                 Sound::ItemLeadUntied,
                 SoundCategory::Neutral,
@@ -1152,7 +1153,7 @@ impl MobEntity {
             let diff = entity.pos.load() - player.get_entity().pos.load();
             if diff.length_squared() <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
                 let new_holder: Arc<dyn EntityBase> = player.clone();
-                if !entity.approve_leash_attachment(new_holder.as_ref()) {
+                if !entity.fire_leash_event(&new_holder) {
                     return Some(false);
                 }
                 if holder.is_some() {
@@ -1817,13 +1818,8 @@ pub trait Mob: EntityBase + Send + Sync {
         !self.get_entity().has_passengers()
     }
 
-    fn attempt_to_shear_equipment(&self, player: &Arc<Player>, shears: &mut ItemStack) -> bool {
-        self.attempt_to_shear_equipment_with_hand(player, shears, pumpkin_util::Hand::Right)
-            .unwrap_or(false)
-    }
-
     /// Returns `None` without shearable equipment and `Some(false)` when plugins cancel.
-    fn attempt_to_shear_equipment_with_hand(
+    fn attempt_to_shear_equipment(
         &self,
         player: &Arc<Player>,
         shears: &mut ItemStack,
@@ -1867,10 +1863,7 @@ pub trait Mob: EntityBase + Send + Sync {
             let mut event = PlayerShearEntityEvent {
                 player: player.clone(),
                 entity_id: entity.entity_id,
-                hand: match hand {
-                    pumpkin_util::Hand::Right => 0,
-                    pumpkin_util::Hand::Left => 1,
-                },
+                hand: hand.packet_id(),
                 cancelled: false,
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
@@ -1879,7 +1872,7 @@ pub trait Mob: EntityBase + Send + Sync {
             }
         }
 
-        let _ = player.damage_item_stack(shears, 1);
+        let _ = player.damage_held_stack(shears, 1, hand);
         mob_entity.set_item_slot(&slot, ItemStack::EMPTY.clone());
         world.emit_game_event(GameEvent::Unequip.name(), entity.pos.load());
         world.emit_game_event_with_context(
@@ -2284,10 +2277,6 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
-    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
-        None
-    }
-
     fn as_bucketable(&self) -> Option<&dyn crate::entity::bucketable::Bucketable> {
         None
     }
@@ -2598,19 +2587,6 @@ pub trait Mob: EntityBase + Send + Sync {
         _hand: pumpkin_util::Hand,
     ) -> Option<bool> {
         None
-    }
-
-    fn mob_interact_with_hand_result(
-        &self,
-        player: &Arc<Player>,
-        item_stack: &mut ItemStack,
-        hand: pumpkin_util::Hand,
-    ) -> Option<super::EntityInteractionResult> {
-        self.mob_interact_with_hand(player, item_stack, hand)
-            .map(|handled| super::EntityInteractionResult {
-                handled,
-                item_used: false,
-            })
     }
 
     /// Fires `EntityTameEvent` for a successful taming roll. `false`: a plugin refused.
@@ -3078,8 +3054,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.interact_with_hand(player, item_stack, pumpkin_util::Hand::Right)
-            .unwrap_or(false)
+        let interacted = self.mob_interact(player, item_stack)
+            || self
+                .as_ageable()
+                .is_some_and(|ageable| ageable.ageable_interact(player, item_stack));
+        if interacted {
+            emit_entity_interact(self.get_entity(), player);
+        }
+        interacted
     }
 
     fn interact_with_hand(
@@ -3088,30 +3070,16 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         item_stack: &mut ItemStack,
         hand: pumpkin_util::Hand,
     ) -> Option<bool> {
-        self.interact_with_hand_result(player, item_stack, hand)
-            .map(|result| result.handled)
-    }
-
-    fn interact_with_hand_result(
-        &self,
-        player: &Arc<Player>,
-        item_stack: &mut ItemStack,
-        hand: pumpkin_util::Hand,
-    ) -> Option<super::EntityInteractionResult> {
         let entity = self.get_entity();
         if !self.get_mob_entity().living_entity.is_alive() {
-            return Some(super::EntityInteractionResult {
-                handled: false,
-                item_used: false,
-            });
+            return Some(false);
         }
-        let named = item_stack.item == &Item::NAME_TAG
+        if item_stack.item == &Item::NAME_TAG
             && entity.entity_type.saveable
             && item_stack
                 .get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
-                .is_some();
-        let mut item_used = true;
-        let interacted = if named {
+                .is_some()
+        {
             let world = entity.world.load();
             let server = world.server.upgrade()?;
             let target = world.get_entity_by_id(entity.entity_id)?;
@@ -3119,43 +3087,23 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 .item_registry
                 .get_pumpkin_item(item_stack.item.id)?
                 .use_on_entity(item_stack, player, target);
-            true
-        } else {
-            if let Some(handled) = super::interact_with_shears(self, player, item_stack, hand) {
-                return Some(super::EntityInteractionResult {
-                    handled,
-                    item_used: true,
-                });
-            }
+            emit_entity_interact(entity, player);
+            return Some(true);
+        }
+        if let Some(handled) = super::interact_with_shears(self, player, item_stack, hand) {
+            return Some(handled);
+        }
+        if let Some(handled) =
             self.get_mob_entity()
                 .interact_leash(player, item_stack, self.can_be_leashed())
-                .unwrap_or_else(|| {
-                    self.mob_interact_with_hand_result(player, item_stack, hand)
-                        .map(|result| {
-                            item_used = result.item_used;
-                            result.handled
-                        })
-                        .unwrap_or_else(|| {
-                            self.mob_interact(player, item_stack)
-                                || self.as_ageable().is_some_and(|ageable| {
-                                    ageable.ageable_interact(player, item_stack)
-                                })
-                        })
-                })
-        };
-        if interacted {
-            entity.world.load().emit_game_event_with_context(
-                pumpkin_data::game_event::GameEvent::EntityInteract.name(),
-                entity.pos.load(),
-                &crate::world::game_event::GameEventContext {
-                    source_entity: Some(player.as_ref()),
-                },
-            );
+        {
+            return Some(handled);
         }
-        Some(super::EntityInteractionResult {
-            handled: interacted,
-            item_used,
-        })
+        let interacted = self.mob_interact_with_hand(player, item_stack, hand)?;
+        if interacted {
+            emit_entity_interact(entity, player);
+        }
+        Some(interacted)
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {
@@ -3336,6 +3284,16 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 pub trait RangedAttackMob: Mob + Send + Sync {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, power: f32);
+}
+
+fn emit_entity_interact(entity: &Entity, player: &Arc<Player>) {
+    entity.world.load().emit_game_event_with_context(
+        GameEvent::EntityInteract.name(),
+        entity.pos.load(),
+        &crate::world::game_event::GameEventContext {
+            source_entity: Some(player.as_ref()),
+        },
+    );
 }
 
 #[cfg(test)]

@@ -253,10 +253,6 @@ impl Animal for SheepEntity {
 }
 
 impl Mob for SheepEntity {
-    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
-        Some(self)
-    }
-
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntitySheepStep, 0.15, 1.0);
     }
@@ -373,15 +369,5 @@ impl Mob for SheepEntity {
         }
 
         self.animal_interact(player, item_stack)
-    }
-}
-
-impl crate::entity::shearable::Shearable for SheepEntity {
-    fn ready_for_shearing(&self) -> bool {
-        Self::ready_for_shearing(self)
-    }
-
-    fn shear(&self, category: SoundCategory, tool: &ItemStack) {
-        Self::shear(self, category, tool);
     }
 }

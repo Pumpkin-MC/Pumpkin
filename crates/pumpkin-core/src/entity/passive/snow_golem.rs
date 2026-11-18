@@ -36,7 +36,6 @@ use crate::entity::{
 const SNOW_GOLEM_HUNTS: &[Hunt] = &[Hunt::new(1, TargetMatch::Enemy, true)];
 const PUMPKIN_FLAG: i8 = 16;
 const DEFAULT_PUMPKIN: bool = true;
-const AMBIENT_SOUND_INTERVAL: i32 = 120;
 const SHEAR_SNOW_GOLEM_LOOT_TABLE: &str = "minecraft:shearing/snow_golem";
 
 pub struct SnowGolemEntity {
@@ -142,14 +141,14 @@ impl SnowGolemEntity {
             );
         }
 
-        self.mob_entity.living_entity.make_sound(
+        self.play_entity_sound(
             Sound::EntitySnowGolemShoot,
-            self.sound_source(),
             1.0,
             0.4 / (self.get_random().random::<f32>() * 0.4 + 0.8),
         );
     }
 
+    #[must_use]
     pub fn ready_for_shearing(&self) -> bool {
         self.has_pumpkin()
     }
@@ -176,51 +175,9 @@ impl SnowGolemEntity {
             }
         }
     }
-
-    fn interact_with_shears(
-        &self,
-        player: &Arc<Player>,
-        item_stack: &mut ItemStack,
-        hand: Hand,
-    ) -> bool {
-        if item_stack.get_item() == &Item::SHEARS && self.ready_for_shearing() {
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            if let Some(server) = world.server.upgrade() {
-                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
-                    player: player.clone(),
-                    entity_id: entity.entity_id,
-                    hand: match hand {
-                        Hand::Right => 0,
-                        Hand::Left => 1,
-                    },
-                    cancelled: false,
-                };
-                server.plugin_manager.fire_blocking(&server, &mut event);
-                if event.cancelled {
-                    return false;
-                }
-            }
-            self.shear(SoundCategory::Players, item_stack);
-            world.emit_game_event_with_context(
-                GameEvent::Shear.name(),
-                entity.pos.load(),
-                &GameEventContext {
-                    source_entity: Some(player.as_ref()),
-                },
-            );
-            let _ = player.damage_item_stack(item_stack, 1);
-            return true;
-        }
-        false
-    }
 }
 
 impl Mob for SnowGolemEntity {
-    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
-        Some(self)
-    }
-
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("Pumpkin", self.has_pumpkin());
     }
@@ -242,7 +199,7 @@ impl Mob for SnowGolemEntity {
     }
 
     fn get_ambient_sound_interval(&self) -> i32 {
-        AMBIENT_SOUND_INTERVAL
+        super::abstract_golem::AMBIENT_SOUND_INTERVAL
     }
 
     fn is_sensitive_to_water(&self) -> bool {
@@ -297,6 +254,9 @@ impl Mob for SnowGolemEntity {
                     }
                     new_state = event.new_state_id;
                 }
+                if pumpkin_data::BlockState::from_id(new_state).is_air() {
+                    continue;
+                }
                 world.set_block_state(&snow_pos, new_state, BlockFlags::NOTIFY_ALL);
                 world.emit_game_event_with_context(
                     GameEvent::BlockPlace.name(),
@@ -318,45 +278,44 @@ impl Mob for SnowGolemEntity {
         );
     }
 
-    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.mob_interact_with_hand(player, item_stack, Hand::Right)
-            .unwrap_or(false)
-    }
-
     fn mob_interact_with_hand(
         &self,
         player: &Arc<Player>,
         item_stack: &mut ItemStack,
         hand: Hand,
     ) -> Option<bool> {
-        Some(self.interact_with_shears(player, item_stack, hand))
-    }
-    fn mob_interact_with_hand_result(
-        &self,
-        player: &Arc<Player>,
-        item_stack: &mut ItemStack,
-        hand: Hand,
-    ) -> Option<crate::entity::EntityInteractionResult> {
-        self.mob_interact_with_hand(player, item_stack, hand)
-            .map(|handled| crate::entity::EntityInteractionResult {
-                handled,
-                item_used: true,
-            })
+        if item_stack.get_item() == &Item::SHEARS && self.ready_for_shearing() {
+            let entity = self.get_entity();
+            let world = entity.world.load();
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                    player: player.clone(),
+                    entity_id: entity.entity_id,
+                    hand: hand.packet_id(),
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return Some(false);
+                }
+            }
+            self.shear(SoundCategory::Players, item_stack);
+            world.emit_game_event_with_context(
+                GameEvent::Shear.name(),
+                entity.pos.load(),
+                &GameEventContext {
+                    source_entity: Some(player.as_ref()),
+                },
+            );
+            let _ = player.damage_held_stack(item_stack, 1, hand);
+            return Some(true);
+        }
+        None
     }
 }
 
 impl RangedAttackMob for SnowGolemEntity {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, _power: f32) {
         self.throw_snowball(target);
-    }
-}
-
-impl crate::entity::shearable::Shearable for SnowGolemEntity {
-    fn ready_for_shearing(&self) -> bool {
-        Self::ready_for_shearing(self)
-    }
-
-    fn shear(&self, category: SoundCategory, tool: &ItemStack) {
-        Self::shear(self, category, tool);
     }
 }

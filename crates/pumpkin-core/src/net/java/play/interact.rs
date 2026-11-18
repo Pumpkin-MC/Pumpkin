@@ -107,11 +107,10 @@ impl JavaClient {
                             };
                             let mut stack = player.inventory().get_stack_in_hand(hand);
                             let before = stack.clone();
-                            let native_interaction = event.target.interact_with_hand_result(player, &mut stack, hand);
-                            let item_used = native_interaction.as_ref().is_none_or(|result| result.item_used);
-                            let interacted = native_interaction.map_or_else(
-                                || event.target.interact(player, &mut stack), |result| result.handled,
-                            );
+                            let native_interaction =
+                                event.target.interact_with_hand(player, &mut stack, hand);
+                            let interacted = native_interaction
+                                .unwrap_or_else(|| event.target.interact(player, &mut stack));
                             let item_id = before.item.id;
                             if !interacted {
                                 server
@@ -137,7 +136,7 @@ impl JavaClient {
                                     },
                                 );
                             }
-                            if item_used && !stack.are_equal(&before) {
+                            if native_interaction.is_none() && !stack.are_equal(&before) {
                                 player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                                 if before.is_damageable() && stack.is_empty() {
                                     player.increment_stat(
@@ -147,10 +146,9 @@ impl JavaClient {
                                     );
                                     player.world().send_entity_status(
                                         player.get_entity(),
-                                        equipment_break_status(&match hand {
-                                            pumpkin_util::Hand::Right => EquipmentSlot::MAIN_HAND,
-                                            pumpkin_util::Hand::Left => EquipmentSlot::OFF_HAND,
-                                        }),
+                                        crate::entity::equipment_break_status(
+                                            &crate::entity::hand_equipment_slot(hand),
+                                        ),
                                         ActorEventID::None,
                                     );
                                 }
