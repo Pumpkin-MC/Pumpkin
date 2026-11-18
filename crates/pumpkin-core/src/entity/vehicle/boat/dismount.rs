@@ -5,11 +5,10 @@ use pumpkin_util::math::{
 };
 
 use super::BoatEntity;
+use crate::entity::dismount_helper::{can_dismount_passenger, find_free_dismount_position};
 use crate::entity::{Entity, EntityBase};
-use crate::world::World;
 
 const DISMOUNT_EPSILON: f64 = 1.0e-5f32 as f64;
-const MAX_FREE_POSITION_DIMENSION: f32 = 4.0;
 
 impl BoatEntity {
     pub(in crate::entity) fn get_dismount_location_for_passenger(
@@ -68,7 +67,7 @@ impl BoatEntity {
             let dimensions = rider.get_dimensions(pose);
             for target in targets.into_iter().flatten() {
                 let bounds = BoundingBox::new_from_pos(target.x, target.y, target.z, &dimensions);
-                if can_dismount_to(&world, passenger, bounds) {
+                if can_dismount_passenger(&world, passenger, bounds) {
                     rider.set_pose(pose);
                     if rider.pose.load() == pose {
                         return target;
@@ -97,44 +96,4 @@ fn collision_horizontal_escape_vector(
         0.0,
         f64::from(z) * distance / scale,
     )
-}
-
-fn can_dismount_to(world: &World, passenger: &dyn EntityBase, bounds: BoundingBox) -> bool {
-    if !world.get_block_collisions(bounds, passenger).0.is_empty() {
-        return false;
-    }
-    let border = world
-        .worldborder
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    border.contains(bounds.min.x, bounds.min.z)
-        && border.contains(
-            bounds.max.x - DISMOUNT_EPSILON,
-            bounds.max.z - DISMOUNT_EPSILON,
-        )
-}
-
-/// Vanilla `LivingEntity.dismountVehicle` when the vehicle was removed or is in a portal.
-fn find_free_dismount_position(
-    world: &World,
-    passenger: &dyn EntityBase,
-    target: Vector3<f64>,
-) -> Vector3<f64> {
-    let dimensions = passenger.get_entity().entity_dimension.load();
-    if dimensions.width > MAX_FREE_POSITION_DIMENSION
-        || dimensions.height > MAX_FREE_POSITION_DIMENSION
-    {
-        return target;
-    }
-    let width = f64::from(dimensions.width);
-    let height = f64::from(dimensions.height);
-    let center = target.add_raw(0.0, height / 2.0, 0.0);
-    world
-        .find_free_position(
-            passenger,
-            &BoundingBox::of_size(center, width, height, width),
-            center,
-            Vector3::new(width, height, width),
-        )
-        .map_or(target, |free| free.add_raw(0.0, -height / 2.0, 0.0))
 }

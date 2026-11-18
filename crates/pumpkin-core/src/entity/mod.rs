@@ -127,6 +127,7 @@ pub const MAX_SCOREBOARD_TAGS: usize = 1024;
 
 /// Push strength per axis in `Entity.push`.
 pub(crate) const PUSH_STRENGTH: f64 = 0.05f32 as f64;
+const MIN_PUSH_DISTANCE: f64 = 0.01f32 as f64;
 
 const MAX_LOADED_MOTION: f64 = 10.0;
 const MAX_HORIZONTAL_POSITION: f64 = 3.000_051_2E7;
@@ -1090,7 +1091,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let mut dx = other_entity.pos.load().x - self_entity.pos.load().x;
         let mut dz = other_entity.pos.load().z - self_entity.pos.load().z;
         let mut d = dx.abs().max(dz.abs());
-        if d >= 0.01 {
+        if d >= MIN_PUSH_DISTANCE {
             d = d.sqrt();
             dx /= d;
             dz /= d;
@@ -5916,180 +5917,18 @@ impl Entity {
                 return;
             }
 
-            // Calculate dismount directions and offsets (vanilla DismountHelper)
-            let vehicle_yaw = self.yaw.load();
-            // Wrap yaw to 0..360 range
-            let wrapped_yaw = (vehicle_yaw % 360.0 + 360.0) % 360.0;
-            let forward_dir = if !(45.0..315.0).contains(&wrapped_yaw) {
-                BlockDirection::South
-            } else if (45.0..135.0).contains(&wrapped_yaw) {
-                BlockDirection::West
-            } else if (135.0..225.0).contains(&wrapped_yaw) {
-                BlockDirection::North
-            } else {
-                BlockDirection::East
-            };
-
-            let get_step = |dir: BlockDirection| -> (i32, i32) {
-                match dir {
-                    BlockDirection::North => (0, -1),
-                    BlockDirection::South => (0, 1),
-                    BlockDirection::East => (1, 0),
-                    BlockDirection::West => (-1, 0),
-                    _ => (0, 0),
-                }
-            };
-
-            let get_clockwise = |dir: BlockDirection| -> BlockDirection {
-                match dir {
-                    BlockDirection::North => BlockDirection::East,
-                    BlockDirection::East => BlockDirection::South,
-                    BlockDirection::South => BlockDirection::West,
-                    BlockDirection::West => BlockDirection::North,
-                    other => other,
-                }
-            };
-
-            let get_opposite = |dir: BlockDirection| -> BlockDirection {
-                match dir {
-                    BlockDirection::North => BlockDirection::South,
-                    BlockDirection::South => BlockDirection::North,
-                    BlockDirection::East => BlockDirection::West,
-                    BlockDirection::West => BlockDirection::East,
-                    other => other,
-                }
-            };
-
-            let right_dir = get_clockwise(forward_dir);
-            let left_dir = get_opposite(right_dir);
-            let back_dir = get_opposite(forward_dir);
-
-            let (fx, fz) = get_step(forward_dir);
-            let (rx, rz) = get_step(right_dir);
-            let (lx, lz) = get_step(left_dir);
-            let (bx, bz) = get_step(back_dir);
-
-            let offsets = [
-                (rx, rz),
-                (lx, lz),
-                (bx + rx, bz + rz),
-                (bx + lx, bz + lz),
-                (fx + rx, fz + rz),
-                (fx + lx, fz + lz),
-                (bx, bz),
-                (fx, fz),
-            ];
-
-            let target_block_y = vehicle_box.max.y.floor() as i32;
-            let below_pos = BlockPos(Vector3::new(
-                self.pos.load().x.floor() as i32,
-                target_block_y - 1,
-                self.pos.load().z.floor() as i32,
-            ));
-
-            let below_state_id = world.get_block_state_id(&below_pos);
-            // Vanilla: isWater checks specifically for water fluid, not any fluid
-            let is_water = Fluid::from_state_id(below_state_id)
-                .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id);
-
-            let fallback_pos =
-                Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
-
             let dismount_pos = if self.entity_type.boat.is_some() {
                 vehicle::boat::BoatEntity::get_dismount_location_for_passenger(
                     self,
                     passenger.as_ref(),
                 )
-            } else if is_water {
-                fallback_pos
+            } else if self.entity_type.has_tag(&tag::EntityType::C_MINECARTS) {
+                vehicle::minecart::MinecartEntity::get_dismount_location_for_passenger(
+                    self,
+                    passenger.as_ref(),
+                )
             } else {
-                // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
-                let poses_and_heights = [
-                    (EntityPose::Standing, vec![0, 1, -1]),
-                    (EntityPose::Crouching, vec![0, 1, -1]),
-                    (EntityPose::Swimming, vec![0, 1]),
-                ];
-
-                let vehicle_block_pos = self.block_pos.load();
-                let mut found = None;
-
-                'search: for (pose, y_offsets) in poses_and_heights {
-                    let dims = passenger_entity.get_dimensions(pose);
-
-                    for y_offset in y_offsets {
-                        for &(ox, oz) in &offsets {
-                            let target_block_x = vehicle_block_pos.0.x + ox;
-                            let target_block_y = vehicle_block_pos.0.y + y_offset;
-                            let target_block_z = vehicle_block_pos.0.z + oz;
-
-                            let target_pos = BlockPos(Vector3::new(
-                                target_block_x,
-                                target_block_y,
-                                target_block_z,
-                            ));
-                            let height = world.get_dismount_height(&target_pos);
-
-                            if height.is_finite() && height < 1.0 {
-                                let location = Vector3::new(
-                                    f64::from(target_block_x) + 0.5,
-                                    f64::from(target_block_y) + height,
-                                    f64::from(target_block_z) + 0.5,
-                                );
-
-                                let bbox = BoundingBox::new_from_pos(
-                                    location.x, location.y, location.z, &dims,
-                                );
-                                if world.is_space_empty(bbox) {
-                                    found = Some((location, pose));
-                                    break 'search;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if let Some((pos, pose)) = found {
-                    if pose != EntityPose::Standing {
-                        passenger_entity.set_pose(pose);
-                    }
-                    pos
-                } else {
-                    // Try dismounting directly on top of the vehicle as fallback
-                    let mut found_fallback = None;
-                    let vehicle_top = vehicle_box.max.y;
-
-                    let poses = [
-                        EntityPose::Standing,
-                        EntityPose::Crouching,
-                        EntityPose::Swimming,
-                    ];
-
-                    for pose in poses {
-                        let dims = passenger_entity.get_dimensions(pose);
-                        let bbox = BoundingBox::new_from_pos(
-                            self.pos.load().x,
-                            vehicle_top,
-                            self.pos.load().z,
-                            &dims,
-                        );
-                        if world.is_space_empty(bbox) {
-                            found_fallback = Some((
-                                Vector3::new(self.pos.load().x, vehicle_top, self.pos.load().z),
-                                pose,
-                            ));
-                            break;
-                        }
-                    }
-
-                    if let Some((pos, pose)) = found_fallback {
-                        if pose != EntityPose::Standing {
-                            passenger_entity.set_pose(pose);
-                        }
-                        pos
-                    } else {
-                        fallback_pos
-                    }
-                }
+                self.generic_dismount_position(&world, passenger_entity, vehicle_box)
             };
 
             // Clean up any remaining reference to the dismounted passenger.
@@ -6143,6 +5982,73 @@ impl Entity {
                 &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
             );
         }
+    }
+
+    fn generic_dismount_position(
+        &self,
+        world: &World,
+        rider: &Self,
+        vehicle_box: BoundingBox,
+    ) -> Vector3<f64> {
+        let vehicle_pos = self.pos.load();
+        let fallback = Vector3::new(vehicle_pos.x, vehicle_box.max.y, vehicle_pos.z);
+        let below = BlockPos::floored(vehicle_pos.x, vehicle_box.max.y, vehicle_pos.z).down();
+        if Fluid::from_state_id(world.get_block_state_id(&below))
+            .is_some_and(|fluid| fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id)
+        {
+            return fallback;
+        }
+
+        // Keep the legacy yaw ranges used by vehicles without a dedicated dismount rule.
+        let yaw = (self.yaw.load() % 360.0 + 360.0) % 360.0;
+        let forward = if !(45.0..315.0).contains(&yaw) {
+            BlockDirection::South
+        } else if (45.0..135.0).contains(&yaw) {
+            BlockDirection::West
+        } else if (135.0..225.0).contains(&yaw) {
+            BlockDirection::North
+        } else {
+            BlockDirection::East
+        };
+        let offsets = dismount_helper::offsets_for_direction(forward);
+        let block_pos = self.block_pos.load();
+        let poses_and_heights: [(EntityPose, &[i32]); 3] = [
+            (EntityPose::Standing, &[0, 1, -1]),
+            (EntityPose::Crouching, &[0, 1, -1]),
+            (EntityPose::Swimming, &[0, 1]),
+        ];
+        for (pose, heights) in poses_and_heights {
+            let dimensions = rider.get_dimensions(pose);
+            for &height in heights {
+                for offset in offsets {
+                    let target = block_pos.offset(offset.add_raw(0, height, 0));
+                    let floor = world.get_dismount_height(&target);
+                    if !dismount_helper::is_block_floor_valid(floor) {
+                        continue;
+                    }
+                    let pos = target.0.to_f64().add_raw(0.5, floor, 0.5);
+                    let bounds = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &dimensions);
+                    if world.is_space_empty(bounds) {
+                        if pose != EntityPose::Standing {
+                            rider.set_pose(pose);
+                        }
+                        return pos;
+                    }
+                }
+            }
+        }
+
+        for (pose, _) in poses_and_heights {
+            let dimensions = rider.get_dimensions(pose);
+            let bounds = BoundingBox::new_from_pos(fallback.x, fallback.y, fallback.z, &dimensions);
+            if world.is_space_empty(bounds) {
+                if pose != EntityPose::Standing {
+                    rider.set_pose(pose);
+                }
+                break;
+            }
+        }
+        fallback
     }
 
     pub fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {

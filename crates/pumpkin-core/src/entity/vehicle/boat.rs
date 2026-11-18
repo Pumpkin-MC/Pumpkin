@@ -4,9 +4,10 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam::atomic::AtomicCell;
 
+use crate::entity::living::{LivingEntity, is_allowed_by_team_rules};
 use crate::entity::player::Player;
 use crate::entity::vehicle::minecart::container::{self, MinecartInventory};
-use crate::entity::{Entity, EntityBase, living::LivingEntity};
+use crate::entity::{Entity, EntityBase};
 use crate::server::Server;
 use crate::world::World;
 use crate::world::game_event::GameEventContext;
@@ -38,6 +39,7 @@ const BACK_SEAT_OFFSET: f32 = -0.6;
 const ANIMAL_SEAT_SHIFT: f32 = 0.2;
 const CHEST_BOAT_CONTAINER_SIZE: usize = 27;
 const TIME_TO_EJECT: f32 = 60.0;
+const CONTACT_VERTICAL_INSET: f64 = 0.01f32 as f64;
 
 #[must_use]
 pub const fn is_chest_boat(entity_type: &EntityType) -> bool {
@@ -68,6 +70,8 @@ pub struct BoatEntity {
 }
 
 impl BoatEntity {
+    pub(crate) const CONTACT_RANGE: f64 = 0.2f32 as f64;
+
     #[must_use]
     pub fn new(mut entity: Entity) -> Self {
         entity.blocks_building = true;
@@ -120,6 +124,45 @@ impl BoatEntity {
     pub(crate) fn is_client_controlled(&self) -> bool {
         self.get_controlling_passenger()
             .is_some_and(|passenger| passenger.get_player().is_some())
+    }
+
+    fn push_nearby_boats(&self) {
+        let entity = self.get_entity();
+        let bounds = entity.bounding_box.load().expand(
+            Self::CONTACT_RANGE,
+            -CONTACT_VERTICAL_INSET,
+            Self::CONTACT_RANGE,
+        );
+        let world = entity.world.load();
+        let mut own_name = None;
+        for other in world.get_boats_at_box(&bounds) {
+            let other_entity = other.get_entity();
+            if other_entity.entity_id == entity.entity_id
+                || !other_entity.is_alive()
+                || other.is_spectator()
+                || !other.is_pushable()
+            {
+                continue;
+            }
+
+            let allowed = {
+                let scoreboard = world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                scoreboard.get_teams().is_empty()
+                    || is_allowed_by_team_rules(
+                        scoreboard.get_entity_team(
+                            own_name.get_or_insert_with(|| self.get_scoreboard_name()),
+                        ),
+                        scoreboard.get_entity_team(&other.get_scoreboard_name()),
+                    )
+            };
+            if allowed {
+                // Shared push logic skips riders in the same vehicle chain and applies the hull height check.
+                self.push(other.as_ref());
+            }
+        }
     }
 
     pub fn open_custom_inventory_screen(&self, player: &Arc<Player>) -> bool {
@@ -293,6 +336,9 @@ impl EntityBase for BoatEntity {
         }
         self.apply_effects_from_blocks();
         entity.tick_block_collisions(caller);
+        if !entity.is_removed() {
+            self.push_nearby_boats();
+        }
     }
 
     fn init_data_tracker(&self) {

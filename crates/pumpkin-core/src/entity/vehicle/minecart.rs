@@ -1,6 +1,7 @@
 mod chest;
 pub mod command_block;
 pub(crate) mod container;
+mod dismount;
 mod furnace;
 mod hopper;
 mod rideable;
@@ -8,7 +9,7 @@ mod spawner;
 mod tnt;
 
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use pumpkin_protocol::java::server::play::SPlayerInput;
 use rand::RngExt;
@@ -19,7 +20,7 @@ use crate::{
     server::Server,
 };
 use pumpkin_data::Block;
-use pumpkin_data::block_properties::PoweredRailLikeProperties;
+use pumpkin_data::block_properties::{PoweredRailLikeProperties, RailShapeStraight};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -30,8 +31,10 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{atan2, wrap_degrees};
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
+use crate::world::World;
 use chest::ChestMinecart;
 use command_block::CommandBlockMinecart;
 use container::MinecartInventory;
@@ -61,10 +64,51 @@ const fn get_exits(
 
 const GRAVITY: f64 = 0.04;
 const RAIL_HEIGHT_OFFSET: f64 = 0.0625;
+const ROTATION_MOVEMENT_THRESHOLD: f64 = 0.001;
+const FLIP_ROTATION_THRESHOLD: f32 = 170.0;
+const DEFAULT_FLIPPED_ROTATION: bool = false;
+const POWERED_RAIL_MIN_SPEED: f64 = 0.01;
+const POWERED_RAIL_BOOST: f64 = 0.06;
+const POWERED_RAIL_START_SPEED: f64 = 0.02;
+const MAX_POWERED_RAIL_SPEED: f64 = 0.4;
+
+fn powered_rail_velocity(
+    world: &World,
+    pos: &BlockPos,
+    shape: RailShapeStraight,
+    mut velocity: Vector3<f64>,
+) -> Vector3<f64> {
+    let speed = velocity.horizontal_length();
+    if speed > POWERED_RAIL_MIN_SPEED {
+        let factor = (speed + POWERED_RAIL_BOOST).min(MAX_POWERED_RAIL_SPEED) / speed;
+        velocity.x *= factor;
+        velocity.z *= factor;
+        return velocity;
+    }
+
+    let conducts = |neighbor: BlockPos| world.get_block_state(&neighbor).is_solid_block();
+    match shape {
+        RailShapeStraight::EastWest if conducts(pos.west()) => {
+            velocity.x = POWERED_RAIL_START_SPEED;
+        }
+        RailShapeStraight::EastWest if conducts(pos.east()) => {
+            velocity.x = -POWERED_RAIL_START_SPEED;
+        }
+        RailShapeStraight::NorthSouth if conducts(pos.north()) => {
+            velocity.z = POWERED_RAIL_START_SPEED;
+        }
+        RailShapeStraight::NorthSouth if conducts(pos.south()) => {
+            velocity.z = -POWERED_RAIL_START_SPEED;
+        }
+        _ => {}
+    }
+    velocity
+}
 
 pub struct MinecartEntity {
     pub vehicle: VehicleEntity,
     kind: MinecartKind,
+    flipped_rotation: AtomicBool,
 }
 
 enum MinecartKind {
@@ -102,7 +146,30 @@ impl MinecartEntity {
         Self {
             vehicle: VehicleEntity::new(entity),
             kind,
+            flipped_rotation: AtomicBool::new(DEFAULT_FLIPPED_ROTATION),
         }
+    }
+
+    fn update_rotation(&self, previous_position: Vector3<f64>, previous_yaw: f32) {
+        let entity = &self.vehicle.entity;
+        let movement = previous_position - entity.pos.load();
+        let mut flipped = self.flipped_rotation.load(Ordering::Relaxed);
+        let mut yaw = entity.yaw.load();
+        // Legacy minecarts keep the same visual end facing forward when they reverse.
+        if movement.horizontal_length_squared() > ROTATION_MOVEMENT_THRESHOLD {
+            yaw = (atan2(movement.z, movement.x) * 180.0 / std::f64::consts::PI) as f32;
+            if flipped {
+                yaw += 180.0;
+            }
+        }
+        if !(-FLIP_ROTATION_THRESHOLD..FLIP_ROTATION_THRESHOLD)
+            .contains(&wrap_degrees(yaw - previous_yaw))
+        {
+            yaw += 180.0;
+            flipped = !flipped;
+            self.flipped_rotation.store(flipped, Ordering::Relaxed);
+        }
+        entity.set_rotation(yaw % 360.0, 0.0);
     }
 
     #[must_use]
@@ -149,6 +216,10 @@ impl EntityBase for MinecartEntity {
     }
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_bool(
+            "FlippedRotation",
+            self.flipped_rotation.load(Ordering::Relaxed),
+        );
         match &self.kind {
             MinecartKind::Chest(minecart) => minecart.write_nbt(nbt),
             MinecartKind::CommandBlock(minecart) => minecart.write_nbt(nbt),
@@ -161,6 +232,11 @@ impl EntityBase for MinecartEntity {
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.flipped_rotation.store(
+            nbt.get_bool("FlippedRotation")
+                .unwrap_or(DEFAULT_FLIPPED_ROTATION),
+            Ordering::Relaxed,
+        );
         match &self.kind {
             MinecartKind::Chest(minecart) => minecart.read_nbt(nbt),
             MinecartKind::CommandBlock(minecart) => minecart.read_nbt(&self.vehicle.entity, nbt),
@@ -174,6 +250,8 @@ impl EntityBase for MinecartEntity {
 
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        let previous_position = self.vehicle.entity.pos.load();
+        let previous_yaw = self.vehicle.entity.yaw.load();
         self.vehicle.tick();
         match &self.kind {
             MinecartKind::Furnace(minecart) => minecart.tick(&self.vehicle.entity),
@@ -240,33 +318,14 @@ impl EntityBase for MinecartEntity {
             );
         }
 
+        let mut powered_rail = None;
         if is_powered_rail || is_activator_rail {
             let props = PoweredRailLikeProperties::from_state_id(state_id);
             let powered = props.powered;
 
             if powered {
                 if is_powered_rail {
-                    let mut velocity = self.vehicle.entity.velocity.load();
-                    let speed = velocity.length();
-                    if speed > 0.01 {
-                        let new_speed = (speed + 0.06).min(0.4);
-                        velocity = velocity
-                            .normalize()
-                            .multiply(new_speed, new_speed, new_speed);
-                        self.vehicle.entity.velocity.store(velocity);
-                    } else {
-                        let yaw = self.vehicle.entity.yaw.load();
-                        let push_dir = Vector3::new(
-                            -f64::from((yaw.to_radians()).sin()),
-                            0.0,
-                            f64::from((yaw.to_radians()).cos()),
-                        );
-                        self.vehicle
-                            .entity
-                            .velocity
-                            .store(push_dir.multiply(0.1, 0.1, 0.1));
-                    }
-                    self.vehicle.entity.send_velocity();
+                    powered_rail = Some(props.shape);
                 } else if is_activator_rail {
                     match &self.kind {
                         MinecartKind::CommandBlock(minecart) => {
@@ -304,7 +363,7 @@ impl EntityBase for MinecartEntity {
             } else if is_powered_rail {
                 let mut velocity = self.vehicle.entity.velocity.load();
                 velocity = velocity.multiply(0.5, 0.5, 0.5);
-                if velocity.length() < 0.01 {
+                if velocity.length() < POWERED_RAIL_MIN_SPEED {
                     velocity = Vector3::new(0.0, 0.0, 0.0);
                 }
                 self.vehicle.entity.velocity.store(velocity);
@@ -378,7 +437,7 @@ impl EntityBase for MinecartEntity {
 
         if is_on_rails {
             use pumpkin_data::block_properties::RailLikeProperties;
-            use pumpkin_data::block_properties::{RailShape, RailShapeStraight};
+            use pumpkin_data::block_properties::RailShape;
 
             let shape = if block.id == Block::RAIL.id {
                 let props = RailLikeProperties::from_state_id(state_id);
@@ -458,6 +517,11 @@ impl EntityBase for MinecartEntity {
             if towards_length > 1e-5 {
                 towards_out = towards_out.normalize();
                 let speed = velocity.length();
+                let speed = if powered_rail.is_some() {
+                    speed.min(MAX_POWERED_RAIL_SPEED)
+                } else {
+                    speed
+                };
                 velocity = towards_out.multiply(speed, speed, speed);
             }
 
@@ -535,6 +599,17 @@ impl EntityBase for MinecartEntity {
                 self.vehicle.entity.send_velocity();
             }
         }
+
+        if let Some(shape) = powered_rail {
+            // Legacy minecarts apply powered-rail acceleration after moving along the track.
+            let current = self.vehicle.entity.velocity.load();
+            let boosted = powered_rail_velocity(&world, &block_pos, shape, current);
+            if boosted != current {
+                self.vehicle.entity.velocity.store(boosted);
+                self.vehicle.entity.send_velocity();
+            }
+        }
+        self.update_rotation(previous_position, previous_yaw);
 
         match &self.kind {
             MinecartKind::Hopper(minecart) => minecart.tick(&self.vehicle.entity),
@@ -863,9 +938,108 @@ impl EntityBase for MinecartEntity {
 mod tests {
     use super::*;
     use crate::entity::ai::test_support::world;
+    use crate::entity::mob::zombie::zombie::ZombieEntity;
+    use pumpkin_util::math::vector2::Vector2;
     use pumpkin_util::text::TextComponent;
+    use pumpkin_world::chunk::ChunkData;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[tokio::test]
+    async fn powered_rail_kick_uses_conducting_neighbors() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let chunk = ChunkData::empty_sync(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        let pos = BlockPos::new(8, 64, 8);
+        let stopped = Vector3::default();
+
+        chunk.set_block_absolute_y(8, 64, 7, Block::STONE.default_state.id);
+        chunk.set_block_absolute_y(9, 64, 8, Block::GLASS.default_state.id);
+        assert_eq!(
+            powered_rail_velocity(&world, &pos, RailShapeStraight::NorthSouth, stopped),
+            Vector3::new(0.0, 0.0, 0.02),
+        );
+        assert_eq!(
+            powered_rail_velocity(&world, &pos, RailShapeStraight::EastWest, stopped),
+            stopped,
+        );
+        chunk.set_block_absolute_y(9, 64, 8, Block::STONE.default_state.id);
+        assert_eq!(
+            powered_rail_velocity(&world, &pos, RailShapeStraight::EastWest, stopped),
+            Vector3::new(-0.02, 0.0, 0.0),
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn minecart_dismount_tracks_reversing_motion_and_checks_the_other_side() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let chunk = ChunkData::empty_sync(0, 0);
+        for x in 7..=9 {
+            for z in 7..=9 {
+                chunk.set_block_absolute_y(x, 63, z, Block::STONE.default_state.id);
+            }
+        }
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        let position = Vector3::new(8.5, 64.0625, 8.5);
+        let minecart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            position,
+            &EntityType::MINECART,
+        )));
+        let rider = ZombieEntity::new(Entity::new(world.clone(), position, &EntityType::ZOMBIE));
+        assert!(world.spawn_entity(minecart.clone()));
+        assert!(world.spawn_entity(rider.clone()));
+
+        // When a yaw-0 cart rolls east, it keeps its visible orientation and flips internally.
+        minecart.update_rotation(position.add_raw(-0.2, 0.0, 0.0), 0.0);
+        let mut saved = NbtCompound::new();
+        minecart.write_custom_nbt(&mut saved);
+        assert_eq!(saved.get_bool("FlippedRotation"), Some(true));
+        assert_eq!(
+            MinecartEntity::get_dismount_location_for_passenger(
+                minecart.get_entity(),
+                rider.as_ref()
+            ),
+            Vector3::new(8.5, 64.0, 9.5)
+        );
+
+        minecart.update_rotation(position.add_raw(0.2, 0.0, 0.0), 0.0);
+        assert_eq!(
+            MinecartEntity::get_dismount_location_for_passenger(
+                minecart.get_entity(),
+                rider.as_ref()
+            ),
+            Vector3::new(8.5, 64.0, 7.5)
+        );
+        minecart.read_custom_nbt(&saved);
+        assert_eq!(
+            MinecartEntity::get_dismount_location_for_passenger(
+                minecart.get_entity(),
+                rider.as_ref()
+            ),
+            Vector3::new(8.5, 64.0, 9.5)
+        );
+        chunk.set_block_absolute_y(8, 64, 9, Block::STONE.default_state.id);
+        let vehicle = minecart.get_entity();
+        let passenger = rider.get_entity();
+        vehicle.add_passenger(minecart.clone(), rider.clone());
+        assert!(passenger.has_vehicle());
+        vehicle.remove_passenger(passenger.entity_id);
+        assert!(!passenger.has_vehicle());
+        assert_eq!(passenger.pos.load(), Vector3::new(8.5, 64.0, 7.5));
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn command_block_minecart_nbt_and_activation_cooldown() -> TestResult {
