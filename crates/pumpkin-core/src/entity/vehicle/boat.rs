@@ -483,7 +483,7 @@ impl EntityBase for BoatEntity {
             let _movements = self.lock_movements();
             entity.update_last_pos()
         };
-        entity.tick_base(caller);
+        entity.base_tick(caller);
         if entity.is_removed() {
             return;
         }

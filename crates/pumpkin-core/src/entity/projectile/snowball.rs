@@ -8,7 +8,6 @@ use crate::{
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
-use pumpkin_util::math::vector3::Vector3;
 
 const GRAVITY: f64 = 0.03;
 
@@ -17,11 +16,7 @@ pub struct SnowballEntity {
 }
 
 impl SnowballEntity {
-    pub fn new(entity: Entity) -> Self {
-        // Keep the velocity initialization
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
-
-        // Initialize without owner
+    pub const fn new(entity: Entity) -> Self {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
@@ -33,7 +28,6 @@ impl SnowballEntity {
 
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
         let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
-        thrown.entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         Self { thrown }
     }
 }
@@ -61,10 +55,6 @@ impl EntityBase for SnowballEntity {
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) {
         let world = self.get_entity().world.load();
 
-        // Always send particle status regardless of what was hit
-        world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
-
-        // Handle entity-specific damage
         if let ProjectileHit::Entity {
             ref entity,
             hit_pos,
@@ -83,5 +73,48 @@ impl EntityBase for SnowballEntity {
                 owner.as_deref(),
             );
         }
+        world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::{
+        ai::test_support::world, mob::blaze::BlazeEntity, passive::snow_golem::SnowGolemEntity,
+    };
+    use pumpkin_util::math::vector3::Vector3;
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[tokio::test]
+    async fn snowball_damage_records_the_golem_as_attacker() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let owner = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        world.spawn_entity(owner.clone());
+        let target = BlazeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(4.5, 64.0, 0.5),
+            &EntityType::BLAZE,
+        ));
+        let snowball = SnowballEntity::new_shot(
+            Entity::new(world.clone(), Vector3::default(), &EntityType::SNOWBALL),
+            owner.get_entity(),
+        );
+        snowball.on_hit(ProjectileHit::Entity {
+            entity: target.clone(),
+            hit_pos: target.get_entity().pos.load(),
+            normal: Vector3::new(-1.0, 0.0, 0.0),
+        });
+        assert_eq!(
+            target.entity.living_entity.get_last_damage_source(),
+            Some((DamageType::THROWN, owner.get_entity().entity_id))
+        );
+        world.level.shutdown().await;
+        Ok(())
     }
 }

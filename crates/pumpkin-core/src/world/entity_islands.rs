@@ -19,7 +19,9 @@ use crate::entity::{
     tnt::TNTEntity,
     vehicle::{boat::BoatEntity, minecart::MinecartEntity},
 };
-use crate::plugin::api::events::block::block_break::BlockBreakEvent;
+use crate::plugin::api::events::block::{
+    block_break::BlockBreakEvent, entity_block_form::EntityBlockFormEvent,
+};
 use crate::plugin::api::events::entity::{
     entity_breed::EntityBreedEvent, entity_combust::EntityCombustEvent,
     entity_dismount::EntityDismountEvent, entity_portal::EntityPortalEvent,
@@ -136,8 +138,8 @@ impl Schedule {
     }
 }
 
-/// A plugin listens to an event an entity tick can fire: targeting, breeding, anger, or a
-/// sit order dropped on damage. Its handler may touch anything, so the tick runs in list order.
+/// A plugin listens to an event an entity tick can fire. Its handler may touch anything,
+/// so the tick runs in list order.
 #[must_use]
 pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
     let plugins = &server.plugin_manager;
@@ -145,6 +147,7 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<EntityBreedEvent>()
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
+        || plugins.has_handlers::<EntityBlockFormEvent>()
 }
 
 /// What one entity can read or change next tick.
