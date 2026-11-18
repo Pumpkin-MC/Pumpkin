@@ -24,7 +24,6 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
 struct ShulkerBoxScreenFactory(Arc<dyn Inventory>);
@@ -128,7 +127,7 @@ impl ShulkerBoxBlock {
             .to_block_direction();
         let lid_open_bounding_box = Self::lid_open_bounding_box(position, facing);
 
-        Self::no_block_collision(world, &lid_open_bounding_box)
+        world.no_block_collision(lid_open_bounding_box)
             && world.no_entity_collision(None, lid_open_bounding_box)
     }
 
@@ -145,19 +144,6 @@ impl ShulkerBoxBlock {
             BlockDirection::East => bounds.max.x -= Self::LID_OPEN_PROGRESS,
         }
         bounds.contract_all(Self::LID_OPEN_INSET)
-    }
-
-    /// Vanilla `CollisionGetter.noBlockCollision` for the lid's opening space.
-    fn no_block_collision(world: &World, bounds: &BoundingBox) -> bool {
-        // Vanilla scans one block past the box so shapes that overhang their block are found.
-        let min = bounds.min_block_pos().offset(Vector3::new(-1, -1, -1));
-        let max = bounds.max_block_pos().offset(Vector3::new(1, 1, 1));
-        BlockPos::iterate(min, max).all(|position| {
-            world
-                .get_block_state(&position)
-                .get_block_collision_shapes_at(&position)
-                .all(|shape| !shape.at_pos(position).intersects(bounds))
-        })
     }
 }
 

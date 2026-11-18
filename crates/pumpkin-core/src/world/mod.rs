@@ -2614,6 +2614,20 @@ impl World {
         true
     }
 
+    /// Vanilla `CollisionGetter.noBlockCollision` for `bounding_box`.
+    pub fn no_block_collision(&self, bounding_box: BoundingBox) -> bool {
+        // Vanilla scans one block past the box so shapes that overhang their block are found.
+        let min = bounding_box
+            .min_block_pos()
+            .offset(Vector3::new(-1, -1, -1));
+        let max = bounding_box.max_block_pos().offset(Vector3::new(1, 1, 1));
+        BlockPos::iterate(min, max).all(|position| {
+            self.get_block_state(&position)
+                .get_block_collision_shapes_at(&position)
+                .all(|shape| !shape.at_pos(position).intersects(&bounding_box))
+        })
+    }
+
     /// No other entity that blocks building overlaps `entity`, ignoring its own vehicle group.
     pub fn is_unobstructed(&self, entity: &Entity) -> bool {
         let bounds = entity.bounding_box.load();
