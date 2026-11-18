@@ -8,7 +8,7 @@ use pumpkin_plugin_api_v0_2::{
     ai::{AiGoal, register_ai_goal},
     commands::{CommandHandler, CommandSuggestionHandler},
     display::EntityDisplayExt,
-    events::{EventData, EventHandler, PlayerChatEvent},
+    events::{EventHandler, EventRef, PlayerChatEvent},
     gametest::{register_async_test, register_entity_predicate, register_void_callback},
     host::{
         command::{
@@ -28,20 +28,15 @@ struct Fixture;
 struct ChatGuard;
 
 impl EventHandler<PlayerChatEvent> for ChatGuard {
-    async fn handle(
-        &self,
-        _server: Server,
-        mut event: EventData<PlayerChatEvent>,
-    ) -> EventData<PlayerChatEvent> {
+    async fn handle(&self, _server: Server, event: EventRef<'_, PlayerChatEvent>) {
+        let Ok(mut chat) = event.get() else {
+            return;
+        };
         // has_permission is an async import, so the handler suspends here
-        if !event
-            .player
-            .has_permission("fixture.chat".to_string())
-            .await
-        {
-            event.cancelled = true;
+        if !chat.player.has_permission("fixture.chat".to_string()).await {
+            chat.cancelled = true;
+            let _ = event.set(chat);
         }
-        event
     }
 }
 

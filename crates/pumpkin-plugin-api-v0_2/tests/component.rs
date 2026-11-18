@@ -46,8 +46,6 @@ const ASYNC_CALLBACKS: [&str; 13] = [
     "handle-generate-phase",
 ];
 
-// Opt-level 1 because an unoptimized build of the lifted `event` variant exceeds the Wasm locals
-// limit and the component fails validation
 fn fixture_path() -> &'static PathBuf {
     static FIXTURE: OnceLock<PathBuf> = OnceLock::new();
     FIXTURE.get_or_init(|| {
@@ -65,7 +63,6 @@ fn fixture_path() -> &'static PathBuf {
                 "--target-dir",
             ])
             .arg(&target_dir)
-            .env("CARGO_PROFILE_DEV_OPT_LEVEL", "1")
             .status()
             .expect("failed to run cargo to build the fixture");
         assert!(status.success(), "building the fixture component failed");
@@ -133,6 +130,15 @@ fn component_declares_the_mixed_v0_2_world() {
             "{name} should be an async export"
         );
     }
+
+    // Edits go through the borrowed event resource, so nothing is returned to the host
+    let handle_event = ty
+        .get_export(&engine, "handle-event")
+        .map(|export| export.ty);
+    assert!(
+        matches!(handle_event, Some(ComponentItem::ComponentFunc(func)) if func.results().len() == 0),
+        "handle-event should return nothing"
+    );
 
     let init = ty
         .get_export(&engine, "init-plugin")
