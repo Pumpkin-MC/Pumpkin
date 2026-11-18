@@ -1142,7 +1142,10 @@ impl ProtoChunk {
                             surface_height_estimate_sampler,
                         )
                         .unwrap_or(generator.default_block);
-                    self.set_block_state(block_x, block_y, block_z, block_state);
+                    // Noise is the first stage to place blocks, so air is already there.
+                    if block_state.id != BlockStateId::AIR {
+                        self.set_block_state(block_x, block_y, block_z, block_state);
+                    }
                 }
             }
         }
