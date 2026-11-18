@@ -15,7 +15,7 @@
 //!
 //! ## Early Development Warning
 //! This SDK is in preview. Events are borrowed host resources that handlers read and edit
-through [`events::EventRef`].
+//! through [`events::EventRef`].
 //!
 
 use std::sync::{Arc, OnceLock};
