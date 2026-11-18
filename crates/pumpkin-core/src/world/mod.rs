@@ -2643,11 +2643,15 @@ impl World {
 
     pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
         self.is_space_empty(bounding_box)
-            && self.no_entity_collision(source, bounding_box)
+            && self.no_entity_collision(Some(source), bounding_box)
             && self.no_border_collision(source, bounding_box)
     }
 
-    pub fn no_entity_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+    pub fn no_entity_collision(
+        &self,
+        source: Option<&dyn EntityBase>,
+        bounding_box: BoundingBox,
+    ) -> bool {
         let average_size = ((bounding_box.max.x - bounding_box.min.x)
             + (bounding_box.max.y - bounding_box.min.y)
             + (bounding_box.max.z - bounding_box.min.z))
@@ -2663,7 +2667,8 @@ impl World {
                 && (other.entity_type == &EntityType::SHULKER
                     || other.entity_type == &EntityType::HAPPY_GHAST
                     || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
-                && !source.get_entity().is_passenger_of_same_vehicle(other)
+                && source
+                    .is_none_or(|source| !source.get_entity().is_passenger_of_same_vehicle(other))
         })
     }
 

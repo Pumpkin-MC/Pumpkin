@@ -11,7 +11,6 @@ use crate::block::{
 };
 
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
-use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::block_properties::ShulkerBoxProperties;
 use pumpkin_data::translation;
@@ -77,7 +76,7 @@ impl BlockBehaviour for ShulkerBoxBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if !Self::can_open(args.world, args.position, args.player) {
+        if !Self::can_open(args.world, args.position) {
             return BlockActionResult::Success;
         }
 
@@ -122,7 +121,7 @@ impl ShulkerBoxBlock {
 
     /// Vanilla `ShulkerBoxBlock.canOpen`. Pumpkin tracks no server-side animation
     /// state, so the box is always treated as closed here.
-    fn can_open(world: &World, position: &BlockPos, player: &Player) -> bool {
+    fn can_open(world: &World, position: &BlockPos) -> bool {
         let state = world.get_block_state(position);
         let facing = ShulkerBoxProperties::from_state_id(state.id)
             .facing
@@ -130,7 +129,7 @@ impl ShulkerBoxBlock {
         let lid_open_bounding_box = Self::lid_open_bounding_box(position, facing);
 
         Self::no_block_collision(world, &lid_open_bounding_box)
-            && world.no_entity_collision(player, lid_open_bounding_box)
+            && world.no_entity_collision(None, lid_open_bounding_box)
     }
 
     /// Vanilla `Shulker.getProgressDeltaAabb(1.0, facing, 0.0, 0.5, bottom center)`:
