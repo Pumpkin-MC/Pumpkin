@@ -33,11 +33,12 @@ use pumpkin_util::math::{pack_degrees, position::chunk_section_from_pos};
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
+use tracing::error;
 use uuid::Uuid;
 
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
-use crate::net::java::JavaClient;
+use crate::net::java::{JavaClient, PacketSink};
 use crate::net::{ClientPlatform, lock_briefly};
 use crate::world::World;
 use crate::world::chunker::get_view_distance;
@@ -74,6 +75,42 @@ struct PlayerViewSnapshot<'a> {
     pos: Vector3<f64>,
     watched: Cylindrical,
     view_distance: i32,
+}
+
+fn serialize<P: ClientPacket>(packet: &P) -> Option<bytes::Bytes> {
+    JavaClient::serialize_packet_for_version(packet, CURRENT_MC_VERSION)
+        .inspect_err(|err| {
+            error!(
+                "Failed to serialize packet {}: {err}",
+                std::any::type_name::<P>()
+            );
+        })
+        .ok()
+}
+
+/// A tracker pass runs inside a [`PacketSink`], so a watcher is queued once for all the
+/// Java packets of the pass. Packets of one entity keep their order.
+fn queue(player: &Player, data: &bytes::Bytes) {
+    if let ClientPlatform::Java(client) = player.client.as_ref() {
+        client.try_enqueue_packet(data.clone());
+    }
+}
+
+/// To every watcher.
+fn send_to_watchers<P: ClientPacket>(tracked: &TrackedEntity, packet: &P) {
+    let seen_by = tracked
+        .seen_by
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if seen_by.is_empty() {
+        return;
+    }
+    let Some(data) = serialize(packet) else {
+        return;
+    };
+    for player in seen_by.values() {
+        queue(player, &data);
+    }
 }
 
 pub struct TrackedEntity {
@@ -163,7 +200,7 @@ impl TrackedEntity {
     }
 
     /// Vanilla `ServerEntity.sendChanges`.
-    pub fn send_changes(&self, world: &World) {
+    fn send_changes(&self, world: &World) {
         let entity = self.entity.get_entity();
         self.send_bedrock_move(entity, world);
         let tick = self.tick_count.fetch_add(1, Relaxed);
@@ -179,7 +216,7 @@ impl TrackedEntity {
 
             if self.entity.is_passenger() {
                 if rot_changed {
-                    self.send_move(entity, MoveSync::Rot, yaw, pitch, world);
+                    self.send_move(entity, MoveSync::Rot, yaw, pitch);
                     entity.last_sent_yaw.store(yaw, Relaxed);
                     entity.last_sent_pitch.store(pitch, Relaxed);
                 }
@@ -193,7 +230,7 @@ impl TrackedEntity {
                     self.send_motion(entity, world);
                 }
                 if let Some(sync) = sync {
-                    self.send_move(entity, sync, yaw, pitch, world);
+                    self.send_move(entity, sync, yaw, pitch);
                 }
                 entity.send_dirty_entity_data();
                 if let Some(sync) = sync {
@@ -212,10 +249,7 @@ impl TrackedEntity {
             // (`MoveActorDelta` HAS_HEAD_YAW), not from this packet.
             let head_yaw = pack_degrees(entity.head_yaw.load());
             if head_yaw != entity.last_sent_head_yaw.load(Relaxed) {
-                self.send_to_tracking_players(
-                    &CHeadRot::new(VarInt(self.entity_id), head_yaw),
-                    world,
-                );
+                send_to_watchers(self, &CHeadRot::new(VarInt(self.entity_id), head_yaw));
                 entity.last_sent_head_yaw.store(head_yaw, Relaxed);
             }
         }
@@ -282,8 +316,11 @@ impl TrackedEntity {
         let velocity = entity.velocity.load();
         if entity.velocity_changed_since_sent() {
             entity.last_sent_velocity.store(velocity);
-            self.send_to_tracking_players_editioned(
+            send_to_watchers(
+                self,
                 &CEntityVelocity::new(VarInt(self.entity_id), velocity),
+            );
+            self.send_to_tracking_players_bedrock(
                 &CSetActorMotion {
                     target_runtime_id: VarULong(self.entity_id as u64),
                     motion: velocity.to_f32_lossy(),
@@ -295,24 +332,22 @@ impl TrackedEntity {
     }
 
     /// Java only -> Bedrock uses [`Self::send_bedrock_move`].
-    fn send_move(&self, entity: &Entity, sync: MoveSync, yaw: u8, pitch: u8, world: &World) {
+    fn send_move(&self, entity: &Entity, sync: MoveSync, yaw: u8, pitch: u8) {
         let on_ground = entity.on_ground.load(Relaxed);
         let id = VarInt(self.entity_id);
         match sync {
             MoveSync::Pos(delta) => {
-                self.send_to_tracking_players(&CUpdateEntityPos::new(id, delta, on_ground), world);
+                send_to_watchers(self, &CUpdateEntityPos::new(id, delta, on_ground));
             }
             MoveSync::Rot => {
-                self.send_to_tracking_players(
-                    &CUpdateEntityRot::new(id, yaw, pitch, on_ground),
-                    world,
-                );
+                send_to_watchers(self, &CUpdateEntityRot::new(id, yaw, pitch, on_ground));
             }
-            MoveSync::PosRot(delta) => self.send_to_tracking_players(
+            MoveSync::PosRot(delta) => send_to_watchers(
+                self,
                 &CUpdateEntityPosRot::new(id, delta, yaw, pitch, on_ground),
-                world,
             ),
-            MoveSync::Absolute(pos) => self.send_to_tracking_players(
+            MoveSync::Absolute(pos) => send_to_watchers(
+                self,
                 &CEntityPositionSync::new(
                     id,
                     pos,
@@ -321,7 +356,6 @@ impl TrackedEntity {
                     entity.pitch.load(),
                     on_ground,
                 ),
-                world,
             ),
         }
     }
@@ -472,6 +506,21 @@ impl TrackedEntity {
         );
     }
 
+    /// The squared distance on the ground between a player and the entity, when the player
+    /// is close enough to be sent it.
+    fn distance_in_range(
+        player_pos: Vector3<f64>,
+        player_vd: i32,
+        entity_pos: Vector3<f64>,
+        effective_range: u32,
+    ) -> Option<f64> {
+        let dx = player_pos.x - entity_pos.x;
+        let dz = player_pos.z - entity_pos.z;
+        let dist_sq = dx.mul_add(dx, dz * dz);
+        let visible_range_blocks = f64::from((effective_range as i32).min(player_vd * 16));
+        (dist_sq <= visible_range_blocks * visible_range_blocks).then_some(dist_sq)
+    }
+
     #[expect(clippy::too_many_arguments)]
     fn update_player_in_view(
         &self,
@@ -483,14 +532,10 @@ impl TrackedEntity {
         effective_range: u32,
         chunk_changed: bool,
     ) {
-        let dx = player_pos.x - entity_pos.x;
-        let dz = player_pos.z - entity_pos.z;
-        let dist_sq = dx.mul_add(dx, dz * dz);
-
-        let visible_range_blocks = f64::from((effective_range as i32).min(player_vd * 16));
-        let range_sq = visible_range_blocks * visible_range_blocks;
-
-        if dist_sq <= range_sq && self.broadcast_to_player(player) {
+        let in_range = Self::distance_in_range(player_pos, player_vd, entity_pos, effective_range)
+            .is_some()
+            && self.broadcast_to_player(player);
+        if in_range {
             if !chunk_changed
                 && self
                     .seen_by
@@ -580,10 +625,54 @@ impl TrackedEntity {
         }
         let entity_chunk = self.entity.get_entity().chunk_pos.load();
         let mut lazy_state: Option<(Vector3<f64>, u32)> = None;
-        for snap in snapshots {
-            if snap.entity_id == self.entity_id {
-                continue;
+        let range_state = || {
+            (
+                self.entity.get_entity().pos.load(),
+                self.scaled_effective_range(world),
+            )
+        };
+
+        // In a crowd nearly every pair stays as it is. Those are told apart with each list
+        // locked once; the others are updated below, once the locks are released.
+        let mut changing: Vec<&PlayerViewSnapshot<'_>> = Vec::new();
+        {
+            let seen_by = self
+                .seen_by
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for snap in snapshots {
+                if snap.entity_id == self.entity_id {
+                    continue;
+                }
+                let in_range = if snap
+                    .watched
+                    .is_within_distance(entity_chunk.x, entity_chunk.y)
+                {
+                    let (entity_pos, effective_range) = *lazy_state.get_or_insert_with(range_state);
+                    Self::distance_in_range(
+                        snap.pos,
+                        snap.view_distance,
+                        entity_pos,
+                        effective_range,
+                    )
+                    .is_some()
+                        && self.broadcast_to_player(snap.player)
+                } else {
+                    false
+                };
+                let seen = seen_by.contains_key(&snap.player.gameprofile.id);
+                let settled = if in_range {
+                    !chunk_changed && seen
+                } else {
+                    !seen
+                };
+                if !settled {
+                    changing.push(snap);
+                }
             }
+        }
+
+        for snap in changing {
             if !snap
                 .watched
                 .is_within_distance(entity_chunk.x, entity_chunk.y)
@@ -591,12 +680,7 @@ impl TrackedEntity {
                 self.remove_player(snap.player);
                 continue;
             }
-            let (entity_pos, effective_range) = *lazy_state.get_or_insert_with(|| {
-                (
-                    self.entity.get_entity().pos.load(),
-                    self.scaled_effective_range(world),
-                )
-            });
+            let (entity_pos, effective_range) = *lazy_state.get_or_insert_with(range_state);
             self.update_player_in_view(
                 snap.player,
                 snap.pos,
@@ -1379,9 +1463,9 @@ impl EntityTracker {
                 });
         }
 
-        tracked_entities
-            .par_iter()
-            .for_each(|tracked| tracked.send_changes(world));
+        PacketSink::for_each(&players, &tracked_entities, |tracked| {
+            tracked.send_changes(world);
+        });
     }
 }
 

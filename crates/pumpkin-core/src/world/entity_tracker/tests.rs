@@ -114,6 +114,110 @@ async fn watchers_follow_a_player_from_the_tracker() -> TestResult {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_watcher_follows_every_player_of_a_crowd_through_a_tick() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.worlds.load()[0].clone();
+    let mut watcher = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+    let walkers: Vec<Client> = (0..12u32)
+        .map(|i| {
+            let pos = Vector3::new(2.5, 100.0, f64::from(i) + 0.5);
+            Client::join(&server, 2 + u64::from(i), pos)
+        })
+        .collect();
+    world.entity_tracker.update_all(&world);
+    let spawned = watcher.received().await?;
+    let mut drawn = Vec::new();
+    for walker in &walkers {
+        drawn.push(drawn_at(None, walker.entity_id(), &spawned)?);
+    }
+
+    // As in a tick: what the passes queue waits for the end of it.
+    let java = watcher.player.client.java().expect("a Java player");
+    java.suspend_flushing();
+    for step in 1..=4 {
+        for (i, walker) in walkers.iter().enumerate() {
+            let pos = walker.player.get_entity().pos.load();
+            let stride = 0.05 * f64::from(step) * (i + 1) as f64 / 4.0;
+            walker
+                .player
+                .get_entity()
+                .set_pos(Vector3::new(pos.x + stride, pos.y, pos.z));
+        }
+        world.entity_tracker.update_all(&world);
+    }
+    java.resume_flushing();
+
+    let packets = watcher.received().await?;
+    // Each player twice: vanilla sends one every `updateInterval` (2) ticks.
+    assert_eq!(count::<CUpdateEntityPos>(&packets), 2 * walkers.len());
+    for (walker, drawn) in walkers.iter().zip(drawn) {
+        let drawn = drawn_at(drawn, walker.entity_id(), &packets)?;
+        assert_close(drawn, walker.player.get_entity().pos.load());
+    }
+    shutdown(&server).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_pass_pairs_and_unpairs_who_changed_and_leaves_the_rest_alone() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.worlds.load()[0].clone();
+    let mut watcher = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+    let stays = Client::join(&server, 2, Vector3::new(3.5, 100.0, 0.5));
+    let leaves = Client::join(&server, 3, Vector3::new(0.5, 100.0, 3.5));
+    let arrives = Client::join(&server, 4, Vector3::new(4000.5, 100.0, 0.5));
+    world.entity_tracker.update_all(&world);
+    let packets = watcher.received().await?;
+    assert!(drawn_at(None, stays.entity_id(), &packets)?.is_some());
+    assert!(drawn_at(None, leaves.entity_id(), &packets)?.is_some());
+    assert!(drawn_at(None, arrives.entity_id(), &packets)?.is_none());
+
+    // How often `packets` draw the entity anew, and whether they leave it drawn.
+    let spawns = |packets: &[RawPacket], entity_id: i32| {
+        let spawned = |packet: &&RawPacket| {
+            packet.id == id::<CSpawnEntity>()
+                && CSpawnEntity::read_packet_data(&packet.payload[..], &CURRENT_MC_VERSION)
+                    .is_ok_and(|spawn| spawn.entity_id.0 == entity_id)
+        };
+        packets.iter().filter(spawned).count()
+    };
+    let kept = |packets: &[RawPacket], entity_id: i32| {
+        drawn_at(Some(Vector3::default()), entity_id, packets).map(|drawn| drawn.is_some())
+    };
+
+    // One walks off, one walks up and one takes a step, all in the same tick.
+    let far = Vector3::new(4000.5, 100.0, 40.5);
+    leaves.player.get_entity().set_pos(far);
+    let near = Vector3::new(0.5, 100.0, -3.5);
+    arrives.player.get_entity().set_pos(near);
+    let step = Vector3::new(3.7, 100.0, 0.5);
+    stays.player.get_entity().set_pos(step);
+    world.entity_tracker.update_all(&world);
+    let packets = watcher.received().await?;
+    assert_eq!(spawns(&packets, stays.entity_id()), 0);
+    assert!(kept(&packets, stays.entity_id())?);
+    assert!(!kept(&packets, leaves.entity_id())?);
+    assert_eq!(spawns(&packets, arrives.entity_id()), 1);
+    let mut drawn = drawn_at(None, arrives.entity_id(), &packets)?;
+
+    // Nothing changes any more: nobody is drawn or removed a second time.
+    for _ in 0..2 {
+        world.entity_tracker.update_all(&world);
+        let packets = watcher.received().await?;
+        for entity_id in [stays.entity_id(), arrives.entity_id(), leaves.entity_id()] {
+            assert_eq!(spawns(&packets, entity_id), 0);
+        }
+        assert_eq!(count::<CRemoveEntities>(&packets), 0);
+        drawn = drawn_at(drawn, arrives.entity_id(), &packets)?;
+    }
+    assert_close(drawn, near);
+    shutdown(&server).await;
+    Ok(())
+}
+
 #[tokio::test]
 async fn head_turns_wait_for_the_update_interval() -> TestResult {
     let folder = tempfile::tempdir()?;
