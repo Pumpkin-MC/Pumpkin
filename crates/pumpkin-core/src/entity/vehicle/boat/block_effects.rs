@@ -1,5 +1,4 @@
-use std::collections::HashSet;
-use std::sync::atomic::Ordering;
+use std::collections::{HashSet, VecDeque};
 
 use pumpkin_data::Block;
 use pumpkin_util::math::{
@@ -15,40 +14,35 @@ const EPSILON: f64 = 1.0e-7;
 const MAX_MOVEMENTS_HANDLED_PER_TICK: usize = 100;
 const MAX_BLOCK_ITERATIONS_ALONG_TRAVEL_PER_TICK: usize = 16;
 
-pub(super) struct BoatMovement {
+struct BoatMovement {
     from: Vector3<f64>,
     to: Vector3<f64>,
     requested: Option<Vector3<f64>>,
 }
 
-impl BoatEntity {
-    pub(super) fn pending_block_movement_reach(&self) -> f64 {
-        let position = self.vehicle.entity.pos.load();
-        self.movements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .iter()
-            .fold(0.0f64, |reach, movement| {
-                reach
-                    .max((movement.from - position).length())
-                    .max((movement.to - position).length())
-            })
+#[derive(Default)]
+pub(super) struct BoatMovements {
+    generation: u64,
+    pending: VecDeque<BoatMovement>,
+}
+
+impl BoatMovements {
+    pub(super) const fn generation(&self) -> u64 {
+        self.generation
     }
 
-    pub(super) fn record_movement(
-        &self,
+    pub(super) fn invalidate(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.pending.clear();
+    }
+
+    pub(super) fn record(
+        &mut self,
         from: Vector3<f64>,
         to: Vector3<f64>,
         requested_movement: Vector3<f64>,
-        teleports: u64,
-    ) -> bool {
-        let mut movements = self
-            .movements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if self.teleports.load(Ordering::Relaxed) != teleports {
-            return false;
-        }
+    ) {
+        let movements = &mut self.pending;
         // Entity.addMovementThisTick merges the oldest pair into a straight movement.
         if movements.len() >= MAX_MOVEMENTS_HANDLED_PER_TICK
             && let Some(first) = movements.pop_front()
@@ -62,24 +56,36 @@ impl BoatEntity {
             to,
             requested: Some(requested_movement),
         });
-        true
+    }
+}
+
+impl BoatEntity {
+    pub(super) fn pending_block_movement_reach(&self) -> f64 {
+        let movements = self.lock_movements();
+        let position = self.vehicle.entity.pos.load();
+        movements.pending.iter().fold(0.0f64, |reach, movement| {
+            reach
+                .max((movement.from - position).length())
+                .max((movement.to - position).length())
+        })
     }
 
     pub(super) fn apply_effects_from_blocks(&self) {
-        let mut movements = std::mem::take(
-            &mut *self
-                .movements
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
         let entity = &self.vehicle.entity;
+        let (mut movements, snapshot, last_pos, bounds) = {
+            let mut state = self.lock_movements();
+            (
+                std::mem::take(&mut state.pending),
+                self.movement_snapshot(&state),
+                entity.last_pos.load(),
+                entity.bounding_box.load(),
+            )
+        };
         if !entity.is_affected_by_blocks() {
             return;
         }
-        let to = entity.pos.load();
-        let from = movements
-            .back()
-            .map_or_else(|| entity.last_pos.load(), |movement| movement.to);
+        let to = snapshot.position;
+        let from = movements.back().map_or(last_pos, |movement| movement.to);
         if movements.is_empty()
             || (to - from).length_squared()
                 > f64::from(BLOCK_INTERSECTION_EPSILON * BLOCK_INTERSECTION_EPSILON)
@@ -90,12 +96,10 @@ impl BoatEntity {
                 requested: None,
             });
         }
-        let world = entity.world.load();
+        let world = &snapshot.world;
         let Some(server) = world.server.upgrade() else {
             return;
         };
-        let teleports = self.teleports.load(Ordering::Relaxed);
-        let bounds = entity.bounding_box.load();
         let mut visited = HashSet::new();
         let mut interrupted = false;
         for movement in movements {
@@ -110,10 +114,14 @@ impl BoatEntity {
                     let (block, state) = world.get_block_and_state(&pos);
                     // Lily pads inherit the full-block entity-inside shape, not their thin outline.
                     if block == &Block::LILY_PAD && visited.insert(pos) {
+                        if !self.movement_is_current(&snapshot, to) {
+                            interrupted = true;
+                            return;
+                        }
                         world
                             .block_registry
-                            .on_entity_collision(block, &world, self, &pos, state, &server);
-                        interrupted = !self.continue_movement(&world, teleports, to);
+                            .on_entity_collision(block, world, self, &pos, state, &server);
+                        interrupted = !self.movement_is_current(&snapshot, to);
                     }
                 },
             );

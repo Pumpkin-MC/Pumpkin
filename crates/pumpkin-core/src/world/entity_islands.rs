@@ -19,11 +19,11 @@ use crate::entity::{
 };
 use crate::plugin::api::events::block::block_break::BlockBreakEvent;
 use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_dismount::EntityDismountEvent,
-    entity_portal::EntityPortalEvent, entity_pose_change::EntityPoseChangeEvent,
-    entity_spawn::EntitySpawnEvent, entity_target::EntityTargetEvent,
-    entity_toggle_sit::EntityToggleSitEvent, item_spawn::ItemSpawnEvent,
-    pig_zombie_anger::PigZombieAngerEvent,
+    entity_breed::EntityBreedEvent, entity_combust::EntityCombustEvent,
+    entity_dismount::EntityDismountEvent, entity_portal::EntityPortalEvent,
+    entity_pose_change::EntityPoseChangeEvent, entity_spawn::EntitySpawnEvent,
+    entity_target::EntityTargetEvent, entity_toggle_sit::EntityToggleSitEvent,
+    item_spawn::ItemSpawnEvent, pig_zombie_anger::PigZombieAngerEvent,
 };
 use crate::plugin::api::events::vehicle::{
     vehicle_damage::VehicleDamageEvent, vehicle_destroy::VehicleDestroyEvent,
@@ -376,6 +376,7 @@ impl EntityReach {
                         || plugins.has_handlers::<BlockBreakEvent>()
                         || plugins.has_handlers::<PacketSentEvent>()
                         || plugins.has_handlers::<GenericGameEvent>()
+                        || plugins.has_handlers::<EntityCombustEvent>()
                         || plugins.has_handlers::<VehicleDamageEvent>()
                         || plugins.has_handlers::<VehicleDestroyEvent>()
                         || plugins.has_handlers::<ItemSpawnEvent>()

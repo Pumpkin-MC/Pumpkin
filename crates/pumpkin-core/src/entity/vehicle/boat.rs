@@ -1,6 +1,5 @@
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use crossbeam::atomic::AtomicCell;
 
@@ -27,7 +26,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
-use block_effects::BoatMovement;
+use block_effects::BoatMovements;
 use physics::BoatStatus;
 
 mod block_effects;
@@ -65,11 +64,16 @@ pub struct BoatEntity {
     water_level: AtomicCell<f64>,
     land_friction: AtomicCell<f32>,
     last_yd: AtomicCell<f64>,
-    teleports: AtomicU64,
-    movements: Mutex<VecDeque<BoatMovement>>,
+    movements: Mutex<BoatMovements>,
     left_paddle_moving: AtomicBool,
     right_paddle_moving: AtomicBool,
     inventory: Option<Arc<MinecartInventory>>,
+}
+
+struct BoatPosition {
+    position: Vector3<f64>,
+    world: Arc<World>,
+    generation: u64,
 }
 
 impl BoatEntity {
@@ -87,8 +91,7 @@ impl BoatEntity {
             water_level: AtomicCell::new(0.0),
             land_friction: AtomicCell::new(0.0),
             last_yd: AtomicCell::new(0.0),
-            teleports: AtomicU64::new(0),
-            movements: Mutex::new(VecDeque::new()),
+            movements: Mutex::default(),
             left_paddle_moving: AtomicBool::new(false),
             right_paddle_moving: AtomicBool::new(false),
             inventory,
@@ -130,32 +133,52 @@ impl BoatEntity {
             .is_some_and(|passenger| passenger.get_player().is_some())
     }
 
-    fn continue_movement(
+    fn lock_movements(&self) -> MutexGuard<'_, BoatMovements> {
+        self.movements
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn movement_snapshot(&self, movements: &BoatMovements) -> BoatPosition {
+        let entity = self.get_entity();
+        BoatPosition {
+            position: entity.pos.load(),
+            world: entity.world.load_full(),
+            generation: movements.generation(),
+        }
+    }
+
+    pub(in crate::entity) fn update_last_pos(&self) {
+        let _movements = self.lock_movements();
+        self.get_entity().update_last_pos();
+    }
+
+    fn movement_matches(
         &self,
-        world: &Arc<World>,
-        teleports: u64,
+        movements: &mut BoatMovements,
+        snapshot: &BoatPosition,
         expected_position: Vector3<f64>,
     ) -> bool {
         let entity = self.get_entity();
-        if entity.is_removed() || self.teleports.load(Ordering::Relaxed) != teleports {
+        if entity.is_removed() || movements.generation() != snapshot.generation {
             return false;
         }
         let position = entity.pos.load();
-        if position != expected_position || !Arc::ptr_eq(world, &entity.world.load()) {
+        if position != expected_position || !Arc::ptr_eq(&snapshot.world, &entity.world.load()) {
             // Native listeners can relocate the base entity directly.
-            self.reset_movement(position);
+            movements.invalidate();
+            entity.last_pos.store(position);
             return false;
         }
         true
     }
 
-    fn reset_movement(&self, position: Vector3<f64>) {
-        self.teleports.fetch_add(1, Ordering::Relaxed);
-        self.movements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-        self.get_entity().last_pos.store(position);
+    fn movement_is_current(
+        &self,
+        snapshot: &BoatPosition,
+        expected_position: Vector3<f64>,
+    ) -> bool {
+        self.movement_matches(&mut self.lock_movements(), snapshot, expected_position)
     }
 
     fn push_nearby_boats(&self) {
@@ -316,9 +339,15 @@ impl EntityBase for BoatEntity {
         pitch: Option<f32>,
         world: Arc<World>,
     ) {
-        // A teleport starts a new path; do not sweep between worlds or positions.
-        self.reset_movement(position);
-        self.get_entity().teleport(position, yaw, pitch, &world);
+        let entity = self.get_entity();
+        let (chunk, packet) = {
+            let mut movements = self.lock_movements();
+            movements.invalidate();
+            entity.last_pos.store(position);
+            entity.apply_teleport(position, yaw, pitch)
+        };
+        // Packet listeners may teleport the boat again.
+        world.broadcast_to_chunk(chunk, &packet);
     }
 
     fn has_container_inventory(&self) -> bool {
@@ -339,6 +368,7 @@ impl EntityBase for BoatEntity {
     }
 
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        let snapshot = self.movement_snapshot(&self.lock_movements());
         let status = self.get_status();
         let old_status = self.status.swap(Some(status));
         self.tick_underwater(status);
@@ -358,8 +388,14 @@ impl EntityBase for BoatEntity {
             {
                 self.set_paddles(false, false);
             }
-            let surface_offset = self.float_boat(old_status, status);
-            self.move_boat(caller, surface_offset);
+            let surface_offset = {
+                let mut movements = self.lock_movements();
+                self.movement_matches(&mut movements, &snapshot, snapshot.position)
+                    .then(|| self.float_boat(old_status, status))
+            };
+            if let Some(offset) = surface_offset {
+                self.move_boat(caller, offset, &snapshot);
+            }
         }
         self.apply_effects_from_blocks();
         entity.tick_block_collisions(caller);

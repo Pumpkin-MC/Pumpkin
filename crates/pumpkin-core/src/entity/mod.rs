@@ -3435,27 +3435,28 @@ impl Entity {
 
     // Does not send movement. That must be done separately
     pub fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
-        self.move_entity_and_get_destination(caller, motion);
+        if let Some((requested, resolved)) = self.apply_entity_motion(caller, motion) {
+            self.finish_entity_movement(caller, requested, resolved);
+        }
     }
 
-    // Return the position reached by collision resolution before effects can relocate the entity.
-    fn move_entity_and_get_destination(
+    /// Resolves and applies movement before invoking block or plugin callbacks.
+    fn apply_entity_motion(
         &self,
         caller: &dyn EntityBase,
         mut motion: Vector3<f64>,
-    ) -> Vector3<f64> {
+    ) -> Option<(Vector3<f64>, Vector3<f64>)> {
         if caller.get_player().is_some() {
-            return self.pos.load();
+            return None;
         }
 
         if self.no_physics.load(Ordering::Relaxed) {
-            let destination = self.pos.load() + motion;
-            self.set_pos(destination);
+            self.move_pos(motion);
             self.horizontal_collision.store(false, Ordering::Relaxed);
             self.vertical_collision.store(false, Ordering::Relaxed);
             self.on_ground.store(false, Ordering::Relaxed);
 
-            return destination;
+            return None;
         }
 
         let movement_multiplier = self.movement_multiplier.swap(Vector3::default());
@@ -3472,8 +3473,7 @@ impl Entity {
 
         let final_move = self.adjust_movement_for_collisions(motion, caller);
 
-        let destination = self.pos.load() + final_move;
-        self.set_pos(destination);
+        self.move_pos(final_move);
 
         let velocity_multiplier = f64::from(caller.get_block_speed_factor());
 
@@ -3497,6 +3497,15 @@ impl Entity {
             self.velocity.store(final_move * velocity_multiplier);
         }
 
+        Some((motion, final_move))
+    }
+
+    fn finish_entity_movement(
+        &self,
+        caller: &dyn EntityBase,
+        motion: Vector3<f64>,
+        final_move: Vector3<f64>,
+    ) {
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
             living.fall(caller, final_move.y, on_ground);
@@ -3513,7 +3522,6 @@ impl Entity {
         if !self.is_removed() {
             self.emit_movement(caller, final_move, &effect_pos, effect_state);
         }
-        destination
     }
 
     /// The emission part of vanilla `Entity.move` for movement the client already resolved,
@@ -4910,6 +4918,16 @@ impl Entity {
         pitch: Option<f32>,
         world: &World,
     ) {
+        let (chunk, packet) = self.apply_teleport(position, yaw, pitch);
+        world.broadcast_to_chunk(chunk, &packet);
+    }
+
+    fn apply_teleport(
+        &self,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+    ) -> (Vector2<i32>, CEntityPositionSync) {
         // Update server-side position and bounding box
         self.set_pos(position);
         if let Some(yaw) = yaw {
@@ -4932,9 +4950,9 @@ impl Entity {
                 .store((pitch * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
         }
         let chunk_pos = self.chunk_pos.load();
-        world.broadcast_to_chunk(
+        (
             chunk_pos,
-            &CEntityPositionSync::new(
+            CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
                 self.velocity.load(),
@@ -4942,7 +4960,7 @@ impl Entity {
                 pitch.unwrap_or(self.pitch.load()),
                 self.on_ground.load(Ordering::SeqCst),
             ),
-        );
+        )
     }
 
     pub fn get_eye_pos(&self) -> Vector3<f64> {
@@ -6424,7 +6442,15 @@ impl EntityBase for Entity {
             .store(was_in_powder_snow, Ordering::Relaxed);
         self.is_in_powder_snow.store(false, Ordering::Relaxed);
 
-        self.update_last_pos();
+        if self.entity_type.boat.is_some()
+            && let Some(boat) = caller
+                .cast_any()
+                .downcast_ref::<vehicle::boat::BoatEntity>()
+        {
+            boat.update_last_pos();
+        } else {
+            self.update_last_pos();
+        }
         self.tick_portal(caller);
         self.update_fluid_state(caller);
         self.check_out_of_world(caller);

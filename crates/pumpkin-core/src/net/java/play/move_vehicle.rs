@@ -1,7 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::entity::vehicle::boat::BoatEntity;
-use pumpkin_protocol::java::client::play::CMoveVehicle;
 use pumpkin_util::math::wrap_degrees;
 
 impl JavaClient {
@@ -59,37 +58,31 @@ impl JavaClient {
             Player::clamp_vertical(packet.y),
             Player::clamp_horizontal(packet.z),
         );
-        let old_pos = vehicle_entity.pos.load();
-        let pos = if let Some(boat) = boat {
-            let Some(accepted) = boat.accept_client_movement(player, requested) else {
-                if !vehicle_entity.is_removed()
-                    && Arc::ptr_eq(&vehicle_entity.world.load(), &entity.world.load())
-                    && boat
-                        .get_controlling_passenger()
-                        .is_some_and(|rider| rider.get_entity().entity_id == entity.entity_id)
-                {
-                    let current = vehicle_entity.pos.load();
-                    player.try_send_client_packet(&CMoveVehicle::new(
-                        current.x,
-                        current.y,
-                        current.z,
-                        vehicle_entity.yaw.load(),
-                        vehicle_entity.pitch.load(),
-                    ));
+        let yaw = wrap_degrees(packet.yaw);
+        let pitch = wrap_degrees(packet.pitch);
+        let (old_pos, pos) = if let Some(boat) = boat {
+            let Some(accepted) =
+                boat.accept_client_movement(player, requested, yaw, pitch, packet.on_ground)
+            else {
+                if let Some(correction) = boat.client_movement_correction(player) {
+                    player.try_send_client_packet(&correction);
                 }
                 return;
             };
             accepted
         } else {
-            requested
+            let old_pos = vehicle_entity.pos.load();
+            vehicle_entity.set_pos(requested);
+            vehicle_entity.set_rotation(yaw, pitch);
+            vehicle_entity
+                .on_ground
+                .store(packet.on_ground, Ordering::Relaxed);
+            (old_pos, requested)
         };
-        vehicle_entity.set_pos(pos);
-        vehicle_entity.set_rotation(wrap_degrees(packet.yaw), wrap_degrees(packet.pitch));
-        vehicle_entity
-            .on_ground
-            .store(packet.on_ground, Ordering::Relaxed);
         let movement = pos - old_pos;
-        vehicle_entity.emit_client_movement(vehicle.as_ref(), movement);
+        if boat.is_none() {
+            vehicle_entity.emit_client_movement(vehicle.as_ref(), movement);
+        }
         if let Some(living) = vehicle.get_living_entity() {
             living.fall(vehicle.as_ref(), movement.y, packet.on_ground);
         }

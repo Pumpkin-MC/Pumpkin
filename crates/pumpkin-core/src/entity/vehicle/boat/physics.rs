@@ -1,13 +1,14 @@
-use std::sync::atomic::Ordering;
+use std::sync::{Arc, atomic::Ordering};
 
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
-use super::BoatEntity;
+use super::{BoatEntity, BoatPosition};
 use crate::entity::{EntityBase, player::Player};
 use crate::plugin::api::events::vehicle::vehicle_move::VehicleMoveEvent;
+use pumpkin_protocol::java::client::play::CMoveVehicle;
 
 pub(super) const DEFAULT_GRAVITY: f64 = 0.04;
 const WATER_OFFSET: f64 = 0.001;
@@ -278,35 +279,50 @@ impl BoatEntity {
         Vector3::default()
     }
 
-    pub(super) fn move_boat(&self, caller: &dyn EntityBase, surface_offset: Vector3<f64>) {
+    pub(super) fn move_boat(
+        &self,
+        caller: &dyn EntityBase,
+        surface_offset: Vector3<f64>,
+        snapshot: &BoatPosition,
+    ) {
         let entity = &self.vehicle.entity;
-        let from = entity.pos.load();
+        let from = snapshot.position;
         let velocity = entity.velocity.load();
         let destination = from + surface_offset + velocity;
-        let Some(event) = self.movement_event(from, destination, None) else {
+        let Some(event) = self.movement_event(snapshot, destination, None) else {
             return;
         };
-        if event.cancelled
-            || !(event.to.x.is_finite() && event.to.y.is_finite() && event.to.z.is_finite())
+        let (resolved, end) = {
+            let mut movements = self.lock_movements();
+            if !self.movement_matches(&mut movements, snapshot, from) {
+                return;
+            }
+            if event.cancelled
+                || !(event.to.x.is_finite() && event.to.y.is_finite() && event.to.z.is_finite())
+            {
+                entity.velocity.store(Vector3::default());
+                return;
+            }
+            self.last_yd.store(velocity.y);
+            let start = from + surface_offset;
+            if start != from {
+                entity.set_pos(start);
+            }
+            let motion = if event.to == destination {
+                velocity
+            } else {
+                event.to - start
+            };
+            let resolved = entity.apply_entity_motion(caller, motion);
+            let end = entity.pos.load();
+            movements.record(start, end, motion);
+            (resolved, end)
+        };
+        if let Some((requested, final_move)) = resolved
+            && self.movement_is_current(snapshot, end)
         {
-            entity.velocity.store(Vector3::default());
-            return;
-        }
-        self.last_yd.store(velocity.y);
-        let start = from + surface_offset;
-        if start != from {
-            entity.set_pos(start);
-        }
-        let motion = if event.to == destination {
-            velocity
-        } else {
-            event.to - start
-        };
-        let world = entity.world.load();
-        let teleports = self.teleports.load(Ordering::Relaxed);
-        let destination = entity.move_entity_and_get_destination(caller, motion);
-        if self.continue_movement(&world, teleports, destination) {
-            self.record_movement(start, destination, motion, teleports);
+            entity.finish_entity_movement(caller, requested, final_move);
+            self.movement_is_current(snapshot, end);
         }
     }
 
@@ -314,53 +330,103 @@ impl BoatEntity {
         &self,
         player: &Player,
         destination: Vector3<f64>,
-    ) -> Option<Vector3<f64>> {
+        yaw: f32,
+        pitch: f32,
+        on_ground: bool,
+    ) -> Option<(Vector3<f64>, Vector3<f64>)> {
         let entity = &self.vehicle.entity;
-        let from = entity.pos.load();
-        let teleports = self.teleports.load(Ordering::Relaxed);
-        let event = self.movement_event(from, destination, Some(player.get_entity().entity_id))?;
+        let snapshot = self.movement_snapshot(&self.lock_movements());
+        let event =
+            self.movement_event(&snapshot, destination, Some(player.get_entity().entity_id))?;
         let target = event.to;
         if event.cancelled
             || !(target.x.is_finite() && target.y.is_finite() && target.z.is_finite())
-            || entity.has_new_boat_collision(self, target - from)
+            || entity.has_new_boat_collision(self, target - snapshot.position)
         {
             return None;
         }
-        if self.teleports.load(Ordering::Relaxed) != teleports
-            || (target != from && !self.record_movement(from, target, target - from, teleports))
-        {
+        if !self.commit_client_movement(&snapshot, target, yaw, pitch, on_ground) {
             return None;
+        }
+        if self.movement_is_current(&snapshot, target) {
+            entity.emit_client_movement(self, target - snapshot.position);
+            self.movement_is_current(&snapshot, target);
+        }
+        Some((snapshot.position, target))
+    }
+
+    pub(super) fn commit_client_movement(
+        &self,
+        snapshot: &BoatPosition,
+        target: Vector3<f64>,
+        yaw: f32,
+        pitch: f32,
+        on_ground: bool,
+    ) -> bool {
+        let mut movements = self.lock_movements();
+        let from = snapshot.position;
+        if !self.movement_matches(&mut movements, snapshot, from) {
+            return false;
+        }
+        let entity = self.get_entity();
+        entity.set_pos(target);
+        entity.set_rotation(yaw, pitch);
+        entity.on_ground.store(on_ground, Ordering::Relaxed);
+        if target != from {
+            movements.record(from, target, target - from);
         }
         // AbstractBoat.checkFallDamage records delta movement, not the packet's displacement.
         self.last_yd.store(entity.velocity.load().y);
-        Some(target)
+        true
+    }
+
+    pub(crate) fn client_movement_correction(&self, player: &Player) -> Option<CMoveVehicle> {
+        let player_entity = player.get_entity();
+        let driver = self.get_controlling_passenger()?;
+        if driver.get_entity().entity_id != player_entity.entity_id {
+            return None;
+        }
+        let _movements = self.lock_movements();
+        let entity = self.get_entity();
+        if entity.is_removed() || !Arc::ptr_eq(&entity.world.load(), &player_entity.world.load()) {
+            return None;
+        }
+        let current = entity.pos.load();
+        Some(CMoveVehicle::new(
+            current.x,
+            current.y,
+            current.z,
+            entity.yaw.load(),
+            entity.pitch.load(),
+        ))
     }
 
     fn movement_event(
         &self,
-        from: Vector3<f64>,
+        snapshot: &BoatPosition,
         destination: Vector3<f64>,
         client_driver: Option<i32>,
     ) -> Option<VehicleMoveEvent> {
         let entity = &self.vehicle.entity;
+        let from = snapshot.position;
         let mut event = VehicleMoveEvent::new(entity.entity_id, from, destination);
-        if destination != from {
-            let world = entity.world.load();
-            if let Some(server) = world.server.upgrade()
-                && server.plugin_manager.has_handlers::<VehicleMoveEvent>()
-            {
-                let teleports = self.teleports.load(Ordering::Relaxed);
-                server.plugin_manager.fire_blocking(&server, &mut event);
-                if !self.continue_movement(&world, teleports, from) {
-                    return None;
-                }
-                let current_driver = self
-                    .get_controlling_passenger()
-                    .filter(|passenger| passenger.get_player().is_some())
-                    .map(|passenger| passenger.get_entity().entity_id);
-                if current_driver != client_driver {
-                    return None;
-                }
+        if destination != from
+            && let Some(server) = snapshot.world.server.upgrade()
+            && server.plugin_manager.has_handlers::<VehicleMoveEvent>()
+        {
+            if !self.movement_is_current(snapshot, from) {
+                return None;
+            }
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if !self.movement_is_current(snapshot, from) {
+                return None;
+            }
+            let current_driver = self
+                .get_controlling_passenger()
+                .filter(|passenger| passenger.get_player().is_some())
+                .map(|passenger| passenger.get_entity().entity_id);
+            if current_driver != client_driver {
+                return None;
             }
         }
         Some(event)

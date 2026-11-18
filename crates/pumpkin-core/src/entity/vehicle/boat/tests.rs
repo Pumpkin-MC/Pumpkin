@@ -17,13 +17,21 @@ use crate::net::{
     ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
     java::{JavaClient, pending::PendingConnection},
 };
+use crate::plugin::api::events::block::block_physics::BlockPhysicsEvent;
+use crate::plugin::api::events::entity::entity_combust::EntityCombustEvent;
 use crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent;
 use crate::plugin::api::events::vehicle::vehicle_move::VehicleMoveEvent;
+use crate::plugin::api::events::vehicle::vehicle_update::VehicleUpdateEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::plugin::{EventHandler, EventPriority};
 use crate::world::entity_islands::{EntityReach, resolve};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+struct NoopListener;
+
+impl EventHandler<BlockPhysicsEvent> for NoopListener {}
+impl EventHandler<EntityCombustEvent> for NoopListener {}
 
 async fn server(folder: &tempfile::TempDir) -> Result<Arc<Server>, Box<dyn std::error::Error>> {
     let basic = BasicConfiguration {
@@ -80,6 +88,16 @@ impl EventHandler<EntitySpawnEvent> for TeleportBoat {
     }
 }
 
+impl EventHandler<VehicleUpdateEvent> for TeleportBoat {
+    fn handle_blocking<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        _event: &'a mut VehicleUpdateEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async { self.teleport() })
+    }
+}
+
 struct RecordCorrection(Sender<CMoveVehicle>);
 
 impl EventHandler<PacketSentEvent> for RecordCorrection {
@@ -113,7 +131,7 @@ async fn vehicle_move_listener_keeps_the_teleport_and_clears_the_sweep() -> Test
     let entity = boat.get_entity();
     let motion = Vector3::new(0.25, -0.1, 0.0);
     entity.velocity.store(motion);
-    assert!(boat.record_movement(from - motion, from, motion, 0));
+    boat.lock_movements().record(from - motion, from, motion);
     server.plugin_manager.register::<VehicleMoveEvent, _>(
         Arc::new(TeleportBoat {
             boat: boat.clone(),
@@ -123,7 +141,8 @@ async fn vehicle_move_listener_keeps_the_teleport_and_clears_the_sweep() -> Test
         true,
     );
 
-    boat.move_boat(boat.as_ref(), Vector3::new(0.0, 0.5, 0.0));
+    let snapshot = boat.movement_snapshot(&boat.lock_movements());
+    boat.move_boat(boat.as_ref(), Vector3::new(0.0, 0.5, 0.0), &snapshot);
 
     assert_eq!(entity.pos.load(), destination);
     assert_eq!(entity.last_pos.load(), destination);
@@ -206,10 +225,6 @@ async fn lily_pad_spawn_listener_serializes_the_boat_and_can_end_the_sweep() -> 
         .level
         .loaded_chunks
         .insert(Vector2::new(0, 0), chunk.clone());
-    for x in [6, 9] {
-        chunk.set_block_absolute_y(x, 63, 8, Block::WATER.default_state.id);
-        chunk.set_block_absolute_y(x, 64, 8, Block::LILY_PAD.default_state.id);
-    }
     let from = Vector3::new(6.5, 64.0, 8.5);
     let to = Vector3::new(9.5, 64.0, 8.5);
     let destination = Vector3::new(24.0, 68.0, 24.0);
@@ -218,13 +233,23 @@ async fn lily_pad_spawn_listener_serializes_the_boat_and_can_end_the_sweep() -> 
         to,
         &EntityType::OAK_BOAT,
     )));
-    assert!(boat.record_movement(from, to, to - from, 0));
+    boat.lock_movements().record(from, to, to - from);
     let config = EntityIslandsConfig {
         unaudited_reach: 0.0,
         ..Default::default()
     };
     let plan = || resolve(vec![EntityReach::of(boat.as_ref(), &config)], &config);
+    server.plugin_manager.register::<BlockPhysicsEvent, _>(
+        Arc::new(NoopListener),
+        EventPriority::Normal,
+        true,
+    );
     assert!(plan().is_some());
+    for x in [6, 9] {
+        chunk.set_block_absolute_y(x, 63, 8, Block::WATER.default_state.id);
+        chunk.set_block_absolute_y(x, 64, 8, Block::LILY_PAD.default_state.id);
+    }
+    assert!(plan().is_none());
     server.plugin_manager.register::<EntitySpawnEvent, _>(
         Arc::new(TeleportBoat {
             boat: boat.clone(),
@@ -240,6 +265,93 @@ async fn lily_pad_spawn_listener_serializes_the_boat_and_can_end_the_sweep() -> 
     assert_eq!(boat.get_entity().pos.load(), destination);
     assert_eq!(world.get_block(&BlockPos::new(6, 64, 8)), &Block::AIR);
     assert_eq!(world.get_block(&BlockPos::new(9, 64, 8)), &Block::LILY_PAD);
+    server.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn teleport_rejects_a_previously_validated_client_move() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let world = crate::entity::ai::test_support::world(&folder);
+    let from = Vector3::new(8.0, 64.0, 8.0);
+    let boat = BoatEntity::new(Entity::new(world.clone(), from, &EntityType::OAK_BOAT));
+
+    let snapshot = boat.movement_snapshot(&boat.lock_movements());
+    let target = from + Vector3::new(0.5, 0.0, 0.0);
+    assert!(boat.commit_client_movement(&snapshot, target, 0.0, 0.0, true));
+    assert!(boat.pending_block_movement_reach() > 0.0);
+
+    let stale = boat.movement_snapshot(&boat.lock_movements());
+    // A teleport can invalidate a packet even if its starting coordinates are unchanged.
+    boat.teleport(target, Some(45.0), None, world.clone());
+    assert!(!boat.commit_client_movement(&stale, from, 90.0, 0.0, false));
+    assert_eq!(boat.get_entity().pos.load(), target);
+    assert_eq!(boat.get_entity().last_pos.load(), target);
+    assert_eq!(boat.get_entity().yaw.load(), 45.0);
+    assert!(boat.get_entity().on_ground.load(Ordering::Relaxed));
+    assert_eq!(boat.pending_block_movement_reach(), 0.0);
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn combustion_listener_serializes_a_boat_in_lava() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 64, 8, Block::LAVA.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let boat = BoatEntity::new(Entity::new(
+        world,
+        Vector3::new(8.5, 64.0, 8.5),
+        &EntityType::OAK_BOAT,
+    ));
+    let config = EntityIslandsConfig {
+        unaudited_reach: 0.0,
+        ..Default::default()
+    };
+    let plan = || resolve(vec![EntityReach::of(&boat, &config)], &config);
+    assert!(plan().is_some());
+    server.plugin_manager.register::<EntityCombustEvent, _>(
+        Arc::new(NoopListener),
+        EventPriority::Normal,
+        true,
+    );
+    assert!(plan().is_none());
+    server.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn teleport_during_vehicle_update_discards_the_old_water_transition() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let boat = Arc::new(BoatEntity::new(Entity::new(
+        world,
+        Vector3::new(8.5, 64.0, 8.5),
+        &EntityType::OAK_BOAT,
+    )));
+    boat.status.store(Some(BoatStatus::InAir));
+    assert!(boat.get_status().is_underwater());
+    let destination = Vector3::new(8.5, 70.0, 8.5);
+    server.plugin_manager.register::<VehicleUpdateEvent, _>(
+        Arc::new(TeleportBoat {
+            boat: boat.clone(),
+            destination,
+        }),
+        EventPriority::Normal,
+        true,
+    );
+
+    boat.tick(boat.as_ref(), &server);
+
+    assert_eq!(boat.get_entity().pos.load(), destination);
+    assert_eq!(boat.pending_block_movement_reach(), 0.0);
     server.shutdown().await;
     Ok(())
 }
