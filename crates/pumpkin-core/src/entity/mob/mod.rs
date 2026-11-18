@@ -2259,6 +2259,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
+        None
+    }
+
     fn as_abstract_horse(
         &self,
     ) -> Option<&dyn crate::entity::passive::abstract_horse::AbstractHorse> {

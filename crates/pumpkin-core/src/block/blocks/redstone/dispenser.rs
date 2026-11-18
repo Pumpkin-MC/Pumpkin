@@ -13,17 +13,12 @@ use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
     OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
-use crate::entity::ageable::AgeableMob;
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::item::ItemEntity;
-use crate::entity::mob::skeleton::bogged::BoggedSkeletonEntity;
+use crate::entity::mob::Mob;
 use crate::entity::mob::sulfur_cube::{SulfurCubeEntity, is_swallowable_item};
 use crate::entity::passive::abstract_horse::try_equip_dispenser_chest;
 use crate::entity::passive::armadillo::ArmadilloEntity;
-use crate::entity::passive::copper_golem::CopperGolemEntity;
-use crate::entity::passive::mooshroom::MooshroomEntity;
-use crate::entity::passive::sheep::SheepEntity;
-use crate::entity::passive::snow_golem::SnowGolemEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::projectile::egg::EggEntity;
@@ -49,6 +44,7 @@ use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
 use crate::item::items::minecart::MinecartItem;
 use crate::item::items::spawn_egg::prepare_egg_mob;
+use crate::plugin::api::events::block::block_shear_entity::BlockShearEntityEvent;
 use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
 use crate::world::World;
 
@@ -1103,50 +1099,40 @@ impl DispenserBlock {
                 return true;
             }
 
-            if !entity.get_entity().is_alive() {
+            // Vanilla `LivingEntity.isAlive` also needs health left, so mobs in their death animation are skipped.
+            if !entity.get_entity().is_alive()
+                || entity
+                    .get_living_entity()
+                    .is_some_and(|living| living.health.load() <= 0.0)
+            {
+                continue;
+            }
+            let Some(shearable) = entity.get_mob().and_then(Mob::as_shearable) else {
+                continue;
+            };
+            if !shearable.ready_for_shearing() {
                 continue;
             }
 
-            let any = entity.cast_any();
-            let sheared = if let Some(sheep) = any.downcast_ref::<SheepEntity>()
-                && sheep.ready_for_shearing()
-            {
-                sheep.shear(SoundCategory::Blocks, tool);
-                true
-            } else if let Some(mooshroom) = any.downcast_ref::<MooshroomEntity>()
-                && !mooshroom.is_baby()
-            {
-                mooshroom.shear(SoundCategory::Blocks, tool);
-                true
-            } else if let Some(snow_golem) = any.downcast_ref::<SnowGolemEntity>()
-                && snow_golem.ready_for_shearing()
-            {
-                snow_golem.shear(SoundCategory::Blocks, tool);
-                true
-            } else if let Some(sulfur_cube) = any.downcast_ref::<SulfurCubeEntity>()
-                && sulfur_cube.has_body_item()
-            {
-                sulfur_cube.shear();
-                true
-            } else if let Some(copper_golem) = any.downcast_ref::<CopperGolemEntity>()
-                && copper_golem.ready_for_shearing()
-            {
-                copper_golem.shear(SoundCategory::Blocks);
-                true
-            } else if let Some(bogged) = any.downcast_ref::<BoggedSkeletonEntity>()
-                && bogged.ready_for_shearing()
-            {
-                bogged.shear(SoundCategory::Blocks, tool);
-                true
-            } else {
-                false
-            };
-
-            if sheared {
-                ctx.world
-                    .emit_game_event(GameEvent::Shear.name(), target.to_centered_f64());
-                return true;
+            if let Some(server) = ctx.world.server.upgrade() {
+                let mut event = BlockShearEntityEvent::new(
+                    *ctx.position,
+                    ctx.world.clone(),
+                    entity.clone(),
+                    tool.clone(),
+                );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    continue;
+                }
             }
+
+            if !shearable.shear(SoundCategory::Blocks, tool) {
+                continue;
+            }
+            ctx.world
+                .emit_game_event(GameEvent::Shear.name(), target.to_centered_f64());
+            return true;
         }
 
         false
@@ -1465,10 +1451,15 @@ impl DispenserBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity::ageable::AgeableMob;
     use crate::entity::ai::test_support::world;
+    use crate::entity::mob::skeleton::bogged::BoggedSkeletonEntity;
     use crate::entity::passive::abstract_horse::AbstractHorse;
+    use crate::entity::passive::copper_golem::CopperGolemEntity;
     use crate::entity::passive::copper_golem::EQUIPMENT_SLOT_ANTENNA;
     use crate::entity::passive::donkey::DonkeyEntity;
+    use crate::entity::passive::snow_golem::SnowGolemEntity;
+    use crate::entity::shearable::Shearable;
     use pumpkin_data::data_component_impl::SulfurCubeContentImpl;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
