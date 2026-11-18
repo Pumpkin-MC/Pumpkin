@@ -26,7 +26,7 @@ use crate::entity::{
             Brain, BrainTick,
             memory::{PackedMemories, types},
         },
-        pathfinder::node::PathType,
+        pathfinder::{Navigator, node::PathType},
     },
     bucketable::{Bucketable, bucket_mob_pickup},
     mob::{
@@ -202,11 +202,14 @@ impl AxolotlEntity {
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             Box::new(AxolotlLookControl::default());
-        mob_entity
-            .navigator
-            .get_mut()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .set_pathfinding_malus(PathType::Water, 0.0);
+        {
+            let navigator = mob_entity
+                .navigator
+                .get_mut()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *navigator = Navigator::amphibious(false);
+            navigator.set_pathfinding_malus(PathType::Water, 0.0);
+        };
         let axolotl = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
