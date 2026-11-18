@@ -141,6 +141,11 @@ impl Client {
         self.player.get_entity().entity_id
     }
 
+    /// The next packet for this client, waiting for it.
+    pub async fn next_packet(&mut self) -> Result<RawPacket, Box<dyn std::error::Error>> {
+        Ok(self.packets.get_raw_packet().await?)
+    }
+
     /// Every packet queued for this client up to now.
     pub async fn received(&mut self) -> Result<Vec<RawPacket>, Box<dyn std::error::Error>> {
         if let Some(java) = self.player.client.java() {

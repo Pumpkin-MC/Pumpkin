@@ -22,6 +22,7 @@ use tokio::time::{Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
+use super::PacketRun;
 use crate::net::decrement_pending_bytes;
 
 /// Max wait for the disconnect flush (`kick_explicit`, writer drain on close).
@@ -73,11 +74,40 @@ pub enum OutgoingPacket {
     },
     /// End-of-tick barrier (`Connection.flushChannel`).
     Flush,
+    /// The ordinary packets a tick queued for this client, in order.
+    Batch(Vec<BatchItem>),
 }
 
+/// What a tick queues for a client: one packet, or a run of them. A run is taken apart
+/// by the writer task, not by the tick thread that queued it.
+pub enum BatchItem {
+    Packet(Bytes),
+    Run(PacketRun),
+}
+
+/// What the writer frames: a packet, or the packets of a run still back to back.
 struct FramePacket {
     data: Bytes,
+    /// Where each packet of a run ends in `data`. `None` for one packet.
+    run_ends: Option<Vec<usize>>,
     completion: Option<Completion>,
+}
+
+impl FramePacket {
+    fn packets(&self) -> impl Iterator<Item = &[u8]> {
+        let single = self.run_ends.is_none().then_some(self.data.len());
+        let mut start = 0;
+        self.run_ends
+            .iter()
+            .flatten()
+            .copied()
+            .chain(single)
+            .map(move |end| {
+                let packet = &self.data[start..end];
+                start = end;
+                packet
+            })
+    }
 }
 
 impl OutgoingPacket {
@@ -111,7 +141,28 @@ impl OutgoingPacket {
                     // off-tick sends flush at once -> mid-tick ones wait for `Flush`.
                     Some(Completion::Framed(_)) | None => FlushRequest::IfNotSuspended,
                 });
-                packets.push_back(FramePacket { data, completion });
+                packets.push_back(FramePacket {
+                    data,
+                    run_ends: None,
+                    completion,
+                });
+            }
+            Self::Batch(batch) => {
+                *flush_request = flush_request.merge(FlushRequest::IfNotSuspended);
+                // A run is framed from where it lies: a handle for each of its packets
+                // would cost more than framing them.
+                packets.extend(batch.into_iter().map(|item| match item {
+                    BatchItem::Packet(data) => FramePacket {
+                        data,
+                        run_ends: None,
+                        completion: None,
+                    },
+                    BatchItem::Run(run) => FramePacket {
+                        data: run.bytes.into(),
+                        run_ends: Some(run.ends),
+                        completion: None,
+                    },
+                }));
             }
         }
     }
@@ -140,18 +191,39 @@ fn frame_packet_batch<W: AsyncWrite + Unpin>(
     mut writer: TCPNetworkEncoder<W>,
     batch: &[FramePacket],
 ) -> (TCPNetworkEncoder<W>, Vec<u8>, Option<PacketEncodeError>) {
-    let mut frame = Vec::new();
-    let mut frame_err = None;
-    for packet in batch {
-        if let Err(err) = writer.frame_packet(&packet.data, &mut frame) {
-            frame_err = Some(err);
-            break;
-        }
-    }
+    // Room for what is not compressed, with a short length in front of each packet. The
+    // packets of a run are small, so they count as not compressed.
+    let room = |packet: &FramePacket| match &packet.run_ends {
+        Some(ends) => packet.data.len() + 3 * ends.len(),
+        None if writer.is_compressing_packet(&packet.data) => 0,
+        None => packet.data.len() + 3,
+    };
+    let mut frame = Vec::with_capacity(batch.iter().map(room).sum());
+    let frame_err = batch
+        .iter()
+        .flat_map(FramePacket::packets)
+        .find_map(|packet| writer.frame_packet(packet, &mut frame).err());
     (writer, frame, frame_err)
 }
 
-/// Compressing batches are framed on a blocking task.
+/// Compressing fewer bytes than this takes less time than handing the batch to a blocking
+/// thread, and every hand-off goes through the one lock of the blocking pool.
+const OFFLOAD_COMPRESSION_BYTES: usize = 16 * 1024;
+
+fn offloads_framing<W: AsyncWrite + Unpin>(
+    writer: &TCPNetworkEncoder<W>,
+    batch: &[FramePacket],
+) -> bool {
+    let compressed_bytes: usize = batch
+        .iter()
+        .flat_map(FramePacket::packets)
+        .filter(|packet| writer.is_compressing_packet(packet))
+        .map(<[u8]>::len)
+        .sum();
+    compressed_bytes >= OFFLOAD_COMPRESSION_BYTES
+}
+
+/// Batches with much to compress are framed on a blocking task.
 async fn frame_batch_maybe_offload<W: AsyncWrite + Unpin + Send + 'static>(
     writer: TCPNetworkEncoder<W>,
     packet_batch: Vec<FramePacket>,
@@ -164,11 +236,7 @@ async fn frame_batch_maybe_offload<W: AsyncWrite + Unpin + Send + 'static>(
     ),
     tokio::task::JoinError,
 > {
-    let needs_offload = packet_batch
-        .iter()
-        .any(|packet| writer.is_compressing_packet(&packet.data));
-
-    if needs_offload {
+    if offloads_framing(&writer, &packet_batch) {
         tokio::task::spawn_blocking(move || {
             let (writer, frame, frame_err) = frame_packet_batch(writer, &packet_batch);
             (writer, packet_batch, frame, frame_err)
@@ -317,7 +385,7 @@ fn drain_until_barrier(
     let mut disconnected = false;
     match first {
         OutgoingPacket::Flush => flush_request = FlushRequest::Always,
-        data @ OutgoingPacket::Data { .. } => {
+        data @ (OutgoingPacket::Data { .. } | OutgoingPacket::Batch(_)) => {
             data.ingest(&mut flush_request, &mut packets);
             loop {
                 match packet_receiver.try_recv() {
@@ -528,8 +596,18 @@ async fn drain_on_close<W: AsyncWrite + Unpin + Send + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use super::super::{JavaClient, PacketRun, pending::PendingConnection};
     use super::*;
+    use crate::net::{GameProfile, PacketRateLimiter, PlayerConfig};
+    use pumpkin_data::packet::CURRENT_MC_VERSION;
+    use pumpkin_protocol::ConnectionState;
+    use pumpkin_protocol::java::client::play::CPlayDisconnect;
+    use pumpkin_protocol::java::packet_decoder::TCPNetworkDecoder;
+    use pumpkin_protocol::packet::MultiVersionJavaPacket;
+    use pumpkin_util::text::TextComponent;
+    use std::net::{Ipv4Addr, SocketAddr};
     use std::pin::Pin;
+    use std::sync::Weak;
     use std::task::{Context, Poll};
     struct RecordingWriter {
         writes: Arc<std::sync::Mutex<Vec<u8>>>,
@@ -1112,5 +1190,263 @@ mod tests {
         drop(tx);
         close.cancel();
         writer.await.unwrap();
+    }
+
+    /// A connected `JavaClient` and what its client end receives.
+    fn java_client() -> (
+        Arc<JavaClient>,
+        TCPNetworkDecoder<tokio::io::ReadHalf<tokio::io::DuplexStream>>,
+    ) {
+        let (client_end, server_end) = tokio::io::duplex(1 << 20);
+        let (read, write) = tokio::io::split(server_end);
+        let pending = PendingConnection::from_transport(
+            Box::new(read),
+            Box::new(write),
+            SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Weak::new(),
+        );
+        let profile = GameProfile {
+            id: uuid::Uuid::nil(),
+            name: "player".to_string(),
+            properties: arc_swap::ArcSwap::default(),
+            profile_actions: None,
+        };
+        let mut client = JavaClient::from_pending(pending, profile, PlayerConfig::default());
+        client.connection_state.store(ConnectionState::Play);
+        client.start_outgoing_packet_task();
+        let (read, _write) = tokio::io::split(client_end);
+        (Arc::new(client), TCPNetworkDecoder::new(read))
+    }
+
+    /// A packet with id `id` and `payload` as its only field.
+    fn numbered(id: u8, payload: u32) -> Bytes {
+        let mut data = vec![id];
+        data.extend_from_slice(&payload.to_be_bytes());
+        data.into()
+    }
+
+    #[tokio::test]
+    async fn a_tick_reaches_the_client_in_the_order_it_was_queued() {
+        let (client, mut received) = java_client();
+        client.suspend_flushing();
+        client.try_enqueue_packet(numbered(1, 0));
+        client.try_enqueue_packet(numbered(2, 0));
+        // Does not wait for the end of the tick, and must not overtake what was queued before.
+        assert!(client.send_packet_now_data(numbered(3, 0)).await);
+        client.try_enqueue_packet(numbered(4, 0));
+        client.resume_flushing();
+
+        for id in 1..=4 {
+            assert_eq!(received.get_raw_packet().await.unwrap().id, id);
+        }
+    }
+
+    #[test]
+    fn only_batches_with_much_to_compress_leave_the_writer_task() {
+        let mut writer = TCPNetworkEncoder::new(tokio::io::sink());
+        writer.set_compression((256, 4));
+        let batch = |sizes: &[usize]| -> Vec<FramePacket> {
+            sizes
+                .iter()
+                .map(|&size| FramePacket {
+                    data: Bytes::from(vec![0; size]),
+                    run_ends: None,
+                    completion: None,
+                })
+                .collect()
+        };
+        // Below the compression threshold nothing is compressed, however many packets.
+        assert!(!offloads_framing(&writer, &batch(&[200; 500])));
+        assert!(!offloads_framing(&writer, &batch(&[200, 4096, 200])));
+        assert!(offloads_framing(&writer, &batch(&[200, 64 * 1024])));
+        assert!(offloads_framing(&writer, &batch(&[4096; 4])));
+
+        // A run counts packet by packet, like the same packets one by one.
+        let run = |size: usize, packets: usize| -> Vec<FramePacket> {
+            vec![FramePacket {
+                data: Bytes::from(vec![0; size * packets]),
+                run_ends: Some((1..=packets).map(|packet| packet * size).collect()),
+                completion: None,
+            }]
+        };
+        assert!(!offloads_framing(&writer, &run(200, 500)));
+        assert!(offloads_framing(&writer, &run(300, 100)));
+    }
+
+    #[tokio::test]
+    async fn a_run_is_framed_packet_by_packet_also_when_some_are_compressed() {
+        let sizes = [5usize, 300, 7, 256, 255];
+        let mut packets = PacketRun::default();
+        for (id, &size) in (1u8..).zip(&sizes) {
+            let mut packet = vec![id];
+            packet.resize(size, id);
+            packets.push(&packet);
+        }
+        let batch = [
+            FramePacket {
+                data: packets.bytes.into(),
+                run_ends: Some(packets.ends),
+                completion: None,
+            },
+            FramePacket {
+                data: numbered(6, 0),
+                run_ends: None,
+                completion: None,
+            },
+            // A run of nothing frames nothing.
+            FramePacket {
+                data: Bytes::new(),
+                run_ends: Some(Vec::new()),
+                completion: None,
+            },
+        ];
+        let mut writer = TCPNetworkEncoder::new(tokio::io::sink());
+        writer.set_compression((256, 4));
+        let (_, frame, frame_err) = frame_packet_batch(writer, &batch);
+        assert!(frame_err.is_none());
+
+        let mut received = TCPNetworkDecoder::new(std::io::Cursor::new(frame));
+        received.set_compression(256);
+        for (id, &size) in (1..).zip(&sizes) {
+            let packet = received.get_raw_packet().await.unwrap();
+            // The id is a one-byte `VarInt`, the rest is the payload.
+            assert_eq!((packet.id, packet.payload.len()), (id, size - 1));
+        }
+        assert_eq!(received.get_raw_packet().await.unwrap().id, 6);
+        assert!(received.get_raw_packet().await.is_err());
+    }
+
+    fn run(ids: std::ops::RangeInclusive<u8>) -> PacketRun {
+        let mut run = PacketRun::default();
+        for id in ids {
+            run.push(&numbered(id, 0));
+        }
+        run
+    }
+
+    #[tokio::test]
+    async fn a_run_arrives_packet_by_packet_where_it_was_queued() {
+        let (client, mut received) = java_client();
+        client.try_enqueue_run(run(1..=2));
+        client.suspend_flushing();
+        client.try_enqueue_packet(numbered(3, 0));
+        client.try_enqueue_run(run(4..=6));
+        client.try_enqueue_packet(numbered(7, 0));
+        client.resume_flushing();
+
+        for id in 1..=7 {
+            assert_eq!(received.get_raw_packet().await.unwrap().id, id);
+        }
+        // Each packet of a run counted once: nothing stays reserved after the writer is done.
+        client.send_packet_now_data(numbered(8, 0)).await;
+        assert_eq!(client.pending_bytes.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn several_runs_are_queued_as_one_with_every_packet_in_order() {
+        let (client, mut received) = java_client();
+        // Outside play no plugin sees a packet, whatever plugins other tests register.
+        client.connection_state.store(ConnectionState::Config);
+        client.suspend_flushing();
+        let mut runs = vec![run(1..=2), run(3..=3), run(4..=6)];
+        client.try_enqueue_runs(&mut runs);
+        assert!(runs.is_empty());
+        // One buffer for the writer, however many the tick threads filled.
+        assert_eq!(client.lock_tick_batch().len(), 1);
+        client.resume_flushing();
+
+        for id in 1..=6 {
+            assert_eq!(received.get_raw_packet().await.unwrap().id, id);
+        }
+        client.send_packet_now_data(numbered(7, 0)).await;
+        assert_eq!(client.pending_bytes.load(Ordering::Acquire), 0);
+    }
+
+    struct SeesPackets;
+    impl crate::plugin::EventHandler<crate::plugin::server::packet::PacketSentEvent> for SeesPackets {}
+
+    #[tokio::test]
+    async fn a_run_still_arrives_when_a_plugin_watches_packets() {
+        let plugins = crate::plugin::PluginManager::new(Vec::new());
+        plugins.register(
+            Arc::new(SeesPackets),
+            crate::plugin::EventPriority::Normal,
+            false,
+        );
+        let (client, mut received) = java_client();
+        client.try_enqueue_run(run(1..=3));
+
+        for id in 1..=3 {
+            assert_eq!(received.get_raw_packet().await.unwrap().id, id);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_kick_mid_tick_follows_the_packets_queued_before_it() {
+        let (client, mut received) = java_client();
+        client.suspend_flushing();
+        client.try_enqueue_packet(numbered(1, 0));
+        client.try_kick(&TextComponent::text("bye"));
+
+        assert_eq!(received.get_raw_packet().await.unwrap().id, 1);
+        assert_eq!(
+            received.get_raw_packet().await.unwrap().id,
+            CPlayDisconnect::to_id(CURRENT_MC_VERSION)
+        );
+    }
+
+    #[tokio::test]
+    async fn closing_mid_tick_still_sends_what_the_tick_queued() {
+        let (client, mut received) = java_client();
+        client.suspend_flushing();
+        client.try_enqueue_packet(numbered(1, 0));
+        client.close();
+
+        assert_eq!(received.get_raw_packet().await.unwrap().id, 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_packet_racing_the_end_of_a_tick_is_neither_first_nor_left_behind() {
+        const ROUNDS: u32 = 10_000;
+        let (client, mut received) = java_client();
+        let runtime = tokio::runtime::Handle::current();
+
+        for round in 0..ROUNDS {
+            client.suspend_flushing();
+            client.try_enqueue_packet(numbered(1, round));
+            let start = Arc::new(AtomicBool::new(false));
+            let racer = {
+                let (client, start, runtime) = (client.clone(), start.clone(), runtime.clone());
+                tokio::task::spawn_blocking(move || {
+                    while !start.load(Ordering::Acquire) {
+                        std::hint::spin_loop();
+                    }
+                    // One that goes out at once could overtake the tick, an ordinary one
+                    // could stay behind with no later tick or packet to carry it out.
+                    if round % 2 == 0 {
+                        runtime.block_on(client.send_packet_now_data(numbered(2, round)));
+                    } else {
+                        client.try_enqueue_packet(numbered(2, round));
+                    }
+                })
+            };
+            start.store(true, Ordering::Release);
+            client.resume_flushing();
+            racer.await.unwrap();
+
+            for id in 1..=2 {
+                let packet =
+                    tokio::time::timeout(Duration::from_secs(5), received.get_raw_packet())
+                        .await
+                        .expect("left behind after the tick ended")
+                        .unwrap();
+                assert_eq!(
+                    (packet.id, &packet.payload[..]),
+                    (id, &round.to_be_bytes()[..])
+                );
+            }
+        }
     }
 }

@@ -1284,12 +1284,7 @@ impl Server {
             world.flush_synced_block_events();
 
             let players = world.players.load();
-            players.par_iter().for_each(|player| {
-                player.process_inbound_packets();
-            });
-            players.par_iter().for_each(|player| {
-                player.tick(self);
-            });
+            World::tick_players(&players, self);
             // Vanilla `ServerChunkCache.tick` runs `ChunkMap.tick` while frozen too.
             for player in players.iter() {
                 player.send_velocity_changes();

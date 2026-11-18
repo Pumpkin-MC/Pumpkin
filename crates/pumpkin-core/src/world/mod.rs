@@ -1636,6 +1636,19 @@ impl World {
         self.play_sound_expect(player, sound, category, &new_vec);
     }
 
+    /// The inbound packets of every player, then every player's tick.
+    ///
+    /// Not inside a [`PacketSink`]: a sink sends in no fixed order, but a handler here can
+    /// queue packets for another player that must follow earlier ones.
+    ///
+    /// [`PacketSink`]: crate::net::java::PacketSink
+    pub(crate) fn tick_players(players: &[Arc<Player>], server: &Server) {
+        players
+            .par_iter()
+            .for_each(|player| player.process_inbound_packets());
+        players.par_iter().for_each(|player| player.tick(server));
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn tick(self: &Arc<Self>, server: &Arc<Server>) {
         let start = std::time::Instant::now();
@@ -1674,12 +1687,7 @@ impl World {
 
         let t_players = std::time::Instant::now();
         // Vanilla handles all packets before any player ticks
-        players.par_iter().for_each(|player| {
-            player.process_inbound_packets();
-        });
-        players.par_iter().for_each(|player| {
-            player.tick(server);
-        });
+        Self::tick_players(&players, server);
         self.encoded_chunk_cache.clear();
         // Vanilla `ServerPlayer.pushEntities`: one player after another, not while frozen
         if server.tick_rate_manager.runs_normally() {
