@@ -1103,13 +1103,11 @@ impl TextComponentBase {
         if self.style.italic == Some(true) {
             text.push_str("§o");
         }
-        if self.style.underlined == Some(true) {
-            text.push_str("§n");
-        }
         if self.style.obfuscated == Some(true) {
             text.push_str("§k");
         }
-        // Note: Bedrock does not support strikethrough natively without resource packs.
+        // hmm, no underline or strikethrough here: Bedrock reads §n and §m as the copper
+        // and redstone colors, so emitting them would recolor the whole message.
 
         text
     }
