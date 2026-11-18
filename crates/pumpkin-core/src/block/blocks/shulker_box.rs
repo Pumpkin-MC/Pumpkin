@@ -11,8 +11,11 @@ use crate::block::{
 };
 
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
-use pumpkin_data::BlockStateId;
+use crate::entity::player::Player;
+use crate::world::World;
+use pumpkin_data::block_properties::ShulkerBoxProperties;
 use pumpkin_data::translation;
+use pumpkin_data::{BlockDirection, BlockStateId, FacingExt};
 use pumpkin_inventory::Inventory;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -20,6 +23,9 @@ use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
 struct ShulkerBoxScreenFactory(Arc<dyn Inventory>);
@@ -71,6 +77,10 @@ impl BlockBehaviour for ShulkerBoxBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        if !Self::can_open(args.world, args.position, args.player) {
+            return BlockActionResult::Success;
+        }
+
         if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
             server: args.server,
             world: args.world,
@@ -106,4 +116,78 @@ impl BlockBehaviour for ShulkerBoxBlock {
 
 impl ShulkerBoxBlock {
     pub const OPEN_ANIMATION_EVENT_TYPE: u8 = 1;
+
+    const LID_OPEN_PROGRESS: f64 = 0.5;
+    const LID_OPEN_INSET: f64 = 1.0E-6;
+
+    /// Vanilla `ShulkerBoxBlock.canOpen`. Pumpkin tracks no server-side animation
+    /// state, so the box is always treated as closed here.
+    fn can_open(world: &World, position: &BlockPos, player: &Player) -> bool {
+        let state = world.get_block_state(position);
+        let facing = ShulkerBoxProperties::from_state_id(state.id)
+            .facing
+            .to_block_direction();
+        let lid_open_bounding_box = Self::lid_open_bounding_box(position, facing);
+
+        Self::no_block_collision(world, &lid_open_bounding_box)
+            && world.no_entity_collision(player, lid_open_bounding_box)
+    }
+
+    /// Vanilla `Shulker.getProgressDeltaAabb(1.0, facing, 0.0, 0.5, bottom center)`:
+    /// the half of the neighbouring block the lid opens into.
+    fn lid_open_bounding_box(position: &BlockPos, facing: BlockDirection) -> BoundingBox {
+        let mut bounds = BoundingBox::from_block(&position.offset(facing.to_offset()));
+        match facing {
+            BlockDirection::Down => bounds.min.y += Self::LID_OPEN_PROGRESS,
+            BlockDirection::Up => bounds.max.y -= Self::LID_OPEN_PROGRESS,
+            BlockDirection::North => bounds.min.z += Self::LID_OPEN_PROGRESS,
+            BlockDirection::South => bounds.max.z -= Self::LID_OPEN_PROGRESS,
+            BlockDirection::West => bounds.min.x += Self::LID_OPEN_PROGRESS,
+            BlockDirection::East => bounds.max.x -= Self::LID_OPEN_PROGRESS,
+        }
+        bounds.contract_all(Self::LID_OPEN_INSET)
+    }
+
+    /// Vanilla `CollisionGetter.noBlockCollision` for the lid's opening space.
+    fn no_block_collision(world: &World, bounds: &BoundingBox) -> bool {
+        // Vanilla scans one block past the box so shapes that overhang their block are found.
+        let min = bounds.min_block_pos().offset(Vector3::new(-1, -1, -1));
+        let max = bounds.max_block_pos().offset(Vector3::new(1, 1, 1));
+        BlockPos::iterate(min, max).all(|position| {
+            world
+                .get_block_state(&position)
+                .get_block_collision_shapes_at(&position)
+                .all(|shape| !shape.at_pos(position).intersects(bounds))
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lid_open_bounding_box_matches_vanilla() {
+        let position = BlockPos::new(0, 64, 0);
+        let cases = [
+            (BlockDirection::Up, [0.0, 65.0, 0.0], [1.0, 65.5, 1.0]),
+            (BlockDirection::Down, [0.0, 63.5, 0.0], [1.0, 64.0, 1.0]),
+            (BlockDirection::North, [0.0, 64.0, -0.5], [1.0, 65.0, 0.0]),
+            (BlockDirection::South, [0.0, 64.0, 1.0], [1.0, 65.0, 1.5]),
+            (BlockDirection::West, [-0.5, 64.0, 0.0], [0.0, 65.0, 1.0]),
+            (BlockDirection::East, [1.0, 64.0, 0.0], [1.5, 65.0, 1.0]),
+        ];
+
+        for (facing, min, max) in cases {
+            let bounds = ShulkerBoxBlock::lid_open_bounding_box(&position, facing);
+            let inset = ShulkerBoxBlock::LID_OPEN_INSET;
+            let close = |a: f64, b: f64| (a - b).abs() < 1.0e-9;
+            assert!(close(bounds.min.x, min[0] + inset));
+            assert!(close(bounds.min.y, min[1] + inset));
+            assert!(close(bounds.min.z, min[2] + inset));
+            assert!(close(bounds.max.x, max[0] - inset));
+            assert!(close(bounds.max.y, max[1] - inset));
+            assert!(close(bounds.max.z, max[2] - inset));
+        }
+    }
 }
