@@ -1286,9 +1286,7 @@ impl Server {
             let players = world.players.load();
             World::tick_players(&players, self);
             // Vanilla `ServerChunkCache.tick` runs `ChunkMap.tick` while frozen too.
-            for player in players.iter() {
-                player.send_velocity_changes();
-            }
+            World::send_velocity_changes(&players, self);
             world.entity_tracker.update_all(world);
         }
     }

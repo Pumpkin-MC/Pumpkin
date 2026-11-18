@@ -58,12 +58,17 @@ use crate::{
         r#type::{load_entity_from_nbt, load_static_entity_from_nbt, self_and_passengers},
     },
     error::PumpkinError,
-    net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
+    net::{
+        ClientPlatform,
+        bedrock::BedrockClient,
+        java::{JavaClient, PacketSink},
+    },
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{
             player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
             player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent,
+            player_velocity::PlayerVelocityEvent,
         },
     },
     server::Server,
@@ -183,6 +188,7 @@ pub mod end_podium;
 pub mod entity_tracker;
 pub mod environment;
 pub mod natural_spawner;
+mod player_push;
 mod player_touch;
 pub mod scoreboard;
 pub mod weather;
@@ -1650,13 +1656,25 @@ impl World {
     ///
     /// Not inside a [`PacketSink`]: a sink sends in no fixed order, but a handler here can
     /// queue packets for another player that must follow earlier ones.
-    ///
-    /// [`PacketSink`]: crate::net::java::PacketSink
     pub(crate) fn tick_players(players: &[Arc<Player>], server: &Server) {
         players
             .par_iter()
             .for_each(|player| player.process_inbound_packets());
         players.par_iter().for_each(|player| player.tick(server));
+    }
+
+    /// [`Player::send_velocity_changes`] for every player.
+    pub(crate) fn send_velocity_changes(players: &[Arc<Player>], server: &Server) {
+        if server.plugin_manager.has_handlers::<PlayerVelocityEvent>() {
+            // A plugin gets the event for one player after another.
+            let sink = PacketSink::new(players);
+            let _runs = sink.collect();
+            for player in players {
+                player.send_velocity_changes();
+            }
+        } else {
+            PacketSink::for_each(players, players, |player| player.send_velocity_changes());
+        }
     }
 
     #[expect(clippy::too_many_lines)]
@@ -1701,9 +1719,7 @@ impl World {
         self.encoded_chunk_cache.clear();
         // Vanilla `ServerPlayer.pushEntities`: one player after another, not while frozen
         if server.tick_rate_manager.runs_normally() {
-            for player in players.iter() {
-                player.push_entities();
-            }
+            player_push::push_entities(self, &players);
         }
         // One player after another, before entities move, like vanilla `doTick` after the
         // level tick
@@ -1842,9 +1858,7 @@ impl World {
         let entity_elapsed = t_entities.elapsed();
 
         // Like vanilla `sendChanges`: before the next tick's packets
-        for player in players.iter() {
-            player.send_velocity_changes();
-        }
+        Self::send_velocity_changes(&players, server);
         self.entity_tracker.update_all(self);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();

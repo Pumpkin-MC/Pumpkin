@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use crate::entity::attributes::{Modifier, ModifierOperation};
 use crate::entity::passive::abstract_horse::player_jump_pending_scale;
 use crate::plugin::api::events::enchantment::{EnchantItemEvent, PrepareItemEnchantEvent};
-use crate::world::scoreboard::{BedrockScoreboard, Scoreboard};
+use crate::world::scoreboard::{BedrockScoreboard, CollisionRule, Scoreboard};
 use advancement::PlayerAdvancement;
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
@@ -4547,7 +4547,8 @@ impl Player {
         }
     }
 
-    pub fn get_team(&self) -> Option<crate::world::scoreboard::Team> {
+    /// Reads the player's team where it stands: a `Team` is expensive to clone.
+    fn read_team<T>(&self, read: impl FnOnce(&crate::world::scoreboard::Team) -> T) -> Option<T> {
         let guard = self
             .custom_scoreboard
             .lock()
@@ -4556,7 +4557,7 @@ impl Player {
             && !sb.get_teams().is_empty()
             && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
         {
-            return Some(team.clone());
+            return Some(read(team));
         }
         drop(guard);
         let world = self.world();
@@ -4567,31 +4568,20 @@ impl Player {
         if sb.get_teams().is_empty() {
             return None;
         }
-        sb.get_entity_team(&self.gameprofile.name).cloned()
+        sb.get_entity_team(&self.gameprofile.name).map(read)
+    }
+
+    pub fn get_team(&self) -> Option<crate::world::scoreboard::Team> {
+        self.read_team(Clone::clone)
     }
 
     pub fn get_team_name(&self) -> Option<String> {
-        let guard = self
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(CustomScoreboard::Java(sb)) = guard.as_ref()
-            && !sb.get_teams().is_empty()
-            && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
-        {
-            return Some(team.name.clone());
-        }
-        drop(guard);
-        let world = self.world();
-        let sb = world
-            .scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if sb.get_teams().is_empty() {
-            return None;
-        }
-        sb.get_entity_team(&self.gameprofile.name)
-            .map(|team| team.name.clone())
+        self.read_team(|team| team.name.clone())
+    }
+
+    /// See [`EntityBase::get_team_collision`].
+    pub fn get_team_collision(&self) -> Option<(String, CollisionRule)> {
+        self.read_team(|team| (team.name.clone(), team.collision_rule))
     }
 
     pub fn set_compass_target(&self, pos: pumpkin_util::math::position::BlockPos) {

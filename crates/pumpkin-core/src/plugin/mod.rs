@@ -172,6 +172,20 @@ where
     }
 }
 
+thread_local! {
+    /// Events this thread has handed to plugin handlers.
+    static EVENTS_HANDLED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many events this thread has handed to plugin handlers so far.
+///
+/// A handler may touch anything. Code that looks something up ahead of its use compares
+/// two readings: equal means no handler ran on this thread in between.
+#[must_use]
+pub fn events_handled() -> u64 {
+    EVENTS_HANDLED.get()
+}
+
 /// A type alias for a map of event handlers, where the key is a static string
 /// and the value is a vector of dynamic event handlers.
 pub type HandlerMap = HashMap<&'static str, Vec<Arc<dyn DynEventHandler>>>;
@@ -1284,6 +1298,8 @@ impl PluginManager {
         if handlers.is_empty() {
             return;
         }
+        // Counted where the event was fired: a blocking fire polls this on its own thread.
+        EVENTS_HANDLED.set(EVENTS_HANDLED.get() + 1);
 
         // Process blocking handlers first
         for handler in handlers {

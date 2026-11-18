@@ -10,6 +10,7 @@ use crate::{
     world::{
         World,
         portal::{NetherPortal, PortalProcessor, PortalType, SourcePortalInfo},
+        scoreboard::{CollisionRule, Team},
     },
 };
 use arc_swap::ArcSwap;
@@ -238,6 +239,24 @@ pub const fn entity_type_to_bedrock_identifier(entity_type: &EntityType) -> &'st
     } else {
         entity_type.resource_name
     }
+}
+
+/// Reads the team of a non-player entity where it stands: a `Team` is expensive to clone.
+fn read_entity_team<E: EntityBase + ?Sized, T>(
+    entity: &E,
+    read: impl FnOnce(&Team) -> T,
+) -> Option<T> {
+    let world = entity.get_entity().world.load();
+    let scoreboard = world
+        .scoreboard
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if scoreboard.get_teams().is_empty() {
+        return None;
+    }
+    scoreboard
+        .get_entity_team(&entity.get_scoreboard_name())
+        .map(read)
 }
 
 pub trait EntityBase: Send + Sync + std::any::Any {
@@ -472,17 +491,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         if let Some(player) = self.get_player() {
             return player.get_team();
         }
-        let world = self.get_entity().world.load();
-        let scoreboard = world
-            .scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if scoreboard.get_teams().is_empty() {
-            return None;
-        }
-        scoreboard
-            .get_entity_team(&self.get_scoreboard_name())
-            .cloned()
+        read_entity_team(self, Clone::clone)
     }
 
     /// The team name alone, which is all the ally checks need. Worth having because
@@ -492,17 +501,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         if let Some(player) = self.get_player() {
             return player.get_team_name();
         }
-        let world = self.get_entity().world.load();
-        let scoreboard = world
-            .scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if scoreboard.get_teams().is_empty() {
-            return None;
+        read_entity_team(self, |team| team.name.clone())
+    }
+
+    /// The team's name and collision rule, which is all the push checks need.
+    fn get_team_collision(&self) -> Option<(String, CollisionRule)> {
+        if let Some(player) = self.get_player() {
+            return player.get_team_collision();
         }
-        scoreboard
-            .get_entity_team(&self.get_scoreboard_name())
-            .map(|team| team.name.clone())
+        read_entity_team(self, |team| (team.name.clone(), team.collision_rule))
     }
 
     fn considers_entity_as_ally(&self, other: &dyn EntityBase) -> bool {
