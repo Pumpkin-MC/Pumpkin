@@ -2029,6 +2029,10 @@ impl LivingEntity {
 
         self.push_entities(caller);
 
+        if caller.is_sensitive_to_water() && self.entity.is_in_water_or_rain() {
+            caller.damage(caller, 1.0, DamageType::DROWN);
+        }
+
         if let Some(ageable) = caller.get_mob().and_then(|mob| mob.as_ageable())
             && self.entity.is_alive()
             && !self.is_dead_or_dying()
@@ -5573,6 +5577,48 @@ mod ai_step_tests {
         fn is_mob_immobile(&self) -> bool {
             self.immobile || self.mob.living_entity.is_dead_or_dying()
         }
+    }
+
+    #[tokio::test]
+    async fn water_sensitive_mobs_take_damage_in_the_shared_ai_step() -> TestResult {
+        struct SensitiveMob(MobEntity);
+        impl Mob for SensitiveMob {
+            fn get_mob_entity(&self) -> &MobEntity {
+                &self.0
+            }
+            fn is_sensitive_to_water(&self) -> bool {
+                true
+            }
+        }
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        for y in 63..=65 {
+            world.set_block_state(
+                &BlockPos::new(0, y, 0),
+                pumpkin_data::Block::WATER.default_state.id,
+                pumpkin_world::world::BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+                    | pumpkin_world::world::BlockFlags::UPDATE_KNOWN_SHAPE,
+            );
+        }
+        let mob = SensitiveMob(MobEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::COW,
+        )));
+        let living = &mob.0.living_entity;
+        living.entity.touching_water.store(true, Ordering::Relaxed);
+        living.tick_movement(&mob);
+        assert_eq!(living.last_damage_taken.load(), 1.0);
+        assert_eq!(
+            living.get_last_damage_source().map(|(kind, _)| kind),
+            Some(pumpkin_data::damage::DamageType::DROWN)
+        );
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[derive(Default)]

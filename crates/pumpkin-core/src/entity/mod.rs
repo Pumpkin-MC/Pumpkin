@@ -168,6 +168,14 @@ pub enum GearDamage {
 /// Returns the [`EntityStatus`] that should be broadcast when the given
 /// equipment slot breaks.
 #[must_use]
+pub const fn hand_equipment_slot(hand: pumpkin_util::Hand) -> EquipmentSlot {
+    match hand {
+        pumpkin_util::Hand::Right => EquipmentSlot::MAIN_HAND,
+        pumpkin_util::Hand::Left => EquipmentSlot::OFF_HAND,
+    }
+}
+
+#[must_use]
 pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
     match slot {
         EquipmentSlot::MainHand(_) => EntityStatus::MainhandBreak,
@@ -967,11 +975,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn interact_with_hand(
         &self,
-        _player: &Arc<Player>,
-        _item_stack: &mut ItemStack,
-        _hand: pumpkin_util::Hand,
+        player: &Arc<Player>,
+        item_stack: &mut ItemStack,
+        hand: pumpkin_util::Hand,
     ) -> Option<bool> {
-        None
+        interact_with_shears(self, player, item_stack, hand)
     }
 
     fn set_on_fire_for(&self, seconds: f32) {
@@ -1394,7 +1402,7 @@ fn y_rot(vector: Vector3<f64>, angle: f32) -> Vector3<f64> {
 }
 
 /// Attachment points for the entity's current pose and age, and the scale they grow with.
-fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) {
+fn attachments_of(entity: &(impl EntityBase + ?Sized)) -> (&'static EntityAttachments, f64) {
     let base = entity.get_entity();
     let entity_type = base.entity_type;
     let living = entity.get_living_entity();
@@ -1411,6 +1419,17 @@ fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) 
 pub(crate) fn attachment_point(point: [f64; 3], scale: f64, yaw: f32) -> Vector3<f64> {
     let [x, y, z] = point;
     y_rot(Vector3::new(x, y, z) * scale, -yaw.to_radians())
+}
+
+pub(crate) fn average_passenger_attachment(entity: &(impl EntityBase + ?Sized)) -> Vector3<f64> {
+    let (attachments, scale) = attachments_of(entity);
+    let points = attachments.passenger;
+    if points.is_empty() {
+        return Vector3::default();
+    }
+    points.iter().fold(Vector3::default(), |sum, point| {
+        sum + Vector3::new(point[0], point[1], point[2])
+    }) * (scale / points.len() as f64)
 }
 
 pub fn default_passenger_attachment_point(
@@ -4966,7 +4985,7 @@ impl Entity {
 
     /// Fires `PlayerLeashEntityEvent` when a player becomes the holder. Returns false if a plugin
     /// cancelled it.
-    fn fire_leash_event(&self, holder: &Arc<dyn EntityBase>) -> bool {
+    pub(crate) fn fire_leash_event(&self, holder: &Arc<dyn EntityBase>) -> bool {
         let world = self.world.load();
         if let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
@@ -5033,7 +5052,8 @@ impl Entity {
         );
     }
 
-    pub fn unleash(&self) {
+    /// Removes the leash unless plugins cancel, returning whether this call removed it.
+    pub fn unleash(&self) -> bool {
         let world = self.world.load();
         if let Some(server) = world.server.upgrade() {
             let mut event =
@@ -5043,23 +5063,14 @@ impl Entity {
                 );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
-                return;
+                return false;
             }
         }
 
-        let old_holder = self
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        let Some(old_holder) = old_holder else {
-            return;
+        let Some(holder) = self.get_leash_holder() else {
+            return false;
         };
-        self.send_leash_removed();
-
-        let holder = old_holder.upgrade();
-        if let Some(holder) = &holder
-            && let Some(server) = world.server.upgrade()
+        if let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
         {
@@ -5069,24 +5080,118 @@ impl Entity {
                 cancelled: false,
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
         }
-        if let Some(holder) = holder {
-            holder.notify_leashee_removed();
-        }
+        self.remove_leash()
     }
 
-    pub fn remove_leash(&self) {
-        let old_holder = self
+    /// Cuts leash connections, returning `None` when there are none to cut.
+    /// `Some(false)` means no cut succeeded; callers must not fall through to shearing.
+    pub fn shear_off_all_leash_connections(
+        &self,
+        caller: &(impl EntityBase + ?Sized),
+        player: Option<&Arc<Player>>,
+    ) -> Option<bool> {
+        let world = self.world.load();
+        let area = BoundingBox::of_size(self.bounding_box.load().get_center(), 32.0, 32.0, 32.0);
+        let connections = world
+            .get_entities_at_box(&area)
+            .into_iter()
+            .filter(|entity| {
+                entity
+                    .get_entity()
+                    .get_leash_holder()
+                    .is_some_and(|holder| holder.get_entity().entity_id == self.entity_id)
+            })
+            .collect::<Vec<_>>();
+        if self.get_leash_holder().is_none() && connections.is_empty() {
+            return None;
+        }
+        let mut dropped = self.drop_leash_from_shearing(player, None);
+        for entity in connections {
+            dropped |= entity
+                .get_entity()
+                .drop_leash_from_shearing(player, Some(self.entity_id));
+        }
+        if dropped {
+            world.emit_game_event_with_context(
+                GameEvent::Shear.name(),
+                self.pos.load(),
+                &crate::world::game_event::GameEventContext {
+                    source_entity: player.map(|player| player.as_ref() as &dyn EntityBase),
+                },
+            );
+            world.play_sound(
+                Sound::ItemShearsSnip,
+                player.map_or_else(|| caller.sound_source(), |player| player.sound_source()),
+                &self.block_pos.load().to_centered_f64(),
+            );
+        }
+        Some(dropped)
+    }
+
+    fn drop_leash_from_shearing(&self, player: Option<&Arc<Player>>, held_by: Option<i32>) -> bool {
+        if self.get_leash_holder().is_none() {
+            return false;
+        }
+        if let Some(server) = self.world.load().server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_unleash::EntityUnleashEvent::new(
+                    self.entity_id,
+                    "unleashed".to_string(),
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+            if let Some(player) = player {
+                let mut event = crate::plugin::api::events::player::player_unleash_entity::PlayerUnleashEntityEvent {
+                    player: player.clone(),
+                    entity_id: self.entity_id,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
+        }
+        if !self.take_leash(held_by) {
+            return false;
+        }
+        self.spawn_at_location(ItemStack::new(1, &pumpkin_data::item::Item::LEAD));
+        true
+    }
+
+    /// Removes the leash, returning whether this call took the connection.
+    pub fn remove_leash(&self) -> bool {
+        self.take_leash(None)
+    }
+
+    fn take_leash(&self, held_by: Option<i32>) -> bool {
+        let mut leashed_to = self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if let Some(old_holder) = old_holder {
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(holder_id) = held_by
+            && leashed_to
+                .as_ref()
+                .and_then(Weak::upgrade)
+                .is_none_or(|holder| holder.get_entity().entity_id != holder_id)
+        {
+            return false;
+        }
+        let old_holder = leashed_to.take();
+        drop(leashed_to);
+        if let Some(old_holder) = &old_holder {
             self.send_leash_removed();
             if let Some(holder) = old_holder.upgrade() {
                 holder.notify_leashee_removed();
             }
         }
+        old_holder.is_some()
     }
 
     pub fn drop_leash(&self) -> bool {
@@ -5140,23 +5245,6 @@ impl Entity {
             world.emit_game_event(
                 pumpkin_data::game_event::GameEvent::Shear.name(),
                 self.pos.load(),
-            );
-        }
-        dropped
-    }
-
-    pub fn shear_off_all_leash_connections(&self, by_player: bool) -> bool {
-        let dropped = self.drop_all_leash_connections();
-        if dropped {
-            let category = if by_player {
-                SoundCategory::Players
-            } else {
-                SoundCategory::Neutral
-            };
-            self.world.load().play_block_sound(
-                Sound::ItemShearsSnip,
-                category,
-                self.block_pos.load(),
             );
         }
         dropped
@@ -5422,12 +5510,16 @@ impl Entity {
     }
 
     pub fn spawn_at_location(&self, stack: ItemStack) {
+        self.spawn_at_location_with_offset(stack, Vector3::default());
+    }
+
+    pub fn spawn_at_location_with_offset(&self, stack: ItemStack, offset: Vector3<f64>) {
         if stack.is_empty() {
             return;
         }
         let world = self.world.load();
         let item_entity = ItemEntity::new(
-            Self::new(world.clone(), self.pos.load(), &EntityType::ITEM),
+            Self::new(world.clone(), self.pos.load() + offset, &EntityType::ITEM),
             stack,
         );
         world.spawn_entity(Arc::new(item_entity));
@@ -6395,15 +6487,14 @@ impl Entity {
     }
 }
 
-impl EntityBase for Entity {
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+impl Entity {
+    pub(crate) fn base_tick(&self, caller: &dyn EntityBase) {
         // Recomputed during movement/block-collision handling in the same tick.
         let was_in_powder_snow = self.is_in_powder_snow.load(Ordering::Relaxed);
         self.was_in_powder_snow
             .store(was_in_powder_snow, Ordering::Relaxed);
         self.is_in_powder_snow.store(false, Ordering::Relaxed);
 
-        self.update_last_pos();
         self.tick_portal(caller);
         self.update_fluid_state(caller);
         self.check_out_of_world(caller);
@@ -6437,6 +6528,13 @@ impl EntityBase for Entity {
                 .store(riding_cooldown - 1, Ordering::Relaxed);
         }
         self.first_tick.store(false, Ordering::Relaxed);
+    }
+}
+
+impl EntityBase for Entity {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.update_last_pos();
+        self.base_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -6518,9 +6616,91 @@ impl Flag {
     }
 }
 
+fn interact_with_shears(
+    target: &(impl EntityBase + ?Sized),
+    player: &Arc<Player>,
+    stack: &mut ItemStack,
+    hand: pumpkin_util::Hand,
+) -> Option<bool> {
+    if stack.item != &pumpkin_data::item::Item::SHEARS {
+        return None;
+    }
+    if let Some(sheared) = target
+        .get_entity()
+        .shear_off_all_leash_connections(target, Some(player))
+    {
+        if sheared {
+            let _ = player.damage_held_stack(stack, 1, hand);
+        }
+        return Some(sheared);
+    }
+    let mob = target.get_mob()?;
+    if mob.can_shear_equipment(player) && !player.get_entity().is_sneaking() {
+        mob.attempt_to_shear_equipment(player, stack, hand)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn concurrent_leash_shearing_drops_one_lead_per_connection()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{ai::test_support::world, passive::snow_golem::SnowGolemEntity};
+        use std::sync::{Barrier, atomic::AtomicUsize};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let golem = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let holder: Arc<dyn EntityBase> = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(4.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let removals = AtomicUsize::new(0);
+        for _ in 0..16 {
+            golem.get_entity().attach_leash(&holder);
+            let barrier = Barrier::new(8);
+            std::thread::scope(|scope| {
+                for _ in 0..8 {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        if golem.get_entity().drop_leash_from_shearing(None, None) {
+                            removals.fetch_add(1, Ordering::Relaxed);
+                        }
+                    });
+                }
+            });
+        }
+        assert_eq!(removals.load(Ordering::Relaxed), 16);
+        let leads: usize = world
+            .entities
+            .load()
+            .iter()
+            .filter_map(|entity| entity.cast_any().downcast_ref::<item::ItemEntity>())
+            .map(|item| {
+                let stack = item
+                    .get_item_stack()
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if stack.item == &pumpkin_data::item::Item::LEAD {
+                    usize::from(stack.item_count)
+                } else {
+                    0
+                }
+            })
+            .sum();
+        assert_eq!(leads, 16);
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[test]
     fn equipment_break_status_maps_all_slots() {
