@@ -25,9 +25,10 @@ use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use pumpkin_world::generation::proto_chunk::GenerationCache;
 use rand::seq::IndexedRandom;
 use rand::{RngExt, rng};
+use rustc_hash::FxHashMap;
 use std::fmt;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
+use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
 
 const MAGIC_NUMBER: i32 = 17 * 17;
@@ -77,43 +78,35 @@ impl MobCounts {
 
 #[derive(Clone, Copy)]
 struct ActiveSpawnPlayer {
-    entity_id: i32,
     chunk_pos: Vector2<i32>,
     pos: Vector3<f64>,
 }
 
+/// Per-player mob counts for one tick. Players are indexes into `active_players`.
+#[derive(Clone, Default)]
 pub struct LocalMobCapCalculator {
-    player_mob_counts: DashMap<i32, MobCounts>,
-    players_near_chunk: DashMap<Vector2<i32>, Arc<[i32]>>,
-    active_players: Option<Arc<[ActiveSpawnPlayer]>>,
+    // Set on the first mob counted near the player, like vanilla's `computeIfAbsent`.
+    player_mob_counts: Box<[OnceLock<MobCounts>]>,
+    players_near_chunk: DashMap<Vector2<i32>, Arc<[usize]>>,
+    active_players: Arc<[ActiveSpawnPlayer]>,
+    /// The players by the cell they stand in, so a lookup reads the ones around a position
+    /// instead of all of them.
+    player_cells: FxHashMap<(i32, i32), Vec<usize>>,
+    /// How often a player's count of a category got to its cap.
+    players_at_cap: MobCounts,
 }
 
-impl Clone for LocalMobCapCalculator {
-    fn clone(&self) -> Self {
-        let player_mob_counts = DashMap::new();
-        for r in &self.player_mob_counts {
-            player_mob_counts.insert(*r.key(), r.value().clone());
-        }
-        let players_near_chunk = DashMap::new();
-        for r in &self.players_near_chunk {
-            players_near_chunk.insert(*r.key(), r.value().clone());
-        }
-        Self {
-            player_mob_counts,
-            players_near_chunk,
-            active_players: self.active_players.clone(),
-        }
-    }
-}
+/// A cell of the player grid is `1 << PLAYER_CELL_SHIFT` blocks wide.
+const PLAYER_CELL_SHIFT: u32 = 6;
+/// The nearest player is looked for this many cells around a position before every player
+/// is checked. Two cells reach the 128 blocks the spawn rules compare against.
+const NEAREST_PLAYER_RINGS: i32 = 2;
 
-impl Default for LocalMobCapCalculator {
-    fn default() -> Self {
-        Self {
-            player_mob_counts: DashMap::new(),
-            players_near_chunk: DashMap::new(),
-            active_players: None,
-        }
-    }
+const fn player_cell(x: f64, z: f64) -> (i32, i32) {
+    (
+        (x.floor() as i32) >> PLAYER_CELL_SHIFT,
+        (z.floor() as i32) >> PLAYER_CELL_SHIFT,
+    )
 }
 
 impl fmt::Debug for LocalMobCapCalculator {
@@ -134,15 +127,29 @@ impl LocalMobCapCalculator {
             }
             let entity = player.get_entity();
             active.push(ActiveSpawnPlayer {
-                entity_id: player.entity_id(),
                 chunk_pos: entity.chunk_pos.load(),
                 pos: entity.pos.load(),
             });
         }
+        Self::new(active)
+    }
+
+    fn new(active: Vec<ActiveSpawnPlayer>) -> Self {
+        let mut player_cells: FxHashMap<(i32, i32), Vec<usize>> = FxHashMap::default();
+        for (index, player) in active.iter().enumerate() {
+            player_cells
+                .entry(player_cell(player.pos.x, player.pos.z))
+                .or_default()
+                .push(index);
+        }
         Self {
-            player_mob_counts: DashMap::new(),
+            player_mob_counts: std::iter::repeat_with(OnceLock::new)
+                .take(active.len())
+                .collect(),
             players_near_chunk: DashMap::new(),
-            active_players: Some(active.into()),
+            active_players: active.into(),
+            player_cells,
+            players_at_cap: MobCounts::default(),
         }
     }
 
@@ -152,102 +159,114 @@ impl LocalMobCapCalculator {
         dx * dx + dy * dy
     }
 
-    fn nearest_player_distance_sq(&self, world: &World, x: f64, y: f64, z: f64) -> Option<f64> {
-        let mut min_dst_sq = f64::MAX;
-        let mut found = false;
-        if let Some(active_players) = &self.active_players {
-            for p in active_players.iter() {
-                let dx = x - p.pos.x;
-                let dy = y - p.pos.y;
-                let dz = z - p.pos.z;
-                let dist_sq = dx * dx + dy * dy + dz * dz;
-                if dist_sq < min_dst_sq {
-                    min_dst_sq = dist_sq;
-                    found = true;
-                }
-            }
-        } else {
-            let players = world.players.load();
-            for player in players.iter() {
-                if player.gamemode.load() != GameMode::Spectator {
-                    let ppos = player.position();
-                    let dx = x - ppos.x;
-                    let dy = y - ppos.y;
-                    let dz = z - ppos.z;
-                    let dist_sq = dx * dx + dy * dy + dz * dz;
-                    if dist_sq < min_dst_sq {
-                        min_dst_sq = dist_sq;
-                        found = true;
+    fn nearest_player_distance_sq(&self, x: f64, y: f64, z: f64) -> Option<f64> {
+        let distance_sq = |p: &ActiveSpawnPlayer| {
+            let dx = x - p.pos.x;
+            let dy = y - p.pos.y;
+            let dz = z - p.pos.z;
+            dx * dx + dy * dy + dz * dz
+        };
+        // A player outside the cells up to `ring` around the position is further away than
+        // `ring` cells are wide, so a nearer one found inside them is the nearest of all.
+        let (cell_x, cell_z) = player_cell(x, z);
+        let mut nearest = f64::MAX;
+        for ring in 0..=NEAREST_PLAYER_RINGS {
+            for dx in -ring..=ring {
+                for dz in -ring..=ring {
+                    if dx.abs().max(dz.abs()) != ring {
+                        continue;
+                    }
+                    let cell = (cell_x.wrapping_add(dx), cell_z.wrapping_add(dz));
+                    for &player in self.player_cells.get(&cell).into_iter().flatten() {
+                        nearest = nearest.min(distance_sq(&self.active_players[player]));
                     }
                 }
+            }
+            let reach = f64::from(ring << PLAYER_CELL_SHIFT);
+            if nearest <= reach * reach {
+                return Some(nearest);
+            }
+        }
+        // Nobody is that close, which is rare where mobs spawn: every player, like vanilla.
+        let mut min_dst_sq = f64::MAX;
+        let mut found = false;
+        for p in self.active_players.iter() {
+            let dist_sq = distance_sq(p);
+            if dist_sq < min_dst_sq {
+                min_dst_sq = dist_sq;
+                found = true;
             }
         }
         found.then_some(min_dst_sq)
     }
 
-    fn get_players_near(&self, world: &World, chunk_pos: Vector2<i32>) -> Arc<[i32]> {
+    /// The players that count for the mob cap of a chunk, in no order.
+    fn players_near(&self, chunk_pos: Vector2<i32>) -> impl Iterator<Item = usize> + '_ {
+        // Only a player within 128 blocks of the middle of the chunk counts, so the cells
+        // that far around it hold them all.
+        let middle_x = f64::from((chunk_pos.x << 4) + 8);
+        let middle_z = f64::from((chunk_pos.y << 4) + 8);
+        let (min_x, min_z) = player_cell(middle_x - 128.0, middle_z - 128.0);
+        let (max_x, max_z) = player_cell(middle_x + 128.0, middle_z + 128.0);
+        (min_x..=max_x)
+            .flat_map(move |cell_x| (min_z..=max_z).map(move |cell_z| (cell_x, cell_z)))
+            .filter_map(|cell| self.player_cells.get(&cell))
+            .flatten()
+            .copied()
+            .filter(move |&index| {
+                let p = &self.active_players[index];
+                (chunk_pos.x - p.chunk_pos.x).abs() <= 9
+                    && (chunk_pos.y - p.chunk_pos.y).abs() <= 9
+                    && Self::calc_distance(chunk_pos, &p.pos) < 16384.0
+            })
+    }
+
+    fn get_players_near(&self, chunk_pos: Vector2<i32>) -> Arc<[usize]> {
         if let Some(players) = self.players_near_chunk.get(&chunk_pos) {
             return players.value().clone();
         }
 
-        let mut players = Vec::new();
-        if let Some(active_players) = &self.active_players {
-            for p in active_players.iter() {
-                if (chunk_pos.x - p.chunk_pos.x).abs() <= 9
-                    && (chunk_pos.y - p.chunk_pos.y).abs() <= 9
-                    && Self::calc_distance(chunk_pos, &p.pos) < 16384.0
-                {
-                    players.push(p.entity_id);
-                }
-            }
-        } else {
-            for player in world.players.load().iter() {
-                if player.gamemode.load() == GameMode::Spectator {
-                    continue;
-                }
-                if Self::calc_distance(chunk_pos, &player.position()) < 16384.0 {
-                    players.push(player.entity_id());
-                }
-            }
-        }
-        let players: Arc<[i32]> = players.into();
+        let mut players: Vec<usize> = self.players_near(chunk_pos).collect();
+        // In the order of the player list, as when every player was checked.
+        players.sort_unstable();
+        let players: Arc<[usize]> = players.into();
         self.players_near_chunk.insert(chunk_pos, players.clone());
         players
     }
 
-    pub fn add_mob(&self, chunk_pos: Vector2<i32>, world: &World, category: &'static MobCategory) {
-        let players = self.get_players_near(world, chunk_pos);
+    pub fn add_mob(&self, chunk_pos: Vector2<i32>, category: &'static MobCategory) {
+        let players = self.get_players_near(chunk_pos);
         for &player in players.iter() {
-            self.player_mob_counts
-                .entry(player)
-                .or_default()
-                .add(category);
+            let counts = self.player_mob_counts[player].get_or_init(MobCounts::default);
+            counts.add(category);
+            if !counts.can_spawn(category) {
+                self.players_at_cap.add(category);
+            }
         }
     }
 
-    pub fn remove_mob(
-        &self,
-        chunk_pos: Vector2<i32>,
-        world: &World,
-        category: &'static MobCategory,
-    ) {
-        let players = self.get_players_near(world, chunk_pos);
+    pub fn remove_mob(&self, chunk_pos: Vector2<i32>, category: &'static MobCategory) {
+        let players = self.get_players_near(chunk_pos);
         for &player in players.iter() {
-            if let Some(count) = self.player_mob_counts.get(&player) {
+            if let Some(count) = self.player_mob_counts[player].get() {
                 count.remove(category);
             }
         }
     }
 
-    pub fn can_spawn(
-        &self,
-        category: &'static MobCategory,
-        world: &World,
-        chunk_pos: Vector2<i32>,
-    ) -> bool {
-        let players = self.get_players_near(world, chunk_pos);
+    #[must_use]
+    pub fn can_spawn(&self, category: &'static MobCategory, chunk_pos: Vector2<i32>) -> bool {
+        // While no player is at the cap, any player near the chunk will do, and the first
+        // one found answers for a chunk nobody asked the list of.
+        if category.max > 0 && self.players_at_cap.0[category.id].load(Relaxed) == 0 {
+            return self.players_near_chunk.get(&chunk_pos).map_or_else(
+                || self.players_near(chunk_pos).next().is_some(),
+                |players| !players.is_empty(),
+            );
+        }
+        let players = self.get_players_near(chunk_pos);
         for &player in players.iter() {
-            if let Some(count) = self.player_mob_counts.get(&player) {
+            if let Some(count) = self.player_mob_counts[player].get() {
                 if count.can_spawn(category) {
                     return true;
                 }
@@ -376,7 +395,7 @@ impl SpawnState {
         self.spawnable_chunk_count = count;
     }
 
-    pub fn add_entity(&self, world: &World, entity: &dyn EntityBase) {
+    pub fn add_entity(&self, entity: &dyn EntityBase) {
         if let Some(mob) = entity.get_mob()
             && (mob.get_mob_entity().persistence_required.load(Relaxed)
                 || mob.requires_custom_persistence())
@@ -394,16 +413,13 @@ impl SpawnState {
             self.spawn_potential.add_charge(&entity_pos, cost.charge);
         }
         if entity.get_mob().is_some() || entity_type.mob {
-            self.local_mob_cap_calculator.add_mob(
-                base_entity.chunk_pos.load(),
-                world,
-                entity_type.category,
-            );
+            self.local_mob_cap_calculator
+                .add_mob(base_entity.chunk_pos.load(), entity_type.category);
         }
         self.mob_category_counts.add(entity_type.category);
     }
 
-    pub fn remove_entity(&self, world: &World, entity: &dyn EntityBase) {
+    pub fn remove_entity(&self, entity: &dyn EntityBase) {
         if let Some(mob) = entity.get_mob()
             && (mob.get_mob_entity().persistence_required.load(Relaxed)
                 || mob.requires_custom_persistence())
@@ -421,11 +437,8 @@ impl SpawnState {
             self.spawn_potential.remove_charge(&entity_pos, cost.charge);
         }
         if entity.get_mob().is_some() || entity_type.mob {
-            self.local_mob_cap_calculator.remove_mob(
-                base_entity.chunk_pos.load(),
-                world,
-                entity_type.category,
-            );
+            self.local_mob_cap_calculator
+                .remove_mob(base_entity.chunk_pos.load(), entity_type.category);
         }
         self.mob_category_counts.remove(entity_type.category);
     }
@@ -457,7 +470,7 @@ impl SpawnState {
                 potential.add_charge(&entity_pos, cost.charge);
             }
             if entity.get_mob().is_some() || entity_type.mob {
-                local_mob_cap.add_mob(chunk_pos, world, entity_type.category);
+                local_mob_cap.add_mob(chunk_pos, entity_type.category);
             }
             counter.add(entity_type.category);
         }
@@ -477,12 +490,10 @@ impl SpawnState {
 
     pub fn can_spawn_for_category_local(
         &self,
-        world: &Arc<World>,
         category: &'static MobCategory,
         chunk_pos: Vector2<i32>,
     ) -> bool {
-        self.local_mob_cap_calculator
-            .can_spawn(category, world, chunk_pos)
+        self.local_mob_cap_calculator.can_spawn(category, chunk_pos)
     }
 
     pub fn can_spawn(
@@ -542,7 +553,7 @@ pub fn spawn_for_chunk(
     is_thundering: bool,
 ) {
     for category in spawn_list {
-        if spawn_state.can_spawn_for_category_local(world, category, chunk_pos) {
+        if spawn_state.can_spawn_for_category_local(category, chunk_pos) {
             let random_pos = get_random_pos_within(world.min_y, &chunk_pos, chunk);
             if random_pos.0.y > world.min_y {
                 spawn_category_for_position(
@@ -788,7 +799,7 @@ pub fn spawn_category_for_position(
 
             let nearest_player_distance_sq = spawn_state
                 .local_mob_cap_calculator
-                .nearest_player_distance_sq(world, xx, f64::from(y_start), zz);
+                .nearest_player_distance_sq(xx, f64::from(y_start), zz);
 
             if let Some(player_distance_sq) = nearest_player_distance_sq
                 && is_right_distance_to_player_and_spawn_point(
@@ -1200,6 +1211,104 @@ mod tests {
         );
         world.level.shutdown().await;
         Ok(())
+    }
+
+    #[test]
+    fn local_mob_cap_counts_each_mob_for_every_nearby_player() {
+        let player_in_chunk = |x: i32| ActiveSpawnPlayer {
+            chunk_pos: Vector2::new(x, 0),
+            pos: Vector3::new(f64::from(x * 16 + 8), 64.0, 8.0),
+        };
+        let calculator = LocalMobCapCalculator::new(vec![player_in_chunk(0), player_in_chunk(12)]);
+        // Chunk 6 is within 128 blocks of both players, chunks -1 and 13 of only one each.
+        let (first, shared, second) =
+            (Vector2::new(-1, 0), Vector2::new(6, 0), Vector2::new(13, 0));
+        let monster = &MobCategory::MONSTER;
+
+        assert!(!calculator.can_spawn(monster, Vector2::new(30, 0)));
+        assert!(calculator.can_spawn(monster, shared));
+        // No mob was counted for the second player yet, so this changes nothing.
+        calculator.remove_mob(second, monster);
+
+        for _ in 0..monster.max {
+            calculator.add_mob(shared, monster);
+        }
+        assert!(!calculator.can_spawn(monster, first));
+        assert!(!calculator.can_spawn(monster, shared));
+        assert!(!calculator.can_spawn(monster, second));
+        assert!(calculator.can_spawn(&MobCategory::CREATURE, shared));
+
+        calculator.remove_mob(second, monster);
+        assert!(!calculator.can_spawn(monster, first));
+        assert!(calculator.can_spawn(monster, shared));
+        assert!(calculator.can_spawn(monster, second));
+    }
+
+    /// The grid of players answers like a pass over every player, which is what vanilla does.
+    #[test]
+    fn the_player_grid_finds_what_checking_every_player_finds() {
+        let mut seed = 7u64;
+        let mut random = |range: f64| {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            ((seed >> 33) as f64 / f64::from(1u32 << 31) - 0.5) * range
+        };
+        // A crowd, players spread out, a few far away, and nobody at all.
+        for (count, range) in [(300, 40.0), (300, 1000.0), (5, 100_000.0), (0, 1.0)] {
+            let players: Vec<ActiveSpawnPlayer> = (0..count)
+                .map(|_| {
+                    let pos = Vector3::new(random(range), 64.0 + random(100.0), random(range));
+                    ActiveSpawnPlayer {
+                        chunk_pos: Vector2::new(
+                            get_section_cord(pos.x.floor() as i32),
+                            get_section_cord(pos.z.floor() as i32),
+                        ),
+                        pos,
+                    }
+                })
+                .collect();
+            let calculator = LocalMobCapCalculator::new(players.clone());
+
+            for _ in 0..2000 {
+                let (x, y, z) = (
+                    random(range * 1.5),
+                    64.0 + random(100.0),
+                    random(range * 1.5),
+                );
+                let every_player = players
+                    .iter()
+                    .map(|p| {
+                        let (dx, dy, dz) = (x - p.pos.x, y - p.pos.y, z - p.pos.z);
+                        dx * dx + dy * dy + dz * dz
+                    })
+                    .reduce(f64::min);
+                assert_eq!(
+                    calculator.nearest_player_distance_sq(x, y, z),
+                    every_player,
+                    "{count} players within {range} blocks, from {x} {y} {z}"
+                );
+
+                let chunk = Vector2::new(
+                    get_section_cord(x.floor() as i32),
+                    get_section_cord(z.floor() as i32),
+                );
+                let every_player: Vec<usize> = (0..players.len())
+                    .filter(|&index| {
+                        let p = &players[index];
+                        (chunk.x - p.chunk_pos.x).abs() <= 9
+                            && (chunk.y - p.chunk_pos.y).abs() <= 9
+                            && LocalMobCapCalculator::calc_distance(chunk, &p.pos) < 16384.0
+                    })
+                    .collect();
+                // Nobody is at a cap, so a mob can spawn wherever a player is near.
+                assert_eq!(
+                    calculator.can_spawn(&MobCategory::AMBIENT, chunk),
+                    !every_player.is_empty()
+                );
+                assert_eq!(*calculator.get_players_near(chunk), *every_player);
+            }
+        }
     }
 
     #[test]

@@ -5395,7 +5395,7 @@ impl World {
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
         let _base_entity = entity.get_entity();
         self.entity_tracker.add_entity(&entity, self);
-        self.spawn_state.load().add_entity(self, entity.as_ref());
+        self.spawn_state.load().add_entity(entity.as_ref());
 
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
@@ -5549,7 +5549,7 @@ impl World {
         // The entity stays live-only: it is written to its chunk's saved data on
         // unload (see `save_entities_by_chunk`), never at spawn, so it can't be both live and
         // serialized at once (which would double it on the next reload).
-        self.spawn_state.load().add_entity(self, entity.as_ref());
+        self.spawn_state.load().add_entity(entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
 
         self.entities.rcu(|current_entities| {
@@ -5589,7 +5589,7 @@ impl World {
             base_entity.remove_passenger(passenger.get_entity().entity_id);
         }
 
-        self.spawn_state.load().remove_entity(self, entity);
+        self.spawn_state.load().remove_entity(entity);
         self.entity_tracker.remove_entity(entity, self);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
@@ -5639,7 +5639,7 @@ impl World {
                 base.removed.store(true, Ordering::Release);
             }
             self.entity_tracker.remove_entity(entity.as_ref(), self);
-            self.spawn_state.load().remove_entity(self, entity.as_ref());
+            self.spawn_state.load().remove_entity(entity.as_ref());
             if let Some(mob) = entity.get_mob() {
                 mob.get_mob_entity().finish_removal(mob);
             }
