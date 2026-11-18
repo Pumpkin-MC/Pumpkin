@@ -57,25 +57,18 @@ impl CommandExecutor for ColorExecutor {
         let uuid = entity.entity_uuid;
 
         let color_val = match self.0 {
-            ColorAction::Named => {
-                let color = TeamColorArgumentType::get(context, "color")?;
-                let rgb = color.to_rgb();
-                i32::from_be_bytes([0, rgb.red, rgb.green, rgb.blue])
-            }
-            ColorAction::Hex => {
-                let rgb = HexColorArgumentType::get(context, "color")?;
-                i32::from_be_bytes([0, rgb.red, rgb.green, rgb.blue])
-            }
-            ColorAction::Reset => 0xFFFFFF,
+            ColorAction::Named => Some(TeamColorArgumentType::get(context, "color")?.to_rgb()),
+            ColorAction::Hex => Some(HexColorArgumentType::get(context, "color")?),
+            ColorAction::Reset => None,
         };
 
         if let Some(player) = context.source.as_player() {
             let packet = CWaypoint::update_position(
                 uuid,
-                Some(WaypointIcon {
-                    style: None,
+                WaypointIcon {
+                    style: WaypointIcon::DEFAULT_STYLE,
                     color: color_val,
-                }),
+                },
                 block_pos,
             );
             player.try_send_client_packet(&packet);
@@ -150,10 +143,12 @@ impl CommandExecutor for StyleExecutor {
         if let Some(player) = context.source.as_player() {
             let packet = CWaypoint::update_position(
                 uuid,
-                Some(WaypointIcon {
-                    style: style_owned.as_deref(),
-                    color: 0xFFFFFF,
-                }),
+                WaypointIcon {
+                    style: style_owned
+                        .as_deref()
+                        .unwrap_or(WaypointIcon::DEFAULT_STYLE),
+                    color: None,
+                },
                 block_pos,
             );
             player.try_send_client_packet(&packet);
