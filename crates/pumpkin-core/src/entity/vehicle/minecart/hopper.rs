@@ -52,17 +52,26 @@ impl HopperMinecart {
             pos.y + 1.5,
             pos.z,
         ) {
-            let _ = HopperBlockEntity::try_take_from_source(inventory.as_ref(), source.as_ref());
-            return;
+            match HopperBlockEntity::try_take_from_source(inventory.as_ref(), source.as_ref()) {
+                Ok(true) => return,
+                Ok(false) => {}
+                Err(leftover) => {
+                    // A concurrent insert filled the slot, drop the item, never void it.
+                    let drop_pos = source_pos.to_centered_f64();
+                    world.scatter_stack(drop_pos.x, drop_pos.y, drop_pos.z, leftover);
+                }
+            }
+        } else {
+            // `Hopper.SUCK_AABB` around the cart; never blocked, the cart isn't grid aligned.
+            let suction_box = BoundingBox::new(
+                Vector3::new(pos.x - 0.5, pos.y + 0.6875, pos.z - 0.5),
+                Vector3::new(pos.x + 0.5, pos.y + 2.0, pos.z + 0.5),
+            );
+            if Self::pick_up_item_internal(&world, inventory, &suction_box) {
+                return;
+            }
         }
-
-        let suction_box = BoundingBox::new(
-            Vector3::new(pos.x - 0.5, pos.y + 0.6875, pos.z - 0.5),
-            Vector3::new(pos.x + 0.5, pos.y + 2.0, pos.z + 0.5),
-        );
-        if Self::pick_up_item_internal(&world, inventory, &suction_box) {
-            return;
-        }
+        // Vanilla `MinecartHopper.suckInItems` falls back to its own box either way.
         Self::pick_up_item_internal(&world, inventory, &cart_box);
     }
 

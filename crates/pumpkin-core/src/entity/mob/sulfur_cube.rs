@@ -873,29 +873,20 @@ impl Mob for SulfurCubeEntity {
             return;
         }
         let living = &self.mob_entity.living_entity;
-        if !living.pickup(item.get_entity(), 1) {
+        let Some(taken) = living.pick_up_from(item, 1, |ground| {
+            // Event already dispatched, a concurrent insert may have filled BODY.
+            if self.has_body_item() {
+                return ItemStack::EMPTY.clone();
+            }
+            ground.split(1)
+        }) else {
             return;
-        }
-        living.on_item_pickup(item);
-        let taken = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .split(1);
+        };
+        // TODO vanilla `SulfurCube.pickUpItem`: onItemPickup, setItemSlot(BODY, split(1)), absorb sound,
+        // setGuaranteedDrop, take. Pickup animation is after the body item is set.
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::BODY, taken);
         self.play_sound(Sound::EntitySulfurCubeAbsorb);
-
-        let empty = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_empty();
-        if empty {
-            item.get_entity().remove();
-        } else {
-            item.init_data_tracker();
-        }
     }
 
     fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
