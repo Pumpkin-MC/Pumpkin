@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -18,6 +17,7 @@ use crate::entity::{
     item::ItemEntity,
     mob::{Mob, MobEntity, equipment::RegionalDifficulty, skeleton::SkeletonEntityBase},
     player::Player,
+    shearable::{Shearable, shear_by_player, shearing_loot},
 };
 use crate::world::World;
 
@@ -47,39 +47,32 @@ impl BoggedSkeletonEntity {
         self.get_entity()
             .set_synced_data(tracked_data::bogged::DATA_SHEARED, sheared);
     }
+}
 
-    #[must_use]
-    pub fn ready_for_shearing(&self) -> bool {
-        !self.is_sheared()
-    }
+impl Shearable for BoggedSkeletonEntity {
+    fn shear(&self, sound_category: SoundCategory, tool: &ItemStack) -> bool {
+        if self.sheared.swap(true, Ordering::Relaxed) {
+            return false;
+        }
 
-    pub fn shear(&self, category: SoundCategory, tool: &ItemStack) {
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
-        world.play_sound(Sound::EntityBoggedShear, category, &pos);
+        world.play_sound(Sound::EntityBoggedShear, sound_category, &pos);
 
-        if let Some(table) = world.get_loot_table(BOGGED_SHEAR_LOOT_TABLE) {
-            let params = crate::world::loot::LootContextParameters {
-                world: Some(&world),
-                position: Some(pos),
-                this_entity: Some(self as &dyn EntityBase),
-                tool: Some(tool.clone()),
-                ..Default::default()
-            };
-            let drop_pos = Vector3::new(pos.x, pos.y + f64::from(entity.height()), pos.z);
-            for drop_stack in
-                crate::world::loot::generate_loot_from_handle(&table, rand::random(), &params)
-            {
-                let item_entity = Arc::new(ItemEntity::new(
-                    Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
-                    drop_stack,
-                ));
-                world.spawn_entity(item_entity);
-            }
+        let drop_pos = Vector3::new(pos.x, pos.y + f64::from(entity.height()), pos.z);
+        for drop in shearing_loot(self, BOGGED_SHEAR_LOOT_TABLE, tool) {
+            world.spawn_entity(Arc::new(ItemEntity::new(
+                Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                drop,
+            )));
         }
-
         self.set_sheared(true);
+        true
+    }
+
+    fn ready_for_shearing(&self) -> bool {
+        !self.is_sheared()
     }
 }
 
@@ -110,6 +103,10 @@ impl Mob for BoggedSkeletonEntity {
         &self.entity.mob_entity
     }
 
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("sheared", self.is_sheared());
     }
@@ -124,28 +121,12 @@ impl Mob for BoggedSkeletonEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        if item_stack.item.id == Item::SHEARS.id && self.ready_for_shearing() {
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            if let Some(server) = world.server.upgrade() {
-                let mut event =
-                    crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
-                        player: player.clone(),
-                        entity_id: entity.entity_id,
-                        hand: 0,
-                        cancelled: false,
-                    };
-                server.plugin_manager.fire_blocking(&server, &mut event);
-                if event.cancelled {
-                    return false;
-                }
-            }
-            self.shear(SoundCategory::Players, item_stack);
-            world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
-            let _ = player.damage_item_stack(item_stack, 1);
-            return true;
+        if item_stack.get_item() == &Item::SHEARS && self.ready_for_shearing() {
+            return shear_by_player(self, player, item_stack);
         }
-        false
+        self.entity
+            .mob_entity
+            .mob_interact(player, item_stack, self.can_be_leashed())
     }
 
     fn populate_default_equipment_slots(

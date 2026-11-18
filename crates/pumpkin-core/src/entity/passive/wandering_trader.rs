@@ -414,6 +414,9 @@ impl WanderingTraderEntity {
             recipe.put_int("demand", offer.demand);
             recipe.put_int("tier", 0);
             recipe.put_compound("buyA", Self::bedrock_trade_item(base_cost, adjusted_count));
+            // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
+            // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
+            // Bedrock always sends `buyB`, an empty compound for "no second cost".
             recipe.put_compound(
                 "buyB",
                 offer.cost_b.as_ref().map_or_else(NbtCompound::new, |cost| {
@@ -679,20 +682,25 @@ impl Mob for WanderingTraderEntity {
         if !offers.is_empty() {
             let mut recipes = Vec::with_capacity(offers.len());
             for offer in offers.iter() {
+                // Unsaveable item: offer not saved.
+                // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
+                // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
+                let (Some(buy), Some(sell), Some(buy_b)) = (
+                    offer.base_cost_a.0.to_nbt(),
+                    offer.output.0.to_nbt(),
+                    offer
+                        .cost_b
+                        .as_ref()
+                        .map_or(Some(None), |cost_b| cost_b.0.to_nbt().map(Some)),
+                ) else {
+                    continue;
+                };
                 let mut recipe = NbtCompound::new();
-                let mut buy = NbtCompound::new();
-                offer.base_cost_a.0.write_item_stack(&mut buy);
                 recipe.put_compound("buy", buy);
-
-                if let Some(cost_b) = &offer.cost_b {
-                    let mut buy_b = NbtCompound::new();
-                    cost_b.0.write_item_stack(&mut buy_b);
+                if let Some(buy_b) = buy_b {
                     recipe.put_compound("buyB", buy_b);
                 }
-
-                let mut sell_item = NbtCompound::new();
-                offer.output.0.write_item_stack(&mut sell_item);
-                recipe.put_compound("sell", sell_item);
+                recipe.put_compound("sell", sell);
 
                 recipe.put_int("uses", offer.uses);
                 recipe.put_int("maxUses", offer.max_uses);
@@ -746,14 +754,20 @@ impl Mob for WanderingTraderEntity {
                     let buy = recipe
                         .get_compound("buy")
                         .and_then(ItemStack::read_item_stack);
-                    let buy_b = recipe
-                        .get_compound("buyB")
-                        .and_then(ItemStack::read_item_stack);
+                    // TODO(buyB): duplicated in `villager/mod.rs` and `wandering_trader.rs`;
+                    // unify into one trade-recipe codec shared by `Villager` and `WanderingTrader`.
+                    // A `buyB` that is present but invalid rejects the recipe, like a failed vanilla codec decode.
+                    let buy_b = recipe.get("buyB").map_or(Some(None), |cost_b| {
+                        cost_b
+                            .extract_compound()
+                            .and_then(ItemStack::read_item_stack)
+                            .map(Some)
+                    });
                     let sell_item = recipe
                         .get_compound("sell")
                         .and_then(ItemStack::read_item_stack);
 
-                    if let (Some(buy), Some(sell_item)) = (buy, sell_item)
+                    if let (Some(buy), Some(sell_item), Some(buy_b)) = (buy, sell_item, buy_b)
                         && !buy.is_empty()
                         && !sell_item.is_empty()
                         && buy_b.as_ref().is_none_or(|stack| !stack.is_empty())

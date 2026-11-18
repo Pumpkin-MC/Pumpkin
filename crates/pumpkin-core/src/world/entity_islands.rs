@@ -335,6 +335,13 @@ impl EntityReach {
                 base.bounding_box
                     .load()
                     .expand(player_radius, player_radius, player_radius);
+            let block_radius = mob.conservative_block_read_radius() + movement;
+            if block_radius > radius + BLOCK_UPDATE_REACH {
+                reach.block_reads =
+                    base.bounding_box
+                        .load()
+                        .expand(block_radius, block_radius, block_radius);
+            }
         }
         // Blast power and chained block effects can exceed the configured margins.
         reach.global = entity

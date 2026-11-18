@@ -3121,6 +3121,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "tracing",
  "zip",
 ]
 

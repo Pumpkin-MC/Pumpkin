@@ -15,6 +15,27 @@ pub fn get_pos(
     z_dir: f64,
     max_xz_radians_difference: f64,
 ) -> Option<Vector3<f64>> {
+    find_pos(
+        mob,
+        horizontal_dist,
+        vertical_dist,
+        flying_height,
+        [x_dir, z_dir],
+        max_xz_radians_difference,
+        true,
+    )
+}
+
+/// Shared by `get_pos` and `air_random_pos::get_pos_towards`, which also rejects water.
+pub(super) fn find_pos(
+    mob: &dyn Mob,
+    horizontal_dist: i32,
+    vertical_dist: i32,
+    flying_height: i32,
+    direction: [f64; 2],
+    max_xz_radians_difference: f64,
+    allow_water: bool,
+) -> Option<Vector3<f64>> {
     let restrict = goal_utils::mob_restricted(mob, f64::from(horizontal_dist));
     let world = mob.get_entity().world.load_full();
     let max_y = world.dimension.min_y + world.dimension.height - 1;
@@ -33,8 +54,8 @@ pub fn get_pos(
                 f64::from(horizontal_dist),
                 vertical_dist,
                 flying_height,
-                x_dir,
-                z_dir,
+                direction[0],
+                direction[1],
                 max_xz_radians_difference,
             )?;
             let pos = random_pos::generate_random_pos_toward_direction(
@@ -51,7 +72,9 @@ pub fn get_pos(
             let pos = random_pos::move_up_out_of_solid(pos, max_y, |candidate| {
                 goal_utils::is_solid(&world, candidate)
             });
-            (!goal_utils::has_malus(mob, &mut context, &pos)).then_some(pos)
+            (!goal_utils::has_malus(mob, &mut context, &pos)
+                && (allow_water || !goal_utils::is_water(&world, &pos)))
+            .then_some(pos)
         },
         |pos| f64::from(mob.get_walk_target_value(pos)),
     )

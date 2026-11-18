@@ -7849,10 +7849,8 @@ impl NBTStorage for PlayerInventory {
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for (i, stack) in main_inv.iter().enumerate() {
-                if !stack.is_empty() {
-                    let mut item_compound = NbtCompound::new();
+                if let Some(mut item_compound) = stack.to_nbt() {
                     item_compound.put_byte("Slot", i as i8);
-                    stack.write_item_stack(&mut item_compound);
                     items.push(NbtTag::Compound(item_compound));
                 }
             }
@@ -7865,9 +7863,7 @@ impl NBTStorage for PlayerInventory {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for (slot, stack) in &equipment_guard.equipment {
-                if !stack.is_empty() {
-                    let mut item_compound = NbtCompound::new();
-                    stack.write_item_stack(&mut item_compound);
+                if let Some(item_compound) = stack.to_nbt() {
                     let vanilla_slot = match slot {
                         EquipmentSlot::Feet(_) => {
                             equipment_compound.put_compound("feet", item_compound.clone());
@@ -7892,9 +7888,8 @@ impl NBTStorage for PlayerInventory {
                         _ => None,
                     };
                     if let Some(slot_byte) = vanilla_slot {
-                        let mut inv_item_compound = NbtCompound::new();
+                        let mut inv_item_compound = item_compound;
                         inv_item_compound.put_byte("Slot", slot_byte);
-                        stack.write_item_stack(&mut inv_item_compound);
                         items.push(NbtTag::Compound(inv_item_compound));
                     }
                 }
@@ -7989,10 +7984,8 @@ impl NBTStorage for EnderChestInventory {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for (i, stack) in ec_items.iter().enumerate() {
-            if !stack.is_empty() {
-                let mut item_compound = NbtCompound::new();
+            if let Some(mut item_compound) = stack.to_nbt() {
                 item_compound.put_byte("Slot", i as i8);
-                stack.write_item_stack(&mut item_compound);
                 items.push(NbtTag::Compound(item_compound));
             }
         }

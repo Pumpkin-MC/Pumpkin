@@ -62,9 +62,7 @@ impl BlockEntity for LecternBlockEntity {
             .book
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !book.is_empty() {
-            let mut book_nbt = NbtCompound::default();
-            book.write_item_stack(&mut book_nbt);
+        if let Some(book_nbt) = book.to_nbt() {
             nbt.put_compound("Book", book_nbt);
         }
         nbt.put_int("Page", self.page.load(Ordering::Relaxed) as i32);
@@ -73,6 +71,11 @@ impl BlockEntity for LecternBlockEntity {
     fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
         let inventory: Arc<dyn Inventory> = self;
         world.scatter_inventory(position, &inventory);
+    }
+
+    /// Vanilla `LecternBlockEntity` is no `Container`: hoppers, droppers and crafters skip it.
+    fn get_container(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        None
     }
 
     fn is_comparator_dirty(&self) -> bool {
@@ -94,10 +97,8 @@ impl BlockEntity for LecternBlockEntity {
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
         if let Ok(book) = self.book.try_lock()
-            && !book.is_empty()
+            && let Some(book_nbt) = book.to_nbt()
         {
-            let mut book_nbt = NbtCompound::new();
-            book.write_item_stack(&mut book_nbt);
             nbt.put("Book", NbtTag::Compound(book_nbt));
         }
         nbt.put_int("Page", self.page.load(Ordering::Relaxed) as i32);
@@ -240,6 +241,24 @@ impl Inventory for LecternBlockEntity {
         self.mark_dirty();
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot != 0 {
+            return false;
+        }
+        // One lock for read and write, a parallel write would be lost otherwise.
+        let mut book = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !update(&mut book) {
+            return false;
+        }
+        drop(book);
+        self.page.store(0, Ordering::Relaxed);
+        self.mark_dirty();
+        true
+    }
+
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
         self.comparator_dirty.store(true, Ordering::Relaxed);
@@ -274,9 +293,7 @@ pub fn build_lectern_actor(
         .put_int("page", page)
         .put_int("totalPages", total_pages);
 
-    if has_book && let Some(book_stack) = book {
-        let mut book_nbt = NbtCompound::new();
-        book_stack.write_item_stack(&mut book_nbt);
+    if has_book && let Some(book_nbt) = book.and_then(ItemStack::to_nbt) {
         builder = builder.put_compound("book", book_nbt);
     }
 

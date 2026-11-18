@@ -495,7 +495,11 @@ impl MobEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             self.apply_navigation_updates(&mut navigator);
-            navigator.tick(&self.living_entity)
+            if mob.ticks_navigation() {
+                navigator.tick(&self.living_entity)
+            } else {
+                None
+            }
         };
 
         // Vanilla PathNavigation.tick hands its waypoint to `mob.getMoveControl()`.
@@ -1975,6 +1979,18 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_ai_step(&self) {}
 
+    fn ticks_navigation(&self) -> bool {
+        true
+    }
+
+    fn conservative_block_read_radius(&self) -> f64 {
+        0.0
+    }
+
+    fn fluid_jump_velocity(&self) -> f64 {
+        0.04
+    }
+
     fn tick_jump_control(&self, jump: bool) {
         self.get_mob_entity()
             .living_entity
@@ -2286,6 +2302,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
+        None
+    }
+
+    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
         None
     }
 
