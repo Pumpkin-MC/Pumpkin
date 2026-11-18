@@ -179,7 +179,7 @@ mod tests {
 
         for (facing, min, max) in cases {
             let bounds = ShulkerBoxBlock::lid_open_bounding_box(&position, facing);
-            let inset = ShulkerBoxBlock::LID_OPEN_INSET;
+            let inset = 1.0E-6;
             let close = |a: f64, b: f64| (a - b).abs() < 1.0e-9;
             assert!(close(bounds.min.x, min[0] + inset));
             assert!(close(bounds.min.y, min[1] + inset));
