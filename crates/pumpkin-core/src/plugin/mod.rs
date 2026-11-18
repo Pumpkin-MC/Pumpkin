@@ -176,6 +176,33 @@ where
 /// and the value is a vector of dynamic event handlers.
 pub type HandlerMap = HashMap<&'static str, Vec<Arc<dyn DynEventHandler>>>;
 
+/// Whether any plugin handles `PacketSentEvent`. Every outgoing play packet asks, so the
+/// answer is kept here instead of being looked up in the handler map each time.
+// One server per process, so a global flag is enough.
+static PACKET_SENT_OBSERVED: AtomicBool = AtomicBool::new(false);
+
+/// Whether an outgoing packet has to go through `PacketSentEvent` at all.
+#[must_use]
+pub fn packet_sent_observed() -> bool {
+    PACKET_SENT_OBSERVED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Sets [`packet_sent_observed`] from the handler map; called after every change of the map.
+/// Checks the map again afterwards, so a change made meanwhile on another thread is not
+/// overwritten by an older answer.
+pub(crate) fn refresh_packet_sent_observed(handlers: &ArcSwap<HandlerMap>) {
+    let name =
+        <api::events::server::packet::PacketSentEvent as api::events::Payload>::get_name_static();
+    loop {
+        let map = handlers.load_full();
+        let observed = map.get(name).is_some_and(|handlers| !handlers.is_empty());
+        PACKET_SENT_OBSERVED.store(observed, std::sync::atomic::Ordering::Relaxed);
+        if Arc::ptr_eq(&map, &handlers.load_full()) {
+            return;
+        }
+    }
+}
+
 /// Plugin loading state
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PluginState {
@@ -1154,6 +1181,7 @@ impl PluginManager {
             });
             Arc::new(new_handlers)
         });
+        refresh_packet_sent_observed(&self.handlers);
     }
 
     /// Get all plugins that are currently loading
@@ -1218,6 +1246,7 @@ impl PluginManager {
                 .push(typed_handler.clone());
             Arc::new(new_handlers)
         });
+        refresh_packet_sent_observed(&self.handlers);
     }
 
     #[must_use]
@@ -1382,5 +1411,22 @@ mod tests {
 
         let plugins_missing = vec![("A".to_string(), vec!["B".to_string()])];
         assert!(PluginManager::topological_sort(&plugins_missing).is_err());
+    }
+
+    struct SeesPackets;
+    impl EventHandler<api::events::server::packet::PacketSentEvent> for SeesPackets {}
+
+    #[test]
+    fn packet_sent_flag_follows_the_handler_map() {
+        let manager = PluginManager::new(Vec::new());
+        refresh_packet_sent_observed(&manager.handlers);
+        assert!(!packet_sent_observed(), "no handler, no packet-sent work");
+
+        manager.register(Arc::new(SeesPackets), EventPriority::Normal, false);
+        assert!(packet_sent_observed(), "a handler turns it on");
+
+        manager.handlers.store(Arc::new(HashMap::new()));
+        refresh_packet_sent_observed(&manager.handlers);
+        assert!(!packet_sent_observed(), "an empty map turns it off");
     }
 }

@@ -494,6 +494,14 @@ impl JavaClient {
         }
     }
 
+    /// Whether a packet skips `PacketSentEvent`: nothing translates or observes it.
+    fn goes_out_unchanged(&self, observe: bool) -> bool {
+        self.version.load() == CURRENT_MC_VERSION
+            && (!observe
+                || !matches!(self.connection_state.load(), ConnectionState::Play)
+                || !crate::plugin::packet_sent_observed())
+    }
+
     /// `PacketSentEvent` for clients the multiversion plugin admitted below
     /// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
     /// The packet is `None` when cancelled; the extra packets are sent either way.
@@ -503,10 +511,7 @@ impl JavaClient {
     /// plugins (anti-cheats, protocol libraries) see every outbound packet. `observe` is
     /// `false` for packets a plugin injected itself, to avoid echoing them back.
     fn translate_outgoing(&self, packet_data: Bytes, observe: bool) -> (Option<Bytes>, Vec<Bytes>) {
-        let current_version = self.version.load() == CURRENT_MC_VERSION;
-        if current_version
-            && (!observe || !matches!(self.connection_state.load(), ConnectionState::Play))
-        {
+        if self.goes_out_unchanged(observe) {
             return (Some(packet_data), Vec::new());
         }
         let player = self.player.load_full();
@@ -536,7 +541,7 @@ impl JavaClient {
         if event.cancelled {
             return (None, extras);
         }
-        if current_version {
+        if self.version.load() == CURRENT_MC_VERSION {
             return (Some(packet_data), extras);
         }
         (frame_packet(event.packet_id, &event.payload), extras)

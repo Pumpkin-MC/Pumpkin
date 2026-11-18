@@ -37,8 +37,8 @@ use uuid::Uuid;
 
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
-use crate::net::ClientPlatform;
 use crate::net::java::JavaClient;
+use crate::net::{ClientPlatform, lock_briefly};
 use crate::world::World;
 use crate::world::chunker::get_view_distance;
 
@@ -501,12 +501,8 @@ impl TrackedEntity {
                 return;
             }
             // Vanilla `isChunkTracked`: never spawn before the chunk packet.
-            if player
-                .chunk_sender
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_chunk_ready(&entity_chunk)
-            {
+            let chunk_ready = lock_briefly(&player.chunk_sender).is_chunk_ready(&entity_chunk);
+            if chunk_ready {
                 if chunk_changed
                     && self
                         .seen_by
