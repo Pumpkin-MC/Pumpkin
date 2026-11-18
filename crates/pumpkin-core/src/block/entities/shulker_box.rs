@@ -147,8 +147,8 @@ impl BlockEntity for ShulkerBoxBlockEntity {
         Some(nbt)
     }
 
-    fn client_update_tag(&self, _saved: NbtCompound) -> NbtCompound {
-        NbtCompound::new()
+    fn sends_saved_update_tag() -> bool {
+        false
     }
 
     fn bedrock_block_actor_data(

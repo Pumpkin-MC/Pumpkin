@@ -1,4 +1,4 @@
-use crate::block::entities::{BlockEntity, block_entity_from_nbt};
+use crate::block::entities::{BlockEntity, block_entity_client_update_tag, block_entity_from_nbt};
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;
 use pumpkin_data::chunk::Biome;
@@ -1976,13 +1976,16 @@ impl World {
                 if let Some(block_entity) = self.get_block_entity(&block_pos)
                     && let Some(nbt) = block_entity.chunk_data_nbt()
                 {
+                    let entity_type_id = block_entity.get_id();
+                    let type_id = u16::try_from(entity_type_id).unwrap_or(u16::MAX);
                     let bytes =
-                        pumpkin_nbt::Nbt::from(block_entity.client_update_tag(nbt)).write_unnamed();
+                        pumpkin_nbt::Nbt::from(block_entity_client_update_tag(type_id, nbt))
+                            .write_unnamed();
                     self.broadcast_to_chunk(
                         chunk_pos,
                         &CBlockEntityData::new(
                             block_pos,
-                            VarInt(block_entity.get_id() as i32),
+                            VarInt(entity_type_id as i32),
                             bytes.as_ref().into(),
                         ),
                     );
@@ -2048,13 +2051,16 @@ impl World {
                     if let Some(block_entity) = self.get_block_entity(block_pos)
                         && let Some(nbt) = block_entity.chunk_data_nbt()
                     {
-                        let bytes = pumpkin_nbt::Nbt::from(block_entity.client_update_tag(nbt))
-                            .write_unnamed();
+                        let entity_type_id = block_entity.get_id();
+                        let type_id = u16::try_from(entity_type_id).unwrap_or(u16::MAX);
+                        let bytes =
+                            pumpkin_nbt::Nbt::from(block_entity_client_update_tag(type_id, nbt))
+                                .write_unnamed();
                         self.broadcast_to_chunk(
                             chunk_pos,
                             &CBlockEntityData::new(
                                 *block_pos,
-                                VarInt(block_entity.get_id() as i32),
+                                VarInt(entity_type_id as i32),
                                 bytes.as_ref().into(),
                             ),
                         );
@@ -7272,15 +7278,18 @@ impl World {
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
         let entity_id = block_entity.resource_location().to_string();
+        let entity_type_id = block_entity.get_id();
 
         if let Some(nbt) = &block_entity_nbt {
+            let type_id = u16::try_from(entity_type_id).unwrap_or(u16::MAX);
             let bytes =
-                pumpkin_nbt::Nbt::from(block_entity.client_update_tag(nbt.clone())).write_unnamed();
+                pumpkin_nbt::Nbt::from(block_entity_client_update_tag(type_id, nbt.clone()))
+                    .write_unnamed();
             self.broadcast_to_chunk(
                 chunk_pos,
                 &CBlockEntityData::new(
                     block_entity.get_position(),
-                    VarInt(block_entity.get_id() as i32),
+                    VarInt(entity_type_id as i32),
                     bytes.as_ref().into(),
                 ),
             );
@@ -7393,15 +7402,18 @@ impl World {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
+        let entity_type_id = block_entity.get_id();
 
         if let Some(nbt) = &block_entity_nbt {
+            let type_id = u16::try_from(entity_type_id).unwrap_or(u16::MAX);
             let bytes =
-                pumpkin_nbt::Nbt::from(block_entity.client_update_tag(nbt.clone())).write_unnamed();
+                pumpkin_nbt::Nbt::from(block_entity_client_update_tag(type_id, nbt.clone()))
+                    .write_unnamed();
             self.broadcast_to_chunk(
                 chunk_pos,
                 &CBlockEntityData::new(
                     block_entity.get_position(),
-                    VarInt(block_entity.get_id() as i32),
+                    VarInt(entity_type_id as i32),
                     bytes.as_ref().into(),
                 ),
             );

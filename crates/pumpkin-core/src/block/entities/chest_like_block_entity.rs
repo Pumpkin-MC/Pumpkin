@@ -125,11 +125,8 @@ macro_rules! impl_block_entity_for_chest {
                 Some(nbt)
             }
 
-            fn client_update_tag(
-                &self,
-                _saved: pumpkin_nbt::compound::NbtCompound,
-            ) -> pumpkin_nbt::compound::NbtCompound {
-                pumpkin_nbt::compound::NbtCompound::new()
+            fn sends_saved_update_tag() -> bool {
+                false
             }
 
             fn bedrock_block_actor_data(
