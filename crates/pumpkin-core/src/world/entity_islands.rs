@@ -21,12 +21,15 @@ use crate::plugin::api::events::block::block_break::BlockBreakEvent;
 use crate::plugin::api::events::entity::{
     entity_breed::EntityBreedEvent, entity_dismount::EntityDismountEvent,
     entity_portal::EntityPortalEvent, entity_pose_change::EntityPoseChangeEvent,
-    entity_target::EntityTargetEvent, entity_toggle_sit::EntityToggleSitEvent,
+    entity_spawn::EntitySpawnEvent, entity_target::EntityTargetEvent,
+    entity_toggle_sit::EntityToggleSitEvent, item_spawn::ItemSpawnEvent,
     pig_zombie_anger::PigZombieAngerEvent,
 };
 use crate::plugin::api::events::vehicle::{
+    vehicle_damage::VehicleDamageEvent, vehicle_destroy::VehicleDestroyEvent,
     vehicle_exit::VehicleExitEvent, vehicle_move::VehicleMoveEvent,
 };
+use crate::plugin::api::events::world::generic_game::GenericGameEvent;
 use crate::plugin::{
     api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
 };
@@ -372,8 +375,13 @@ impl EntityReach {
                         || plugins.has_handlers::<VehicleExitEvent>()
                         || plugins.has_handlers::<BlockBreakEvent>()
                         || plugins.has_handlers::<PacketSentEvent>()
+                        || plugins.has_handlers::<GenericGameEvent>()
+                        || plugins.has_handlers::<VehicleDamageEvent>()
+                        || plugins.has_handlers::<VehicleDestroyEvent>()
+                        || plugins.has_handlers::<ItemSpawnEvent>()
+                        || plugins.has_handlers::<EntitySpawnEvent>()
                 })
-                || boat_may_hit_gateway(&world, &reach.body);
+                || boat_may_need_serial_contact(&world, &reach.body);
             return Self::Boat {
                 reach,
                 start: bounds,
@@ -489,7 +497,7 @@ pub fn resolve(
                     reach.players = grow(reach.players);
                     reach.block_reads = grow(reach.block_reads);
                     reach.block_writes = reach.block_writes.map(grow);
-                    if boat_may_hit_gateway(world, &reach.body) {
+                    if boat_may_need_serial_contact(world, &reach.body) {
                         return None;
                     }
                 }
@@ -536,10 +544,16 @@ pub fn resolve(
     Some(reaches)
 }
 
-fn boat_may_hit_gateway(world: &World, body: &BoundingBox) -> bool {
-    // Gateway contact can teleport the boat beyond its island in this tick.
+fn boat_may_need_serial_contact(world: &World, body: &BoundingBox) -> bool {
+    let has_handlers = world
+        .server
+        .upgrade()
+        .is_some_and(|server| server.plugin_manager.has_event_handlers());
     any_contact_section(world, body, |x, y, z| {
-        section_contains_block(world, x, y, z, |block| block == &Block::END_GATEWAY)
+        section_contains_block(world, x, y, z, |block| {
+            // Breaking a lily pad can run loot, spawn and arbitrary neighbor callbacks.
+            block == &Block::END_GATEWAY || (has_handlers && changes_on_contact(block))
+        })
     })
 }
 

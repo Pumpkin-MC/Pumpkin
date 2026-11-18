@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::tag::{self, Taggable};
@@ -6,7 +8,6 @@ use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::
 use super::BoatEntity;
 use crate::entity::{EntityBase, player::Player};
 use crate::plugin::api::events::vehicle::vehicle_move::VehicleMoveEvent;
-use pumpkin_protocol::java::client::play::CMoveVehicle;
 
 pub(super) const DEFAULT_GRAVITY: f64 = 0.04;
 const WATER_OFFSET: f64 = 0.001;
@@ -282,12 +283,9 @@ impl BoatEntity {
         let from = entity.pos.load();
         let velocity = entity.velocity.load();
         let destination = from + surface_offset + velocity;
-        let mut event = VehicleMoveEvent::new(entity.entity_id, from, destination);
-        if destination != from
-            && let Some(server) = entity.world.load().server.upgrade()
-        {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
+        let Some(event) = self.movement_event(from, destination, None) else {
+            return;
+        };
         if event.cancelled
             || !(event.to.x.is_finite() && event.to.y.is_finite() && event.to.z.is_finite())
         {
@@ -304,8 +302,12 @@ impl BoatEntity {
         } else {
             event.to - start
         };
-        entity.move_entity(caller, motion);
-        self.record_movement(start, entity.pos.load(), motion);
+        let world = entity.world.load();
+        let teleports = self.teleports.load(Ordering::Relaxed);
+        let destination = entity.move_entity_and_get_destination(caller, motion);
+        if self.continue_movement(&world, teleports, destination) {
+            self.record_movement(start, destination, motion, teleports);
+        }
     }
 
     pub(crate) fn accept_client_movement(
@@ -315,30 +317,52 @@ impl BoatEntity {
     ) -> Option<Vector3<f64>> {
         let entity = &self.vehicle.entity;
         let from = entity.pos.load();
-        let mut event = VehicleMoveEvent::new(entity.entity_id, from, destination);
-        if destination != from
-            && let Some(server) = entity.get_server()
-        {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
+        let teleports = self.teleports.load(Ordering::Relaxed);
+        let event = self.movement_event(from, destination, Some(player.get_entity().entity_id))?;
         let target = event.to;
         if event.cancelled
             || !(target.x.is_finite() && target.y.is_finite() && target.z.is_finite())
             || entity.has_new_boat_collision(self, target - from)
         {
-            player.try_send_client_packet(&CMoveVehicle::new(
-                from.x,
-                from.y,
-                from.z,
-                entity.yaw.load(),
-                entity.pitch.load(),
-            ));
             return None;
         }
-        if target != from {
-            self.record_movement(from, target, target - from);
+        if self.teleports.load(Ordering::Relaxed) != teleports
+            || (target != from && !self.record_movement(from, target, target - from, teleports))
+        {
+            return None;
         }
+        // AbstractBoat.checkFallDamage records delta movement, not the packet's displacement.
         self.last_yd.store(entity.velocity.load().y);
         Some(target)
+    }
+
+    fn movement_event(
+        &self,
+        from: Vector3<f64>,
+        destination: Vector3<f64>,
+        client_driver: Option<i32>,
+    ) -> Option<VehicleMoveEvent> {
+        let entity = &self.vehicle.entity;
+        let mut event = VehicleMoveEvent::new(entity.entity_id, from, destination);
+        if destination != from {
+            let world = entity.world.load();
+            if let Some(server) = world.server.upgrade()
+                && server.plugin_manager.has_handlers::<VehicleMoveEvent>()
+            {
+                let teleports = self.teleports.load(Ordering::Relaxed);
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if !self.continue_movement(&world, teleports, from) {
+                    return None;
+                }
+                let current_driver = self
+                    .get_controlling_passenger()
+                    .filter(|passenger| passenger.get_player().is_some())
+                    .map(|passenger| passenger.get_entity().entity_id);
+                if current_driver != client_driver {
+                    return None;
+                }
+            }
+        }
+        Some(event)
     }
 }

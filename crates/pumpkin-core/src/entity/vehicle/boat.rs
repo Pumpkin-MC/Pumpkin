@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crossbeam::atomic::AtomicCell;
@@ -33,6 +33,8 @@ use physics::BoatStatus;
 mod block_effects;
 mod dismount;
 mod physics;
+#[cfg(test)]
+mod tests;
 
 const FRONT_SEAT_OFFSET: f32 = 0.2;
 const BACK_SEAT_OFFSET: f32 = -0.6;
@@ -63,6 +65,7 @@ pub struct BoatEntity {
     water_level: AtomicCell<f64>,
     land_friction: AtomicCell<f32>,
     last_yd: AtomicCell<f64>,
+    teleports: AtomicU64,
     movements: Mutex<VecDeque<BoatMovement>>,
     left_paddle_moving: AtomicBool,
     right_paddle_moving: AtomicBool,
@@ -84,6 +87,7 @@ impl BoatEntity {
             water_level: AtomicCell::new(0.0),
             land_friction: AtomicCell::new(0.0),
             last_yd: AtomicCell::new(0.0),
+            teleports: AtomicU64::new(0),
             movements: Mutex::new(VecDeque::new()),
             left_paddle_moving: AtomicBool::new(false),
             right_paddle_moving: AtomicBool::new(false),
@@ -124,6 +128,34 @@ impl BoatEntity {
     pub(crate) fn is_client_controlled(&self) -> bool {
         self.get_controlling_passenger()
             .is_some_and(|passenger| passenger.get_player().is_some())
+    }
+
+    fn continue_movement(
+        &self,
+        world: &Arc<World>,
+        teleports: u64,
+        expected_position: Vector3<f64>,
+    ) -> bool {
+        let entity = self.get_entity();
+        if entity.is_removed() || self.teleports.load(Ordering::Relaxed) != teleports {
+            return false;
+        }
+        let position = entity.pos.load();
+        if position != expected_position || !Arc::ptr_eq(world, &entity.world.load()) {
+            // Native listeners can relocate the base entity directly.
+            self.reset_movement(position);
+            return false;
+        }
+        true
+    }
+
+    fn reset_movement(&self, position: Vector3<f64>) {
+        self.teleports.fetch_add(1, Ordering::Relaxed);
+        self.movements
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+        self.get_entity().last_pos.store(position);
     }
 
     fn push_nearby_boats(&self) {
@@ -285,13 +317,8 @@ impl EntityBase for BoatEntity {
         world: Arc<World>,
     ) {
         // A teleport starts a new path; do not sweep between worlds or positions.
-        self.movements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-        let entity = self.get_entity();
-        entity.last_pos.store(position);
-        entity.teleport(position, yaw, pitch, &world);
+        self.reset_movement(position);
+        self.get_entity().teleport(position, yaw, pitch, &world);
     }
 
     fn has_container_inventory(&self) -> bool {

@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::atomic::Ordering;
 
 use pumpkin_data::Block;
 use pumpkin_util::math::{
@@ -34,16 +35,20 @@ impl BoatEntity {
             })
     }
 
-    pub(crate) fn record_movement(
+    pub(super) fn record_movement(
         &self,
         from: Vector3<f64>,
         to: Vector3<f64>,
         requested_movement: Vector3<f64>,
-    ) {
+        teleports: u64,
+    ) -> bool {
         let mut movements = self
             .movements
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.teleports.load(Ordering::Relaxed) != teleports {
+            return false;
+        }
         // Entity.addMovementThisTick merges the oldest pair into a straight movement.
         if movements.len() >= MAX_MOVEMENTS_HANDLED_PER_TICK
             && let Some(first) = movements.pop_front()
@@ -57,6 +62,7 @@ impl BoatEntity {
             to,
             requested: Some(requested_movement),
         });
+        true
     }
 
     pub(super) fn apply_effects_from_blocks(&self) {
@@ -88,30 +94,32 @@ impl BoatEntity {
         let Some(server) = world.server.upgrade() else {
             return;
         };
+        let teleports = self.teleports.load(Ordering::Relaxed);
+        let bounds = entity.bounding_box.load();
         let mut visited = HashSet::new();
-        let mut visit = |pos| {
-            if !entity.is_alive() {
-                return;
-            }
-            let (block, state) = world.get_block_and_state(&pos);
-            // Lily pads inherit the full-block entity-inside shape, not their thin outline.
-            if block == &Block::LILY_PAD && visited.insert(pos) {
-                world
-                    .block_registry
-                    .on_entity_collision(block, &world, self, &pos, state, &server);
-            }
-        };
+        let mut interrupted = false;
         for movement in movements {
-            let bounds = entity
-                .bounding_box
-                .load()
-                .shift(movement.from - entity.pos.load());
             for_each_block_along_movement(
-                bounds,
+                bounds.shift(movement.from - to),
                 movement.to - movement.from,
                 movement.requested,
-                &mut visit,
+                |pos| {
+                    if interrupted {
+                        return;
+                    }
+                    let (block, state) = world.get_block_and_state(&pos);
+                    // Lily pads inherit the full-block entity-inside shape, not their thin outline.
+                    if block == &Block::LILY_PAD && visited.insert(pos) {
+                        world
+                            .block_registry
+                            .on_entity_collision(block, &world, self, &pos, state, &server);
+                        interrupted = !self.continue_movement(&world, teleports, to);
+                    }
+                },
             );
+            if interrupted {
+                break;
+            }
         }
     }
 }

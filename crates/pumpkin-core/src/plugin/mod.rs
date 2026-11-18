@@ -1221,6 +1221,11 @@ impl PluginManager {
     }
 
     #[must_use]
+    pub(crate) fn has_event_handlers(&self) -> bool {
+        !self.handlers.load().is_empty()
+    }
+
+    #[must_use]
     pub fn has_handlers<E: Payload + 'static>(&self) -> bool {
         self.handlers
             .load()

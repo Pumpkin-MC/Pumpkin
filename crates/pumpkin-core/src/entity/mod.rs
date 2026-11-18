@@ -3266,6 +3266,7 @@ impl Entity {
     fn push_by_fluid(&self, speed: f64, push: Vector3<f64>, n: usize) {
         const MIN_CURRENT_SPEED: f64 = 0.003;
         const MIN_CURRENT_IMPULSE: f64 = MIN_CURRENT_SPEED * 1.5;
+        // Vanilla's CurrentAccumulator compares the squared length directly to this threshold.
         if n == 0 || push.length_squared() < f64::from(1.0e-5f32) {
             return;
         }
@@ -3433,18 +3434,28 @@ impl Entity {
     // Move by a delta, adjust for collisions, and send
 
     // Does not send movement. That must be done separately
-    pub fn move_entity(&self, caller: &dyn EntityBase, mut motion: Vector3<f64>) {
+    pub fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
+        self.move_entity_and_get_destination(caller, motion);
+    }
+
+    // Return the position reached by collision resolution before effects can relocate the entity.
+    fn move_entity_and_get_destination(
+        &self,
+        caller: &dyn EntityBase,
+        mut motion: Vector3<f64>,
+    ) -> Vector3<f64> {
         if caller.get_player().is_some() {
-            return;
+            return self.pos.load();
         }
 
         if self.no_physics.load(Ordering::Relaxed) {
-            self.move_pos(motion);
+            let destination = self.pos.load() + motion;
+            self.set_pos(destination);
             self.horizontal_collision.store(false, Ordering::Relaxed);
             self.vertical_collision.store(false, Ordering::Relaxed);
             self.on_ground.store(false, Ordering::Relaxed);
 
-            return;
+            return destination;
         }
 
         let movement_multiplier = self.movement_multiplier.swap(Vector3::default());
@@ -3461,7 +3472,8 @@ impl Entity {
 
         let final_move = self.adjust_movement_for_collisions(motion, caller);
 
-        self.move_pos(final_move);
+        let destination = self.pos.load() + final_move;
+        self.set_pos(destination);
 
         let velocity_multiplier = f64::from(caller.get_block_speed_factor());
 
@@ -3498,10 +3510,10 @@ impl Entity {
                 .update_entity_movement_after_fall_on(effect_block, caller);
         }
 
-        if self.is_removed() {
-            return;
+        if !self.is_removed() {
+            self.emit_movement(caller, final_move, &effect_pos, effect_state);
         }
-        self.emit_movement(caller, final_move, &effect_pos, effect_state);
+        destination
     }
 
     /// The emission part of vanilla `Entity.move` for movement the client already resolved,
@@ -6530,6 +6542,22 @@ impl Flag {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn fluid_current_ignores_very_small_accumulated_pushes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = ai::test_support::world(&folder);
+        let entity = Entity::new(world.clone(), Vector3::default(), &EntityType::OAK_BOAT);
+        for push in [Vector3::default(), Vector3::new(0.002, 0.0, 0.0)] {
+            entity.push_by_fluid(WATER_PUSH_SPEED, push, 1);
+            assert_eq!(entity.velocity.load(), Vector3::default());
+        }
+        entity.push_by_fluid(WATER_PUSH_SPEED, Vector3::new(0.004, 0.0, 0.0), 1);
+        assert_eq!(entity.velocity.load(), Vector3::new(0.014, 0.0, 0.0));
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[test]
     fn equipment_break_status_maps_all_slots() {
