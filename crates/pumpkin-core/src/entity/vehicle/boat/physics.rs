@@ -225,7 +225,17 @@ impl BoatEntity {
     ) -> Vector3<f64> {
         const DEFAULT_FRICTION: f32 = 0.9;
         let entity = &self.vehicle.entity;
-        if let Some(border_clear) = surface_border_clear {
+        let status = if surface_border_clear.is_some() {
+            // Tick listeners may change the water without relocating the boat.
+            let status = self.get_status();
+            self.status.store(Some(status));
+            status
+        } else {
+            status
+        };
+        if let Some(border_clear) = surface_border_clear
+            && !matches!(status, BoatStatus::InAir | BoatStatus::OnLand)
+        {
             self.water_level.store(entity.bounding_box.load().max.y);
             let target_y = f64::from(self.get_water_level_above() - entity.height()) + 0.101;
             let position = entity.pos.load();
@@ -325,7 +335,8 @@ impl BoatEntity {
             let resolved =
                 entity.apply_entity_motion(caller, motion, walls.as_slice().as_flattened());
             let end = entity.pos.load();
-            movements.record(start, end, motion);
+            let requested = resolved.map_or(motion, |(requested, _)| requested);
+            movements.record(start, end, requested);
             (resolved, end)
         };
         if let Some((requested, final_move)) = resolved

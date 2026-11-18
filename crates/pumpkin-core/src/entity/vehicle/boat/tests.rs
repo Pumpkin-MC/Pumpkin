@@ -11,6 +11,7 @@ use pumpkin_protocol::java::{client::play::CMoveVehicle, server::play::SMoveVehi
 use pumpkin_protocol::{ConnectionState, ServerPacket};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::chunk::ChunkData;
+use pumpkin_world::world::BlockFlags;
 
 use super::*;
 use crate::data::VanillaData;
@@ -98,6 +99,27 @@ impl EventHandler<VehicleUpdateEvent> for TeleportBoat {
         _event: &'a mut VehicleUpdateEvent,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async { self.teleport() })
+    }
+}
+
+struct DrainWater {
+    world: Arc<World>,
+    position: BlockPos,
+}
+
+impl EventHandler<VehicleUpdateEvent> for DrainWater {
+    fn handle_blocking<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        _event: &'a mut VehicleUpdateEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async {
+            self.world.set_block_state(
+                &self.position,
+                Block::AIR.default_state.id,
+                BlockFlags::NOTIFY_LISTENERS,
+            );
+        })
     }
 }
 
@@ -256,9 +278,17 @@ async fn lily_pad_spawn_listener_serializes_the_boat_and_can_end_the_sweep() -> 
     assert!(plan().is_some());
     for x in [6, 9] {
         chunk.set_block_absolute_y(x, 63, 8, Block::WATER.default_state.id);
-        chunk.set_block_absolute_y(x, 64, 8, Block::LILY_PAD.default_state.id);
     }
+    let set_pads = |block: &Block| {
+        for x in [6, 9] {
+            chunk.set_block_absolute_y(x, 64, 8, block.default_state.id);
+        }
+    };
+    set_pads(&Block::LILY_PAD);
     assert!(plan().is_none());
+    // Without contact blocks, only the explicit spawn-listener check forces serial ticking.
+    set_pads(&Block::AIR);
+    assert!(plan().is_some());
     server.plugin_manager.register::<EntitySpawnEvent, _>(
         Arc::new(TeleportBoat {
             boat: boat.clone(),
@@ -269,11 +299,46 @@ async fn lily_pad_spawn_listener_serializes_the_boat_and_can_end_the_sweep() -> 
     );
     assert!(plan().is_none());
 
+    set_pads(&Block::LILY_PAD);
     boat.apply_effects_from_blocks();
 
     assert_eq!(boat.get_entity().pos.load(), destination);
     assert_eq!(world.get_block(&BlockPos::new(6, 64, 8)), &Block::AIR);
     assert_eq!(world.get_block(&BlockPos::new(9, 64, 8)), &Block::LILY_PAD);
+    server.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_sweep_follows_movement_after_the_multiplier() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let chunk = ChunkData::empty_sync(0, 0);
+    let x_first = BlockPos::new(7, 64, 5);
+    let z_first = BlockPos::new(5, 64, 8);
+    for pos in [x_first, z_first] {
+        let x = pos.0.x as usize;
+        let z = pos.0.z as usize;
+        chunk.set_block_absolute_y(x, 63, z, Block::WATER.default_state.id);
+        chunk.set_block_absolute_y(x, 64, z, Block::LILY_PAD.default_state.id);
+    }
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let start = Vector3::new(5.5, 64.125, 5.5);
+    let boat = BoatEntity::new(Entity::new(world.clone(), start, &EntityType::OAK_BOAT));
+    let entity = boat.get_entity();
+    entity.velocity.store(Vector3::new(8.0, 0.0, 4.0));
+    entity
+        .movement_multiplier
+        .store(Vector3::new(0.25, 1.0, 1.0));
+    let snapshot = boat.movement_snapshot(&boat.lock_movements());
+
+    boat.move_boat(&boat, Vector3::default(), &snapshot);
+    assert_eq!(entity.pos.load(), start + Vector3::new(2.0, 0.0, 4.0));
+    boat.apply_effects_from_blocks();
+
+    assert_eq!(world.get_block(&x_first), &Block::LILY_PAD);
+    assert_eq!(world.get_block(&z_first), &Block::AIR);
     server.shutdown().await;
     Ok(())
 }
@@ -472,6 +537,47 @@ async fn teleport_during_vehicle_update_discards_the_old_water_transition() -> T
 
     assert_eq!(boat.get_entity().pos.load(), destination);
     assert_eq!(boat.pending_block_movement_reach(), 0.0);
+    server.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn draining_water_during_vehicle_update_keeps_the_boat_falling() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let chunk = ChunkData::empty_sync(0, 0);
+    let water = BlockPos::new(8, 64, 8);
+    chunk.set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let start = Vector3::new(8.5, 64.0, 8.5);
+    let falling = Vector3::new(0.0, -0.25, 0.0);
+    let boat = BoatEntity::new(Entity::new(world.clone(), start, &EntityType::OAK_BOAT));
+    let entity = boat.get_entity();
+    boat.status.store(Some(BoatStatus::InAir));
+    entity.velocity.store(falling);
+
+    boat.tick(&boat, &server);
+    assert!(entity.pos.load().y > start.y);
+    assert_eq!(entity.velocity.load(), Vector3::default());
+
+    boat.teleport(start, None, None, world.clone());
+    boat.status.store(Some(BoatStatus::InAir));
+    entity.velocity.store(falling);
+    server.plugin_manager.register::<VehicleUpdateEvent, _>(
+        Arc::new(DrainWater {
+            world: world.clone(),
+            position: water,
+        }),
+        EventPriority::Normal,
+        true,
+    );
+
+    boat.tick(&boat, &server);
+
+    assert_eq!(world.get_block(&water), &Block::AIR);
+    assert!(entity.pos.load().y < start.y);
+    assert!(entity.velocity.load().y < falling.y);
     server.shutdown().await;
     Ok(())
 }

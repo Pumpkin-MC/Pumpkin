@@ -62,6 +62,8 @@ const fn get_exits(shape: RailShape) -> (Vector3<f64>, Vector3<f64>) {
 }
 
 const GRAVITY: f64 = 0.04;
+const WATER_GRAVITY: f64 = 0.005;
+const AIR_DRAG: f32 = 0.95;
 const RAIL_HEIGHT_OFFSET: f64 = 0.0625;
 const ROTATION_MOVEMENT_THRESHOLD: f64 = 0.001;
 const FLIP_ROTATION_THRESHOLD: f32 = 170.0;
@@ -215,20 +217,26 @@ impl MinecartEntity {
         }
     }
 
+    fn max_speed(&self, in_water: bool) -> f64 {
+        let speed = if in_water {
+            MAX_RAIL_SPEED_IN_WATER
+        } else {
+            MAX_RAIL_SPEED
+        };
+        if matches!(self.kind, MinecartKind::Furnace(_)) {
+            speed * if in_water { 0.75 } else { 0.5 }
+        } else {
+            speed
+        }
+    }
+
     fn rail_movement(
         &self,
         velocity: Vector3<f64>,
         in_water: bool,
         occupied: bool,
     ) -> Vector3<f64> {
-        let mut max_speed = if in_water {
-            MAX_RAIL_SPEED_IN_WATER
-        } else {
-            MAX_RAIL_SPEED
-        };
-        if matches!(self.kind, MinecartKind::Furnace(_)) {
-            max_speed *= if in_water { 0.75 } else { 0.5 };
-        }
+        let max_speed = self.max_speed(in_water);
         let scale = if occupied {
             OCCUPIED_RAIL_MOTION_FACTOR
         } else {
@@ -239,6 +247,22 @@ impl MinecartEntity {
             0.0,
             (velocity.z * scale).clamp(-max_speed, max_speed),
         )
+    }
+
+    fn off_rail_movement(&self, mut velocity: Vector3<f64>, in_water: bool) -> Vector3<f64> {
+        let entity = self.get_entity();
+        if !entity.has_no_gravity() {
+            velocity.y -= if in_water { WATER_GRAVITY } else { GRAVITY };
+        }
+        // comeOffTrack caps stored momentum, while moveAlongTrack only caps displacement.
+        let max_speed = self.max_speed(in_water);
+        velocity.x = velocity.x.clamp(-max_speed, max_speed);
+        velocity.z = velocity.z.clamp(-max_speed, max_speed);
+        if entity.on_ground.load(Ordering::Relaxed) {
+            velocity = velocity * 0.5;
+        }
+        entity.velocity.store(velocity);
+        velocity
     }
 
     fn activate_rideable(&self, occupied: bool) {
@@ -485,7 +509,7 @@ impl EntityBase for MinecartEntity {
 
         let mut velocity = self.vehicle.entity.velocity.load();
         let occupied = is_on_rails && self.get_entity().has_passengers();
-        let in_water = is_on_rails && {
+        let in_water = {
             let bounds = self.get_entity().bounding_box.load().expand_all(-0.001);
             BlockPos::iterate(bounds.min_block_pos(), bounds.max_block_pos()).any(|pos| {
                 let (fluid, state) = world.get_fluid_and_fluid_state(&pos);
@@ -594,21 +618,14 @@ impl EntityBase for MinecartEntity {
                 };
             }
             self.vehicle.entity.velocity.store(velocity);
-        } else if !self.vehicle.entity.on_ground.load(Ordering::Relaxed) {
-            velocity.y -= GRAVITY;
-            self.vehicle.entity.velocity.store(velocity);
         }
 
         let motion = if is_on_rails {
             self.rail_movement(velocity, in_water, occupied)
         } else {
-            velocity
+            self.off_rail_movement(velocity, in_water)
         };
-        let moved = if is_on_rails {
-            motion != Vector3::default()
-        } else {
-            motion.length() > 0.001
-        };
+        let moved = motion != Vector3::default();
         let height_change = if let Some((rail_center, uphill)) = slope {
             let entity = self.get_entity();
             let previous_height = slope_height(entity.pos.load(), rail_center, uphill);
@@ -643,51 +660,25 @@ impl EntityBase for MinecartEntity {
                 return;
             }
 
-            #[allow(clippy::useless_let_if_seq)]
-            let mut friction = 0.95; // Vanilla minecart air drag
-
-            if is_on_rails {
-                // The movement solver clips blocked axes and contact pushes can alter stored speed.
-                velocity = self.get_entity().velocity.load();
-                friction = if occupied { 0.997 } else { 0.96 };
-                if in_water {
-                    friction *= 0.95;
+            // The movement solver clips blocked axes and contact pushes can alter stored speed.
+            let velocity = self.get_entity().velocity.load();
+            let mut next_vel = if is_on_rails {
+                if let MinecartKind::Furnace(minecart) = &self.kind {
+                    minecart.velocity(velocity, in_water)
+                } else if let Some(inventory) = self.container() {
+                    container::velocity(inventory, velocity, in_water)
+                } else {
+                    let friction = if occupied { 0.997 } else { 0.96 };
+                    velocity * (friction * if in_water { 0.95 } else { 1.0 })
                 }
+            } else if self.get_entity().on_ground.load(Ordering::Relaxed) {
+                velocity
             } else {
-                let below_block_pos = BlockPos(Vector3::new(
-                    block_pos.0.x,
-                    block_pos.0.y - 1,
-                    block_pos.0.z,
-                ));
-                let below_block = world.get_block(&below_block_pos);
-
-                let is_on_ground = self.vehicle.entity.on_ground.load(Ordering::Relaxed)
-                    || (below_block.id != Block::AIR.id
-                        && below_block.id != Block::WATER.id
-                        && below_block.id != Block::LAVA.id);
-                let is_in_water = self.vehicle.entity.touching_water.load(Ordering::Relaxed)
-                    || below_block.id == Block::WATER.id;
-
-                if is_on_ground {
-                    friction = 0.5;
-                } else if is_in_water {
-                    friction = 0.95;
-                }
-            }
-
-            let mut next_vel = if is_on_rails && let MinecartKind::Furnace(minecart) = &self.kind {
-                minecart.velocity(velocity, in_water)
-            } else if is_on_rails && let Some(inventory) = self.container() {
-                container::velocity(inventory, velocity, in_water)
-            } else {
-                velocity.multiply(friction, friction, friction)
+                velocity * f64::from(AIR_DRAG)
             };
             let speed = next_vel.horizontal_length();
             if height_change != 0.0 && speed > 0.0 {
                 next_vel = next_vel * ((speed + height_change * SLOPE_HEIGHT_SPEED_FACTOR) / speed);
-            }
-            if !is_on_rails && next_vel.length() < 0.005 {
-                next_vel = Vector3::new(0.0, 0.0, 0.0);
             }
             self.vehicle.entity.velocity.store(next_vel);
             if next_vel.length_squared() == 0.0 {
@@ -705,6 +696,7 @@ impl EntityBase for MinecartEntity {
             }
         }
         if activate_rideable {
+            // Vanilla ejects before updating yaw and flipped rotation for this tick.
             self.activate_rideable(occupied);
         }
         self.update_rotation(previous_position, previous_yaw);
@@ -1086,6 +1078,10 @@ mod tests {
         assert_eq!(minecart.rail_movement(boosted, true, false).x, 0.2);
         let occupied_motion = minecart.rail_movement(boosted, false, true);
         assert!((occupied_motion.x - 0.345).abs() < f64::EPSILON);
+        let off_rail_motion = minecart.off_rail_movement(boosted.add_raw(0.0, -0.1, 0.0), false);
+        assert_eq!(off_rail_motion.x, 0.4);
+        assert_eq!(minecart.get_entity().velocity.load(), off_rail_motion);
+        assert!((off_rail_motion.y + 0.14).abs() < f64::EPSILON);
         world.level.shutdown().await;
         Ok(())
     }
