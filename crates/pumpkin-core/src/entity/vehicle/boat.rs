@@ -13,16 +13,18 @@ use crate::world::game_event::GameEventContext;
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::CustomNameImpl;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
 use pumpkin_inventory::Inventory;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
@@ -40,7 +42,16 @@ const BACK_SEAT_OFFSET: f32 = -0.6;
 const ANIMAL_SEAT_SHIFT: f32 = 0.2;
 const CHEST_BOAT_CONTAINER_SIZE: usize = 27;
 const TIME_TO_EJECT: f32 = 60.0;
+const BUBBLE_TIME: u8 = 60;
+const BUBBLE_COLUMN_LAUNCH_SPEED: f64 = 0.6;
+const BUBBLE_COLUMN_SINK_SPEED: f64 = 0.7;
 const CONTACT_VERTICAL_INSET: f64 = 0.01f32 as f64;
+
+#[derive(Clone, Copy)]
+enum BubbleColumnDirection {
+    Up,
+    Down,
+}
 
 #[must_use]
 pub const fn is_chest_boat(entity_type: &EntityType) -> bool {
@@ -65,6 +76,8 @@ pub struct BoatEntity {
     land_friction: AtomicCell<f32>,
     last_yd: AtomicCell<f64>,
     movements: Mutex<BoatMovements>,
+    surface_bubble_contact: AtomicCell<Option<BubbleColumnDirection>>,
+    bubble_time: AtomicCell<u8>,
     left_paddle_moving: AtomicBool,
     right_paddle_moving: AtomicBool,
     inventory: Option<Arc<MinecartInventory>>,
@@ -92,6 +105,8 @@ impl BoatEntity {
             land_friction: AtomicCell::new(0.0),
             last_yd: AtomicCell::new(0.0),
             movements: Mutex::default(),
+            surface_bubble_contact: AtomicCell::new(None),
+            bubble_time: AtomicCell::new(0),
             left_paddle_moving: AtomicBool::new(false),
             right_paddle_moving: AtomicBool::new(false),
             inventory,
@@ -111,15 +126,79 @@ impl BoatEntity {
         let ticks = (self.ticks_underwater.load() + 1.0).min(TIME_TO_EJECT);
         self.ticks_underwater.store(ticks);
         if ticks >= TIME_TO_EJECT {
-            let entity = &self.vehicle.entity;
-            let passengers = entity
-                .passengers
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            for passenger in passengers.iter().rev() {
-                entity.remove_passenger(passenger.get_entity().entity_id);
+            self.eject_passengers();
+        }
+    }
+
+    fn eject_passengers(&self) {
+        let entity = self.get_entity();
+        let passengers = entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers.iter().rev() {
+            entity.remove_passenger(passenger.get_entity().entity_id);
+        }
+    }
+
+    fn tick_bubble_column(&self) {
+        let previous = self.bubble_time.load();
+        let (contact, launch_position) = if previous == 1 {
+            let movements = self.lock_movements();
+            let contact = self.surface_bubble_contact.swap(None);
+            (contact, contact.map(|_| self.movement_snapshot(&movements)))
+        } else {
+            (self.surface_bubble_contact.swap(None), None)
+        };
+        let remaining = contact.map_or(0, |_| {
+            if previous == 0 {
+                BUBBLE_TIME - 1
+            } else {
+                previous - 1
             }
+        });
+        if previous == remaining {
+            return;
+        }
+
+        let entity = self.get_entity();
+        self.bubble_time.store(remaining);
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::abstract_boat::ID_BUBBLE_TIME,
+            VarInt(i32::from(remaining)),
+        );
+
+        if let (Some(direction), Some(snapshot)) = (contact, launch_position) {
+            if !self.movement_is_current(&snapshot, snapshot.position) {
+                return;
+            }
+            let event = match direction {
+                BubbleColumnDirection::Up => EntityStatus::BoatLaunch,
+                BubbleColumnDirection::Down => {
+                    self.eject_passengers();
+                    EntityStatus::BoatSink
+                }
+            };
+            let client_controlled = self.is_client_controlled();
+            {
+                let mut movements = self.lock_movements();
+                if !self.movement_matches(&mut movements, &snapshot, snapshot.position) {
+                    return;
+                }
+                // A controlling Java client applies the impulse when it receives the event.
+                if !client_controlled {
+                    let mut velocity = entity.velocity.load();
+                    match direction {
+                        BubbleColumnDirection::Up => velocity.y = BUBBLE_COLUMN_LAUNCH_SPEED,
+                        BubbleColumnDirection::Down => velocity.y -= BUBBLE_COLUMN_SINK_SPEED,
+                    }
+                    entity.velocity.store(velocity);
+                }
+            }
+            snapshot
+                .world
+                .broadcast_entity_event(entity, event, ActorEventID::None);
         }
     }
 
@@ -148,11 +227,6 @@ impl BoatEntity {
         }
     }
 
-    pub(in crate::entity) fn update_last_pos(&self) {
-        let _movements = self.lock_movements();
-        self.get_entity().update_last_pos();
-    }
-
     fn movement_matches(
         &self,
         movements: &mut BoatMovements,
@@ -167,6 +241,7 @@ impl BoatEntity {
         if position != expected_position || !Arc::ptr_eq(&snapshot.world, &entity.world.load()) {
             // Native listeners can relocate the base entity directly.
             movements.invalidate();
+            self.surface_bubble_contact.store(None);
             entity.last_pos.store(position);
             return false;
         }
@@ -343,6 +418,7 @@ impl EntityBase for BoatEntity {
         let (chunk, packet) = {
             let mut movements = self.lock_movements();
             movements.invalidate();
+            self.surface_bubble_contact.store(None);
             entity.last_pos.store(position);
             entity.apply_teleport(position, yaw, pitch)
         };
@@ -367,14 +443,47 @@ impl EntityBase for BoatEntity {
         Some(container.clone() as Arc<dyn Inventory>)
     }
 
-    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+    fn on_above_bubble_column(&self, drag_down: bool, _pos: &BlockPos) {
+        let direction = if drag_down {
+            BubbleColumnDirection::Down
+        } else {
+            BubbleColumnDirection::Up
+        };
+        self.surface_bubble_contact.store(Some(direction));
+
+        // The Java client provides the surface splash sound and particles locally.
+        if !self.status.load().is_some_and(BoatStatus::is_underwater) && rand::random_ratio(1, 100)
+        {
+            let driver = self.get_controlling_passenger();
+            let entity = self.get_entity();
+            entity.world.load().emit_game_event_with_context(
+                GameEvent::Splash.name(),
+                entity.pos.load(),
+                &GameEventContext {
+                    source_entity: driver.as_deref(),
+                },
+            );
+        }
+    }
+
+    fn on_inside_bubble_column(&self, drag_down: bool) {
+        if !self.is_client_controlled() {
+            crate::block::blocks::bubble_column::push_entity(self.get_entity(), drag_down, false);
+        }
+    }
+
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let snapshot = self.movement_snapshot(&self.lock_movements());
         let status = self.get_status();
         let old_status = self.status.swap(Some(status));
         self.tick_underwater(status);
         self.vehicle.tick();
         let entity = &self.vehicle.entity;
-        entity.tick(caller, server);
+        {
+            let _movements = self.lock_movements();
+            entity.update_last_pos()
+        };
+        entity.tick_base(caller);
         if entity.is_removed() {
             return;
         }
@@ -388,10 +497,18 @@ impl EntityBase for BoatEntity {
             {
                 self.set_paddles(false, false);
             }
+            // Surfacing only moves vertically, so the hull's current X/Z bounds suffice.
+            let surface_border_clear = (old_status == Some(BoatStatus::InAir)
+                && !matches!(status, BoatStatus::InAir | BoatStatus::OnLand))
+            .then(|| {
+                snapshot
+                    .world
+                    .no_border_collision(self, entity.bounding_box.load())
+            });
             let surface_offset = {
                 let mut movements = self.lock_movements();
                 self.movement_matches(&mut movements, &snapshot, snapshot.position)
-                    .then(|| self.float_boat(old_status, status))
+                    .then(|| self.float_boat(status, surface_border_clear))
             };
             if let Some(offset) = surface_offset {
                 self.move_boat(caller, offset, &snapshot);
@@ -400,7 +517,10 @@ impl EntityBase for BoatEntity {
         self.apply_effects_from_blocks();
         entity.tick_block_collisions(caller);
         if !entity.is_removed() {
-            self.push_nearby_boats();
+            self.tick_bubble_column();
+            if !entity.is_removed() {
+                self.push_nearby_boats();
+            }
         }
     }
 

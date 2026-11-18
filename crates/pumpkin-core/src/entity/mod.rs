@@ -1,5 +1,6 @@
 use crate::block::blocks::bubble_column;
 use crate::{
+    block::stop_vertical_movement_after_fall,
     entity::{
         ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag},
         decoration::leash_knot::LeashKnotEntity,
@@ -2451,10 +2452,11 @@ impl Entity {
         &self,
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
+        border_walls: &[BoundingBox],
     ) -> Vector3<f64> {
         let was_on_ground = self.on_ground.load(Ordering::SeqCst);
         let bounding_box = self.bounding_box.load();
-        let movement_step = self.collide_bounding_box(movement, caller);
+        let movement_step = self.collide_bounding_box(movement, caller, border_walls);
 
         let max_up_step = Self::max_up_step(caller);
         let horizontal_collision = movement.x != movement_step.x || movement.z != movement_step.z;
@@ -2495,12 +2497,27 @@ impl Entity {
             {
                 let distance_to_ground = bounding_box.min.y - grounded_box.min.y;
                 let stepped = step_from_ground - Vector3::new(0.0, distance_to_ground, 0.0);
+                let on_ground = movement.y != stepped.y && movement.y < 0.0;
                 self.vertical_collision
                     .store(movement.y != stepped.y, Ordering::SeqCst);
-                self.on_ground.store(
-                    movement.y != stepped.y && movement.y < 0.0,
-                    Ordering::SeqCst,
-                );
+                self.on_ground.store(on_ground, Ordering::SeqCst);
+                // Vanilla checks support after the step, the pre-step support is stale.
+                let supporting = on_ground
+                    .then(|| {
+                        let area = Self::support_test_area(&bounding_box.shift(stepped))
+                            .expand_towards(-stepped.x, 0.0, -stepped.z);
+                        let (collisions, block_positions) =
+                            self.world.load().get_block_collisions(area, caller);
+                        Self::supporting_block_after(
+                            &collisions,
+                            &block_positions,
+                            &bounding_box,
+                            stepped,
+                            self.pos.load(),
+                        )
+                    })
+                    .flatten();
+                self.supporting_block_pos.store(supporting);
                 self.horizontal_collision.store(
                     movement.x != stepped.x || movement.z != stepped.z,
                     Ordering::SeqCst,
@@ -2572,51 +2589,30 @@ impl Entity {
         };
         let mut resolved = Vector3::new(0.0, 0.0, 0.0);
         for axis in axes {
-            let mut amount = movement.get_axis(axis);
-            if amount == 0.0 {
+            let distance = movement.get_axis(axis);
+            if distance == 0.0 {
                 continue;
             }
-            let moved = bounding_box.shift(resolved);
-            for collider in colliders {
-                amount = Self::collide_axis(&moved, collider, axis, amount);
-            }
-            resolved.set_axis(axis, amount);
+            let (allowed, _) = bounding_box
+                .shift(resolved)
+                .collide_along(axis, colliders, distance);
+            resolved.set_axis(axis, allowed);
         }
         resolved
-    }
-
-    /// How far `moving` can travel along `axis` before it hits `other`.
-    fn collide_axis(moving: &BoundingBox, other: &BoundingBox, axis: Axis, amount: f64) -> f64 {
-        const EPSILON: f64 = 1.0E-7;
-        let overlaps = [Axis::X, Axis::Y, Axis::Z]
-            .into_iter()
-            .filter(|&other_axis| other_axis != axis)
-            .all(|other_axis| {
-                moving.max.get_axis(other_axis) - EPSILON > other.min.get_axis(other_axis)
-                    && moving.min.get_axis(other_axis) + EPSILON < other.max.get_axis(other_axis)
-            });
-        if !overlaps {
-            return amount;
-        }
-        if amount > 0.0 && other.min.get_axis(axis) >= moving.max.get_axis(axis) - EPSILON {
-            amount.min(other.min.get_axis(axis) - moving.max.get_axis(axis))
-        } else if amount < 0.0 && other.max.get_axis(axis) <= moving.min.get_axis(axis) + EPSILON {
-            amount.max(other.max.get_axis(axis) - moving.min.get_axis(axis))
-        } else {
-            amount
-        }
     }
 
     fn collide_bounding_box(
         &self,
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
+        border_walls: &[BoundingBox],
     ) -> Vector3<f64> {
         self.vertical_collision.store(false, Ordering::SeqCst);
         if movement.length_squared() == 0.0 {
             return movement;
         }
-        let collision = self.collide(movement, caller);
+        let collision = self.collide(movement, caller, border_walls);
+        // Vanilla `onGround`: stopped while moving down, even with no supporting block found.
         self.on_ground
             .store(collision.vertical && movement.y < 0.0, Ordering::SeqCst);
         self.supporting_block_pos.store(collision.supporting);
@@ -2629,118 +2625,45 @@ impl Entity {
 
     /// Vanilla `collide` without writing state.
     #[expect(clippy::float_cmp)]
-    pub(crate) fn collide(&self, movement: Vector3<f64>, caller: &dyn EntityBase) -> Collision {
+    pub(crate) fn collide(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+        border_walls: &[BoundingBox],
+    ) -> Collision {
         let bounding_box = self.bounding_box.load();
-
         let swept = bounding_box.stretch(movement);
         let (mut collisions, block_positions) =
             self.world.load().get_block_collisions(swept, caller);
-        let boat_colliders = self.get_boat_collisions(swept, caller);
-        if !boat_colliders.is_empty() {
-            collisions.extend(boat_colliders);
-            let adjusted = Self::collide_with_boxes(movement, bounding_box, &collisions);
-            let vertical = adjusted.y != movement.y;
-            let mut start = 0;
-            let supporting = (vertical && movement.y < 0.0)
-                .then(|| {
-                    block_positions.into_iter().find_map(|(end, position)| {
-                        let supports = collisions[start..end].iter().any(|shape| {
-                            Self::collide_axis(&bounding_box, shape, Axis::Y, movement.y)
-                                == adjusted.y
-                        });
-                        start = end;
-                        supports.then_some(position)
-                    })
-                })
-                .flatten();
-            return Collision {
-                movement: adjusted,
-                supporting,
-                horizontal: adjusted.x != movement.x || adjusted.z != movement.z,
-                vertical,
-            };
-        }
-
+        collisions.extend(self.get_boat_collisions(swept, caller));
+        collisions.extend_from_slice(border_walls);
         if collisions.is_empty() {
             return Collision::free(movement);
         }
 
-        let mut adjusted_movement = movement;
-        let mut supporting = None;
-        let mut vertical = false;
+        let adjusted_movement = Self::collide_with_boxes(movement, bounding_box, &collisions);
 
-        // Y-Axis adjustment
-        if movement.get_axis(Axis::Y) != 0.0 {
-            let mut max_time = 1.0;
-            let mut positions = block_positions.into_iter();
-            if let Some((mut collisions_len, mut position)) = positions.next() {
-                let mut supporting_block_pos = None;
+        // Vanilla `Mth.equal`: sideways cuts under 1e-5 are not a collision.
+        let horizontal = (movement.x - adjusted_movement.x).abs() >= 1.0e-5
+            || (movement.z - adjusted_movement.z).abs() >= 1.0e-5;
+        let vertical = adjusted_movement.y != movement.y;
 
-                for (i, inert_box) in collisions.iter().enumerate() {
-                    if i == collisions_len {
-                        let Some((next_len, next_pos)) = positions.next() else {
-                            break;
-                        };
-                        collisions_len = next_len;
-                        position = next_pos;
-                    }
-
-                    if let Some(collision_time) = bounding_box.calculate_collision_time(
-                        inert_box,
-                        adjusted_movement,
-                        Axis::Y,
-                        max_time,
-                    ) {
-                        max_time = collision_time;
-
-                        // If the entity is moving downwards and collides, set the supporting block position
-                        if movement.get_axis(Axis::Y) < 0.0 {
-                            supporting_block_pos = Some(position);
-                        }
-                    }
-                }
-
-                if max_time != 1.0 {
-                    vertical = true;
-                    let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-                    adjusted_movement.set_axis(Axis::Y, changed_component);
-                }
-
-                supporting = supporting_block_pos;
-            }
-        }
-
-        let mut horizontal_collision = false;
-
-        for axis in Axis::horizontal() {
-            if movement.get_axis(axis) == 0.0 {
-                continue;
-            }
-
-            let mut max_time = 1.0;
-
-            for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    axis,
-                    max_time,
-                ) {
-                    max_time = collision_time;
-                }
-            }
-
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(axis) * max_time;
-                adjusted_movement.set_axis(axis, changed_component);
-                horizontal_collision = true;
-            }
-        }
+        let supporting = if vertical && movement.y < 0.0 {
+            Self::supporting_block_after(
+                &collisions,
+                &block_positions,
+                &bounding_box,
+                adjusted_movement,
+                self.pos.load(),
+            )
+        } else {
+            None
+        };
 
         Collision {
             movement: adjusted_movement,
             supporting,
-            horizontal: horizontal_collision,
+            horizontal,
             vertical,
         }
     }
@@ -2812,7 +2735,13 @@ impl Entity {
         let bounds = self.bounding_box.load();
         let previous = bounds.expand_all(-COLLISION_EPSILON);
         let destination = bounds.shift(movement).expand_all(-COLLISION_EPSILON);
-        let mut colliders = self.get_boat_collisions(bounds.stretch(movement), caller);
+        let swept = bounds.stretch(movement);
+        let mut colliders = self.get_boat_collisions(swept, caller);
+        if self.entity_type.boat.is_some()
+            && let Some(walls) = self.world.load().border_collision_walls(self, &swept)
+        {
+            colliders.extend(walls);
+        }
         // Vanilla allows leaving an existing overlap.
         colliders.retain(|shape| !shape.intersects(&previous));
         colliders.iter().any(|shape| shape.intersects(&destination))
@@ -2820,6 +2749,63 @@ impl Entity {
                 && (movement - Self::collide_with_boxes(movement, bounds, &colliders))
                     .horizontal_length_squared()
                     > MOVED_WRONGLY_THRESHOLD)
+    }
+
+    /// Vanilla `checkSupportingBlock`: a thin box under the final position, else under the start X/Z.
+    fn supporting_block_after(
+        collisions: &[BoundingBox],
+        block_positions: &[(usize, BlockPos)],
+        start_box: &BoundingBox,
+        movement: Vector3<f64>,
+        start_pos: Vector3<f64>,
+    ) -> Option<BlockPos> {
+        let test_area = Self::support_test_area(&start_box.shift(movement));
+        let position = start_pos + movement;
+        Self::find_supporting_block(collisions, block_positions, &test_area, &position).or_else(
+            || {
+                Self::find_supporting_block(
+                    collisions,
+                    block_positions,
+                    &test_area.shift(Vector3::new(-movement.x, 0.0, -movement.z)),
+                    &position,
+                )
+            },
+        )
+    }
+
+    fn support_test_area(final_box: &BoundingBox) -> BoundingBox {
+        BoundingBox::new(
+            Vector3::new(final_box.min.x, final_box.min.y - 1.0e-6, final_box.min.z),
+            Vector3::new(final_box.max.x, final_box.min.y, final_box.max.z),
+        )
+    }
+
+    /// Vanilla `CollisionGetter.findSupportingBlock`: the colliding block closest to `position`.
+    fn find_supporting_block(
+        collisions: &[BoundingBox],
+        block_positions: &[(usize, BlockPos)],
+        area: &BoundingBox,
+        position: &Vector3<f64>,
+    ) -> Option<BlockPos> {
+        let mut best: Option<(f64, BlockPos)> = None;
+        let mut start = 0;
+        for &(end, pos) in block_positions {
+            if collisions[start..end].iter().any(|s| s.intersects(area)) {
+                let distance = pos.to_centered_f64().squared_distance_to_vec(position);
+                // Ties go to the larger position in vanilla `Vec3i.compareTo` order (y, z, x).
+                let better = best.is_none_or(|(best_distance, best_pos)| {
+                    distance < best_distance
+                        || (distance == best_distance
+                            && (best_pos.0.y, best_pos.0.z, best_pos.0.x)
+                                < (pos.0.y, pos.0.z, pos.0.x))
+                });
+                if better {
+                    best = Some((distance, pos));
+                }
+            }
+            start = end;
+        }
+        best.map(|(_, pos)| pos)
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
@@ -3030,8 +3016,11 @@ impl Entity {
 
         for pos in BlockPos::iterate(min, max) {
             let (block, state) = world.get_block_and_state(&pos);
-            // Boat movement already visits lily pads, including contacts at its endpoint.
-            if state.is_air() || (block == &Block::LILY_PAD && self.entity_type.boat.is_some()) {
+            // Boat movement visits lily pads and bubble columns along its swept path.
+            if state.is_air()
+                || (self.entity_type.boat.is_some()
+                    && (block == &Block::LILY_PAD || block == &Block::BUBBLE_COLUMN))
+            {
                 continue;
             }
 
@@ -3435,7 +3424,13 @@ impl Entity {
 
     // Does not send movement. That must be done separately
     pub fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
-        if let Some((requested, resolved)) = self.apply_entity_motion(caller, motion) {
+        let walls = self.entity_type.boat.and_then(|_| {
+            let swept = self.bounding_box.load().stretch(motion);
+            self.world.load().border_collision_walls(self, &swept)
+        });
+        if let Some((requested, resolved)) =
+            self.apply_entity_motion(caller, motion, walls.as_slice().as_flattened())
+        {
             self.finish_entity_movement(caller, requested, resolved);
         }
     }
@@ -3445,6 +3440,7 @@ impl Entity {
         &self,
         caller: &dyn EntityBase,
         mut motion: Vector3<f64>,
+        border_walls: &[BoundingBox],
     ) -> Option<(Vector3<f64>, Vector3<f64>)> {
         if caller.get_player().is_some() {
             return None;
@@ -3471,31 +3467,21 @@ impl Entity {
             self.velocity.store(Vector3::default());
         }
 
-        let final_move = self.adjust_movement_for_collisions(motion, caller);
+        let final_move = self.adjust_movement_for_collisions(motion, caller, border_walls);
 
         self.move_pos(final_move);
 
-        let velocity_multiplier = f64::from(caller.get_block_speed_factor());
-
-        if self.entity_type.boat.is_some() {
-            const COLLISION_EPSILON: f64 = 1.0E-5;
-            let velocity = self.velocity.load();
-            self.velocity.store(Vector3::new(
-                if (motion.x - final_move.x).abs() < COLLISION_EPSILON {
-                    velocity.x * velocity_multiplier
-                } else {
-                    0.0
-                },
-                velocity.y,
-                if (motion.z - final_move.z).abs() < COLLISION_EPSILON {
-                    velocity.z * velocity_multiplier
-                } else {
-                    0.0
-                },
-            ));
-        } else {
-            self.velocity.store(final_move * velocity_multiplier);
+        // Vanilla `Entity.move`: velocity is kept, a wall zeroes its axis, the speed factor only slows X/Z.
+        let speed_factor = f64::from(caller.get_block_speed_factor());
+        let mut velocity = self.velocity.load();
+        if (motion.x - final_move.x).abs() >= 1.0e-5 {
+            velocity.x = 0.0;
         }
+        if (motion.z - final_move.z).abs() >= 1.0e-5 {
+            velocity.z = 0.0;
+        }
+        self.velocity
+            .store(velocity.multiply(speed_factor, 1.0, speed_factor));
 
         Some((motion, final_move))
     }
@@ -3513,10 +3499,17 @@ impl Entity {
 
         let (effect_pos, effect_block, effect_state) = self.get_block_with_y_offset(0.2);
         if motion.y != final_move.y {
-            let world = self.world.load();
-            world
-                .block_registry
-                .update_entity_movement_after_fall_on(effect_block, caller);
+            if motion.y < 0.0 {
+                let world = self.world.load();
+                world
+                    .block_registry
+                    .update_entity_movement_after_fall_on(effect_block, caller);
+            } else {
+                // Vanilla `restituteMovementAfterCollisions`: block bounciness only applies when landing.
+                // TODO vanilla also applies the `BOUNCINESS` attribute (+ sulfur cubes) on
+                // walls and ceilings
+                stop_vertical_movement_after_fall(caller);
+            }
         }
 
         if !self.is_removed() {
@@ -3778,6 +3771,7 @@ impl Entity {
             }
         }
 
+        // TODO: vanilla rolls from the entity `random`; same odds, not seed-reproducible.
         let amplitude = rand::random::<f64>().mul_add(PUSH_OUT_RANDOM_SPEED, PUSH_OUT_MIN_SPEED);
 
         let axis = direction.to_axis().into();
@@ -6432,25 +6426,14 @@ impl Entity {
         }
         scoreboard.add_player_to_team(&*world, team_name, scoreboard_name);
     }
-}
-
-impl EntityBase for Entity {
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+    /// Shared tick work after the entity has recorded its previous position.
+    fn tick_base(&self, caller: &dyn EntityBase) {
         // Recomputed during movement/block-collision handling in the same tick.
         let was_in_powder_snow = self.is_in_powder_snow.load(Ordering::Relaxed);
         self.was_in_powder_snow
             .store(was_in_powder_snow, Ordering::Relaxed);
         self.is_in_powder_snow.store(false, Ordering::Relaxed);
 
-        if self.entity_type.boat.is_some()
-            && let Some(boat) = caller
-                .cast_any()
-                .downcast_ref::<vehicle::boat::BoatEntity>()
-        {
-            boat.update_last_pos();
-        } else {
-            self.update_last_pos();
-        }
         self.tick_portal(caller);
         self.update_fluid_state(caller);
         self.check_out_of_world(caller);
@@ -6484,6 +6467,13 @@ impl EntityBase for Entity {
                 .store(riding_cooldown - 1, Ordering::Relaxed);
         }
         self.first_tick.store(false, Ordering::Relaxed);
+    }
+}
+
+impl EntityBase for Entity {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.update_last_pos();
+        self.tick_base(caller);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -6568,6 +6558,87 @@ impl Flag {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn boat_movement_stops_at_world_border() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = ai::test_support::world(&folder);
+        world
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .new_diameter = 16.0;
+        let boat = Entity::new(
+            world.clone(),
+            Vector3::new(7.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        );
+        let motion = Vector3::new(0.75, 0.0, 0.125);
+        assert!(boat.has_new_boat_collision(&boat, motion));
+
+        boat.move_entity(&boat, motion);
+        assert_eq!(boat.pos.load(), Vector3::new(7.3125, 64.0, 0.125));
+        assert!(boat.horizontal_collision.load(Ordering::Relaxed));
+        assert!(!boat.has_new_boat_collision(&boat, Vector3::new(-0.25, 0.0, 0.0)));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn non_constraining_boat_preserves_block_slide() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let folder = tempfile::tempdir()?;
+        let world = ai::test_support::world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        chunk.set_block_absolute_y(1, 64, 1, Block::STONE.default_state.id);
+
+        let movement = Vector3::new(0.75, 0.0, 1.0);
+        let bounds = BoundingBox {
+            min: Vector3::new(0.25, 64.0, 0.0),
+            max: Vector3::new(0.75, 65.0, 0.5),
+        };
+        let movers = [
+            (&EntityType::ARMOR_STAND, Vector3::new(0.25, 0.0, 1.0)),
+            (&EntityType::OAK_BOAT, Vector3::new(0.25, 0.0, 1.0)),
+        ]
+        .map(|(kind, expected)| {
+            let mover = Entity::new(world.clone(), Vector3::new(0.5, 64.0, 0.25), kind);
+            mover.bounding_box.store(bounds);
+            let before = mover.collide(movement, &mover, &[]).movement;
+            (mover, before, expected)
+        });
+        let collider = Arc::new(vehicle::boat::BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::OAK_BOAT,
+        )));
+        let hull = collider.get_entity();
+        hull.set_pos(Vector3::new(0.5, 64.0 - f64::from(hull.height()), 0.5));
+        world.add_entity_silent(collider);
+
+        for (mover, before, expected) in movers {
+            assert_eq!(
+                mover
+                    .get_boat_collisions(bounds.stretch(movement), &mover)
+                    .len(),
+                1
+            );
+            assert_eq!(mover.collide(movement, &mover, &[]).movement, before);
+            assert_eq!(before, expected);
+            // Moving down does constrain the move, but the hull is not a supporting block.
+            let landing = mover.collide(Vector3::new(0.0, -0.25, 0.0), &mover, &[]);
+            assert!(landing.vertical);
+            assert_eq!(landing.movement, Vector3::default());
+            assert!(landing.supporting.is_none());
+        }
+
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn fluid_current_ignores_very_small_accumulated_pushes()

@@ -183,15 +183,39 @@ impl Worldborder {
 
     #[must_use]
     pub fn collision_shape_contains(&self, bounding_box: &BoundingBox) -> bool {
+        let interior = self.collision_bounds();
+        bounding_box.min.x >= interior.min.x
+            && bounding_box.max.x <= interior.max.x
+            && bounding_box.min.z >= interior.min.z
+            && bounding_box.max.z <= interior.max.z
+    }
+
+    fn collision_bounds(&self) -> BoundingBox {
         let half = self.new_diameter / 2.0;
-        let min_x = (self.center_x - half).floor();
-        let max_x = (self.center_x + half).ceil();
-        let min_z = (self.center_z - half).floor();
-        let max_z = (self.center_z + half).ceil();
-        bounding_box.min.x >= min_x
-            && bounding_box.max.x <= max_x
-            && bounding_box.min.z >= min_z
-            && bounding_box.max.z <= max_z
+        BoundingBox::new(
+            Vector3::new(
+                (self.center_x - half).floor(),
+                f64::NEG_INFINITY,
+                (self.center_z - half).floor(),
+            ),
+            Vector3::new(
+                (self.center_x + half).ceil(),
+                f64::INFINITY,
+                (self.center_z + half).ceil(),
+            ),
+        )
+    }
+
+    pub(super) fn collision_walls(&self) -> [BoundingBox; 4] {
+        let interior = self.collision_bounds();
+        let low = f64::NEG_INFINITY;
+        let high = f64::INFINITY;
+        [
+            BoundingBox::new_array([low, low, low], [interior.min.x, high, high]),
+            BoundingBox::new_array([interior.max.x, low, low], [high, high, high]),
+            BoundingBox::new_array([low, low, low], [high, high, interior.min.z]),
+            BoundingBox::new_array([low, low, interior.max.z], [high, high, high]),
+        ]
     }
 
     #[must_use]

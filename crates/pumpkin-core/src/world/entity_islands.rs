@@ -15,7 +15,9 @@ use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
 use crate::entity::{
-    DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity, vehicle::boat::BoatEntity,
+    DelayedLeash, EntityBase, PUSH_STRENGTH,
+    tnt::TNTEntity,
+    vehicle::{boat::BoatEntity, minecart::MinecartEntity},
 };
 use crate::plugin::api::events::block::block_break::BlockBreakEvent;
 use crate::plugin::api::events::entity::{
@@ -264,6 +266,8 @@ fn changes_on_contact(block: &Block) -> bool {
             &Block::BIG_DRIPLEAF,
             &Block::TURTLE_EGG,
             &Block::POWDER_SNOW,
+            &Block::WATER_CAULDRON,
+            &Block::POWDER_SNOW_CAULDRON,
             &Block::SCULK_SHRIEKER,
             &Block::SCULK_SENSOR,
             &Block::CALIBRATED_SCULK_SENSOR,
@@ -332,7 +336,12 @@ impl EntityReach {
             + entity
                 .get_mob()
                 .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement)
-            + boat.map_or(0.0, BoatEntity::additional_tick_movement);
+            + boat.map_or(0.0, BoatEntity::additional_tick_movement)
+            + if entity.cast_any().is::<MinecartEntity>() {
+                MinecartEntity::additional_tick_movement()
+            } else {
+                0.0
+            };
         let radius = movement
             + config.unaudited_reach
             + entity.get_living_entity().map_or(0.0, |living| {
@@ -348,6 +357,13 @@ impl EntityReach {
                 base.bounding_box
                     .load()
                     .expand(player_radius, player_radius, player_radius);
+            let block_radius = mob.conservative_block_read_radius() + movement;
+            if block_radius > radius + BLOCK_UPDATE_REACH {
+                reach.block_reads =
+                    base.bounding_box
+                        .load()
+                        .expand(block_radius, block_radius, block_radius);
+            }
         }
         // Blast power and chained block effects can exceed the configured margins.
         reach.global = entity
@@ -357,6 +373,13 @@ impl EntityReach {
                 .cast_any()
                 .downcast_ref::<TNTEntity>()
                 .is_some_and(TNTEntity::is_about_to_explode);
+        if base.entity_type == &EntityType::MINECART {
+            // An earlier entity can power the rail before the cart ejects its passenger.
+            let world = base.world.load();
+            let pos = base.block_pos.load();
+            reach.global |= world.get_block(&pos) == &Block::ACTIVATOR_RAIL
+                || world.get_block(&pos.down()) == &Block::ACTIVATOR_RAIL;
+        }
         if boat.is_some() {
             let world = base.world.load_full();
             reach.entities =

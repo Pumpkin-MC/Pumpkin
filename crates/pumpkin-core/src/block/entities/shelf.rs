@@ -234,6 +234,10 @@ impl Inventory for ShelfBlockEntity {
         self.mark_dirty();
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        pumpkin_inventory::update_locked_stack(&self.items, slot, update)
+    }
+
     fn mark_dirty(&self) {
         self.mark_dirty_with_event(Some(GameEvent::BlockActivate));
     }

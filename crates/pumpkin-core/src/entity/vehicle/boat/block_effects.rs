@@ -107,22 +107,27 @@ impl BoatEntity {
                 bounds.shift(movement.from - to),
                 movement.to - movement.from,
                 movement.requested,
-                |pos| {
+                |pos, is_precise| {
                     if interrupted {
                         return;
                     }
                     let (block, state) = world.get_block_and_state(&pos);
-                    // Lily pads inherit the full-block entity-inside shape, not their thin outline.
-                    if block == &Block::LILY_PAD && visited.insert(pos) {
-                        if !self.movement_is_current(&snapshot, to) {
-                            interrupted = true;
-                            return;
-                        }
-                        world
-                            .block_registry
-                            .on_entity_collision(block, world, self, &pos, state, &server);
-                        interrupted = !self.movement_is_current(&snapshot, to);
+                    // Both blocks use the full-block entity-inside shape. Bubble columns
+                    // additionally require a precise contact after the visit is recorded.
+                    if (block != &Block::LILY_PAD && block != &Block::BUBBLE_COLUMN)
+                        || !visited.insert(pos)
+                        || (block == &Block::BUBBLE_COLUMN && !is_precise)
+                    {
+                        return;
                     }
+                    if !self.movement_is_current(&snapshot, to) {
+                        interrupted = true;
+                        return;
+                    }
+                    world
+                        .block_registry
+                        .on_entity_collision(block, world, self, &pos, state, &server);
+                    interrupted = !self.movement_is_current(&snapshot, to);
                 },
             );
             if interrupted {
@@ -136,7 +141,7 @@ fn for_each_block_along_movement(
     bounds: BoundingBox,
     movement: Vector3<f64>,
     requested_movement: Option<Vector3<f64>>,
-    mut visit: impl FnMut(BlockPos),
+    mut visit: impl FnMut(BlockPos, bool),
 ) {
     // Entity.checkInsideBlocks follows the collision axes, with 16 steps per movement.
     let mut bounds = bounds;
@@ -152,7 +157,7 @@ fn for_each_block_along_movement(
                 destination.min_block_pos(),
                 BlockPos::floored_v(destination.max),
             ) {
-                visit(pos);
+                visit(pos, intersects_block(&destination, pos));
             }
         }
         return;
@@ -175,7 +180,7 @@ fn for_each_block_along_movement(
             destination.min_block_pos(),
             BlockPos::floored_v(destination.max),
         ) {
-            visit(pos);
+            visit(pos, intersects_block(&destination, pos));
         }
     }
 }
@@ -184,11 +189,16 @@ fn visit_movement_blocks(
     bounds: BoundingBox,
     movement: Vector3<f64>,
     remaining_steps: usize,
-    visit: &mut impl FnMut(BlockPos),
+    visit: &mut impl FnMut(BlockPos, bool),
 ) -> usize {
     let destination = bounds
         .shift(movement)
         .expand_all(-f64::from(BLOCK_INTERSECTION_EPSILON));
+    // Vanilla sends the block-position precision flag on movement longer than the
+    // deflated block length, or when the final bounds actually touch that block.
+    let moved_far =
+        movement.length_squared() > (1.0 - f64::from(BLOCK_INTERSECTION_EPSILON)).powi(2);
+    let mut visit = |pos| visit(pos, moved_far || intersects_block(&destination, pos));
     if movement.length_squared()
         < f64::from(BLOCK_INTERSECTION_EPSILON * BLOCK_INTERSECTION_EPSILON)
     {
@@ -233,6 +243,10 @@ fn visit_movement_blocks(
         }
     }
     remaining_steps - (last_step + 1)
+}
+
+fn intersects_block(bounds: &BoundingBox, pos: BlockPos) -> bool {
+    bounds.intersects(&BoundingBox::full_block().at_pos(pos))
 }
 
 fn add_collisions_along_travel(
@@ -426,7 +440,7 @@ mod tests {
             Vector3::new(1.000_009_999_999_747_4, 0.75, 0.75),
         );
         let mut visited = HashSet::new();
-        for_each_block_along_movement(bounds, Vector3::default(), None, |pos| {
+        for_each_block_along_movement(bounds, Vector3::default(), None, |pos, _| {
             visited.insert(pos);
         });
         // Recorded from 26.3 BlockGetter with a deflated maximum X of exactly 1.0.
@@ -444,7 +458,7 @@ mod tests {
         );
         let movement = Vector3::new(4.0, 0.0, 0.0);
         let mut visited = HashSet::new();
-        for_each_block_along_movement(bounds, movement, Some(movement), |pos| {
+        for_each_block_along_movement(bounds, movement, Some(movement), |pos, _| {
             visited.insert(pos);
         });
         assert_eq!(
@@ -470,7 +484,7 @@ mod tests {
             bounds,
             Vector3::new(2.0, 0.0, 4.0),
             Some(Vector3::new(8.0, 0.0, 4.0)),
-            |pos| {
+            |pos, _| {
                 visited.insert(pos);
             },
         );
@@ -496,7 +510,7 @@ mod tests {
         );
         let movement = Vector3::new(1000.0, 0.0, 0.0);
         let mut visited = HashSet::new();
-        for_each_block_along_movement(bounds, movement, Some(movement), |pos| {
+        for_each_block_along_movement(bounds, movement, Some(movement), |pos, _| {
             visited.insert(pos);
         });
         assert_eq!(visited.len(), 17);
@@ -512,7 +526,7 @@ mod tests {
             Vector3::new(0.6875, 0.8125, 0.6875),
         );
         let mut visited = HashSet::new();
-        for_each_block_along_movement(bounds, Vector3::new(1000.0, 0.0, 500.0), None, |pos| {
+        for_each_block_along_movement(bounds, Vector3::new(1000.0, 0.0, 500.0), None, |pos, _| {
             visited.insert(pos);
         });
         // Recorded from 26.3: the last new cell is at step 14, so no final-box fallback runs.

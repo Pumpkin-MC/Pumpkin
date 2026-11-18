@@ -127,7 +127,10 @@ impl ItemBehaviour for BoatItem {
         );
         let entity = boat_entity.get_entity();
         let boat_box = entity.bounding_box.load();
-        if !world.is_space_empty(boat_box)
+        if !world
+            .get_block_collisions(boat_box, boat_entity.as_ref())
+            .0
+            .is_empty()
             || !world.no_border_collision(boat_entity.as_ref(), boat_box)
             || entity
                 .get_boat_collisions(boat_box, boat_entity.as_ref())

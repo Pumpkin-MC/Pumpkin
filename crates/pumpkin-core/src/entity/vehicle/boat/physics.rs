@@ -220,14 +220,12 @@ impl BoatEntity {
 
     pub(super) fn float_boat(
         &self,
-        old_status: Option<BoatStatus>,
         status: BoatStatus,
+        surface_border_clear: Option<bool>,
     ) -> Vector3<f64> {
         const DEFAULT_FRICTION: f32 = 0.9;
         let entity = &self.vehicle.entity;
-        if old_status == Some(BoatStatus::InAir)
-            && !matches!(status, BoatStatus::InAir | BoatStatus::OnLand)
-        {
+        if let Some(border_clear) = surface_border_clear {
             self.water_level.store(entity.bounding_box.load().max.y);
             let target_y = f64::from(self.get_water_level_above() - entity.height()) + 0.101;
             let position = entity.pos.load();
@@ -236,8 +234,8 @@ impl BoatEntity {
             self.status.store(Some(BoatStatus::InWater));
             let target = bounds.shift(offset);
             let world = entity.world.load();
-            if world.is_space_empty(target)
-                && world.no_border_collision(self, target)
+            if border_clear
+                && world.get_block_collisions(target, self).0.is_empty()
                 && entity
                     .get_boat_collisions(target, self)
                     .iter()
@@ -292,28 +290,40 @@ impl BoatEntity {
         let Some(event) = self.movement_event(snapshot, destination, None) else {
             return;
         };
+        let target_valid =
+            event.to.x.is_finite() && event.to.y.is_finite() && event.to.z.is_finite();
+        let start = from + surface_offset;
+        let motion = if event.to == destination {
+            velocity
+        } else {
+            event.to - start
+        };
+        // Read the border before taking the movement lock. Border packet listeners can move boats.
+        let walls = if event.cancelled || !target_valid {
+            None
+        } else {
+            let swept = entity
+                .bounding_box
+                .load()
+                .shift(surface_offset)
+                .stretch(motion);
+            snapshot.world.border_collision_walls(entity, &swept)
+        };
         let (resolved, end) = {
             let mut movements = self.lock_movements();
             if !self.movement_matches(&mut movements, snapshot, from) {
                 return;
             }
-            if event.cancelled
-                || !(event.to.x.is_finite() && event.to.y.is_finite() && event.to.z.is_finite())
-            {
+            if event.cancelled || !target_valid {
                 entity.velocity.store(Vector3::default());
                 return;
             }
             self.last_yd.store(velocity.y);
-            let start = from + surface_offset;
             if start != from {
                 entity.set_pos(start);
             }
-            let motion = if event.to == destination {
-                velocity
-            } else {
-                event.to - start
-            };
-            let resolved = entity.apply_entity_motion(caller, motion);
+            let resolved =
+                entity.apply_entity_motion(caller, motion, walls.as_slice().as_flattened());
             let end = entity.pos.load();
             movements.record(start, end, motion);
             (resolved, end)
@@ -336,6 +346,11 @@ impl BoatEntity {
     ) -> Option<(Vector3<f64>, Vector3<f64>)> {
         let entity = &self.vehicle.entity;
         let snapshot = self.movement_snapshot(&self.lock_movements());
+        // A dimension change can leave the player linked to a boat in the old world.
+        let same_world = || Arc::ptr_eq(&snapshot.world, &player.get_entity().world.load());
+        if !same_world() {
+            return None;
+        }
         let event =
             self.movement_event(&snapshot, destination, Some(player.get_entity().entity_id))?;
         let target = event.to;
@@ -345,7 +360,7 @@ impl BoatEntity {
         {
             return None;
         }
-        if !self.commit_client_movement(&snapshot, target, yaw, pitch, on_ground) {
+        if !same_world() || !self.commit_client_movement(&snapshot, target, yaw, pitch, on_ground) {
             return None;
         }
         if self.movement_is_current(&snapshot, target) {

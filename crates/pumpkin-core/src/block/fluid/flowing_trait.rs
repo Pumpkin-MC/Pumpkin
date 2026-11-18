@@ -45,8 +45,7 @@ pub trait FlowingFluid: Send + Sync {
         self.get_effective_props(fluid, state_id).is_some()
     }
 
-    /// Returns correct fluid properties for a state, treating waterlogged blocks as water sources
-    /// (level 8, non-falling). Returns `None` if the state doesn't contain this fluid.
+    /// Returns the fluid properties, including source water held by another block.
     fn get_effective_props(
         &self,
         fluid: &Fluid,
@@ -55,11 +54,10 @@ pub trait FlowingFluid: Send + Sync {
         if fluid.states.iter().any(|s| s.block_state_id == state_id) {
             return Some(FlowingFluidProperties::from_state_id(state_id, fluid));
         }
-        if fluid.id == Fluid::FLOWING_WATER.id || fluid.id == Fluid::WATER.id {
-            let block = Block::from_state_id(state_id);
-            if block.is_waterlogged(state_id) {
-                return Some(self.get_source(fluid, false));
-            }
+        if fluid.matches_type(&Fluid::WATER)
+            && World::get_fluid_from_state_id(state_id).matches_type(fluid)
+        {
+            return Some(self.get_source(fluid, false));
         }
         None
     }

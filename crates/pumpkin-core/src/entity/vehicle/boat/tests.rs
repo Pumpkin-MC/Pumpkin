@@ -4,6 +4,7 @@ use std::sync::mpsc::{Sender, channel};
 use futures::future::BoxFuture;
 use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+use pumpkin_data::block_properties::BubbleColumnLikeProperties;
 use pumpkin_data::packet::{CURRENT_MC_VERSION, clientbound::play::MOVE_VEHICLE};
 use pumpkin_data::{Block, dimension::Dimension};
 use pumpkin_protocol::java::{client::play::CMoveVehicle, server::play::SMoveVehicle};
@@ -18,6 +19,7 @@ use crate::net::{
     java::{JavaClient, pending::PendingConnection},
 };
 use crate::plugin::api::events::block::block_physics::BlockPhysicsEvent;
+use crate::plugin::api::events::block::cauldron_level_change::CauldronLevelChangeEvent;
 use crate::plugin::api::events::entity::entity_combust::EntityCombustEvent;
 use crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent;
 use crate::plugin::api::events::vehicle::vehicle_move::VehicleMoveEvent;
@@ -32,6 +34,7 @@ struct NoopListener;
 
 impl EventHandler<BlockPhysicsEvent> for NoopListener {}
 impl EventHandler<EntityCombustEvent> for NoopListener {}
+impl EventHandler<CauldronLevelChangeEvent> for NoopListener {}
 
 async fn server(folder: &tempfile::TempDir) -> Result<Arc<Server>, Box<dyn std::error::Error>> {
     let basic = BasicConfiguration {
@@ -191,17 +194,23 @@ async fn vehicle_move_listener_keeps_the_teleport_and_clears_the_sweep() -> Test
         true,
     );
 
-    java.handle_move_vehicle(
-        &player,
-        &SMoveVehicle {
-            x: from.x + 0.5,
-            y: from.y,
-            z: from.z,
-            yaw: 90.0,
-            pitch: 0.0,
-            on_ground: false,
-        },
-    );
+    let packet = SMoveVehicle {
+        x: from.x + 0.5,
+        y: from.y,
+        z: from.z,
+        yaw: 90.0,
+        pitch: 0.0,
+        on_ground: false,
+    };
+    let other_folder = tempfile::tempdir()?;
+    let other_world = crate::entity::ai::test_support::world(&other_folder);
+    player.get_entity().set_world(other_world.clone());
+    java.handle_move_vehicle(&player, &packet);
+    assert_eq!(entity.pos.load(), from);
+    player.get_entity().set_world(world);
+    other_world.level.shutdown().await;
+
+    java.handle_move_vehicle(&player, &packet);
     java.player.store(Arc::new(None));
 
     assert_eq!(entity.pos.load(), destination);
@@ -269,6 +278,75 @@ async fn lily_pad_spawn_listener_serializes_the_boat_and_can_end_the_sweep() -> 
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bubble_surface_contact_launches_after_sixty_ticks_and_ejects_on_sink() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let chunk = ChunkData::empty_sync(0, 0);
+    let column = BlockPos::new(8, 64, 8);
+    let upward = BubbleColumnLikeProperties { r#drag: false }.to_state_id(&Block::BUBBLE_COLUMN);
+    let downward = BubbleColumnLikeProperties { r#drag: true }.to_state_id(&Block::BUBBLE_COLUMN);
+    chunk.set_block_absolute_y(8, 64, 8, upward);
+    world
+        .level
+        .loaded_chunks
+        .insert(Vector2::new(0, 0), chunk.clone());
+    let from = Vector3::new(6.5, 64.5, 8.5);
+    let to = Vector3::new(10.5, 64.5, 8.5);
+    let boat = Arc::new(BoatEntity::new(Entity::new(
+        world.clone(),
+        to,
+        &EntityType::OAK_BOAT,
+    )));
+    let tick_contacts = || {
+        boat.apply_effects_from_blocks();
+        boat.tick_bubble_column();
+    };
+
+    boat.lock_movements().record(from, to, to - from);
+    tick_contacts();
+    assert_eq!(boat.bubble_time.load(), 59);
+    assert_eq!(boat.get_entity().velocity.load(), Vector3::default());
+    tick_contacts();
+    assert_eq!(
+        boat.bubble_time.load(),
+        0,
+        "leaving the column clears the timer"
+    );
+
+    let center = column.0.to_f64() + Vector3::new(0.5, 0.5, 0.5);
+    boat.teleport(center, None, None, world.clone());
+    let rider =
+        crate::entity::r#type::from_type(&EntityType::PIG, center, &world, uuid::Uuid::new_v4());
+    boat.get_entity().add_passenger(boat.clone(), rider.clone());
+    assert!(rider.get_entity().has_vehicle());
+    for _ in 0..59 {
+        tick_contacts();
+    }
+    assert_eq!(boat.get_entity().velocity.load(), Vector3::default());
+    tick_contacts();
+    assert_eq!(
+        boat.get_entity().velocity.load(),
+        Vector3::new(0.0, 0.6, 0.0)
+    );
+    assert!(
+        rider.get_entity().has_vehicle(),
+        "an upward column keeps its rider"
+    );
+
+    chunk.set_block_absolute_y(8, 64, 8, downward);
+    for _ in 0..59 {
+        tick_contacts();
+    }
+    assert!(rider.get_entity().has_vehicle());
+    tick_contacts();
+    assert!(!rider.get_entity().has_vehicle());
+    assert!(boat.get_entity().velocity.load().y < 0.0);
+    server.shutdown().await;
+    Ok(())
+}
+
 #[tokio::test]
 async fn teleport_rejects_a_previously_validated_client_move() -> TestResult {
     let folder = tempfile::tempdir()?;
@@ -291,6 +369,48 @@ async fn teleport_rejects_a_previously_validated_client_move() -> TestResult {
     assert!(boat.get_entity().on_ground.load(Ordering::Relaxed));
     assert_eq!(boat.pending_block_movement_reach(), 0.0);
     world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cauldron_listener_serializes_a_boat_that_can_change_its_level() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let chunk = ChunkData::empty_sync(0, 0);
+    world
+        .level
+        .loaded_chunks
+        .insert(Vector2::new(0, 0), chunk.clone());
+    let pos = BlockPos::new(8, 64, 8);
+    let boat = BoatEntity::new(Entity::new(
+        world.clone(),
+        Vector3::new(8.5, 64.35, 8.5),
+        &EntityType::OAK_BOAT,
+    ));
+    let config = EntityIslandsConfig {
+        unaudited_reach: 0.0,
+        ..Default::default()
+    };
+    let can_plan = || resolve(vec![EntityReach::of(&boat, &config)], &config).is_some();
+    let old_state = Block::WATER_CAULDRON.default_state.id;
+    chunk.set_block_absolute_y(8, 64, 8, old_state);
+    assert!(can_plan());
+    server
+        .plugin_manager
+        .register::<CauldronLevelChangeEvent, _>(
+            Arc::new(NoopListener),
+            EventPriority::Normal,
+            true,
+        );
+    assert!(!can_plan());
+
+    let entity = boat.get_entity();
+    entity.set_has_no_gravity(true);
+    entity.fire_ticks.store(100, Ordering::Relaxed);
+    boat.tick(&boat, &server);
+    assert_ne!(world.get_block_state_id(&pos), old_state);
+    server.shutdown().await;
     Ok(())
 }
 

@@ -165,7 +165,14 @@ fn bubble_column_velocity(
 /// Pushes an entity in a bubble column. One at the top of the column gets the stronger push.
 pub fn entity_inside(world: &World, pos: &BlockPos, state: BlockStateId, entity: &dyn EntityBase) {
     let drag_down = kind_from_state(state) == BubbleColumnKind::Downward;
-    if world.get_block(&pos.up()) == &Block::AIR {
+    let above = pos.up();
+    let nothing_above = world.get_fluid(&above) == &Fluid::EMPTY
+        && world
+            .get_block_state(&above)
+            .get_block_collision_shapes_at(&above)
+            .next()
+            .is_none();
+    if nothing_above {
         entity.on_above_bubble_column(drag_down, pos);
     } else {
         entity.on_inside_bubble_column(drag_down);
@@ -291,6 +298,7 @@ mod tests {
     use pumpkin_data::fluid::{Falling, FlowingWaterLikeFluidProperties, FluidProperties, Level};
 
     use super::*;
+    use crate::block::fluid::{flowing_trait::FlowingFluid, water::FlowingWater};
 
     fn flowing_water_state() -> BlockStateId {
         FlowingWaterLikeFluidProperties {
@@ -311,6 +319,25 @@ mod tests {
             Some(BubbleColumnKind::Downward)
         );
         assert_eq!(kind_from_support(&Block::STONE), None);
+    }
+
+    #[tokio::test]
+    async fn water_spread_keeps_a_bubble_column() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        let pos = BlockPos::new(8, 64, 8);
+        let column = bubble_column_state(BubbleColumnKind::Upward);
+        chunk.set_block_absolute_y(8, 64, 8, column);
+        world
+            .level
+            .loaded_chunks
+            .insert(pos.chunk_position(), chunk);
+
+        FlowingWater.spread_to(&world, &Fluid::FLOWING_WATER, &pos, flowing_water_state());
+        assert_eq!(world.get_block_state_id(&pos), column);
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[test]
