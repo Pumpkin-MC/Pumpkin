@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
 use crate::block::{
     GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, OnPlaceArgs, OnSyncedBlockEventArgs,
@@ -118,9 +119,18 @@ impl ShulkerBoxBlock {
     const LID_OPEN_PROGRESS: f64 = 0.5;
     const LID_OPEN_INSET: f64 = 1.0E-6;
 
-    /// Vanilla `ShulkerBoxBlock.canOpen`. Pumpkin tracks no server-side animation
-    /// state, so the box is always treated as closed here.
+    /// Vanilla `ShulkerBoxBlock.canOpen`. Pumpkin has no server-side animation status;
+    /// a box with viewers is treated as open, and a closing box as closed.
     fn can_open(world: &World, position: &BlockPos) -> bool {
+        if let Some(block_entity) = world.get_block_entity(position)
+            && let Some(shulker_box) = block_entity
+                .as_any()
+                .downcast_ref::<ShulkerBoxBlockEntity>()
+            && shulker_box.viewers.current.load(Ordering::Relaxed) > 0
+        {
+            return true;
+        }
+
         let state = world.get_block_state(position);
         let facing = ShulkerBoxProperties::from_state_id(state.id)
             .facing
