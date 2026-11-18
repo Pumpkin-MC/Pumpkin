@@ -174,6 +174,15 @@ pub trait BlockEntity: Any + Send + Sync {
             world.scatter_inventory(position, &inventory);
         }
     }
+
+    fn on_player_destroyed(
+        &self,
+        _world: &Arc<World>,
+        _state: BlockStateId,
+        _player: &Arc<crate::entity::player::Player>,
+        _tool: &ItemStack,
+    ) {
+    }
     fn is_dirty(&self) -> bool {
         false
     }
