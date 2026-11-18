@@ -96,7 +96,6 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, HorizontalFacingExt, translation};
-use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
@@ -1105,6 +1104,17 @@ impl World {
                 ClientPlatform::Java(_) => None,
             }),
         );
+    }
+
+    /// [`Player::send_system_message`] to each of `players`. The Java packet is the same
+    /// for all of them and serialized once; the Bedrock text follows each player's locale.
+    pub fn send_system_message_to(players: &[Arc<Player>], message: &TextComponent) {
+        Self::broadcast_java_players(&CSystemChatMessage::new(message, false), players.iter());
+        for player in players {
+            if player.client.bedrock().is_some() {
+                player.send_system_message(message);
+            }
+        }
     }
 
     pub fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
@@ -4172,9 +4182,12 @@ impl World {
             if let Ok(data) = java_client.serialize_packet(&settings_packet) {
                 java_client.send_packet_now(data).await;
             }
-            let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
-            let add_packet = CRecipeBookAdd::new(true, &dynamic_recipes);
-            if let Ok(data) = java_client.serialize_packet(&add_packet) {
+            let book = server.recipe_manager.book_packet(|recipes| {
+                java_client
+                    .serialize_packet(&CRecipeBookAdd::new(true, recipes))
+                    .ok()
+            });
+            if let Some(data) = book {
                 java_client.send_packet_now(data).await;
             }
         }
@@ -5355,9 +5368,7 @@ impl World {
                     server.plugin_manager.fire(&server, &mut event).await;
 
                     if !event.cancelled {
-                        for player in self.players.load().iter() {
-                            player.send_system_message(&event.leave_message);
-                        }
+                        Self::send_system_message_to(&self.players.load(), &event.leave_message);
                         info!("{}", event.leave_message.to_pretty_console());
                     }
                 }

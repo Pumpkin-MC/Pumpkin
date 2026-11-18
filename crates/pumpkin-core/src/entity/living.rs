@@ -33,6 +33,7 @@ use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::neutral::find_by_uuid;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
+use crate::world::World;
 use crate::world::loot::LootContextParameters;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::AttributeModifierSlot;
@@ -2958,9 +2959,7 @@ impl LivingEntity {
             }
 
             if show_death_messages && let Some(server) = world.server.upgrade() {
-                for player in server.get_all_players() {
-                    player.send_system_message(&final_death_message);
-                }
+                World::send_system_message_to(&server.get_all_players(), &final_death_message);
             }
         } else if self.entity.custom_name.load().is_some() {
             let death_message = Self::get_death_message(dyn_self, damage_type, source, cause);
@@ -5450,6 +5449,32 @@ mod tests {
             .unwrap();
 
         assert_eq!(bytes, [10, 17, 1, 28, 0xff, 0xcd, 0x5c, 0xab]);
+    }
+
+    #[tokio::test]
+    async fn every_player_reads_of_a_death_and_of_a_player_leaving_once()
+    -> crate::test_support::TestResult {
+        use crate::test_support::{Client, count, server, shutdown};
+        use pumpkin_protocol::java::client::play::CSystemChatMessage;
+
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let mut victim = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        let mut watcher = Client::join(&server, 2, Vector3::new(3.5, 100.0, 0.5));
+        victim.received().await?;
+        watcher.received().await?;
+
+        victim.player.kill();
+
+        for client in [&mut victim, &mut watcher] {
+            assert_eq!(count::<CSystemChatMessage>(&client.received().await?), 1);
+        }
+
+        let world = server.worlds.load()[0].clone();
+        world.remove_player(&victim.player, true).await;
+        assert_eq!(count::<CSystemChatMessage>(&watcher.received().await?), 1);
+        shutdown(&server).await;
+        Ok(())
     }
 }
 

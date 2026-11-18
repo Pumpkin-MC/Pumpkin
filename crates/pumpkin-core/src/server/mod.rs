@@ -602,14 +602,14 @@ impl Server {
             .datapack_manager
             .execute_function(server, &source, "#minecraft:load");
 
-        let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal();
         for player in self.get_all_players() {
             if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
-                let add_packet = pumpkin_protocol::java::client::play::CRecipeBookAdd::new(
-                    true,
-                    &dynamic_recipes,
-                );
-                if let Ok(data) = java_client.serialize_packet(&add_packet) {
+                let book = self.recipe_manager.book_packet(|recipes| {
+                    let add_packet =
+                        pumpkin_protocol::java::client::play::CRecipeBookAdd::new(true, recipes);
+                    java_client.serialize_packet(&add_packet).ok()
+                });
+                if let Some(data) = book {
                     java_client.try_enqueue_packet(data);
                 }
             }
