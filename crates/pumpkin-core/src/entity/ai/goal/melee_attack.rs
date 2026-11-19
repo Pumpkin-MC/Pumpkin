@@ -21,7 +21,7 @@ pub struct MeleeAttackGoal {
     #[expect(dead_code)]
     target_location: Vector3<f64>,
     update_countdown_ticks: i32,
-    pub cooldown: i32,
+    cooldown: i32,
     #[expect(dead_code)]
     attack_interval_ticks: i32,
     last_update_time: i64,
@@ -93,6 +93,11 @@ impl MeleeAttackGoal {
     #[must_use]
     pub const fn get_ticks_until_next_attack(&self) -> i32 {
         self.cooldown
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn set_ticks_until_next_attack(&mut self, ticks: i32) {
+        self.cooldown = ticks;
     }
 
     #[must_use]

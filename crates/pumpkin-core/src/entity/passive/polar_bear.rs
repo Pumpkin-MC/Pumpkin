@@ -292,7 +292,7 @@ mod tests {
         let (bear, target) = bear_and_target(&world, WARNING_RANGE);
         let mut goal = MeleeAttackGoal::new(1.25, true);
 
-        goal.cooldown = 10;
+        goal.set_ticks_until_next_attack(10);
         check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
         for _ in 0..39 {
             bear.mob_tick(bear.as_ref());
@@ -300,12 +300,12 @@ mod tests {
         assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 1);
 
         // Still on cooldown: another attack check must not growl or restart it.
-        goal.cooldown = 10;
+        goal.set_ticks_until_next_attack(10);
         check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
         assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 1);
 
         bear.mob_tick(bear.as_ref());
-        goal.cooldown = 10;
+        goal.set_ticks_until_next_attack(10);
         check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
         assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 40);
         world.level.shutdown().await;

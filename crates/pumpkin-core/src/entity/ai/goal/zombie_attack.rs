@@ -41,7 +41,8 @@ impl Goal for ZombieAttackGoal {
         self.melee_attack_goal.tick(mob);
         self.ticks += 1;
         if self.ticks >= 5
-            && self.melee_attack_goal.cooldown < self.melee_attack_goal.get_max_cooldown() / 2
+            && self.melee_attack_goal.get_ticks_until_next_attack()
+                < self.melee_attack_goal.get_max_cooldown() / 2
         {
             mob.get_mob_entity().set_attacking(true);
         } else {
