@@ -401,12 +401,6 @@ impl WitherEntity {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
 
-        if world.level_info.load().difficulty == Difficulty::Peaceful {
-            self.remove_all_bossbar(&world);
-            entity.remove();
-            return false;
-        }
-
         if !entity.is_alive() || self.mob_entity.living_entity.health.load() <= 0.0 {
             self.remove_all_bossbar(&world);
             if !self.dropped_loot.swap(true, Ordering::SeqCst) {
