@@ -4,6 +4,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::entity::EntityPose;
 use pumpkin_data::environment_attribute::Activity;
 use pumpkin_util::math::position::BlockPos;
 
@@ -45,6 +46,69 @@ impl BrainTick<'_> {
                 .get_attribute_value(&Attributes::FOLLOW_RANGE),
         }
     }
+
+    /// Includes pose changes requested earlier in this tick.
+    #[must_use]
+    pub fn pose(&self) -> EntityPose {
+        self.pending_pose()
+            .unwrap_or_else(|| self.mob.get_entity().pose.load())
+    }
+
+    pub(crate) const fn pending_pose(&self) -> Option<EntityPose> {
+        self.state.pending_pose
+    }
+
+    pub fn set_pose(&mut self, pose: EntityPose) {
+        self.set_pose_then(pose, |_| {});
+    }
+
+    /// Runs the action if the pose change is accepted and the mob is still present.
+    pub fn set_pose_then(
+        &mut self,
+        pose: EntityPose,
+        action: impl FnOnce(&dyn Mob) + Send + 'static,
+    ) {
+        self.set_pose_then_if(pose, |_| true, move |mob, _| action(mob));
+    }
+
+    pub(crate) fn set_pose_then_if(
+        &mut self,
+        pose: EntityPose,
+        should_apply: impl Fn(&dyn Mob) -> bool + Send + 'static,
+        action: impl FnOnce(&dyn Mob, &dyn Fn() -> bool) + Send + 'static,
+    ) {
+        self.defer_pose_change(pose, move |mob| {
+            let entity = mob.get_entity();
+            if !should_apply(mob) {
+                return;
+            }
+            entity.set_pose_if(pose, || !entity.is_removed() && should_apply(mob));
+            let current =
+                || !entity.is_removed() && entity.pose.load() == pose && should_apply(mob);
+            if current() {
+                action(mob, &current);
+            }
+        });
+    }
+
+    /// Records a pose for later behaviors and defers the complete transition.
+    pub(crate) fn defer_pose_change(
+        &mut self,
+        pose: EntityPose,
+        action: impl FnOnce(&dyn Mob) + Send + 'static,
+    ) {
+        self.state.pending_pose = Some(pose);
+        self.defer(move |mob| {
+            if !mob.get_entity().is_removed() {
+                action(mob);
+            }
+        });
+    }
+
+    /// Runs an action after releasing the brain lock so plugin callbacks can reenter it.
+    pub fn defer(&mut self, action: impl FnOnce(&dyn Mob) + Send + 'static) {
+        self.state.effects.push(Box::new(action));
+    }
 }
 
 /// Read once per sensor scan, where vanilla re-ranges its shared `TargetingConditions`.
@@ -56,6 +120,7 @@ pub struct VisibilityContext<'a> {
 }
 
 type ActivityConditions = Box<[(MemoryModuleId, MemoryStatus)]>;
+pub(crate) type BrainEffect = Box<dyn FnOnce(&dyn Mob) + Send>;
 
 #[derive(Default)]
 pub struct Brain {
@@ -79,6 +144,8 @@ pub struct BrainState {
     default_activity: Activity,
     schedule: Option<Schedule>,
     last_schedule_update: i64,
+    pending_pose: Option<EntityPose>,
+    effects: Vec<BrainEffect>,
 }
 
 impl Default for BrainState {
@@ -92,6 +159,8 @@ impl Default for BrainState {
             default_activity: Activity::Idle,
             schedule: None,
             last_schedule_update: -9999,
+            pending_pose: None,
+            effects: Vec::new(),
         };
         state.use_default_activity();
         state
@@ -286,6 +355,23 @@ impl BrainState {
 }
 
 impl Brain {
+    pub(crate) fn take_effects(&mut self) -> Vec<BrainEffect> {
+        self.state.pending_pose = None;
+        std::mem::take(&mut self.state.effects)
+    }
+
+    pub(crate) fn rebuild(
+        &mut self,
+        world: &Arc<World>,
+        mob: &dyn Mob,
+        time: i64,
+    ) -> Vec<BrainEffect> {
+        self.stop_all(world, mob, time);
+        let effects = self.take_effects();
+        *self = mob.make_brain(&self.pack());
+        effects
+    }
+
     pub fn add_activity(&mut self, data: ActivityData) {
         let index = data.activity as usize;
         let slots = activity::ALL_ACTIVITIES.len();

@@ -10,6 +10,7 @@ use crate::entity::ai::brain::behavior::{Behavior, utils};
 use crate::entity::ai::brain::memory::{
     MemoryModuleId, MemoryStatus, types, walk_target::WalkTarget,
 };
+use crate::entity::mob::Mob;
 
 const TIME_OUT_DURATION: i32 = 100;
 const CATCH_ANIMATION_DURATION: i32 = 6;
@@ -83,21 +84,28 @@ impl ShootTongue {
         );
     }
 
-    fn eat_entity(&self, tick: &BrainTick<'_>, frog: &FrogEntity) {
-        tick.world.play_sound_fine(
-            self.eat_sound,
+    fn eat_entity(mob: &dyn Mob, sound: Sound) {
+        let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>() else {
+            return;
+        };
+        let entity = frog.get_entity();
+        if entity.is_removed() {
+            return;
+        }
+        entity.world.load().play_sound_fine(
+            sound,
             SoundCategory::Neutral,
-            &frog.get_entity().pos.load(),
+            &entity.pos.load(),
             2.0,
             1.0,
         );
         let Some(target) = frog.get_tongue_target() else {
             return;
         };
-        if !is_alive(target.as_ref()) {
+        if entity.is_removed() || !is_alive(target.as_ref()) {
             return;
         }
-        tick.mob.do_hurt_target(target.as_ref());
+        mob.do_hurt_target(target.as_ref());
         if !is_alive(target.as_ref()) {
             target.get_entity().remove();
         }
@@ -154,9 +162,7 @@ impl Behavior for ShootTongue {
             tick.state.erase(types::ATTACK_TARGET.id());
             Self::add_unreachable_target_to_memory(tick, target.as_ref());
         }
-        reachable
-            && tick.mob.get_entity().pose.load() != EntityPose::Croaking
-            && super::can_eat(target.as_ref())
+        reachable && tick.pose() != EntityPose::Croaking && super::can_eat(target.as_ref())
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
@@ -186,17 +192,32 @@ impl Behavior for ShootTongue {
                 let frog_pos = frog.get_entity().pos.load();
                 let target_pos = target.get_entity().pos.load();
                 if target_pos.squared_distance_to_vec(&frog_pos).sqrt() < EATING_DISTANCE {
-                    tick.world.play_sound_fine(
-                        self.tongue_sound,
-                        SoundCategory::Neutral,
-                        &frog_pos,
-                        2.0,
-                        1.0,
-                    );
-                    frog.get_entity().set_pose(EntityPose::UsingTongue);
-                    target
-                        .get_entity()
-                        .set_velocity((frog_pos - target_pos).normalize() * EATING_MOVEMENT_FACTOR);
+                    let world = tick.world.clone();
+                    let sound = self.tongue_sound;
+                    tick.defer(move |_| {
+                        world.play_sound_fine(sound, SoundCategory::Neutral, &frog_pos, 2.0, 1.0);
+                    });
+                    tick.set_pose(EntityPose::UsingTongue);
+                    tick.defer(move |mob| {
+                        let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>() else {
+                            return;
+                        };
+                        let entity = frog.get_entity();
+                        let prey = target.get_entity();
+                        if entity.is_removed()
+                            || !is_alive(target.as_ref())
+                            || !Arc::ptr_eq(&entity.world.load(), &prey.world.load())
+                            || frog.get_tongue_target().is_none_or(|current| {
+                                current.get_entity().entity_uuid != prey.entity_uuid
+                            })
+                        {
+                            return;
+                        }
+                        let offset = entity.pos.load() - prey.pos.load();
+                        if offset.length() < EATING_DISTANCE {
+                            prey.set_velocity(offset.normalize() * EATING_MOVEMENT_FACTOR);
+                        }
+                    });
                     self.eat_animation_timer = 0;
                     self.state = State::CatchAnimation;
                 } else if self.calculate_path_counter <= 0 {
@@ -211,7 +232,8 @@ impl Behavior for ShootTongue {
                 self.eat_animation_timer += 1;
                 if elapsed >= CATCH_ANIMATION_DURATION {
                     self.state = State::EatAnimation;
-                    self.eat_entity(tick, frog);
+                    let sound = self.eat_sound;
+                    tick.defer(move |mob| Self::eat_entity(mob, sound));
                 }
             }
             State::EatAnimation => {
@@ -229,7 +251,7 @@ impl Behavior for ShootTongue {
         tick.state.erase(types::ATTACK_TARGET.id());
         if let Some(frog) = frog(tick) {
             frog.erase_tongue_target();
-            frog.get_entity().set_pose(EntityPose::Standing);
+            tick.set_pose(EntityPose::Standing);
         }
     }
 

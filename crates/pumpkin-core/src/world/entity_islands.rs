@@ -17,14 +17,37 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
-use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
-use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
-    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+use crate::entity::{
+    DelayedLeash, EntityBase, PUSH_STRENGTH, projectile::wind_charge::WindChargeEntity,
+    tnt::TNTEntity,
+};
+use crate::plugin::api::events::{
+    Payload,
+    block::{
+        BellRingEvent, BlockBreakEvent, BlockDropItemEvent, BlockExpEvent, BlockFormEvent,
+        BlockPhysicsEvent, BlockRedstoneEvent, CauldronLevelChangeEvent, EntityBlockFormEvent,
+        NotePlayEvent, SpongeAbsorbEvent, TNTPrimeEvent,
+    },
+    entity::{
+        CreatureSpawnEvent, EntityBreedEvent, EntityCombustEvent, EntityDamageByEntityEvent,
+        EntityDamageEvent, EntityDeathEvent, EntityDismountEvent, EntityDropItemEvent,
+        EntityExhaustionEvent, EntityExplodeEvent, EntityKnockbackByEntityEvent,
+        EntityKnockbackEvent, EntityMountEvent, EntityPortalEvent, EntityPoseChangeEvent,
+        EntityPotionEffectEvent, EntityResurrectEvent, EntitySpawnEvent, EntityTargetEvent,
+        EntityTeleportEvent, EntityToggleSitEvent, EntityUnleashEvent, ExplosionPrimeEvent,
+        ItemSpawnEvent, PigZombieAngerEvent, PlayerDeathEvent,
+    },
+    player::{
+        PlayerAdvancementDoneEvent, PlayerExpChangeEvent, PlayerItemBreakEvent,
+        PlayerItemDamageEvent, PlayerLevelChangeEvent, PlayerStatisticIncrementEvent,
+        PlayerUnleashEntityEvent, PlayerVelocityEvent,
+    },
+    vehicle::{VehicleDamageEvent, VehicleDestroyEvent, VehicleEnterEvent, VehicleExitEvent},
+    world::GenericGameEvent,
 };
 use crate::plugin::{
-    api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
+    PluginManager, api::events::vehicle::vehicle_update::VehicleUpdateEvent,
+    server::packet::PacketSentEvent,
 };
 use crate::server::Server;
 use crate::world::World;
@@ -141,6 +164,75 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
         || plugins.has_handlers::<EntityBlockFormEvent>()
+}
+
+fn plugins_observe_wind_charge_tick(
+    plugins: &PluginManager,
+    world: &World,
+    charge: &WindChargeEntity,
+) -> bool {
+    // Enqueueing velocity, burst and hit packets can call the observer synchronously.
+    // An owner in another dimension can also receive packets for a hit it was credited with.
+    if plugins.has_handlers::<PacketSentEvent>()
+        && (!world.players.load().is_empty()
+            || charge
+                .get_projectile_owner()
+                .is_some_and(|owner| owner.get_player(world).is_some()))
+    {
+        return true;
+    }
+
+    plugins.has_handlers_for(&[
+        // Projectile travel, impact and explosion.
+        EntityCombustEvent::get_name_static(),
+        EntityPortalEvent::get_name_static(),
+        GenericGameEvent::get_name_static(),
+        EntityExplodeEvent::get_name_static(),
+        // Damage, death, equipment and vehicle cleanup.
+        EntityDamageEvent::get_name_static(),
+        EntityDamageByEntityEvent::get_name_static(),
+        EntityKnockbackEvent::get_name_static(),
+        EntityKnockbackByEntityEvent::get_name_static(),
+        EntityExhaustionEvent::get_name_static(),
+        PlayerItemDamageEvent::get_name_static(),
+        PlayerItemBreakEvent::get_name_static(),
+        EntityResurrectEvent::get_name_static(),
+        EntityPotionEffectEvent::get_name_static(),
+        EntityPoseChangeEvent::get_name_static(),
+        EntityTeleportEvent::get_name_static(),
+        EntityDeathEvent::get_name_static(),
+        PlayerDeathEvent::get_name_static(),
+        VehicleDamageEvent::get_name_static(),
+        VehicleDestroyEvent::get_name_static(),
+        EntityDismountEvent::get_name_static(),
+        VehicleExitEvent::get_name_static(),
+        EntityUnleashEvent::get_name_static(),
+        PlayerUnleashEntityEvent::get_name_static(),
+        EntityMountEvent::get_name_static(),
+        VehicleEnterEvent::get_name_static(),
+        CreatureSpawnEvent::get_name_static(),
+        EntitySpawnEvent::get_name_static(),
+        EntityDropItemEvent::get_name_static(),
+        ItemSpawnEvent::get_name_static(),
+        PlayerAdvancementDoneEvent::get_name_static(),
+        PlayerExpChangeEvent::get_name_static(),
+        PlayerLevelChangeEvent::get_name_static(),
+        PlayerStatisticIncrementEvent::get_name_static(),
+        PlayerVelocityEvent::get_name_static(),
+        // Block impact, contact and synchronous neighbour updates.
+        BlockBreakEvent::get_name_static(),
+        BlockDropItemEvent::get_name_static(),
+        BlockExpEvent::get_name_static(),
+        BlockPhysicsEvent::get_name_static(),
+        BlockRedstoneEvent::get_name_static(),
+        BlockFormEvent::get_name_static(),
+        SpongeAbsorbEvent::get_name_static(),
+        CauldronLevelChangeEvent::get_name_static(),
+        TNTPrimeEvent::get_name_static(),
+        ExplosionPrimeEvent::get_name_static(),
+        NotePlayEvent::get_name_static(),
+        BellRingEvent::get_name_static(),
+    ])
 }
 
 /// What one entity can read or change next tick.
@@ -320,13 +412,13 @@ impl EntityReach {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
-        let wind_charge = base.entity_type == &EntityType::WIND_CHARGE
-            || base.entity_type == &EntityType::BREEZE_WIND_CHARGE;
+        let wind_charge = entity.cast_any().downcast_ref::<WindChargeEntity>();
         let movement = base.velocity.load().length()
+            + wind_charge.map_or(0.0, |charge| charge.acceleration_power().abs())
             + entity
                 .get_mob()
                 .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement);
-        let margin = if wind_charge {
+        let margin = if wind_charge.is_some() {
             config.unaudited_reach.max(WIND_CHARGE_TICK_MARGIN)
         } else {
             config.unaudited_reach
@@ -358,11 +450,12 @@ impl EntityReach {
         reach.global = entity
             .get_mob()
             .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
-            || wind_charge
-                && base.world.load().server.upgrade().is_some_and(|server| {
-                    // A hit can run damage, gear, block, game and spawn callbacks in this tick.
-                    server.plugin_manager.has_event_handlers()
+            || wind_charge.is_some_and(|charge| {
+                let world = base.world.load();
+                world.server.upgrade().is_some_and(|server| {
+                    plugins_observe_wind_charge_tick(&server.plugin_manager, &world, charge)
                 })
+            })
             || entity
                 .cast_any()
                 .downcast_ref::<TNTEntity>()
@@ -1101,7 +1194,55 @@ impl DisjointSets {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        entity::{ai::test_support, r#type::from_type},
+        plugin::{EventHandler, EventPriority, player::PlayerChatEvent},
+    };
     use pumpkin_util::math::vector3::Vector3;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn only_reachable_plugin_handlers_make_a_wind_charge_tick_global()
+    -> Result<(), Box<dyn std::error::Error>> {
+        struct IgnoreEvent;
+        impl<E: Payload> EventHandler<E> for IgnoreEvent {}
+
+        let folder = tempfile::tempdir()?;
+        let world = test_support::world(&folder);
+        let entity = from_type(
+            &EntityType::WIND_CHARGE,
+            Vector3::new(0.0, 64.0, 0.0),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        let charge = entity
+            .cast_any()
+            .downcast_ref::<WindChargeEntity>()
+            .ok_or("expected a wind charge")?;
+        let plugins = PluginManager::new(Vec::new());
+
+        plugins.register::<PlayerChatEvent, _>(Arc::new(IgnoreEvent), EventPriority::Normal, true);
+        plugins.register::<PacketSentEvent, _>(Arc::new(IgnoreEvent), EventPriority::Normal, true);
+        assert!(!plugins_observe_wind_charge_tick(&plugins, &world, charge));
+
+        plugins.register::<EntityExplodeEvent, _>(
+            Arc::new(IgnoreEvent),
+            EventPriority::Normal,
+            true,
+        );
+        assert!(plugins_observe_wind_charge_tick(&plugins, &world, charge));
+
+        let plugins = PluginManager::new(Vec::new());
+        plugins.register::<EntityPoseChangeEvent, _>(
+            Arc::new(IgnoreEvent),
+            EventPriority::Normal,
+            true,
+        );
+        assert!(plugins_observe_wind_charge_tick(&plugins, &world, charge));
+
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[test]
     fn serial_schedule_retries_after_twenty_ticks_or_a_count_change() {

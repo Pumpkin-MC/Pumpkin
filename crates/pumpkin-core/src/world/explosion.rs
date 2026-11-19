@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::Ordering::Relaxed};
+use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockState, BlockStateId,
@@ -348,34 +348,11 @@ impl<'a> Explosion<'a> {
         )
     }
 
-    fn should_affect_blocklike_entities(&self, world: &World) -> bool {
+    pub(crate) fn should_affect_blocklike_entities(&self, world: &World) -> bool {
         !self
             .source
             .is_some_and(|source| is_wind_charge(source.get_entity().entity_type))
             && (world.level_info.load().game_rules.mob_griefing || self.destroys_blocks())
-    }
-
-    fn ignores_blocklike_entity(&self, world: &World, entity: &Entity) -> bool {
-        let entity_type = entity.entity_type;
-        if entity_type == &EntityType::ARMOR_STAND {
-            entity.invisible.load(Relaxed) || !self.should_affect_blocklike_entities(world)
-        } else if entity_type == &EntityType::ITEM {
-            !self.should_affect_blocklike_entities(world)
-        } else if [
-            &EntityType::CUSHION,
-            &EntityType::ITEM_FRAME,
-            &EntityType::GLOW_ITEM_FRAME,
-            &EntityType::LEASH_KNOT,
-            &EntityType::PAINTING,
-        ]
-        .contains(&entity_type)
-        {
-            self.source
-                .is_some_and(|source| source.get_entity().is_in_water())
-                || !self.should_affect_blocklike_entities(world)
-        } else {
-            false
-        }
     }
 
     #[must_use]
@@ -565,8 +542,7 @@ impl<'a> Explosion<'a> {
         // the damage source's owner and calls `onExplosionHit`. `Explosion` has no source yet.
         for entity_base in entities {
             let entity = entity_base.get_entity();
-            if entity_base.is_immune_to_explosion() || self.ignores_blocklike_entity(world, entity)
-            {
+            if entity_base.ignore_explosion(self, world) {
                 continue;
             }
 

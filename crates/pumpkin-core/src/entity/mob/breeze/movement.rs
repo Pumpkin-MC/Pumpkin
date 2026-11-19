@@ -1,19 +1,22 @@
-use std::sync::atomic::Ordering::Relaxed;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering::Relaxed},
+};
 
 use pumpkin_data::{
     Block, attributes::Attributes, effect::StatusEffect, entity::EntityPose, sound::Sound, tag,
 };
 use pumpkin_util::{
     math::{cos, lerp, position::BlockPos, sin, vector3::Vector3},
-    random::{RandomImpl, xoroshiro128::Xoroshiro},
+    random::sample_gaussian_pair,
 };
 use pumpkin_world::clip::{ClipBlock, ClipContext, ClipFluid};
 use rand::{RngExt, seq::SliceRandom};
 
-use super::{breeze_from_tick, look_from_eyes};
+use super::look_from_eyes;
 use crate::{
     entity::{
-        Entity, EntityBase,
+        Entity,
         ai::{
             brain::{
                 BrainState, BrainTick,
@@ -27,6 +30,7 @@ use crate::{
         },
         dismount_helper::is_block_dangerous,
         living::LivingEntity,
+        mob::Mob,
     },
     world::World,
 };
@@ -44,7 +48,7 @@ const MAX_JUMP_VELOCITY_MULTIPLIER: f32 = 0.058_333_334;
 const ALLOWED_ANGLES: [i32; 5] = [40, 55, 60, 75, 80];
 
 pub(super) fn long_jump() -> Box<dyn BehaviorControl> {
-    Box::new(Timed::new(LongJump))
+    Box::new(Timed::new(LongJump::default()))
 }
 
 pub(super) fn slide() -> Box<dyn BehaviorControl> {
@@ -75,10 +79,10 @@ pub(super) fn block_read_radius(living: &LivingEntity) -> f64 {
 }
 
 fn random_point_behind_target(target: &Entity, random: &mut impl RngExt) -> Vector3<f64> {
-    let mut random = Xoroshiro::from_seed(random.random());
-    let view_angle = target.head_yaw.load() + 180.0 + random.next_gaussian() as f32 * 90.0 / 2.0;
+    let (spread, _) = sample_gaussian_pair(|| random.random());
+    let view_angle = target.head_yaw.load() + 180.0 + spread as f32 * 90.0 / 2.0;
     let distance = lerp(
-        random.next_f32(),
+        random.random(),
         JUMP_CIRCLE_INNER_RADIUS,
         JUMP_CIRCLE_MIDDLE_RADIUS,
     );
@@ -127,9 +131,34 @@ fn snap_to_surface(world: &World, target: Vector3<f64>) -> Option<BlockPos> {
     None
 }
 
-struct LongJump;
+#[derive(Default)]
+struct LongJump {
+    pending_transition: Option<Arc<AtomicBool>>,
+}
 
 impl LongJump {
+    fn transition(
+        &mut self,
+        tick: &mut BrainTick<'_>,
+        pose: EntityPose,
+        action: impl FnOnce(&dyn Mob, &dyn Fn() -> bool) + Send + 'static,
+    ) {
+        let active = Arc::new(AtomicBool::new(true));
+        self.pending_transition = Some(active.clone());
+        let world = tick.world.clone();
+        let position = tick.mob.get_entity().pos.load();
+        tick.set_pose_then_if(
+            pose,
+            move |mob| {
+                let entity = mob.get_entity();
+                active.load(Relaxed)
+                    && Arc::ptr_eq(&world, &entity.world.load())
+                    && entity.pos.load() == position
+            },
+            action,
+        );
+    }
+
     fn clear_jump_memories(state: &mut BrainState) {
         state.erase(types::BREEZE_JUMP_TARGET.id());
         state.erase(types::BREEZE_JUMP_INHALING.id());
@@ -239,16 +268,13 @@ impl Behavior for LongJump {
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        breeze_from_tick(tick).is_some_and(|breeze| breeze.planned_pose() != EntityPose::Standing)
+        tick.pose() != EntityPose::Standing
             && !tick
                 .state
                 .has_memory_value(types::BREEZE_JUMP_COOLDOWN.id())
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
-        let Some(breeze) = breeze_from_tick(tick) else {
-            return;
-        };
         if !tick
             .state
             .has_memory_value(types::BREEZE_JUMP_INHALING.id())
@@ -257,36 +283,28 @@ impl Behavior for LongJump {
                 .set_with_expiry(types::BREEZE_JUMP_INHALING, (), INHALING_DURATION_TICKS);
         }
         let target = tick.state.get(types::BREEZE_JUMP_TARGET).copied();
-        breeze.change_pose(EntityPose::Inhaling, move |breeze| {
+        self.transition(tick, EntityPose::Inhaling, move |breeze, current| {
             let entity = breeze.get_entity();
             entity
                 .world
                 .load()
                 .play_sound_from_entity(breeze, Sound::EntityBreezeCharge);
-            if let Some(target) = target {
+            if current()
+                && let Some(target) = target
+            {
                 look_from_eyes(entity, target.to_centered_f64());
-            }
-        });
-        breeze.after_brain_tick(|breeze| {
-            if breeze.get_entity().pose.load() != EntityPose::Inhaling {
-                breeze.mob_entity.with_brain(breeze, |brain| {
-                    Self::clear_jump_memories(brain);
-                });
             }
         });
     }
 
     fn tick(&mut self, tick: &mut BrainTick<'_>) {
-        let Some(breeze) = breeze_from_tick(tick) else {
-            return;
-        };
-        let entity = breeze.get_entity();
+        let entity = tick.mob.get_entity();
         let in_water = entity.is_in_water();
         if !in_water {
             tick.state.erase(types::BREEZE_LEAVING_WATER.id());
         }
 
-        let pose = breeze.planned_pose();
+        let pose = tick.pose();
         if pose == EntityPose::Inhaling
             && !tick
                 .state
@@ -297,18 +315,22 @@ impl Behavior for LongJump {
                 .get(types::BREEZE_JUMP_TARGET)
                 .and_then(|&target| Self::calculate_jump_velocity(tick, target))
             else {
-                breeze.change_pose(EntityPose::Standing, |_| {});
+                tick.set_pose(EntityPose::Standing);
                 return;
             };
             // Commit pose before playing transition sounds so a canceled pose stays silent.
-            breeze.change_pose(EntityPose::LongJumping, move |breeze| {
+            self.transition(tick, EntityPose::LongJumping, move |breeze, current| {
+                let body = breeze.get_mob_entity();
                 if in_water {
-                    breeze.mob_entity.with_brain(breeze, |brain| {
+                    body.with_brain(breeze, |brain| {
                         brain.set(types::BREEZE_LEAVING_WATER, ());
                     });
                 }
                 breeze.play_entity_sound(Sound::EntityBreezeJump, 1.0, 1.0);
-                let living = &breeze.mob_entity.living_entity;
+                if !current() {
+                    return;
+                }
+                let living = &body.living_entity;
                 living.entity.yaw.store(living.entity.body_yaw.load());
                 living.discard_friction.store(true, Relaxed);
                 living.entity.velocity.store(velocity);
@@ -325,14 +347,14 @@ impl Behavior for LongJump {
             } else {
                 JUMP_COOLDOWN_TICKS
             };
-            breeze.change_pose(EntityPose::Standing, move |breeze| {
+            self.transition(tick, EntityPose::Standing, move |breeze, current| {
+                let body = breeze.get_mob_entity();
                 breeze.play_entity_sound(Sound::EntityBreezeLand, 1.0, 1.0);
-                breeze
-                    .mob_entity
-                    .living_entity
-                    .discard_friction
-                    .store(false, Relaxed);
-                breeze.mob_entity.with_brain(breeze, |brain| {
+                if !current() {
+                    return;
+                }
+                body.living_entity.discard_friction.store(false, Relaxed);
+                body.with_brain(breeze, |brain| {
                     brain.set_with_expiry(types::BREEZE_JUMP_COOLDOWN, (), cooldown);
                     brain.set_with_expiry(types::BREEZE_SHOOT, (), 100);
                 });
@@ -341,19 +363,21 @@ impl Behavior for LongJump {
     }
 
     fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        if let Some(breeze) = breeze_from_tick(tick) {
-            // An interrupted jump may never run the landing callback.
-            breeze
-                .mob_entity
-                .living_entity
-                .discard_friction
-                .store(false, Relaxed);
-            if matches!(
-                breeze.planned_pose(),
-                EntityPose::LongJumping | EntityPose::Inhaling
-            ) {
-                breeze.change_pose(EntityPose::Standing, |_| {});
-            }
+        // An interrupted jump may never run the landing callback.
+        if let Some(pending) = self.pending_transition.take() {
+            pending.store(false, Relaxed);
+        }
+        tick.mob
+            .get_mob_entity()
+            .living_entity
+            .discard_friction
+            .store(false, Relaxed);
+        if matches!(
+            tick.mob.get_entity().pose.load(),
+            EntityPose::LongJumping | EntityPose::Inhaling
+        ) || matches!(tick.pose(), EntityPose::LongJumping | EntityPose::Inhaling)
+        {
+            tick.set_pose(EntityPose::Standing);
         }
         Self::clear_jump_memories(tick.state);
     }
@@ -380,8 +404,7 @@ impl Behavior for Slide {
         let entity = tick.mob.get_entity();
         entity.on_ground.load(Relaxed)
             && !entity.is_in_water()
-            && breeze_from_tick(tick)
-                .is_some_and(|breeze| breeze.planned_pose() == EntityPose::Standing)
+            && tick.pose() == EntityPose::Standing
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
@@ -433,12 +456,10 @@ impl Behavior for Slide {
 struct SlideToTargetSink(MoveToTargetSink);
 
 impl SlideToTargetSink {
-    fn begin_sliding(tick: &BrainTick<'_>) {
-        if let Some(breeze) = breeze_from_tick(tick) {
-            breeze.change_pose(EntityPose::Sliding, |breeze| {
-                breeze.play_entity_sound(Sound::EntityBreezeSlide, 1.0, 1.0);
-            });
-        }
+    fn begin_sliding(tick: &mut BrainTick<'_>) {
+        tick.set_pose_then(EntityPose::Sliding, |breeze| {
+            breeze.play_entity_sound(Sound::EntityBreezeSlide, 1.0, 1.0);
+        });
     }
 }
 
@@ -476,16 +497,14 @@ impl Behavior for SlideToTargetSink {
 
     fn stop(&mut self, tick: &mut BrainTick<'_>) {
         self.0.stop(tick);
-        if let Some(breeze) = breeze_from_tick(tick) {
-            let has_target = tick.state.has_memory_value(types::ATTACK_TARGET.id());
-            breeze.change_pose(EntityPose::Standing, move |breeze| {
-                if has_target {
-                    breeze.mob_entity.with_brain(breeze, |brain| {
-                        brain.set_with_expiry(types::BREEZE_SHOOT, (), 60);
-                    });
-                }
-            });
-        }
+        let has_target = tick.state.has_memory_value(types::ATTACK_TARGET.id());
+        tick.set_pose_then(EntityPose::Standing, move |breeze| {
+            if has_target {
+                breeze.get_mob_entity().with_brain(breeze, |brain| {
+                    brain.set_with_expiry(types::BREEZE_SHOOT, (), 60);
+                });
+            }
+        });
     }
 
     fn debug_name(&self) -> &'static str {
@@ -496,10 +515,14 @@ impl Behavior for SlideToTargetSink {
 #[cfg(test)]
 mod tests {
     use pumpkin_data::entity::EntityType;
+    use pumpkin_data::environment_attribute::Activity;
 
     use super::super::BreezeEntity;
     use super::*;
-    use crate::entity::ai::{brain::behavior::Status, test_support};
+    use crate::entity::ai::{
+        brain::{Brain, activity::ActivityData, behavior::Status},
+        test_support,
+    };
 
     #[tokio::test]
     async fn expired_long_jump_restores_friction_before_committing_the_pose()
@@ -516,7 +539,7 @@ mod tests {
         living.discard_friction.store(true, Relaxed);
 
         let mut state = BrainState::default();
-        let mut jump = Timed::new(LongJump);
+        let mut jump = Timed::new(LongJump::default());
         let duration = jump.inner().max_duration();
         jump.start_at(0, duration);
         jump.tick_or_stop(&mut BrainTick {
@@ -530,6 +553,52 @@ mod tests {
         assert_eq!(jump.status(), Status::Stopped);
         assert_eq!(living.entity.pose.load(), EntityPose::LongJumping);
         assert!(!living.discard_friction.load(Relaxed));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rebuilding_the_brain_cancels_queued_breeze_takeoff()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = test_support::world(&folder);
+        let breeze = BreezeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 300.0, 0.5),
+            &EntityType::BREEZE,
+        ));
+        let body = &breeze.mob_entity;
+        let entity = &body.living_entity.entity;
+        for refresh in [false, true] {
+            entity.set_pose(EntityPose::Inhaling);
+            entity.velocity.store(Vector3::default());
+            body.living_entity.discard_friction.store(false, Relaxed);
+            body.with_brain(breeze.as_ref(), |brain| {
+                *brain = Brain::default();
+                let mut jump = Timed::new(LongJump::default());
+                jump.start_at(world.get_world_age(), jump.inner().max_duration());
+                brain.add_activity(ActivityData::with_priority_start(
+                    Activity::Idle,
+                    0,
+                    vec![Box::new(jump)],
+                ));
+                brain.set(types::BREEZE_JUMP_TARGET, BlockPos::new(8, 300, 0));
+            });
+            if refresh {
+                body.request_refresh_brain();
+            }
+            body.tick_brain(breeze.as_ref());
+            assert_eq!(
+                entity.pose.load(),
+                if refresh {
+                    EntityPose::Standing
+                } else {
+                    EntityPose::LongJumping
+                }
+            );
+            assert_eq!(entity.velocity.load() == Vector3::default(), refresh);
+            assert_eq!(body.living_entity.discard_friction.load(Relaxed), !refresh);
+        }
+        world.level.shutdown().await;
         Ok(())
     }
 }

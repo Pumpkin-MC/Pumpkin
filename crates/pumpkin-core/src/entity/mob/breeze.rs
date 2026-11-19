@@ -2,20 +2,16 @@ mod ai;
 mod movement;
 mod shoot;
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 
-use pumpkin_data::{
-    damage::DamageType,
-    entity::{EntityPose, EntityType},
-    sound::Sound,
-};
+use pumpkin_data::{damage::DamageType, entity::EntityType, sound::Sound};
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, EntityBase,
     ai::{
         brain::{
-            Brain, BrainTick,
+            Brain,
             memory::{PackedMemories, types},
         },
         pathfinder::node::PathType,
@@ -23,26 +19,18 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     projectile_deflection::{ProjectileDeflection, default_deflection},
 };
+use crate::net::ClientPlatform;
 use crate::plugin::api::events::entity::{
     entity_pose_change::EntityPoseChangeEvent, entity_spawn::EntitySpawnEvent,
     entity_target::TargetReason,
 };
+use crate::plugin::api::events::world::GenericGameEvent;
 use crate::plugin::server::packet::PacketSentEvent;
+use crate::world::chunker::{get_view_distance, is_within_chebyshev_distance};
 
 const MAX_HEAD_Y_ROT: f32 = 30.0;
 const HEAD_ROT_SPEED: f32 = 25.0;
-
-type BrainEffect = Box<dyn FnOnce(&BreezeEntity) + Send>;
-
-#[derive(Default)]
-struct BrainEffects {
-    pose: Option<EntityPose>,
-    actions: Vec<BrainEffect>,
-}
-
-fn breeze_from_tick<'a>(tick: &BrainTick<'a>) -> Option<&'a BreezeEntity> {
-    tick.mob.cast_any().downcast_ref()
-}
+const LAND_SOUND_FALL_DISTANCE: f32 = 3.0;
 
 fn look_from_eyes(entity: &Entity, target: Vector3<f64>) {
     entity.look_at(target.add_raw(0.0, -entity.get_eye_height(), 0.0));
@@ -53,7 +41,6 @@ fn look_from_eyes(entity: &Entity, target: Vector3<f64>) {
 
 pub struct BreezeEntity {
     pub mob_entity: MobEntity,
-    brain_effects: Mutex<BrainEffects>,
 }
 
 impl BreezeEntity {
@@ -65,62 +52,11 @@ impl BreezeEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         navigator.set_pathfinding_malus(PathType::DangerTrapdoor, -1.0);
         navigator.set_pathfinding_malus(PathType::DamageFire, -1.0);
-        Arc::new(Self {
-            mob_entity,
-            brain_effects: Mutex::default(),
-        })
-    }
-
-    fn planned_pose(&self) -> EntityPose {
-        self.brain_effects
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .pose
-            .unwrap_or_else(|| self.get_entity().pose.load())
-    }
-
-    fn change_pose(&self, pose: EntityPose, after: impl FnOnce(&Self) + Send + 'static) {
-        let mut effects = self
-            .brain_effects
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        effects.pose = Some(pose);
-        effects.actions.push(Box::new(move |breeze| {
-            let entity = breeze.get_entity();
-            entity.set_pose(pose);
-            if !entity.is_removed() && entity.pose.load() == pose {
-                after(breeze);
-            }
-        }));
-    }
-
-    fn after_brain_tick(&self, after: impl FnOnce(&Self) + Send + 'static) {
-        self.brain_effects
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .actions
-            .push(Box::new(after));
-    }
-
-    fn flush_brain_effects(&self) {
-        let effects = std::mem::take(
-            &mut *self
-                .brain_effects
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner),
-        );
-        // Pose, sound and spawn callbacks can reenter the mob through plugins.
-        for apply in effects.actions {
-            apply(self);
-        }
+        Arc::new(Self { mob_entity })
     }
 }
 
 impl Mob for BreezeEntity {
-    fn is_allowed_in_peaceful(&self) -> bool {
-        false
-    }
-
     fn make_brain(&self, packed: &PackedMemories) -> Brain {
         ai::make_brain(self, packed)
     }
@@ -134,7 +70,7 @@ impl Mob for BreezeEntity {
                 brain.set_optional(types::ATTACK_TARGET, current.clone());
             }
         });
-        self.mob_entity.tick_brain(self);
+        let effects = self.mob_entity.tick_brain_effects(self);
         let (proposed, nearest_id) = self.mob_entity.with_brain(self, |brain| {
             (
                 brain.get(types::ATTACK_TARGET).cloned(),
@@ -165,7 +101,9 @@ impl Mob for BreezeEntity {
             }
             ai::update_activity(brain);
         });
-        self.flush_brain_effects();
+        for effect in effects {
+            effect(self);
+        }
     }
 
     fn additional_tick_movement(&self) -> f64 {
@@ -177,18 +115,63 @@ impl Mob for BreezeEntity {
     }
 
     fn has_global_tick_reach(&self) -> bool {
-        self.get_entity()
-            .world
-            .load()
-            .server
-            .upgrade()
-            .is_some_and(|server| {
-                server.plugin_manager.has_handlers::<EntitySpawnEvent>()
-                    || server
-                        .plugin_manager
-                        .has_handlers::<EntityPoseChangeEvent>()
-                    || server.plugin_manager.has_handlers::<PacketSentEvent>()
-            })
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let Some(server) = world.server.upgrade() else {
+            return false;
+        };
+        let plugins = &server.plugin_manager;
+        if plugins.has_handlers::<EntitySpawnEvent>()
+            || plugins.has_handlers::<EntityPoseChangeEvent>()
+            || plugins.has_handlers::<GenericGameEvent>()
+        {
+            return true;
+        }
+        if !plugins.has_handlers::<PacketSentEvent>() {
+            return false;
+        }
+
+        let tracked = world.entity_tracker.get_tracked_entity(entity.entity_id);
+        if tracked.as_ref().is_some_and(|body| body.has_viewers()) {
+            return true;
+        }
+        let chunk = entity.chunk_pos.load();
+        // A charge can pair with clients farther away than those hearing the Brain's sounds.
+        let range = (EntityType::BREEZE_WIND_CHARGE.client_tracking_range as i32)
+            .max(shoot::SHOOT_VOLUME.ceil() as i32);
+        let can_land =
+            self.mob_entity.living_entity.fall_distance.load() > LAND_SOUND_FALL_DISTANCE;
+        let is_passenger = self.is_passenger();
+        let tracking_range = tracked
+            .as_ref()
+            .map_or(EntityType::BREEZE.client_tracking_range, |body| {
+                body.get_effective_range()
+            });
+        world.players.load().iter().any(|player| {
+            // A vehicle may move the Breeze before its turn. Fall sounds follow travel.
+            let player_chunk = player.get_entity().chunk_pos.load();
+            is_passenger
+                || is_within_chebyshev_distance(chunk, player_chunk, range)
+                || match player.client.as_ref() {
+                    ClientPlatform::Java(_) => {
+                        // Chunk delivery can pair this player before the Breeze ticks.
+                        let view_range = u32::from(get_view_distance(player).get());
+                        can_land
+                            || is_within_chebyshev_distance(
+                                chunk,
+                                player_chunk,
+                                tracking_range.min(view_range) as i32,
+                            )
+                    }
+                    ClientPlatform::Bedrock(_) => {
+                        tracked.is_none()
+                            && player
+                                .watched_section
+                                .load()
+                                .is_within_distance(chunk.x, chunk.y)
+                    }
+                }
+        })
     }
 
     fn can_attack(&self, target: &dyn EntityBase) -> bool {
@@ -203,7 +186,7 @@ impl Mob for BreezeEntity {
         fall_distance: f32,
         damage_modifier: f32,
     ) -> bool {
-        if fall_distance > 3.0 {
+        if fall_distance > LAND_SOUND_FALL_DISTANCE {
             caller.play_entity_sound(Sound::EntityBreezeLand, 1.0, 1.0);
         }
         self.mob_entity
@@ -254,6 +237,7 @@ impl Mob for BreezeEntity {
 mod tests {
     use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
+    use pumpkin_data::entity::EntityPose;
     use pumpkin_data::environment_attribute::Activity;
     use pumpkin_util::math::vector3::Vector3;
 
@@ -309,15 +293,12 @@ mod tests {
                 "CheckBreezePoseEffect",
                 vec![(types::BREEZE_SHOOT.id(), MemoryStatus::Registered)],
                 move |tick| {
-                    let Some(breeze) = breeze_from_tick(tick) else {
-                        return false;
-                    };
                     tick.state.set(types::BREEZE_SHOOT, ());
                     let probe = probe.clone();
-                    breeze.change_pose(EntityPose::Inhaling, move |breeze| {
+                    tick.set_pose_then(EntityPose::Inhaling, move |breeze| {
                         probe.store(
                             breeze
-                                .mob_entity
+                                .get_mob_entity()
                                 .brain_has_memory_value(types::BREEZE_SHOOT.id()),
                             Relaxed,
                         );

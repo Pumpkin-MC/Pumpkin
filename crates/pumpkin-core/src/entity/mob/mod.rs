@@ -3,9 +3,9 @@ use super::{
 };
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::behavior::temperament::Temperament;
-use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag};
+use crate::entity::ai::brain::{Brain, BrainEffect};
 use crate::entity::ai::control::body_rotation_control::BodyRotationControl;
 use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
@@ -760,11 +760,9 @@ impl MobEntity {
     pub fn refresh_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
-        self.with_brain(mob, |brain| {
-            brain.stop_all(&world, mob, time);
-            let packed = brain.pack();
-            *brain = mob.make_brain(&packed);
-        });
+        for effect in self.with_brain(mob, |brain| brain.rebuild(&world, mob, time)) {
+            effect(mob);
+        }
     }
 
     pub fn request_refresh_brain(&self) {
@@ -772,12 +770,23 @@ impl MobEntity {
     }
 
     pub fn tick_brain(&self, mob: &dyn Mob) {
+        for effect in self.tick_brain_effects(mob) {
+            effect(mob);
+        }
+    }
+
+    /// Returns deferred actions for callers that must synchronize state before firing callbacks.
+    pub(crate) fn tick_brain_effects(&self, mob: &dyn Mob) -> Vec<BrainEffect> {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
-        self.with_brain(mob, |brain| brain.tick(&world, mob, time));
-        if self.brain_refresh_requested.swap(false, Ordering::AcqRel) {
-            self.refresh_brain(mob);
-        }
+        self.with_brain(mob, |brain| {
+            brain.tick(&world, mob, time);
+            if self.brain_refresh_requested.swap(false, Ordering::AcqRel) {
+                brain.rebuild(&world, mob, time)
+            } else {
+                brain.take_effects()
+            }
+        })
     }
 
     pub fn write_mob_nbt(&self, mob: &dyn Mob, nbt: &mut NbtCompound) {
@@ -1195,13 +1204,6 @@ impl MobEntity {
         let entity = &self.living_entity.entity;
 
         let world = entity.world.load();
-        if !mob.is_allowed_in_peaceful()
-            && world.level_info.load().difficulty == Difficulty::Peaceful
-        {
-            entity.remove();
-            return;
-        }
-
         let pos = entity.pos.load();
         let players = world.players.load();
 
@@ -1593,11 +1595,6 @@ pub trait Mob: EntityBase + Send + Sync {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .has_line_of_sight(&mob_entity.living_entity.entity, target)
-    }
-
-    /// Whether a mob of this type can remain in the world on Peaceful difficulty.
-    fn is_allowed_in_peaceful(&self) -> bool {
-        true
     }
 
     fn requires_custom_persistence(&self) -> bool {

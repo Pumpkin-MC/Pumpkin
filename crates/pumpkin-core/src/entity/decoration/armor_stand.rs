@@ -247,6 +247,14 @@ impl ArmorStandEntity {
 }
 
 impl EntityBase for ArmorStandEntity {
+    fn ignore_explosion(
+        &self,
+        explosion: &crate::world::Explosion<'_>,
+        world: &crate::world::World,
+    ) -> bool {
+        self.is_invisible() || !explosion.should_affect_blocklike_entities(world)
+    }
+
     fn can_hit(&self) -> bool {
         !self.get_entity().is_removed() && !self.is_marker()
     }

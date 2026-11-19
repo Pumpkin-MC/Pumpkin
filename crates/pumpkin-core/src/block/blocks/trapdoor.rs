@@ -79,32 +79,21 @@ fn can_open_trapdoor(block: &Block) -> bool {
 }
 
 fn get_sound(block: &Block, open: bool) -> Sound {
-    let (open_sound, close_sound) = match block {
-        b if b == &Block::IRON_TRAPDOOR => {
-            (Sound::BlockIronTrapdoorOpen, Sound::BlockIronTrapdoorClose)
+    if open {
+        if block.has_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) {
+            Sound::BlockWoodenTrapdoorOpen
+        } else if block == &Block::IRON_TRAPDOOR {
+            Sound::BlockIronTrapdoorOpen
+        } else {
+            Sound::BlockCopperTrapdoorOpen
         }
-        b if b == &Block::BAMBOO_TRAPDOOR => (
-            Sound::BlockBambooWoodTrapdoorOpen,
-            Sound::BlockBambooWoodTrapdoorClose,
-        ),
-        b if b == &Block::CHERRY_TRAPDOOR => (
-            Sound::BlockCherryWoodTrapdoorOpen,
-            Sound::BlockCherryWoodTrapdoorClose,
-        ),
-        b if b == &Block::CRIMSON_TRAPDOOR || b == &Block::WARPED_TRAPDOOR => (
-            Sound::BlockNetherWoodTrapdoorOpen,
-            Sound::BlockNetherWoodTrapdoorClose,
-        ),
-        b if b.has_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) => (
-            Sound::BlockWoodenTrapdoorOpen,
-            Sound::BlockWoodenTrapdoorClose,
-        ),
-        _ => (
-            Sound::BlockCopperTrapdoorOpen,
-            Sound::BlockCopperTrapdoorClose,
-        ),
-    };
-    if open { open_sound } else { close_sound }
+    } else if block.has_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) {
+        Sound::BlockWoodenTrapdoorClose
+    } else if block == &Block::IRON_TRAPDOOR {
+        Sound::BlockIronTrapdoorClose
+    } else {
+        Sound::BlockCopperTrapdoorClose
+    }
 }
 
 #[pumpkin_block_from_tag("minecraft:trapdoors")]

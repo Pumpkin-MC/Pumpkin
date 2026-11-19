@@ -81,27 +81,23 @@ fn can_open_door(block: &Block) -> bool {
     block != &Block::IRON_DOOR
 }
 
+// Todo: The sounds should be from BlockSetType
 fn get_sound(block: &Block, open: bool) -> Sound {
-    let (open_sound, close_sound) = match block {
-        b if b == &Block::IRON_DOOR => (Sound::BlockIronDoorOpen, Sound::BlockIronDoorClose),
-        b if b == &Block::BAMBOO_DOOR => (
-            Sound::BlockBambooWoodDoorOpen,
-            Sound::BlockBambooWoodDoorClose,
-        ),
-        b if b == &Block::CHERRY_DOOR => (
-            Sound::BlockCherryWoodDoorOpen,
-            Sound::BlockCherryWoodDoorClose,
-        ),
-        b if b == &Block::CRIMSON_DOOR || b == &Block::WARPED_DOOR => (
-            Sound::BlockNetherWoodDoorOpen,
-            Sound::BlockNetherWoodDoorClose,
-        ),
-        b if b.has_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) => {
-            (Sound::BlockWoodenDoorOpen, Sound::BlockWoodenDoorClose)
+    if open {
+        if block.has_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
+            Sound::BlockWoodenDoorOpen
+        } else if block == &Block::IRON_DOOR {
+            Sound::BlockIronDoorOpen
+        } else {
+            Sound::BlockCopperDoorOpen
         }
-        _ => (Sound::BlockCopperDoorOpen, Sound::BlockCopperDoorClose),
-    };
-    if open { open_sound } else { close_sound }
+    } else if block.has_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
+        Sound::BlockWoodenDoorClose
+    } else if block == &Block::IRON_DOOR {
+        Sound::BlockIronDoorClose
+    } else {
+        Sound::BlockCopperDoorClose
+    }
 }
 
 #[expect(clippy::pedantic)]

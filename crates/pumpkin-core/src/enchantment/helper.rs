@@ -3,9 +3,9 @@ use std::sync::Arc;
 use crate::enchantment::effects::EnchantmentEntityEffectExt;
 use crate::entity::player::Player;
 use crate::entity::projectile::arrow::ArrowEntity;
-use crate::entity::{Entity, EntityBase, living::attribute_modifier_slot_matches};
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
-use pumpkin_data::data_component_impl::{EnchantmentsImpl, EquipmentSlot};
+use pumpkin_data::data_component_impl::EnchantmentsImpl;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::enchantment::{Enchantment, EnchantmentEntityEffect, EnchantmentTarget};
 use pumpkin_data::entity::EntityType;
@@ -25,6 +25,8 @@ impl EnchantmentHelper {
         enchantment: &'static Enchantment,
         caller: &dyn crate::entity::EntityBase,
     ) -> i32 {
+        use crate::entity::living::attribute_modifier_slot_matches;
+        use pumpkin_data::data_component_impl::EquipmentSlot;
         use pumpkin_inventory::Inventory;
         let Some(living) = caller.get_living_entity() else {
             return 0;
@@ -152,87 +154,6 @@ impl EnchantmentHelper {
                 }
             }
         });
-    }
-
-    /// Applies victim-side Thorns after a successful hit by a known attacker.
-    pub(crate) fn apply_thorns(victim: &dyn EntityBase, attacker: &dyn EntityBase) {
-        const SLOTS: [EquipmentSlot; 8] = [
-            EquipmentSlot::MAIN_HAND,
-            EquipmentSlot::OFF_HAND,
-            EquipmentSlot::FEET,
-            EquipmentSlot::LEGS,
-            EquipmentSlot::CHEST,
-            EquipmentSlot::HEAD,
-            EquipmentSlot::BODY,
-            EquipmentSlot::SADDLE,
-        ];
-
-        let Some(living) = victim.get_living_entity() else {
-            return;
-        };
-        let thorns = &Enchantment::THORNS;
-        let [effect] = thorns.get_post_attack_effects() else {
-            return;
-        };
-        let EnchantmentEntityEffect::AllOf(effects) = &effect.effect else {
-            return;
-        };
-        let [
-            EnchantmentEntityEffect::DamageEntity {
-                min_damage,
-                max_damage,
-                damage_type: Some(damage_type),
-            },
-            EnchantmentEntityEffect::ChangeItemDamage { amount },
-        ] = *effects
-        else {
-            return;
-        };
-
-        let enchantment_level = |stack: &ItemStack| {
-            if stack.is_empty() {
-                0
-            } else {
-                stack.get_enchantment_level(thorns)
-            }
-        };
-        for slot in &SLOTS {
-            if !thorns
-                .slots
-                .iter()
-                .any(|group| attribute_modifier_slot_matches(group, slot))
-            {
-                continue;
-            }
-            let level = if *slot == EquipmentSlot::MAIN_HAND {
-                enchantment_level(&living.held_item(victim))
-            } else {
-                living
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .equipment
-                    .get(slot)
-                    .map_or(0, enchantment_level)
-            };
-            // The generated data omits Thorns' per-slot random-chance requirement.
-            if level <= 0 || rand::random::<f32>() >= 0.15 + 0.15 * (level - 1) as f32 {
-                continue;
-            }
-
-            let min = min_damage.calculate(level);
-            let max = max_damage.calculate(level);
-            let damage = min + rand::random::<f32>() * (max - min);
-            attacker.damage_with_context(
-                attacker,
-                damage,
-                **damage_type,
-                Some(victim.get_entity().pos.load()),
-                Some(victim),
-                Some(victim),
-            );
-            living.damage_equipped_item(victim, slot, amount.calculate(level) as i32);
-        }
     }
 
     /// Computes projectile spread angle using data-driven projectile spread effects.

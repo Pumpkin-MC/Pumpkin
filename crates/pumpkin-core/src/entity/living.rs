@@ -3498,7 +3498,7 @@ impl LivingEntity {
         }
         let durability_damage = (damage / 4.0).max(1.0) as i32;
         for slot in slots {
-            let stack = self
+            let mut stack = self
                 .entity_equipment
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -3509,42 +3509,26 @@ impl LivingEntity {
             if !damage_on_hurt || !stack.is_damageable() || !stack.can_be_hurt_by(damage_type) {
                 continue;
             }
-            self.damage_equipped_item(caller, slot, durability_damage);
-        }
-    }
-
-    pub(crate) fn damage_equipped_item(
-        &self,
-        caller: &dyn EntityBase,
-        slot: &EquipmentSlot,
-        amount: i32,
-    ) {
-        if let Some(player) = caller.get_player() {
-            player.damage_item_in_slot(slot, amount);
-            return;
-        }
-
-        let (result, stack) = {
-            let mut equipment = self
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let Some(stack) = equipment.equipment.get_mut(slot) else {
-                return;
-            };
-            let result = stack.damage_item(amount);
-            if result == DamageResult::Untouched {
-                return;
+            if let Some(player) = caller.get_player() {
+                player.damage_item_in_slot(slot, durability_damage);
+                continue;
             }
-            (result, stack.clone())
-        };
-        self.send_equipment_changes(&[(slot.clone(), stack)]);
-        if result == DamageResult::Broken {
-            self.entity.world.load().send_entity_status(
-                &self.entity,
-                super::equipment_break_status(slot),
-                ActorEventID::None,
-            );
+            let result = stack.damage_item(durability_damage);
+            if result == DamageResult::Untouched {
+                continue;
+            }
+            self.entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .put(slot, stack.clone());
+            self.send_equipment_changes(&[(slot.clone(), stack)]);
+            if result == DamageResult::Broken {
+                self.entity.world.load().send_entity_status(
+                    &self.entity,
+                    super::equipment_break_status(slot),
+                    ActorEventID::None,
+                );
+            }
         }
     }
 

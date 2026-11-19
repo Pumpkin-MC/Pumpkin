@@ -32,29 +32,17 @@ fn is_stone_button(block: &Block) -> bool {
 }
 
 fn get_sound(block: &Block, on: bool) -> Sound {
-    let (on_sound, off_sound) = match block {
-        b if is_stone_button(b) => (
-            Sound::BlockStoneButtonClickOn,
-            Sound::BlockStoneButtonClickOff,
-        ),
-        b if b == &Block::BAMBOO_BUTTON => (
-            Sound::BlockBambooWoodButtonClickOn,
-            Sound::BlockBambooWoodButtonClickOff,
-        ),
-        b if b == &Block::CHERRY_BUTTON => (
-            Sound::BlockCherryWoodButtonClickOn,
-            Sound::BlockCherryWoodButtonClickOff,
-        ),
-        b if b == &Block::CRIMSON_BUTTON || b == &Block::WARPED_BUTTON => (
-            Sound::BlockNetherWoodButtonClickOn,
-            Sound::BlockNetherWoodButtonClickOff,
-        ),
-        _ => (
-            Sound::BlockWoodenButtonClickOn,
-            Sound::BlockWoodenButtonClickOff,
-        ),
-    };
-    if on { on_sound } else { off_sound }
+    if is_stone_button(block) {
+        if on {
+            Sound::BlockStoneButtonClickOn
+        } else {
+            Sound::BlockStoneButtonClickOff
+        }
+    } else if on {
+        Sound::BlockWoodenButtonClickOn
+    } else {
+        Sound::BlockWoodenButtonClickOff
+    }
 }
 
 #[pumpkin_block_from_tag("minecraft:buttons")]

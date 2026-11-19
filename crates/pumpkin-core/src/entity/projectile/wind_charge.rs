@@ -15,7 +15,6 @@ use std::{
 };
 
 use crate::{
-    enchantment::EnchantmentHelper,
     entity::{
         Entity, EntityBase,
         living::LivingEntity,
@@ -66,6 +65,10 @@ pub static BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<
 });
 
 impl WindChargeEntity {
+    pub(crate) fn acceleration_power(&self) -> f64 {
+        self.thrown_item_entity.acceleration_power()
+    }
+
     #[must_use]
     pub const fn new_normal(thrown_item_entity: ThrownItemEntity) -> Self {
         Self {
@@ -228,7 +231,7 @@ impl EntityBase for WindChargeEntity {
                 if let Some(owner) = owner.as_deref().and_then(EntityBase::get_living_entity) {
                     owner.set_last_hurt_mob(entity.as_ref());
                 }
-                let did_damage = entity.damage_with_context(
+                entity.damage_with_context(
                     entity.as_ref(),
                     1.0,
                     DamageType::WIND_CHARGE,
@@ -236,9 +239,6 @@ impl EntityBase for WindChargeEntity {
                     Some(self),
                     owner.as_deref(),
                 );
-                if did_damage && let Some(owner) = owner.as_deref() {
-                    EnchantmentHelper::apply_thorns(entity.as_ref(), owner);
-                }
                 self.create_explosion(self.get_entity().pos.load());
             }
             ProjectileHit::Block { face, hit_pos, .. } => {

@@ -9,7 +9,7 @@ use crate::{
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     server::Server,
     world::{
-        World,
+        Explosion, World,
         portal::{NetherPortal, PortalProcessor, PortalType, SourcePortalInfo},
     },
 };
@@ -428,6 +428,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     /// Whether the entity is immune from explosion knockback and damage
     fn is_immune_to_explosion(&self) -> bool {
         false
+    }
+
+    /// Whether this explosion skips both damage and knockback for the entity.
+    fn ignore_explosion(&self, _explosion: &Explosion<'_>, _world: &World) -> bool {
+        self.is_immune_to_explosion()
     }
 
     fn get_gravity(&self) -> f64 {
@@ -4588,6 +4593,10 @@ impl Entity {
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
+        self.set_pose_if(pose, || true);
+    }
+
+    pub(crate) fn set_pose_if(&self, pose: EntityPose, should_apply: impl FnOnce() -> bool) {
         if self.pose.load() == pose {
             return;
         }
@@ -4606,6 +4615,9 @@ impl Entity {
             }
         }
 
+        if !should_apply() {
+            return;
+        }
         self.pose.store(pose);
         let pose = pose as i32;
         let mut bedrock_meta = SyncedActorDataList::new();
