@@ -243,6 +243,7 @@ use crate::net::bedrock::play::{
 };
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::HorizontalFacing;
+use pumpkin_data::damage::DamageScaling;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
 use pumpkin_data::data_component_impl::{
@@ -1999,6 +2000,26 @@ impl Player {
         self.damage_item_stack_internal(stack, amount, true)
     }
 
+    /// Vanilla `hurtAndBreak` on a held stack: also counts the break and plays it for `hand`.
+    pub fn damage_held_stack(
+        &self,
+        stack: &mut ItemStack,
+        amount: i32,
+        hand: Hand,
+    ) -> DamageResult {
+        let item_id = stack.item.id;
+        let result = self.damage_item_stack(stack, amount);
+        if result == DamageResult::Broken {
+            self.increment_stat(statistics::StatisticCategory::Broken, i32::from(item_id), 1);
+            self.world().send_entity_status(
+                &self.living_entity.entity,
+                super::equipment_break_status(&super::hand_equipment_slot(hand)),
+                ActorEventID::None,
+            );
+        }
+        result
+    }
+
     /// Vanilla `ItemStack.hurtWithoutBreaking`: applies durability damage clamped at `max_damage - 1`.
     pub fn hurt_item_stack_without_breaking(
         &self,
@@ -3109,6 +3130,10 @@ impl Player {
             }
         }
 
+        if self.inbound_packets.is_empty() {
+            return;
+        }
+
         let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
             return;
         };
@@ -3300,9 +3325,10 @@ impl Player {
                         }
                         _ => Vec::new(),
                     };
-                    let mut per_player_cache = rustc_hash::FxHashMap::default();
-                    let encoded =
-                        crate::net::ChunkSender::encode_batch(&batch, &mut per_player_cache);
+                    let encoded = crate::net::ChunkSender::encode_batch_shared(
+                        &batch,
+                        &world.encoded_chunk_cache,
+                    );
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
                     let sent = self.chunk_sender.try_lock().map_or_else(
                         |_| Vec::new(),
@@ -4129,9 +4155,11 @@ impl Player {
     }
 
     pub fn increment_stat(&self, category: statistics::StatisticCategory, stat: i32, amount: i32) {
-        let final_amount = if let Some(player_arc) =
-            self.world().get_player_by_uuid(self.gameprofile.id)
-            && let Some(server) = self.world().server.upgrade()
+        let final_amount = if let Some(server) = self.world().server.upgrade()
+            && server
+                .plugin_manager
+                .has_handlers::<crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent>()
+            && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
             let mut event = crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent {
                 player: player_arc,
@@ -4545,15 +4573,20 @@ impl Player {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(CustomScoreboard::Java(sb)) = guard.as_ref()
+            && !sb.get_teams().is_empty()
             && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
         {
             return Some(team.clone());
         }
+        drop(guard);
         let world = self.world();
         let sb = world
             .scoreboard
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if sb.get_teams().is_empty() {
+            return None;
+        }
         sb.get_entity_team(&self.gameprofile.name).cloned()
     }
 
@@ -4563,15 +4596,20 @@ impl Player {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(CustomScoreboard::Java(sb)) = guard.as_ref()
+            && !sb.get_teams().is_empty()
             && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
         {
             return Some(team.name.clone());
         }
+        drop(guard);
         let world = self.world();
         let sb = world
             .scoreboard
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if sb.get_teams().is_empty() {
+            return None;
+        }
         sb.get_entity_team(&self.gameprofile.name)
             .map(|team| team.name.clone())
     }
@@ -5279,11 +5317,29 @@ impl Player {
         {
             return false;
         }
-        // TODO: Vanilla `Player.hurtServer` difficulty scaling when `scalesWithDifficulty`
         if !self.get_entity().is_invulnerable_to(&damage_type, cause)
             && !self.living_entity.is_dead_or_dying()
         {
             self.release_shoulders();
+        }
+        let scales_with_difficulty = match damage_type.scaling {
+            DamageScaling::Never => false,
+            DamageScaling::Always => true,
+            DamageScaling::WhenCausedByLivingNonPlayer => cause.is_some_and(|cause| {
+                cause.get_living_entity().is_some() && cause.get_player().is_none()
+            }),
+        };
+        let mut amount = amount;
+        if scales_with_difficulty {
+            amount = match self.world().level_info.load().difficulty {
+                Difficulty::Peaceful => 0.0,
+                Difficulty::Easy => (amount / 2.0 + 1.0).min(amount),
+                Difficulty::Normal => amount,
+                Difficulty::Hard => amount * 3.0 / 2.0,
+            };
+        }
+        if amount == 0.0 {
+            return false;
         }
         self.living_entity
             .damage_with_context(caller, amount, damage_type, position, source, cause)
@@ -6233,9 +6289,90 @@ impl Player {
         }
     }
 
+    fn tick_inventory_item_components(&self, server: &Server) {
+        use pumpkin_data::data_component_impl::{LodestoneTrackerImpl, MapPostProcessingImpl};
+        use pumpkin_inventory::Inventory;
+
+        let needs_tick = |stack: &ItemStack| -> bool {
+            !stack.is_empty()
+                && !stack.patch.is_empty()
+                && (stack
+                    .get_data_component::<MapPostProcessingImpl>()
+                    .is_some()
+                    || stack.get_data_component::<LodestoneTrackerImpl>().is_some())
+        };
+
+        let mut candidates: Vec<(usize, ItemStack)> = Vec::new();
+        {
+            let main = self
+                .inventory
+                .main_inventory
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (slot_idx, stack) in main.iter().enumerate() {
+                if needs_tick(stack) {
+                    candidates.push((slot_idx, stack.clone()));
+                }
+            }
+        }
+        {
+            let equipment = self
+                .inventory
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (&slot_idx, eq_slot) in self.inventory.equipment_slots.iter() {
+                let stack = equipment.get(eq_slot);
+                if needs_tick(&stack) {
+                    candidates.push((slot_idx, stack));
+                }
+            }
+        }
+        if candidates.is_empty() {
+            return;
+        }
+
+        let world = self.world();
+        let mut any_changed = false;
+        for (slot_idx, mut stack) in candidates {
+            let mut changed = crate::world::map::resolve_map_post_processing(&mut stack, server);
+
+            if let Some(tracker) = stack.get_data_component::<LodestoneTrackerImpl>()
+                && tracker.tracked
+                && let Some(target) = &tracker.target
+                && target.dimension == world.dimension.minecraft_name
+            {
+                let pos = BlockPos::new(target.x, target.y, target.z);
+                if world.level.is_chunk_loaded(&pos.chunk_position())
+                    && world.get_block(&pos) != &Block::LODESTONE
+                {
+                    stack.set_data_component(LodestoneTrackerImpl {
+                        target: None,
+                        tracked: true,
+                    });
+                    changed = true;
+                }
+            }
+
+            if changed {
+                self.inventory.set_stack(slot_idx, stack);
+                any_changed = true;
+            }
+        }
+
+        if any_changed {
+            self.player_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .send_content_updates();
+        }
+    }
+
     pub fn tick_maps(&self, server: &Server) {
         use pumpkin_data::data_component_impl::MapIdImpl;
         use pumpkin_data::item::Item;
+
+        self.tick_inventory_item_components(server);
 
         for hand in Hand::all() {
             let stack = self.inventory().get_stack_in_hand(hand);
@@ -6247,7 +6384,9 @@ impl Player {
                 if let Some(map_data_arc) = server.map_manager.get_map(map_id)
                     && let Ok(mut map_data) = map_data_arc.try_lock()
                 {
-                    map_data.update(self);
+                    if !map_data.locked {
+                        map_data.update(self);
+                    }
 
                     let tick_count = self.tick_counter.load(Ordering::Relaxed);
                     if map_data.dirty || tick_count % 10 == 0 {
@@ -6765,6 +6904,29 @@ impl Player {
         screen_handler_factory: &dyn ScreenHandlerFactory,
         block_pos: Option<BlockPos>,
     ) -> Option<u8> {
+        let custom_name = block_pos
+            .and_then(|pos| self.world().get_block_entity(&pos))
+            .and_then(|be| be.get_custom_name());
+        let display_name = custom_name.unwrap_or_else(|| screen_handler_factory.get_display_name());
+
+        if let Some(pos) = block_pos
+            && let Some(be) = self.world().get_block_entity(&pos)
+            && let Some(lock) = be.get_lock()
+            && self.gamemode.load() != GameMode::Spectator
+            && !lock.unlocks_with(&self.inventory.held_item())
+        {
+            self.send_system_message_raw(
+                &TextComponent::translate("container.isLocked", [display_name]),
+                true,
+            );
+            self.world().play_sound(
+                pumpkin_data::sound::Sound::BlockChestLocked,
+                pumpkin_data::sound::SoundCategory::Blocks,
+                &pos.to_centered_f64(),
+            );
+            return None;
+        }
+
         if !self
             .current_screen_handler
             .lock()
@@ -6804,7 +6966,6 @@ impl Player {
             let sync_id = screen_handler_temp.sync_id();
             let window_type = screen_handler_temp.window_type()?;
 
-            let display_name = screen_handler_factory.get_display_name();
             let java_packet =
                 COpenScreen::new(sync_id.into(), (window_type as i32).into(), &display_name);
 
@@ -7688,10 +7849,8 @@ impl NBTStorage for PlayerInventory {
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for (i, stack) in main_inv.iter().enumerate() {
-                if !stack.is_empty() {
-                    let mut item_compound = NbtCompound::new();
+                if let Some(mut item_compound) = stack.to_nbt() {
                     item_compound.put_byte("Slot", i as i8);
-                    stack.write_item_stack(&mut item_compound);
                     items.push(NbtTag::Compound(item_compound));
                 }
             }
@@ -7704,9 +7863,7 @@ impl NBTStorage for PlayerInventory {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for (slot, stack) in &equipment_guard.equipment {
-                if !stack.is_empty() {
-                    let mut item_compound = NbtCompound::new();
-                    stack.write_item_stack(&mut item_compound);
+                if let Some(item_compound) = stack.to_nbt() {
                     let vanilla_slot = match slot {
                         EquipmentSlot::Feet(_) => {
                             equipment_compound.put_compound("feet", item_compound.clone());
@@ -7731,9 +7888,8 @@ impl NBTStorage for PlayerInventory {
                         _ => None,
                     };
                     if let Some(slot_byte) = vanilla_slot {
-                        let mut inv_item_compound = NbtCompound::new();
+                        let mut inv_item_compound = item_compound;
                         inv_item_compound.put_byte("Slot", slot_byte);
-                        stack.write_item_stack(&mut inv_item_compound);
                         items.push(NbtTag::Compound(inv_item_compound));
                     }
                 }
@@ -7828,10 +7984,8 @@ impl NBTStorage for EnderChestInventory {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for (i, stack) in ec_items.iter().enumerate() {
-            if !stack.is_empty() {
-                let mut item_compound = NbtCompound::new();
+            if let Some(mut item_compound) = stack.to_nbt() {
                 item_compound.put_byte("Slot", i as i8);
-                stack.write_item_stack(&mut item_compound);
                 items.push(NbtTag::Compound(item_compound));
             }
         }
@@ -9428,6 +9582,31 @@ impl InventoryPlayer for Player {
         self.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::BrewedPotion,
         );
+    }
+
+    fn game_time(&self) -> i64 {
+        self.world().get_world_age()
+    }
+
+    fn sync_container_world_event(&self, event: pumpkin_data::world::WorldEvent) {
+        if let Some(pos) = self.open_container_pos.load() {
+            self.world().sync_world_event(event, pos, 0);
+        }
+    }
+
+    fn on_crafted_post_process(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
+        if let Some(server) = self.world().server.upgrade() {
+            crate::world::map::resolve_map_post_processing(stack, &server);
+        }
+    }
+
+    fn map_state(&self, map_id: i32) -> Option<(bool, i8)> {
+        let server = self.world().server.upgrade()?;
+        let map = server.map_manager.get_map(map_id)?;
+        let data = map
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Some((data.locked, data.scale))
     }
 }
 

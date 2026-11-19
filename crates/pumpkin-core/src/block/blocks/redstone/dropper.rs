@@ -157,7 +157,7 @@ impl BlockBehaviour for DropperBlock {
                 return;
             };
 
-            if let Some((slot_index, mut item)) = dropper.get_random_slot() {
+            if let Some((slot_index, item)) = dropper.get_random_slot() {
                 let props = DispenserLikeProperties::from_state_id(state.id);
                 let direction = props.facing.to_block_direction();
                 let target_pos = args.position.offset(direction.to_offset());
@@ -165,27 +165,31 @@ impl BlockBehaviour for DropperBlock {
                 if let Some(container) =
                     HopperBlockEntity::get_container_at(args.world, &target_pos)
                 {
-                    let backup = item.clone();
-                    let one_item = item.split(1);
-
-                    if HopperBlockEntity::add_item(
+                    // Taken and restored under the slot lock, a hopper filling the dropper meanwhile keeps its items.
+                    let Some(one_item) = HopperBlockEntity::take_one(dropper, slot_index, &item)
+                    else {
+                        return;
+                    };
+                    if !HopperBlockEntity::add_item(
                         Some(dropper),
                         container.as_ref(),
-                        one_item,
+                        one_item.clone(),
                         Some(direction.opposite()),
                     )
                     .is_empty()
+                        && let Some(leftover) =
+                            HopperBlockEntity::put_back(dropper, slot_index, one_item)
                     {
-                        dropper.set_stack(slot_index, item);
-                    } else {
-                        dropper.set_stack(slot_index, backup);
+                        args.world.drop_stack(args.position, leftover);
                     }
                     return;
                 }
 
                 // No container found, dispense item into the world
-                let drop_item = item.split(1);
-                dropper.set_stack(slot_index, item);
+                let Some(drop_item) = HopperBlockEntity::take_one(dropper, slot_index, &item)
+                else {
+                    return;
+                };
                 let facing = to_normal(props.facing);
                 let mut pos = args.position.to_centered_f64().add(&(facing * 0.7));
 
