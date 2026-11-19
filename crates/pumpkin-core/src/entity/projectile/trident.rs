@@ -388,7 +388,7 @@ impl TridentEntity {
                 &world,
                 &self.entity,
                 owner_player.as_ref(),
-                target.get_entity(),
+                target.as_ref(),
                 &weapon_stack,
             );
         }
