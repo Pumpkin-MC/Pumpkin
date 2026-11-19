@@ -133,7 +133,7 @@ impl PolarBearEntity {
                         .on_stop(stop_standing),
                 ),
             );
-            goal_selector.add_goal(1, EscapeDangerGoal::new_with_tag(2.0, panic_causes));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(2.0).with_panic_tag(panic_causes));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
