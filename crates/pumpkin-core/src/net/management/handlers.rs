@@ -46,6 +46,10 @@ static OPENRPC_SCHEMA: LazyLock<Value> = LazyLock::new(|| {
     .expect("assets/json-rpc-api-schema.json must be valid JSON")
 });
 
+/// One request sets the entity broadcast range at a time, so the setting and the trackers
+/// end on the same value.
+static SETTING_BROADCAST_RANGE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn extract_param<'a>(params: Option<&'a Value>, param_name: &str) -> Result<&'a Value, RpcError> {
     match params {
         Some(Value::Object(map)) => map.get(param_name).ok_or_else(|| {
@@ -1246,6 +1250,9 @@ async fn execute_method(
                 *ENTITY_BROADCAST_RANGE_PERCENTAGE.start(),
                 *ENTITY_BROADCAST_RANGE_PERCENTAGE.end(),
             );
+            let _setting = SETTING_BROADCAST_RANGE
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             server
                 .management_hub
                 .settings
