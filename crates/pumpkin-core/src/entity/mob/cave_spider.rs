@@ -117,15 +117,18 @@ impl Mob for CaveSpiderEntity {
                 _ => 0,
             };
             if duration > 0 {
-                living.add_effect(Effect {
-                    effect_type: &StatusEffect::POISON,
-                    duration,
-                    amplifier: 0,
-                    ambient: false,
-                    show_particles: true,
-                    show_icon: true,
-                    blend: false,
-                });
+                living.add_effect_with_source(
+                    Effect {
+                        effect_type: &StatusEffect::POISON,
+                        duration,
+                        amplifier: 0,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: false,
+                    },
+                    Some(self),
+                );
             }
         }
     }

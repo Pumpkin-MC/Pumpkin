@@ -563,15 +563,18 @@ impl Mob for BeeEntity {
                 _ => 0,
             };
             if seconds > 0 {
-                target.add_effect(Effect {
-                    effect_type: &StatusEffect::POISON,
-                    duration: seconds * 20,
-                    amplifier: 0,
-                    ambient: false,
-                    show_particles: true,
-                    show_icon: true,
-                    blend: false,
-                });
+                target.add_effect_with_source(
+                    Effect {
+                        effect_type: &StatusEffect::POISON,
+                        duration: seconds * 20,
+                        amplifier: 0,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: false,
+                    },
+                    Some(self),
+                );
             }
         }
         self.set_has_stung(true);

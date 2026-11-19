@@ -1,5 +1,14 @@
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use std::sync::Arc;
+
+use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::tag::{self, RegistryKey, Taggable, get_tag_values};
+use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::vector3::Vector3;
 use serde_json::Value;
+
+use crate::entity::EntityBase;
+use crate::entity::living::LivingEntity;
+use crate::entity::player::Player;
 
 pub type ItemEnchantment<'a> = (&'a str, u32);
 pub type InventoryItemSnapshot<'a> = (&'a str, u32, &'a [ItemEnchantment<'a>]);
@@ -657,11 +666,27 @@ pub struct EntityPredicate {
     pub looking_at: Option<TagOrIdMatcher>,
     pub feet_item: Option<TagOrIdMatcher>,
     pub safe_armor_disallowed: Option<bool>,
+    /// The terms of a condition list, all of which must match as well.
+    pub all_of: Vec<Self>,
+    /// The terms of an `any_of` condition, at least one of which must match as well.
+    pub any_of: Option<Vec<Self>>,
 }
 
 impl EntityPredicate {
     #[must_use]
     pub fn matches(&self, entity_type: &str, distance: Option<f64>, is_baby: Option<bool>) -> bool {
+        if !self
+            .all_of
+            .iter()
+            .all(|term| term.matches(entity_type, distance, is_baby))
+            || self.any_of.as_ref().is_some_and(|terms| {
+                !terms
+                    .iter()
+                    .any(|term| term.matches(entity_type, distance, is_baby))
+            })
+        {
+            return false;
+        }
         if let Some(types) = &self.entity_type
             && !types.matches(RegistryKey::EntityType, entity_type)
         {
@@ -687,6 +712,160 @@ impl EntityPredicate {
             && is_baby != Some(expected_baby)
         {
             return false;
+        }
+        true
+    }
+
+    /// Whether this predicate, or any term it must also match, rejects piglin-safe armor.
+    #[must_use]
+    pub fn disallows_safe_armor(&self) -> bool {
+        self.safe_armor_disallowed == Some(true)
+            || self.all_of.iter().any(Self::disallows_safe_armor)
+    }
+
+    /// The vehicle and passenger conditions of `started_riding`, including every term in `all_of`.
+    #[must_use]
+    pub fn matches_riding(&self, vehicle_type: Option<&str>, passenger_type: Option<&str>) -> bool {
+        let matches = |types: Option<&TagOrIdMatcher>, actual: Option<&str>| {
+            types.is_none_or(|types| {
+                actual.is_some_and(|actual| types.matches(RegistryKey::EntityType, actual))
+            })
+        };
+        matches(self.vehicle_type.as_ref(), vehicle_type)
+            && matches(self.passenger_type.as_ref(), passenger_type)
+            && self
+                .all_of
+                .iter()
+                .all(|term| term.matches_riding(vehicle_type, passenger_type))
+            && self.any_of.as_ref().is_none_or(|terms| {
+                terms
+                    .iter()
+                    .any(|term| term.matches_riding(vehicle_type, passenger_type))
+            })
+    }
+
+    fn matches_equipment(&self, living: Option<&LivingEntity>) -> bool {
+        if self.feet_item.is_none() && self.safe_armor_disallowed != Some(true) {
+            return true;
+        }
+        let Some(living) = living else {
+            return false;
+        };
+        let equipment = living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(items) = &self.feet_item
+            && !items.matches(
+                RegistryKey::Item,
+                equipment.get(&EquipmentSlot::FEET).item.registry_key,
+            )
+        {
+            return false;
+        }
+        self.safe_armor_disallowed != Some(true)
+            || ![
+                EquipmentSlot::HEAD,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::FEET,
+            ]
+            .iter()
+            .any(|slot| {
+                equipment
+                    .get(slot)
+                    .item
+                    .has_tag(&tag::Item::MINECRAFT_PIGLIN_SAFE_ARMOR)
+            })
+    }
+
+    /// Every condition of the predicate against a live entity, with distances measured from
+    /// `origin`.
+    #[must_use]
+    pub fn matches_entity(&self, entity: &dyn EntityBase, origin: Vector3<f64>) -> bool {
+        let base = entity.get_entity();
+        if !self
+            .all_of
+            .iter()
+            .all(|term| term.matches_entity(entity, origin))
+            || self
+                .any_of
+                .as_ref()
+                .is_some_and(|terms| !terms.iter().any(|term| term.matches_entity(entity, origin)))
+        {
+            return false;
+        }
+        if let Some(types) = &self.entity_type
+            && !types.matches(RegistryKey::EntityType, base.entity_type.resource_name)
+        {
+            return false;
+        }
+        let pos = base.pos.load();
+        let (dx, dy, dz) = (pos.x - origin.x, pos.y - origin.y, pos.z - origin.z);
+        if let Some(bounds) = &self.distance_horizontal
+            && !bounds.matches(dx.hypot(dz))
+        {
+            return false;
+        }
+        if let Some(bounds) = &self.distance_absolute
+            && !bounds.matches((dx * dx + dy * dy + dz * dz).sqrt())
+        {
+            return false;
+        }
+        let living = entity.get_living_entity();
+        if let Some(expected_baby) = self.is_baby
+            && living.map(LivingEntity::is_baby) != Some(expected_baby)
+        {
+            return false;
+        }
+        let vehicle = base.get_vehicle();
+        if let Some(types) = &self.vehicle_type
+            && !vehicle.as_ref().is_some_and(|vehicle| {
+                types.matches(
+                    RegistryKey::EntityType,
+                    vehicle.get_entity().entity_type.resource_name,
+                )
+            })
+        {
+            return false;
+        }
+        if let Some(types) = &self.passenger_type
+            && !vehicle.as_ref().is_some_and(|vehicle| {
+                vehicle
+                    .get_entity()
+                    .passengers
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .iter()
+                    .any(|passenger| {
+                        types.matches(
+                            RegistryKey::EntityType,
+                            passenger.get_entity().entity_type.resource_name,
+                        )
+                    })
+            })
+        {
+            return false;
+        }
+        if let Some(block) = &self.stepping_on {
+            let stepping = base.world.load().get_block(&base.get_on_pos());
+            if !matches_tag_or_id(RegistryKey::Block, block, stepping.name) {
+                return false;
+            }
+        }
+        if !self.matches_equipment(living) {
+            return false;
+        }
+        if let Some(types) = &self.looking_at {
+            let Some(looked_at) = entity.get_player().and_then(looking_at) else {
+                return false;
+            };
+            if !types.matches(
+                RegistryKey::EntityType,
+                looked_at.get_entity().entity_type.resource_name,
+            ) {
+                return false;
+            }
         }
         true
     }
@@ -787,7 +966,115 @@ impl EntityPredicate {
             looking_at,
             feet_item,
             safe_armor_disallowed,
+            all_of: Vec::new(),
+            any_of: None,
         }
+    }
+}
+
+/// The entity in the player's crosshair within 100 blocks, while the player can see it.
+fn looking_at(player: &Player) -> Option<Arc<dyn EntityBase>> {
+    const LOOK_RANGE: f64 = 100.0;
+    let entity = player.get_entity();
+    let eye = entity.get_eye_pos();
+    let view = entity.rotation();
+    let end = Vector3::new(
+        f64::from(view.x).mul_add(LOOK_RANGE, eye.x),
+        f64::from(view.y).mul_add(LOOK_RANGE, eye.y),
+        f64::from(view.z).mul_add(LOOK_RANGE, eye.z),
+    );
+    let search = BoundingBox::new(
+        Vector3::new(eye.x.min(end.x), eye.y.min(end.y), eye.z.min(end.z)),
+        Vector3::new(eye.x.max(end.x), eye.y.max(end.y), eye.z.max(end.z)),
+    )
+    .expand_all(1.0);
+    entity
+        .world
+        .load()
+        .get_all_at_box(&search)
+        .into_iter()
+        .filter(|candidate| {
+            candidate.get_entity().entity_id != entity.entity_id && !candidate.is_spectator()
+        })
+        .filter_map(|candidate| {
+            let hit = candidate.get_entity().bounding_box.load().clip(eye, end)?;
+            Some((eye.squared_distance_to_vec(&hit), candidate))
+        })
+        .min_by(|(a, _), (b, _)| a.total_cmp(b))
+        .map(|(_, candidate)| candidate)
+        .filter(|candidate| entity.has_line_of_sight(candidate.get_entity()))
+}
+
+/// Strongly-typed mob effect instance condition.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct MobEffectPredicate {
+    pub effect: String,
+    pub amplifier: Option<IntBounds>,
+    pub duration: Option<IntBounds>,
+    pub ambient: Option<bool>,
+    pub visible: Option<bool>,
+}
+
+impl MobEffectPredicate {
+    #[must_use]
+    pub fn matches(&self, effect: &pumpkin_data::potion::Effect) -> bool {
+        if !matches_id(&self.effect, effect.effect_type.minecraft_name) {
+            return false;
+        }
+        if let Some(amplifier) = &self.amplifier
+            && !amplifier.matches(i64::from(effect.amplifier))
+        {
+            return false;
+        }
+        if let Some(duration) = &self.duration
+            && !duration.matches(i64::from(effect.duration))
+        {
+            return false;
+        }
+        if let Some(ambient) = self.ambient
+            && ambient != effect.ambient
+        {
+            return false;
+        }
+        if let Some(visible) = self.visible
+            && visible != effect.show_particles
+        {
+            return false;
+        }
+        true
+    }
+}
+
+/// Strongly-typed condition for `minecraft:effects_changed`.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct MobEffectsPredicate {
+    pub effects: Vec<MobEffectPredicate>,
+}
+
+impl MobEffectsPredicate {
+    #[must_use]
+    pub fn matches(&self, active_effects: &[pumpkin_data::potion::Effect]) -> bool {
+        self.effects
+            .iter()
+            .all(|expected| active_effects.iter().any(|actual| expected.matches(actual)))
+    }
+
+    #[must_use]
+    pub fn from_value(val: &Value) -> Self {
+        let Some(map) = val.as_object() else {
+            return Self::default();
+        };
+        let effects = map
+            .iter()
+            .map(|(effect, predicate)| MobEffectPredicate {
+                effect: effect.clone(),
+                amplifier: predicate.get("amplifier").and_then(IntBounds::from_value),
+                duration: predicate.get("duration").and_then(IntBounds::from_value),
+                ambient: predicate.get("ambient").and_then(Value::as_bool),
+                visible: predicate.get("visible").and_then(Value::as_bool),
+            })
+            .collect();
+        Self { effects }
     }
 }
 
@@ -1263,7 +1550,10 @@ pub enum CriterionConditions {
     StartedRiding(Option<EntityPredicate>),
     SummonedEntity(EntityPredicate),
     CrafterRecipeCrafted(String),
-    EffectsChanged,
+    EffectsChanged {
+        effects: MobEffectsPredicate,
+        source: Option<EntityPredicate>,
+    },
     SpearMobs {
         count: Option<i32>,
     },
@@ -1633,13 +1923,34 @@ impl From<pumpkin_data::advancement_data::AdvancementCondition> for CriterionCon
             AC::StartedRiding(p) => Self::StartedRiding(p.as_ref().map(from_entity_condition)),
             AC::SummonedEntity(e) => Self::SummonedEntity(from_entity_condition(&e)),
             AC::CrafterRecipeCrafted(r) => Self::CrafterRecipeCrafted(r.to_string()),
-            AC::EffectsChanged => Self::EffectsChanged,
+            AC::EffectsChanged { effects, source } => Self::EffectsChanged {
+                effects: MobEffectsPredicate {
+                    effects: effects
+                        .iter()
+                        .map(|effect| MobEffectPredicate {
+                            effect: effect.effect.to_string(),
+                            amplifier: int_bounds(effect.amplifier_min, effect.amplifier_max),
+                            duration: int_bounds(effect.duration_min, effect.duration_max),
+                            ambient: effect.ambient,
+                            visible: effect.visible,
+                        })
+                        .collect(),
+                },
+                source: source.as_ref().map(from_entity_condition),
+            },
             AC::SpearMobs { count } => Self::SpearMobs { count },
             AC::Impossible => Self::Impossible,
             AC::Empty | AC::Tick => Self::Tick,
             AC::Custom(raw) => Self::parse("", raw),
         }
     }
+}
+
+fn int_bounds(min: Option<i32>, max: Option<i32>) -> Option<IntBounds> {
+    (min.is_some() || max.is_some()).then_some(IntBounds {
+        min: min.map(i64::from),
+        max: max.map(i64::from),
+    })
 }
 
 fn from_entity_condition(e: &pumpkin_data::advancement_data::EntityCondition) -> EntityPredicate {
@@ -1679,14 +1990,8 @@ fn from_entity_condition(e: &pumpkin_data::advancement_data::EntityCondition) ->
 
     EntityPredicate {
         entity_type: (!patterns.is_empty()).then_some(TagOrIdMatcher { patterns }),
-        distance_horizontal: e.distance_horizontal_min.map(|min| FloatBounds {
-            min: Some(min),
-            max: None,
-        }),
-        distance_absolute: e.distance_absolute_min.map(|min| FloatBounds {
-            min: Some(min),
-            max: None,
-        }),
+        distance_horizontal: float_bounds(e.distance_horizontal_min, e.distance_horizontal_max),
+        distance_absolute: float_bounds(e.distance_absolute_min, e.distance_absolute_max),
         is_baby: e.is_baby,
         vehicle_type: (!vpatterns.is_empty()).then_some(TagOrIdMatcher {
             patterns: vpatterns,
@@ -1696,7 +2001,13 @@ fn from_entity_condition(e: &pumpkin_data::advancement_data::EntityCondition) ->
         looking_at,
         feet_item,
         safe_armor_disallowed: e.safe_armor_disallowed,
+        all_of: Vec::new(),
+        any_of: None,
     }
+}
+
+fn float_bounds(min: Option<f64>, max: Option<f64>) -> Option<FloatBounds> {
+    (min.is_some() || max.is_some()).then_some(FloatBounds { min, max })
 }
 
 fn from_item_used_on_block_condition(
@@ -1765,6 +2076,36 @@ fn from_item_condition(i: &pumpkin_data::advancement_data::ItemCondition) -> Ite
 }
 
 fn parse_entity_pred(val: &Value) -> EntityPredicate {
+    // A list of loot conditions: one is read like the single form, several must all match.
+    if let Value::Array(conditions) = val {
+        return match conditions.as_slice() {
+            [] => EntityPredicate::default(),
+            [condition] => parse_entity_pred(condition),
+            _ => EntityPredicate {
+                all_of: conditions.iter().map(parse_entity_pred).collect(),
+                ..EntityPredicate::default()
+            },
+        };
+    }
+    let condition = val
+        .get("type")
+        .or_else(|| val.get("condition"))
+        .and_then(Value::as_str);
+    if let Some(terms) = val.get("terms") {
+        match condition {
+            // `all_of` holds the same list as the plain list form.
+            Some("minecraft:all_of") => return parse_entity_pred(terms),
+            Some("minecraft:any_of") => {
+                return EntityPredicate {
+                    any_of: Some(terms.as_array().map_or_else(Vec::new, |terms| {
+                        terms.iter().map(parse_entity_pred).collect()
+                    })),
+                    ..EntityPredicate::default()
+                };
+            }
+            _ => {}
+        }
+    }
     val.get("predicate").map_or_else(
         || {
             val.get("entity").map_or_else(
@@ -2059,7 +2400,12 @@ impl CriterionConditions {
                     .unwrap_or("")
                     .to_string(),
             ),
-            "minecraft:effects_changed" => Self::EffectsChanged,
+            "minecraft:effects_changed" => Self::EffectsChanged {
+                effects: MobEffectsPredicate::from_value(
+                    val.get("effects").unwrap_or(&Value::Null),
+                ),
+                source: val.get("source").map(parse_entity_pred),
+            },
             "minecraft:spear_mobs" => Self::SpearMobs {
                 count: val.get("count").and_then(Value::as_i64).map(|v| v as i32),
             },
@@ -2516,6 +2862,55 @@ mod tests {
     }
 
     #[test]
+    fn effects_changed_source_given_as_conditions() {
+        let source = |json: &str| match CriterionConditions::parse(
+            "minecraft:effects_changed",
+            &format!(r#"{{ "source": {json} }}"#),
+        ) {
+            CriterionConditions::EffectsChanged { source, .. } => source,
+            _ => None,
+        };
+        let condition = r#"{ "condition": "minecraft:entity_properties", "entity": "this",
+            "predicate": { "type": "minecraft:dolphin" } }"#;
+
+        let single = source(&format!("[{condition}]")).expect("a source");
+        assert!(single.matches("minecraft:dolphin", None, None));
+        assert!(!single.matches("minecraft:zombie", None, None));
+
+        let several = source(&format!("[{condition}, {condition}]")).expect("a source");
+        assert!(several.matches("minecraft:dolphin", None, None));
+        assert!(!several.matches("minecraft:zombie", None, None));
+        let adult = r#"{ "condition": "minecraft:entity_properties", "entity": "this",
+            "predicate": { "flags": { "is_baby": false } } }"#;
+        let adult_dolphin = source(&format!("[{condition}, {adult}]")).expect("a source");
+        assert!(adult_dolphin.matches("minecraft:dolphin", None, Some(false)));
+        assert!(!adult_dolphin.matches("minecraft:dolphin", None, Some(true)));
+
+        let all_of = source(&format!(
+            r#"{{ "type": "minecraft:all_of", "terms": [{condition}] }}"#
+        ))
+        .expect("a source");
+        assert!(all_of.matches("minecraft:dolphin", None, None));
+        assert!(!all_of.matches("minecraft:zombie", None, None));
+
+        let all_of = source(&format!(
+            r#"{{ "condition": "minecraft:all_of", "terms": [{condition}] }}"#
+        ))
+        .expect("a source");
+        assert!(!all_of.matches("minecraft:zombie", None, None));
+
+        let any_of = source(&format!(
+            r#"[{{ "condition": "minecraft:any_of", "terms": [{condition}, {{
+                "condition": "minecraft:entity_properties", "entity": "this",
+                "predicate": {{ "type": "minecraft:bee" }} }}] }}]"#
+        ))
+        .expect("a source");
+        assert!(any_of.matches("minecraft:dolphin", None, None));
+        assert!(any_of.matches("minecraft:bee", None, None));
+        assert!(!any_of.matches("minecraft:pufferfish", None, None));
+    }
+
+    #[test]
     fn distract_piglin_safe_armor_predicate() {
         let cond = CriterionConditions::parse(
             "minecraft:player_interacted_with_entity",
@@ -2567,6 +2962,28 @@ mod tests {
                         .matches("minecraft:gold_ingot", 1, &[])
                 );
                 assert_eq!(player.as_ref().unwrap().safe_armor_disallowed, Some(true));
+            }
+            _ => panic!("Expected PlayerInteractedWithEntity variant"),
+        }
+
+        let cond = CriterionConditions::parse(
+            "minecraft:player_interacted_with_entity",
+            r##"{
+                "player": [
+                    { "condition": "minecraft:entity_properties", "entity": "this",
+                      "predicate": { "flags": { "is_baby": false } } },
+                    { "condition": "minecraft:inverted", "term": {
+                        "condition": "minecraft:entity_properties", "entity": "this",
+                        "predicate": { "equipment": { "head": { "items": "#minecraft:piglin_safe_armor" } } }
+                    } }
+                ]
+            }"##,
+        );
+        match &cond {
+            CriterionConditions::PlayerInteractedWithEntity { player, .. } => {
+                let player = player.as_ref().unwrap();
+                assert_eq!(player.safe_armor_disallowed, None);
+                assert!(player.disallows_safe_armor());
             }
             _ => panic!("Expected PlayerInteractedWithEntity variant"),
         }
