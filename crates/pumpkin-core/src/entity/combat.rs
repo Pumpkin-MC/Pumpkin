@@ -218,7 +218,8 @@ pub fn sync_hit_player_velocity(victim: &dyn EntityBase, old_movement: Vector3<f
     entity.velocity.store(old_movement);
 }
 
-pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {
+pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World) {
+    let pos = attacker_entity.pos.load();
     let yaw = attacker_entity.yaw.load();
     let d = -f64::from((yaw.to_radians()).sin());
     let e = f64::from((yaw.to_radians()).cos());
