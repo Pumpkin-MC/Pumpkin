@@ -552,8 +552,9 @@ impl Mob for BeeEntity {
         }
         crate::enchantment::EnchantmentHelper::on_post_attack(
             self,
-            target.get_entity(),
+            target,
             &living.held_item(self),
+            DamageType::STING,
         );
         if let Some(target) = target.get_living_entity() {
             target.set_stinger_count(target.get_stinger_count() + 1);
