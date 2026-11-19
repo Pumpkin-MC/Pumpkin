@@ -475,7 +475,7 @@ macro_rules! impl_block_entity_for_cooking {
                                 bottom_item.item.registry_key.to_string(),
                                 adjusted_fuel_ticks as u32,
                             );
-                            server.plugin_manager.fire_blocking(&server, &mut burn_event);
+                            burn_event = server.plugin_manager.fire_blocking(&server, burn_event);
                             if burn_event.cancelled {
                                 burn_cancelled = true;
                             } else {
@@ -527,7 +527,7 @@ macro_rules! impl_block_entity_for_cooking {
                                     top_item.item.registry_key.to_string(),
                                     self.get_cooking_total_time() as u32,
                                 );
-                                server.plugin_manager.fire_blocking(&server, &mut start_event);
+                                start_event = server.plugin_manager.fire_blocking(&server, start_event);
                                 if start_event.cancelled {
                                     start_cancelled = true;
                                 } else {
@@ -551,7 +551,7 @@ macro_rules! impl_block_entity_for_cooking {
                                             top_item.item.registry_key.to_string(),
                                             cooking_recipe.result.id.to_string(),
                                         );
-                                        server.plugin_manager.fire_blocking(&server, &mut smelt_event);
+                                        smelt_event = server.plugin_manager.fire_blocking(&server, smelt_event);
                                         if smelt_event.cancelled {
                                             smelt_cancelled = true;
                                         }

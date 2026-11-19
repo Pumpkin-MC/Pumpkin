@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, mem, ptr::NonNull, sync::Arc};
+use std::sync::Arc;
 
 use pumpkin_data::{Block, entity::EntityType};
 use pumpkin_inventory::screen_handler::ClickType;
@@ -12,7 +12,7 @@ use wasmtime::component::Resource;
 use crate::pumpkin::{self, plugin::event::Event as WasmEvent};
 use pumpkin_core::{
     entity::player::Player,
-    plugin::{BoxFuture, EventHandler, Payload},
+    plugin::{BoxFuture, EventHandler, Payload, QueuedEventHandler},
     server::Server,
     world::World,
 };
@@ -39,20 +39,11 @@ fn get_event_inner<E: Payload + ToFromWasmEvent + 'static>(
     state: &mut PluginHostState,
     event: &Resource<WasmEvent>,
 ) -> wasmtime::Result<Result<E::Wit, ()>> {
-    let handle = {
-        let orig = state.get(event)?;
-
-        EventHandle {
-            data: orig.data,
-            mutable: orig.mutable,
-        }
-    };
-
-    let Ok(event_inner) = handle.get_ref::<E>() else {
+    let handle = state.get(event)?.clone();
+    let Some(value) = handle.read::<E>()? else {
         return Ok(Err(()));
     };
-
-    Ok(Ok(event_inner.to_wasm_event(state)))
+    Ok(Ok(value.to_wasm_event(state)))
 }
 
 fn set_event_inner<E: Payload + ToFromWasmEvent + 'static>(
@@ -60,28 +51,28 @@ fn set_event_inner<E: Payload + ToFromWasmEvent + 'static>(
     event: &Resource<WasmEvent>,
     data: E::Wit,
 ) -> wasmtime::Result<Result<(), ()>> {
-    let mut handle = {
-        let orig = match state.get(event) {
-            Ok(orig) => orig,
-            Err(err) => {
-                data.cleanup_event(state);
-                return Err(err);
-            }
-        };
-
-        EventHandle {
-            data: orig.data,
-            mutable: orig.mutable,
+    let handle = match state.get(event) {
+        Ok(handle) => handle.clone(),
+        Err(error) => {
+            data.cleanup_event(state);
+            return Err(error);
         }
     };
 
-    let Ok(event_inner) = handle.get_mut::<E>() else {
-        data.cleanup_event(state);
-        return Ok(Err(()));
-    };
-
-    event_inner.apply_wasm_event(data, state);
-    Ok(Ok(()))
+    match handle.write::<E>() {
+        Ok(Some(mut value)) => {
+            value.apply_wasm_event(data, state);
+            Ok(Ok(()))
+        }
+        Ok(None) => {
+            data.cleanup_event(state);
+            Ok(Err(()))
+        }
+        Err(error) => {
+            data.cleanup_event(state);
+            Err(error.into())
+        }
+    }
 }
 
 macro_rules! impl_event_getter_setter {
@@ -1685,221 +1676,49 @@ pub(super) fn consume_world(
         .expect("invalid world resource handle")
 }
 
-/// Represents a transient unsafe pointer to a event on the async callstack.
-///
-/// See [`EventResource`] for more details.
-///
-/// Only public because it is needed for `FromResource`
-/// DO NOT USE OUTSIDE OF THIS FILE
-pub struct EventHandle {
-    data: NonNull<dyn Payload + 'static>,
-    mutable: bool,
-}
-
-// SAFETY: `Payload` is always Send + Sync, and neither the `data` pointer
-// (only it's pointee) nor `mutable` is ever modified.
-//
-// Additionally it is only accessed though the enclosing Resource<EventHandle>
-// and so will ever be accessed from a single-thread at a time due to Wasmtime
-// Store guarantees
-unsafe impl Send for EventHandle {}
-// SAFETY: ditto
-unsafe impl Sync for EventHandle {}
-
-impl EventHandle {
-    fn from_ref(event: &(dyn Payload + 'static)) -> Self {
-        Self {
-            data: NonNull::from_ref(event),
-            mutable: false,
-        }
-    }
-
-    fn from_mut(event: &mut (dyn Payload + 'static)) -> Self {
-        Self {
-            data: NonNull::from_mut(event),
-            mutable: true,
-        }
-    }
-
-    fn get_ref<T: Payload + 'static>(&self) -> Result<&T, ()> {
-        // SAFETY: The pointer was originally coerced from a reference
-        // thus adheres to the constraints of a reference.
-        unsafe { self.data.as_ref() }.downcast_ref::<T>().ok_or(())
-    }
-
-    fn get_mut<T: Payload + 'static>(&mut self) -> Result<&mut T, ()> {
-        if !self.mutable {
-            return Err(());
-        }
-
-        // SAFETY: The pointer was originally coerced from a reference
-        // thus adheres to the constraints of a reference.
-        //
-        // `mutable` protects Rust mutable aliasing/borrowing rules.
-        unsafe { self.data.as_mut() }.downcast_mut::<T>().ok_or(())
-    }
-}
-
-/// Captures a possibly mutable reference to an event
-/// (which all implement `Payload`) as a temporary `Resource`
-///
-/// `Resource` contents must be `'static`, yet cloning the whole event to satisfy
-/// this would be wasteful. Instead, we use this wrapper to capture mutable
-/// or immutable reference (which lives e.g. on the async call stack) and
-/// generally try to ensure that it can't outlive the original reference
-///
-/// Unfortunately Rust has no linear types. Drop isn't suitable since the
-/// destructor is async and needs access to plugin context. Special care must
-/// be taken to call `destroy` as it goes out of scope.
-struct EventResource<'a> {
-    data: Resource<WasmEvent>,
-    _phantom: PhantomData<&'a mut (dyn Payload + 'static)>,
-}
-
-impl<'a> EventResource<'a> {
-    async fn from_ref(
-        event: &'a (dyn Payload + 'static),
-        plugin: &'a Arc<WasmPlugin>,
-    ) -> wasmtime::Result<Self> {
-        // SAFETY: Mostly protected by the `'a` lifetime.
-        // Otherwise hinges on `destroy` being called properly
-        let static_event: &'static (dyn Payload + 'static) = unsafe { mem::transmute(event) };
-        let handle = EventHandle::from_ref(static_event);
-        Ok(Self {
-            data: plugin
-                .store
-                .call(move |state| state.add(handle))
-                .await
-                .flatten()?,
-            _phantom: PhantomData,
-        })
-    }
-
-    async fn from_mut(
-        event: &'a mut (dyn Payload + 'static),
-        plugin: &'a Arc<WasmPlugin>,
-    ) -> wasmtime::Result<Self> {
-        // SAFETY: Mostly protected by the `'a` lifetime.
-        // Otherwise hinges on `destroy` being called properly
-        let static_event: &'static mut (dyn Payload + 'static) = unsafe { mem::transmute(event) };
-        let handle = EventHandle::from_mut(static_event);
-        Ok(Self {
-            data: plugin
-                .store
-                .call(|state| state.add(handle))
-                .await
-                .flatten()?,
-            _phantom: PhantomData,
-        })
-    }
-
-    /// Returns a new resource borrow handle to the `data` owned by self.
-    ///
-    /// This is a key part of the safety; plugins must only be supplied *borrows*,
-    /// never ownership of the outer resource. That way the component model
-    /// ensures that the plugin won't hold onto it beyond the scope of the
-    /// export call.
-    fn get_borrow(&self) -> Resource<WasmEvent> {
-        Resource::new_borrow(self.data.rep())
-    }
-
-    /// MUST be called before the original ref goes out of scope.
-    async fn destroy(self, plugin: &Arc<WasmPlugin>) -> wasmtime::Result<()> {
-        plugin
-            .store
-            .call(|state| state.drop(self.data))
-            .await
-            .flatten()
-    }
-}
-
-impl WasmPluginEventHandler {
-    async fn handle_dyn<'a, F, Fut>(&'a self, server: &'a Arc<Server>, create_event: F)
-    where
-        F: FnOnce(&'a Arc<WasmPlugin>) -> Fut,
-        Fut: std::future::Future<Output = wasmtime::Result<EventResource<'a>>>,
-    {
-        let wasm_event = match create_event(&self.plugin).await {
-            Ok(res) => res,
-            Err(error) => {
-                tracing::error!(
-                    handler_id = self.handler_id,
-                    %error,
-                    "Failed to create resource for event."
-                );
-                return;
-            }
-        };
-
-        let event_borrow = wasm_event.get_borrow();
-        let server_clone = server.clone();
-
-        let handler_id = self.handler_id;
-        let function = *self
-            .plugin
-            .instance::<crate::Plugin>()
-            .func_handle_event()
-            .func();
-
-        match self
-            .plugin
-            .store
-            .call_guest(move |mut guest| {
-                Box::pin(async move {
-                    let server_res = guest.with(|mut store| store.data_mut().add(server_clone))?;
-
-                    guest
-                        .call_func::<(
-                            u32,
-                            Resource<crate::pumpkin::plugin::server::Server>,
-                            Resource<WasmEvent>,
-                        ), ()>(
-                            function, (handler_id, server_res, event_borrow)
-                        )
-                        .await
-                })
-            })
-            .await
-        {
-            Ok(()) => {}
-            Err(error) => {
-                tracing::error!(
-                    handler_id = self.handler_id,
-                    %error,
-                    "Wasm event handler failed"
-                );
-            }
-        }
-
-        match wasm_event.destroy(&self.plugin).await {
-            Ok(()) => {}
-            Err(error) => {
-                tracing::error!(
-                    handler_id = self.handler_id,
-                    %error,
-                    "Failed to cleanup resource for event."
-                );
-            }
-        }
-    }
-}
+pub use pumpkin_core::plugin::QueuedEvent as EventHandle;
 
 impl<E: Payload + ToFromWasmEvent + 'static> EventHandler<E> for WasmPluginEventHandler {
-    fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
-        let dyn_event: &(dyn Payload + 'static) = event;
-        Box::pin(self.handle_dyn(server, move |plugin| {
-            EventResource::from_ref(dyn_event, plugin)
-        }))
+    fn queued_handler(&self) -> Option<&dyn QueuedEventHandler> {
+        Some(self)
     }
+}
 
-    fn handle_blocking<'a>(
-        &'a self,
-        server: &'a Arc<Server>,
-        event: &'a mut E,
-    ) -> BoxFuture<'a, ()> {
-        let dyn_event: &mut (dyn Payload + 'static) = event;
-        Box::pin(self.handle_dyn(server, move |plugin| {
-            EventResource::from_mut(dyn_event, plugin)
-        }))
+impl QueuedEventHandler for WasmPluginEventHandler {
+    fn dispatch<'a>(&'a self, server: &'a Arc<Server>, event: EventHandle) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            type ServerResource = Resource<crate::pumpkin::plugin::server::Server>;
+
+            let server = Arc::clone(server);
+            let handler_id = self.handler_id;
+            let function = *self
+                .plugin
+                .instance::<crate::Plugin>()
+                .func_handle_event()
+                .func();
+            let result = self.plugin.store.call_guest(move |mut guest| {
+                Box::pin(async move {
+                    let owned = guest.with(|mut store| store.data_mut().add::<WasmEvent>(event))?;
+                    let server_resource = guest.with(|mut store| store.data_mut().add(server));
+                    let result = match server_resource {
+                        Ok(server) => {
+                            let borrow = Resource::new_borrow(owned.rep());
+                            guest.call_func::<(u32, ServerResource, Resource<WasmEvent>), ()>(
+                                function, (handler_id, server, borrow)
+                            ).await
+                        }
+                        Err(error) => Err(error),
+                    };
+                    let cleanup = guest.with(|mut store| store.data_mut().drop(owned));
+                    if let Err(error) = &cleanup {
+                        tracing::error!(handler_id, %error, "Failed to remove Wasm event resource");
+                    }
+                    result.and(cleanup)
+                })
+            }).await;
+            if let Err(error) = result {
+                tracing::error!(handler_id, %error, "Wasm event dispatch failed");
+            }
+        })
     }
 }

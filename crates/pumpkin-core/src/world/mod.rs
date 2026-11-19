@@ -2778,7 +2778,7 @@ impl World {
                     below_pos,
                     &Block::ICE,
                 );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 !event.cancelled
             });
             if allow {
@@ -2819,7 +2819,7 @@ impl World {
                             top_pos,
                             &Block::SNOW,
                         );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    event = server.plugin_manager.fire_blocking(&server, event);
                     !event.cancelled
                 });
                 if allow {
@@ -3100,7 +3100,7 @@ impl World {
                 crate::plugin::api::events::world::weather_change::WeatherChangeEvent::new(
                     world_arc, raining,
                 );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return;
             }
@@ -3138,7 +3138,7 @@ impl World {
                 crate::plugin::api::events::world::weather_change::ThunderChangeEvent::new(
                     world_arc, thundering,
                 );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return;
             }
@@ -3676,7 +3676,7 @@ impl World {
         .color_named(NamedColor::Yellow);
 
         let mut event = PlayerJoinEvent::new(player.clone(), msg_comp);
-        server.plugin_manager.fire(server, &mut event).await;
+        event = server.plugin_manager.fire(server, event).await;
 
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false);
@@ -4208,7 +4208,7 @@ impl World {
         .color_named(NamedColor::Yellow);
         let mut event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
-        server.plugin_manager.fire(server, &mut event).await;
+        event = server.plugin_manager.fire(server, event).await;
 
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false);
@@ -4370,7 +4370,7 @@ impl World {
             power,
         );
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return;
@@ -4521,7 +4521,7 @@ impl World {
             position,
         );
         if let Some(ref s) = server {
-            s.plugin_manager.fire(s, &mut spawn_loc_event).await;
+            spawn_loc_event = s.plugin_manager.fire(s, spawn_loc_event).await;
         }
         let position = spawn_loc_event.spawn_pos;
 
@@ -4557,7 +4557,7 @@ impl World {
                     pitch,
                     cancelled: false,
                 };
-                s.plugin_manager.fire(s, &mut event).await;
+                event = s.plugin_manager.fire(s, event).await;
 
                 if event.cancelled {
                     (None, position, yaw, pitch)
@@ -4616,7 +4616,7 @@ impl World {
                 .plugin_manager
                 .fire(
                     &server,
-                    &mut PlayerRespawnEvent::new(
+                    PlayerRespawnEvent::new(
                         player.clone(),
                         self.clone(),
                         target_world.clone(),
@@ -4868,9 +4868,7 @@ impl World {
         if !server.plugin_manager.has_handlers::<E>() {
             return None;
         }
-        let mut event = event();
-        server.plugin_manager.fire_blocking(&server, &mut event);
-        Some(event)
+        Some(server.plugin_manager.fire_blocking(&server, event()))
     }
 
     /// Whether a plugin cancelled the event, see [`Self::plugin_event`].
@@ -5392,7 +5390,7 @@ impl World {
                 let mut event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
                 if let Some(server) = self.server.upgrade() {
-                    server.plugin_manager.fire(&server, &mut event).await;
+                    event = server.plugin_manager.fire(&server, event).await;
 
                     if !event.cancelled {
                         for player in self.players.load().iter() {
@@ -5507,7 +5505,7 @@ impl World {
             self.clone(),
         );
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return false;
@@ -5537,7 +5535,7 @@ impl World {
             player,
         );
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return false;
@@ -5983,7 +5981,7 @@ impl World {
             !flags.contains(BlockFlags::SKIP_DROPS),
         );
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return None;
@@ -6439,9 +6437,7 @@ impl World {
             stack.item.registry_key.to_string(),
         );
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut item_event);
+            item_event = server.plugin_manager.fire_blocking(&server, item_event);
         }
         !item_event.cancelled
     }
@@ -6555,9 +6551,7 @@ impl World {
                     pos,
                     effect_only,
                 );
-            server_ref
-                .plugin_manager
-                .fire_blocking(&server_ref, &mut event);
+            event = server_ref.plugin_manager.fire_blocking(&server_ref, event);
             if event.cancelled {
                 return;
             }
@@ -6865,7 +6859,7 @@ impl World {
             *source_position,
         );
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return;
@@ -7895,7 +7889,7 @@ impl World {
             position,
         );
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return;
@@ -7906,10 +7900,10 @@ impl World {
     }
 
     pub async fn unload(self: &Arc<Self>) {
-        let mut event =
+        let event =
             crate::plugin::api::events::world::world_load::WorldUnloadEvent::new(self.clone());
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire(&server, &mut event).await;
+            server.plugin_manager.fire(&server, event).await;
         }
     }
 
@@ -7952,11 +7946,11 @@ impl World {
             .store(true, std::sync::atomic::Ordering::Relaxed);
         self.level.level_channel.notify();
 
-        let mut save_event = crate::plugin::api::events::world::world_save::WorldSaveEvent::new(
+        let save_event = crate::plugin::api::events::world::world_save::WorldSaveEvent::new(
             format!("{:?}", self.dimension),
         );
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire(&server, &mut save_event).await;
+            server.plugin_manager.fire(&server, save_event).await;
         }
     }
 
@@ -8081,48 +8075,39 @@ impl World {
     }
 
     pub fn populate_chunk(&self, chunk_pos: Vector2<i32>) {
-        let mut populate_event =
+        let populate_event =
             crate::plugin::api::events::world::chunk_populate::ChunkPopulateEvent::new(chunk_pos);
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut populate_event);
+            server.plugin_manager.fire_blocking(&server, populate_event);
         }
     }
 
     pub fn unload_chunk(&self, chunk_pos: Vector2<i32>) {
-        let mut unload_event =
+        let unload_event =
             crate::plugin::api::events::world::chunk_unload::ChunkUnloadEvent::new(chunk_pos);
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut unload_event);
+            server.plugin_manager.fire_blocking(&server, unload_event);
         }
     }
 
     pub fn load_entities(&self, chunk_pos: Vector2<i32>, entity_count: usize) {
-        let mut load_event =
-            crate::plugin::api::events::world::entities_load::EntitiesLoadEvent::new(
-                chunk_pos,
-                entity_count,
-            );
+        let load_event = crate::plugin::api::events::world::entities_load::EntitiesLoadEvent::new(
+            chunk_pos,
+            entity_count,
+        );
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut load_event);
+            server.plugin_manager.fire_blocking(&server, load_event);
         }
     }
 
     pub fn unload_entities(&self, chunk_pos: Vector2<i32>, entity_count: usize) {
-        let mut unload_event =
+        let unload_event =
             crate::plugin::api::events::world::entities_unload::EntitiesUnloadEvent::new(
                 chunk_pos,
                 entity_count,
             );
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut unload_event);
+            server.plugin_manager.fire_blocking(&server, unload_event);
         }
     }
 
@@ -8144,62 +8129,48 @@ impl World {
     }
 
     pub fn generate_loot(&self, loot_table: String) {
-        let mut loot_event =
+        let loot_event =
             crate::plugin::api::events::world::loot_generate::LootGenerateEvent::new(loot_table);
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut loot_event);
+            server.plugin_manager.fire_blocking(&server, loot_event);
         }
     }
 
     pub fn skip_time(&self, skip_amount: i64) {
-        let mut time_event =
+        let time_event =
             crate::plugin::api::events::world::time_skip::TimeSkipEvent::new(skip_amount);
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut time_event);
+            server.plugin_manager.fire_blocking(&server, time_event);
         }
     }
 
     pub fn trigger_raid(&self, pos: BlockPos) {
-        let mut raid_event =
-            crate::plugin::api::events::raid::raid_trigger::RaidTriggerEvent::new(pos);
+        let raid_event = crate::plugin::api::events::raid::raid_trigger::RaidTriggerEvent::new(pos);
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut raid_event);
+            server.plugin_manager.fire_blocking(&server, raid_event);
         }
     }
 
     pub fn spawn_raid_wave(&self, wave: u32, pos: BlockPos) {
-        let mut wave_event =
+        let wave_event =
             crate::plugin::api::events::raid::raid_spawn_wave::RaidSpawnWaveEvent::new(wave, pos);
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut wave_event);
+            server.plugin_manager.fire_blocking(&server, wave_event);
         }
     }
 
     pub fn finish_raid(&self, victory: bool) {
-        let mut raid_event =
+        let raid_event =
             crate::plugin::api::events::raid::raid_finish::RaidFinishEvent::new(victory);
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut raid_event);
+            server.plugin_manager.fire_blocking(&server, raid_event);
         }
     }
 
     pub fn stop_raid(&self, reason: String) {
-        let mut raid_event =
-            crate::plugin::api::events::raid::raid_stop::RaidStopEvent::new(reason);
+        let raid_event = crate::plugin::api::events::raid::raid_stop::RaidStopEvent::new(reason);
         if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut raid_event);
+            server.plugin_manager.fire_blocking(&server, raid_event);
         }
     }
 
@@ -8209,25 +8180,25 @@ impl World {
         structure_name: String,
         pos: BlockPos,
     ) {
-        let mut event = crate::plugin::api::events::world::async_structure_generate::AsyncStructureGenerateEvent::new(
+        let event = crate::plugin::api::events::world::async_structure_generate::AsyncStructureGenerateEvent::new(
             world_name,
             structure_name,
             pos,
         );
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
     }
 
     pub fn async_structure_spawn(&self, world_name: String, structure_name: String, pos: BlockPos) {
-        let mut event =
+        let event =
             crate::plugin::api::events::world::async_structure_spawn::AsyncStructureSpawnEvent::new(
                 world_name,
                 structure_name,
                 pos,
             );
         if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
     }
 }

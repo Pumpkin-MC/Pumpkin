@@ -47,13 +47,11 @@ impl ItemBehaviour for FireChargeItem {
                 &pumpkin_data::Block::FIRE,
                 player_arc,
             );
-            server_ref
-                .plugin_manager
-                .fire_blocking(&server_ref, &mut event);
+            event = server_ref.plugin_manager.fire_blocking(&server_ref, event);
             let mut portal_event = PortalCreateEvent::new(location, PortalType::Nether);
-            server_ref
+            portal_event = server_ref
                 .plugin_manager
-                .fire_blocking(&server_ref, &mut portal_event);
+                .fire_blocking(&server_ref, portal_event);
             if event.cancelled || portal_event.cancelled {
                 return BlockActionResult::Fail;
             }
