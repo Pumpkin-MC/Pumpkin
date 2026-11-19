@@ -15,6 +15,7 @@ use pumpkin_world::{
 use rand::RngExt;
 
 use super::chorus_plant;
+use crate::entity::projectile::{may_break, may_interact};
 use crate::{
     block::{
         BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnProjectileHitArgs,
@@ -59,8 +60,12 @@ impl BlockBehaviour for ChorusFlowerBlock {
     }
 
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
-        args.world
-            .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+        if may_interact(args.projectile, args.world, args.position)
+            && may_break(args.projectile, args.world)
+        {
+            args.world
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+        }
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {

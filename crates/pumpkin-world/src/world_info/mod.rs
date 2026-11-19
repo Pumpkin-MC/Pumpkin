@@ -97,6 +97,20 @@ pub struct LevelData {
     /// Persisted to `data/minecraft/weather.dat`.
     #[serde(rename = "clearWeatherTime", skip_serializing, default)]
     pub clear_weather_time: i32,
+
+    /// Persisted to `data/minecraft/wandering_trader.dat`.
+    #[serde(
+        rename = "WanderingTraderSpawnDelay",
+        skip_serializing,
+        default = "data_files::default_wandering_trader_delay"
+    )]
+    pub wandering_trader_spawn_delay: i32,
+    #[serde(
+        rename = "WanderingTraderSpawnChance",
+        skip_serializing,
+        default = "data_files::default_wandering_trader_chance"
+    )]
+    pub wandering_trader_spawn_chance: i32,
 }
 
 const DEFAULT_BORDER_DAMAGE_PER_BLOCK: f64 = 0.2;
@@ -556,6 +570,8 @@ impl LevelData {
             world_gen_settings: WorldGenSettings::new(seed),
             day_time: 0,
             clear_weather_time: -1,
+            wandering_trader_spawn_delay: data_files::DEFAULT_WANDERING_TRADER_SPAWN_DELAY,
+            wandering_trader_spawn_chance: data_files::DEFAULT_WANDERING_TRADER_SPAWN_CHANCE,
         }
     }
 

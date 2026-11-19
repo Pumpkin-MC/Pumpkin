@@ -152,18 +152,16 @@ impl PluginRuntime {
             verify_signatures,
             |bytes, path_str| {
                 let verification = signature::verify_wasm_plugin(bytes, path_str);
-                if verification.is_signed && verification.is_valid {
-                    verification.metadata
-                } else {
-                    None
-                }
+                (verification.is_signed && verification.is_valid)
+                    .then_some(verification.metadata)
+                    .flatten()
             },
         )
         .flatten();
 
         let wasm_bytes = signature::strip_pumpkin_sections(&wasm_bytes).unwrap_or(wasm_bytes);
 
-        let api_version = plugin_api_version(&wasm_bytes)?;
+        let (api_version, binding_language) = inspect_plugin(&wasm_bytes)?;
         let engine = self.engine(api_version);
         let component = load_component(engine, &wasm_bytes, &self.cache_dir)?;
 
@@ -229,6 +227,7 @@ impl PluginRuntime {
         let wasm_plugin = Arc::new(WasmPlugin {
             plugin_instance,
             api_version,
+            binding_language,
             store,
             task_scheduler: Arc::clone(&self.task_scheduler),
         });
@@ -247,6 +246,7 @@ impl PluginRuntime {
                 PluginApiVersion::V0_1 => "0.1",
                 PluginApiVersion::V0_2 => "0.2",
             },
+            wasm_plugin_language = wasm_plugin.binding_language.as_deref().unwrap_or("wasm"),
             wasm_plugin_policy = LegacySyncReentry::NAME,
             "Loaded Wasm plugin with synchronous compatibility policy"
         );
@@ -267,8 +267,11 @@ where
     verify_signatures.then(|| verify(wasm_bytes, path_str))
 }
 
-/// Reads the plugin's API version from its bytes, before choosing the engine to compile it on.
-fn plugin_api_version(wasm_bytes: &[u8]) -> Result<PluginApiVersion, PluginInitError> {
+/// Reads the plugin's API version and detected binding language from its bytes, before choosing
+/// the engine to compile it on.
+fn inspect_plugin(
+    wasm_bytes: &[u8],
+) -> Result<(PluginApiVersion, Option<String>), PluginInitError> {
     let names = scan_component_names(wasm_bytes)?;
     let Some(version) = names.metadata_version else {
         return Err(PluginInitError::UnknownApiVersion());
@@ -276,18 +279,24 @@ fn plugin_api_version(wasm_bytes: &[u8]) -> Result<PluginApiVersion, PluginInitE
     // `starts_with` to ignore "minor" version differences
     // WIT enforces semver. Will always be major.minor.patch
     // For early/unstable release: 0.major.minor
-    if version.starts_with("0.1.") {
+    let api_version = if version.starts_with("0.1.") {
         // WASI 0.3 needs concurrency support, which the v0.1 engine doesn't have, so the linker
         // would report this as an API mismatch.
         if let Some(import) = names.wasi_p3_import {
             return Err(PluginInitError::UnsupportedWasi(import));
         }
-        Ok(PluginApiVersion::V0_1)
+        PluginApiVersion::V0_1
     } else if version.starts_with("0.2.") {
-        v0_2_api_version(&version)
+        v0_2_api_version(&version)?
     } else {
-        Err(PluginInitError::UnsupportedApiVersion(version))
-    }
+        return Err(PluginInitError::UnsupportedApiVersion(version));
+    };
+    Ok((api_version, names.binding_language))
+}
+
+#[cfg(test)]
+fn plugin_api_version(wasm_bytes: &[u8]) -> Result<PluginApiVersion, PluginInitError> {
+    inspect_plugin(wasm_bytes).map(|(api_version, _)| api_version)
 }
 
 /// Builds the engine for one store mode, with the settings every plugin engine shares.

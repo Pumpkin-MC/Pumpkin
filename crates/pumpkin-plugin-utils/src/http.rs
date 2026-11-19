@@ -99,4 +99,42 @@ impl HttpClient {
             .text()
             .map_err(|e| HttpError::BodyRead(e.to_string()))
     }
+
+    /// Performs an Ed25519-signed HTTP POST request to a marketplace telemetry/crash endpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns `HttpError` if the request fails or returns a non-2xx status code.
+    pub fn post_signed_telemetry(
+        &self,
+        url: &str,
+        json_bytes: &[u8],
+        public_key_hex: &str,
+        signature_hex: &str,
+        timestamp_str: &str,
+    ) -> Result<String, HttpError> {
+        let response = self
+            .client
+            .post(url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .header("X-Telemetry-Public-Key", public_key_hex)
+            .header("X-Telemetry-Signature", signature_hex)
+            .header("X-Telemetry-Timestamp", timestamp_str)
+            .body(json_bytes.to_vec())
+            .send()
+            .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
+
+        let status = response.status().as_u16();
+        if status < 200 || status >= 300 {
+            let body = response
+                .text()
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(HttpError::BadStatus(status, body));
+        }
+
+        response
+            .text()
+            .map_err(|e| HttpError::BodyRead(e.to_string()))
+    }
 }

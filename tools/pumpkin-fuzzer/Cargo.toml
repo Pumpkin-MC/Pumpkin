@@ -11,6 +11,9 @@ clap = { version = "4", features = ["derive"] }
 colored.workspace = true
 rand.workspace = true
 
+[lints.cargo]
+unused_dependencies = "deny"
+
 [lints.clippy]
 expect_used = "allow"
 unwrap_used = "allow"

@@ -6,6 +6,8 @@ use std::sync::{
 use pumpkin_data::BlockState;
 use pumpkin_data::cow_sound_variant::CowSoundVariant;
 use pumpkin_data::cow_variant::CowVariant;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{CowSoundVariantImpl, CowVariantImpl, DataComponentImpl};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
@@ -30,7 +32,7 @@ use crate::entity::{
 use crate::item::items::bucket::fill_bucket_stack;
 use crate::world::World;
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
+const SOUND_VOLUME: f32 = 0.4;
 
 /// Represents a Cow, a common passive mob that provides milk, leather, and beef.
 ///
@@ -63,7 +65,14 @@ impl CowEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.25,
+                    &pumpkin_data::tag::Item::MINECRAFT_COW_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(1.0)));
             goal_selector.add_goal(
@@ -89,6 +98,18 @@ impl CowEntity {
         );
     }
 
+    fn variant_name(&self) -> String {
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        self.resolve_dynamic_entry_id("minecraft:cow_variant", variant_id, |id| {
+            let variant = CowVariant::from_id(id as u8).unwrap_or_default();
+            format!("minecraft:{}", variant.to_name())
+        })
+    }
+
+    fn sound_variant(&self) -> CowSoundVariant {
+        CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed)).unwrap_or_default()
+    }
+
     pub fn set_sound_variant(&self, sound_variant: CowSoundVariant) {
         self.sound_variant
             .store(sound_variant as u8, Ordering::Relaxed);
@@ -102,17 +123,15 @@ impl CowEntity {
 
 impl CustomSound for CowEntity {
     fn death_sound(&self) -> Option<Sound> {
-        let is_baby = self.is_baby();
-        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        Some(sound_variant.death_sound(is_baby))
+        Some(self.sound_variant().death_sound(self.is_baby()))
     }
 
     fn hurt_sound(&self) -> Option<Sound> {
-        let is_baby = self.is_baby();
-        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        Some(sound_variant.hurt_sound(is_baby))
+        Some(self.sound_variant().hurt_sound(self.is_baby()))
+    }
+
+    fn sound_volume(&self) -> f32 {
+        SOUND_VOLUME
     }
 }
 
@@ -128,7 +147,6 @@ impl Animal for CowEntity {
         item_stack
             .item
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_COW_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
 
     fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
@@ -153,14 +171,29 @@ impl Animal for CowEntity {
 
 impl Mob for CowEntity {
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
-        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        self.play_entity_sound(sound_variant.step_sound(self.is_baby()), 0.15, 1.0);
+        self.play_entity_sound(self.sound_variant().step_sound(self.is_baby()), 0.15, 1.0);
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(self.sound_variant().ambient_sound(self.is_baby()))
+    }
+
+    fn mob_get_component(&self, component: DataComponent) -> Option<Box<dyn DataComponentImpl>> {
+        match component {
+            DataComponent::CowVariant => Some(Box::new(CowVariantImpl {
+                value: self.variant_name().into(),
+            })),
+            DataComponent::CowSoundVariant => Some(Box::new(CowSoundVariantImpl {
+                value: format!("minecraft:{}", self.sound_variant().to_name()).into(),
+            })),
+            _ => None,
+        }
     }
 
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
         let biome = world.get_biome(&self.get_entity().block_pos.load());
@@ -224,18 +257,10 @@ impl Mob for CowEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
-        let variant_str =
-            self.resolve_dynamic_entry_id("minecraft:cow_variant", variant_id, |id| {
-                let variant = CowVariant::from_id(id as u8).unwrap_or_default();
-                format!("minecraft:{}", variant.to_name())
-            });
-        nbt.put_string("variant", variant_str);
-        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
+        nbt.put_string("variant", self.variant_name());
         nbt.put_string(
             "sound_variant",
-            format!("minecraft:{}", sound_variant.to_name()),
+            format!("minecraft:{}", self.sound_variant().to_name()),
         );
     }
 
@@ -268,12 +293,6 @@ impl Mob for CowEntity {
             fill_bucket_stack(item_stack, player, &Item::MILK_BUCKET);
             return true;
         }
-        let sound_variant = CowSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        self.animal_interact(
-            player,
-            item_stack,
-            sound_variant.ambient_sound(self.is_baby()),
-        )
+        self.animal_interact(player, item_stack)
     }
 }

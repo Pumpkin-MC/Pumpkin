@@ -4,7 +4,6 @@ use std::sync::{
 };
 
 use pumpkin_data::entity::{EntityStatus, EntityType};
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
@@ -43,6 +42,7 @@ fn is_wary(mob: &dyn Mob) -> bool {
 /// Wiki: <https://minecraft.wiki/w/Ocelot>
 pub struct OcelotEntity {
     pub mob_entity: MobEntity,
+    pub ageable_data: crate::entity::ageable::AgeableData,
     pub is_trusting: AtomicBool,
 }
 
@@ -51,6 +51,7 @@ impl OcelotEntity {
         let mob_entity = MobEntity::new(entity);
         let ocelot = Self {
             mob_entity,
+            ageable_data: crate::entity::ageable::AgeableData::default(),
             is_trusting: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(ocelot);
@@ -95,14 +96,27 @@ impl OcelotEntity {
 
 impl Animal for OcelotEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        let item = item_stack.get_item();
-        item.has_tag(&tag::Item::MINECRAFT_OCELOT_FOOD)
-            || item == &Item::COD
-            || item == &Item::SALMON
+        item_stack
+            .get_item()
+            .has_tag(&tag::Item::MINECRAFT_OCELOT_FOOD)
+    }
+}
+
+impl crate::entity::ageable::AgeableMob for OcelotEntity {
+    fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
+        &self.ageable_data
+    }
+
+    fn default_baby_spawn_chance(&self) -> f32 {
+        crate::entity::ageable::OCELOT_BABY_SPAWN_CHANCE
     }
 }
 
 impl Mob for OcelotEntity {
+    fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
@@ -163,10 +177,6 @@ impl Mob for OcelotEntity {
             return true;
         }
 
-        self.animal_interact(
-            player,
-            item_stack,
-            pumpkin_data::sound::Sound::EntityOcelotAmbient,
-        )
+        self.animal_interact(player, item_stack)
     }
 }

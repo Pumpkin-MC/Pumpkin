@@ -3,13 +3,13 @@ use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Weak};
 
 pub struct LeapAtTargetGoal {
     goal_control: Controls,
     yd: f32,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
 }
 
 impl LeapAtTargetGoal {
@@ -53,7 +53,7 @@ impl Goal for LeapAtTargetGoal {
             return false;
         }
 
-        self.target = Some(target);
+        self.target = Some(Arc::downgrade(&target));
         true
     }
 
@@ -63,7 +63,7 @@ impl Goal for LeapAtTargetGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        let Some(target) = &self.target else {
+        let Some(target) = self.target.as_ref().and_then(Weak::upgrade) else {
             return;
         };
 

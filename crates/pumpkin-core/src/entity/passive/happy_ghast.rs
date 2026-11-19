@@ -5,9 +5,7 @@ use std::sync::{
 
 use pumpkin_data::BlockState;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -23,8 +21,6 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
-
-pub const HAPPY_GHAST_FOOD: &[&Item] = &[&Item::SNOWBALL];
 
 /// Represents a Happy Ghast, a passive flying mob.
 ///
@@ -61,9 +57,9 @@ impl HappyGhastEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(
                 1,
-                Box::new(TemptGoal::with_stop_distance(
+                Box::new(TemptGoal::with_tag_and_stop_distance(
                     1.0,
-                    HAPPY_GHAST_FOOD,
+                    &tag::Item::MINECRAFT_HAPPY_GHAST_TEMPT_ITEMS,
                     false,
                     7.0,
                 )),
@@ -122,11 +118,25 @@ impl Animal for HappyGhastEntity {
         item_stack
             .item
             .has_tag(&tag::Item::MINECRAFT_HAPPY_GHAST_FOOD)
-            || HAPPY_GHAST_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
 impl Mob for HappyGhastEntity {
+    fn mob_support_quad_leash_as_holder(&self) -> bool {
+        true
+    }
+
+    fn can_dispenser_equip_into_slot(
+        &self,
+        slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+    ) -> bool {
+        *slot == pumpkin_data::data_component_impl::EquipmentSlot::BODY
+    }
+
+    fn should_stay_close_to_leash_holder(&self) -> bool {
+        false
+    }
+
     /// Vanilla `HappyGhast` steps silently.
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {}
 
@@ -206,9 +216,9 @@ impl Mob for HappyGhastEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if self.is_baby() {
-            return self.animal_interact(player, item_stack, Sound::EntityGhastlingAmbient);
+            return self.animal_interact(player, item_stack);
         }
 
-        self.animal_interact(player, item_stack, Sound::EntityHappyGhastAmbient)
+        self.animal_interact(player, item_stack)
     }
 }

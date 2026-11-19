@@ -1,3 +1,4 @@
+use crate::identifier::Identifier;
 use crate::text::color::{ARGBColor, hsv_to_rgb};
 use crate::translation::{
     Locale, get_translation, get_translation_text, reorder_substitutions, translation_to_pretty,
@@ -8,10 +9,8 @@ use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
-use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
-use std::fmt::Formatter;
 use std::fmt::Write;
 use std::sync::LazyLock;
 use style::Style;
@@ -20,6 +19,8 @@ pub mod click;
 pub mod color;
 pub mod hover;
 pub mod legacy;
+mod nbt_de;
+mod short_form;
 pub mod style;
 
 /// Represents a Minecraft chat component.
@@ -32,46 +33,7 @@ pub struct TextComponent(pub TextComponentBase);
 
 impl<'de> Deserialize<'de> for TextComponent {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct TextComponentVisitor;
-
-        impl<'de> Visitor<'de> for TextComponentVisitor {
-            type Value = TextComponentBase;
-
-            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                formatter.write_str("a TextComponentBase or a sequence of TextComponentBase")
-            }
-
-            fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
-                Ok(TextComponentBase {
-                    content: Box::new(TextContent::Text {
-                        text: Cow::from(v.to_string()),
-                    }),
-                    style: Box::default(),
-                    extra: vec![],
-                })
-            }
-
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                let mut bases = Vec::new();
-                while let Some(element) = seq.next_element::<TextComponent>()? {
-                    bases.push(element.0);
-                }
-
-                Ok(TextComponentBase {
-                    content: Box::new(TextContent::Text { text: "".into() }),
-                    style: Box::default(),
-                    extra: bases,
-                })
-            }
-
-            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
-                TextComponentBase::deserialize(serde::de::value::MapAccessDeserializer::new(map))
-            }
-        }
-
-        deserializer
-            .deserialize_any(TextComponentVisitor)
-            .map(TextComponent)
+        short_form::Component::deserialize(deserializer).map(|c| Self(c.0))
     }
 }
 
@@ -92,7 +54,11 @@ pub struct TextComponentBase {
     #[serde(flatten)]
     pub style: Box<Style>,
     /// Child text components that are appended after this component's content.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "short_form::components"
+    )]
     pub extra: Vec<Self>,
 }
 
@@ -149,20 +115,14 @@ impl TextComponentBase {
                     compound.put_list("with", list);
                 }
             }
-            TextContent::PlayerSprite {
-                type_name,
-                profile,
-                hat,
-            } => {
+            TextContent::PlayerSprite { profile, hat } => {
                 if *version >= JavaMinecraftVersion::V_26_1 {
-                    let full_type = if type_name.contains(':') {
-                        type_name.to_string()
-                    } else {
-                        format!("minecraft:{type_name}")
-                    };
-                    compound.put_string("type", full_type);
+                    // Like vanilla: no `type`, the client finds the object by its
+                    // `player` key, and `hat` only when it is off.
                     compound.put_compound("player", profile.0.clone());
-                    compound.put_byte("hat", i8::from(*hat));
+                    if !hat {
+                        compound.put_bool("hat", false);
+                    }
                 } else {
                     let name = profile.0.get_string("name").unwrap_or("player_sprite");
                     compound.put_string("text", name.to_string());
@@ -240,6 +200,17 @@ impl TextComponentBase {
                         click_tag.put_string("command", command.to_string());
                     } else {
                         click_tag.put_string("value", command.to_string());
+                    }
+                }
+                ClickEvent::ShowDialog { dialog } => {
+                    click_tag.put_string("action", "show_dialog".to_string());
+                    click_tag.put("dialog", dialog.to_nbt());
+                }
+                ClickEvent::Custom { id, payload } => {
+                    click_tag.put_string("action", "custom".to_string());
+                    click_tag.put_string("id", id.to_string());
+                    if let Some(payload) = payload {
+                        click_tag.put("payload", payload.to_nbt());
                     }
                 }
                 ClickEvent::SuggestCommand { command } => {
@@ -512,20 +483,12 @@ impl TextComponentBase {
                     map.insert("with".to_string(), serde_json::Value::Array(list));
                 }
             }
-            TextContent::PlayerSprite {
-                type_name,
-                profile,
-                hat,
-            } => {
+            TextContent::PlayerSprite { profile, hat } => {
                 if *version >= JavaMinecraftVersion::V_26_1 {
-                    let full_type = if type_name.contains(':') {
-                        type_name.to_string()
-                    } else {
-                        format!("minecraft:{type_name}")
-                    };
-                    map.insert("type".to_string(), serde_json::Value::String(full_type));
                     map.insert("player".to_string(), nbt_compound_to_json(&profile.0));
-                    map.insert("hat".to_string(), serde_json::Value::Bool(*hat));
+                    if !hat {
+                        map.insert("hat".to_string(), serde_json::Value::Bool(false));
+                    }
                 } else {
                     let name = profile.0.get_string("name").unwrap_or("player_sprite");
                     map.insert(
@@ -648,6 +611,23 @@ impl TextComponentBase {
                             "value".to_string(),
                             serde_json::Value::String(command.to_string()),
                         );
+                    }
+                }
+                ClickEvent::ShowDialog { dialog } => {
+                    click_map.insert(
+                        "action".to_string(),
+                        serde_json::Value::String("show_dialog".to_string()),
+                    );
+                    click_map.insert("dialog".to_string(), dialog.0.as_ref().clone());
+                }
+                ClickEvent::Custom { id, payload } => {
+                    click_map.insert(
+                        "action".to_string(),
+                        serde_json::Value::String("custom".to_string()),
+                    );
+                    click_map.insert("id".to_string(), serde_json::Value::String(id.to_string()));
+                    if let Some(payload) = payload {
+                        click_map.insert("payload".to_string(), payload.0.as_ref().clone());
                     }
                 }
                 ClickEvent::SuggestCommand { command } => {
@@ -927,10 +907,11 @@ impl TextComponentBase {
 }
 
 fn nbt_compound_to_json(compound: &pumpkin_nbt::NbtCompound) -> serde_json::Value {
-    let mut map = serde_json::Map::new();
-    for (k, v) in &compound.child_tags {
-        map.insert(k.to_string(), nbt_tag_to_json(v));
-    }
+    let map = compound
+        .child_tags
+        .iter()
+        .map(|(k, v)| (k.to_string(), nbt_tag_to_json(v)))
+        .collect();
     serde_json::Value::Object(map)
 }
 
@@ -1355,7 +1336,7 @@ impl TextComponent {
     /// Parses a text component from its NBT representation
     #[must_use]
     pub fn from_nbt(tag: &pumpkin_nbt::tag::NbtTag) -> Self {
-        serde_json::from_value(nbt_tag_to_json(tag)).unwrap_or_else(|_| Self::empty())
+        Self::deserialize(nbt_de::TagDeserializer(tag)).unwrap_or_else(|_| Self::empty())
     }
 
     /// Creates a new text component with plain text content.
@@ -1606,7 +1587,6 @@ impl TextComponent {
     pub fn player_sprite(profile: pumpkin_nbt::NbtCompound, hat: bool) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::PlayerSprite {
-                type_name: Cow::Borrowed("minecraft:player_sprite"),
                 profile: ProfileNbt(profile),
                 hat,
             }),
@@ -2040,6 +2020,105 @@ impl std::hash::Hash for ProfileNbt {
     }
 }
 
+impl Serialize for ProfileNbt {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        nbt_compound_to_json(&self.0).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ProfileNbt {
+    /// Reads what vanilla's `ResolvableProfile` codec reads: a player name, or a
+    /// compound with `name`, `id`, `properties` or skin overrides.
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut profile = pumpkin_nbt::NbtCompound::new();
+        match serde_json::Value::deserialize(deserializer)? {
+            serde_json::Value::String(name) if is_valid_player_name(&name) => {
+                profile.put_string("name", name);
+            }
+            serde_json::Value::Object(fields) => {
+                for (key, value) in fields {
+                    let tag = if key == "id" {
+                        // A UUID is four ints, sent as an int array.
+                        let Ok(id) = serde_json::from_value::<[i32; 4]>(value) else {
+                            return Err(serde::de::Error::custom("a profile id is four ints"));
+                        };
+                        pumpkin_nbt::tag::NbtTag::IntArray(id.to_vec())
+                    } else if !is_valid_profile_field(&key, &value) {
+                        return Err(serde::de::Error::custom(format!("invalid profile {key}")));
+                    } else {
+                        hover::json_to_nbt(&value)
+                    };
+                    profile.put(&key, tag);
+                }
+            }
+            _ => return Err(serde::de::Error::custom("expected a name or a compound")),
+        }
+        // The profile is sent on as it is, and NBT can't hold a string over 65535 bytes.
+        let mut writer = pumpkin_nbt::serializer::NbtWriteHelperJava::new(std::io::sink());
+        if profile.clone().serialize_content(&mut writer).is_err() {
+            return Err(serde::de::Error::custom("the profile doesn't fit in NBT"));
+        }
+        Ok(Self(profile))
+    }
+}
+
+/// Vanilla's `StringUtil.isValidPlayerName`, which its `PLAYER_NAME` codec checks:
+/// at most 16 characters, each from `!` to `~`.
+fn is_valid_player_name(name: &str) -> bool {
+    name.len() <= 16 && name.as_bytes().iter().all(u8::is_ascii_graphic)
+}
+
+/// What vanilla's `ResolvableProfile` codec takes in a profile field other than
+/// `id`. It ignores the fields it doesn't know.
+fn is_valid_profile_field(key: &str, value: &serde_json::Value) -> bool {
+    match key {
+        "name" => value.as_str().is_some_and(is_valid_player_name),
+        "properties" => is_valid_property_map(value),
+        // `PlayerSkin.Patch`: three texture identifiers and the model.
+        "texture" | "cape" | "elytra" => value
+            .as_str()
+            .is_some_and(|texture| Identifier::parse(texture).is_ok()),
+        "model" => matches!(value.as_str(), Some("slim" | "wide")),
+        _ => true,
+    }
+}
+
+const MAX_PROPERTY_NAME_LENGTH: usize = 64;
+const MAX_PROPERTY_VALUE_LENGTH: usize = 32767;
+const MAX_PROPERTY_SIGNATURE_LENGTH: usize = 1024;
+const MAX_PROPERTIES: usize = 16;
+
+/// Vanilla's `ExtraCodecs.PROPERTY_MAP`: a list of properties, or a map of names
+/// to values. Vanilla writes the map back as the list, and a client hashes an
+/// item that way when it's clicked, so the list's limits hold for the map too.
+fn is_valid_property_map(properties: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    // Vanilla counts a string's length in UTF-16 units.
+    let fits = |text: &str, max| text.encode_utf16().nth(max).is_none();
+    let string_fits = |text: &Value, max| text.as_str().is_some_and(|text| fits(text, max));
+    match properties {
+        Value::Array(list) => {
+            list.len() <= MAX_PROPERTIES
+                && list.iter().all(|property| {
+                    let field = |name, max| property.get(name).map(|text| string_fits(text, max));
+                    field("name", MAX_PROPERTY_NAME_LENGTH) == Some(true)
+                        && field("value", MAX_PROPERTY_VALUE_LENGTH) == Some(true)
+                        // A property doesn't need a signature.
+                        && field("signature", MAX_PROPERTY_SIGNATURE_LENGTH) != Some(false)
+                })
+        }
+        Value::Object(map) => {
+            let values = || map.values().filter_map(Value::as_array).flatten();
+            map.len() <= MAX_PROPERTIES
+                && map.keys().all(|name| fits(name, MAX_PROPERTY_NAME_LENGTH))
+                && map.values().all(Value::is_array)
+                && values().count() <= MAX_PROPERTIES
+                && values().all(|value| string_fits(value, MAX_PROPERTY_VALUE_LENGTH))
+        }
+        _ => false,
+    }
+}
+
 /// The content type of the text component.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
@@ -2054,7 +2133,11 @@ pub enum TextContent {
         #[serde(skip, default)]
         bedrock_translate: Option<Cow<'static, str>>,
         /// Substitution parameters for the translation.
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[serde(
+            default,
+            skip_serializing_if = "Vec::is_empty",
+            deserialize_with = "short_form::arguments"
+        )]
         with: Vec<TextComponentBase>,
     },
     /// Displays the name of one or more entities found by a selector.
@@ -2085,19 +2168,36 @@ pub enum TextContent {
         /// Substitution parameters for the translation.
         with: Vec<TextComponentBase>,
     },
-    /// A player sprite object component.
-    #[serde(skip)]
+    /// A player's head: vanilla's `object` component with `object: "player"`.
+    /// Clients before 26.1 get the player's name as text instead.
     PlayerSprite {
-        type_name: Cow<'static, str>,
+        #[serde(rename = "player")]
         profile: ProfileNbt,
+        /// Whether the hat layer is drawn over the head.
+        #[serde(default = "default_hat", deserialize_with = "bool_or_byte")]
         hat: bool,
     },
+}
+
+/// Vanilla draws the hat layer unless `hat` turns it off.
+const fn default_hat() -> bool {
+    true
+}
+
+/// NBT has no booleans, so [`TextComponent::from_nbt`] hands over `hat` as a
+/// byte, which vanilla's `NbtOps` also reads as a boolean.
+fn bool_or_byte<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    value
+        .as_bool()
+        .or_else(|| value.as_i64().map(|byte| byte != 0))
+        .ok_or_else(|| serde::de::Error::custom("expected a boolean"))
 }
 
 /// Tests for the text component implementations.
 #[cfg(test)]
 mod test {
-    use crate::text::click::ClickEvent;
+    use crate::text::click::{ClickEvent, ClickPayload};
     use crate::text::{
         TextComponent,
         color::{Color, NamedColor},
@@ -2230,6 +2330,42 @@ mod test {
     }
 
     #[test]
+    fn sign_click_actions_round_trip_through_json_and_nbt() {
+        let show = TextComponent::text("dialog").click_event(ClickEvent::ShowDialog {
+            dialog: ClickPayload(Box::new(
+                serde_json::json!({"type":"minecraft:notice","title":"x"}),
+            )),
+        });
+        let json = serde_json::to_string(&show).unwrap();
+        let from_json: TextComponent = serde_json::from_str(&json).unwrap();
+        assert_eq!(from_json, show);
+        let nbt = show
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+        let from_nbt = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(nbt));
+        assert_eq!(from_nbt, show);
+
+        let custom = TextComponent::text("custom").click_event(ClickEvent::Custom {
+            id: Cow::Borrowed("example:action"),
+            payload: Some(ClickPayload(Box::new(serde_json::json!({"value": 1})))),
+        });
+        let json = serde_json::to_string(&custom).unwrap();
+        let from_json: TextComponent = serde_json::from_str(&json).unwrap();
+        assert_eq!(from_json, custom);
+        let nbt = custom
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+        let from_nbt = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(nbt));
+        assert_eq!(from_nbt, custom);
+    }
+
+    #[test]
+    fn null_dialog_payloads_are_rejected() {
+        let json = r#"{"text":"x","click_event":{"action":"show_dialog","dialog":null}}"#;
+        assert!(serde_json::from_str::<TextComponent>(json).is_err());
+    }
+
+    #[test]
     fn styled_components_parse_from_nbt() {
         let mut styled = pumpkin_nbt::compound::NbtCompound::new();
         styled.put_string("text", "hi".to_string());
@@ -2238,12 +2374,349 @@ mod test {
         assert_eq!(component.0.style.color, Some(Color::Named(NamedColor::Red)));
         assert_eq!(component.get_text(), "hi");
     }
+
+    /// Each form of a player head that vanilla 26.3 reads goes out to a 26.3
+    /// client as the bytes vanilla writes for it, and to older ones as the name.
+    #[test]
+    fn player_sprite_reads_vanilla_json_and_writes_vanilla_nbt() {
+        // `{player:{name:"Steve"}}`, as vanilla 26.3 encodes all three.
+        let vanilla = b"\x0a\x0a\x00\x06player\x08\x00\x04name\x00\x05Steve\x00\x00";
+        for json in [
+            r#"{"type":"object","object":"player","player":{"name":"Steve"},"hat":true}"#,
+            r#"{"player":{"name":"Steve"}}"#,
+            r#"{"player":"Steve"}"#,
+        ] {
+            let head: TextComponent = serde_json::from_str(json).unwrap();
+            assert_eq!(
+                &*head.encode_for_version(&JavaMinecraftVersion::V_26_3),
+                vanilla,
+                "{json}"
+            );
+            let old = head.to_nbt_compound_for_version(&JavaMinecraftVersion::V_1_21_11);
+            assert_eq!(old.get_string("text"), Some("Steve"));
+        }
+    }
+
+    /// A head keeps its whole profile and `hat` through a plugin's `to-json` and
+    /// `from-json` and through NBT, and the profile's `id` goes out as an int array.
+    #[test]
+    fn player_sprite_keeps_its_profile_and_hat() {
+        let json = r#"{"type":"object","object":"player","player":{"name":"Steve","id":[1,2,3,4],"properties":[{"name":"textures","value":"e30="}],"texture":"entity/player/wide/steve","model":"slim"},"hat":false}"#;
+        let head: TextComponent = serde_json::from_str(json).unwrap();
+        let back: TextComponent =
+            serde_json::from_str(&serde_json::to_string(&head).unwrap()).unwrap();
+        assert_eq!(back, head);
+
+        let nbt = head.to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+        assert_eq!(nbt.get_bool("hat"), Some(false));
+        let profile = nbt.get_compound("player").unwrap();
+        assert_eq!(profile.get_int_array("id"), Some(&[1, 2, 3, 4][..]));
+        assert_eq!(profile.get_list("properties").map(<[_]>::len), Some(1));
+
+        // NBT has no booleans, so `hat` comes back from it as the byte 0.
+        for component in [head.clone(), TextComponent::text("a").add_child(head)] {
+            let nbt = component.to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+            let from_nbt = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(nbt));
+            assert_eq!(from_nbt, component);
+        }
+    }
+
+    /// Vanilla rejects these profiles too, so they never reach a client.
+    #[test]
+    fn malformed_player_profiles_are_rejected() {
+        for json in [
+            r#"{"player":5}"#,
+            r#"{"player":"abcdefghijklmnopq"}"#,
+            r#"{"player":{"name":5}}"#,
+            r#"{"player":{"name":"a b"}}"#,
+            r#"{"player":{"id":[1,2,3]}}"#,
+            r#"{"player":{"id":"00000001-0000-0002-0000-000300000004"}}"#,
+            r#"{"player":{"name":"a","properties":5}}"#,
+            r#"{"player":{"properties":{"textures":"e30="}}}"#,
+            r#"{"player":{"properties":[{"name":"textures"}]}}"#,
+            r#"{"player":{"properties":[{"name":"textures","value":"e30=","signature":5}]}}"#,
+            r#"{"player":{"texture":5}}"#,
+            r#"{"player":{"cape":"A"}}"#,
+            r#"{"player":{"elytra":"..:a"}}"#,
+            r#"{"player":{"model":"default"}}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<TextComponent>(json).is_err(),
+                "{json}"
+            );
+        }
+
+        // From NBT, as a creative client sends it in an item's lore.
+        let mut profile = pumpkin_nbt::NbtCompound::new();
+        profile.put_byte("properties", 5);
+        let nbt = TextComponent::player_sprite(profile, true)
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3);
+        let from_nbt = TextComponent::from_nbt(&pumpkin_nbt::tag::NbtTag::Compound(nbt));
+        assert_eq!(from_nbt, TextComponent::empty());
+    }
+
+    /// Vanilla 26.3 takes properties up to these sizes. It counts a string in
+    /// UTF-16 units, and a map past them is one it reads but can't write back.
+    #[test]
+    fn player_profile_properties_have_vanilla_limits() {
+        let head = |properties: &str| {
+            let json = format!(r#"{{"player":{{"properties":{properties}}}}}"#);
+            serde_json::from_str::<TextComponent>(&json)
+        };
+        let list = |count: usize, name: usize, value: usize, signature: usize| {
+            let property = format!(
+                r#"{{"name":"{}","value":"{}","signature":"{}"}}"#,
+                "😀".repeat(name / 2),
+                "v".repeat(value),
+                "s".repeat(signature)
+            );
+            format!("[{}]", vec![property; count].join(","))
+        };
+        let map = |names: usize, values: usize, name: usize, value: usize| {
+            let values = vec![format!(r#""{}""#, "v".repeat(value)); values].join(",");
+            let names: Vec<_> = (0..names)
+                .map(|i| format!(r#""{i:n>name$}":[{values}]"#))
+                .collect();
+            format!("{{{}}}", names.join(","))
+        };
+        assert!(head(&list(16, 64, 32767, 1024)).is_ok());
+        assert!(head(&map(16, 1, 64, 32767)).is_ok());
+        for (form, over) in [
+            ("17 properties", list(17, 64, 32767, 1024)),
+            ("name", list(16, 66, 32767, 1024)),
+            ("value", list(16, 64, 32768, 1024)),
+            ("signature", list(16, 64, 32767, 1025)),
+            ("17 names", map(17, 0, 64, 32767)),
+            ("17 values", map(1, 17, 64, 32767)),
+            ("map name", map(16, 1, 65, 32767)),
+            ("map value", map(16, 1, 64, 32768)),
+        ] {
+            assert!(head(&over).is_err(), "{form}");
+        }
+
+        // Vanilla can't write a string over 65535 bytes to NBT, and "界" takes three.
+        let value = |length| format!(r#"[{{"name":"a","value":"{}"}}]"#, "界".repeat(length));
+        assert!(head(&value(21845)).is_ok());
+        assert!(head(&value(21846)).is_err());
+    }
 }
 
 #[cfg(test)]
 mod custom_name_nbt_tests {
     use super::TextComponent;
     use pumpkin_nbt::tag::NbtTag;
+
+    #[test]
+    fn list_form_appends_the_rest_to_the_first() {
+        let mut first = pumpkin_nbt::compound::NbtCompound::new();
+        first.put_string("text", "A".to_string());
+        first.put_string("color", "red".to_string());
+        let tag = NbtTag::List(vec![
+            NbtTag::Compound(first),
+            NbtTag::String("B".into()),
+            NbtTag::String("C".into()),
+        ]);
+        let component = TextComponent::from_nbt(&tag);
+        assert_eq!(component.0.extra.len(), 2);
+        assert_eq!(component.get_text(), "ABC");
+    }
+
+    #[test]
+    fn translation_arguments_may_be_numbers() {
+        let mut name = pumpkin_nbt::compound::NbtCompound::new();
+        name.put_string("translate", "chat.type.text".to_string());
+        name.put(
+            "with",
+            NbtTag::List(vec![
+                NbtTag::String("Bob".into()),
+                NbtTag::Byte(1),
+                NbtTag::Short(2),
+                NbtTag::Int(3),
+                NbtTag::Long(4),
+                NbtTag::Float(5.5),
+                NbtTag::Double(6.5),
+            ]),
+        );
+        let component = TextComponent::from_nbt(&NbtTag::Compound(name));
+        let super::TextContent::Translate { with, .. } = *component.0.content else {
+            panic!("not a translation");
+        };
+        let texts: Vec<String> = with
+            .into_iter()
+            .map(|arg| super::TextComponent(arg).get_text())
+            .collect();
+        assert_eq!(texts, ["Bob", "1", "2", "3", "4", "5.5", "6.5"]);
+    }
+
+    #[test]
+    fn an_empty_list_is_not_a_component() {
+        assert!(serde_json::from_str::<TextComponent>("[]").is_err());
+    }
+
+    #[test]
+    fn every_style_flag_is_read_from_a_byte() {
+        let mut name = pumpkin_nbt::compound::NbtCompound::new();
+        name.put_string("text", "x".to_string());
+        for (flag, value) in [
+            ("bold", 1),
+            ("italic", 0),
+            ("underlined", 1),
+            ("strikethrough", 0),
+            ("obfuscated", 1),
+        ] {
+            name.put(flag, NbtTag::Byte(value));
+        }
+        let style = TextComponent::from_nbt(&NbtTag::Compound(name)).0.style;
+        assert_eq!(style.bold, Some(true));
+        assert_eq!(style.italic, Some(false));
+        assert_eq!(style.underlined, Some(true));
+        assert_eq!(style.strikethrough, Some(false));
+        assert_eq!(style.obfuscated, Some(true));
+    }
+
+    #[test]
+    fn json_flags_take_booleans_and_numbers() {
+        let json = r#"{"text":"x","bold":true,"italic":false,"underlined":1,"strikethrough":0}"#;
+        let style = serde_json::from_str::<TextComponent>(json).unwrap().0.style;
+        assert_eq!(style.bold, Some(true));
+        assert_eq!(style.italic, Some(false));
+        assert_eq!(style.underlined, Some(true));
+        assert_eq!(style.strikethrough, Some(false));
+    }
+
+    #[test]
+    fn json_null_flag_is_absent() {
+        let json = r#"{"text":"x","bold":null,"italic":true}"#;
+        let style = serde_json::from_str::<TextComponent>(json).unwrap().0.style;
+        assert_eq!(style.bold, None);
+        assert_eq!(style.italic, Some(true));
+    }
+
+    #[test]
+    fn empty_hover_values_stay_readable() {
+        let json = r#"{"text":"x","hover_event":{"action":"show_text","value":[]}}"#;
+        let component: TextComponent = serde_json::from_str(json).unwrap();
+        let hover = super::hover::HoverEvent::ShowText { value: Vec::new() };
+        assert_eq!(component.0.style.hover_event, Some(hover.clone()));
+
+        let tag = NbtTag::Compound(
+            TextComponent::text("x")
+                .hover_event(hover)
+                .0
+                .to_nbt_compound(),
+        );
+        let back = TextComponent::from_nbt(&tag);
+        assert!(matches!(
+            back.0.style.hover_event,
+            Some(super::hover::HoverEvent::ShowText { value }) if value.is_empty()
+        ));
+    }
+
+    #[test]
+    fn plain_string_hover_entity_name_is_text() {
+        let mut hover = pumpkin_nbt::compound::NbtCompound::new();
+        hover.put_string("action", "show_entity".to_string());
+        hover.put_string("id", "minecraft:pig".to_string());
+        hover.put_string("uuid", "6ba1a740-9a3b-4b7c-8f2c-8f5a5c1a0a11".to_string());
+        hover.put_string("name", "Piggy".to_string());
+        let mut name = pumpkin_nbt::compound::NbtCompound::new();
+        name.put_string("text", "pig".to_string());
+        name.put_compound("hover_event", hover);
+        let component = TextComponent::from_nbt(&NbtTag::Compound(name));
+        let Some(super::hover::HoverEvent::ShowEntity {
+            name: Some(name), ..
+        }) = component.0.style.hover_event
+        else {
+            panic!("no entity hover with a name");
+        };
+        assert_eq!(name.len(), 1);
+        assert_eq!(TextComponent(name[0].clone()).get_text(), "Piggy");
+    }
+
+    #[test]
+    fn a_number_is_not_a_component() {
+        assert_eq!(
+            TextComponent::from_nbt(&NbtTag::Int(7)),
+            TextComponent::empty()
+        );
+    }
+
+    #[test]
+    fn nbt_round_trips() {
+        let original = TextComponent::text("Navigator")
+            .bold()
+            .add_child(TextComponent::text("!").italic())
+            .hover_event(super::hover::HoverEvent::show_text(TextComponent::text(
+                "Tip",
+            )));
+        let tag = NbtTag::Compound(original.0.to_nbt_compound());
+        assert_eq!(TextComponent::from_nbt(&tag), original);
+    }
+
+    #[test]
+    fn json_accepts_the_short_forms_too() {
+        let component: TextComponent =
+            serde_json::from_str(r#"{"text":"A","extra":["B",["C","D"]],"bold":1}"#).unwrap();
+        assert_eq!(component.0.style.bold, Some(true));
+        assert_eq!(component.get_text(), "ABCD");
+    }
+
+    #[test]
+    fn show_item_components_are_read_from_nbt() {
+        let mut enchantments = pumpkin_nbt::compound::NbtCompound::new();
+        enchantments.put("minecraft:sharpness", NbtTag::Int(5));
+        let mut components = pumpkin_nbt::compound::NbtCompound::new();
+        components.put_compound("minecraft:enchantments", enchantments);
+        components.put("minecraft:ints", NbtTag::IntArray(vec![1, 2]));
+        components.put("minecraft:longs", NbtTag::LongArray(vec![3]));
+        components.put("minecraft:bytes", NbtTag::ByteArray(vec![4].into()));
+        let mut hover = pumpkin_nbt::compound::NbtCompound::new();
+        hover.put_string("action", "show_item".to_string());
+        hover.put_string("id", "minecraft:diamond_sword".to_string());
+        hover.put_compound("components", components);
+        let mut name = pumpkin_nbt::compound::NbtCompound::new();
+        name.put_string("text", "[Sword]".to_string());
+        name.put_compound("hover_event", hover);
+        let component = TextComponent::from_nbt(&NbtTag::Compound(name));
+        let back = component.0.to_nbt_compound();
+        let hover = back.get_compound("hover_event").unwrap();
+        let components = hover.get_compound("components").unwrap();
+        let enchantments = components.get_compound("minecraft:enchantments").unwrap();
+        assert!(enchantments.get("minecraft:sharpness").is_some());
+        for key in ["minecraft:ints", "minecraft:longs", "minecraft:bytes"] {
+            assert!(matches!(components.get(key), Some(NbtTag::List(l)) if !l.is_empty()));
+        }
+    }
+
+    #[test]
+    fn plain_string_hover_value_is_text() {
+        let mut hover = pumpkin_nbt::compound::NbtCompound::new();
+        hover.put_string("action", "show_text".to_string());
+        hover.put_string("value", "Tip".to_string());
+        let mut name = pumpkin_nbt::compound::NbtCompound::new();
+        name.put_string("text", "Navigator".to_string());
+        name.put_compound("hover_event", hover);
+        let component = TextComponent::from_nbt(&NbtTag::Compound(name));
+        assert!(component.0.style.hover_event.is_some());
+        assert_eq!(component.get_text(), "Navigator");
+    }
+
+    #[test]
+    fn plain_strings_in_extra_are_text() {
+        let mut inner = pumpkin_nbt::compound::NbtCompound::new();
+        inner.put_string("text", String::new());
+        inner.put_string("color", "red".to_string());
+        inner.put(
+            "extra",
+            NbtTag::List(vec![NbtTag::String("Navigator".into())]),
+        );
+        let mut name = pumpkin_nbt::compound::NbtCompound::new();
+        name.put_string("text", String::new());
+        name.put("italic", NbtTag::Byte(0));
+        name.put("extra", NbtTag::List(vec![NbtTag::Compound(inner)]));
+        let component = TextComponent::from_nbt(&NbtTag::Compound(name));
+        assert_eq!(component.get_text(), "Navigator");
+    }
 
     #[test]
     fn plain_string_tag_is_literal_text() {

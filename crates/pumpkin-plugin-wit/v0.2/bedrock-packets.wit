@@ -1289,6 +1289,15 @@ interface bedrock-packets {
     /// Entity ID if the container belongs to an entity (e.g. horse or donkey chest).
     target-entity-id: s64,
   }
+  /// Sent by the server to update container property data (e.g. furnace burn/cook progress or brewing stand timers).
+  record c-container-set-data {
+    /// Window ID assigned to the open container session.
+    container-id: u8,
+    /// Property key identifier within the container.
+    id: s32,
+    /// Updated value for the property.
+    value: s32,
+  }
   /// Sent by the server to correct the client's predicted movement under server authoritative movement.
   record c-correct-player-move-prediction {
     /// Prediction mode type (e.g. player movement vs vehicle movement).
@@ -1553,6 +1562,21 @@ interface bedrock-packets {
     state: u8,
     destination-name: string,
     options: option<matchmaking-state-options>,
+  }
+  /// Sent by the server to synchronize the armor and body equipment worn by an actor.
+  record c-mob-armor-equipment {
+    /// Runtime entity ID of the equipped actor.
+    target-runtime-id: s64,
+    /// Item equipped in the head (helmet) slot.
+    head: network-item-stack-descriptor,
+    /// Item equipped in the chest (chestplate/elytra) slot.
+    chest: network-item-stack-descriptor,
+    /// Item equipped in the legs (leggings) slot.
+    legs: network-item-stack-descriptor,
+    /// Item equipped in the feet (boots) slot.
+    feet: network-item-stack-descriptor,
+    /// Item equipped in the body (horse/wolf armor) slot.
+    body: network-item-stack-descriptor,
   }
   /// Sent by the server to add, modify, or remove potion/status effects on an entity.
   record c-mob-effect {
@@ -2363,6 +2387,15 @@ interface bedrock-packets {
     /// Target world layer for the block (e.g. 0 for primary blocks, 1 for waterlogging).
     layer: s32,
   }
+  /// Opens a mount equipment screen (horse, llama) on the client.
+  record c-update-equip {
+    container-id: u8,
+    container-type: u8,
+    size: s32,
+    entity-unique-id: s64,
+    /// Network NBT with a `slots` list describing the equipment slots.
+    data: nbt-tree,
+  }
   /// Opens or refreshes a Bedrock merchant screen with its complete offer list.
   record c-update-trade {
     /// Window identifier of the active trade screen.
@@ -2551,6 +2584,9 @@ interface bedrock-packets {
     s-client-cache-blob-status(s-client-cache-blob-status),
     /// Sent by the client during login to inform the server whether client-side chunk blob caching is supported.
     s-client-cache-status(s-client-cache-status),
+    /// The client's movement prediction state (actor flags, bounding box, movement attributes,
+    /// flying). Only sent after server-authoritative movement corrections, so its body is not read.
+    s-client-movement-prediction-sync,
     /// Sent by the client to request server-side execution of a slash command.
     s-command-request(s-command-request),
     /// Sent by either client or server to close an open container inventory window.
@@ -2636,6 +2672,8 @@ interface bedrock-packets {
     c-client-cache-miss-response(c-client-cache-miss-response),
     /// Sent by the server to open an inventory container screen (chest, furnace, anvil) on the client.
     c-container-open(c-container-open),
+    /// Sent by the server to update container property data (e.g. furnace burn/cook progress or brewing stand timers).
+    c-container-set-data(c-container-set-data),
     /// Sent by the server to correct the client's predicted movement under server authoritative movement.
     c-correct-player-move-prediction(c-correct-player-move-prediction),
     /// Sent by the server to send all crafting and smelting recipes available in the world.
@@ -2662,6 +2700,8 @@ interface bedrock-packets {
     c-level-sound-event(c-level-sound-event),
     /// Sent by the server to inform the client of matchmaking status.
     c-matchmaking-state(c-matchmaking-state),
+    /// Sent by the server to synchronize the armor and body equipment worn by an actor.
+    c-mob-armor-equipment(c-mob-armor-equipment),
     /// Sent by the server to add, modify, or remove potion/status effects on an entity.
     c-mob-effect(c-mob-effect),
     /// Sent by the server to show the item equipped or held by a mob or other player.
@@ -2740,6 +2780,8 @@ interface bedrock-packets {
     c-update-attributes(c-update-attributes),
     /// Updates a single block state client-side without retransmitting the entire chunk.
     c-update-block(c-update-block),
+    /// Opens a mount equipment screen (horse, llama) on the client.
+    c-update-equip(c-update-equip),
     /// Opens or refreshes a Bedrock merchant screen with its complete offer list.
     c-update-trade(c-update-trade),
     /// Sends custom collision and selection voxel shapes to the client.

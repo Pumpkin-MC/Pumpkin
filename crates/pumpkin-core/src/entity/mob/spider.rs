@@ -2,12 +2,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::BlockState;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::Sound;
 use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 use uuid::Uuid;
 
@@ -30,6 +32,8 @@ use crate::entity::{
     r#type::from_type,
 };
 use crate::world::World;
+
+const VEHICLE_SEAT_HEIGHT: f64 = 0.3125;
 
 pub const SPIDER_FLEES: &[Flee] =
     &[
@@ -95,14 +99,45 @@ impl SpiderEntity {
     }
 
     pub fn set_climbing(&self, climbing: bool) {
-        if self.is_climbing.swap(climbing, Ordering::Relaxed) != climbing {
-            let flags = i8::from(climbing);
-            let entity = &self.mob_entity.living_entity.entity;
-            entity.set_synced_data(pumpkin_data::tracked_data::spider::DATA_FLAGS_ID, flags);
-            if let Some(meta) = self.mob_metadata() {
-                entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
-            }
+        set_wall_climbing(
+            self,
+            &self.is_climbing,
+            pumpkin_data::tracked_data::spider::DATA_FLAGS_ID,
+            climbing,
+        );
+    }
+}
+
+/// Vanilla `Spider.setClimbing`.
+pub fn set_wall_climbing(
+    mob: &dyn Mob,
+    climbing: &AtomicBool,
+    flags: pumpkin_data::tracked_data::TrackedData,
+    next: bool,
+) {
+    if climbing.swap(next, Ordering::Relaxed) != next {
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        entity.set_synced_data(flags, i8::from(next));
+        if let Some(meta) = mob.mob_metadata() {
+            entity.send_bedrock_actor_data(&meta.to_bedrock_actor_data());
         }
+    }
+}
+
+/// Vanilla `Spider.tick`: the climb flag follows `horizontalCollision`.
+pub fn tick_wall_climbing(
+    mob: &dyn Mob,
+    climbing: &AtomicBool,
+    flags: pumpkin_data::tracked_data::TrackedData,
+) {
+    let entity = &mob.get_mob_entity().living_entity.entity;
+    if entity.is_alive() {
+        set_wall_climbing(
+            mob,
+            climbing,
+            flags,
+            entity.horizontal_collision.load(Ordering::Relaxed),
+        );
     }
 }
 
@@ -111,6 +146,7 @@ impl SpiderEntity {
 pub fn finalize_spider_spawn(
     mob: &MobEntity,
     world: &Arc<World>,
+    reason: crate::entity::mob::spawn::EntitySpawnReason,
     group_data: Option<SpawnGroupData>,
 ) -> Option<SpawnGroupData> {
     mob.finalize_spawn_base();
@@ -121,7 +157,7 @@ pub fn finalize_spider_spawn(
     if rng.random_range(0..100) == 0 {
         let skeleton = from_type(&EntityType::SKELETON, pos, world, Uuid::new_v4());
         skeleton.get_entity().set_rotation(entity.yaw.load(), 0.0);
-        finalize_spawn(&skeleton, world, None);
+        finalize_spawn(&skeleton, world, reason, None);
         mob.add_pending_rider(skeleton);
     }
 
@@ -152,7 +188,26 @@ pub fn finalize_spider_spawn(
     Some(group_data)
 }
 
+pub(super) fn small_vehicle_attachment_point(
+    mob: &MobEntity,
+    vehicle: &dyn EntityBase,
+    seat_height: f64,
+) -> Option<Vector3<f64>> {
+    let living = &mob.living_entity;
+    (vehicle.get_entity().width() <= living.entity.width()).then(|| {
+        Vector3::new(
+            0.0,
+            seat_height * living.get_attribute_value(&Attributes::SCALE),
+            0.0,
+        )
+    })
+}
+
 impl Mob for SpiderEntity {
+    fn mob_vehicle_attachment_point(&self, vehicle: &dyn EntityBase) -> Option<Vector3<f64>> {
+        small_vehicle_attachment_point(&self.mob_entity, vehicle, VEHICLE_SEAT_HEIGHT)
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntitySpiderStep, 0.15, 1.0);
     }
@@ -160,13 +215,19 @@ impl Mob for SpiderEntity {
     fn finalize_spawn(
         &self,
         world: &Arc<World>,
+        reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
-        finalize_spider_spawn(&self.mob_entity, world, group_data)
+        finalize_spider_spawn(&self.mob_entity, world, reason, group_data)
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn on_climbable(&self) -> bool {
+        // Vanilla `Spider.onClimbable`: the wall-climb flag, not climbable blocks.
+        self.is_climbing()
     }
 
     fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
@@ -178,13 +239,10 @@ impl Mob for SpiderEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        let entity = &self.mob_entity.living_entity.entity;
-        if !entity.is_alive() {
-            return;
-        }
-
-        let vel = entity.velocity.load();
-        let is_colliding_horizontally = vel.x.abs() < 1e-4 && vel.z.abs() < 1e-4;
-        self.set_climbing(is_colliding_horizontally);
+        tick_wall_climbing(
+            self,
+            &self.is_climbing,
+            pumpkin_data::tracked_data::spider::DATA_FLAGS_ID,
+        );
     }
 }

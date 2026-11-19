@@ -9,7 +9,10 @@ use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
-use crate::entity::Entity;
+use std::sync::Arc;
+
+use crate::entity::{Entity, EntityBase};
+use crate::world::{Explosion, ExplosionInteraction};
 
 pub(super) struct TntMinecart {
     fuse: AtomicI32,
@@ -49,7 +52,8 @@ impl TntMinecart {
         );
     }
 
-    pub(super) fn tick(&self, entity: &Entity) -> bool {
+    pub(super) fn tick(&self, minecart: &dyn EntityBase) -> bool {
+        let entity = minecart.get_entity();
         let fuse = self.fuse.load(Ordering::Relaxed);
         if fuse > 0 {
             self.fuse.store(fuse - 1, Ordering::Relaxed);
@@ -65,16 +69,24 @@ impl TntMinecart {
         } else if fuse == 0 {
             let velocity = entity.velocity.load();
             self.explode(
-                entity,
+                minecart,
                 velocity.x.mul_add(velocity.x, velocity.z * velocity.z),
+                None,
             );
             return true;
         }
         false
     }
 
-    pub(super) fn explode(&self, entity: &Entity, horizontal_speed_squared: f64) {
-        let world = entity.world.load();
+    /// `cause` is who gets the credit, e.g. the shooter of the burning arrow that set it off.
+    pub(super) fn explode(
+        &self,
+        minecart: &dyn EntityBase,
+        horizontal_speed_squared: f64,
+        cause: Option<Arc<dyn EntityBase>>,
+    ) {
+        let entity = minecart.get_entity();
+        let world = entity.world.load_full();
         if !world.level_info.load().game_rules.tnt_explodes {
             if self.fuse.load(Ordering::Relaxed) > -1 {
                 entity.remove();
@@ -91,11 +103,19 @@ impl TntMinecart {
         let pos = entity.pos.load();
         let primed = self.fuse.load(Ordering::Relaxed) > -1;
         entity.remove();
-        if primed {
-            world.explode_tnt_minecart(pos, power);
-        } else {
-            world.explode(pos, power, crate::world::ExplosionInteraction::Tnt);
+        let mut explosion = Explosion::new(
+            power,
+            pos,
+            world.get_block_interaction(ExplosionInteraction::Tnt),
+        )
+        .with_source(minecart);
+        if cause.is_some() {
+            explosion = explosion.with_indirect_source(cause);
         }
+        if primed {
+            explosion = explosion.preserving_rails();
+        }
+        world.run_explosion(&explosion);
     }
 
     pub(super) fn set_fuse(&self, fuse: i32) {

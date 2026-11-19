@@ -82,6 +82,31 @@ impl CommandBlock {
         condition_met
     }
 
+    /// Mirrors `CommandBlockEntity.setAutomatic` when `loadAdditional` transitions `auto` from
+    /// `false` to `true` on an unpowered non-sequence command block.
+    pub(crate) fn schedule_auto_if_needed(
+        world: &World,
+        command_block: &CommandBlockEntity,
+        pos: &BlockPos,
+        previous_auto: bool,
+    ) {
+        if previous_auto
+            || !command_block.auto.load(Ordering::Relaxed)
+            || command_block.powered.load(Ordering::Relaxed)
+        {
+            return;
+        }
+        let block = world.get_block(pos);
+        if !matches!(
+            block.id,
+            BlockId::COMMAND_BLOCK | BlockId::REPEATING_COMMAND_BLOCK
+        ) {
+            return;
+        }
+        Self::mark_condition_met(world, command_block, pos);
+        world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
+    }
+
     /// Mirrors vanilla CommandBlock.setPoweredAndUpdate: only a power edge mutates
     /// the powered state, and a REDSTONE-mode rising edge records the condition and
     /// schedules execution one tick later. Chain/automatic blocks do not schedule

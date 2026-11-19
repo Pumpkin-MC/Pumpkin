@@ -107,8 +107,16 @@ impl GhastEntity {
 }
 
 impl Mob for GhastEntity {
+    fn mob_support_quad_leash_as_holder(&self) -> bool {
+        true
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn on_climbable(&self) -> bool {
+        false
     }
 
     fn get_mob_gravity(&self) -> f64 {
@@ -145,7 +153,7 @@ impl Mob for GhastEntity {
         }
     }
 
-    fn get_base_experience_reward(&self) -> u32 {
+    fn xp_reward(&self) -> u32 {
         Self::XP_REWARD
     }
 }

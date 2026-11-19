@@ -28,6 +28,8 @@ const PLAYER_INFO_CHANNEL: &str = "velocity:player_info";
 
 #[derive(Error, Debug)]
 pub enum VelocityError {
+    #[error("Unexpected Velocity response")]
+    UnexpectedResponse,
     #[error("No response data received")]
     NoData,
     #[error("Unable to verify player details")]
@@ -35,7 +37,7 @@ pub enum VelocityError {
     #[error("Failed to read forward version")]
     FailedReadForwardVersion,
     #[error("Unsupported forwarding version {0}. Maximum supported version is {1}")]
-    UnsupportedForwardVersion(u8, u8),
+    UnsupportedForwardVersion(i32, u8),
     #[error("Failed to read address")]
     FailedReadAddress,
     #[error("Failed to parse address")]
@@ -49,8 +51,8 @@ pub enum VelocityError {
 }
 
 pub async fn velocity_login(connection: &mut PendingConnection) {
-    // TODO: Validate the packet transaction id from the plugin response with this
     let velocity_message_id: i32 = rand::rng().random();
+    connection.velocity_message_id = Some(velocity_message_id);
 
     let mut buf = BytesMut::new();
     buf.put_u8(MAX_SUPPORTED_FORWARDING_VERSION);
@@ -113,8 +115,12 @@ pub fn receive_velocity_plugin_response(
     port: u16,
     config: &VelocityConfig,
     response: SLoginPluginResponse,
+    expected_message_id: &mut Option<i32>,
 ) -> Result<(GameProfile, SocketAddr), VelocityError> {
     debug!("Received velocity response");
+    if expected_message_id.take() != Some(response.message_id.0) {
+        return Err(VelocityError::UnexpectedResponse);
+    }
     if let Some(data) = response.data {
         if data.len() < 32 {
             return Err(VelocityError::FailedVerifyIntegrity);
@@ -130,10 +136,11 @@ pub fn receive_velocity_plugin_response(
             .get_var_int()
             .map_err(|_| VelocityError::FailedReadForwardVersion)?;
 
-        let version = version.0 as u8;
-        if version > MAX_SUPPORTED_FORWARDING_VERSION {
+        // Compared as read: truncating to `u8` first would let 256, 512 and so
+        // on pass as version 0.
+        if version.0 > i32::from(MAX_SUPPORTED_FORWARDING_VERSION) || version.0 < 1 {
             return Err(VelocityError::UnsupportedForwardVersion(
-                version,
+                version.0,
                 MAX_SUPPORTED_FORWARDING_VERSION,
             ));
         }
@@ -151,4 +158,142 @@ pub fn receive_velocity_plugin_response(
         return Ok((profile, socket_addr));
     }
     Err(VelocityError::NoData)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{error::Error, sync::Weak, time::Duration};
+
+    use pumpkin_data::packet::CURRENT_MC_VERSION;
+    use pumpkin_protocol::{
+        ConnectionState, VarInt, java::packet_decoder::TCPNetworkDecoder,
+        packet::MultiVersionJavaPacket, ser::NetworkWriteExt,
+    };
+    use tokio::io::BufReader;
+    use uuid::Uuid;
+
+    use super::*;
+    use crate::net::PacketRateLimiter;
+
+    const SECRET: &str = "test-velocity-secret";
+    const PLAYER_ID: Uuid = Uuid::from_u128(0x12345678_1234_5678_9abc_123456789abc);
+
+    fn signed_response(message_id: i32) -> Result<SLoginPluginResponse, Box<dyn Error>> {
+        let mut payload = Vec::new();
+        payload.write_var_int(&VarInt(1))?;
+        payload.write_string("127.0.0.1")?;
+        payload.extend_from_slice(PLAYER_ID.as_bytes());
+        payload.write_string("Steve")?;
+        payload.write_var_int(&VarInt(0))?;
+
+        let mut mac = HmacSha256::new_from_slice(SECRET.as_bytes())?;
+        mac.update(&payload);
+        let mut data = mac.finalize().into_bytes().to_vec();
+        data.extend_from_slice(&payload);
+        Ok(SLoginPluginResponse {
+            message_id: VarInt(message_id),
+            data: Some(data.into_boxed_slice()),
+        })
+    }
+
+    #[tokio::test]
+    async fn velocity_request_accepts_only_one_matching_response() -> Result<(), Box<dyn Error>> {
+        let (client, transport) = tokio::io::duplex(1024);
+        let (read, write) = tokio::io::split(transport);
+        let mut connection = PendingConnection::from_transport(
+            Box::new(read),
+            Box::new(write),
+            "127.0.0.1:25565".parse()?,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Weak::new(),
+        );
+        connection.connection_state.store(ConnectionState::Login);
+        velocity_login(&mut connection).await;
+
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(client));
+        let packet =
+            tokio::time::timeout(Duration::from_secs(5), decoder.get_raw_packet()).await??;
+        assert_eq!(packet.id, CLoginPluginRequest::to_id(CURRENT_MC_VERSION));
+        let mut payload = &packet.payload[..];
+        let message_id = payload.get_var_int()?.0;
+        assert_eq!(payload.get_str()?.as_ref(), PLAYER_INFO_CHANNEL);
+        assert_eq!(payload, &[MAX_SUPPORTED_FORWARDING_VERSION]);
+
+        let config = VelocityConfig {
+            enabled: true,
+            secret: SECRET.to_string(),
+        };
+        let (profile, address) = receive_velocity_plugin_response(
+            25565,
+            &config,
+            signed_response(message_id)?,
+            &mut connection.velocity_message_id,
+        )?;
+        assert_eq!(profile.id, PLAYER_ID);
+        assert_eq!(profile.name, "Steve");
+        assert_eq!(address, "127.0.0.1:25565".parse::<SocketAddr>()?);
+        assert!(matches!(
+            receive_velocity_plugin_response(
+                25565,
+                &config,
+                signed_response(message_id)?,
+                &mut connection.velocity_message_id,
+            ),
+            Err(VelocityError::UnexpectedResponse)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn velocity_response_rejects_unsolicited_and_mismatched_ids() -> Result<(), Box<dyn Error>> {
+        let config = VelocityConfig {
+            enabled: true,
+            secret: SECRET.to_string(),
+        };
+        for mut expected_message_id in [None, Some(42)] {
+            assert!(matches!(
+                receive_velocity_plugin_response(
+                    25565,
+                    &config,
+                    signed_response(-1)?,
+                    &mut expected_message_id,
+                ),
+                Err(VelocityError::UnexpectedResponse)
+            ));
+            assert_eq!(expected_message_id, None);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn velocity_response_consumes_request_when_data_is_absent() -> Result<(), Box<dyn Error>> {
+        let config = VelocityConfig {
+            enabled: true,
+            secret: SECRET.to_string(),
+        };
+        let mut expected_message_id = Some(-1);
+        assert!(matches!(
+            receive_velocity_plugin_response(
+                25565,
+                &config,
+                SLoginPluginResponse {
+                    message_id: VarInt(-1),
+                    data: None,
+                },
+                &mut expected_message_id,
+            ),
+            Err(VelocityError::NoData)
+        ));
+        assert!(matches!(
+            receive_velocity_plugin_response(
+                25565,
+                &config,
+                signed_response(-1)?,
+                &mut expected_message_id,
+            ),
+            Err(VelocityError::UnexpectedResponse)
+        ));
+        Ok(())
+    }
 }

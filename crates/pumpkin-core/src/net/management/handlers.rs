@@ -278,7 +278,7 @@ async fn execute_method(
                     let name = ban.player.name.clone().unwrap_or_default();
                     let profile = GameProfile {
                         id: uuid,
-                        name: name.clone(),
+                        name,
                         properties: arc_swap::ArcSwap::from_pointee(Vec::new()),
                         profile_actions: None,
                     };
@@ -376,7 +376,7 @@ async fn execute_method(
                     let name = ban.player.name.clone().unwrap_or_default();
                     let profile = GameProfile {
                         id: uuid,
-                        name: name.clone(),
+                        name,
                         properties: arc_swap::ArcSwap::from_pointee(Vec::new()),
                         profile_actions: None,
                     };
