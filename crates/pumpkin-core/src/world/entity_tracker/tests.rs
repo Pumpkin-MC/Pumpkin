@@ -48,7 +48,9 @@ fn drawn_at(
                     pos = None;
                 }
             }
-        } else if packet.id == id::<CEntityPositionSync>() && payload.get_var_int()?.0 == entity_id
+        } else if packet.id == id::<CEntityPositionSync>()
+            && payload.get_var_int()?.0 == entity_id
+            && pos.is_some()
         {
             // A linear path: just the end position.
             payload.get_var_int()?;
@@ -575,7 +577,9 @@ async fn a_riding_player_turns_but_moves_with_its_vehicle() -> TestResult {
     let packets = watcher.received().await?;
     let moved = |packet: &RawPacket| {
         let mut payload = &packet.payload[..];
-        (packet.id == id::<CUpdateEntityPos>() || packet.id == id::<CUpdateEntityPosRot>())
+        (packet.id == id::<CUpdateEntityPos>()
+            || packet.id == id::<CUpdateEntityPosRot>()
+            || packet.id == id::<CEntityPositionSync>())
             && payload
                 .get_var_int()
                 .is_ok_and(|id| id.0 == rider.entity_id())
