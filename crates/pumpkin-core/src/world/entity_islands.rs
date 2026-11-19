@@ -6,7 +6,9 @@ use std::collections::VecDeque;
 #[cfg(debug_assertions)]
 use std::sync::Arc;
 
-use pumpkin_data::{Block, attributes::Attributes, entity::EntityType, tag, tag::Taggable};
+use pumpkin_data::{
+    Block, attributes::Attributes, entity::EntityType, game_event::GameEvent, tag, tag::Taggable,
+};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, get_section_cord, position::BlockPos, vector2::Vector2,
     vector3::Vector3,
@@ -20,9 +22,12 @@ use crate::block::blocks::redstone::SIGNAL_MAX;
 use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
 use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
 use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
+    entity_breed::EntityBreedEvent, entity_damage::EntityDamageEvent,
+    entity_damage_by_block::EntityDamageByBlockEvent,
+    entity_damage_by_entity::EntityDamageByEntityEvent, entity_target::EntityTargetEvent,
     entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
 };
+use crate::plugin::api::events::world::generic_game::GenericGameEvent;
 use crate::plugin::{
     api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
 };
@@ -30,7 +35,7 @@ use crate::server::Server;
 use crate::world::World;
 
 /// Reach of same-tick neighbour updates: a full wire line, the powered block and one component.
-const BLOCK_UPDATE_REACH: f64 = SIGNAL_MAX as f64 + 2.0;
+pub(crate) const BLOCK_UPDATE_REACH: f64 = SIGNAL_MAX as f64 + 2.0;
 
 /// Grid cell size for large boxes.
 const CELL_SIZE: f64 = 16.0;
@@ -137,6 +142,15 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
         || plugins.has_handlers::<EntityBlockFormEvent>()
+}
+
+pub(crate) fn plugins_observe_passive_block_writes(server: &Server) -> bool {
+    let plugins = &server.plugin_manager;
+    plugins.has_handlers::<EntityDamageEvent>()
+        || plugins.has_handlers::<EntityDamageByEntityEvent>()
+        || plugins.has_handlers::<EntityDamageByBlockEvent>()
+        || plugins.has_handlers::<GenericGameEvent>()
+        || plugins.has_handlers::<PacketSentEvent>()
 }
 
 /// What one entity can read or change next tick.
@@ -478,6 +492,7 @@ pub(crate) fn prune_block_writes(
     world: &World,
     reaches: &mut [TickReach],
     checks: &[BlockWriteCheck],
+    passive_writes: &[(i32, BoundingBox)],
 ) -> Option<()> {
     if reaches.iter().any(|reach| reach.global) {
         return Some(());
@@ -532,6 +547,15 @@ pub(crate) fn prune_block_writes(
         .filter_map(|(slot, active)| active.then_some(slot))
         .collect();
     let mut query = Query::new(candidates.len());
+    for (_, writes) in passive_writes {
+        contacts.for_each_overlapping(&mut query, writes, &mut budget, |candidate| {
+            let slot = candidates[candidate];
+            if !active[slot] {
+                active[slot] = true;
+                pending.push_back(slot);
+            }
+        })?;
+    }
     while let Some(slot) = pending.pop_front() {
         let Some(writes) = reaches[slot].block_writes else {
             continue;
@@ -705,6 +729,15 @@ pub fn partition(
     idle_entities: &[(i32, BoundingBox)],
     players: &[(i32, BoundingBox)],
 ) -> Option<Islands> {
+    partition_with_passive_writes(nodes, idle_entities, players, &[])
+}
+
+pub(crate) fn partition_with_passive_writes(
+    nodes: &[(i32, TickReach)],
+    idle_entities: &[(i32, BoundingBox)],
+    players: &[(i32, BoundingBox)],
+    passive_writes: &[(i32, BoundingBox)],
+) -> Option<Islands> {
     if nodes.iter().any(|(_, reach)| reach.global) {
         return None;
     }
@@ -750,7 +783,7 @@ pub fn partition(
         .enumerate()
         .filter_map(|(slot, (_, reach))| reach.block_writes.map(|writes| (slot, writes)))
         .collect();
-    if !writers.is_empty() {
+    if !writers.is_empty() || !passive_writes.is_empty() {
         let mut block_grid = Grid::default();
         for (slot, (_, reach)) in nodes.iter().enumerate() {
             block_grid.insert(slot, reach.block_reads, &mut budget)?;
@@ -758,6 +791,29 @@ pub fn partition(
         let mut query = Query::new(sets.len());
         for (slot, writes) in writers {
             block_grid.union_overlapping(&mut sets, &mut query, slot, &writes, &mut budget)?;
+        }
+        // Anyone who can hit the owner is already joined to its slot, even for an idle owner.
+        let mut passive_grid = Grid::default();
+        let mut owners = Vec::with_capacity(passive_writes.len());
+        let mut passive_query = Query::new(passive_writes.len());
+        for (id, writes) in passive_writes {
+            let slot = *slots.get(id)?;
+            block_grid.union_overlapping(&mut sets, &mut query, slot, writes, &mut budget)?;
+            // Resin placement notifies nearby listeners. The hit also emits a vibration at the mob.
+            entity_grid.union_overlapping(&mut sets, &mut query, slot, writes, &mut budget)?;
+            let event_radius = f64::from(GameEvent::EntityAction.notification_radius()) + 1.0;
+            let hit = entity_grid.boxes.get(slot)?.expand_all(event_radius);
+            entity_grid.union_overlapping(&mut sets, &mut query, slot, &hit, &mut budget)?;
+            passive_grid.for_each_overlapping(
+                &mut passive_query,
+                writes,
+                &mut budget,
+                |other| {
+                    sets.union(slot, owners[other]);
+                },
+            )?;
+            passive_grid.insert(owners.len(), *writes, &mut budget)?;
+            owners.push(slot);
         }
     }
 
@@ -1443,6 +1499,27 @@ mod tests {
         assert!(partition(&nodes, &[], &[]).is_none());
     }
 
+    #[test]
+    fn passive_block_writes_join_attackers_to_remote_readers_and_writers()
+    -> Result<(), &'static str> {
+        let nodes = [
+            node(10, 1.0, 1.0),
+            node(11, 100.0, 0.0),
+            node(12, 500.0, 0.0),
+            node(13, 900.0, 1.0),
+        ];
+        let idle = [(20, cube(0.0, 1.0)), (21, cube(901.0, 1.0))];
+        let writes = [(20, cube(100.0, 2.0)), (21, cube(102.0, 1.0))];
+        assert_eq!(
+            islands(&nodes, &idle, &[]),
+            [vec![0], vec![1], vec![2], vec![3]]
+        );
+        let planned = partition_with_passive_writes(&nodes, &idle, &[], &writes)
+            .ok_or("ordinary writes exceed the budget")?;
+        assert_eq!(planned.islands, [vec![0, 1, 3], vec![2]]);
+        Ok(())
+    }
+
     fn assert_box(actual: &BoundingBox, expected: &BoundingBox) {
         assert_eq!((actual.min, actual.max), (expected.min, expected.max));
     }
@@ -1579,7 +1656,8 @@ mod tests {
             prune_block_writes(
                 &world,
                 &mut reaches,
-                &[BlockWriteCheck::Contact, BlockWriteCheck::Unconditional]
+                &[BlockWriteCheck::Contact, BlockWriteCheck::Unconditional],
+                &[],
             )
             .is_none()
         );
@@ -1656,6 +1734,7 @@ mod tests {
                 BlockWriteCheck::Unconditional,
                 BlockWriteCheck::Contact,
             ],
+            &[],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
         assert!(
@@ -1692,6 +1771,7 @@ mod tests {
             &world,
             std::slice::from_mut(&mut reach),
             &[BlockWriteCheck::Contact],
+            &[],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reach.block_writes.is_some());
@@ -1705,6 +1785,7 @@ mod tests {
             &world,
             std::slice::from_mut(&mut reach),
             &[BlockWriteCheck::Contact],
+            &[],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reach.block_writes.is_some());
@@ -1713,6 +1794,7 @@ mod tests {
             &world,
             std::slice::from_mut(&mut reach),
             &[BlockWriteCheck::Contact],
+            &[],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reach.block_writes.is_none());
@@ -1777,6 +1859,7 @@ mod tests {
             &world,
             &mut reaches,
             &[check, BlockWriteCheck::Unconditional],
+            &[],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
         assert_eq!(partitioned(&reaches), [vec![0], vec![1]]);
@@ -1790,6 +1873,7 @@ mod tests {
             &world,
             &mut reaches,
             &[check, BlockWriteCheck::Unconditional],
+            &[],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
         assert_eq!(partitioned(&reaches), [vec![0, 1]]);
@@ -1807,6 +1891,7 @@ mod tests {
                 BlockWriteCheck::Unconditional,
                 BlockWriteCheck::Unconditional,
             ],
+            &[],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reaches[0].block_writes.is_some());
@@ -1817,6 +1902,7 @@ mod tests {
             &world,
             &mut reaches,
             &[check, BlockWriteCheck::Unconditional],
+            &[],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
         assert!(reaches[0].block_writes.is_some());

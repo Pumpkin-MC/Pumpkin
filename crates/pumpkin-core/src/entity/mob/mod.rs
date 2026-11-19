@@ -514,13 +514,13 @@ impl MobEntity {
 
         mob.custom_server_ai_step(caller);
 
-        {
+        if mob.ticks_move_control() {
             let mut move_control = self
                 .move_control
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             move_control.tick(mob);
-        };
+        }
 
         if mob.ticks_look_control() {
             let mut look_control = self
@@ -530,10 +530,14 @@ impl MobEntity {
             look_control.tick(mob);
         }
 
-        self.jump_control
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .tick(mob);
+        if mob.ticks_jump_control() {
+            self.jump_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .tick(mob);
+        } else {
+            mob.tick_jump_control(false);
+        }
     }
 
     fn update_control_flags(&self, mob: &dyn Mob) {
@@ -869,15 +873,18 @@ impl MobEntity {
 
     /// The target, checked again on every read so a player who turns creative is dropped.
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
-        let target = self
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-            .and_then(Weak::upgrade)?;
+        let target = self.stored_target()?;
         (EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity())
             && self.living_entity.can_attack(target.as_ref()))
         .then_some(target)
+    }
+
+    pub(crate) fn stored_target(&self) -> Option<Arc<dyn EntityBase>> {
+        self.target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(Weak::upgrade)
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -1192,6 +1199,12 @@ impl MobEntity {
         let entity = &self.living_entity.entity;
 
         let world = entity.world.load();
+        if !mob.is_allowed_in_peaceful()
+            && world.level_info.load().difficulty == Difficulty::Peaceful
+        {
+            entity.remove();
+            return;
+        }
         let pos = entity.pos.load();
         let players = world.players.load();
 
@@ -1981,9 +1994,34 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn before_mob_ai_step(&self) {}
 
+    /// Returns false while an entity's required world data is still loading.
+    fn prepare_mob_tick(&self) -> bool {
+        true
+    }
+
     fn mob_ai_step(&self) {}
 
     fn ticks_navigation(&self) -> bool {
+        true
+    }
+
+    fn ticks_move_control(&self) -> bool {
+        true
+    }
+
+    fn ticks_jump_control(&self) -> bool {
+        true
+    }
+
+    fn mob_can_use_portal(&self) -> bool {
+        true
+    }
+
+    fn is_allowed_in_peaceful(&self) -> bool {
+        true
+    }
+
+    fn mob_accepts_push_impulses(&self) -> bool {
         true
     }
 
@@ -2193,6 +2231,21 @@ pub trait Mob: EntityBase + Send + Sync {
         _cause: Option<&dyn EntityBase>,
     ) -> Option<bool> {
         None
+    }
+
+    /// Returns true when the mob handles its own death animation and removal.
+    fn mob_tick_death(&self, _death_time: u8) -> bool {
+        false
+    }
+
+    /// Number of death-animation ticks during which travel continues.
+    fn mob_death_animation_ticks(&self) -> u8 {
+        20
+    }
+
+    /// Emits the death vibration before loot, then broadcasts the death status.
+    fn emits_entity_die_game_event(&self) -> bool {
+        false
     }
 
     /// Lets a mob replace the default knockback; true when it applied its own.
@@ -3015,7 +3068,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         }
 
         mob_entity.check_despawn(self);
-        if mob_entity.living_entity.entity.is_removed() {
+        if mob_entity.living_entity.entity.is_removed() || !self.prepare_mob_tick() {
             return;
         }
 

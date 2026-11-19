@@ -10,6 +10,9 @@ pub struct EndGatewayBlock;
 
 impl BlockBehaviour for EndGatewayBlock {
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        if !args.entity.can_use_portal() {
+            return;
+        }
         let entity = args.entity.get_entity();
         if entity
             .portal_cooldown

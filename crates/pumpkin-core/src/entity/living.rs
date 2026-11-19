@@ -1,3 +1,4 @@
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
@@ -29,8 +30,8 @@ use crate::entity::attributes::ModifierOperation;
 use crate::entity::attributes::{AttributeInstance, apply_attributes, pack_attributes};
 use crate::entity::breath::DROWNING_INTERVAL;
 use crate::entity::combat::{CombatRules, CombatTracker, FallLocation, knockback_after_resistance};
-use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::neutral::find_by_uuid;
+use crate::entity::mob::{Mob, equipment::DEFAULT_EQUIPMENT_DROP_CHANCE};
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
 use crate::world::loot::LootContextParameters;
@@ -580,6 +581,24 @@ impl LivingEntity {
             .store(self.entity.tick_count.load(Relaxed), Relaxed);
     }
 
+    pub(crate) fn resolve_mob_responsible_for_damage(
+        &self,
+        damage_type: DamageType,
+        attacker: Option<&dyn EntityBase>,
+    ) {
+        if let Some(attacker) = attacker
+            && attacker.get_living_entity().is_some()
+            && !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_ANGER)
+            && (damage_type != DamageType::WIND_CHARGE
+                || !self
+                    .entity
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_NO_ANGER_FROM_WIND_CHARGE))
+        {
+            self.set_last_hurt_by_mob(Some(attacker));
+        }
+    }
+
     fn tick_last_hurt_by_mob(&self) {
         if self.last_hurt_by_mob.load().is_none() {
             return;
@@ -596,6 +615,12 @@ impl LivingEntity {
     pub fn get_last_hurt_by_player(&self) -> Option<Arc<crate::entity::player::Player>> {
         let uuid = self.last_hurt_by_player.load()?;
         self.entity.world.load().get_player_by_uuid(uuid)
+    }
+
+    pub(crate) fn set_last_hurt_by_player(&self, uuid: Option<Uuid>) {
+        self.last_hurt_by_player.store(uuid);
+        self.last_hurt_by_player_memory_time
+            .store(uuid.map_or(0, |_| LAST_HURT_BY_PLAYER_MEMORY_TIME), Relaxed);
     }
 
     /// Returns the entity that should receive kill credit for this entity's death.
@@ -2815,12 +2840,22 @@ impl LivingEntity {
     /// flow: stop movement input, attribute the kill, drop loot, broadcast the
     /// `Death` (3) entity event, and hand out XP. Safe to call on every lethal
     /// damage event; only the first call has an effect.
-    #[allow(clippy::too_many_lines)]
     pub fn on_death(
         &self,
         damage_type: DamageType,
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
+    ) {
+        self.on_death_with_sound(damage_type, source, cause, true);
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn on_death_with_sound(
+        &self,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+        play_death_sound: bool,
     ) {
         let world = self.entity.world.load();
         let Some(dyn_self) = world.get_entity_by_id(self.entity.entity_id) else {
@@ -2843,11 +2878,23 @@ impl LivingEntity {
 
             self.update_death_stats(&*dyn_self, kill_credit.as_deref());
 
-            self.make_voice_sound(&*dyn_self, self.death_sound(&*dyn_self));
+            if play_death_sound {
+                self.make_voice_sound(&*dyn_self, self.death_sound(&*dyn_self));
+            }
             let perished = killer
                 .and_then(EntityBase::get_mob)
                 .is_none_or(|mob| mob.killed_entity(&*dyn_self));
-            world.send_entity_status(&self.entity, EntityStatus::Death, ActorEventID::Death);
+            let emit_death_game_event = dyn_self
+                .get_mob()
+                .is_some_and(Mob::emits_entity_die_game_event);
+            if emit_death_game_event {
+                if perished {
+                    self.entity
+                        .emit_own_game_event(&*dyn_self, GameEvent::EntityDie);
+                }
+            } else {
+                world.send_entity_status(&self.entity, EntityStatus::Death, ActorEventID::Death);
+            }
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
                 if let Some(player) = cause_ent
@@ -2917,13 +2964,19 @@ impl LivingEntity {
                     ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount);
                 }
             }
-            self.entity.pose.store(EntityPose::Dying);
+            if !emit_death_game_event {
+                self.entity.pose.store(EntityPose::Dying);
+            }
 
             if should_drop_loot {
                 self.drop_equipment(looting_level);
             }
             if perished && let Some(mob) = dyn_self.get_mob() {
                 mob.drop_inventory();
+            }
+            if emit_death_game_event {
+                world.send_entity_status(&self.entity, EntityStatus::Death, ActorEventID::Death);
+                self.entity.pose.store(EntityPose::Dying);
             }
 
             // Broadcast death message if it's a player and the gamerule is enabled
@@ -4027,29 +4080,16 @@ impl LivingEntity {
         damage
     }
 
-    #[allow(clippy::too_many_lines)]
-    pub fn damage_with_context(
+    pub(crate) fn fire_damage_events(
         &self,
-        caller: &dyn EntityBase,
         amount: f32,
         damage_type: DamageType,
         position: Option<Vector3<f64>>,
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
-    ) -> bool {
-        let mut amount = amount;
-
-        // Check invulnerability before applying damage
-        if self.entity.is_invulnerable_to(&damage_type, cause) {
-            return false;
-        }
-
-        if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
-            return false; // Dying or dead
-        }
-
+    ) -> Option<f32> {
         // Like vanilla, negative damage is still a hit, just of zero.
-        amount = amount.max(0.0);
+        let mut amount = amount.max(0.0);
 
         let mut damage_event =
             crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
@@ -4063,7 +4103,7 @@ impl LivingEntity {
                 .fire_blocking(&server, &mut damage_event);
         }
         if damage_event.cancelled {
-            return false;
+            return None;
         }
         amount = damage_event.damage;
 
@@ -4082,7 +4122,7 @@ impl LivingEntity {
                     .fire_blocking(&server, &mut by_entity_event);
             }
             if by_entity_event.cancelled {
-                return false;
+                return None;
             }
             amount = by_entity_event.damage;
         } else if position.is_some()
@@ -4116,10 +4156,32 @@ impl LivingEntity {
                     .fire_blocking(&server, &mut by_block_event);
             }
             if by_block_event.cancelled {
-                return false;
+                return None;
             }
             amount = by_block_event.damage;
         }
+
+        Some(amount)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub fn damage_with_context(
+        &self,
+        caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if self.entity.is_invulnerable_to(&damage_type, cause) || self.is_dead_or_dying() {
+            return false;
+        }
+        let Some(mut amount) =
+            self.fire_damage_events(amount, damage_type, position, source, cause)
+        else {
+            return false;
+        };
 
         let world = self.entity.world.load();
         let is_fire_damage = damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE);
@@ -4236,17 +4298,7 @@ impl LivingEntity {
         let Some(server) = world.server.upgrade() else {
             return false;
         };
-        if let Some(attacker) = cause.or(source)
-            && attacker.get_living_entity().is_some()
-            && !damage_type.has_tag(&tag::DamageType::MINECRAFT_NO_ANGER)
-            && (damage_type != DamageType::WIND_CHARGE
-                || !self
-                    .entity
-                    .entity_type
-                    .has_tag(&tag::EntityType::MINECRAFT_NO_ANGER_FROM_WIND_CHARGE))
-        {
-            self.set_last_hurt_by_mob(Some(attacker));
-        }
+        self.resolve_mob_responsible_for_damage(damage_type, cause.or(source));
         let config = &server.advanced_config.pvp;
 
         // Vanilla flashes only for a full hit, not the rest landing within the cooldown
@@ -4358,10 +4410,7 @@ impl LivingEntity {
                     CustomStatistic::DamageDealt as i32,
                     (dmg_to_health * 10.0).round() as i32,
                 );
-                self.last_hurt_by_player
-                    .store(Some(attacker_player.gameprofile.id));
-                self.last_hurt_by_player_memory_time
-                    .store(LAST_HURT_BY_PLAYER_MEMORY_TIME, Relaxed);
+                self.set_last_hurt_by_player(Some(attacker_player.gameprofile.id));
             }
         }
 
@@ -4529,9 +4578,11 @@ impl EntityBase for LivingEntity {
 
         // Only tick movement if the entity is alive. This prevents a dead "corpse"
         // from continuing to be simulated (accumulating fall_distance/velocity).
-        // We allow movement during death animation (20 ticks) so knockback is applied.
+        // Movement continues during the death animation so knockback is applied.
         let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
-        let in_death_animation = self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
+        let in_death_animation = self.health.load() <= 0.0
+            && self.death_time.load(Relaxed)
+                < caller.get_mob().map_or(20, Mob::mob_death_animation_ticks);
         if is_alive || in_death_animation {
             let _ = self.current_impulse_context_reset_grace_time.fetch_update(
                 Relaxed,
@@ -4855,6 +4906,9 @@ impl EntityBase for LivingEntity {
                 .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
                 .unwrap_or_else(|time| time)
                 .saturating_add(1);
+            if caller.get_mob().is_some_and(|mob| mob.mob_tick_death(time)) {
+                return;
+            }
             if self.entity.entity_type == &EntityType::PLAYER {
                 // Bedrock keeps a dead remote player actor in its death pose.
                 // Remove Java players after the animation so respawn can

@@ -520,7 +520,7 @@ impl PiglinEntity {
                         .clip(&pumpkin_world::clip::ClipContext::new(
                             eye_pos,
                             candidate.get_entity().get_eye_pos(),
-                            pumpkin_world::clip::ClipBlock::Visual,
+                            pumpkin_world::clip::ClipBlock::Collider,
                             pumpkin_world::clip::ClipFluid::None,
                         ))
                         .is_miss

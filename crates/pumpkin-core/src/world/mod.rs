@@ -48,12 +48,14 @@ use crate::world::chunker::is_within_chebyshev_distance;
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
     block::{
+        entities::creaking_heart::CreakingHeartBlockEntity,
         registry::BlockRegistry,
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
     entity::{
         Entity, EntityBase, RemovalReason,
+        mob::creaking::CreakingEntity,
         player::Player,
         r#type::{load_entity_from_nbt, load_static_entity_from_nbt, self_and_passengers},
     },
@@ -290,6 +292,7 @@ pub struct World {
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
     pending_block_entity_migrations: crossbeam::queue::SegQueue<Vector2<i32>>,
+    pending_creaking_heart_hits: crossbeam::queue::SegQueue<i32>,
     /// Persistent custom data for the world (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: std::sync::Mutex<NbtCompound>,
     /// Persistent custom data for block entities at specific positions
@@ -452,6 +455,7 @@ impl World {
             server,
             block_entities: DashMap::new(),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
+            pending_creaking_heart_hits: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
             encoded_chunk_cache: DashMap::new(),
@@ -1377,6 +1381,75 @@ impl World {
         self.broadcast_packet_all(&packet);
     }
 
+    pub fn spawn_block_crumble(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        particle_count: i32,
+        state: BlockStateId,
+    ) {
+        let mut data = Vec::new();
+        if VarInt(i32::from(state.as_u16())).encode(&mut data).is_err() {
+            return;
+        }
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            0.0,
+            particle_count,
+            VarInt(Particle::BlockCrumble.to_id() as i32),
+            &data,
+        );
+        self.broadcast_particle_in_range(&packet);
+    }
+
+    pub fn spawn_trail_particle(
+        &self,
+        position: Vector3<f64>,
+        target: Vector3<f64>,
+        color: i32,
+        duration: i32,
+    ) {
+        let mut data = Vec::with_capacity(33);
+        data.extend_from_slice(&target.x.to_be_bytes());
+        data.extend_from_slice(&target.y.to_be_bytes());
+        data.extend_from_slice(&target.z.to_be_bytes());
+        data.extend_from_slice(&color.to_be_bytes());
+        if VarInt(duration).encode(&mut data).is_err() {
+            return;
+        }
+        let packet = CParticle::new(
+            true,
+            true,
+            position,
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            1,
+            VarInt(Particle::Trail.to_id() as i32),
+            &data,
+        );
+        self.broadcast_particle_in_range(&packet);
+    }
+
+    fn broadcast_particle_in_range(&self, packet: &CParticle<'_>) {
+        let radius: f64 = if packet.force_spawn { 512.0 } else { 32.0 };
+        let players = self.players.load();
+        Self::broadcast_java_players(
+            packet,
+            players.iter().filter(|player| {
+                player
+                    .get_entity()
+                    .block_pos
+                    .load()
+                    .to_centered_f64()
+                    .squared_distance_to_vec(&packet.position)
+                    < radius.powi(2)
+            }),
+        );
+    }
+
     /// Spawns `minecraft:item` particles textured like `stack`.
     pub fn spawn_item_particle(
         &self,
@@ -1743,7 +1816,31 @@ impl World {
                     .map(|(report, (entity, _))| report.block_write_check(entity.as_ref()))
                     .collect();
                 let mut reaches = entity_islands::resolve(reports, islands_config)?;
-                entity_islands::prune_block_writes(self, &mut reaches, &block_write_checks)?;
+                let passive_writes: Vec<_> = entities_to_tick
+                    .iter()
+                    .filter_map(|entity| {
+                        if entity.get_entity().entity_type != &EntityType::CREAKING {
+                            return None;
+                        }
+                        let creaking = entity.cast_any().downcast_ref::<CreakingEntity>()?;
+                        let home = creaking
+                            .get_home_pos()
+                            .filter(|home| self.is_in_build_limit(*home))?;
+                        let reach = CreakingHeartBlockEntity::resin_write_reach(home);
+                        Some((entity.get_entity().entity_id, reach))
+                    })
+                    .collect();
+                if !passive_writes.is_empty()
+                    && entity_islands::plugins_observe_passive_block_writes(server)
+                {
+                    return None;
+                }
+                entity_islands::prune_block_writes(
+                    self,
+                    &mut reaches,
+                    &block_write_checks,
+                    &passive_writes,
+                )?;
                 let nodes: Vec<_> = tickable
                     .iter()
                     .map(|(entity, _)| entity.get_entity().entity_id)
@@ -1761,8 +1858,12 @@ impl World {
                     .iter()
                     .map(|player| (player.get_entity().entity_id, pickup_body(player).0))
                     .collect();
-                let mut islands =
-                    entity_islands::partition(&nodes, &idle_entities, &player_bodies)?;
+                let mut islands = entity_islands::partition_with_passive_writes(
+                    &nodes,
+                    &idle_entities,
+                    &player_bodies,
+                    &passive_writes,
+                )?;
                 // Start the largest islands first.
                 islands
                     .islands
@@ -1830,6 +1931,7 @@ impl World {
             player.send_velocity_changes();
         }
         self.entity_tracker.update_all(self);
+        self.flush_pending_creaking_heart_hits(&active_chunks);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
         if self.block_entities.len() < active_chunks.len() {
@@ -1880,6 +1982,33 @@ impl World {
                 block_entity_count,
                 block_entity_elapsed,
             );
+        }
+    }
+
+    pub(crate) fn defer_creaking_heart_hit(&self, entity_id: i32) {
+        self.pending_creaking_heart_hits.push(entity_id);
+    }
+
+    fn flush_pending_creaking_heart_hits(
+        self: &Arc<Self>,
+        active_chunks: &FxHashSet<Vector2<i32>>,
+    ) {
+        // Pending resin can change blocks. Apply it before block entities tick, outside the islands.
+        for _ in 0..self.pending_creaking_heart_hits.len() {
+            let Some(id) = self.pending_creaking_heart_hits.pop() else {
+                break;
+            };
+            let Some(entity) = self.get_entity_by_id(id) else {
+                continue;
+            };
+            if let Some(creaking) = entity.cast_any().downcast_ref::<CreakingEntity>()
+                && !creaking.finish_pending_heart_hit(
+                    self,
+                    active_chunks.contains(&entity.get_entity().chunk_pos.load()),
+                )
+            {
+                self.defer_creaking_heart_hit(id);
+            }
         }
     }
 
@@ -5965,6 +6094,17 @@ impl World {
             flags.remove(BlockFlags::SKIP_DROPS);
         } else {
             flags.insert(BlockFlags::SKIP_DROPS);
+        }
+
+        if broken_block == &Block::CREAKING_HEART
+            && let Some(player) = cause
+        {
+            crate::block::blocks::creaking_heart::CreakingHeartBlock::player_will_destroy(
+                self,
+                position,
+                broken_block_state.id,
+                player,
+            );
         }
 
         let broken_block_state =

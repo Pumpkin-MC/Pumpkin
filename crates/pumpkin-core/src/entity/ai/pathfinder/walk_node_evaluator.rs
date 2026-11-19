@@ -13,6 +13,7 @@ pub struct WalkNodeEvaluator {
     path_types_cache: FxHashMap<Vector3<i32>, PathType>,
     reusable_neighbors: [Option<Node>; 4],
     pub is_amphibious: bool,
+    pub(super) home_distance_limit: Option<(BlockPos, f64)>,
 }
 
 impl WalkNodeEvaluator {
@@ -23,6 +24,7 @@ impl WalkNodeEvaluator {
             path_types_cache: FxHashMap::default(),
             reusable_neighbors: [None, None, None, None],
             is_amphibious: false,
+            home_distance_limit: None,
         }
     }
 
@@ -641,6 +643,15 @@ impl NodeEvaluator for WalkNodeEvaluator {
     }
 
     fn get_path_type(&mut self, context: &mut PathfindingContext, pos: Vector3<i32>) -> PathType {
+        if let Some((home, max_distance_squared)) = self.home_distance_limit {
+            let home = home.to_f64();
+            let distance = home.squared_distance_to_vec(&BlockPos(pos).to_f64());
+            let current_distance =
+                home.squared_distance_to_vec(&BlockPos(context.mob_position()).to_f64());
+            if distance > max_distance_squared && distance >= current_distance {
+                return PathType::Blocked;
+            }
+        }
         context.get_land_node_type(pos)
     }
 

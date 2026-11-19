@@ -5,15 +5,22 @@ use rand::RngExt;
 use super::super::BrainTick;
 use super::super::memory::{MemoryModuleId, MemoryStatus};
 use super::timed::Behavior;
+use crate::entity::mob::Mob;
 
 pub struct Swim {
     chance: f32,
+    can_swim: fn(&dyn Mob) -> bool,
 }
 
 impl Swim {
     #[must_use]
     pub const fn new(chance: f32) -> Self {
-        Self { chance }
+        Self::with_condition(chance, |_| true)
+    }
+
+    #[must_use]
+    pub const fn with_condition(chance: f32, can_swim: fn(&dyn Mob) -> bool) -> Self {
+        Self { chance, can_swim }
     }
 }
 
@@ -25,8 +32,9 @@ impl Behavior for Swim {
     fn check_extra_start_conditions(&mut self, tick: &mut BrainTick<'_>) -> bool {
         let living = &tick.mob.get_mob_entity().living_entity;
         let entity = &living.entity;
-        (entity.is_in_water() && entity.water_height.load() > living.get_swim_height())
-            || entity.touching_lava.load(Relaxed)
+        (self.can_swim)(tick.mob)
+            && ((entity.is_in_water() && entity.water_height.load() > living.get_swim_height())
+                || entity.touching_lava.load(Relaxed))
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {

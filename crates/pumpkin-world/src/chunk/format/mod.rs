@@ -1,4 +1,5 @@
 use std::{
+    collections::hash_map::Entry,
     path::PathBuf,
     str::FromStr,
     sync::{
@@ -213,6 +214,40 @@ where
 }
 
 impl ChunkData {
+    fn recover_missing_creaking_hearts(
+        section: &ChunkSections,
+        position: Vector2<i32>,
+        block_entities: &mut FxHashMap<BlockPos, NbtCompound>,
+    ) -> bool {
+        let is_heart = |id: BlockStateId| id.to_block_id() == BlockId::CREAKING_HEART;
+        let sections = section
+            .block_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut repaired = false;
+        for (section_index, palette) in sections.iter().enumerate() {
+            if !palette.contains_matching(is_heart) {
+                continue;
+            }
+            let section_y = section.min_y + section_coords::section_to_block(section_index as i32);
+            for (index, _) in palette.iter().enumerate().filter(|(_, id)| is_heart(*id)) {
+                let x = section_coords::section_to_block(position.x) + (index % 16) as i32;
+                let y = section_y + (index / 256) as i32;
+                let z = section_coords::section_to_block(position.y) + (index / 16 % 16) as i32;
+                if let Entry::Vacant(entry) = block_entities.entry(BlockPos::new(x, y, z)) {
+                    let mut heart = NbtCompound::new();
+                    heart.put_string("id", "minecraft:creaking_heart".to_string());
+                    heart.put_int("x", x);
+                    heart.put_int("y", y);
+                    heart.put_int("z", z);
+                    entry.insert(heart);
+                    repaired = true;
+                }
+            }
+        }
+        repaired
+    }
+
     #[allow(clippy::too_many_lines)]
     pub fn internal_from_bytes(
         chunk_data: &[u8],
@@ -472,13 +507,14 @@ impl ChunkData {
             .cloned()
             .unwrap_or_default();
 
+        let repaired_hearts =
+            Self::recover_missing_creaking_hearts(&section, position, &mut block_entities);
         Ok(Self {
             section,
             heightmap: std::sync::Mutex::new(heightmaps),
             x: position.x,
             z: position.y,
-            // This chunk is read from disk, so it has not been modified
-            dirty: AtomicBool::new(false),
+            dirty: AtomicBool::new(repaired_hearts),
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             pending_block_entities: std::sync::Mutex::new(block_entities),
@@ -1130,12 +1166,14 @@ impl ChunkData {
             NbtCompound::default()
         };
 
+        let repaired_hearts =
+            Self::recover_missing_creaking_hearts(&section, position, &mut block_entities);
         Ok(Self {
             section,
             heightmap: std::sync::Mutex::new(heightmaps),
             x: position.x,
             z: position.y,
-            dirty: AtomicBool::new(false),
+            dirty: AtomicBool::new(repaired_hearts),
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             pending_block_entities: std::sync::Mutex::new(block_entities),
@@ -1502,6 +1540,59 @@ mod tests {
             NbtTag::List(sections.into_iter().map(NbtTag::Compound).collect()),
         );
         pumpkin_nbt::Nbt::new(String::new(), root)
+    }
+
+    #[test]
+    fn chunk_formats_recover_only_missing_creaking_heart_data() -> Result<(), ChunkParsingError> {
+        let chunk_pos = Vector2::new(3, -2);
+        let original = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        let missing = BlockPos::new(50, -29, -19);
+        let linked = BlockPos::new(61, 18, -28);
+        let state = Block::CREAKING_HEART.default_state.id;
+        original.set_block_absolute_y(2, missing.0.y, 13, state);
+        original.set_block_absolute_y(13, linked.0.y, 4, state);
+
+        let mut saved = NbtCompound::new();
+        saved.put_string("id", "minecraft:creaking_heart".to_string());
+        saved.put_int("x", linked.0.x);
+        saved.put_int("y", linked.0.y);
+        saved.put_int("z", linked.0.z);
+        saved.put("creaking", NbtTag::IntArray(vec![1, 2, 3, 4]));
+        original
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(linked, saved.clone());
+
+        for bytes in [
+            original.internal_to_bytes(),
+            original.internal_to_pump_bytes(),
+        ] {
+            let recovered = ChunkData::internal_from_bytes(&bytes, chunk_pos)?;
+            assert!(recovered.is_dirty());
+            let entities = recovered
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            assert_eq!(entities.len(), 2);
+            assert_eq!(entities.get(&linked), Some(&saved));
+            let Some(heart) = entities.get(&missing) else {
+                return Err(ChunkParsingError::ErrorDeserializingChunk(
+                    "missing Creaking Heart after decode".into(),
+                ));
+            };
+            assert_eq!(heart.get_string("id"), Some("minecraft:creaking_heart"));
+            assert_eq!(heart.get_int("x"), Some(missing.0.x));
+            assert_eq!(heart.get_int("y"), Some(missing.0.y));
+            assert_eq!(heart.get_int("z"), Some(missing.0.z));
+            assert!(!heart.has("creaking"));
+            drop(entities);
+
+            let serialized = recovered.internal_to_pump_bytes();
+            let reloaded = ChunkData::internal_from_bytes(&serialized, chunk_pos)?;
+            assert!(!reloaded.is_dirty());
+        }
+        Ok(())
     }
 
     #[test]

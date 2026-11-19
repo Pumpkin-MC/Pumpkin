@@ -1057,6 +1057,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    fn accepts_push_impulses(&self) -> bool {
+        self.get_mob()
+            .is_none_or(mob::Mob::mob_accepts_push_impulses)
+    }
+
+    fn can_use_portal(&self) -> bool {
+        self.get_mob().is_none_or(mob::Mob::mob_can_use_portal)
+    }
+
     /// Vanilla `LivingEntity.onClimbable`.
     fn on_climbable(&self) -> bool {
         self.get_living_entity()
@@ -3797,7 +3806,10 @@ impl Entity {
         }
     }
 
-    pub fn try_use_portal(&self, portal_world: Arc<World>, pos: BlockPos) {
+    pub fn try_use_portal(&self, caller: &dyn EntityBase, portal_world: Arc<World>, pos: BlockPos) {
+        if !caller.can_use_portal() {
+            return;
+        }
         let mut portal_event =
             crate::plugin::api::events::entity::entity_portal::EntityPortalEvent::new(
                 self.entity_id,
@@ -4862,7 +4874,7 @@ impl Entity {
         Vector3::new(pos.x, pos.y + self.get_eye_height(), pos.z)
     }
 
-    /// No visual-blocking block between the two eye positions (matching vanilla `ClipContext.Block.VISUAL`).
+    /// No colliding block between the two eye positions (vanilla's default sight check).
     #[must_use]
     pub fn has_line_of_sight(&self, other: &Self) -> bool {
         let from = self.get_eye_pos();
@@ -4876,7 +4888,7 @@ impl Entity {
             .clip(&pumpkin_world::clip::ClipContext::new(
                 from,
                 to,
-                pumpkin_world::clip::ClipBlock::Visual,
+                pumpkin_world::clip::ClipBlock::Collider,
                 pumpkin_world::clip::ClipFluid::None,
             ))
             .is_miss

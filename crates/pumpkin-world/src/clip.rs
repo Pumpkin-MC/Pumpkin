@@ -1,6 +1,7 @@
+use pumpkin_data::block_properties::COLLISION_SHAPES;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 use crate::world::BlockAccessor;
@@ -12,7 +13,7 @@ pub enum ClipBlock {
     Collider,
     /// Tests outline selection shapes (`BlockState::outline_shapes`).
     Outline,
-    /// Tests visual occlusion shapes (`BlockState::visual_shapes`) for line-of-sight.
+    /// Tests vanilla's visual occlusion shapes, which can differ from physical collision.
     Visual,
     /// Tests full block shape for blocks in `#minecraft:fall_damage_resetting`.
     FallDamageResetting,
@@ -242,6 +243,53 @@ fn clip_block_shapes(
     closest_hit
 }
 
+fn clip_visual(
+    state: &BlockState,
+    block_pos: &BlockPos,
+    from: Vector3<f64>,
+    to: Vector3<f64>,
+) -> Option<(f64, BlockDirection, Vector3<f64>, bool)> {
+    // Vanilla delegates to collision unless the block class overrides getVisualShape.
+    let block = Block::from_state_id(state.id);
+    if matches!(
+        block.id,
+        BlockId::GLASS
+            | BlockId::TINTED_GLASS
+            | BlockId::GLASS_PANE
+            | BlockId::IRON_BARS
+            | BlockId::POWDER_SNOW
+    ) || block.name.ends_with("_stained_glass")
+        || block.name.ends_with("_stained_glass_pane")
+        || block.name.ends_with("copper_bars")
+        || block.name.ends_with("copper_grate")
+    {
+        return None;
+    }
+
+    if matches!(block.id, BlockId::MUD | BlockId::SOUL_SAND | BlockId::SNOW)
+        || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES)
+    {
+        return clip_block_shapes(
+            state
+                .outline_shapes
+                .iter()
+                .map(|&id| COLLISION_SHAPES[usize::from(id)]),
+            state,
+            block_pos,
+            from,
+            to,
+        );
+    }
+
+    clip_block_shapes(
+        state.get_block_collision_shapes_at(block_pos),
+        state,
+        block_pos,
+        from,
+        to,
+    )
+}
+
 fn clip_fluid(
     state: &BlockState,
     block_pos: &BlockPos,
@@ -286,7 +334,7 @@ fn check_block(
     let state = accessor.get_block_state(block_pos);
 
     let block_hit = match context.block {
-        ClipBlock::Collider | ClipBlock::Visual => clip_block_shapes(
+        ClipBlock::Collider => clip_block_shapes(
             state.get_block_collision_shapes_at(block_pos),
             state,
             block_pos,
@@ -300,6 +348,7 @@ fn check_block(
             from,
             to,
         ),
+        ClipBlock::Visual => clip_visual(state, block_pos, from, to),
         ClipBlock::FallDamageResetting => {
             if Block::from_state_id(state.id)
                 .has_tag(&pumpkin_data::tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING)
@@ -606,5 +655,22 @@ mod tests {
         ));
         assert!(hit_stone.is_hit());
         assert_eq!(hit_stone.block_pos, BlockPos::new(2, 0, 0));
+
+        world.set_block(BlockPos::new(2, 0, 0), &Block::GLASS);
+        let visual_glass = world.clip(&ClipContext::new(
+            from,
+            to,
+            ClipBlock::Visual,
+            ClipFluid::None,
+        ));
+        let collider_glass = world.clip(&ClipContext::new(
+            from,
+            to,
+            ClipBlock::Collider,
+            ClipFluid::None,
+        ));
+        assert!(visual_glass.is_miss());
+        assert_eq!(collider_glass.block_pos, BlockPos::new(2, 0, 0));
+        assert!(collider_glass.is_hit());
     }
 }
