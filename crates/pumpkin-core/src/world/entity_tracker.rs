@@ -298,6 +298,8 @@ pub struct TrackedEntity {
     bedrock_pos: AtomicCell<Vector3<f64>>,
     /// Packed pitch, yaw, head yaw.
     bedrock_rot: AtomicCell<[u8; 3]>,
+    /// Bits of pitch, yaw and head yaw of a player: `MovePlayer` carries them unpacked.
+    bedrock_player_rot: AtomicCell<[u32; 3]>,
 }
 
 impl TrackedEntity {
@@ -324,6 +326,8 @@ impl TrackedEntity {
         base.last_sent_pitch.store(rot[0], Relaxed);
         base.last_sent_yaw.store(rot[1], Relaxed);
         base.last_sent_head_yaw.store(rot[2], Relaxed);
+        let bedrock_player_rot =
+            [base.pitch.load(), base.yaw.load(), base.head_yaw.load()].map(f32::to_bits);
         let last_section_pos = chunk_section_from_pos(&base.block_pos.load());
         Self {
             entity,
@@ -342,6 +346,7 @@ impl TrackedEntity {
             was_riding: AtomicBool::new(false),
             bedrock_pos: AtomicCell::new(bedrock_pos),
             bedrock_rot: AtomicCell::new(rot),
+            bedrock_player_rot: AtomicCell::new(bedrock_player_rot),
         }
     }
 
@@ -705,8 +710,21 @@ impl TrackedEntity {
                 flags |= flag;
             }
         }
-        if flags == 0 {
+        // A turn too small to change the packed angles still shows on a Bedrock client.
+        let player_rot = self.entity.get_player().map(|_| {
+            [
+                entity.pitch.load(),
+                entity.yaw.load(),
+                entity.head_yaw.load(),
+            ]
+            .map(f32::to_bits)
+        });
+        let turned = player_rot.is_some_and(|rot| rot != self.bedrock_player_rot.load());
+        if flags == 0 && !turned {
             return;
+        }
+        if let Some(rot) = player_rot {
+            self.bedrock_player_rot.store(rot);
         }
 
         if flags
