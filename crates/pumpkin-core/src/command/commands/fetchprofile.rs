@@ -87,7 +87,15 @@ fn report_resolved_profile(
     message_id: &'static str,
     argument: TextComponent,
 ) {
-    let encoded_profile_compound = game_profile_to_nbt(profile);
+    report_resolved_profile_nbt(source, game_profile_to_nbt(profile), message_id, argument);
+}
+
+fn report_resolved_profile_nbt(
+    source: &CommandSource,
+    encoded_profile_compound: NbtCompound,
+    message_id: &'static str,
+    argument: TextComponent,
+) {
     let encoded_profile_as_string = encoded_profile_compound.to_string();
 
     let head_component = TextComponent::player_sprite(encoded_profile_compound, true);
@@ -325,20 +333,34 @@ struct PrintForEntityExecutor;
 
 impl CommandExecutor for PrintForEntityExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        use crate::entity::decoration::mannequin::MannequinEntity;
+        use pumpkin_data::data_component_impl::DataComponentImpl;
+
         let entity = EntityArgumentType::get_entity(context, ARG_ENTITY)?;
 
-        entity.get_player().map_or_else(
-            || Err(NO_PROFILE_ERROR_TYPE.create_without_context(entity.get_display_name())),
-            |player| {
-                report_resolved_profile(
-                    &context.source,
-                    &player.gameprofile,
-                    translation::java::COMMANDS_FETCHPROFILE_ENTITY_SUCCESS,
-                    player.get_display_name(),
-                );
-                Ok(1)
-            },
-        )
+        if let Some(player) = entity.get_player() {
+            report_resolved_profile(
+                &context.source,
+                &player.gameprofile,
+                translation::java::COMMANDS_FETCHPROFILE_ENTITY_SUCCESS,
+                player.get_display_name(),
+            );
+            return Ok(1);
+        }
+        if let Some(mannequin) = entity.cast_any().downcast_ref::<MannequinEntity>() {
+            let profile_nbt = match mannequin.get_profile().write_data() {
+                NbtTag::Compound(compound) => compound,
+                _ => NbtCompound::new(),
+            };
+            report_resolved_profile_nbt(
+                &context.source,
+                profile_nbt,
+                translation::java::COMMANDS_FETCHPROFILE_ENTITY_SUCCESS,
+                entity.get_display_name(),
+            );
+            return Ok(1);
+        }
+        Err(NO_PROFILE_ERROR_TYPE.create_without_context(entity.get_display_name()))
     }
 }
 

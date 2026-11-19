@@ -311,6 +311,11 @@ impl PlayerInventory {
         -1
     }
 
+    /// Whether `insert_stack_anywhere` would place at least one item of `stack`.
+    pub fn can_hold_any(&self, stack: &ItemStack) -> bool {
+        self.get_occupied_slot_with_room_for_stack(stack) != -1 || self.get_empty_slot() != -1
+    }
+
     /// Inserts a stack into any available slot.
     ///
     /// # Arguments
@@ -637,6 +642,16 @@ impl PlayerInventory {
     /// Gets the currently selected hotbar slot index.
     pub fn get_selected_slot(&self) -> u8 {
         self.selected_slot.load(Ordering::Relaxed)
+    }
+
+    /// Inventory slot of an equipment slot -> the main hand is the selected hotbar slot
+    pub fn equipment_slot_index(&self, slot: &EquipmentSlot) -> Option<usize> {
+        if matches!(slot, EquipmentSlot::MainHand(_)) {
+            return Some(self.get_selected_slot() as usize);
+        }
+        self.equipment_slots
+            .iter()
+            .find_map(|(index, equipment)| (equipment == slot).then_some(*index))
     }
 }
 

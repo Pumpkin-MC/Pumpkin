@@ -56,13 +56,7 @@ impl PathfindToRaidGoal {
             }
         }
 
-        // TODO: this should count nearby POI sections instead.
-        world
-            .villager_poi
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get_nearest_job_site(pos, 32)
-            .is_none()
+        !world.is_village(&pos)
     }
 }
 

@@ -1,4 +1,5 @@
 use pumpkin_data::BlockDirection;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::entity::ai::pathfinder::{
@@ -11,6 +12,9 @@ use crate::entity::ai::pathfinder::{
 pub struct AmphibiousNodeEvaluator {
     pub walk: WalkNodeEvaluator,
     prefers_shallow_swimming: bool,
+    /// Frog rules: the in-water start node uses the box floor, and blocks above
+    /// `frog_prefer_jump_to` count as open.
+    frog: bool,
     old_walkable_cost: f32,
     old_water_border_cost: f32,
 }
@@ -23,8 +27,17 @@ impl AmphibiousNodeEvaluator {
         Self {
             walk,
             prefers_shallow_swimming,
+            frog: false,
             old_walkable_cost: 0.0,
             old_water_border_cost: 0.0,
+        }
+    }
+
+    #[must_use]
+    pub fn frog(prefers_shallow_swimming: bool) -> Self {
+        Self {
+            frog: true,
+            ..Self::new(prefers_shallow_swimming)
         }
     }
 
@@ -57,7 +70,11 @@ impl NodeEvaluator for AmphibiousNodeEvaluator {
         if mob_data.is_in_water {
             let half_width = f64::from(mob_data.width) / 2.0;
             let min_x = (mob_data.position.x - half_width).floor() as i32;
-            let min_y = (mob_data.position.y + 0.5).floor() as i32;
+            let min_y = if self.frog {
+                mob_data.position.y.floor() as i32
+            } else {
+                (mob_data.position.y + 0.5).floor() as i32
+            };
             let min_z = (mob_data.position.z - half_width).floor() as i32;
             Some(self.walk.get_start_node(Vector3::new(min_x, min_y, min_z)))
         } else {
@@ -139,6 +156,14 @@ impl NodeEvaluator for AmphibiousNodeEvaluator {
     }
 
     fn get_path_type(&mut self, context: &mut PathfindingContext, pos: Vector3<i32>) -> PathType {
+        if self.frog
+            && context
+                .world()
+                .get_block(&BlockPos(pos.add_raw(0, -1, 0)))
+                .has_tag(&tag::Block::MINECRAFT_FROG_PREFER_JUMP_TO)
+        {
+            return PathType::Open;
+        }
         let block_path_type = context.get_path_type_from_state(pos);
         if block_path_type == PathType::Water {
             for dir in [

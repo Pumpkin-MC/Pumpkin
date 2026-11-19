@@ -95,11 +95,16 @@ pub struct WanderingTraderData {
     pub data_version: i32,
 }
 
-const fn default_wandering_trader_delay() -> i32 {
-    24_000
+pub const DEFAULT_WANDERING_TRADER_SPAWN_DELAY: i32 = 24_000;
+pub const DEFAULT_WANDERING_TRADER_SPAWN_CHANCE: i32 = 25;
+
+#[must_use]
+pub const fn default_wandering_trader_delay() -> i32 {
+    DEFAULT_WANDERING_TRADER_SPAWN_DELAY
 }
-const fn default_wandering_trader_chance() -> i32 {
-    25
+#[must_use]
+pub const fn default_wandering_trader_chance() -> i32 {
+    DEFAULT_WANDERING_TRADER_SPAWN_CHANCE
 }
 
 impl Default for WanderingTraderData {

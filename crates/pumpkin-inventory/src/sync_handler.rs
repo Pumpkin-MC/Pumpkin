@@ -113,11 +113,14 @@ impl SyncHandler {
             );
 
             for (i, property) in properties.iter().enumerate() {
-                player.enqueue_property_packet(&CSetContainerProperty::new(
-                    VarInt(screen_handler.sync_id.into()),
-                    i as i16,
-                    *property as i16,
-                ));
+                player.enqueue_property_packet(
+                    &CSetContainerProperty::new(
+                        VarInt(screen_handler.sync_id.into()),
+                        i as i16,
+                        *property as i16,
+                    ),
+                    screen_handler.window_type,
+                );
             }
         }
     }
@@ -196,11 +199,14 @@ impl SyncHandler {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
         {
-            player.enqueue_property_packet(&CSetContainerProperty::new(
-                VarInt(screen_handler.sync_id.into()),
-                property as i16,
-                value as i16,
-            ));
+            player.enqueue_property_packet(
+                &CSetContainerProperty::new(
+                    VarInt(screen_handler.sync_id.into()),
+                    property as i16,
+                    value as i16,
+                ),
+                screen_handler.window_type,
+            );
         }
     }
 }

@@ -268,7 +268,7 @@ macro_rules! impl_experience_container_for_cooking {
 
 #[macro_export]
 macro_rules! impl_inventory_for_cooking {
-    ($struct_name:ty) => {
+    ($struct_name:ty, $recipe_kind:expr) => {
         impl pumpkin_inventory::Inventory for $struct_name {
             fn size(&self) -> usize {
                 Self::INVENTORY_SIZE
@@ -323,21 +323,33 @@ macro_rules! impl_inventory_for_cooking {
                     && ItemStack::are_items_and_components_equal(&items[slot], &stack);
 
                 items[slot] = stack.clone();
-
-                if slot == 0 && !is_same_item {
-                    if let Some(recipe) = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
-                        stack.item,
-                        CookingRecipeKind::Smelting,
-                    ) {
-                        self.set_cooking_total_time(recipe.cookingtime as u16);
-                    } else {
-                        self.set_cooking_total_time(0);
-                    }
-                    self.set_cooking_time_spent(0);
-                }
+                self.on_stack_set(slot, is_same_item, &stack);
 
                 // Always consider the inventory changed when setting a stack
                 self.mark_dirty();
+            }
+
+            fn update_stack(
+                &self,
+                slot: usize,
+                update: &mut dyn FnMut(&mut ItemStack) -> bool,
+            ) -> bool {
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(stack) = items.get_mut(slot) else {
+                    return false;
+                };
+                let old = (slot == 0).then(|| stack.clone());
+                if !update(stack) {
+                    return false;
+                }
+                let is_same_item = old.is_some_and(|old| {
+                    !stack.is_empty() && ItemStack::are_items_and_components_equal(&old, stack)
+                });
+                self.on_stack_set(slot, is_same_item, stack);
+                true
             }
 
             fn mark_dirty(&self) {
@@ -345,8 +357,68 @@ macro_rules! impl_inventory_for_cooking {
                 self.comparator_dirty.store(true, Ordering::Relaxed);
             }
 
+            fn is_valid_slot_for(&self, slot: usize, stack: &ItemStack) -> bool {
+                match slot {
+                    2 => false,
+                    1 => stack
+                        .get_data_component::<pumpkin_data::data_component_impl::CookingFuelImpl>()
+                        .is_some()
+                        || (stack.item.id == pumpkin_data::item::Item::BUCKET.id
+                            && self.get_stack(1).item.id != pumpkin_data::item::Item::BUCKET.id),
+                    _ => slot < Self::INVENTORY_SIZE,
+                }
+            }
+
+            fn is_sided(&self) -> bool {
+                true
+            }
+
+            fn get_slots_for_face(
+                &self,
+                direction: pumpkin_data::BlockDirection,
+            ) -> &'static [usize] {
+                match direction {
+                    pumpkin_data::BlockDirection::Down => &[2, 1],
+                    pumpkin_data::BlockDirection::Up => &[0],
+                    _ => &[1],
+                }
+            }
+
+            fn can_take_item_through_face(
+                &self,
+                slot: usize,
+                stack: &ItemStack,
+                direction: pumpkin_data::BlockDirection,
+            ) -> bool {
+                use pumpkin_data::tag::Taggable;
+                if direction == pumpkin_data::BlockDirection::Down && slot == 1 {
+                    stack
+                        .item
+                        .has_tag(&pumpkin_data::tag::Item::MINECRAFT_FURNACE_FUEL_BOTTOM_TAKEABLE)
+                } else {
+                    true
+                }
+            }
+
             fn as_any(&self) -> &dyn std::any::Any {
                 self
+            }
+        }
+
+        impl $struct_name {
+            /// Vanilla `AbstractFurnaceBlockEntity.setItem`: a different input item restarts cooking.
+            fn on_stack_set(&self, slot: usize, is_same_item: bool, stack: &ItemStack) {
+                if slot == 0 && !is_same_item {
+                    if let Some(recipe) = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
+                        stack.item,
+                        $recipe_kind,
+                    ) {
+                        self.set_cooking_total_time(recipe.cookingtime as u16);
+                    } else {
+                        self.set_cooking_total_time(0);
+                    }
+                    self.set_cooking_time_spent(0);
+                }
             }
         }
     };
@@ -418,12 +490,7 @@ macro_rules! impl_block_entity_for_cooking {
                                 is_dirty = true;
                                 if let Ok(mut items_guard) = self.items.try_write() {
                                     if !items_guard[1].is_empty() {
-                                        let remainder = items_guard[1]
-                                            .get_data_component::<
-                                                pumpkin_data::data_component_impl::UseRemainderImpl,
-                                            >()
-                                            .and_then(|component| component.remainder.as_deref())
-                                            .and_then(pumpkin_data::item::Item::from_registry_key);
+                                        let remainder = items_guard[1].item.crafting_remainder;
                                         items_guard[1].decrement(1);
                                         if let Some(remainder_item) = remainder
                                         {
@@ -580,6 +647,7 @@ macro_rules! impl_block_entity_for_cooking {
                     lit_total_time,
                     lit_time_remaining,
                     recipes_used: std::sync::Mutex::new(recipes_used_map),
+                    metadata: $crate::block::entities::ContainerMetadata::from_nbt(nbt),
                 };
                 pumpkin_inventory::sync_read_items_from_nbt(nbt, furnace.items.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner));
 
@@ -614,6 +682,37 @@ macro_rules! impl_block_entity_for_cooking {
                 }
 
                 self.write_inventory_nbt(nbt, true);
+                self.metadata.write_nbt(nbt);
+            }
+
+            fn apply_item_components(&self, stack: &ItemStack) {
+                self.metadata.apply_item_components(stack);
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::apply_container_items_to_slice(stack, &mut *items);
+            }
+
+            fn collect_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_name_only(stack);
+            }
+
+            fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_item_components(stack);
+                let items = self
+                    .items
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::collect_container_items_from_slice(&*items, stack);
+            }
+
+            fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+                self.metadata.get_lock()
+            }
+
+            fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+                self.metadata.get_custom_name()
             }
 
             fn get_inventory(
@@ -671,7 +770,7 @@ macro_rules! impl_block_entity_for_cooking {
                     pumpkin_data::recipes::CookingRecipeKind::Smoking => "Smoker",
                     _ => "Furnace",
                 };
-                Some($crate::block::entities::bedrock::build_furnace_actor(
+                Some($crate::block::entities::furnace_like_block_entity::build_furnace_actor(
                     bedrock_id,
                     self.position,
                     self.get_cooking_time_spent(),
@@ -705,4 +804,43 @@ macro_rules! impl_block_entity_for_cooking {
             }
         }
     };
+}
+
+/// Builds the Bedrock block-actor NBT for cooking appliances (Furnace, Smoker, `BlastFurnace`).
+#[must_use]
+pub fn build_furnace_actor(
+    id: &'static str,
+    position: pumpkin_util::math::position::BlockPos,
+    cook_time: u16,
+    lit_remaining: u16,
+    lit_total: u16,
+    stored_xp: i32,
+    custom_name: Option<&str>,
+) -> pumpkin_nbt::compound::NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new(id, position)
+        .custom_name(custom_name)
+        .put_short("BurnTime", lit_remaining as i16)
+        .put_short("BurnDuration", lit_total as i16)
+        .put_short("CookTime", cook_time as i16)
+        .put_short("StoredXPInt", stored_xp.clamp(0, i16::MAX as i32) as i16)
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_util::math::position::BlockPos;
+
+    #[test]
+    fn furnace_actor_builder() {
+        let pos = BlockPos::new(10, 60, 20);
+        let nbt = build_furnace_actor("Smoker", pos, 150, 40, 200, 5, Some("Custom Smoker"));
+        assert_eq!(nbt.get_string("id"), Some("Smoker"));
+        assert_eq!(nbt.get_string("CustomName"), Some("Custom Smoker"));
+        assert_eq!(nbt.get_short("CookTime"), Some(150));
+        assert_eq!(nbt.get_short("BurnTime"), Some(40));
+        assert_eq!(nbt.get_short("BurnDuration"), Some(200));
+        assert_eq!(nbt.get_short("StoredXPInt"), Some(5));
+        assert_eq!(nbt.get_bool("isMovable"), Some(true));
+    }
 }

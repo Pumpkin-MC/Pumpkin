@@ -34,6 +34,9 @@ impl JavaClient {
             .or_else(|| world.get_entity_by_id(entity_id.0));
 
         if let Some(target) = target {
+            if !player.can_interact_with_entity(target.as_ref(), 1.0) {
+                return;
+            }
             if player.gamemode.load() == GameMode::Spectator {
                 player.camera_target_id.store(Some(entity_id.0));
                 player.try_send_client_packet(&CSetCamera::new(entity_id));
@@ -99,27 +102,39 @@ impl JavaClient {
                                 }
                             }
                             let packet_hand = interact.hand.map_or(0, |hand| hand.0);
-                            let Ok(mut hand) = pumpkin_util::Hand::from_packet_id(packet_hand)
-                            else {
+                            let Ok(hand) = pumpkin_util::Hand::from_packet_id(packet_hand) else {
                                 return;
                             };
                             let mut stack = player.inventory().get_stack_in_hand(hand);
-                            let mut before = stack.clone();
+                            let before = stack.clone();
                             let native_interaction =
                                 event.target.interact_with_hand(player, &mut stack, hand);
-                            let interacted = if let Some(handled) = native_interaction {
-                                handled
-                            } else {
-                                hand = pumpkin_util::Hand::Right;
-                                stack = player.inventory().held_item();
-                                before = stack.clone();
-                                event.target.interact(player, &mut stack)
-                            };
+                            let interacted = native_interaction
+                                .unwrap_or_else(|| event.target.interact(player, &mut stack));
                             let item_id = before.item.id;
                             if !interacted {
                                 server
                                     .item_registry
-                                    .use_on_entity(&mut stack, player, event.target);
+                                    .use_on_entity(&mut stack, player, event.target.clone());
+                            }
+                            if interacted || !stack.are_equal(&before) {
+                                let is_baby =
+                                    event.target.get_entity().age.load(Ordering::Relaxed) < 0;
+                                let player_wearing_safe_armor =
+                                    crate::entity::mob::piglin_ai::PiglinAi::is_wearing_safe_armor(
+                                        &player.living_entity,
+                                    );
+                                player.trigger_advancement(
+                                    crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerInteractedWithEntity {
+                                        entity_type: format!(
+                                            "minecraft:{}",
+                                            event.target.get_entity().entity_type.resource_name
+                                        ),
+                                        item_id: before.item.registry_key.to_string(),
+                                        is_baby,
+                                        player_wearing_safe_armor,
+                                    },
+                                );
                             }
                             if native_interaction.is_none() && !stack.are_equal(&before) {
                                 player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
@@ -131,8 +146,10 @@ impl JavaClient {
                                     );
                                     player.world().send_entity_status(
                                         player.get_entity(),
-                                        equipment_break_status(&EquipmentSlot::MAIN_HAND),
-                                        None,
+                                        crate::entity::equipment_break_status(
+                                            &crate::entity::hand_equipment_slot(hand),
+                                        ),
+                                        ActorEventID::None,
                                     );
                                 }
                             }

@@ -1,4 +1,5 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use crate::entity::projectile::owner::ProjectileOwner;
+use std::sync::atomic::Ordering;
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
@@ -23,9 +24,7 @@ impl LlamaSpitEntity {
     pub const fn new(entity: Entity) -> Self {
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: None,
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
+            owner: ProjectileOwner::none(),
             gravity: LLAMA_SPIT_GRAVITY,
         };
 
@@ -41,13 +40,11 @@ impl LlamaSpitEntity {
         let x = owner_pos.x - offset * body_yaw_rad.sin();
         let y = owner_pos.y + shooter.get_eye_height() - 0.1;
         let z = owner_pos.z + offset * body_yaw_rad.cos();
-        entity.pos.store(Vector3::new(x, y, z));
+        entity.set_pos(Vector3::new(x, y, z));
 
         let thrown = ThrownItemEntity {
             entity,
-            owner_id: Some(shooter.entity_id),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
+            owner: ProjectileOwner::new(Some(shooter)),
             gravity: LLAMA_SPIT_GRAVITY,
         };
 
@@ -56,16 +53,16 @@ impl LlamaSpitEntity {
 }
 
 impl EntityBase for LlamaSpitEntity {
-    fn get_owner_id(&self) -> Option<i32> {
-        self.thrown.owner_id
+    fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
+        Some(&self.thrown.owner)
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         if self.get_entity().touching_water.load(Ordering::Relaxed) {
             self.get_entity().remove();
             return;
         }
-        self.thrown.process_tick(caller);
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -88,15 +85,14 @@ impl EntityBase for LlamaSpitEntity {
         } = hit
         {
             let world = self.get_entity().world.load();
-            let owner_id = self.thrown.owner_id;
-            let owner = owner_id.and_then(|id| world.get_entity_by_id(id));
+            let owner = self.thrown.owner.get(&world);
 
             let _ = entity.damage_with_context(
                 entity.as_ref(),
                 1.0,
                 DamageType::SPIT,
                 Some(hit_pos),
-                Some(self.get_entity()),
+                Some(self),
                 owner.as_deref(),
             );
         }

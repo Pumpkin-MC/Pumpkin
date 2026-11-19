@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering::Relaxed;
-
 use super::Goal;
 use crate::entity::ai::util::goal_utils;
 use crate::entity::mob::Mob;
@@ -25,19 +23,10 @@ impl ResetUniversalAngerGoal {
 
     fn was_hurt_by_player(&self, mob: &dyn Mob) -> bool {
         let living = &mob.get_mob_entity().living_entity;
-        if living.last_attacked_time.load(Relaxed) <= self.last_hurt_by_player_time {
-            return false;
-        }
-        let attacker_id = living.last_attacker_id.load(Relaxed);
-        if attacker_id == 0 {
-            return false;
-        }
         living
-            .entity
-            .world
-            .load()
-            .get_entity_by_id(attacker_id)
+            .get_last_hurt_by_mob()
             .is_some_and(|attacker| attacker.get_entity().entity_type == &EntityType::PLAYER)
+            && living.get_last_hurt_by_mob_timestamp() > self.last_hurt_by_player_time
     }
 }
 
@@ -57,8 +46,7 @@ impl Goal for ResetUniversalAngerGoal {
         self.last_hurt_by_player_time = mob
             .get_mob_entity()
             .living_entity
-            .last_attacked_time
-            .load(Relaxed);
+            .get_last_hurt_by_mob_timestamp();
 
         let Some(neutral) = mob.as_neutral() else {
             return;

@@ -2,7 +2,6 @@ use pumpkin_data::BlockState;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -47,10 +46,6 @@ fn is_entity_above_block(entity: &crate::entity::Entity, position: &BlockPos) ->
     bb.min.y >= block_top - WALK_ON_EPSILON
 }
 
-fn is_entity_descending(entity: &crate::entity::Entity) -> bool {
-    entity.velocity.load().y < 0.0
-}
-
 pub(crate) fn collision_shape_for_entity(
     entity: &dyn EntityBase,
     position: &BlockPos,
@@ -70,7 +65,7 @@ pub(crate) fn collision_shape_for_entity(
 
     if can_entity_walk_on_powder_snow(entity)
         && is_entity_above_block(base, position)
-        && !is_entity_descending(base)
+        && !base.is_sneaking()
     {
         return Some(BoundingBox::full_block());
     }
@@ -87,16 +82,10 @@ pub(crate) fn inside_collision_shape_for_entity(
 
 impl BlockBehaviour for PowderSnowBlock {
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity()
-            && args.fall_distance >= 4.0
-        {
-            let sound = if args.fall_distance < 7.0 {
-                Sound::EntityGenericSmallFall
-            } else {
-                Sound::EntityGenericBigFall
-            };
-
-            living.entity.play_sound(sound);
+        if args.entity.get_living_entity().is_some() && args.fall_distance >= 4.0 {
+            let (small, big) = args.entity.get_fall_sounds();
+            let sound = if args.fall_distance < 7.0 { small } else { big };
+            args.entity.play_entity_sound(sound, 1.0, 1.0);
         }
     }
 

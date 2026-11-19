@@ -84,8 +84,67 @@ pub struct OwnedBrewingRecipe {
 }
 
 #[derive(Clone, Debug)]
+pub struct OwnedStonecutterRecipe {
+    pub recipe_id: String,
+    pub group: Option<String>,
+    pub ingredient: OwnedRecipeIngredient,
+    pub result: OwnedRecipeResult,
+}
+
+#[derive(Clone, Debug)]
+pub struct OwnedSmithingTransformRecipe {
+    pub recipe_id: String,
+    pub template: OwnedRecipeIngredient,
+    pub base: OwnedRecipeIngredient,
+    pub addition: OwnedRecipeIngredient,
+    pub result: OwnedRecipeResult,
+}
+
+#[derive(Clone, Debug)]
+pub struct OwnedSmithingTrimRecipe {
+    pub recipe_id: String,
+    pub template: OwnedRecipeIngredient,
+    pub base: OwnedRecipeIngredient,
+    pub addition: OwnedRecipeIngredient,
+    pub pattern: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct OwnedSpecialCraftingRecipe {
+    pub recipe_id: String,
+    pub category: RecipeCategoryTypes,
+}
+
+#[derive(Clone, Debug)]
 pub enum DynamicRecipe {
     Crafting(OwnedCraftingRecipe),
     Cooking(OwnedCookingRecipeType),
     Brewing(OwnedBrewingRecipe),
+    Stonecutting(OwnedStonecutterRecipe),
+    SmithingTransform(OwnedSmithingTransformRecipe),
+    SmithingTrim(OwnedSmithingTrimRecipe),
+    SpecialCrafting(OwnedSpecialCraftingRecipe),
+}
+
+impl DynamicRecipe {
+    #[must_use]
+    pub fn recipe_id(&self) -> Option<&str> {
+        match self {
+            Self::Crafting(
+                OwnedCraftingRecipe::Shaped { recipe_id, .. }
+                | OwnedCraftingRecipe::Shapeless { recipe_id, .. },
+            ) => recipe_id.as_deref(),
+            Self::Cooking(
+                OwnedCookingRecipeType::Blasting(r)
+                | OwnedCookingRecipeType::Smelting(r)
+                | OwnedCookingRecipeType::Smoking(r)
+                | OwnedCookingRecipeType::CampfireCooking(r),
+            ) => Some(&r.recipe_id),
+            Self::Brewing(r) => Some(&r.recipe_id),
+            Self::Stonecutting(r) => Some(&r.recipe_id),
+            Self::SmithingTransform(r) => Some(&r.recipe_id),
+            Self::SmithingTrim(r) => Some(&r.recipe_id),
+            Self::SpecialCrafting(r) => Some(&r.recipe_id),
+        }
+    }
 }

@@ -4,7 +4,7 @@ use crate::server::Server;
 use crate::world::World;
 use core::f32;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::{BundleContentsImpl, ContainerImpl, DamageResistantImpl};
+use pumpkin_data::data_component_impl::{BundleContentsImpl, ContainerImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
@@ -26,7 +26,7 @@ use std::sync::atomic::Ordering::{AcqRel, Relaxed};
 use std::sync::{
     Arc, Mutex,
     atomic::{
-        AtomicBool, AtomicU8, AtomicU32,
+        AtomicBool, AtomicI32,
         Ordering::{self},
     },
 };
@@ -37,15 +37,15 @@ use crate::world::entity_islands::{self, AuditedReach};
 
 pub struct ItemEntity {
     entity: Entity,
-    item_age: AtomicU32,
+    /// Vanilla `ItemEntity.age`, NBT `Age` as a short.
+    item_age: AtomicI32,
     thrower: crossbeam::atomic::AtomicCell<Option<uuid::Uuid>>,
     // These cannot be atomic values because we mutate their state based on what they are; we run
     // into the ABA problem
     item_stack: Mutex<ItemStack>,
-    pickup_delay: AtomicU8,
+    /// Vanilla `ItemEntity.pickupDelay`, NBT `PickupDelay` as a short.
+    pickup_delay: AtomicI32,
     health: AtomicF32,
-    never_despawn: AtomicBool,
-    never_pickup: AtomicBool,
     merge_reserved: AtomicBool,
 }
 
@@ -89,7 +89,11 @@ impl Drop for ItemMergeReservation<'_> {
 }
 
 /// Vanilla `ItemEntity.LIFETIME`.
-const LIFETIME: u32 = 6000; // 5 minutes in ticks
+const LIFETIME: i32 = 6000; // 5 minutes in ticks
+/// Vanilla `ItemEntity.INFINITE_PICKUP_DELAY`.
+const INFINITE_PICKUP_DELAY: i32 = 32767;
+/// Vanilla `ItemEntity.INFINITE_LIFETIME`.
+const INFINITE_LIFETIME: i32 = -32768;
 /// Vanilla `ItemEntity.merge(to, from, 64)`: cap on top of `getMaxStackSize`.
 const MERGE_MAX_COUNT: u8 = 64;
 
@@ -100,6 +104,7 @@ impl ItemEntity {
     pub const DEFAULT_PICKUP_DELAY: u8 = 10;
 
     pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
+        // TODO: vanilla rolls velocity and yaw from the entity `random`; not seed-reproducible.
         entity.velocity.store(Vector3::new(
             rand::random::<f64>().mul_add(0.2, -0.1),
             0.2,
@@ -111,12 +116,10 @@ impl ItemEntity {
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
-            item_age: AtomicU32::new(0),
+            item_age: AtomicI32::new(0),
             thrower: crossbeam::atomic::AtomicCell::new(None),
-            pickup_delay: AtomicU8::new(Self::DEFAULT_PICKUP_DELAY),
+            pickup_delay: AtomicI32::new(i32::from(Self::DEFAULT_PICKUP_DELAY)),
             health: AtomicF32::new(5.0),
-            never_despawn: AtomicBool::new(false),
-            never_pickup: AtomicBool::new(false),
             merge_reserved: AtomicBool::new(false),
         }
     }
@@ -128,18 +131,17 @@ impl ItemEntity {
         pickup_delay: u8,
     ) -> Self {
         entity.velocity.store(velocity);
+        // TODO: vanilla rolls yaw from the entity `random`; same odds, not seed-reproducible.
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self::update_fire_immune(&entity, &item_stack);
 
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
-            item_age: AtomicU32::new(0),
+            item_age: AtomicI32::new(0),
             thrower: crossbeam::atomic::AtomicCell::new(None),
-            pickup_delay: AtomicU8::new(pickup_delay), // Vanilla pickup delay is 10 ticks
+            pickup_delay: AtomicI32::new(i32::from(pickup_delay)),
             health: AtomicF32::new(5.0),
-            never_despawn: AtomicBool::new(false),
-            never_pickup: AtomicBool::new(false),
             merge_reserved: AtomicBool::new(false),
         }
     }
@@ -150,12 +152,10 @@ impl ItemEntity {
         Self {
             entity,
             item_stack: Mutex::new(ItemStack::new(1, &pumpkin_data::item::Item::AIR)),
-            item_age: AtomicU32::new(0),
+            item_age: AtomicI32::new(0),
             thrower: crossbeam::atomic::AtomicCell::new(None),
-            pickup_delay: AtomicU8::new(0),
+            pickup_delay: AtomicI32::new(0),
             health: AtomicF32::new(5.0),
-            never_despawn: AtomicBool::new(false),
-            never_pickup: AtomicBool::new(false),
             merge_reserved: AtomicBool::new(false),
         }
     }
@@ -168,29 +168,55 @@ impl ItemEntity {
         self.thrower.store(Some(uuid));
     }
 
+    pub fn get_thrower(&self) -> Option<uuid::Uuid> {
+        self.thrower.load()
+    }
+
     pub fn get_pickup_delay(&self) -> u8 {
-        self.pickup_delay.load(Ordering::Relaxed)
+        self.pickup_delay
+            .load(Ordering::Relaxed)
+            .clamp(0, i32::from(u8::MAX)) as u8
     }
 
     pub fn set_pickup_delay(&self, pickup_delay: u8) {
-        self.pickup_delay.store(pickup_delay, Ordering::Relaxed);
+        self.pickup_delay
+            .store(i32::from(pickup_delay), Ordering::Relaxed);
     }
 
     pub const fn get_entity(&self) -> &Entity {
         &self.entity
     }
 
-    /// Vanilla `ItemStack.canBeHurtBy`: the `damage_resistant` tag blocks matching damage.
-    fn can_be_hurt_by(stack: &ItemStack, damage_type: DamageType) -> bool {
-        stack
-            .get_data_component::<DamageResistantImpl>()
-            .is_none_or(|res| damage_type.is_tagged_with(res.res_type.as_str()) != Some(true))
+    /// Vanilla `HopperBlockEntity.addItem(Container, ItemEntity)`, locked throughout. True once the whole stack moved.
+    pub fn insert_into(&self, insert: impl FnOnce(ItemStack) -> ItemStack) -> bool {
+        let mut stack = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // TODO: vanilla reports an empty stack as moved (`addItem` returns EMPTY) and discards the entity.
+        if stack.is_empty() || self.entity.removed.load(Ordering::SeqCst) {
+            return false;
+        }
+        let rest = insert(stack.clone()).item_count;
+        let changed = rest != stack.item_count;
+        stack.set_count(rest);
+        drop(stack);
+
+        if rest == 0 {
+            self.entity.remove();
+            true
+        } else {
+            if changed {
+                self.on_count_changed();
+            }
+            false
+        }
     }
 
     /// Vanilla `ItemEntity.fireImmune`, cached since the item only changes on load.
     fn update_fire_immune(entity: &Entity, stack: &ItemStack) {
         entity.fire_immune.store(
-            !Self::can_be_hurt_by(stack, DamageType::IN_FIRE),
+            !stack.can_be_hurt_by(DamageType::IN_FIRE),
             Ordering::Relaxed,
         );
     }
@@ -203,19 +229,31 @@ impl ItemEntity {
             && stack.are_items_and_components_equal(other)
     }
 
+    /// Vanilla `ItemEntity.merge`: moves `min(min(max stack, max_count) - to.count, from.count)`.
+    ///
+    /// Not clamped at zero: a `to` above the limit is cut back and the excess goes into `from`.
+    pub fn merge(to: &mut ItemStack, from: &mut ItemStack, max_count: u8) {
+        let limit = i16::from(to.get_max_stack_size().min(max_count));
+        let delta = (limit - i16::from(to.item_count)).min(i16::from(from.item_count));
+        to.item_count = (i16::from(to.item_count) + delta).clamp(0, i16::from(u8::MAX)) as u8;
+        from.item_count = (i16::from(from.item_count) - delta).clamp(0, i16::from(u8::MAX)) as u8;
+    }
+
     /// Vanilla `ItemEntity.isMergable`.
     fn is_mergeable(&self) -> bool {
+        let age = self.item_age.load(Ordering::Relaxed);
         if self.entity.removed.load(Ordering::SeqCst)
-            || self.never_pickup.load(Ordering::Relaxed)
-            || self.never_despawn.load(Ordering::Relaxed)
-            || self.item_age.load(Ordering::Relaxed) >= LIFETIME
+            || self.pickup_delay.load(Ordering::Relaxed) == INFINITE_PICKUP_DELAY
+            || age == INFINITE_LIFETIME
+            || age >= LIFETIME
         {
             return false;
         }
-        let Ok(item_stack) = self.item_stack.try_lock() else {
-            return false;
-        };
-
+        // Blocking is safe here, a skipped check would delay the merge by up to 40 ticks.
+        let item_stack = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         item_stack.item_count < item_stack.get_max_stack_size()
     }
 
@@ -294,16 +332,13 @@ impl ItemEntity {
             return;
         }
 
-        let mut event = crate::plugin::api::events::entity::item_merge::ItemMergeEvent {
-            entity_id: target.entity.entity_id,
-            target_id: source.entity.entity_id,
-            cancelled: false,
-        };
-        let server = self.entity.world.load().server.upgrade();
-        if let Some(server) = server {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled
+        let cancelled = self.entity.world.load().cancelled_by_plugin(|| {
+            crate::plugin::api::events::entity::item_merge::ItemMergeEvent::new(
+                target.entity.entity_id,
+                source.entity.entity_id,
+            )
+        });
+        if cancelled
             || self.entity.removed.load(Ordering::SeqCst)
             || other.entity.removed.load(Ordering::SeqCst)
         {
@@ -344,18 +379,12 @@ impl ItemEntity {
             (other_stack, self_stack)
         };
 
-        // Vanilla `ItemEntity.merge(to, from, 64)`.
-        let max_size = stack1.get_max_stack_size().min(MERGE_MAX_COUNT);
-        let moved = stack2
-            .item_count
-            .min(max_size.saturating_sub(stack1.item_count));
-        stack1.increment(moved);
-        stack2.decrement(moved);
+        Self::merge(&mut stack1, &mut stack2, MERGE_MAX_COUNT);
         let source_empty = stack2.is_empty();
         drop(stack1);
         drop(stack2);
 
-        // `is_mergeable` already excluded never-despawn and never-pickup items.
+        // Vanilla `ItemEntity.merge`: keep the larger delay and the younger age.
         target.pickup_delay.fetch_max(
             source.pickup_delay.load(Ordering::Relaxed),
             Ordering::Relaxed,
@@ -380,6 +409,12 @@ impl ItemEntity {
                 .item_stack
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // in a parallel batch -> the player already has the contents.
+            if stack.is_empty() {
+                return;
+            }
+            // Claims the item -> a pickup waiting on the lock sees an empty stack.
+            stack.set_count(0);
             let mut contents = Vec::new();
             if let Some(container) = stack.get_data_component::<ContainerImpl>()
                 && !container.items.is_empty()
@@ -391,7 +426,7 @@ impl ItemEntity {
                 && !bundle.items.is_empty()
             {
                 contents.extend(bundle.items.iter().cloned());
-                stack.set_data_component(BundleContentsImpl { items: Vec::new() });
+                stack.set_data_component(BundleContentsImpl::EMPTY);
             }
             contents
         };
@@ -407,7 +442,7 @@ impl ItemEntity {
 
     /// Resends the stack after its count changed. Bedrock item actors ignore the `ITEM`
     /// metadata, so they get the count as `UpdateStackSize`
-    fn on_count_changed(&self) {
+    pub(crate) fn on_count_changed(&self) {
         self.init_data_tracker();
 
         let count = self
@@ -428,11 +463,13 @@ impl ItemEntity {
     }
 
     fn decrement_pickup_delay(&self) {
-        self.pickup_delay
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
-                Some(val.saturating_sub(1))
-            })
-            .ok();
+        // Vanilla: decrement when `pickupDelay > 0 && pickupDelay != INFINITE_PICKUP_DELAY`.
+        // Atomic, a merge raising the delay concurrently must not be overwritten.
+        let _ = self
+            .pickup_delay
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |delay| {
+                (delay > 0 && delay != INFINITE_PICKUP_DELAY).then_some(delay - 1)
+            });
     }
 
     fn apply_fluid_drag_or_gravity(&self, mut velo: Vector3<f64>) -> Vector3<f64> {
@@ -520,30 +557,7 @@ impl ItemEntity {
     }
 
     fn process_age_and_merge(&self) -> bool {
-        if self.never_despawn.load(Ordering::Relaxed) {
-            return true;
-        }
-
         let entity = &self.entity;
-        let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
-
-        if age >= LIFETIME {
-            let entity_id = entity.entity_id;
-            let world = entity.world.load_full();
-            let mut despawn_event =
-                crate::plugin::api::events::entity::item_despawn::ItemDespawnEvent::new(entity_id);
-            if let Some(server) = world.server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut despawn_event);
-            }
-            if !despawn_event.cancelled
-                && let Some(e) = world.get_entity_by_id(entity_id)
-            {
-                e.get_entity().remove();
-            }
-            return false;
-        }
 
         // merge rate on `tickCount`: 2 while the item changes block cell, else 40.
         let moved =
@@ -551,6 +565,27 @@ impl ItemEntity {
         let rate = if moved { 2 } else { 40 };
         if entity.tick_count.load(Ordering::Relaxed) % rate == 0 {
             self.merge_with_neighbours();
+            if entity.removed.load(Ordering::SeqCst) {
+                return false;
+            }
+        }
+
+        // Vanilla leaves `Age == -32768` alone. Other negatives (extended lifetime) count up to 6000.
+        let age = self.item_age.load(Ordering::Relaxed);
+        if age == INFINITE_LIFETIME {
+            return true;
+        }
+        let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
+        if age >= LIFETIME {
+            let entity_id = entity.entity_id;
+            let world = entity.world.load_full();
+            if !world.cancelled_by_plugin(|| {
+                crate::plugin::api::events::entity::item_despawn::ItemDespawnEvent::new(entity_id)
+            }) && let Some(e) = world.get_entity_by_id(entity_id)
+            {
+                e.get_entity().remove();
+            }
+            return false;
         }
 
         true
@@ -579,13 +614,15 @@ impl EntityBase for ItemEntity {
             .has_tag(&pumpkin_data::tag::Item::MINECRAFT_DAMPENS_VIBRATIONS)
     }
 
-    fn get_owner_id(&self) -> Option<i32> {
+    /// Vanilla `ItemEntity.getOwner`: the thrower.
+    fn get_owner_entity(&self) -> Option<Arc<dyn EntityBase>> {
         let uuid = self.thrower.load()?;
-        self.entity
-            .world
-            .load()
-            .get_entity_by_uuid(uuid)
-            .map(|entity| entity.get_entity().entity_id)
+        let world = self.entity.world.load();
+        world.get_entity_by_uuid(uuid).or_else(|| {
+            world
+                .get_player_by_uuid(uuid)
+                .map(|player| player as Arc<dyn EntityBase>)
+        })
     }
 
     fn audited_reach(&self) -> Option<AuditedReach> {
@@ -594,19 +631,25 @@ impl EntityBase for ItemEntity {
         let pushes =
             super::MAX_PUSH_OUT_SPEED + super::max_fluid_push_speed(world.dimension.fast_lava);
         let velocity = entity.velocity.load();
+        let horizontal = velocity.x.hypot(velocity.z) + pushes;
+        let vertical = velocity.y.abs() + pushes + self.get_gravity() + SURFACE_UPWARD_ACCELERATION;
+        let mut links = entity_islands::links_of(self);
+        // Entering water splashes, wherever the item ends up.
+        let moved = entity
+            .bounding_box
+            .load()
+            .expand(horizontal, vertical, horizontal);
+        super::mob::game_event_listener_links(&world, false, &moved, &mut links);
         let mut reach = AuditedReach {
             bounding_box: entity.bounding_box.load(),
-            motion: (
-                velocity.x.hypot(velocity.z) + pushes,
-                velocity.y.abs() + pushes + self.get_gravity() + SURFACE_UPWARD_ACCELERATION,
-            ),
+            motion: (horizontal, vertical),
             entities: MERGE_DISTANCE,
             players: 0.0,
             block_reads: 1.0,
             route: None,
             changes_blocks: false,
             global: false,
-            links: entity_islands::links_of(self),
+            links,
         };
         reach.scan_contact_blocks(&world);
         Some(reach)
@@ -650,6 +693,20 @@ impl EntityBase for ItemEntity {
         }
     }
 
+    fn teleport(
+        &self,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Arc<World>,
+    ) {
+        self.entity.teleport(position, yaw, pitch, &world);
+        // Vanilla `ItemEntity.teleport`: merge at the destination, if the item lives in that world.
+        if Arc::ptr_eq(&self.entity.world.load(), &world) {
+            self.merge_with_neighbours();
+        }
+    }
+
     fn init_data_tracker(&self) {
         self.entity.set_synced_data(
             pumpkin_data::tracked_data::item::ITEM,
@@ -683,28 +740,26 @@ impl EntityBase for ItemEntity {
             return false;
         }
         // E.g. netherite ignores fire, the nether star explosions.
-        let can_be_hurt = Self::can_be_hurt_by(
-            &self
-                .item_stack
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            damage_type,
-        );
+        let can_be_hurt = self
+            .item_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .can_be_hurt_by(damage_type);
         if !can_be_hurt {
             return false;
         }
 
-        let mut event = crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
-            entity.entity_id,
-            damage_type,
-            amount,
-        );
-        if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
-            return false;
-        }
+        let damage = match world.plugin_event(|| {
+            crate::plugin::api::events::entity::entity_damage::EntityDamageEvent::new(
+                entity.entity_id,
+                damage_type,
+                amount,
+            )
+        }) {
+            Some(event) if event.cancelled => return false,
+            Some(event) => event.damage,
+            None => amount,
+        };
 
         // Vanilla `markHurt`: resend the motion.
         entity.velocity_dirty.store(true, Ordering::SeqCst);
@@ -712,7 +767,7 @@ impl EntityBase for ItemEntity {
         // Vanilla keeps item health as an int: `(int)(health - damage)`.
         let destroyed = loop {
             let current = self.health.load(Relaxed);
-            let new = (current - event.damage).trunc();
+            let new = (current - damage).trunc();
             if self
                 .health
                 .compare_exchange(current, new, AcqRel, Relaxed)
@@ -730,43 +785,71 @@ impl EntityBase for ItemEntity {
         true
     }
 
+    fn receives_player_touch(&self) -> bool {
+        true
+    }
+
     fn on_player_collision(&self, player: &Arc<Player>) {
-        if self.pickup_delay.load(Ordering::Relaxed) > 0
-            || player.living_entity.health.load() <= 0.0
-            || player.is_spectator()
-        {
+        // Vanilla `playerTouch`: pickup only when `pickupDelay == 0`.
+        if self.pickup_delay.load(Ordering::Relaxed) != 0 {
             return;
         }
 
-        let (item_id, count_before) = {
+        // No event while the pickup cannot happen, this runs every tick of contact.
+        let (item_name, count) = {
             let stack = self
                 .item_stack
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            (stack.item.id, stack.item_count)
+            if stack.is_empty() || !(player.is_creative() || player.inventory.can_hold_any(&stack))
+            {
+                return;
+            }
+            (stack.item.registry_key.to_string(), stack.item_count)
         };
+        if self.entity.world.load().cancelled_by_plugin(|| {
+            crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
+                player.entity_id(),
+                item_name,
+                count,
+            )
+        }) {
+            return;
+        }
 
-        let mut local_stack = self
-            .item_stack
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        let inserted = player.inventory.insert_stack_anywhere(&mut local_stack);
-        let count_after = local_stack.item_count;
-        let is_empty = local_stack.is_empty();
-        *self
-            .item_stack
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = local_stack;
+        // Inserted in place under the lock; an empty stack was already destroyed or merged away.
+        let (item_id, count_before, inserted, count_after, is_empty) = {
+            let mut stack = self
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // A plugin or another thread may have removed the entity while the event fired.
+            if stack.is_empty() || self.entity.removed.load(Ordering::SeqCst) {
+                return;
+            }
+            let (item_id, count_before) = (stack.item.id, stack.item_count);
+            let inserted = player.inventory.insert_stack_anywhere(&mut stack);
+            // Vanilla `Inventory.add`: the loop ends on a pass that inserts nothing, so creative
+            // voids whatever is left of a stack that did not fully fit, even after a partial insert.
+            if !stack.is_empty() && player.is_creative() {
+                stack.set_count(0);
+            }
+            (
+                item_id,
+                count_before,
+                inserted,
+                stack.item_count,
+                stack.is_empty(),
+            )
+        };
 
         if inserted || player.is_creative() {
             player.inventory_changed.store(true, Ordering::Relaxed);
 
-            let amount_picked_up = if player.is_creative() {
-                count_before
-            } else {
-                count_before - count_after
-            };
+            // TODO: vanilla `playerTouch` reports the full original count (stat and pickup animation) even when
+            // only part fit, so the rest is counted again on the next touch. Here only the removed part counts.
+            // A creative stack that fit nowhere is voided, so `count_after` is already 0.
+            let amount_picked_up = count_before - count_after;
 
             if amount_picked_up > 0 {
                 if inserted
@@ -791,7 +874,7 @@ impl EntityBase for ItemEntity {
 
             player
                 .living_entity
-                .pickup(&self.entity, amount_picked_up.into());
+                .send_pickup_animation(&self.entity, amount_picked_up.into());
 
             player
                 .current_screen_handler
@@ -834,10 +917,11 @@ impl EntityBase for ItemEntity {
             .item_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut item_compound = NbtCompound::new();
-        item.write_item_stack(&mut item_compound);
-        nbt.put_compound("Item", item_compound);
+        if let Some(item_compound) = item.to_nbt() {
+            nbt.put_compound("Item", item_compound);
+        }
 
+        // Vanilla writes these as shorts: `(short) this.age` / `(short) this.pickupDelay`.
         nbt.put_short("Age", self.item_age.load(Ordering::Relaxed) as i16);
         nbt.put_short(
             "PickupDelay",
@@ -863,17 +947,18 @@ impl EntityBase for ItemEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
         }
 
-        // Vanilla stores Age as a short
-        self.item_age
-            .store(nbt.get_short("Age").unwrap_or(0) as u32, Ordering::Relaxed);
-
-        // Vanilla stores PickupDelay as a short
-        if let Some(delay) = nbt.get_short("PickupDelay") {
-            self.pickup_delay.store(delay as u8, Ordering::Relaxed);
-        }
+        // Vanilla stores `Age` / `PickupDelay` as shorts, including -32768 and -6000.
+        self.item_age.store(
+            i32::from(nbt.get_numeric_short("Age").unwrap_or(0)),
+            Ordering::Relaxed,
+        );
+        self.pickup_delay.store(
+            i32::from(nbt.get_numeric_short("PickupDelay").unwrap_or(0)),
+            Ordering::Relaxed,
+        );
 
         // Vanilla stores Health as a short
-        if let Some(health) = nbt.get_short("Health") {
+        if let Some(health) = nbt.get_numeric_short("Health") {
             self.health.store(health as f32, Relaxed);
         }
     }
@@ -992,11 +1077,11 @@ mod tests {
     #[test]
     fn damage_resistant_items() {
         let sword = ItemStack::new(1, &Item::NETHERITE_SWORD);
-        assert!(!ItemEntity::can_be_hurt_by(&sword, DamageType::LAVA));
-        assert!(ItemEntity::can_be_hurt_by(&sword, DamageType::CACTUS));
+        assert!(!sword.can_be_hurt_by(DamageType::LAVA));
+        assert!(sword.can_be_hurt_by(DamageType::CACTUS));
 
         let star = ItemStack::new(1, &Item::NETHER_STAR);
-        assert!(!ItemEntity::can_be_hurt_by(&star, DamageType::EXPLOSION));
-        assert!(ItemEntity::can_be_hurt_by(&star, DamageType::LAVA));
+        assert!(!star.can_be_hurt_by(DamageType::EXPLOSION));
+        assert!(star.can_be_hurt_by(DamageType::LAVA));
     }
 }

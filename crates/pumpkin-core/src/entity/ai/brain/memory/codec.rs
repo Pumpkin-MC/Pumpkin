@@ -14,11 +14,13 @@ pub struct MemoryCodec {
     pub decode: fn(&NbtTag) -> Option<Box<dyn MemoryValue>>,
 }
 
-fn block_pos_to_tag(pos: BlockPos) -> NbtTag {
+#[must_use]
+pub fn block_pos_to_tag(pos: BlockPos) -> NbtTag {
     NbtTag::IntArray(vec![pos.0.x, pos.0.y, pos.0.z])
 }
 
-const fn block_pos_from_tag(tag: &NbtTag) -> Option<BlockPos> {
+#[must_use]
+pub const fn block_pos_from_tag(tag: &NbtTag) -> Option<BlockPos> {
     let NbtTag::IntArray(values) = tag else {
         return None;
     };

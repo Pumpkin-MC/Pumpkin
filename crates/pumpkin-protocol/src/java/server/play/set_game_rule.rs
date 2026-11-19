@@ -21,7 +21,9 @@ pub struct SSetGameRule<'a> {
 impl<'a> ServerPacket<'a> for SSetGameRule<'a> {
     fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let count = bytebuf.get_var_int()?.0 as usize;
-        let mut entries = Vec::with_capacity(count);
+        // Vanilla puts no limit on this count, so only the pre-allocation is capped.
+        let mut entries =
+            Vec::with_capacity(count.min(pumpkin_data::game_rules::GameRule::all().len()));
         for _ in 0..count {
             let game_rule_key = bytebuf.get_str_borrowed()?;
             let value = bytebuf.get_str_borrowed()?;

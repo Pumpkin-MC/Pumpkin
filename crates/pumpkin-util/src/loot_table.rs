@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 pub mod parser;
 pub use serde_json::Value as LootPredicateValue;
 
@@ -22,6 +23,10 @@ pub enum LootCondition {
         unenchanted_chance: f32,
         enchanted_chance_base: f32,
         enchanted_chance_per_level_above_first: f32,
+    },
+    RandomChanceWithLooting {
+        chance: f32,
+        looting_multiplier: f32,
     },
     TableBonus {
         enchantment: &'static str,
@@ -50,6 +55,16 @@ pub enum LootCondition {
         tag: &'static str,
         expected: bool,
     },
+    DamageSourceProperties(&'static std::sync::LazyLock<serde_json::Value>),
+    TimeCheck {
+        value: &'static std::sync::LazyLock<serde_json::Value>,
+        period: Option<u64>,
+    },
+    ValueCheck {
+        value: LootNumberProvider,
+        range: &'static std::sync::LazyLock<serde_json::Value>,
+    },
+    Reference(&'static str),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,7 +89,13 @@ pub enum LootNumberProvider {
     Binomial { n: i32, probability: f32 },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct LootStewEffect {
+    pub effect: Cow<'static, str>,
+    pub duration: LootNumberProvider,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum LootFunctionKind {
     SetCount {
         count: LootNumberProvider,
@@ -91,9 +112,10 @@ pub enum LootFunctionKind {
     ExplosionDecay,
     ApplyBonus(LootBonusFormula),
     FurnaceSmelt,
+    SetStewEffect(Cow<'static, [LootStewEffect]>),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct LootFunction {
     pub kind: LootFunctionKind,
     pub enchantment: Option<&'static str>,
@@ -163,6 +185,10 @@ pub enum DynamicLootCondition {
         enchanted_chance_base: f32,
         enchanted_chance_per_level_above_first: f32,
     },
+    RandomChanceWithLooting {
+        chance: f32,
+        looting_multiplier: f32,
+    },
     TableBonus {
         enchantment: String,
         chances: Box<[f32]>,
@@ -190,6 +216,16 @@ pub enum DynamicLootCondition {
         tag: String,
         expected: bool,
     },
+    DamageSourceProperties(serde_json::Value),
+    TimeCheck {
+        value: serde_json::Value,
+        period: Option<u64>,
+    },
+    ValueCheck {
+        value: LootNumberProvider,
+        range: serde_json::Value,
+    },
+    Reference(String),
 }
 
 impl From<LootCondition> for DynamicLootCondition {
@@ -215,6 +251,13 @@ impl From<LootCondition> for DynamicLootCondition {
                 unenchanted_chance,
                 enchanted_chance_base,
                 enchanted_chance_per_level_above_first,
+            },
+            LootCondition::RandomChanceWithLooting {
+                chance,
+                looting_multiplier,
+            } => Self::RandomChanceWithLooting {
+                chance,
+                looting_multiplier,
             },
             LootCondition::TableBonus {
                 enchantment,
@@ -255,6 +298,18 @@ impl From<LootCondition> for DynamicLootCondition {
                 tag: tag.into(),
                 expected,
             },
+            LootCondition::DamageSourceProperties(predicate) => {
+                Self::DamageSourceProperties((**predicate).clone())
+            }
+            LootCondition::TimeCheck { value, period } => Self::TimeCheck {
+                value: (**value).clone(),
+                period,
+            },
+            LootCondition::ValueCheck { value, range } => Self::ValueCheck {
+                value,
+                range: (**range).clone(),
+            },
+            LootCondition::Reference(name) => Self::Reference(name.to_string()),
         }
     }
 }
@@ -328,7 +383,7 @@ impl From<LootEntry> for DynamicLootEntry {
             functions: entry
                 .functions
                 .iter()
-                .copied()
+                .cloned()
                 .map(DynamicLootFunction::from)
                 .collect(),
         }
@@ -359,7 +414,7 @@ impl From<LootPool> for DynamicLootPool {
             functions: pool
                 .functions
                 .iter()
-                .copied()
+                .cloned()
                 .map(DynamicLootFunction::from)
                 .collect(),
         }
@@ -384,7 +439,7 @@ impl From<&LootTable> for DynamicLootTable {
             functions: table
                 .functions
                 .iter()
-                .copied()
+                .cloned()
                 .map(DynamicLootFunction::from)
                 .collect(),
         }

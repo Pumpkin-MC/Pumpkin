@@ -32,6 +32,9 @@ fn detection_box_at(pos: &BlockPos) -> BoundingBox {
 
 pub(crate) trait PressurePlate {
     fn on_entity_collision_pp(&self, args: OnEntityCollisionArgs<'_>) {
+        if args.entity.is_spectator() || args.entity.is_ignoring_block_triggers() {
+            return;
+        }
         let output = self.get_redstone_output(args.block, args.state.id);
         if output == 0 {
             self.update_plate_state(args.world, args.position, args.block, args.state, output);

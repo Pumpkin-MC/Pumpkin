@@ -81,8 +81,14 @@ impl BlockEntity for CommandBlockEntity {
         let auto = AtomicBool::new(nbt.get_bool("auto").unwrap_or(false));
         let powered = AtomicBool::new(nbt.get_bool("powered").unwrap_or(false));
         let command = StdMutex::new(nbt.get_string("Command").unwrap_or("").to_string());
-        let last_output = StdMutex::new(nbt.get_string("LastOutput").unwrap_or("").to_string());
-        let track_output = AtomicBool::new(nbt.get_bool("TrackOutput").unwrap_or(false));
+        let track_output_val = nbt.get_bool("TrackOutput").unwrap_or(true);
+        let last_output_str = if track_output_val {
+            nbt.get_string("LastOutput").unwrap_or("").to_string()
+        } else {
+            String::new()
+        };
+        let last_output = StdMutex::new(last_output_str);
+        let track_output = AtomicBool::new(track_output_val);
         let success_count =
             AtomicU32::new(nbt.get_int("SuccessCount").unwrap_or(0).cast_unsigned());
 
@@ -126,7 +132,7 @@ impl BlockEntity for CommandBlockEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        Some(crate::block::entities::bedrock::build_command_block_actor(
+        Some(build_command_block_actor(
             self.position,
             &command,
             None,
@@ -144,7 +150,83 @@ impl BlockEntity for CommandBlockEntity {
         self.dirty.load(Ordering::Relaxed)
     }
 
+    fn on_nbt_loaded(
+        &self,
+        world: &std::sync::Arc<crate::world::World>,
+        previous: Option<&dyn BlockEntity>,
+    ) {
+        let previous_auto = previous
+            .and_then(|prev| prev.as_any().downcast_ref::<Self>())
+            .is_some_and(|prev| prev.auto.load(Ordering::Relaxed));
+        crate::block::blocks::command::CommandBlock::schedule_auto_if_needed(
+            world,
+            self,
+            &self.position,
+            previous_auto,
+        );
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for command blocks.
+#[expect(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
+#[must_use]
+pub fn build_command_block_actor(
+    position: BlockPos,
+    command: &str,
+    custom_name: Option<&str>,
+    auto: bool,
+    condition_met: bool,
+    conditional: bool,
+    powered: bool,
+    success_count: u32,
+    track_output: bool,
+    last_output: &str,
+) -> NbtCompound {
+    super::bedrock::BedrockBlockActorBuilder::new("CommandBlock", position)
+        .movable(false)
+        .custom_name(custom_name)
+        .put_string("Command", command)
+        .put_bool("auto", auto)
+        .put_bool("conditionMet", condition_met)
+        .put_bool("conditionalMode", conditional)
+        .put_bool("powered", powered)
+        .put_int("SuccessCount", success_count as i32)
+        .put_bool("TrackOutput", track_output)
+        .put_string("LastOutput", last_output)
+        .finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_block_actor_builder() {
+        let pos = BlockPos::new(6, 64, 6);
+        let nbt = build_command_block_actor(
+            pos,
+            "say hi",
+            Some("Cmd"),
+            true,
+            true,
+            false,
+            false,
+            1,
+            true,
+            "hi",
+        );
+        assert_eq!(nbt.get_string("id"), Some("CommandBlock"));
+        assert_eq!(nbt.get_string("Command"), Some("say hi"));
+        assert_eq!(nbt.get_string("CustomName"), Some("Cmd"));
+        assert_eq!(nbt.get_bool("auto"), Some(true));
+        assert_eq!(nbt.get_bool("conditionMet"), Some(true));
+        assert_eq!(nbt.get_bool("conditionalMode"), Some(false));
+        assert_eq!(nbt.get_bool("powered"), Some(false));
+        assert_eq!(nbt.get_int("SuccessCount"), Some(1));
+        assert_eq!(nbt.get_bool("isMovable"), Some(false));
     }
 }

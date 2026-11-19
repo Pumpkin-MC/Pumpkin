@@ -2,18 +2,23 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockState, BlockStateId,
+    attributes::Attributes,
     damage::DamageType,
     entity::EntityType,
     fluid::Fluid,
+    item_stack::ItemStack,
+    particle::Particle,
+    sound::Sound,
     tag::{Tag, Taggable},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::chunk::ChunkData;
-use rustc_hash::FxHashMap;
+use rand::seq::SliceRandom;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    block::{ExplodeArgs, drop_loot},
-    entity::{Entity, EntityBase},
+    block::{ExplodeArgs, collect_loot},
+    entity::{Entity, EntityBase, item::ItemEntity, projectile::is_redirectable, tnt::TNTEntity},
     world::loot::LootContextParameters,
 };
 
@@ -98,9 +103,8 @@ pub trait ExplosionDamageCalculator: Send + Sync {
         .sqrt()
             / radius;
         let damage_multiplier = (1.0 - distance) * exposure as f64;
-        (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
-            * 7.0
-            * explosion.power as f64
+        // Vanilla scales by the doubled radius, not the power.
+        (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier) * 7.0 * radius
             + 1.0) as f32
     }
 }
@@ -112,8 +116,8 @@ impl ExplosionDamageCalculator for DefaultExplosionDamageCalculator {}
 
 /// A configurable explosion damage calculator (e.g. for wind charges, mace wind bursts).
 pub struct SimpleExplosionDamageCalculator {
+    pub explodes_blocks: bool,
     pub damages_entities: bool,
-    pub damages_blocks: bool,
     pub knockback_multiplier: Option<f32>,
     pub immune_blocks: Option<&'static Tag>,
 }
@@ -121,14 +125,14 @@ pub struct SimpleExplosionDamageCalculator {
 impl SimpleExplosionDamageCalculator {
     #[must_use]
     pub const fn new(
+        explodes_blocks: bool,
         damages_entities: bool,
-        damages_blocks: bool,
         knockback_multiplier: Option<f32>,
         immune_blocks: Option<&'static Tag>,
     ) -> Self {
         Self {
+            explodes_blocks,
             damages_entities,
-            damages_blocks,
             knockback_multiplier,
             immune_blocks,
         }
@@ -144,10 +148,8 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
         block: &Block,
         fluid: &pumpkin_data::fluid::FluidState,
     ) -> Option<f32> {
-        if let Some(immune_tag) = self.immune_blocks
-            && block.has_tag(immune_tag)
-        {
-            return None;
+        if let Some(immune_tag) = self.immune_blocks {
+            return block.has_tag(immune_tag).then_some(3_600_000.0);
         }
         if block.default_state.is_air() && fluid.is_empty {
             None
@@ -161,18 +163,10 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
         _explosion: &Explosion,
         _world: &World,
         _pos: &BlockPos,
-        block: &Block,
+        _block: &Block,
         _power: f32,
     ) -> bool {
-        if !self.damages_blocks {
-            return false;
-        }
-        if let Some(immune_tag) = self.immune_blocks
-            && block.has_tag(immune_tag)
-        {
-            return false;
-        }
-        true
+        self.explodes_blocks
     }
 
     fn should_damage_entity(&self, _explosion: &Explosion, _entity: &dyn EntityBase) -> bool {
@@ -184,15 +178,24 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
     }
 }
 
-pub struct Explosion {
+pub struct Explosion<'a> {
     power: f32,
     pos: Vector3<f64>,
     block_interaction: BlockInteraction,
     damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
     preserve_rails: bool,
+    source: Option<&'a dyn EntityBase>,
+    /// The entity credited with the explosion when it isn't the source itself.
+    indirect_source: Option<Arc<dyn EntityBase>>,
+    source_is_indirect: bool,
+    damage_type: Option<DamageType>,
+    small_particle: Particle,
+    large_particle: Particle,
+    sound: Sound,
+    from_wind_charge: bool,
 }
 
-impl Explosion {
+impl<'a> Explosion<'a> {
     #[must_use]
     pub const fn new(power: f32, pos: Vector3<f64>, block_interaction: BlockInteraction) -> Self {
         Self {
@@ -201,6 +204,14 @@ impl Explosion {
             block_interaction,
             damage_calculator: None,
             preserve_rails: false,
+            source: None,
+            indirect_source: None,
+            source_is_indirect: false,
+            damage_type: None,
+            small_particle: Particle::Explosion,
+            large_particle: Particle::ExplosionEmitter,
+            sound: Sound::EntityGenericExplode,
+            from_wind_charge: false,
         }
     }
 
@@ -219,6 +230,118 @@ impl Explosion {
         self
     }
 
+    /// Sets the entity that exploded and who gets the credit for it:
+    /// primed TNT credits whoever lit it, a living entity itself and a projectile its living owner.
+    #[must_use]
+    pub fn with_source(mut self, source: &'a dyn EntityBase) -> Self {
+        self.source = Some(source);
+        self.source_is_indirect = source.get_living_entity().is_some();
+        self.indirect_source = if self.source_is_indirect {
+            None
+        } else {
+            let world = source.get_entity().world.load();
+            let owner = source.cast_any().downcast_ref::<TNTEntity>().map_or_else(
+                || {
+                    source
+                        .get_projectile_owner()
+                        .and_then(|owner| owner.get(&world))
+                },
+                |tnt| tnt.owner.get(&world),
+            );
+            owner.filter(|owner| owner.get_living_entity().is_some())
+        };
+        self
+    }
+
+    /// Credits the explosion to `cause` instead of the source's owner, for sources that pass their own damage source.
+    #[must_use]
+    pub fn with_indirect_source(mut self, cause: Option<Arc<dyn EntityBase>>) -> Self {
+        self.source_is_indirect = false;
+        self.indirect_source = cause;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_damage_type(mut self, damage_type: DamageType) -> Self {
+        self.damage_type = Some(damage_type);
+        self
+    }
+
+    #[must_use]
+    pub const fn center(&self) -> Vector3<f64> {
+        self.pos
+    }
+
+    #[must_use]
+    pub const fn power(&self) -> f32 {
+        self.power
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> Option<&'a dyn EntityBase> {
+        self.source
+    }
+
+    #[must_use]
+    pub fn indirect_source(&self) -> Option<&dyn EntityBase> {
+        if self.source_is_indirect {
+            self.source
+        } else {
+            self.indirect_source.as_deref()
+        }
+    }
+
+    /// Credited explosions with a source deal `player_explosion` damage, which changes the death message.
+    #[must_use]
+    pub fn damage_type(&self) -> DamageType {
+        self.damage_type.unwrap_or(
+            if self.source.is_some() && self.indirect_source().is_some() {
+                DamageType::PLAYER_EXPLOSION
+            } else {
+                DamageType::EXPLOSION
+            },
+        )
+    }
+
+    #[must_use]
+    pub const fn with_particles_and_sound(
+        mut self,
+        small_particle: Particle,
+        large_particle: Particle,
+        sound: Sound,
+    ) -> Self {
+        self.small_particle = small_particle;
+        self.large_particle = large_particle;
+        self.sound = sound;
+        self
+    }
+
+    #[must_use]
+    pub const fn from_wind_charge(mut self) -> Self {
+        self.from_wind_charge = true;
+        self
+    }
+
+    /// Mirrors `ServerExplosion.isSmall`.
+    #[must_use]
+    pub const fn is_small(&self) -> bool {
+        self.power < 2.0 || matches!(self.block_interaction, BlockInteraction::Keep)
+    }
+
+    #[must_use]
+    pub const fn particle(&self) -> Particle {
+        if self.is_small() {
+            self.small_particle
+        } else {
+            self.large_particle
+        }
+    }
+
+    #[must_use]
+    pub const fn sound(&self) -> Sound {
+        self.sound
+    }
+
     fn protects_rail(&self, world: &World, pos: &BlockPos, block: &Block) -> bool {
         self.preserve_rails && (Self::is_rail(block) || Self::is_rail(world.get_block(&pos.up())))
     }
@@ -230,12 +353,10 @@ impl Explosion {
             || block.id == Block::ACTIVATOR_RAIL.id
     }
 
+    /// Vanilla `calculateExplodedPositions`, shuffled like `interactWithBlocks`.
     #[allow(clippy::too_many_lines)]
-    fn get_blocks_to_destroy(
-        &self,
-        world: &World,
-    ) -> FxHashMap<BlockPos, (&'static Block, &'static BlockState)> {
-        let mut map = FxHashMap::default();
+    fn get_blocks_to_destroy(&self, world: &World) -> Vec<BlockPos> {
+        let mut positions = FxHashSet::default();
 
         let mut chunk_cache: FxHashMap<
             pumpkin_util::math::vector2::Vector2<i32>,
@@ -268,6 +389,7 @@ impl Explosion {
                     let mut pos_y = self.pos.y;
                     let mut pos_z = self.pos.z;
 
+                    // TODO: vanilla rolls from `level.random`; same odds, not seed-reproducible.
                     let random_val = rand::random::<f32>();
                     let mut h = self.power * random_val.mul_add(0.6, 0.7);
 
@@ -329,6 +451,13 @@ impl Explosion {
                                 )
                             };
 
+                            // The exploding entity adjusts resistance
+                            // unless the explosion brought its own calculator.
+                            let resistance = match (self.source, &self.damage_calculator) {
+                                (Some(source), None) => resistance
+                                    .map(|r| source.get_block_explosion_resistance(block, r)),
+                                _ => resistance,
+                            };
                             if let Some(resistance) = resistance {
                                 h -= (resistance + 0.3) * 0.3;
                             }
@@ -337,7 +466,7 @@ impl Explosion {
                                 && !protects_rail
                                 && calc.should_block_explode(self, world, &block_pos, block, h)
                             {
-                                map.insert(block_pos, (block, state));
+                                positions.insert(block_pos);
                             }
                         }
 
@@ -349,7 +478,10 @@ impl Explosion {
                 }
             }
         }
-        map
+        let mut positions: Vec<_> = positions.into_iter().collect();
+        // TODO: vanilla shuffles with `level.random`, same odds, not seed-reproducible.
+        positions.shuffle(&mut rand::rng());
+        positions
     }
 
     fn damage_entities(&self, world: &Arc<World>) {
@@ -379,6 +511,8 @@ impl Explosion {
             None => &default_calc,
         };
 
+        // TODO vanilla also skips the source entity, checks `doTeamsAllowDamage`, gives redirectable projectiles
+        // the damage source's owner and calls `onExplosionHit`. `Explosion` has no source yet.
         for entity_base in entities {
             if entity_base.is_immune_to_explosion() {
                 continue;
@@ -390,6 +524,12 @@ impl Explosion {
             }
 
             let entity = entity_base.get_entity();
+            if self
+                .source
+                .is_some_and(|source| source.get_entity().entity_id == entity.entity_id)
+            {
+                continue;
+            }
 
             let distance = (entity.pos.load().squared_distance_to_vec(&self.pos)).sqrt() / radius;
             if distance > 1.0 {
@@ -405,14 +545,22 @@ impl Explosion {
                 Self::calculate_exposure(&self.pos, entity, world) as f64
             };
 
-            if exposure == 0.0 {
-                continue;
-            }
-
-            if should_damage {
+            // No exposure still deals the formula's flat 1 damage, like vanilla.
+            if should_damage
+                && self
+                    .source
+                    .is_none_or(|source| source.do_teams_allow_damage(entity_base.as_ref()))
+            {
                 let damage =
                     calc.get_entity_damage_amount(self, entity_base.as_ref(), exposure as f32);
-                entity.damage(entity_base.as_ref(), damage, DamageType::EXPLOSION);
+                entity_base.damage_with_context(
+                    entity_base.as_ref(),
+                    damage,
+                    self.damage_type(),
+                    None,
+                    self.source,
+                    self.indirect_source(),
+                );
             }
 
             // Calculate and apply knockback
@@ -423,16 +571,55 @@ impl Explosion {
             };
             let direction = (dir_pos - self.pos).normalize();
 
-            let knockback_power = (1.0 - distance) * exposure * knockback_multiplier;
+            // Vanilla's `RangedAttribute` keeps this in 0..=1, Pumpkin's attribute values are unclamped.
+            let knockback_resistance = entity_base.get_living_entity().map_or(0.0, |living| {
+                living
+                    .get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE)
+                    .clamp(0.0, 1.0)
+            });
+            let knockback_power =
+                (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
             let knockback = direction * knockback_power;
-            // Vanilla `ServerExplosion.hurtEntities`: creative flyers get no knockback.
-            if entity_base
+            // Vanilla `ServerExplosion.hurtEntities`: creative flyers get no knockback packet.
+            if !entity_base
                 .get_player()
                 .is_some_and(|player| player.is_creative() && player.is_flying())
             {
-                continue;
+                // A living entity's goes through `EntityKnockbackEvent`
+                let knockback = if entity_base.get_living_entity().is_some() {
+                    entity.fire_knockback_events(knockback_power, knockback, None)
+                } else {
+                    Some(knockback)
+                };
+                if let Some(knockback) = knockback {
+                    // TODO vanilla sends a player's knockback in `ClientboundExplodePacket`, added to the client's
+                    // motion. Setting the motion here starts from the server's stale copy of a player's velocity.
+                    entity.add_velocity(knockback);
+                }
             }
-            entity.add_velocity(knockback);
+
+            self.on_explosion_hit(entity_base.as_ref());
+        }
+    }
+
+    /// A pushed redirectable projectile now belongs to whoever caused the explosion, and a player remembers the
+    /// impulse for fall damage.
+    fn on_explosion_hit(&self, entity_base: &dyn EntityBase) {
+        if is_redirectable(entity_base.get_entity())
+            && let Some(owner) = entity_base.get_projectile_owner()
+        {
+            owner.set_uuid(
+                self.indirect_source()
+                    .map(|cause| cause.get_entity().entity_uuid),
+            );
+        } else if let Some(player) = entity_base.get_player() {
+            // Vanilla `ServerPlayer.onExplosionHit`: wind-charge explosions skip fall damage.
+            player
+                .living_entity
+                .set_ignore_fall_damage_from_current_impulse(
+                    self.from_wind_charge,
+                    player.position(),
+                );
         }
     }
 
@@ -496,68 +683,81 @@ impl Explosion {
         visible_points as f32 / total_points as f32
     }
 
-    /// Returns the removed block count
+    /// Vanilla `ServerExplosion.explode`: returns the count of affected positions, also for `Keep`.
     pub fn explode(&self, world: &Arc<World>) -> u32 {
+        // TODO vanilla passes the source entity with the event. `Explosion` has no source yet.
+        world.emit_game_event(
+            pumpkin_data::game_event::GameEvent::Explode.name(),
+            self.pos,
+        );
+        // Vanilla collects the positions before `hurtEntities`: a crystal set off by the damage
+        // must not change which blocks this explosion breaks. `Keep` counts them too, for the packet.
+        let blocks = self.get_blocks_to_destroy(world);
         self.damage_entities(world);
 
         match self.block_interaction {
-            BlockInteraction::Keep => 0,
+            BlockInteraction::Keep => blocks.len() as u32,
             BlockInteraction::TriggerBlock => {
-                let blocks = self.get_blocks_to_destroy(world);
-                for (pos, (block, _state)) in &blocks {
-                    let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
-                    if let Some(pumpkin_block) = pumpkin_block {
+                for pos in &blocks {
+                    // Vanilla `interactWithBlocks` reads the live state.
+                    let block = world.get_block(pos);
+                    if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id) {
                         pumpkin_block.explode(ExplodeArgs {
                             world,
                             block,
                             position: pos,
+                            explosion: self,
                         });
                     }
                 }
-                0
+                blocks.len() as u32
             }
             BlockInteraction::Destroy | BlockInteraction::DestroyWithDecay => {
                 let center_pos = BlockPos::floored(self.pos.x, self.pos.y, self.pos.z);
-                let mut event =
+                let yield_rate = if self.power > 0.0 {
+                    1.0 / self.power
+                } else {
+                    1.0
+                };
+                if world.cancelled_by_plugin(|| {
                     crate::plugin::api::events::block::block_explode::BlockExplodeEvent::new(
-                        center_pos,
-                        if self.power > 0.0 {
-                            1.0 / self.power
-                        } else {
-                            1.0
-                        },
-                    );
-                if let Some(server) = world.server.upgrade() {
-                    server.plugin_manager.fire_blocking(&server, &mut event);
-                }
-                if event.cancelled {
+                        center_pos, yield_rate,
+                    )
+                }) {
                     return 0;
                 }
 
-                let blocks = self.get_blocks_to_destroy(world);
                 let decay_drops = self.block_interaction == BlockInteraction::DestroyWithDecay;
-                let explosion_radius = decay_drops.then_some(self.power);
+                let base_params = LootContextParameters {
+                    explosion_radius: decay_drops.then_some(self.power),
+                    world_time: world.level_info.load().day_time as u64,
+                    is_raining: Some(world.is_raining()),
+                    is_thundering: Some(world.is_thundering()),
+                    // Vanilla `THIS_ENTITY` is the explosion's direct source.
+                    this_entity: self.source,
+                    ..Default::default()
+                };
+                let mut drops: Vec<(BlockPos, ItemStack)> = Vec::new();
 
-                for (pos, (block, state)) in &blocks {
+                for pos in &blocks {
+                    // Vanilla reads the live state: updates from earlier blocks may have broken or replaced this one.
+                    let (block, state) = world.get_block_and_state(pos);
+                    if state.is_air() {
+                        continue;
+                    }
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
+                    // TODO vanilla `onExplosionHit`: blocks drop XP (`spawnAfterBreak`) when the indirect source is a player.
                     if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {
-                        let is_raining = world.is_raining();
-                        let is_thundering = world.is_thundering();
                         let params = LootContextParameters {
                             block_state: Some(state),
-                            explosion_radius,
-                            position: Some(pumpkin_util::math::vector3::Vector3::new(
-                                pos.0.x as f64,
-                                pos.0.y as f64,
-                                pos.0.z as f64,
-                            )),
-                            world_time: world.level_info.load().day_time as u64,
-                            is_raining: Some(is_raining),
-                            is_thundering: Some(is_thundering),
-                            ..Default::default()
+                            // Vanilla `ORIGIN` is `Vec3.atCenterOf(pos)`.
+                            position: Some(pos.to_centered_f64()),
+                            ..base_params.clone()
                         };
-                        drop_loot(world, block, pos, false, &params);
+                        for stack in collect_loot(world, block, pos, &params) {
+                            add_or_append_stack(&mut drops, stack, *pos);
+                        }
                     }
 
                     world.set_block_state(pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
@@ -568,8 +768,12 @@ impl Explosion {
                             world,
                             block,
                             position: pos,
+                            explosion: self,
                         });
                     }
+                }
+                for (pos, stack) in drops {
+                    world.drop_stack(&pos, stack);
                 }
                 // TODO: fire
                 blocks.len() as u32
@@ -578,10 +782,38 @@ impl Explosion {
     }
 }
 
+/// Vanilla `ServerExplosion.addOrAppendStack`: explosion drops merge into piles of up to 16
+/// before they spawn, each pile at the first block that dropped it.
+fn add_or_append_stack(
+    drops: &mut Vec<(BlockPos, ItemStack)>,
+    mut stack: ItemStack,
+    pos: BlockPos,
+) {
+    // Vanilla reads an empty stack as air: it never merges and spawns nothing.
+    if stack.is_empty() {
+        return;
+    }
+    for (_, pile) in drops.iter_mut() {
+        if ItemEntity::are_mergeable(pile, &stack) {
+            ItemEntity::merge(pile, &mut stack, 16);
+        }
+        if stack.is_empty() {
+            return;
+        }
+    }
+    drops.push((pos, stack));
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Explosion;
-    use pumpkin_data::Block;
+    use super::{
+        BlockInteraction, Explosion, ExplosionDamageCalculator, SimpleExplosionDamageCalculator,
+        add_or_append_stack,
+    };
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_data::{Block, fluid::Fluid, particle::Particle, sound::Sound, tag};
+    use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
     #[test]
     fn tnt_minecart_rail_protection_covers_every_rail_type() {
@@ -594,5 +826,124 @@ mod tests {
             assert!(Explosion::is_rail(rail));
         }
         assert!(!Explosion::is_rail(&Block::STONE));
+    }
+
+    #[test]
+    fn explosion_drops_merge_into_piles_of_16() {
+        let mut drops = Vec::new();
+        for x in 0..20 {
+            add_or_append_stack(
+                &mut drops,
+                ItemStack::new(1, &Item::COBBLESTONE),
+                BlockPos::new(x, 0, 0),
+            );
+        }
+        add_or_append_stack(
+            &mut drops,
+            ItemStack::new(1, &Item::DIRT),
+            BlockPos::new(0, 1, 0),
+        );
+
+        let counts: Vec<_> = drops
+            .iter()
+            .map(|(pos, stack)| (pos.0.x, stack.item.id, stack.item_count))
+            .collect();
+        assert_eq!(
+            counts,
+            [
+                (0, Item::COBBLESTONE.id, 16),
+                (16, Item::COBBLESTONE.id, 4),
+                (0, Item::DIRT.id, 1),
+            ]
+        );
+    }
+
+    /// A multi-item stack tops up a pile to 16, the rest becomes one pile of any size.
+    #[test]
+    fn multi_item_drop_tops_up_then_stays_one_pile() {
+        let mut drops = vec![(
+            BlockPos::new(0, 0, 0),
+            ItemStack::new(10, &Item::COBBLESTONE),
+        )];
+
+        add_or_append_stack(
+            &mut drops,
+            ItemStack::new(32, &Item::COBBLESTONE),
+            BlockPos::new(1, 0, 0),
+        );
+
+        let counts: Vec<_> = drops.iter().map(|(_, stack)| stack.item_count).collect();
+        assert_eq!(counts, [16, 26]);
+    }
+
+    /// Vanilla `areMergable` checks the whole incoming count: 10 + 60 > 64 skips a pile with room for 6.
+    #[test]
+    fn pile_with_room_is_skipped_when_both_exceed_the_max_stack() {
+        let mut drops = vec![(
+            BlockPos::new(0, 0, 0),
+            ItemStack::new(10, &Item::COBBLESTONE),
+        )];
+
+        add_or_append_stack(
+            &mut drops,
+            ItemStack::new(60, &Item::COBBLESTONE),
+            BlockPos::new(1, 0, 0),
+        );
+
+        let counts: Vec<_> = drops.iter().map(|(_, stack)| stack.item_count).collect();
+        assert_eq!(counts, [10, 60]);
+    }
+
+    #[tokio::test]
+    async fn wind_burst_explosion_uses_large_gust_particle_and_immune_block_resistance()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let explosion = Explosion::new(
+            3.5,
+            Vector3::new(0.0, 64.0, 0.0),
+            BlockInteraction::TriggerBlock,
+        )
+        .with_particles_and_sound(
+            Particle::GustEmitterSmall,
+            Particle::GustEmitterLarge,
+            Sound::EntityWindChargeWindBurst,
+        );
+        assert!(!explosion.is_small());
+        assert_eq!(explosion.particle(), Particle::GustEmitterLarge);
+        assert_eq!(explosion.sound(), Sound::EntityWindChargeWindBurst);
+
+        let calc = SimpleExplosionDamageCalculator::new(
+            true,
+            false,
+            Some(1.2),
+            Some(&tag::Block::MINECRAFT_BLOCKS_WIND_CHARGE_EXPLOSIONS),
+        );
+        let pos = BlockPos::new(0, 64, 0);
+        let empty_fluid = &Fluid::EMPTY.states[0];
+        assert_eq!(
+            calc.get_block_explosion_resistance(
+                &explosion,
+                &world,
+                &pos,
+                &Block::BEDROCK,
+                empty_fluid
+            ),
+            Some(3_600_000.0)
+        );
+        assert_eq!(
+            calc.get_block_explosion_resistance(
+                &explosion,
+                &world,
+                &pos,
+                &Block::LEVER,
+                empty_fluid
+            ),
+            None
+        );
+        assert!(calc.should_block_explode(&explosion, &world, &pos, &Block::LEVER, 1.0));
+
+        world.level.shutdown().await;
+        Ok(())
     }
 }
