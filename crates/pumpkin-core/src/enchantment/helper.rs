@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::enchantment::effects::EnchantmentEntityEffectExt;
+use crate::enchantment::effects::{DamageEntity, EnchantmentEntityEffectExt};
 use crate::entity::living::{LivingEntity, attribute_modifier_slot_matches};
 use crate::entity::player::Player;
 use crate::entity::projectile::arrow::ArrowEntity;
@@ -18,6 +18,7 @@ use pumpkin_inventory::Inventory;
 use pumpkin_util::loot_table::LootCondition;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 
 /// Data-driven helper for enchantment effects matching vanilla `EnchantmentHelper`.
 pub struct EnchantmentHelper;
@@ -188,29 +189,44 @@ impl EnchantmentHelper {
         effect: &EnchantmentEntityEffect,
         owner: Option<&Arc<Player>>,
         target: &Entity,
-        enchanted_owner: Option<&LivingEntity>,
+        holder: &dyn EntityBase,
         slot: &EquipmentSlot,
     ) {
         match effect {
             EnchantmentEntityEffect::AllOf(effects) => {
                 for effect in *effects {
                     Self::apply_post_attack_effect(
-                        world,
-                        level,
-                        effect,
-                        owner,
-                        target,
-                        enchanted_owner,
-                        slot,
+                        world, level, effect, owner, target, holder, slot,
                     );
                 }
             }
             EnchantmentEntityEffect::ChangeItemDamage { amount } => {
-                if let Some(enchanted_owner) = enchanted_owner {
-                    enchanted_owner.damage_equipped_item(
-                        world,
-                        slot,
-                        amount.calculate(level) as i32,
+                if let Some(living) = holder.get_living_entity() {
+                    living.damage_equipped_item(world, slot, amount.calculate(level) as i32);
+                }
+            }
+            EnchantmentEntityEffect::DamageEntity {
+                min_damage,
+                max_damage,
+                damage_type,
+            } => {
+                let mut rng = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+                let damage =
+                    DamageEntity::new(min_damage.clone(), max_damage.clone(), *damage_type)
+                        .calculate_damage(level, &mut rng);
+                let damage_type = damage_type.copied().unwrap_or(DamageType::GENERIC);
+                let target_entity = world
+                    .get_player_by_id(target.entity_id)
+                    .map(|p| p as Arc<dyn EntityBase>)
+                    .or_else(|| world.get_entity_by_id(target.entity_id));
+                if let Some(target_entity) = target_entity {
+                    target_entity.damage_with_context(
+                        target_entity.as_ref(),
+                        damage,
+                        damage_type,
+                        None,
+                        Some(holder),
+                        Some(holder),
                     );
                 }
             }
@@ -270,7 +286,7 @@ impl EnchantmentHelper {
                                 &targeted_effect.effect,
                                 owner.as_ref(),
                                 target,
-                                Some(living),
+                                victim,
                                 &slot,
                             );
                         }
@@ -283,7 +299,6 @@ impl EnchantmentHelper {
             && let Some(attacker) = attacker
         {
             let owner = world.get_player_by_id(attacker.get_entity().entity_id);
-            let attacker_living = attacker.get_living_entity();
             Self::run_iteration_on_item(weapon, |enchantment, level| {
                 if !enchantment
                     .slots
@@ -310,7 +325,7 @@ impl EnchantmentHelper {
                             &targeted_effect.effect,
                             owner.as_ref(),
                             target,
-                            attacker_living,
+                            attacker,
                             &EquipmentSlot::MAIN_HAND,
                         );
                     }
@@ -401,13 +416,11 @@ impl EnchantmentHelper {
     pub fn on_trident_post_attack(
         world: &Arc<World>,
         trident: &Entity,
-        owner: Option<&Arc<Player>>,
+        owner: Option<&dyn EntityBase>,
         victim: &dyn EntityBase,
         weapon: &ItemStack,
     ) {
-        let attacker = owner.map_or(trident as &dyn EntityBase, |player| {
-            player.as_ref() as &dyn EntityBase
-        });
+        let attacker = owner.unwrap_or(trident);
         Self::apply_post_attack_effects(
             world,
             victim,

@@ -1788,7 +1788,7 @@ impl Player {
 
         crate::enchantment::EnchantmentHelper::on_post_attack(
             self,
-            victim_entity,
+            victim.as_ref(),
             &item_stack,
             damage_type,
         );
