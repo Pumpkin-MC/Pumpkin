@@ -4823,10 +4823,14 @@ impl World {
                                 None => entity.init_data_tracker(),
                             }
 
-                            // Clear velocity so the client does not replay the drop
-                            // animation; residual velocity from the original drop is
-                            // stale data.
-                            entity.get_entity().velocity.store(Vector3::default());
+                            let base = entity.get_entity();
+                            // Wind charges resume flight with their saved velocity.
+                            // Keep clearing stale velocity to avoid replaying drop animations.
+                            if base.entity_type != &EntityType::WIND_CHARGE
+                                && base.entity_type != &EntityType::BREEZE_WIND_CHARGE
+                            {
+                                base.velocity.store(Vector3::default());
+                            }
 
                             // UUID-dedupes if another watcher already loaded this entity.
                             // Tracker owns pairing (spawn packets + vehicle restore).

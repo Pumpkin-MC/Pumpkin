@@ -253,7 +253,13 @@ fn wind_charge_has_packet_recipients(
     }
 
     let players = world.players.load();
-    if players.is_empty() {
+    // A victim's credited player can still be connected in another dimension.
+    if players.is_empty()
+        && world
+            .server
+            .upgrade()
+            .is_none_or(|server| !server.has_n_players(1))
+    {
         return false;
     }
     if !movement.is_finite() {
@@ -288,25 +294,15 @@ fn wind_charge_has_packet_recipients(
     }
 
     // A hit can reach distant viewers and players credited for a kill, or broadcast a block sound.
-    if world.get_entities_at_box(&area).iter().any(|other| {
+    world.get_entities_at_box(&area).iter().any(|other| {
         other.get_entity().entity_id != entity.entity_id
             && (tracker
                 .get_tracked_entity(other.get_entity().entity_id)
                 .is_some_and(|tracked| tracked.has_viewers())
-                || other
-                    .get_living_entity()
-                    .is_some_and(|living| living.is_blocking() || living.has_player_kill_credit()))
-    }) {
-        return true;
-    }
-
-    // Portals can move the charge outside the area covered by the recipient checks.
-    let contact = body.expand(movement, movement, movement);
-    entity
-        .portal_manager
-        .lock()
-        .map_or(true, |manager| manager.is_some())
-        || wind_charge_can_reach_portal(world, &contact)
+                || other.get_living_entity().is_some_and(|living| {
+                    living.is_blocking() || living.player_kill_credit_id().is_some()
+                }))
+    })
 }
 
 fn wind_charge_can_reach_portal(world: &World, contact: &BoundingBox) -> bool {
@@ -559,6 +555,22 @@ impl EntityReach {
             .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
             || wind_charge.is_some_and(|charge| {
                 let world = base.world.load();
+                // Block contact precedes impact, so a gateway can move the burst to its exit.
+                if !movement.is_finite()
+                    || base
+                        .portal_manager
+                        .lock()
+                        .map_or(true, |manager| manager.is_some())
+                    || wind_charge_can_reach_portal(
+                        &world,
+                        &base
+                            .bounding_box
+                            .load()
+                            .expand(movement, movement, movement),
+                    )
+                {
+                    return true;
+                }
                 world.server.upgrade().is_some_and(|server| {
                     plugins_observe_wind_charge_tick(
                         &server.plugin_manager,
@@ -626,11 +638,7 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
     }
     if let Some(living) = entity.get_living_entity() {
         // Kill credit on death.
-        links.extend(
-            living
-                .get_last_hurt_by_player()
-                .map(|player| player.entity_id()),
-        );
+        links.extend(living.player_kill_credit_id());
         links.extend(living.get_last_hurt_by_mob_id().filter(|id| *id != 0));
     }
     links
@@ -1364,6 +1372,48 @@ mod tests {
         assert!(plugins_observe_wind_charge_tick(
             &plugins, &world, charge, 0.0
         ));
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_wind_charge_can_reach_a_gateway_exit_without_packet_observers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = test_support::world(&folder);
+        let source = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        let neighbor = pumpkin_world::chunk::ChunkData::empty_sync(1, 0);
+        world.level.loaded_chunks.insert(Vector2::new(0, 0), source);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(1, 0), neighbor.clone());
+        let charge = from_type(
+            &EntityType::WIND_CHARGE,
+            Vector3::new(14.5, 64.0, 8.5),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        charge
+            .get_entity()
+            .set_velocity(Vector3::new(2.0, 0.0, 0.0));
+        let config = EntityIslandsConfig::default();
+        let reports = || {
+            vec![
+                EntityReach::of(charge.as_ref(), &config),
+                EntityReach::Conservative(node(-1, 400.0, 0.0).1),
+            ]
+        };
+        let reaches = resolve(reports(), &config).ok_or("unexpected serial fallback")?;
+        let nodes = [
+            (charge.get_entity().entity_id, reaches[0].clone()),
+            (-1, reaches[1].clone()),
+        ];
+        assert_eq!(islands(&nodes, &[], &[]), [vec![0], vec![1]]);
+
+        neighbor.set_block_absolute_y(0, 64, 8, Block::END_GATEWAY.default_state.id);
+        assert!(resolve(reports(), &config).is_none());
 
         world.level.shutdown().await;
         Ok(())

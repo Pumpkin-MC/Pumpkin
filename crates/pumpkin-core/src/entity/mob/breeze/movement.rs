@@ -13,7 +13,7 @@ use pumpkin_util::{
 use pumpkin_world::clip::{ClipBlock, ClipContext, ClipFluid};
 use rand::{RngExt, seq::SliceRandom};
 
-use super::look_from_eyes;
+use super::{BreezeEntity, look_from_eyes};
 use crate::{
     entity::{
         Entity,
@@ -466,9 +466,16 @@ struct SlideToTargetSink(MoveToTargetSink);
 
 impl SlideToTargetSink {
     fn begin_sliding(tick: &mut BrainTick<'_>) {
-        tick.set_pose_then(EntityPose::Sliding, |breeze| {
-            breeze.play_entity_sound(Sound::EntityBreezeSlide, 1.0, 1.0);
-        });
+        tick.set_pose_then_if(
+            EntityPose::Sliding,
+            |_| true,
+            |breeze| {
+                if let Some(breeze) = breeze.cast_any().downcast_ref::<BreezeEntity>() {
+                    breeze.pose_cleanup.store(None);
+                }
+            },
+            |breeze, _| breeze.play_entity_sound(Sound::EntityBreezeSlide, 1.0, 1.0),
+        );
     }
 }
 
@@ -506,19 +513,8 @@ impl Behavior for SlideToTargetSink {
 
     fn stop(&mut self, tick: &mut BrainTick<'_>) {
         self.0.stop(tick);
-        let target = tick.state.get(types::ATTACK_TARGET).cloned();
-        tick.set_pose_then(EntityPose::Standing, move |breeze| {
-            if let Some(target) = target {
-                breeze.get_mob_entity().with_brain(breeze, |brain| {
-                    if brain
-                        .get(types::ATTACK_TARGET)
-                        .is_some_and(|current| Arc::ptr_eq(current, &target))
-                    {
-                        brain.set_with_expiry(types::BREEZE_SHOOT, (), 60);
-                    }
-                });
-            }
-        });
+        let target = tick.state.get(types::ATTACK_TARGET).map(Arc::downgrade);
+        BreezeEntity::finish_pose(tick, EntityPose::Sliding, target);
     }
 
     fn debug_name(&self) -> &'static str {
@@ -531,7 +527,6 @@ mod tests {
     use pumpkin_data::entity::EntityType;
     use pumpkin_data::environment_attribute::Activity;
 
-    use super::super::BreezeEntity;
     use super::*;
     use crate::entity::ai::{
         brain::{Brain, activity::ActivityData, behavior::Status},
@@ -565,6 +560,7 @@ mod tests {
             (None, false),
         ] {
             breeze.get_entity().set_pose(EntityPose::Sliding);
+            body.set_target(current.clone());
             let effects = body.with_brain(breeze.as_ref(), |brain| {
                 brain.erase(types::BREEZE_SHOOT.id());
                 brain.set(types::ATTACK_TARGET, target.clone());

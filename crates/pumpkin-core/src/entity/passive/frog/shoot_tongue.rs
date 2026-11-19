@@ -11,6 +11,7 @@ use crate::entity::ai::brain::memory::{
     MemoryModuleId, MemoryStatus, types, walk_target::WalkTarget,
 };
 use crate::entity::mob::Mob;
+use crate::world::World;
 
 const TIME_OUT_DURATION: i32 = 100;
 const CATCH_ANIMATION_DURATION: i32 = 6;
@@ -90,20 +91,11 @@ impl ShootTongue {
         };
         let entity = frog.get_entity();
         let world = entity.world.load_full();
-        let prey_is_current = || {
-            is_alive(frog)
-                && Arc::ptr_eq(&entity.world.load(), &world)
-                && is_alive(target.as_ref())
-                && Arc::ptr_eq(&target.get_entity().world.load(), &world)
-                && frog
-                    .get_tongue_target()
-                    .is_some_and(|current| Arc::ptr_eq(&current, target))
-        };
-        if !prey_is_current() {
+        if !tongue_target_is_current(frog, target, &world) {
             return;
         }
         world.play_sound_fine(sound, SoundCategory::Neutral, &entity.pos.load(), 2.0, 1.0);
-        if !prey_is_current() {
+        if !tongue_target_is_current(frog, target, &world) {
             return;
         }
         mob.do_hurt_target(target.as_ref());
@@ -118,6 +110,20 @@ impl ShootTongue {
             WalkTarget::from_vec(target.get_entity().pos.load(), WALK_SPEED_MODIFIER, 0),
         );
     }
+}
+
+fn tongue_target_is_current(
+    frog: &FrogEntity,
+    target: &Arc<dyn EntityBase>,
+    world: &Arc<World>,
+) -> bool {
+    is_alive(frog)
+        && Arc::ptr_eq(&frog.get_entity().world.load(), world)
+        && is_alive(target.as_ref())
+        && Arc::ptr_eq(&target.get_entity().world.load(), world)
+        && frog
+            .get_tongue_target()
+            .is_some_and(|current| Arc::ptr_eq(&current, target))
 }
 
 fn is_alive(entity: &dyn EntityBase) -> bool {
@@ -194,27 +200,32 @@ impl Behavior for ShootTongue {
                 let target_pos = target.get_entity().pos.load();
                 if target_pos.squared_distance_to_vec(&frog_pos).sqrt() < EATING_DISTANCE {
                     let world = tick.world.clone();
+                    let sound_world = world.clone();
+                    let sound_target = target.clone();
                     let sound = self.tongue_sound;
-                    tick.defer(move |_| {
-                        world.play_sound_fine(sound, SoundCategory::Neutral, &frog_pos, 2.0, 1.0);
+                    tick.defer(move |mob| {
+                        if let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>()
+                            && tongue_target_is_current(frog, &sound_target, &sound_world)
+                        {
+                            sound_world.play_sound_fine(
+                                sound,
+                                SoundCategory::Neutral,
+                                &frog_pos,
+                                2.0,
+                                1.0,
+                            );
+                        }
                     });
                     tick.set_pose(EntityPose::UsingTongue);
                     tick.defer(move |mob| {
                         let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>() else {
                             return;
                         };
-                        let entity = frog.get_entity();
-                        let prey = target.get_entity();
-                        if entity.is_removed()
-                            || !is_alive(target.as_ref())
-                            || !Arc::ptr_eq(&entity.world.load(), &prey.world.load())
-                            || frog.get_tongue_target().is_none_or(|current| {
-                                current.get_entity().entity_uuid != prey.entity_uuid
-                            })
-                        {
+                        if !tongue_target_is_current(frog, &target, &world) {
                             return;
                         }
-                        let offset = entity.pos.load() - prey.pos.load();
+                        let prey = target.get_entity();
+                        let offset = frog.get_entity().pos.load() - prey.pos.load();
                         if offset.length() < EATING_DISTANCE {
                             prey.set_velocity(offset.normalize() * EATING_MOVEMENT_FACTOR);
                         }

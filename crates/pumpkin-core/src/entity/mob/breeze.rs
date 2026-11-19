@@ -2,16 +2,21 @@ mod ai;
 mod movement;
 mod shoot;
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
-use pumpkin_data::{damage::DamageType, entity::EntityType, sound::Sound};
+use arc_swap::ArcSwapOption;
+use pumpkin_data::{
+    damage::DamageType,
+    entity::{EntityPose, EntityType},
+    sound::Sound,
+};
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, EntityBase,
     ai::{
         brain::{
-            Brain,
+            Brain, BrainTick,
             memory::{PackedMemories, types},
         },
         pathfinder::node::PathType,
@@ -41,6 +46,12 @@ fn look_from_eyes(entity: &Entity, target: Vector3<f64>) {
 
 pub struct BreezeEntity {
     pub mob_entity: MobEntity,
+    pose_cleanup: ArcSwapOption<PoseCleanup>,
+}
+
+struct PoseCleanup {
+    previous: EntityPose,
+    target: Option<Weak<dyn EntityBase>>,
 }
 
 impl BreezeEntity {
@@ -52,7 +63,81 @@ impl BreezeEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         navigator.set_pathfinding_malus(PathType::DangerTrapdoor, -1.0);
         navigator.set_pathfinding_malus(PathType::DamageFire, -1.0);
-        Arc::new(Self { mob_entity })
+        Arc::new(Self {
+            mob_entity,
+            pose_cleanup: ArcSwapOption::empty(),
+        })
+    }
+
+    fn finish_pose(
+        tick: &mut BrainTick<'_>,
+        previous: EntityPose,
+        target: Option<Weak<dyn EntityBase>>,
+    ) {
+        tick.defer_pose_change(EntityPose::Standing, move |mob| {
+            let Some(breeze) = mob.cast_any().downcast_ref::<Self>() else {
+                return;
+            };
+            let pose = breeze.get_entity().pose.load();
+            if pose != previous && pose != EntityPose::Standing {
+                return;
+            }
+            let cleanup = Arc::new(PoseCleanup { previous, target });
+            breeze.pose_cleanup.store(Some(cleanup.clone()));
+            breeze.restore_standing(&cleanup, true);
+        });
+    }
+
+    fn clear_pose_cleanup(&self, cleanup: &Arc<PoseCleanup>) -> bool {
+        self.pose_cleanup
+            .compare_and_swap(&Some(cleanup.clone()), None)
+            .as_ref()
+            .is_some_and(|active| Arc::ptr_eq(active, cleanup))
+    }
+
+    fn restore_standing(&self, cleanup: &Arc<PoseCleanup>, allow_standing: bool) {
+        let entity = self.get_entity();
+        let living = &self.mob_entity.living_entity;
+        let previous = entity.pose.load();
+        if !living.is_alive()
+            || !(previous == cleanup.previous || allow_standing && previous == EntityPose::Standing)
+        {
+            self.clear_pose_cleanup(cleanup);
+            return;
+        }
+
+        let restored = entity.set_pose_if(
+            EntityPose::Standing,
+            || {
+                living.is_alive()
+                    && entity.pose.load() == previous
+                    && self
+                        .pose_cleanup
+                        .load()
+                        .as_ref()
+                        .is_some_and(|active| Arc::ptr_eq(active, cleanup))
+            },
+            || {},
+        );
+        if restored
+            && self.clear_pose_cleanup(cleanup)
+            && living.is_alive()
+            && entity.pose.load() == EntityPose::Standing
+            && let Some(target) = cleanup.target.as_ref().and_then(Weak::upgrade)
+            && self
+                .mob_entity
+                .stored_target()
+                .is_some_and(|current| Arc::ptr_eq(&current, &target))
+        {
+            self.mob_entity.with_brain(self, |brain| {
+                if brain
+                    .get(types::ATTACK_TARGET)
+                    .is_some_and(|current| Arc::ptr_eq(current, &target))
+                {
+                    brain.set_with_expiry(types::BREEZE_SHOOT, (), 60);
+                }
+            });
+        }
     }
 }
 
@@ -62,6 +147,14 @@ impl Mob for BreezeEntity {
     }
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        // A veto leaves the old pose in place. Retry before the next Brain tick.
+        if let Some(cleanup) = self.pose_cleanup.load_full() {
+            self.restore_standing(&cleanup, false);
+            if !self.mob_entity.living_entity.is_alive() {
+                return;
+            }
+        }
+
         // Plugins can set the mob's target between Brain ticks.
         let current = self.mob_entity.stored_target();
         let target_id = |target: &Arc<dyn EntityBase>| target.get_entity().entity_id;

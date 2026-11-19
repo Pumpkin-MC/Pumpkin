@@ -62,7 +62,7 @@ impl BrainTick<'_> {
         self.set_pose_then(pose, |_| {});
     }
 
-    /// Runs the action if the pose change is accepted and the mob is still present.
+    /// Runs the action if the pose change is accepted and the mob is still alive.
     pub fn set_pose_then(
         &mut self,
         pose: EntityPose,
@@ -83,13 +83,10 @@ impl BrainTick<'_> {
             if !should_apply(mob) {
                 return;
             }
-            let applied = entity.set_pose_if(
-                pose,
-                || !entity.is_removed() && should_apply(mob),
-                || commit(mob),
-            );
-            let current =
-                || !entity.is_removed() && entity.pose.load() == pose && should_apply(mob);
+            let living = &mob.get_mob_entity().living_entity;
+            let eligible = || living.is_alive() && should_apply(mob);
+            let applied = entity.set_pose_if(pose, eligible, || commit(mob));
+            let current = || eligible() && entity.pose.load() == pose;
             if applied && current() {
                 action(mob, &current);
             }
@@ -104,7 +101,7 @@ impl BrainTick<'_> {
     ) {
         self.state.pending_pose = Some(pose);
         self.defer(move |mob| {
-            if !mob.get_entity().is_removed() {
+            if mob.get_mob_entity().living_entity.is_alive() {
                 action(mob);
             }
         });

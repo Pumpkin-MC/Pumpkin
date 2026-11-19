@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
     effect::StatusEffect,
     entity::{EntityPose, EntityType},
@@ -8,7 +9,7 @@ use pumpkin_data::{
 };
 use pumpkin_util::math::vector3::Vector3;
 
-use super::look_from_eyes;
+use super::{BreezeEntity, look_from_eyes};
 use crate::entity::{
     Entity, EntityBase,
     ai::brain::{
@@ -33,14 +34,24 @@ const SHOOT_DURATION_TICKS: i32 = SHOOT_INITIAL_DELAY_TICKS + 1 + SHOOT_RECOVER_
 pub(super) const SHOOT_VOLUME: f32 = 1.5;
 
 pub(super) fn shoot() -> Box<dyn BehaviorControl> {
-    Box::new(Timed::new(Shoot))
+    Box::new(Timed::new(Shoot::default()))
 }
 
 pub(super) fn shoot_when_stuck() -> Box<dyn BehaviorControl> {
     Box::new(Timed::new(ShootWhenStuck))
 }
 
-struct Shoot;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ChargePose {
+    Pending,
+    Accepted,
+    Stopped,
+}
+
+#[derive(Default)]
+struct Shoot {
+    charge_pose: Option<Arc<AtomicCell<ChargePose>>>,
+}
 
 impl Behavior for Shoot {
     fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
@@ -88,19 +99,43 @@ impl Behavior for Shoot {
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        tick.state.has_memory_value(types::ATTACK_TARGET.id())
+        self.charge_pose
+            .as_ref()
+            .is_some_and(|pose| match pose.load() {
+                ChargePose::Pending => tick.pending_pose() == Some(EntityPose::Shooting),
+                ChargePose::Accepted => true,
+                ChargePose::Stopped => false,
+            })
+            && tick.state.has_memory_value(types::ATTACK_TARGET.id())
             && tick.state.has_memory_value(types::BREEZE_SHOOT.id())
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
-        tick.state.set_with_expiry(
-            types::BREEZE_SHOOT_CHARGING,
-            (),
-            i64::from(SHOOT_INITIAL_DELAY_TICKS),
+        let charge_pose = Arc::new(AtomicCell::new(ChargePose::Pending));
+        self.charge_pose = Some(charge_pose.clone());
+        let accepted = charge_pose.clone();
+        tick.set_pose_then_if(
+            EntityPose::Shooting,
+            move |_| charge_pose.load() != ChargePose::Stopped,
+            move |breeze| {
+                breeze.get_mob_entity().with_brain(breeze, |brain| {
+                    if accepted
+                        .compare_exchange(ChargePose::Pending, ChargePose::Accepted)
+                        .is_ok()
+                    {
+                        brain.set_with_expiry(
+                            types::BREEZE_SHOOT_CHARGING,
+                            (),
+                            i64::from(SHOOT_INITIAL_DELAY_TICKS),
+                        );
+                        if let Some(breeze) = breeze.cast_any().downcast_ref::<BreezeEntity>() {
+                            breeze.pose_cleanup.store(None);
+                        }
+                    }
+                });
+            },
+            |breeze, _| breeze.play_entity_sound(Sound::EntityBreezeInhale, 1.0, 1.0),
         );
-        tick.set_pose_then(EntityPose::Shooting, |breeze| {
-            breeze.play_entity_sound(Sound::EntityBreezeInhale, 1.0, 1.0);
-        });
     }
 
     fn tick(&mut self, tick: &mut BrainTick<'_>) {
@@ -112,9 +147,13 @@ impl Behavior for Shoot {
         let breeze = tick.mob.get_entity();
         look_from_eyes(breeze, target_position);
 
-        if tick
-            .state
-            .has_memory_value(types::BREEZE_SHOOT_CHARGING.id())
+        if !self
+            .charge_pose
+            .as_ref()
+            .is_some_and(|pose| pose.load() == ChargePose::Accepted)
+            || tick
+                .state
+                .has_memory_value(types::BREEZE_SHOOT_CHARGING.id())
             || tick
                 .state
                 .has_memory_value(types::BREEZE_SHOOT_RECOVERING.id())
@@ -135,8 +174,12 @@ impl Behavior for Shoot {
     }
 
     fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        if tick.pose() == EntityPose::Shooting {
-            tick.set_pose(EntityPose::Standing);
+        let charge_pose = self
+            .charge_pose
+            .take()
+            .map(|pose| pose.swap(ChargePose::Stopped));
+        if charge_pose == Some(ChargePose::Accepted) && tick.pose() == EntityPose::Shooting {
+            BreezeEntity::finish_pose(tick, EntityPose::Shooting, None);
         }
         tick.state
             .set_with_expiry(types::BREEZE_SHOOT_COOLDOWN, (), SHOOT_COOLDOWN_TICKS);
@@ -251,7 +294,6 @@ mod tests {
             brain::{Brain, activity::ActivityData},
             test_support::world,
         },
-        mob::breeze::BreezeEntity,
         passive::iron_golem::IronGolemEntity,
     };
 
