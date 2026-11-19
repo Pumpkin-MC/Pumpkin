@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{self, Cursor, Read};
 
 use aes::cipher::KeyIvInit;
 use bytes::BytesMut;
@@ -52,6 +52,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
 pub struct TCPNetworkDecoder<R: AsyncRead + Unpin> {
     reader: Option<DecryptionReader<R>>,
     compression: Option<CompressionThreshold>,
+    prefetched: Cursor<Vec<u8>>,
     payload_scratch: BytesMut,
     compressed_scratch: Vec<u8>,
 }
@@ -61,6 +62,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         Self {
             reader: Some(DecryptionReader::None(reader)),
             compression: None,
+            prefetched: Cursor::default(),
             payload_scratch: BytesMut::new(),
             compressed_scratch: Vec::new(),
         }
@@ -90,14 +92,45 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         Ok(())
     }
 
+    /// Detects EOF while retaining bytes for later decoding when this future is cancelled.
+    pub async fn prefetch_until_disconnect(&mut self, limit: usize) -> io::Result<()> {
+        let reader = self
+            .reader
+            .as_mut()
+            .ok_or_else(|| io::Error::other("Reader missing"))?;
+        let mut buffer = [0; 8192];
+        loop {
+            let available = limit
+                .saturating_sub(self.prefetched.get_ref().len())
+                .min(buffer.len());
+            if available == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Too much data before admission",
+                ));
+            }
+            let read = reader.read(&mut buffer[..available]).await?;
+            if read == 0 {
+                return Ok(());
+            }
+            self.prefetched.get_mut().extend_from_slice(&buffer[..read]);
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     pub async fn get_raw_packet(&mut self) -> Result<RawPacket, PacketDecodeError> {
         let reader = self
             .reader
             .as_mut()
             .ok_or_else(|| PacketDecodeError::Message("Reader missing".into()))?;
+        if !self.prefetched.get_ref().is_empty()
+            && self.prefetched.position() == self.prefetched.get_ref().len() as u64
+        {
+            self.prefetched = Cursor::default();
+        }
+        let mut reader = AsyncReadExt::chain(&mut self.prefetched, reader);
 
-        let packet_len = VarInt::decode_async(reader)
+        let packet_len = VarInt::decode_async(&mut reader)
             .await
             .map_err(|err| match err {
                 ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
@@ -320,6 +353,30 @@ mod tests {
             encrypt_aes128(&mut packet, k, v)?;
         }
         Ok(packet)
+    }
+
+    #[tokio::test]
+    async fn cancelled_admission_prefetch_preserves_partial_encrypted_packet()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use tokio::io::AsyncWriteExt;
+
+        let key = [42; 16];
+        let raw = build_packet(42, b"early packet", false, Some(&key), Some(&key))?;
+        let (mut writer, reader) = tokio::io::duplex(64);
+        let mut decoder = TCPNetworkDecoder::new(reader);
+        decoder.set_encryption(&key)?;
+        writer.write_all(&raw[..2]).await?;
+        // The admission verdict arrives in the middle of an encrypted frame.
+        tokio::select! {
+            biased;
+            result = decoder.prefetch_until_disconnect(64) => panic!("unexpected disconnect: {result:?}"),
+            () = std::future::ready(()) => {}
+        }
+        writer.write_all(&raw[2..]).await?;
+        let packet = decoder.get_raw_packet().await?;
+        assert_eq!(packet.id, 42);
+        assert_eq!(packet.payload.as_ref(), b"early packet");
+        Ok(())
     }
 
     /// Test decoding without compression and encryption
