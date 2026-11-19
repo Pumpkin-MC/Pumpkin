@@ -580,6 +580,18 @@ impl LivingEntity {
             .store(self.entity.tick_count.load(Relaxed), Relaxed);
     }
 
+    /// Records the target of the attack. Only a living target is remembered.
+    pub(crate) fn set_last_hurt_mob(&self, target: &dyn EntityBase) {
+        self.last_attacking_id.store(
+            target
+                .get_living_entity()
+                .map_or(0, |living| living.entity.entity_id),
+            Relaxed,
+        );
+        self.last_attack_time
+            .store(self.entity.tick_count.load(Relaxed), Relaxed);
+    }
+
     fn tick_last_hurt_by_mob(&self) {
         if self.last_hurt_by_mob.load().is_none() {
             return;
@@ -2841,7 +2853,7 @@ impl LivingEntity {
             let kill_credit = self.get_kill_credit();
             let killer = cause.or(source);
 
-            self.update_death_stats(&*dyn_self, kill_credit.as_deref());
+            self.update_death_stats(&*dyn_self, kill_credit.as_deref(), damage_type, source);
 
             self.make_voice_sound(&*dyn_self, self.death_sound(&*dyn_self));
             let perished = killer
@@ -3056,7 +3068,13 @@ impl LivingEntity {
         }
     }
 
-    fn update_death_stats(&self, dyn_self: &dyn EntityBase, cause: Option<&dyn EntityBase>) {
+    fn update_death_stats(
+        &self,
+        dyn_self: &dyn EntityBase,
+        cause: Option<&dyn EntityBase>,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+    ) {
         if let Some(victim_player) = dyn_self.get_player() {
             victim_player.increment_custom_stat(CustomStatistic::Deaths, 1);
             victim_player.set_stat(
@@ -3099,20 +3117,16 @@ impl LivingEntity {
 
                 let resource_name = self.entity.entity_type.resource_name;
                 let criterion_key = format!("minecraft:{resource_name}");
+                let distance = killer_player.position() - self.entity.pos.load();
                 killer_player.trigger_advancement(
                     crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilledEntity {
                         entity_type_resource: criterion_key,
+                        horizontal_distance: distance.horizontal_length(),
+                        absolute_distance: distance.length(),
+                        damage_type,
+                        direct_entity_type: source.map(|entity| entity.get_entity().entity_type.resource_name),
                     },
                 );
-
-                if resource_name == "skeleton" {
-                    let distance_sq = killer_player
-                        .position()
-                        .squared_distance_to_vec(&self.entity.pos.load());
-                    if distance_sq >= 2500.0 {
-                        killer_player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::SniperDuel);
-                    }
-                }
 
                 if resource_name == "phantom" {
                     killer_player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::TwoBirdsOneArrow);
@@ -3484,7 +3498,7 @@ impl LivingEntity {
         }
         let durability_damage = (damage / 4.0).max(1.0) as i32;
         for slot in slots {
-            let mut stack = self
+            let stack = self
                 .entity_equipment
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -3495,26 +3509,42 @@ impl LivingEntity {
             if !damage_on_hurt || !stack.is_damageable() || !stack.can_be_hurt_by(damage_type) {
                 continue;
             }
-            if let Some(player) = caller.get_player() {
-                player.damage_item_in_slot(slot, durability_damage);
-                continue;
-            }
-            let result = stack.damage_item(durability_damage);
-            if result == DamageResult::Untouched {
-                continue;
-            }
-            self.entity_equipment
+            self.damage_equipped_item(caller, slot, durability_damage);
+        }
+    }
+
+    pub(crate) fn damage_equipped_item(
+        &self,
+        caller: &dyn EntityBase,
+        slot: &EquipmentSlot,
+        amount: i32,
+    ) {
+        if let Some(player) = caller.get_player() {
+            player.damage_item_in_slot(slot, amount);
+            return;
+        }
+
+        let (result, stack) = {
+            let mut equipment = self
+                .entity_equipment
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .put(slot, stack.clone());
-            self.send_equipment_changes(&[(slot.clone(), stack)]);
-            if result == DamageResult::Broken {
-                self.entity.world.load().send_entity_status(
-                    &self.entity,
-                    super::equipment_break_status(slot),
-                    ActorEventID::None,
-                );
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(stack) = equipment.equipment.get_mut(slot) else {
+                return;
+            };
+            let result = stack.damage_item(amount);
+            if result == DamageResult::Untouched {
+                return;
             }
+            (result, stack.clone())
+        };
+        self.send_equipment_changes(&[(slot.clone(), stack)]);
+        if result == DamageResult::Broken {
+            self.entity.world.load().send_entity_status(
+                &self.entity,
+                super::equipment_break_status(slot),
+                ActorEventID::None,
+            );
         }
     }
 

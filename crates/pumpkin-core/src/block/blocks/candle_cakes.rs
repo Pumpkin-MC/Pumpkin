@@ -129,6 +129,9 @@ impl BlockBehaviour for CandleCakeBlock {
     }
 
     fn explode(&self, args: ExplodeArgs<'_>) {
+        if !args.explosion.can_trigger_blocks(args.world) {
+            return;
+        }
         let (current_block, current_state) = args.world.get_block_and_state(args.position);
         if current_block != args.block {
             return;

@@ -30,7 +30,11 @@ impl ProjectileDeflection {
             Self::None => return,
             Self::Breeze => {
                 if let Some(entity) = entity {
-                    entity.play_entity_sound(Sound::EntityBreezeDeflect, 1.0, 1.0);
+                    entity
+                        .get_entity()
+                        .world
+                        .load()
+                        .play_sound_from_entity(entity, Sound::EntityBreezeDeflect);
                 }
                 Self::Reverse.apply(projectile, entity, power);
                 return;

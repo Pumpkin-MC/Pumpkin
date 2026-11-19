@@ -2,6 +2,8 @@ use crate::entity::projectile::owner::ProjectileOwner;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::{VarInt, java::client::play::CProjectilePower};
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::LazyLock;
 use std::{
@@ -13,6 +15,7 @@ use std::{
 };
 
 use crate::{
+    enchantment::EnchantmentHelper,
     entity::{
         Entity, EntityBase,
         living::LivingEntity,
@@ -140,8 +143,29 @@ impl EntityBase for WindChargeEntity {
         Some(&self.thrown_item_entity.owner)
     }
 
+    fn java_spawn_data(&self) -> VarInt {
+        VarInt(
+            self.get_owner_entity()
+                .map_or(0, |owner| owner.get_entity().entity_id),
+        )
+    }
+
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        self.thrown_item_entity.write_nbt(nbt);
+    }
+
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        self.thrown_item_entity.read_nbt(nbt);
+    }
+
     fn on_deflection(&self, by_attack: bool) {
         self.thrown_item_entity.on_deflection(by_attack);
+        let entity = self.get_entity();
+        let power = self.thrown_item_entity.acceleration_power();
+        entity.world.load().send_to_tracking_players(
+            entity,
+            &CProjectilePower::new(VarInt(entity.entity_id), power, 0.0, 0.0),
+        );
     }
 
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
@@ -192,7 +216,10 @@ impl EntityBase for WindChargeEntity {
                     .owner
                     .get(&world)
                     .filter(|owner| owner.get_living_entity().is_some());
-                entity.damage_with_context(
+                if let Some(owner) = owner.as_deref().and_then(EntityBase::get_living_entity) {
+                    owner.set_last_hurt_mob(entity.as_ref());
+                }
+                let did_damage = entity.damage_with_context(
                     entity.as_ref(),
                     1.0,
                     DamageType::WIND_CHARGE,
@@ -200,6 +227,9 @@ impl EntityBase for WindChargeEntity {
                     Some(self),
                     owner.as_deref(),
                 );
+                if did_damage && let Some(owner) = owner.as_deref() {
+                    EnchantmentHelper::apply_thorns(entity.as_ref(), owner);
+                }
                 self.create_explosion(self.get_entity().pos.load());
             }
             ProjectileHit::Block { face, hit_pos, .. } => {

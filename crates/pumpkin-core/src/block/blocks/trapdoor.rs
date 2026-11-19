@@ -1,8 +1,8 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
-    OnPlaceArgs, PathComputationType,
+    BlockBehaviour, ExplodeArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -17,21 +17,54 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
+use rand::random;
 use std::sync::Arc;
 
 type TrapDoorProperties = pumpkin_data::block_properties::OakTrapdoorLikeProperties;
 
-fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
+fn toggle_trapdoor(player: Option<&Player>, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_state_id(block_pos);
+    if !block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+        return;
+    }
     let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state);
+    if player.is_none() && (!can_open_trapdoor(block) || trapdoor_props.powered) {
+        return;
+    }
     trapdoor_props.open = !trapdoor_props.open;
 
-    world.play_block_sound_expect(
-        player,
-        get_sound(block, trapdoor_props.open),
-        SoundCategory::Blocks,
-        *block_pos,
-    );
+    if world
+        .set_block_state_if(
+            block_pos,
+            trapdoor_props.to_state_id(block),
+            BlockFlags::NOTIFY_LISTENERS,
+            |state| state == block_state,
+        )
+        .is_none()
+    {
+        return;
+    }
+    if trapdoor_props.waterlogged {
+        world.schedule_fluid_tick(
+            &Fluid::WATER,
+            *block_pos,
+            Fluid::WATER.flow_speed as u8,
+            TickPriority::Normal,
+        );
+    }
+
+    let sound = get_sound(block, trapdoor_props.open);
+    if let Some(player) = player {
+        world.play_block_sound_expect(player, sound, SoundCategory::Blocks, *block_pos);
+    } else {
+        world.play_sound_fine(
+            sound,
+            SoundCategory::Blocks,
+            &block_pos.to_centered_f64(),
+            1.0,
+            random::<f32>() * 0.1 + 0.9,
+        );
+    }
 
     let game_event = if trapdoor_props.open {
         pumpkin_data::game_event::GameEvent::BlockOpen
@@ -39,12 +72,6 @@ fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
         pumpkin_data::game_event::GameEvent::BlockClose
     };
     world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
-
-    world.set_block_state(
-        block_pos,
-        trapdoor_props.to_state_id(block),
-        BlockFlags::NOTIFY_LISTENERS,
-    );
 }
 
 fn can_open_trapdoor(block: &Block) -> bool {
@@ -52,21 +79,32 @@ fn can_open_trapdoor(block: &Block) -> bool {
 }
 
 fn get_sound(block: &Block, open: bool) -> Sound {
-    if open {
-        if block.has_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) {
-            Sound::BlockWoodenTrapdoorOpen
-        } else if block == &Block::IRON_TRAPDOOR {
-            Sound::BlockIronTrapdoorOpen
-        } else {
-            Sound::BlockCopperTrapdoorOpen
+    let (open_sound, close_sound) = match block {
+        b if b == &Block::IRON_TRAPDOOR => {
+            (Sound::BlockIronTrapdoorOpen, Sound::BlockIronTrapdoorClose)
         }
-    } else if block.has_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) {
-        Sound::BlockWoodenTrapdoorClose
-    } else if block == &Block::IRON_TRAPDOOR {
-        Sound::BlockIronTrapdoorClose
-    } else {
-        Sound::BlockCopperTrapdoorClose
-    }
+        b if b == &Block::BAMBOO_TRAPDOOR => (
+            Sound::BlockBambooWoodTrapdoorOpen,
+            Sound::BlockBambooWoodTrapdoorClose,
+        ),
+        b if b == &Block::CHERRY_TRAPDOOR => (
+            Sound::BlockCherryWoodTrapdoorOpen,
+            Sound::BlockCherryWoodTrapdoorClose,
+        ),
+        b if b == &Block::CRIMSON_TRAPDOOR || b == &Block::WARPED_TRAPDOOR => (
+            Sound::BlockNetherWoodTrapdoorOpen,
+            Sound::BlockNetherWoodTrapdoorClose,
+        ),
+        b if b.has_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) => (
+            Sound::BlockWoodenTrapdoorOpen,
+            Sound::BlockWoodenTrapdoorClose,
+        ),
+        _ => (
+            Sound::BlockCopperTrapdoorOpen,
+            Sound::BlockCopperTrapdoorClose,
+        ),
+    };
+    if open { open_sound } else { close_sound }
 }
 
 #[pumpkin_block_from_tag("minecraft:trapdoors")]
@@ -79,9 +117,15 @@ impl BlockBehaviour for TrapDoorBlock {
                 return BlockActionResult::Pass;
             }
 
-            toggle_trapdoor(args.player, args.world, args.position);
+            toggle_trapdoor(Some(args.player), args.world, args.position);
 
             BlockActionResult::Success
+        }
+    }
+
+    fn explode(&self, args: ExplodeArgs<'_>) {
+        if args.explosion.can_trigger_blocks(args.world) {
+            toggle_trapdoor(None, args.world, args.position);
         }
     }
 

@@ -1410,6 +1410,27 @@ impl World {
         self.play_sound_raw(sound as u16, category, position, 1.0, 1.0);
     }
 
+    /// Plays an entity-bound sound as a level action, independent of the entity's silent flag.
+    pub(crate) fn play_sound_from_entity(&self, source: &dyn EntityBase, sound: Sound) {
+        let entity = source.get_entity();
+        let packet = pumpkin_protocol::java::client::play::CEntitySoundEffect::new(
+            IdOr::Id(sound as u16),
+            source.sound_source(),
+            VarInt(entity.entity_id),
+            1.0,
+            1.0,
+            rng().random(),
+        );
+        let position = entity.pos.load();
+        let players = self.players.load();
+        Self::broadcast_java_players(
+            &packet,
+            players.iter().filter(|player| {
+                player.position().squared_distance_to_vec(&position) < 16.0 * 16.0
+            }),
+        );
+    }
+
     pub fn play_sound_event(
         &self,
         sound: &pumpkin_data::data_component_impl::IdOr<

@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use crate::block::{
-    CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
-    OnPlaceArgs, OnStateReplacedArgs, blocks::abstract_wall_mounting::WallMountedBlock,
+    CanPlaceAtArgs, EmitsRedstonePowerArgs, ExplodeArgs, GetRedstonePowerArgs,
+    GetStateForNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs,
+    blocks::abstract_wall_mounting::WallMountedBlock,
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
@@ -39,6 +40,12 @@ impl BlockBehaviour for LeverBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         Self::pull(args.world, args.position);
         BlockActionResult::Success
+    }
+
+    fn explode(&self, args: ExplodeArgs<'_>) {
+        if args.explosion.can_trigger_blocks(args.world) {
+            Self::pull(args.world, args.position);
+        }
     }
 
     fn emits_redstone_power(&self, _args: EmitsRedstonePowerArgs<'_>) -> bool {
@@ -102,14 +109,23 @@ impl WallMountedBlock for LeverBlock {
 impl LeverBlock {
     pub(crate) fn pull(world: &Arc<World>, block_pos: &BlockPos) {
         let (block, state) = world.get_block_and_state_id(block_pos);
+        if block != &Block::LEVER {
+            return;
+        }
 
         let mut lever_props = LeverLikeProperties::from_state_id(state);
         lever_props.powered = !lever_props.powered;
-        world.set_block_state(
-            block_pos,
-            lever_props.to_state_id(block),
-            BlockFlags::NOTIFY_ALL,
-        );
+        if world
+            .set_block_state_if(
+                block_pos,
+                lever_props.to_state_id(block),
+                BlockFlags::NOTIFY_ALL,
+                |current| current == state,
+            )
+            .is_none()
+        {
+            return;
+        }
 
         Self::update_neighbors(world, block_pos, lever_props);
 

@@ -869,15 +869,18 @@ impl MobEntity {
 
     /// The target, checked again on every read so a player who turns creative is dropped.
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
-        let target = self
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-            .and_then(Weak::upgrade)?;
+        let target = self.stored_target()?;
         (EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity())
             && self.living_entity.can_attack(target.as_ref()))
         .then_some(target)
+    }
+
+    pub(crate) fn stored_target(&self) -> Option<Arc<dyn EntityBase>> {
+        self.target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(Weak::upgrade)
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -1192,6 +1195,13 @@ impl MobEntity {
         let entity = &self.living_entity.entity;
 
         let world = entity.world.load();
+        if !mob.is_allowed_in_peaceful()
+            && world.level_info.load().difficulty == Difficulty::Peaceful
+        {
+            entity.remove();
+            return;
+        }
+
         let pos = entity.pos.load();
         let players = world.players.load();
 
@@ -1585,6 +1595,11 @@ pub trait Mob: EntityBase + Send + Sync {
             .has_line_of_sight(&mob_entity.living_entity.entity, target)
     }
 
+    /// Whether a mob of this type can remain in the world on Peaceful difficulty.
+    fn is_allowed_in_peaceful(&self) -> bool {
+        true
+    }
+
     fn requires_custom_persistence(&self) -> bool {
         false
     }
@@ -1903,9 +1918,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn check_spawn_obstruction(&self, world: &World) -> bool {
-        let bounding_box = self.get_entity().bounding_box.load();
-        !world.contains_any_liquid(bounding_box)
-            && world.get_entities_at_box(&bounding_box).is_empty()
+        let entity = self.get_entity();
+        !world.contains_any_liquid(entity.bounding_box.load()) && world.is_unobstructed(entity)
     }
 
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.

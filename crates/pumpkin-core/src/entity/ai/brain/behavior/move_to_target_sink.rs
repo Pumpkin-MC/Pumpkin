@@ -130,6 +130,41 @@ impl MoveToTargetSink {
         self.path = Self::create_path(tick.mob, partial_step);
         self.path.is_some()
     }
+
+    /// Updates navigation and reports whether it restarted toward a moving target.
+    pub(crate) fn tick_path(&mut self, tick: &mut BrainTick<'_>) -> bool {
+        let new_path = tick
+            .mob
+            .get_mob_entity()
+            .steered()
+            .navigator()
+            .get_path()
+            .cloned();
+        let unchanged = match (&self.path, &new_path) {
+            (Some(previous), Some(current)) => previous.same_snapshot(current),
+            (None, None) => true,
+            _ => false,
+        };
+        if !unchanged {
+            self.path.clone_from(&new_path);
+            tick.state.set_optional(types::PATH, new_path);
+        }
+        let (Some(_), Some(last_target_pos)) = (&self.path, self.last_target_pos) else {
+            return false;
+        };
+        let Some(walk) = WalkTargetView::read(tick) else {
+            return false;
+        };
+        let target_pos = walk.target.current_block_position();
+        if target_pos.squared_distance(&last_target_pos) <= RETARGET_DISTANCE_SQR
+            || !self.try_compute_path(tick, &walk)
+        {
+            return false;
+        }
+        self.last_target_pos = Some(target_pos);
+        self.start(tick);
+        true
+    }
 }
 
 impl Behavior for MoveToTargetSink {
@@ -201,35 +236,7 @@ impl Behavior for MoveToTargetSink {
     }
 
     fn tick(&mut self, tick: &mut BrainTick<'_>) {
-        let new_path = tick
-            .mob
-            .get_mob_entity()
-            .steered()
-            .navigator()
-            .get_path()
-            .cloned();
-        let unchanged = match (&self.path, &new_path) {
-            (Some(previous), Some(current)) => previous.same_snapshot(current),
-            (None, None) => true,
-            _ => false,
-        };
-        if !unchanged {
-            self.path.clone_from(&new_path);
-            tick.state.set_optional(types::PATH, new_path);
-        }
-        let (Some(_), Some(last_target_pos)) = (&self.path, self.last_target_pos) else {
-            return;
-        };
-        let Some(walk) = WalkTargetView::read(tick) else {
-            return;
-        };
-        let target_pos = walk.target.current_block_position();
-        if target_pos.squared_distance(&last_target_pos) > RETARGET_DISTANCE_SQR
-            && self.try_compute_path(tick, &walk)
-        {
-            self.last_target_pos = Some(target_pos);
-            self.start(tick);
-        }
+        self.tick_path(tick);
     }
 
     fn debug_name(&self) -> &'static str {

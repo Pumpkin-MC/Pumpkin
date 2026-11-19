@@ -32,6 +32,10 @@ use crate::world::World;
 /// Reach of same-tick neighbour updates: a full wire line, the powered block and one component.
 const BLOCK_UPDATE_REACH: f64 = SIGNAL_MAX as f64 + 2.0;
 
+// A burst can travel six blocks from impact, then trigger a redstone update and a game event.
+// The extra block covers the face offset and block rounding.
+const WIND_CHARGE_TICK_MARGIN: f64 = 6.0 + BLOCK_UPDATE_REACH + 16.0 + 1.0;
+
 /// Grid cell size for large boxes.
 const CELL_SIZE: f64 = 16.0;
 const SMALL_CELL_SIZE: f64 = 4.0;
@@ -316,12 +320,19 @@ impl EntityReach {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
+        let wind_charge = base.entity_type == &EntityType::WIND_CHARGE
+            || base.entity_type == &EntityType::BREEZE_WIND_CHARGE;
         let movement = base.velocity.load().length()
             + entity
                 .get_mob()
                 .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement);
+        let margin = if wind_charge {
+            config.unaudited_reach.max(WIND_CHARGE_TICK_MARGIN)
+        } else {
+            config.unaudited_reach
+        };
         let radius = movement
-            + config.unaudited_reach
+            + margin
             + entity.get_living_entity().map_or(0.0, |living| {
                 living
                     .get_attribute_value(&Attributes::FOLLOW_RANGE)
@@ -347,6 +358,11 @@ impl EntityReach {
         reach.global = entity
             .get_mob()
             .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
+            || wind_charge
+                && base.world.load().server.upgrade().is_some_and(|server| {
+                    // A hit can run damage, gear, block, game and spawn callbacks in this tick.
+                    server.plugin_manager.has_event_handlers()
+                })
             || entity
                 .cast_any()
                 .downcast_ref::<TNTEntity>()
