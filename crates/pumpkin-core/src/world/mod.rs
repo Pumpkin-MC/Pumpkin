@@ -2342,7 +2342,11 @@ impl World {
                 for scheduled_tick in batch {
                     let pos = scheduled_tick.position;
                     let block = world.get_block(&pos);
-                    if block.id != scheduled_tick.value.id {
+                    let scheduled_block = scheduled_tick.value;
+                    // Bubble columns schedule their first tick while the block is still water.
+                    let pending_bubble_column =
+                        scheduled_block == &Block::BUBBLE_COLUMN && block == &Block::WATER;
+                    if block.id != scheduled_block.id && !pending_bubble_column {
                         continue;
                     }
                     if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id) {
