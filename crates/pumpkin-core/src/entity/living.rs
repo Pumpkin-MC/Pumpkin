@@ -1540,8 +1540,12 @@ impl LivingEntity {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn add_effect(&self, effect: Effect) {
+        self.add_effect_with_source(effect, None);
+    }
+
+    #[expect(clippy::too_many_lines)]
+    pub fn add_effect_with_source(&self, effect: Effect, source: Option<&dyn EntityBase>) {
         if !self.can_be_affected(&effect) {
             return;
         }
@@ -1676,8 +1680,16 @@ impl LivingEntity {
                 let category = self.entity.entity_type.sound_source;
                 world.play_sound_fine(sound, category, &self.entity.pos.load(), 1.0, 1.0);
             }
+            self.trigger_effects_changed(source);
         }
         self.sync_effect_particles();
+    }
+
+    fn trigger_effects_changed(&self, source: Option<&dyn EntityBase>) {
+        let world = self.entity.world.load();
+        if let Some(player) = world.get_player_by_id(self.entity.entity_id) {
+            player.trigger_effects_changed(source);
+        }
     }
 
     fn sync_effect_particles(&self) {
@@ -1775,6 +1787,7 @@ impl LivingEntity {
 
         if succeeded {
             self.sync_effect_particles();
+            self.trigger_effects_changed(None);
         }
 
         succeeded
@@ -4721,6 +4734,7 @@ impl EntityBase for LivingEntity {
                         effects,
                         1.0,
                         crate::item::potion::PotionApplicationSource::Normal,
+                        None,
                         None,
                     );
                 }

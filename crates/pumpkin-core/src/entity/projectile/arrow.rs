@@ -725,15 +725,19 @@ impl ArrowEntity {
         let scale = item_stack
             .get_data_component::<PotionDurationScaleImpl>()
             .map_or(1.0, |component| component.scale);
+        let world = living.entity.world.load();
+        let owner = self.owner.get(&world);
+        let source: &dyn EntityBase = owner.as_deref().unwrap_or(self);
         crate::item::potion::PotionContents::apply_effects_to(
             living,
             crate::item::potion::PotionContents::read_potion_effects(&item_stack),
             scale,
             crate::item::potion::PotionApplicationSource::Arrow,
             None,
+            Some(source),
         );
         if self.entity.entity_type.id == EntityType::SPECTRAL_ARROW.id {
-            living.add_effect(Self::spectral_glowing_effect());
+            living.add_effect_with_source(Self::spectral_glowing_effect(), Some(source));
         }
     }
 

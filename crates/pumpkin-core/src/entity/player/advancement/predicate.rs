@@ -791,6 +791,79 @@ impl EntityPredicate {
     }
 }
 
+/// Strongly-typed mob effect instance condition.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct MobEffectPredicate {
+    pub effect: String,
+    pub amplifier: Option<IntBounds>,
+    pub duration: Option<IntBounds>,
+    pub ambient: Option<bool>,
+    pub visible: Option<bool>,
+}
+
+impl MobEffectPredicate {
+    #[must_use]
+    pub fn matches(&self, effect: &pumpkin_data::potion::Effect) -> bool {
+        if !matches_id(&self.effect, effect.effect_type.minecraft_name) {
+            return false;
+        }
+        if let Some(amplifier) = &self.amplifier
+            && !amplifier.matches(i64::from(effect.amplifier))
+        {
+            return false;
+        }
+        if let Some(duration) = &self.duration
+            && !duration.matches(i64::from(effect.duration))
+        {
+            return false;
+        }
+        if let Some(ambient) = self.ambient
+            && ambient != effect.ambient
+        {
+            return false;
+        }
+        if let Some(visible) = self.visible
+            && visible != effect.show_particles
+        {
+            return false;
+        }
+        true
+    }
+}
+
+/// Strongly-typed condition for `minecraft:effects_changed`.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct MobEffectsPredicate {
+    pub effects: Vec<MobEffectPredicate>,
+}
+
+impl MobEffectsPredicate {
+    #[must_use]
+    pub fn matches(&self, active_effects: &[pumpkin_data::potion::Effect]) -> bool {
+        self.effects
+            .iter()
+            .all(|expected| active_effects.iter().any(|actual| expected.matches(actual)))
+    }
+
+    #[must_use]
+    pub fn from_value(val: &Value) -> Self {
+        let Some(map) = val.as_object() else {
+            return Self::default();
+        };
+        let effects = map
+            .iter()
+            .map(|(effect, predicate)| MobEffectPredicate {
+                effect: effect.clone(),
+                amplifier: predicate.get("amplifier").and_then(IntBounds::from_value),
+                duration: predicate.get("duration").and_then(IntBounds::from_value),
+                ambient: predicate.get("ambient").and_then(Value::as_bool),
+                visible: predicate.get("visible").and_then(Value::as_bool),
+            })
+            .collect();
+        Self { effects }
+    }
+}
+
 /// Strongly-typed damage condition.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct DamagePredicate {
@@ -1263,7 +1336,10 @@ pub enum CriterionConditions {
     StartedRiding(Option<EntityPredicate>),
     SummonedEntity(EntityPredicate),
     CrafterRecipeCrafted(String),
-    EffectsChanged,
+    EffectsChanged {
+        effects: MobEffectsPredicate,
+        source: Option<EntityPredicate>,
+    },
     SpearMobs {
         count: Option<i32>,
     },
@@ -1633,13 +1709,34 @@ impl From<pumpkin_data::advancement_data::AdvancementCondition> for CriterionCon
             AC::StartedRiding(p) => Self::StartedRiding(p.as_ref().map(from_entity_condition)),
             AC::SummonedEntity(e) => Self::SummonedEntity(from_entity_condition(&e)),
             AC::CrafterRecipeCrafted(r) => Self::CrafterRecipeCrafted(r.to_string()),
-            AC::EffectsChanged => Self::EffectsChanged,
+            AC::EffectsChanged { effects, source } => Self::EffectsChanged {
+                effects: MobEffectsPredicate {
+                    effects: effects
+                        .iter()
+                        .map(|effect| MobEffectPredicate {
+                            effect: effect.effect.to_string(),
+                            amplifier: int_bounds(effect.amplifier_min, effect.amplifier_max),
+                            duration: int_bounds(effect.duration_min, effect.duration_max),
+                            ambient: effect.ambient,
+                            visible: effect.visible,
+                        })
+                        .collect(),
+                },
+                source: source.as_ref().map(from_entity_condition),
+            },
             AC::SpearMobs { count } => Self::SpearMobs { count },
             AC::Impossible => Self::Impossible,
             AC::Empty | AC::Tick => Self::Tick,
             AC::Custom(raw) => Self::parse("", raw),
         }
     }
+}
+
+fn int_bounds(min: Option<i32>, max: Option<i32>) -> Option<IntBounds> {
+    (min.is_some() || max.is_some()).then_some(IntBounds {
+        min: min.map(i64::from),
+        max: max.map(i64::from),
+    })
 }
 
 fn from_entity_condition(e: &pumpkin_data::advancement_data::EntityCondition) -> EntityPredicate {
@@ -2059,7 +2156,12 @@ impl CriterionConditions {
                     .unwrap_or("")
                     .to_string(),
             ),
-            "minecraft:effects_changed" => Self::EffectsChanged,
+            "minecraft:effects_changed" => Self::EffectsChanged {
+                effects: MobEffectsPredicate::from_value(
+                    val.get("effects").unwrap_or(&Value::Null),
+                ),
+                source: val.get("source").map(parse_entity_pred),
+            },
             "minecraft:spear_mobs" => Self::SpearMobs {
                 count: val.get("count").and_then(Value::as_i64).map(|v| v as i32),
             },
