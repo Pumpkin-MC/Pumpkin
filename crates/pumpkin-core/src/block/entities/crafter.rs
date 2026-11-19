@@ -24,6 +24,7 @@ pub struct CrafterBlockEntity {
     pub triggered: AtomicBool,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
+    pub metadata: super::ContainerMetadata,
 }
 
 impl BlockEntity for CrafterBlockEntity {
@@ -52,6 +53,7 @@ impl BlockEntity for CrafterBlockEntity {
             .filter_map(|(i, &d)| d.then_some(i as i32))
             .collect();
         nbt.put("disabled_slots", NbtTag::IntArray(disabled_vec));
+        self.metadata.write_nbt(nbt);
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
@@ -71,6 +73,7 @@ impl BlockEntity for CrafterBlockEntity {
             ),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
+            metadata: super::ContainerMetadata::from_nbt(nbt),
         };
 
         sync_read_items_from_nbt(
@@ -193,6 +196,32 @@ impl BlockEntity for CrafterBlockEntity {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        self.metadata.apply_item_components(stack);
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::apply_container_items_to_slice(stack, &mut *items);
+    }
+
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_item_components(stack);
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        super::collect_container_items_from_slice(&*items, stack);
+    }
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.metadata.get_lock()
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.metadata.get_custom_name()
+    }
 }
 
 impl CrafterBlockEntity {
@@ -213,6 +242,7 @@ impl CrafterBlockEntity {
             triggered: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
+            metadata: super::ContainerMetadata::default(),
         }
     }
 
@@ -349,6 +379,21 @@ impl Inventory for CrafterBlockEntity {
         self.mark_dirty();
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        let changed = pumpkin_inventory::update_locked_stack(&self.items, slot, update);
+        // Like `set_stack`, a write re-enables the slot.
+        if changed && self.is_slot_disabled(slot) {
+            // `set_slot_state` refuses a filled slot, and the update already filled it.
+            self.disabled_slots
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)[slot] = false;
+            self.mark_dirty();
+        }
+        changed
+    }
+
+    /// Vanilla `CrafterBlockEntity.canPlaceItem`: hoppers spread items, a slot only takes more while
+    /// no later slot is empty or holds fewer of the same item.
     fn is_valid_slot_for(&self, slot: usize, _stack: &ItemStack) -> bool {
         if slot >= Self::INVENTORY_SIZE || self.is_slot_disabled(slot) {
             return false;
@@ -435,6 +480,32 @@ impl PropertyDelegate for CrafterBlockEntity {
 mod tests {
     use super::*;
     use pumpkin_data::item::Item;
+
+    /// Vanilla spreads hopper input: only the last slot with the fewest items takes more.
+    #[test]
+    fn hoppers_fill_the_smallest_later_stack() {
+        let crafter = CrafterBlockEntity::new(BlockPos::new(0, 0, 0));
+        for slot in 0..CrafterBlockEntity::INVENTORY_SIZE {
+            let count = if slot == 4 { 1 } else { 2 };
+            crafter.set_stack(slot, ItemStack::new(count, &Item::DIAMOND));
+        }
+        let diamond = ItemStack::new(1, &Item::DIAMOND);
+        let accepting: Vec<_> = (0..CrafterBlockEntity::INVENTORY_SIZE)
+            .filter(|&slot| crafter.is_valid_slot_for(slot, &diamond))
+            .collect();
+        assert_eq!(
+            accepting,
+            (4..CrafterBlockEntity::INVENTORY_SIZE).collect::<Vec<_>>()
+        );
+
+        // A disabled slot doesn't count as the smaller one.
+        crafter
+            .disabled_slots
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)[4] = true;
+        assert!(crafter.is_valid_slot_for(0, &diamond));
+        assert!(!crafter.is_valid_slot_for(4, &diamond));
+    }
 
     #[test]
     fn crafter_property_delegate_and_slot_distribution() {

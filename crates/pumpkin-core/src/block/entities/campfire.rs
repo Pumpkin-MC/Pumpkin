@@ -200,6 +200,30 @@ impl BlockEntity for CampfireBlockEntity {
         Some(nbt)
     }
 
+    fn apply_item_components(&self, stack: &ItemStack) {
+        if let Some(container) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
+        {
+            for (slot, item) in &container.items {
+                if let Some(cell) = self.items.get(*slot as usize) {
+                    *cell
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = item.clone();
+                }
+            }
+        }
+    }
+
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        let items: [ItemStack; Self::SLOT_COUNT] = std::array::from_fn(|i| {
+            self.items[i]
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+        });
+        super::collect_container_items_from_slice(&items, stack);
+    }
+
     fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, _position: &BlockPos) {
         for item in &self.items {
             let stack = std::mem::replace(
@@ -244,10 +268,8 @@ impl CampfireBlockEntity {
             let stack = item
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !stack.is_empty() {
-                let mut item_nbt = NbtCompound::new();
+            if let Some(mut item_nbt) = stack.to_nbt() {
                 item_nbt.put_byte("Slot", slot as i8);
-                stack.write_item_stack(&mut item_nbt);
                 items.push(NbtTag::Compound(item_nbt));
             }
         }

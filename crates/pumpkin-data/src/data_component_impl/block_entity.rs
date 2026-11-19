@@ -23,25 +23,60 @@ impl DataComponentImpl for BlockEntityDataImpl {
     default_impl!(BlockEntityData);
 }
 
-/// Entity NBT carried by an item, e.g. a spawn egg. `None` for the item's default component.
-#[derive(Clone, Debug, PartialEq)]
+/// Entity NBT carried by an item, e.g. a spawn egg (`TypedEntityData<EntityType<?>>`).
+#[derive(Clone, Debug)]
 pub struct EntityDataImpl {
+    pub entity_type: Option<&'static crate::entity_type::EntityType>,
     pub nbt: Option<NbtCompound>,
 }
-impl EntityDataImpl {
-    pub fn read_data(tag: &NbtTag) -> Option<Self> {
-        if let NbtTag::Compound(c) = tag {
-            Some(Self {
-                nbt: Some(c.clone()),
-            })
-        } else {
-            None
+impl PartialEq for EntityDataImpl {
+    fn eq(&self, other: &Self) -> bool {
+        if self.get_entity_type().map(|e| e.id) != other.get_entity_type().map(|e| e.id) {
+            return false;
         }
+        let strip_id = |opt: &Option<NbtCompound>| -> NbtCompound {
+            let mut c = opt.clone().unwrap_or_default();
+            c.child_tags.remove("id");
+            c
+        };
+        strip_id(&self.nbt) == strip_id(&other.nbt)
+    }
+}
+impl EntityDataImpl {
+    #[must_use]
+    pub fn get_entity_type(&self) -> Option<&'static crate::entity_type::EntityType> {
+        self.entity_type.or_else(|| {
+            let id = self.nbt.as_ref()?.get_string("id")?;
+            crate::entity_type::EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+        })
+    }
+
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let NbtTag::Compound(c) = tag else {
+            return None;
+        };
+        let id = c.get_string("id")?;
+        let entity_type =
+            crate::entity_type::EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))?;
+        let mut nbt = c.clone();
+        nbt.child_tags.remove("id");
+        Some(Self {
+            entity_type: Some(entity_type),
+            nbt: (!nbt.is_empty()).then_some(nbt),
+        })
     }
 }
 impl DataComponentImpl for EntityDataImpl {
     fn write_data(&self) -> NbtTag {
-        self.nbt.clone().map_or(NbtTag::End, NbtTag::Compound)
+        let mut out = self.nbt.clone().unwrap_or_default();
+        if let Some(et) = self.get_entity_type() {
+            out.put_string("id", format!("minecraft:{}", et.resource_name));
+            NbtTag::Compound(out)
+        } else if out.is_empty() {
+            NbtTag::End
+        } else {
+            NbtTag::Compound(out)
+        }
     }
     default_impl!(EntityData);
 }
@@ -107,10 +142,11 @@ impl DataComponentImpl for ContainerImpl {
     fn write_data(&self) -> NbtTag {
         let mut list = Vec::new();
         for (slot, stack) in &self.items {
+            let Some(item_compound) = stack.to_nbt() else {
+                continue;
+            };
             let mut entry = NbtCompound::new();
             entry.put_int("slot", *slot as i32);
-            let mut item_compound = NbtCompound::new();
-            stack.write_item_stack(&mut item_compound);
             entry.put_compound("item", item_compound);
             list.push(NbtTag::Compound(entry));
         }
@@ -250,9 +286,8 @@ impl SulfurCubeContentImpl {
 }
 impl DataComponentImpl for SulfurCubeContentImpl {
     fn write_data(&self) -> NbtTag {
-        let mut compound = NbtCompound::new();
-        self.item.write_item_stack(&mut compound);
-        NbtTag::Compound(compound)
+        // Unsaveable item: empty compound, read back as no component.
+        NbtTag::Compound(self.item.to_nbt().unwrap_or_default())
     }
     default_impl!(SulfurCubeContent);
 }

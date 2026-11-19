@@ -308,18 +308,119 @@ impl DataComponentImpl for BlockTransformerImpl {
     default_impl!(BlockTransformer);
 }
 
-/// 26.3 `minecraft:brewing_fuel` marker. Presence identifies brewing-stand fuel.
+/// 26.3 `minecraft:brewing_fuel` (`BrewingFuel(ResolvableInt uses, ResolvableFloat speedMultiplier)`).
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BrewingFuelImpl;
+pub struct BrewingFuelImpl {
+    pub uses: IntProvider,
+    pub speed_multiplier: FloatProvider,
+}
 impl BrewingFuelImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const DEFAULT: Self = Self {
+        uses: IntProvider::Id(Cow::Borrowed("minecraft:brewing/uses_default")),
+        speed_multiplier: FloatProvider::Id(Cow::Borrowed("minecraft:brewing/speed_default")),
+    };
+
+    #[must_use]
+    pub fn get_uses(&self) -> i32 {
+        match &self.uses {
+            IntProvider::Inline(v) => (*v).max(0),
+            IntProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "brewing/uses_default" => 20,
+                    _ => crate::context_provider::get_context_int_provider_json(id)
+                        .and_then(|s| s.trim().parse::<i32>().ok())
+                        .unwrap_or(20)
+                        .max(0),
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn get_speed_multiplier(&self) -> f32 {
+        match &self.speed_multiplier {
+            FloatProvider::Inline(v) => (*v).max(0.0),
+            FloatProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "brewing/speed_default" => 1.0,
+                    _ => crate::context_provider::get_context_float_provider_json(id)
+                        .and_then(|s| s.trim().parse::<f32>().ok())
+                        .unwrap_or(1.0)
+                        .max(0.0),
+                }
+            }
+        }
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        if compound.is_empty() {
+            return Some(Self::DEFAULT);
+        }
+        let uses = if let Some(id) = compound.get_string("uses") {
+            IntProvider::Id(Cow::Owned(id.to_string()))
+        } else if let Some(val) = compound.get("uses").and_then(NbtTag::extract_int) {
+            IntProvider::Inline(val)
+        } else {
+            return None;
+        };
+        let speed_multiplier = if let Some(id) = compound.get_string("speed_multiplier") {
+            FloatProvider::Id(Cow::Owned(id.to_string()))
+        } else if let Some(val) = compound
+            .get("speed_multiplier")
+            .and_then(NbtTag::extract_float)
+        {
+            FloatProvider::Inline(val)
+        } else {
+            FloatProvider::Id(Cow::Borrowed("minecraft:brewing/speed_default"))
+        };
+        Some(Self {
+            uses,
+            speed_multiplier,
+        })
     }
 }
 impl DataComponentImpl for BrewingFuelImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::Compound(NbtCompound::new())
+        let mut compound = NbtCompound::new();
+        match &self.uses {
+            IntProvider::Id(id) => compound.put_string("uses", id.to_string()),
+            IntProvider::Inline(val) => compound.put_int("uses", *val),
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => compound.put_string("speed_multiplier", id.to_string()),
+            FloatProvider::Inline(val) => compound.put_float("speed_multiplier", *val),
+        }
+        NbtTag::Compound(compound)
     }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        match &self.uses {
+            IntProvider::Id(id) => {
+                digest.update(&[1u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            IntProvider::Inline(val) => {
+                digest.update(&[2u8]);
+                digest.update(&get_i32_hash(*val).to_le_bytes());
+            }
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => {
+                digest.update(&[3u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            FloatProvider::Inline(val) => {
+                digest.update(&[4u8]);
+                digest.update(&get_f32_hash(*val).to_le_bytes());
+            }
+        }
+        digest.finalize() as i32
+    }
+
     default_impl!(BrewingFuel);
 }
 
@@ -686,13 +787,13 @@ impl BundleContentsImpl {
 }
 impl DataComponentImpl for BundleContentsImpl {
     fn write_data(&self) -> NbtTag {
-        let mut list = Vec::new();
-        for stack in &self.items {
-            let mut item_compound = NbtCompound::new();
-            stack.write_item_stack(&mut item_compound);
-            list.push(NbtTag::Compound(item_compound));
-        }
-        NbtTag::List(list)
+        NbtTag::List(
+            self.items
+                .iter()
+                .filter_map(crate::item_stack::ItemStack::to_nbt)
+                .map(NbtTag::Compound)
+                .collect(),
+        )
     }
     default_impl!(BundleContents);
 }
@@ -1070,17 +1171,86 @@ pub struct JukeboxPlayableImpl {
     pub song: &'static str,
 }
 impl JukeboxPlayableImpl {
+    #[must_use]
+    pub const fn song_registry_key(song: crate::jukebox_song::JukeboxSong) -> &'static str {
+        use crate::jukebox_song::JukeboxSong;
+        match song {
+            JukeboxSong::Id11 => "minecraft:11",
+            JukeboxSong::Id13 => "minecraft:13",
+            JukeboxSong::Id5 => "minecraft:5",
+            JukeboxSong::Blocks => "minecraft:blocks",
+            JukeboxSong::Bounce => "minecraft:bounce",
+            JukeboxSong::Cat => "minecraft:cat",
+            JukeboxSong::Chirp => "minecraft:chirp",
+            JukeboxSong::Creator => "minecraft:creator",
+            JukeboxSong::CreatorMusicBox => "minecraft:creator_music_box",
+            JukeboxSong::Far => "minecraft:far",
+            JukeboxSong::LavaChicken => "minecraft:lava_chicken",
+            JukeboxSong::Mall => "minecraft:mall",
+            JukeboxSong::Mellohi => "minecraft:mellohi",
+            JukeboxSong::Otherside => "minecraft:otherside",
+            JukeboxSong::Pigstep => "minecraft:pigstep",
+            JukeboxSong::Precipice => "minecraft:precipice",
+            JukeboxSong::Relic => "minecraft:relic",
+            JukeboxSong::Stal => "minecraft:stal",
+            JukeboxSong::Strad => "minecraft:strad",
+            JukeboxSong::Tears => "minecraft:tears",
+            JukeboxSong::Wait => "minecraft:wait",
+            JukeboxSong::Ward => "minecraft:ward",
+        }
+    }
+
+    #[must_use]
+    pub const fn song_from_id(id: u32) -> Option<crate::jukebox_song::JukeboxSong> {
+        use crate::jukebox_song::JukeboxSong;
+        match id {
+            0 => Some(JukeboxSong::Id11),
+            1 => Some(JukeboxSong::Id13),
+            2 => Some(JukeboxSong::Id5),
+            3 => Some(JukeboxSong::Blocks),
+            4 => Some(JukeboxSong::Bounce),
+            5 => Some(JukeboxSong::Cat),
+            6 => Some(JukeboxSong::Chirp),
+            7 => Some(JukeboxSong::Creator),
+            8 => Some(JukeboxSong::CreatorMusicBox),
+            9 => Some(JukeboxSong::Far),
+            10 => Some(JukeboxSong::LavaChicken),
+            11 => Some(JukeboxSong::Mall),
+            12 => Some(JukeboxSong::Mellohi),
+            13 => Some(JukeboxSong::Otherside),
+            14 => Some(JukeboxSong::Pigstep),
+            15 => Some(JukeboxSong::Precipice),
+            16 => Some(JukeboxSong::Relic),
+            17 => Some(JukeboxSong::Stal),
+            18 => Some(JukeboxSong::Strad),
+            19 => Some(JukeboxSong::Tears),
+            20 => Some(JukeboxSong::Wait),
+            21 => Some(JukeboxSong::Ward),
+            _ => None,
+        }
+    }
+
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let compound = data.extract_compound()?;
-        let song = compound.get_string("song")?;
-        let static_song = crate::jukebox_song::JukeboxSong::from_name(
-            song.strip_prefix("minecraft:").unwrap_or(song),
-        )
-        .map_or("", |s| s.to_name());
-        Some(Self { song: static_song })
+        let raw_song = data
+            .extract_string()
+            .or_else(|| data.extract_compound().and_then(|c| c.get_string("song")))?;
+        let song = crate::jukebox_song::JukeboxSong::from_name(
+            raw_song.strip_prefix("minecraft:").unwrap_or(raw_song),
+        )?;
+        Some(Self {
+            song: Self::song_registry_key(song),
+        })
     }
 }
 impl DataComponentImpl for JukeboxPlayableImpl {
+    fn write_data(&self) -> NbtTag {
+        let song = if self.song.contains(':') {
+            self.song.to_string()
+        } else {
+            format!("minecraft:{}", self.song)
+        };
+        NbtTag::String(song.into())
+    }
     default_impl!(JukeboxPlayable);
 }
 

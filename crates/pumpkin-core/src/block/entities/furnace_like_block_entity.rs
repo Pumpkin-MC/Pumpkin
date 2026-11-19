@@ -323,21 +323,33 @@ macro_rules! impl_inventory_for_cooking {
                     && ItemStack::are_items_and_components_equal(&items[slot], &stack);
 
                 items[slot] = stack.clone();
-
-                if slot == 0 && !is_same_item {
-                    if let Some(recipe) = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
-                        stack.item,
-                        $recipe_kind,
-                    ) {
-                        self.set_cooking_total_time(recipe.cookingtime as u16);
-                    } else {
-                        self.set_cooking_total_time(0);
-                    }
-                    self.set_cooking_time_spent(0);
-                }
+                self.on_stack_set(slot, is_same_item, &stack);
 
                 // Always consider the inventory changed when setting a stack
                 self.mark_dirty();
+            }
+
+            fn update_stack(
+                &self,
+                slot: usize,
+                update: &mut dyn FnMut(&mut ItemStack) -> bool,
+            ) -> bool {
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(stack) = items.get_mut(slot) else {
+                    return false;
+                };
+                let old = (slot == 0).then(|| stack.clone());
+                if !update(stack) {
+                    return false;
+                }
+                let is_same_item = old.is_some_and(|old| {
+                    !stack.is_empty() && ItemStack::are_items_and_components_equal(&old, stack)
+                });
+                self.on_stack_set(slot, is_same_item, stack);
+                true
             }
 
             fn mark_dirty(&self) {
@@ -390,6 +402,23 @@ macro_rules! impl_inventory_for_cooking {
 
             fn as_any(&self) -> &dyn std::any::Any {
                 self
+            }
+        }
+
+        impl $struct_name {
+            /// Vanilla `AbstractFurnaceBlockEntity.setItem`: a different input item restarts cooking.
+            fn on_stack_set(&self, slot: usize, is_same_item: bool, stack: &ItemStack) {
+                if slot == 0 && !is_same_item {
+                    if let Some(recipe) = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
+                        stack.item,
+                        $recipe_kind,
+                    ) {
+                        self.set_cooking_total_time(recipe.cookingtime as u16);
+                    } else {
+                        self.set_cooking_total_time(0);
+                    }
+                    self.set_cooking_time_spent(0);
+                }
             }
         }
     };
@@ -618,6 +647,7 @@ macro_rules! impl_block_entity_for_cooking {
                     lit_total_time,
                     lit_time_remaining,
                     recipes_used: std::sync::Mutex::new(recipes_used_map),
+                    metadata: $crate::block::entities::ContainerMetadata::from_nbt(nbt),
                 };
                 pumpkin_inventory::sync_read_items_from_nbt(nbt, furnace.items.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner));
 
@@ -652,6 +682,37 @@ macro_rules! impl_block_entity_for_cooking {
                 }
 
                 self.write_inventory_nbt(nbt, true);
+                self.metadata.write_nbt(nbt);
+            }
+
+            fn apply_item_components(&self, stack: &ItemStack) {
+                self.metadata.apply_item_components(stack);
+                let mut items = self
+                    .items
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::apply_container_items_to_slice(stack, &mut *items);
+            }
+
+            fn collect_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_name_only(stack);
+            }
+
+            fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+                self.metadata.collect_item_components(stack);
+                let items = self
+                    .items
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                $crate::block::entities::collect_container_items_from_slice(&*items, stack);
+            }
+
+            fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+                self.metadata.get_lock()
+            }
+
+            fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+                self.metadata.get_custom_name()
             }
 
             fn get_inventory(

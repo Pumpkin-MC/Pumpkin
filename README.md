@@ -6,6 +6,8 @@
 [![Discord](https://img.shields.io/discord/1268592337445978193.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/wT8XjrjKkf)
 [![License: GPL](https://img.shields.io/badge/License-GPLv3-yellow.svg)](https://opensource.org/licenses/gpl-3-0)
 
+[Website](https://pumpkinmc.org/) • [Download](https://pumpkinmc.org/download/) • [Docs](https://docs.pumpkinmc.org/) • [Discord](https://discord.gg/wT8XjrjKkf)
+
 </div>
 
 [Pumpkin](https://pumpkinmc.org/) is a Minecraft server built entirely in Rust, offering a fast, efficient,
@@ -16,6 +18,21 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 
 </div>
 
+> [!IMPORTANT]
+> Pumpkin is currently under heavy development.
+>
+> [See what needs to be done before the 1.0.0 Release](https://github.com/Pumpkin-MC/Pumpkin/issues/449)
+
+## Quick Start
+
+Install on Linux / macOS:
+
+```sh
+curl -sSfL https://pumpkinmc.org/install.sh | sh
+```
+
+Or grab a prebuilt binary from the [Download page](https://pumpkinmc.org/download/) (also available on [GitHub Releases](https://github.com/Pumpkin-MC/Pumpkin/releases)). See the [Quick Start guide](https://docs.pumpkinmc.org/#quick-start) and [Documentation](https://docs.pumpkinmc.org/) for setup details.
+
 ## Goals
 
 - **Performance**: Leveraging multi-threading for maximum speed and efficiency.
@@ -23,11 +40,6 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 - **Security**: Prioritizes security by preventing known security exploits.
 - **Flexibility**: Highly configurable, with the ability to disable unnecessary features.
 - **Extensibility**: Provides a foundation for plugin development.
-
-> [!IMPORTANT]
-> Pumpkin is currently under heavy development.
->
-> [See what needs to be done before the 1.0.0 Release](https://github.com/Pumpkin-MC/Pumpkin/issues/449)
 
 ## Features
 
@@ -95,17 +107,9 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 
 <!-- Check out our [Github Project](https://github.com/orgs/Pumpkin-MC/projects/3) to see current progress. -->
 
-## How to run
-
-See our [Quick Start](https://docs.pumpkinmc.org/#quick-start) guide to get Pumpkin running.
-
 ## Contributions
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
-
-## Docs
-
-Pumpkin's documentation can be found at <https://pumpkinmc.org/>
 
 ## Communication
 

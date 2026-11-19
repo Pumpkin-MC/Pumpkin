@@ -49,6 +49,7 @@ RUST_CI_IGNORED_ROOTS = {
 }
 
 RUST_CI_IGNORED_FILES = {
+    ".github/CODEOWNERS",
     ".github/dependabot.yml",
     ".github/FUNDING.yml",
     ".github/PULL_REQUEST_TEMPLATE.md",
@@ -56,7 +57,6 @@ RUST_CI_IGNORED_FILES = {
     ".github/workflows/docker.yml",
     ".github/workflows/nightly.yml",
     ".github/workflows/release.yml",
-    ".github/workflows/reviewers.yml",
     ".github/workflows/sync-wit.yml",
     ".github/workflows/typos.yml",
     ".dockerignore",

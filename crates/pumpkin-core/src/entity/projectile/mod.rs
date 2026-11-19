@@ -73,7 +73,7 @@ impl ThrownItemEntity {
     /// Starts at the shooter's eye.
     pub fn new(entity: Entity, owner: &Entity, gravity: f64) -> Self {
         let mut owner_pos = owner.pos.load();
-        owner_pos.y += owner.get_eye_height() - 0.1;
+        owner_pos.y += owner.get_eye_height() - f64::from(0.1f32);
         entity.set_pos(owner_pos);
         Self::owned(entity, owner, gravity)
     }
@@ -146,7 +146,9 @@ impl ThrownItemEntity {
         }
 
         let mut velocity = entity.velocity.load();
-        velocity.y -= self.get_gravity();
+        if !entity.has_no_gravity() {
+            velocity.y -= self.get_gravity();
+        }
         let inertia = if entity.touching_water.load(Ordering::Relaxed) {
             WATER_INERTIA
         } else {
@@ -214,8 +216,8 @@ fn handle_first_tick_bubble_column(projectile: &dyn EntityBase, world: &World) {
     }
 }
 
-const WATER_INERTIA: f64 = 0.8;
-const AIR_INERTIA: f64 = 0.99;
+const WATER_INERTIA: f64 = 0.8f32 as f64;
+const AIR_INERTIA: f64 = 0.99f32 as f64;
 
 /// What became of a hit handed to [`hit_target_or_deflect_self`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

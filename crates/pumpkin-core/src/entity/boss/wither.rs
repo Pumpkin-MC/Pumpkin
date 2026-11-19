@@ -604,6 +604,10 @@ impl Mob for WitherEntity {
         self.remove_all_bossbar(&self.get_entity().world.load());
     }
 
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        false
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

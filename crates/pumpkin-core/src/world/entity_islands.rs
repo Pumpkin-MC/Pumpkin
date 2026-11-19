@@ -18,6 +18,7 @@ use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
 use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
+use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
 use crate::plugin::api::events::entity::{
     entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
     entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
@@ -126,8 +127,8 @@ impl Schedule {
     }
 }
 
-/// A plugin listens to an event an entity tick can fire: targeting, breeding, anger, or a
-/// sit order dropped on damage. Its handler may touch anything, so the tick runs in list order.
+/// A plugin listens to an event an entity tick can fire. Its handler may touch anything,
+/// so the tick runs in list order.
 #[must_use]
 pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
     let plugins = &server.plugin_manager;
@@ -135,6 +136,7 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<EntityBreedEvent>()
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
+        || plugins.has_handlers::<EntityBlockFormEvent>()
 }
 
 /// What one entity can read or change next tick.
@@ -333,6 +335,13 @@ impl EntityReach {
                 base.bounding_box
                     .load()
                     .expand(player_radius, player_radius, player_radius);
+            let block_radius = mob.conservative_block_read_radius() + movement;
+            if block_radius > radius + BLOCK_UPDATE_REACH {
+                reach.block_reads =
+                    base.bounding_box
+                        .load()
+                        .expand(block_radius, block_radius, block_radius);
+            }
         }
         // Blast power and chained block effects can exceed the configured margins.
         reach.global = entity

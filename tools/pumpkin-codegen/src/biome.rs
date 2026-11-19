@@ -63,12 +63,6 @@ pub struct Biome {
 }
 
 impl Biome {
-    fn attr_bool(&self, key: &str) -> Option<bool> {
-        let val = self.attributes.get(key)?;
-        val.as_bool()
-            .or_else(|| val.get("argument").and_then(Value::as_bool))
-    }
-
     fn attr_f32(&self, key: &str) -> Option<f32> {
         let val = self.attributes.get(key)?;
         val.as_f64()
@@ -371,6 +365,12 @@ pub fn build() -> TokenStream {
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let has_precipitation = biome.has_precipitation;
         let temperature = biome.temperature;
+        let boolean_attributes: Vec<_> = biome.attributes.iter().filter_map(|(name, value)| {
+            let value = value.as_bool().or_else(|| value.get("argument").and_then(Value::as_bool))?;
+            let name = name.strip_prefix("minecraft:").unwrap_or(name);
+            let variant = format_ident!("{}", name.replace('/', "_").to_pascal_case());
+            Some(quote! { (crate::environment_attribute::EnvironmentAttribute::#variant, #value) })
+        }).collect();
         let downfall = biome.downfall;
         let carvers: Vec<TokenStream> = biome
             .carvers
@@ -398,16 +398,6 @@ pub fn build() -> TokenStream {
             .collect();
 
         let creature_spawn_probability = &biome.creature_spawn_probability.unwrap_or(0.1);
-        let increased_fire_burnout = biome
-            .attr_bool("minecraft:gameplay/increased_fire_burnout")
-            .unwrap_or(false);
-        let snow_golem_melts = biome
-            .attr_bool("minecraft:gameplay/snow_golem_melts")
-            .unwrap_or(false);
-        let can_pillager_patrol_spawn = biome
-            .attr_bool("minecraft:gameplay/can_pillager_patrol_spawn")
-            .unwrap_or(true);
-
         let temperature_modifier = biome
             .temperature_modifier
             .unwrap_or(TemperatureModifier::None);
@@ -492,6 +482,7 @@ pub fn build() -> TokenStream {
                 id: #index,
                 registry_id: #name,
                 be_network_id: #be_network_id,
+                boolean_attributes: &[#(#boolean_attributes),*],
                 weather: Weather::new(
                      #has_precipitation,
                      #temperature,
@@ -501,9 +492,6 @@ pub fn build() -> TokenStream {
                 features: &[#(#features),*],
                 carvers: &[#(#carvers),*],
                 creature_spawn_probability: #creature_spawn_probability,
-                increased_fire_burnout: #increased_fire_burnout,
-                snow_golem_melts: #snow_golem_melts,
-                can_pillager_patrol_spawn: #can_pillager_patrol_spawn,
                 spawners: #spawners,
                 spawn_costs: phf::phf_map! {
                     #(#spawn_costs),*
@@ -532,13 +520,11 @@ pub fn build() -> TokenStream {
             pub id: u8,
             pub registry_id: &'static str,
             pub be_network_id: u8,
+            pub boolean_attributes: &'static [(crate::environment_attribute::EnvironmentAttribute, bool)],
             pub weather: Weather,
             pub carvers: &'static [&'static crate::carver::CarverConfig],
             pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],
             pub creature_spawn_probability: f32,
-            pub increased_fire_burnout: bool,
-            pub snow_golem_melts: bool,
-            pub can_pillager_patrol_spawn: bool,
             pub spawners: SpawnGroups,
             pub spawn_costs: phf::Map<&'static str, SpawnCosts>,
         }
