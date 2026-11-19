@@ -57,17 +57,22 @@ pub(super) fn push_entities(world: &World, players: &[Arc<Player>]) {
         .par_iter()
         .map(|player| player.pushable_entities(&met))
         .collect();
+    let mut moved = false;
     for (player, pushable) in players.iter().zip(pushable) {
         // A plugin handler may have moved anybody. A death drop, a parrot leaving a hurt
         // player's shoulder or a player joining are new neighbours. Then the turn looks again.
-        let as_found = events_handled() == handled
+        let as_found = !moved
+            && events_handled() == handled
             && Arc::ptr_eq(&entities, &world.entities.load())
             && std::ptr::eq(players.as_ptr(), world.players.load().as_ptr());
+        let pos = player.position();
         if as_found {
             player.push_entities_among(pushable);
         } else {
             player.push_entities();
         }
+        // Cramming damage can set off a death protection that teleports the player.
+        moved |= player.position() != pos;
     }
 }
 
