@@ -17,7 +17,7 @@ use crate::{
 use pumpkin_core::plugin::Context;
 use pumpkin_wasm_host_common::state::PluginHostState;
 
-fn register_typed_event<E: pumpkin_core::plugin::Payload + ToFromWasmEvent + Clone + 'static>(
+fn register_typed_event<E: pumpkin_core::plugin::Payload + ToFromWasmEvent + 'static>(
     ctx: &Context,
     handler: &Arc<WasmPluginEventHandler>,
     priority: pumpkin_core::plugin::EventPriority,

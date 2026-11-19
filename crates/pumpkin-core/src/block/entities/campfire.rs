@@ -129,7 +129,7 @@ impl BlockEntity for CampfireBlockEntity {
                             slot as u8,
                             cooking_time,
                         );
-                        server.plugin_manager.fire_blocking(&server, &mut event);
+                        event = server.plugin_manager.fire_blocking(&server, event);
                         if event.cancelled {
                             continue;
                         }
@@ -165,7 +165,7 @@ impl BlockEntity for CampfireBlockEntity {
                     stack.clone(),
                     result.clone(),
                 );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     continue;
                 }

@@ -62,9 +62,7 @@ impl Player {
             return;
         };
         let mut input_event = PlayerInputEvent::new(player.clone(), format!("{input:b}"));
-        server
-            .plugin_manager
-            .fire_blocking(server, &mut input_event);
+        input_event = server.plugin_manager.fire_blocking(server, input_event);
         if input_event.cancelled {
             return;
         }

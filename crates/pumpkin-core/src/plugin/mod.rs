@@ -6,14 +6,14 @@ use std::{
     any::Any,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    pin::Pin,
+    pin::{Pin, pin},
     sync::{Arc, RwLock as SyncRwLock, atomic::AtomicBool},
     thread::ThreadId,
     time::Duration,
 };
 use thiserror::Error;
 use tokio::{
-    sync::{Notify, RwLock},
+    sync::{Notify, RwLock, RwLockMappedWriteGuard, RwLockReadGuard, RwLockWriteGuard},
     task::JoinHandle,
 };
 use tracing::{debug, error, info, warn};
@@ -38,14 +38,88 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 6;
+pub const PLUGIN_API_VERSION: u32 = 7;
 
 const PLUGIN_DIR: &str = "./plugins";
+
+/// Access to an event whose handler can continue running after its caller stops waiting.
+#[derive(Clone)]
+pub struct QueuedEvent {
+    storage: Arc<RwLock<dyn EventSlot>>,
+    writable: bool,
+}
+
+impl QueuedEvent {
+    /// Borrows a live event of the requested type for one synchronous host accessor.
+    ///
+    /// Returns `None` if the type differs or dispatch has reclaimed the payload.
+    ///
+    /// # Errors
+    /// Returns a lock error if another accessor holds an exclusive borrow.
+    pub fn read<E: Payload + 'static>(
+        &self,
+    ) -> Result<Option<RwLockReadGuard<'_, E>>, tokio::sync::TryLockError> {
+        Ok(RwLockReadGuard::try_map(self.storage.try_read()?, |slot| {
+            (slot as &dyn Any).downcast_ref::<Option<E>>()?.as_ref()
+        })
+        .ok())
+    }
+
+    /// Borrows a live event for an edit by a blocking handler.
+    ///
+    /// Returns `None` for notifications, a type mismatch, or a reclaimed payload.
+    ///
+    /// # Errors
+    /// Returns a lock error if another accessor has borrowed the event.
+    pub fn write<E: Payload + 'static>(
+        &self,
+    ) -> Result<Option<RwLockMappedWriteGuard<'_, E>>, tokio::sync::TryLockError> {
+        if !self.writable {
+            return Ok(None);
+        }
+        Ok(
+            RwLockWriteGuard::try_map(self.storage.try_write()?, |slot| {
+                (slot as &mut dyn Any).downcast_mut::<Option<E>>()?.as_mut()
+            })
+            .ok(),
+        )
+    }
+}
+
+// The erased lock and typed lock both refer to the same allocation.
+trait EventSlot: Any + Send + Sync {
+    fn payload(&self) -> Option<&dyn Payload>;
+    fn payload_mut(&mut self) -> Option<&mut dyn Payload>;
+}
+
+impl<E: Payload + 'static> EventSlot for Option<E> {
+    fn payload(&self) -> Option<&dyn Payload> {
+        self.as_ref().map(|event| event as &dyn Payload)
+    }
+
+    fn payload_mut(&mut self) -> Option<&mut dyn Payload> {
+        self.as_mut().map(|event| event as &mut dyn Payload)
+    }
+}
+
+enum DispatchEvent<'a> {
+    Borrowed(&'a mut dyn Payload),
+    Shared(Arc<RwLock<dyn EventSlot>>),
+}
+
+/// Receives an owned event handle when callback execution can outlive its caller.
+pub trait QueuedEventHandler: Send + Sync {
+    fn dispatch<'a>(&'a self, server: &'a Arc<Server>, event: QueuedEvent) -> BoxFuture<'a, ()>;
+}
 
 /// A trait for handling events dynamically.
 ///
 /// This trait allows for handling events of any type that implements the `Event` trait.
 pub trait DynEventHandler: Send + Sync {
+    fn queued_handler(&self) -> Option<&dyn QueuedEventHandler> {
+        None
+    }
+
     /// Asynchronously handles a dynamic event.
     ///
     /// # Arguments
@@ -88,6 +162,10 @@ pub trait DynEventHandler: Send + Sync {
 ///
 /// This trait allows for handling events of a specific type that implements the `Event` trait.
 pub trait EventHandler<E: Payload>: Send + Sync {
+    fn queued_handler(&self) -> Option<&dyn QueuedEventHandler> {
+        None
+    }
+
     /// Asynchronously handles an event of type `E`.
     ///
     /// # Arguments
@@ -129,6 +207,10 @@ where
     E: Payload + Send + Sync + 'static,
     H: EventHandler<E> + Send + Sync,
 {
+    fn queued_handler(&self) -> Option<&dyn QueuedEventHandler> {
+        self.handler.queued_handler()
+    }
+
     /// Asynchronously handles a blocking dynamic event.
     fn handle_blocking_dyn<'a>(
         &'a self,
@@ -1228,92 +1310,137 @@ impl PluginManager {
             .is_some_and(|handlers| !handlers.is_empty())
     }
 
-    /// Fire an event to all registered handlers
-    pub async fn fire<E: Payload + Send + Sync + 'static>(
-        &self,
-        server: &Arc<Server>,
-        event: &mut E,
-    ) {
-        self.fire_dyn(server, E::get_name_static(), event).await;
+    /// Returns the event after blocking handlers and notifications have finished.
+    pub async fn fire<E: Payload + 'static>(&self, server: &Arc<Server>, event: E) -> E {
+        let snapshot = self.handlers.load();
+        let Some(handlers) = snapshot
+            .get(E::get_name_static())
+            .filter(|handlers| !handlers.is_empty())
+        else {
+            return event;
+        };
+        Self::dispatch_event(server, event, handlers).await
     }
 
-    async fn fire_dyn(
-        &self,
+    #[expect(
+        clippy::expect_used,
+        reason = "Only the typed dispatch wrapper takes the payload, after handlers finish."
+    )]
+    async fn dispatch_event<E: Payload + 'static>(
         server: &Arc<Server>,
-        event_name: &'static str,
-        event: &mut (dyn Payload + Send + Sync),
+        mut event: E,
+        handlers: &[Arc<dyn DynEventHandler>],
+    ) -> E {
+        if handlers
+            .iter()
+            .any(|handler| handler.queued_handler().is_some())
+        {
+            let slot = Arc::new(RwLock::new(Some(event)));
+            Self::dispatch_registered(server, DispatchEvent::Shared(slot.clone()), handlers).await;
+            slot.write().await.take().expect("dispatch owns the event")
+        } else {
+            Self::dispatch_registered(server, DispatchEvent::Borrowed(&mut event), handlers).await;
+            event
+        }
+    }
+
+    #[expect(
+        clippy::expect_used,
+        reason = "The typed dispatch wrapper can only take the payload after this future completes."
+    )]
+    async fn dispatch_registered(
+        server: &Arc<Server>,
+        mut event: DispatchEvent<'_>,
+        handlers: &[Arc<dyn DynEventHandler>],
     ) {
-        let handlers_map = self.handlers.load();
-        if handlers_map.is_empty() {
-            return;
-        }
-
-        let Some(handlers) = handlers_map.get(event_name) else {
-            return;
-        };
-
-        if handlers.is_empty() {
-            return;
-        }
-
-        // Process blocking handlers first
-        for handler in handlers {
-            if handler.is_blocking() {
-                handler.handle_blocking_dyn(server, event).await;
+        for handler in handlers.iter().filter(|handler| handler.is_blocking()) {
+            match &mut event {
+                DispatchEvent::Borrowed(event) => handler.handle_blocking_dyn(server, *event).await,
+                DispatchEvent::Shared(slot) => {
+                    if let Some(handler) = handler.queued_handler() {
+                        handler
+                            .dispatch(
+                                server,
+                                QueuedEvent {
+                                    storage: Arc::clone(slot),
+                                    writable: true,
+                                },
+                            )
+                            .await;
+                    } else {
+                        let mut guard = slot.write().await;
+                        let event = guard.payload_mut().expect("dispatch owns the event");
+                        handler.handle_blocking_dyn(server, event).await;
+                    }
+                }
             }
         }
 
-        // Run non-blocking handlers concurrently
-        let non_blocking: Vec<_> = handlers
-            .iter()
-            .filter(|h| !h.is_blocking())
-            .map(|h| h.handle_dyn(server, event))
-            .collect();
-
-        if !non_blocking.is_empty() {
-            futures::future::join_all(non_blocking).await;
-        }
+        join_all(
+            handlers
+                .iter()
+                .filter(|handler| !handler.is_blocking())
+                .map(|handler| {
+                    let event = &event;
+                    async move {
+                        match event {
+                            DispatchEvent::Borrowed(event) => {
+                                handler.handle_dyn(server, *event).await;
+                            }
+                            DispatchEvent::Shared(slot) => {
+                                if let Some(handler) = handler.queued_handler() {
+                                    handler
+                                        .dispatch(
+                                            server,
+                                            QueuedEvent {
+                                                storage: Arc::clone(slot),
+                                                writable: false,
+                                            },
+                                        )
+                                        .await;
+                                } else {
+                                    let guard = slot.read().await;
+                                    let event = guard.payload().expect("dispatch owns the event");
+                                    handler.handle_dyn(server, event).await;
+                                }
+                            }
+                        }
+                    }
+                }),
+        )
+        .await;
     }
 
-    /// Fire an event to all registered handlers synchronously (blocking if handlers exist).
-    /// If no handlers are registered for this event, returns immediately without runtime overhead.
-    pub fn fire_blocking<E: Payload + Send + Sync + 'static>(
-        &self,
-        server: &Arc<Server>,
-        event: &mut E,
-    ) {
-        self.fire_blocking_dyn(server, E::get_name_static(), event);
-    }
-
-    fn fire_blocking_dyn(
-        &self,
-        server: &Arc<Server>,
-        event_name: &'static str,
-        event: &mut (dyn Payload + Send + Sync),
-    ) {
-        let handlers_map = self.handlers.load();
-        if handlers_map.is_empty() {
-            return;
-        }
-
-        let Some(handlers) = handlers_map.get(event_name) else {
-            return;
+    /// Runs handlers synchronously, returning immediately when none are registered.
+    #[expect(
+        clippy::expect_used,
+        reason = "The pinned future stores the event before returning."
+    )]
+    pub fn fire_blocking<E: Payload + 'static>(&self, server: &Arc<Server>, event: E) -> E {
+        let snapshot = self.handlers.load();
+        let Some(handlers) = snapshot
+            .get(E::get_name_static())
+            .filter(|handlers| !handlers.is_empty())
+        else {
+            return event;
         };
 
-        if handlers.is_empty() {
-            return;
-        }
+        let mut result = None;
+        Self::block_on_dispatch(
+            server,
+            pin!(async {
+                result = Some(Self::dispatch_event(server, event, handlers).await);
+            }),
+        );
+        result.expect("blocking dispatch returned the event")
+    }
 
+    fn block_on_dispatch(server: &Arc<Server>, dispatch: Pin<&mut dyn Future<Output = ()>>) {
+        let dispatch = || server.runtime.block_on(dispatch);
         if tokio::runtime::Handle::try_current().is_ok() {
-            tokio::task::block_in_place(|| {
-                server
-                    .runtime
-                    .block_on(self.fire_dyn(server, event_name, event));
-            });
+            tokio::task::block_in_place(dispatch);
         } else {
-            server
-                .runtime
-                .block_on(self.fire_dyn(server, event_name, event));
+            dispatch();
         }
     }
 
@@ -1350,6 +1477,101 @@ impl PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::plugin::events::server::ServerTickStartEvent;
+
+    #[tokio::test]
+    async fn queued_event_survives_caller_cancellation() {
+        let (submitted, queued) = tokio::sync::oneshot::channel();
+        let caller = tokio::spawn(async move {
+            let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(3))));
+            let handle = QueuedEvent {
+                storage: slot.clone(),
+                writable: true,
+            };
+            assert!(submitted.send(handle).is_ok());
+            std::future::pending::<()>().await;
+            drop(slot);
+        });
+
+        let handle = queued.await.unwrap();
+        caller.abort();
+        assert!(caller.await.unwrap_err().is_cancelled());
+        handle
+            .write::<ServerTickStartEvent>()
+            .unwrap()
+            .unwrap()
+            .tick = 4;
+        assert_eq!(
+            handle.read::<ServerTickStartEvent>().unwrap().unwrap().tick,
+            4
+        );
+    }
+
+    #[tokio::test]
+    async fn queued_event_shares_edits_and_expires_after_dispatch() {
+        let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(1))));
+        let blocking = QueuedEvent {
+            storage: slot.clone(),
+            writable: true,
+        };
+        let notification = QueuedEvent {
+            storage: slot.clone(),
+            writable: false,
+        };
+        blocking
+            .write::<ServerTickStartEvent>()
+            .unwrap()
+            .unwrap()
+            .tick = 2;
+        assert!(
+            notification
+                .write::<ServerTickStartEvent>()
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            notification
+                .read::<ServerTickStartEvent>()
+                .unwrap()
+                .unwrap()
+                .tick,
+            2
+        );
+        {
+            let mut guard = blocking.storage.write().await;
+            let event = guard.payload_mut().unwrap();
+            event
+                .as_any_mut()
+                .downcast_mut::<ServerTickStartEvent>()
+                .unwrap()
+                .tick = 3;
+        };
+        {
+            let guard = notification.storage.read().await;
+            let event = guard.payload().unwrap();
+            assert_eq!(
+                event
+                    .as_any()
+                    .downcast_ref::<ServerTickStartEvent>()
+                    .unwrap()
+                    .tick,
+                3
+            );
+            assert_eq!(
+                notification
+                    .read::<ServerTickStartEvent>()
+                    .unwrap()
+                    .unwrap()
+                    .tick,
+                3
+            );
+        };
+        assert_eq!(slot.write().await.take().unwrap().tick, 3);
+        assert!(blocking.read::<ServerTickStartEvent>().unwrap().is_none());
+        assert!(blocking.write::<ServerTickStartEvent>().unwrap().is_none());
+        assert!(blocking.storage.read().await.payload().is_none());
+    }
 
     #[tokio::test]
     async fn topological_sort() {

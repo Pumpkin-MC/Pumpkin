@@ -39,7 +39,7 @@ impl ChunkSend {
         let mut valid_chunks = Vec::with_capacity(chunks.len());
         for chunk in chunks {
             let mut event = Self::new(world.clone(), chunk.clone());
-            server.plugin_manager.fire(server, &mut event).await;
+            event = server.plugin_manager.fire(server, event).await;
             if !event.cancelled {
                 valid_chunks.push(chunk.clone());
             }
@@ -56,7 +56,7 @@ impl ChunkSend {
         let mut cancelled = Vec::new();
         chunks.retain(|prepared| {
             let mut event = Self::new(world.clone(), prepared.chunk.clone());
-            server.plugin_manager.fire_blocking(server, &mut event);
+            event = server.plugin_manager.fire_blocking(server, event);
             if event.cancelled {
                 cancelled.push(prepared.position);
             }

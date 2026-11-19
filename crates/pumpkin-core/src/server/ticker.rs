@@ -91,7 +91,7 @@ impl Ticker {
             if server.plugin_manager.has_handlers::<ServerTickStartEvent>() {
                 server
                     .plugin_manager
-                    .fire_blocking(server, &mut ServerTickStartEvent::new(tick_number));
+                    .fire_blocking(server, ServerTickStartEvent::new(tick_number));
             }
 
             let should_tick_game_tests = (manager.runs_normally() || sprinting)
@@ -121,7 +121,7 @@ impl Ticker {
             if server.plugin_manager.has_handlers::<ServerTickEndEvent>() {
                 server.plugin_manager.fire_blocking(
                     server,
-                    &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
+                    ServerTickEndEvent::new(tick_number, tick_duration_nanos),
                 );
             }
 
