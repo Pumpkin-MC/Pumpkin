@@ -32,6 +32,7 @@ pub fn test_configs(temp_dir: &tempfile::TempDir) -> (BasicConfiguration, Advanc
     advanced_config.networking.bedrock.authentication.enabled = false;
     advanced_config.player_data.save_player_data = false;
     advanced_config.advancement.save_advancements = false;
+    advanced_config.update_checker.enabled = false;
 
     (basic_config, advanced_config)
 }

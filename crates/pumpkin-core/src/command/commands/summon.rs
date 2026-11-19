@@ -86,7 +86,12 @@ impl CommandExecutor for SummonExecutor {
         let name = entity.get_display_name();
         // Vanilla only finalizes the spawn when no NBT argument was given.
         if !self.has_nbt {
-            finalize_spawn(&entity, world, None);
+            finalize_spawn(
+                &entity,
+                world,
+                crate::entity::mob::spawn::EntitySpawnReason::Command,
+                None,
+            );
         }
         for entity in entities {
             world.spawn_entity(entity);

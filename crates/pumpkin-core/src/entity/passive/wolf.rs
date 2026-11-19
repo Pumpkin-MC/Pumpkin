@@ -192,6 +192,10 @@ impl Mob for WolfEntity {
         self.order_to_sit(false);
     }
 
+    fn can_shear_equipment(&self, player: &Player) -> bool {
+        self.is_owned_by(&player.gameprofile.id)
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         let sound_variant = WolfSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
             .unwrap_or_default();
@@ -377,9 +381,6 @@ impl Mob for WolfEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         let item = item_stack.get_item();
-        let sound_variant = WolfSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        let ambient = sound_variant.ambient_sound(self.is_baby());
         if self.is_tame() {
             if self.is_food(item_stack)
                 && self.mob_entity.living_entity.health.load()
@@ -387,7 +388,6 @@ impl Mob for WolfEntity {
             {
                 item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                 self.mob_entity.living_entity.heal(2.0);
-                self.play_eating_sound(ambient);
                 return true;
             }
 
@@ -410,7 +410,7 @@ impl Mob for WolfEntity {
                     return true;
                 }
 
-                let parent_interaction = self.animal_interact(player, item_stack, ambient);
+                let parent_interaction = self.animal_interact(player, item_stack);
                 if !parent_interaction {
                     if self.order_to_sit(!self.is_ordered_to_sit()) {
                         self.stop_and_forget_target();
@@ -433,7 +433,7 @@ impl Mob for WolfEntity {
             return true;
         }
 
-        self.animal_interact(player, item_stack, ambient)
+        self.animal_interact(player, item_stack)
     }
 }
 

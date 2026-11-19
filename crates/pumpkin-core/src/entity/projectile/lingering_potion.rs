@@ -1,8 +1,9 @@
 use crate::entity::projectile::owner::ProjectileOwner;
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
 
-use crate::entity::projectile::splash_potion::extinguish_fire_if_water_potion;
+use crate::entity::projectile::splash_potion::{
+    extinguish_fire_if_water_potion, rehydrate_axolotls_around,
+};
 use crate::{
     entity::{Entity, EntityBase, projectile::ThrownItemEntity},
     server::Server,
@@ -29,8 +30,6 @@ impl LingeringPotionEntity {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
         };
 
@@ -65,6 +64,10 @@ impl LingeringPotionEntity {
 }
 
 impl EntityBase for LingeringPotionEntity {
+    fn hurt_knockback_direction(&self, hurt: &Entity) -> Option<(f64, f64)> {
+        super::knockback_away_from(self.get_entity(), hurt)
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.thrown.owner)
     }
@@ -83,8 +86,8 @@ impl EntityBase for LingeringPotionEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -113,6 +116,9 @@ impl EntityBase for LingeringPotionEntity {
         world.send_entity_status(self.get_entity(), EntityStatus::Death, ActorEventID::Death);
 
         let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);
+
+        let search_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
+        rehydrate_axolotls_around(&world, &stack, &search_box);
 
         // If no effects, just splash (like water bottles)
         if effects.is_empty() {

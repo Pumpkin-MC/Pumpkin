@@ -379,6 +379,10 @@ impl CreakingEntity {
 }
 
 impl Mob for CreakingEntity {
+    fn mob_is_pushable(&self) -> bool {
+        self.mob_entity.living_entity.is_pushable() && self.can_move()
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityCreakingStep, 0.15, 1.0);
     }

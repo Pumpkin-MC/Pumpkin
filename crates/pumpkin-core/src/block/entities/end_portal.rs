@@ -41,6 +41,13 @@ impl BlockEntity for EndPortalBlockEntity {
         Self { position }
     }
 
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        Some(super::bedrock::BedrockBlockActorBuilder::new("EndPortal", self.position).finish())
+    }
+
     fn write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     fn as_any(&self) -> &dyn std::any::Any {

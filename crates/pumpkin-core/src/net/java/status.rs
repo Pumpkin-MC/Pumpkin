@@ -23,6 +23,17 @@ impl PendingConnection {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .get_status_response(client_version.protocol_version())
         };
+        // Show translated versions as compatible in the server list.
+        let client_protocol = client_version.protocol_version();
+        if client_protocol >= 0
+            && server
+                .plugin_manager
+                .java_versions
+                .admits_protocol(client_protocol as u32)
+            && let Some(version) = &mut status_response.version
+        {
+            version.protocol = client_protocol as u32;
+        }
 
         let (max_players, num_players) = status_response
             .players

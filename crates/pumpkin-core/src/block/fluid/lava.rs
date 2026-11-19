@@ -1,6 +1,10 @@
 use super::flowing_trait::FlowingFluid;
 use crate::{
-    block::{FluidMetadata, blocks::fire::fire::FireBlock, fluid::FluidBehaviour},
+    block::{
+        FluidMetadata,
+        blocks::fire::{fire::FireBlock, soul_fire::SoulFireBlock},
+        fluid::FluidBehaviour,
+    },
     entity::EntityBase,
     world::World,
 };
@@ -8,11 +12,11 @@ use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
     damage::DamageType,
     fluid::{Falling, Fluid, FluidProperties, Level},
-    tag::Taggable,
+    tag::{self, Taggable},
     world::WorldEvent,
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 use std::sync::Arc;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
@@ -33,33 +37,30 @@ impl FlowingLava {
             .game_rules
             .fire_spread_radius_around_player;
 
-        if spread_radius == 0 {
-            return false;
-        }
         if spread_radius == -1 {
             return true;
         }
-
-        world
-            .get_closest_player(pos.to_centered_f64(), spread_radius as f64)
-            .is_some()
-    }
-
-    fn is_flammable_state(block_state: &BlockState) -> bool {
-        let block = Block::from_state_id(block_state.id);
-        if block.is_waterlogged(block_state.id) {
+        if spread_radius <= 0 {
             return false;
         }
-        block
-            .flammable
-            .as_ref()
-            .is_some_and(|flammable| flammable.burn_chance > 0)
+
+        let target = Vector3::new(f64::from(pos.0.x), f64::from(pos.0.y), f64::from(pos.0.z));
+        let max_distance_sq = (spread_radius as f64).powi(2);
+        world.players.load().iter().any(|player| {
+            !player.is_spectator()
+                && player
+                    .get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(&target)
+                    < max_distance_sq
+        })
     }
 
     fn is_flammable(world: &Arc<World>, pos: &BlockPos) -> bool {
         world
             .get_block_state_if_loaded(pos)
-            .is_some_and(Self::is_flammable_state)
+            .is_some_and(BlockState::burnable)
     }
 
     fn has_flammable_neighbours(world: &Arc<World>, pos: &BlockPos) -> bool {
@@ -69,22 +70,27 @@ impl FlowingLava {
     }
 
     fn can_resolve_fire_state_without_loading(world: &Arc<World>, pos: &BlockPos) -> bool {
-        if !world.is_loaded(pos) || !world.is_loaded(&pos.down()) {
-            return false;
-        }
+        let (x, z) = (pos.0.x, pos.0.z);
+        let loaded = |x: i32, z: i32| world.level.is_chunk_loaded(&Vector2::new(x >> 4, z >> 4));
 
-        BlockDirection::all()
-            .iter()
-            .all(|dir| world.is_loaded(&pos.offset(dir.to_offset())))
+        loaded(x, z)
+            && (x & 15 != 0 || loaded(x - 1, z))
+            && (x & 15 != 15 || loaded(x + 1, z))
+            && (z & 15 != 0 || loaded(x, z - 1))
+            && (z & 15 != 15 || loaded(x, z + 1))
     }
 
-    fn ignite_fire_if_possible(world: &Arc<World>, pos: &BlockPos) {
-        if !Self::can_resolve_fire_state_without_loading(world, pos) {
+    fn ignite_fire_if_possible(world: &Arc<World>, fire_pos: &BlockPos, state_pos: &BlockPos) {
+        if !Self::can_resolve_fire_state_without_loading(world, state_pos) {
             return;
         }
 
-        let fire_state_id = FireBlock.get_state_for_position(world.as_ref(), &Block::FIRE, pos);
-        world.set_block_state(pos, fire_state_id, BlockFlags::NOTIFY_ALL);
+        let fire_state_id = if SoulFireBlock::is_soul_base(world.get_block(&state_pos.down())) {
+            Block::SOUL_FIRE.default_state.id
+        } else {
+            FireBlock.get_state_for_position(world.as_ref(), &Block::FIRE, state_pos)
+        };
+        world.set_block_state(fire_pos, fire_state_id, BlockFlags::NOTIFY_ALL);
     }
 
     fn receive_neighbor_fluids(world: &Arc<World>, block_pos: &BlockPos) -> bool {
@@ -204,18 +210,17 @@ impl FluidBehaviour for FlowingLava {
                     rand::random_range(-1..=1),
                 ));
 
-                let (block, _) = world.get_block_and_state_id(&test_pos);
+                let Some(state_id) = world.get_block_state_id_if_loaded(&test_pos) else {
+                    return;
+                };
 
-                if block.id == Block::AIR.id {
+                let (block, state) = BlockState::from_id_with_block(state_id);
+                if state.is_air() {
                     if Self::has_flammable_neighbours(world, &test_pos) {
-                        world.set_block_state(
-                            &test_pos,
-                            Block::FIRE.default_state.id,
-                            BlockFlags::NOTIFY_ALL,
-                        );
+                        Self::ignite_fire_if_possible(world, &test_pos, &test_pos);
                         return;
                     }
-                } else if block.is_solid() {
+                } else if block.has_tag(&tag::Block::MINECRAFT_BLOCKS_LAVA_FIRE_SPREAD) {
                     return;
                 }
             }
@@ -227,17 +232,17 @@ impl FluidBehaviour for FlowingLava {
                     rand::random_range(-1..=1),
                 ));
 
-                if !world.is_loaded(&test_pos) {
+                let Some(test_state) = world.get_block_state_if_loaded(&test_pos) else {
                     return;
-                }
+                };
 
                 let above_pos = test_pos.up();
-                if world
-                    .get_block_state_if_loaded(&above_pos)
-                    .is_some_and(BlockState::is_air)
-                    && Self::is_flammable(world, &test_pos)
+                if test_state.burnable()
+                    && world
+                        .get_block_state_if_loaded(&above_pos)
+                        .is_some_and(BlockState::is_air)
                 {
-                    Self::ignite_fire_if_possible(world, &above_pos);
+                    Self::ignite_fire_if_possible(world, &above_pos, &test_pos);
                 }
             }
         }

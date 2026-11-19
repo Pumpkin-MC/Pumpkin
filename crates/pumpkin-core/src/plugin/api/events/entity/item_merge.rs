@@ -10,3 +10,14 @@ pub struct ItemMergeEvent {
     /// The ID of the target item entity being merged into the primary.
     pub target_id: i32,
 }
+
+impl ItemMergeEvent {
+    #[must_use]
+    pub const fn new(entity_id: i32, target_id: i32) -> Self {
+        Self {
+            entity_id,
+            target_id,
+            cancelled: false,
+        }
+    }
+}

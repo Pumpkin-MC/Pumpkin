@@ -969,12 +969,11 @@ impl JigsawGenerator {
         self.pool_aliases = aliases;
         self
     }
-}
 
-impl StructureGenerator for JigsawGenerator {
-    fn get_structure_position(
+    pub fn get_structure_position_checked(
         &self,
         context: StructureGeneratorContext<'_>,
+        is_valid_biome: impl FnOnce(BlockPos) -> bool,
     ) -> Option<StructurePosition> {
         let mut context = context;
         let structure = context
@@ -1051,7 +1050,7 @@ impl StructureGenerator for JigsawGenerator {
             &self.start_pool
         };
 
-        JigsawPlacement::add_pieces(
+        JigsawPlacement::add_pieces_checked(
             &mut context,
             start_pool,
             start_jigsaw,
@@ -1063,7 +1062,17 @@ impl StructureGenerator for JigsawGenerator {
             dimension_padding,
             liquid_settings,
             &pool_alias_lookup,
+            is_valid_biome,
         )
+    }
+}
+
+impl StructureGenerator for JigsawGenerator {
+    fn get_structure_position(
+        &self,
+        context: StructureGeneratorContext<'_>,
+    ) -> Option<StructurePosition> {
+        self.get_structure_position_checked(context, |_| true)
     }
 }
 

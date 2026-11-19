@@ -15,7 +15,7 @@ pub trait GeneratorInit {
     fn new(seed: Seed, dimension: Dimension) -> Self;
 }
 
-use pumpkin_data::structures::{StructurePlacementCalculator, StructureSet};
+use pumpkin_data::structures::{StructureKeys, StructurePlacementCalculator, StructureSet};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use std::sync::Arc;
@@ -101,6 +101,29 @@ impl WorldGenerator {
         }
     }
 
+    /// See [`VanillaGenerator::can_locate_structure`]. Other generators keep every structure.
+    #[must_use]
+    pub fn can_locate_structure(&self, set_index: usize, key: StructureKeys) -> bool {
+        match self {
+            Self::Noise(noise_gen) => noise_gen.can_locate_structure(set_index, key),
+            Self::Flat(_) | Self::Custom(_) => true,
+        }
+    }
+
+    /// Whether a piece of one of the `wanted` structures covers `pos`. Only noise worlds
+    /// generate structures.
+    #[must_use]
+    pub fn has_structure_piece_at(
+        &self,
+        pos: pumpkin_util::math::position::BlockPos,
+        wanted: &[StructureKeys],
+    ) -> bool {
+        match self {
+            Self::Noise(noise_gen) => noise_gen.has_structure_piece_at(pos, wanted),
+            Self::Flat(_) | Self::Custom(_) => false,
+        }
+    }
+
     #[must_use]
     pub fn global_structure_cache(
         &self,
@@ -138,9 +161,56 @@ pub struct VanillaGenerator {
     pub structure_calculator: StructurePlacementCalculator,
     pub structure_allowed_biomes: FxHashMap<usize, Vec<u16>>,
     pub enabled_structure_sets: FxHashSet<usize>,
+    pub uniform_carvers: Option<&'static [&'static pumpkin_data::carver::CarverConfig]>,
+    pub possible_biomes: FxHashSet<u16>,
 }
 
 impl VanillaGenerator {
+    /// Whether `/locate` may look for `key` through the set at `set_index`, like vanilla
+    /// `ChunkGeneratorStructureState.getPlacementsForStructure`: the set has to generate in
+    /// this dimension and one of the structure's own biomes has to be possible here.
+    #[must_use]
+    pub fn can_locate_structure(&self, set_index: usize, key: StructureKeys) -> bool {
+        self.enabled_structure_sets.contains(&set_index)
+            && ProtoChunk::structure_biomes(key)
+                .iter()
+                .any(|biome| self.possible_biomes.contains(biome))
+    }
+
+    /// Whether a piece of one of the `wanted` structures covers `pos`.
+    #[must_use]
+    pub fn has_structure_piece_at(
+        &self,
+        pos: pumpkin_util::math::position::BlockPos,
+        wanted: &[StructureKeys],
+    ) -> bool {
+        let dimension = &self.dimension;
+        let bottom_y = dimension.min_y as i8;
+        let shape = self
+            .settings
+            .shape
+            .trim_height(bottom_y, (dimension.min_y + dimension.height) as u16);
+        let min_y = i32::from(shape.min_y.max(bottom_y));
+        let height = shape.height.min(dimension.height as u16);
+        ProtoChunk::structure_references_in_chunk(
+            self,
+            pos.0.x >> 4,
+            pos.0.z >> 4,
+            min_y,
+            height,
+            |key| wanted.contains(&key),
+        )
+        .iter()
+        .any(|(_, collector)| {
+            collector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pieces
+                .iter()
+                .any(|piece| piece.bounding_box().contains_pos(&pos.0))
+        })
+    }
+
     #[must_use]
     pub fn find_spawn_position(&self) -> pumpkin_util::math::position::BlockPos {
         if self.settings.spawn_target.is_empty() {
@@ -201,6 +271,22 @@ impl VanillaGenerator {
         }
 
         let possible_biomes = biome_supplier.possible_biomes();
+        let uniform_carvers = {
+            let mut iter = possible_biomes
+                .iter()
+                .filter_map(|&id| pumpkin_data::chunk::Biome::from_id(id as u8).map(|b| b.carvers));
+            iter.next().map_or(Some(&[][..]), |first| {
+                iter.all(|carvers| {
+                    std::ptr::eq(first, carvers)
+                        || (first.len() == carvers.len()
+                            && first
+                                .iter()
+                                .zip(carvers.iter())
+                                .all(|(&a, &b)| std::ptr::eq(a, b)))
+                })
+                .then_some(first)
+            })
+        };
         let enabled_structure_sets = StructureSet::NAMES
             .iter()
             .enumerate()
@@ -246,6 +332,8 @@ impl VanillaGenerator {
             structure_calculator: StructurePlacementCalculator::new(seed.0 as i64),
             structure_allowed_biomes,
             enabled_structure_sets,
+            uniform_carvers,
+            possible_biomes,
         }
     }
 }

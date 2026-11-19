@@ -46,10 +46,6 @@ fn is_entity_above_block(entity: &crate::entity::Entity, position: &BlockPos) ->
     bb.min.y >= block_top - WALK_ON_EPSILON
 }
 
-fn is_entity_descending(entity: &crate::entity::Entity) -> bool {
-    entity.velocity.load().y < 0.0
-}
-
 pub(crate) fn collision_shape_for_entity(
     entity: &dyn EntityBase,
     position: &BlockPos,
@@ -69,7 +65,7 @@ pub(crate) fn collision_shape_for_entity(
 
     if can_entity_walk_on_powder_snow(entity)
         && is_entity_above_block(base, position)
-        && !is_entity_descending(base)
+        && !base.is_sneaking()
     {
         return Some(BoundingBox::full_block());
     }

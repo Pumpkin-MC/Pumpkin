@@ -98,10 +98,24 @@ thread_local! {
 fn cell_offsets(seed: i64, x: i32, y: i32, z: i32) -> CellOffsets {
     let key = (seed, x, y, z);
     LAST_CELL_OFFSETS.with_borrow_mut(|last| {
-        if let Some((last_key, offsets)) = last
-            && *last_key == key
-        {
-            return *offsets;
+        if let Some((last_key, prev_offsets)) = last {
+            if *last_key == key {
+                return *prev_offsets;
+            }
+            if *last_key == (seed, x, y + 1, z) {
+                let mut offsets = [[0.0; 3]; 8];
+                for permutation in 0..8 {
+                    if (permutation & 0b010) != 0 {
+                        offsets[permutation] = prev_offsets[permutation & !0b010];
+                    } else {
+                        let shifted_x = if (permutation & 0b100) == 0 { x } else { x + 1 };
+                        let shifted_z = if (permutation & 0b001) == 0 { z } else { z + 1 };
+                        offsets[permutation] = corner_offset(seed, shifted_x, y, shifted_z);
+                    }
+                }
+                *last = Some((key, offsets));
+                return offsets;
+            }
         }
         let mut offsets = [[0.0; 3]; 8];
         for (permutation, offset) in offsets.iter_mut().enumerate() {
@@ -170,7 +184,7 @@ const fn salt_mix(seed: i64, salt: i64) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_util::{math::vector3::Vector3, read_data_from_file};
+    use pumpkin_util::math::vector3::Vector3;
 
     use crate::{
         biome::hash_seed,
@@ -207,7 +221,7 @@ mod test {
     #[test]
     fn chunk_wide_blend() {
         let data: Vec<(i32, i32, i32, i32, i32, i32)> =
-            read_data_from_file!("../../../../assets/tests/biome_mixer.json");
+            include_json!("../../../../assets/tests/biome_mixer.json");
 
         let seed = hash_seed((-777i64) as u64);
         for (i, (x, y, z, result_x, result_y, result_z)) in data.into_iter().enumerate() {

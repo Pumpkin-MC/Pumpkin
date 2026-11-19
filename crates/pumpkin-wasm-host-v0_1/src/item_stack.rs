@@ -22,7 +22,7 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::combat::{Modifier, Operation};
 use pumpkin_data::data_component_impl::{
-    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl,
+    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl, MAX_ENCHANTMENT_LEVEL,
 };
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
@@ -181,7 +181,9 @@ impl HostItemStack for PluginHostState {
         };
 
         current_encs.retain(|(e, _)| e.id != enc.id);
-        current_encs.push((enc, level as i32));
+        if level > 0 {
+            current_encs.push((enc, level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32));
+        }
 
         if let Some((_, data)) = stack
             .patch
@@ -275,11 +277,15 @@ impl HostItemStack for PluginHostState {
         let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
 
-        stack.set_custom_data(
-            "pumpkin:enchantments",
-            &enchantment_id,
-            NbtTag::Int(level as i32),
-        );
+        if level == 0 {
+            stack.remove_custom_data("pumpkin:enchantments", &enchantment_id);
+        } else {
+            stack.set_custom_data(
+                "pumpkin:enchantments",
+                &enchantment_id,
+                NbtTag::Int(level as i32),
+            );
+        }
 
         if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&enchantment_id) {
             let mut current_encs = if let Some((_, Some(data))) = stack
@@ -296,7 +302,9 @@ impl HostItemStack for PluginHostState {
             };
 
             current_encs.retain(|(e, _)| e.id != vanilla.id);
-            current_encs.push((vanilla, level as i32));
+            if level > 0 {
+                current_encs.push((vanilla, level.min(MAX_ENCHANTMENT_LEVEL as u32) as i32));
+            }
 
             if let Some((_, data)) = stack
                 .patch
@@ -433,7 +441,7 @@ impl HostItemStack for PluginHostState {
         let attr = super::living_entity::from_wit_attribute(modifier.attribute);
         let slot = super::enchantment::to_data_slot(modifier.slot);
         let op = from_wit_item_operation(modifier.modifier.operation);
-        let leaked_id: &'static str = Box::leak(modifier.modifier.id.into_boxed_str());
+        let mod_id = modifier.modifier.id;
 
         let mut current_mods = stack
             .get_data_component::<AttributeModifiersImpl>()
@@ -441,13 +449,14 @@ impl HostItemStack for PluginHostState {
                 comp.attribute_modifiers.clone().into_owned()
             });
 
-        current_mods.retain(|m| !(m.r#type == attr && m.id == leaked_id && m.slot == slot));
+        current_mods.retain(|m| !(m.r#type == attr && m.id.as_ref() == mod_id && m.slot == slot));
         current_mods.push(Modifier {
             r#type: attr,
-            id: leaked_id,
+            id: Cow::Owned(mod_id),
             amount: modifier.modifier.amount,
             operation: op,
             slot,
+            display: pumpkin_data::data_component_impl::ModifierDisplay::Default,
         });
 
         stack.set_data_component(AttributeModifiersImpl {

@@ -1,3 +1,4 @@
+use pumpkin_data::tag::Taggable;
 use std::sync::{
     Arc, Mutex, Weak,
     atomic::{AtomicBool, Ordering},
@@ -138,6 +139,19 @@ impl PillagerEntity {
 }
 
 impl Mob for PillagerEntity {
+    // Raid banners going into the inventory are not handled yet.
+    fn pick_up_item(&self, item: &crate::entity::item::ItemEntity) {
+        let is_banner = item
+            .get_item_stack()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_BANNERS);
+        if is_banner {
+            crate::entity::mob::equipment::pick_up_item_as_equipment(self, item);
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -169,9 +183,7 @@ impl Mob for PillagerEntity {
         if !inv.is_empty() {
             let mut items_tag = Vec::new();
             for item in inv.iter() {
-                if !item.is_empty() {
-                    let mut item_nbt = NbtCompound::new();
-                    item.write_item_stack(&mut item_nbt);
+                if let Some(item_nbt) = item.to_nbt() {
                     items_tag.push(NbtTag::Compound(item_nbt));
                 }
             }

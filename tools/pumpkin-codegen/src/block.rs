@@ -1,5 +1,5 @@
 use heck::{ToPascalCase, ToShoutySnakeCase, ToUpperCamelCase};
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Literal, Span, TokenStream};
 use pumpkin_nbt::deserializer::{NbtReadHelper, NbtReadHelperBedrock};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
@@ -27,22 +27,6 @@ fn fill_array<T: Clone + ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStream> {
     }
 
     raw_id_from_state_id_ordered
-}
-
-/// Converts a sparse `(block_ident, state_index, state_id)` list into a dense `TokenStream` array.
-///
-/// # Arguments
-/// – `array` – triples of `(block_ident, state_index, state_id)` mapping each state ID to the block constant and local index.
-fn fill_state_array(array: Vec<(Ident, usize, u16)>) -> Vec<TokenStream> {
-    let max_index = array.iter().map(|(_, _, index)| index).max().unwrap();
-    let mut ret = vec![quote! { Missed State }; (max_index + 1) as usize];
-
-    for (block, index, state_id) in array {
-        let index_lit = LitInt::new(&index.to_string(), Span::call_site());
-        ret[state_id as usize] = quote! { &Block::#block.states[#index_lit] };
-    }
-
-    ret
 }
 
 /// Converts a block registry name into the SCREAMING_SNAKE_CASE constant identifier.
@@ -731,6 +715,8 @@ impl BlockState {
     const IS_SOLID_RENDER: u16 = 1 << 10;
     const CAN_OCCLUDE: u16 = 1 << 11;
     const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
+    /// Set by codegen, not extractor.
+    const IS_WATERLOGGED: u16 = 1 << 13;
 
     /// Returns `true` if this state receives random tick events.
     const fn has_random_ticks(&self) -> bool {
@@ -886,6 +872,12 @@ pub struct Block {
     pub velocity_multiplier: f32,
     /// Jump velocity multiplier applied when jumping from this block.
     pub jump_velocity_multiplier: f32,
+    /// Vertical bounce restitution (`Block.getBounceRestitution`).
+    #[serde(default)]
+    pub bounce_restitution: f32,
+    /// Fraction of fall distance reduced on landing (`Block.getFallDistanceReduction`).
+    #[serde(default)]
+    pub fall_distance_reduction: f32,
     /// Hash keys referencing the properties defined for this block.
     pub properties: Vec<i32>,
     /// State ID of the default (canonical) block state.
@@ -917,6 +909,8 @@ impl ToTokens for Block {
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
         let jump_velocity_multiplier = &self.jump_velocity_multiplier;
+        let bounce_restitution = &self.bounce_restitution;
+        let fall_distance_reduction = &self.fall_distance_reduction;
         let experience = if let Some(exp) = &self.experience {
             let exp_tokens = exp.to_token_stream();
             quote! { Some(#exp_tokens) }
@@ -929,17 +923,10 @@ impl ToTokens for Block {
         } else {
             quote! { None }
         };
-        // Generate state tokens
-        let states = self.states.iter().map(BlockState::to_tokens);
-
-        let default_state_ref: &BlockState = self
-            .states
-            .iter()
-            .find(|state| state.id == self.default_state_id)
-            .unwrap();
-        let mut default_state = default_state_ref.clone();
-        default_state.id = default_state_ref.id;
-        let default_state = default_state.to_tokens();
+        // flat states
+        let first_state = Literal::usize_unsuffixed(self.states[0].id.0 as usize);
+        let state_count = Literal::usize_unsuffixed(self.states.len());
+        let default_state = Literal::usize_unsuffixed(self.default_state_id.0 as usize);
         let flammable = if let Some(flammable) = &self.flammable {
             let flammable_tokens = flammable.to_token_stream();
             quote! { Some(#flammable_tokens) }
@@ -956,9 +943,11 @@ impl ToTokens for Block {
                 slipperiness: #slipperiness,
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,
+                bounce_restitution: #bounce_restitution,
+                fall_distance_reduction: #fall_distance_reduction,
                 item_id: #item_id,
-                default_state: &#default_state,
-                states: &[#(#states),*],
+                default_state: &mappings::BLOCK_STATES[#default_state],
+                states: block_states(#first_state, #state_count),
                 flammable: #flammable,
                 experience: #experience,
                 loot_table: #loot_table,
@@ -1323,7 +1312,6 @@ pub fn build() -> TokenStream {
 
     let mut random_tick_states = Vec::new();
     let mut air_states = Vec::new();
-    let mut liquid_states = Vec::new();
 
     let mut constants_list = Vec::new();
     let mut block_id_constants = Vec::new();
@@ -1341,7 +1329,7 @@ pub fn build() -> TokenStream {
 
     let mut raw_id_from_state_id_array = Vec::new();
     let mut type_from_raw_id_array = Vec::new();
-    let mut state_from_state_id_array = Vec::<(Ident, usize, u16)>::new();
+    let mut flat_states = Vec::new();
 
     let mut property_enums: BTreeMap<String, PropertyStruct> = BTreeMap::new();
     for generated_property in &generated_properties {
@@ -1414,8 +1402,18 @@ pub fn build() -> TokenStream {
 
         let mut multiplier = 1;
         let mut property_descriptors = Vec::new();
+        let mut waterlogged_multiplier = None;
         for hash in block.properties.iter().rev() {
             let gen_prop = generated_prop_map.get(hash).unwrap();
+            if gen_prop.serialized_name == "waterlogged" {
+                // waterlogged bool: index 0 = true
+                assert!(
+                    matches!(gen_prop.property_type, GeneratedPropertyType::Boolean),
+                    "{}: waterlogged is not a boolean",
+                    block.name
+                );
+                waterlogged_multiplier = Some(multiplier);
+            }
             let variant_count = match &gen_prop.property_type {
                 GeneratedPropertyType::Boolean => 2,
                 GeneratedPropertyType::Int { min, max } => (max - min + 1) as u16,
@@ -1459,10 +1457,10 @@ pub fn build() -> TokenStream {
             pub const #const_ident: Self = #block_id;
         });
 
-        type_from_raw_id_array.push((block.id.0, quote! { &Block::#const_ident }));
+        type_from_raw_id_array.push((block.id.0, quote! { Block::#const_ident }));
 
         block_from_name_entries.push(quote! {
-            #name_str => Block::#const_ident,
+            #name_str => BlockId::#const_ident,
         });
 
         for (i, state) in block.states.iter().enumerate() {
@@ -1474,10 +1472,11 @@ pub fn build() -> TokenStream {
                 let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
                 air_states.push(state_id);
             }
-            if state.is_liquid() {
-                let state_id = LitInt::new(&state.id.0.to_string(), Span::call_site());
-                liquid_states.push(state_id);
+            let mut flat_state = state.clone();
+            if waterlogged_multiplier.is_some_and(|m| (i as u16 / m) % 2 == 0) {
+                flat_state.state_flags |= BlockState::IS_WATERLOGGED;
             }
+            flat_states.push(flat_state.to_tokens());
 
             let mut matched_be_id = air_be_network_id;
 
@@ -1505,7 +1504,6 @@ pub fn build() -> TokenStream {
 
             block_state_to_bedrock.push((state.id.0, matched_be_id));
             raw_id_from_state_id_array.push((state.id.0, quote! { BlockId::#const_ident }));
-            state_from_state_id_array.push((const_ident.clone(), i, state.id.0));
         }
 
         if !property_collection.is_empty() {
@@ -1520,7 +1518,7 @@ pub fn build() -> TokenStream {
 
         if existing_item_ids.insert(item_id) {
             block_from_item_id_arms.push(quote! {
-                #item_id => Some(&Self::#const_ident),
+                #item_id => Some(Self::from_id(BlockId::#const_ident)),
             });
         }
     }
@@ -1580,7 +1578,6 @@ pub fn build() -> TokenStream {
         .map(ToTokens::to_token_stream);
 
     let air_state_ids = quote! { #(#air_states)|* };
-    let liquid_state_ids = quote! { #(#liquid_states)|* };
 
     let block_props = block_properties.iter().map(ToTokens::to_token_stream);
     let properties = property_enums.values().map(ToTokens::to_token_stream);
@@ -1610,11 +1607,7 @@ pub fn build() -> TokenStream {
     let max_type_id = type_from_raw_id_vec.len();
     let type_from_raw_id_items = quote! { #(#type_from_raw_id_vec),* };
 
-    let state_from_state_id_vec = fill_state_array(state_from_state_id_array);
-    let max_state_id_2 = state_from_state_id_vec.len();
-    let state_from_state_id = quote! { #(#state_from_state_id_vec),* };
-
-    assert_eq!(max_state_id, max_state_id_2);
+    assert_eq!(max_state_id, flat_states.len());
 
     let Bitset {
         items,
@@ -1773,10 +1766,10 @@ pub fn build() -> TokenStream {
             matches!(id.as_u16(), #air_state_ids)
         }
 
-         #[inline(always)]
-         #[must_use]
+        #[inline(always)]
+        #[must_use]
         pub const fn is_liquid(id: BlockStateId) -> bool {
-            matches!(id.as_u16(), #liquid_state_ids)
+            BlockState::from_id(id).is_liquid()
         }
 
         #[inline(always)]
@@ -1800,16 +1793,8 @@ pub fn build() -> TokenStream {
             #[inline]
             #[must_use]
             pub const fn from_id(id: BlockStateId) -> &'static Self {
-                // Safety: We always check this condition when creating a BlockStateId.
-                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
-                // If the condition held once, it will always hold.
-                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
-                // This hint guarantees that bound checks can be optimized away in release builds.
-                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
-                // bound checks-panics are replaced with ub-checks on profile.dev
-                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
-
-                mappings::STATE_FROM_STATE_ID[id.as_u16() as usize]
+                // SAFETY: BlockStateId < STATE_COUNT, see layout asserts.
+                unsafe { lookup(&mappings::BLOCK_STATES, id.as_u16()) }
             }
 
             #[doc = r" Get a block state from a state id and the corresponding block."]
@@ -1823,30 +1808,35 @@ pub fn build() -> TokenStream {
 
             #[must_use]
             pub const fn to_be_network_id(id: BlockStateId) -> u32 {
-                // Safety: We always check this condition when creating a BlockStateId.
-                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
-                // If the condition held once, it will always hold.
-                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
-                // This hint guarantees that bound checks can be optimized away in release builds.
-                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
-                // bound checks-panics are replaced with ub-checks on profile.dev
-                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
-
-                Self::STATE_ID_TO_BEDROCK[id.as_u16() as usize]
+                // SAFETY: BlockStateId < STATE_COUNT, see layout asserts.
+                unsafe { *lookup(Self::STATE_ID_TO_BEDROCK, id.as_u16()) }
             }
         }
 
         impl BlockStateId {
             pub const AIR: Self = Block::AIR.default_state.id;
 
-            pub(crate) const STATE_COUNT: u16 = mappings::STATE_FROM_STATE_ID.len() as u16;
+            pub(crate) const STATE_COUNT: u16 = mappings::BLOCK_STATES.len() as u16;
+        }
+
+        // unchecked lookup
+        #[inline(always)]
+        const unsafe fn lookup<T>(table: &'static [T], index: u16) -> &'static T {
+            unsafe { &*table.as_ptr().add(index as usize) }
+        }
+
+        // block states
+        const fn block_states(first: usize, len: usize) -> &'static [BlockState] {
+            mappings::BLOCK_STATES.split_at(first).1.split_at(len).0
         }
 
         mod mappings {
+            use super::NoteblockInstrument;
+            use crate::block_state::PistonBehavior;
             use crate::{Block, BlockId, BlockState, BlockStateId};
             use phf;
 
-            pub(super) static BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
+            pub(super) static BLOCK_FROM_NAME_MAP: phf::Map<&'static str, BlockId> = phf::phf_map!{
                 #(#block_from_name_entries)*
             };
 
@@ -1854,13 +1844,38 @@ pub fn build() -> TokenStream {
                 #raw_id_from_state_id
             ];
 
-            pub(super) static TYPE_FROM_RAW_ID: [&Block; #max_type_id] = [
+            // flat blocks
+            pub(super) static BLOCKS: [Block; #max_type_id] = [
                 #type_from_raw_id_items
             ];
 
-            pub(super) static STATE_FROM_STATE_ID: [&BlockState; #max_state_id] = [
-                #state_from_state_id
+            // flat states
+            pub(super) static BLOCK_STATES: [BlockState; #max_state_id] = [
+                #(#flat_states),*
             ];
+
+            // layout asserts
+            const _: () = {
+                let mut state = 0;
+                while state < BLOCK_STATES.len() {
+                    assert!(BLOCK_STATES[state].id.as_u16() as usize == state);
+                    state += 1;
+                }
+                let mut index = 0;
+                while index < BLOCKS.len() {
+                    let block = &BLOCKS[index];
+                    assert!(block.id.as_u16() as usize == index);
+                    let first = block.states[0].id.as_u16() as usize;
+                    let default = block.default_state.id.as_u16() as usize;
+                    assert!(default >= first && default < first + block.states.len());
+                    let mut offset = 0;
+                    while offset < block.states.len() {
+                        assert!(BLOCK_ID_FROM_STATE_ID[first + offset].as_u16() == block.id.as_u16());
+                        offset += 1;
+                    }
+                    index += 1;
+                }
+            };
         }
 
 
@@ -1894,30 +1909,22 @@ pub fn build() -> TokenStream {
             #[inline]
             #[must_use]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
-                mappings::BLOCK_FROM_NAME_MAP.get(name)
+                mappings::BLOCK_FROM_NAME_MAP.get(name).map(|id| Self::from_id(*id))
             }
 
             #[doc = r" Try to get a block from a namespace prefixed name."]
             #[must_use]
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 let key = name.strip_prefix("minecraft:").unwrap_or(name);
-                mappings::BLOCK_FROM_NAME_MAP.get(key)
+                mappings::BLOCK_FROM_NAME_MAP.get(key).map(|id| Self::from_id(*id))
             }
 
             /// Get a [`Block`] from a [`BlockId`]
             #[inline]
             #[must_use]
             pub const fn from_id(id: BlockId) -> &'static Self {
-                // Safety: We always check this condition when creating a BlockId.
-                // the u16 field is private and immutable. BlockId::BLOCK_COUNT is a const u16.
-                // If the condition held once, it will always hold.
-                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockId::BLOCK_COUNT) }
-                // This hint guarantees that bound checks can be optimized away in release builds.
-                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
-                // bound checks-panics are replaced with ub-checks on profile.dev
-                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
-
-                mappings::TYPE_FROM_RAW_ID[id.as_u16() as usize]
+                // SAFETY: BlockId < BLOCK_COUNT, see layout asserts.
+                unsafe { lookup(&mappings::BLOCKS, id.as_u16()) }
             }
 
             /// Get a [`Block`] from a state id
@@ -1954,27 +1961,37 @@ pub fn build() -> TokenStream {
                     _ => panic!("Invalid props")
                 }
             }
+
+            #[doc = r" Copies matching block properties from `source_state_id` of `source_block` onto `self`."]
+            #[must_use]
+            pub fn with_properties_of(
+                &self,
+                source_block: &Self,
+                source_state_id: BlockStateId,
+            ) -> BlockStateId {
+                if self.states.len() <= 1 {
+                    return self.default_state.id;
+                }
+                if let Some(source_props) = source_block.properties(source_state_id) {
+                    let props = source_props.to_props();
+                    self.from_properties(&props).to_state_id(self)
+                } else {
+                    self.default_state.id
+                }
+            }
         }
 
         impl BlockId {
             #(#block_id_constants)*
 
-            pub(crate) const BLOCK_COUNT: u16 = mappings::TYPE_FROM_RAW_ID.len() as u16;
+            pub(crate) const BLOCK_COUNT: u16 = mappings::BLOCKS.len() as u16;
 
             /// Get a [`BlockId`] from a [`BlockStateId`]
             #[inline]
             #[must_use]
             pub const fn from_state_id(id: BlockStateId) -> BlockId {
-                // Safety: We always check this condition when creating a BlockStateId.
-                // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
-                // If the condition held once, it will always hold.
-                unsafe { std::hint::assert_unchecked(id.as_u16() < BlockStateId::STATE_COUNT) }
-                // This hint guarantees that bound checks can be optimized away in release builds.
-                // Due to debug_assertions forcing -Zub_checks=yes (rust-lang/rust#123499)
-                // bound checks-panics are replaced with ub-checks on profile.dev
-                // https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/ub-checks.html
-
-                mappings::BLOCK_ID_FROM_STATE_ID[id.as_u16() as usize]
+                // SAFETY: BlockStateId < STATE_COUNT, see layout asserts.
+                unsafe { *lookup(&mappings::BLOCK_ID_FROM_STATE_ID, id.as_u16()) }
             }
         }
 
