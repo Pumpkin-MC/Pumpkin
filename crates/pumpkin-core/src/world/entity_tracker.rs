@@ -245,9 +245,8 @@ impl FarWatchers {
             && !hurt_by(target, viewer)
             && viewer.camera_target_id.load() != Some(target.get_entity().entity_id);
         match (far, state) {
-            (true, None) => Some(FarState::Joining),
-            // It still has the far base: it never left.
-            (true, Some(FarState::Leaving)) => Some(FarState::Following),
+            // A watcher that was leaving got no far delta meanwhile, so it starts over.
+            (true, None | Some(FarState::Leaving)) => Some(FarState::Joining),
             (false, Some(FarState::Joining | FarState::Following)) => Some(FarState::Leaving),
             _ => None,
         }

@@ -434,6 +434,43 @@ async fn a_watcher_back_before_its_first_far_update_gets_no_far_delta() -> TestR
     Ok(())
 }
 
+/// A far update can also come while a watcher is back for a moment. It gets no delta then,
+/// so it needs the far base anew when it goes away again before a near update.
+#[tokio::test]
+async fn a_watcher_away_again_before_a_near_update_gets_the_far_base_anew() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let entity_tracking = EntityTrackingConfig {
+        far_player_distance: 16,
+        far_player_update_interval: 5,
+    };
+    let server = server_with_entity_tracking(&folder, entity_tracking).await?;
+    let walker = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+    let mut watcher = Client::join(&server, 2, Vector3::new(40.5, 100.0, 0.5));
+    let world = server.worlds.load()[0].clone();
+    let entity = walker.player.get_entity();
+    let mut drawn = None;
+
+    // Far updates in ticks 0, 5 and 10, near updates in every other tick.
+    for tick in 0..=10 {
+        // Back before the far update of tick 5, away before the near update of tick 6.
+        if let Some(x) = [(5, 6.5), (6, 40.5)]
+            .iter()
+            .find_map(|&(at, x)| (at == tick).then_some(x))
+        {
+            let watcher = &watcher.player;
+            watcher.get_entity().set_pos(Vector3::new(x, 100.0, 0.5));
+            world.entity_tracker.update_player_position(watcher, &world);
+        }
+        let z = 0.2f64.mul_add(f64::from(tick), 0.5);
+        entity.set_pos(Vector3::new(0.5, 100.0, z));
+        world.entity_tracker.update_all(&world);
+        drawn = drawn_at(drawn, walker.entity_id(), &watcher.received().await?)?;
+    }
+    assert_close(drawn, entity.pos.load());
+    shutdown(&server).await;
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_respawned_or_removed_player_is_redrawn_or_gone() -> TestResult {
     let folder = tempfile::tempdir()?;
