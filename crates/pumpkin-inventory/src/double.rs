@@ -81,6 +81,14 @@ impl Inventory for DoubleInventory {
         }
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot >= self.first.size() {
+            self.second.update_stack(slot - self.first.size(), update)
+        } else {
+            self.first.update_stack(slot, update)
+        }
+    }
+
     fn on_open(&self) {
         self.first.on_open();
         self.second.on_open();

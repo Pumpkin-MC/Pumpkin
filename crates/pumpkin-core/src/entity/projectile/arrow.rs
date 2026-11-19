@@ -178,9 +178,9 @@ impl ArrowEntity {
     }
 
     fn write_item_stack_nbt(item_stack: &ItemStack, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        let mut item = pumpkin_nbt::compound::NbtCompound::new();
-        item_stack.copy_with_count(1).write_item_stack(&mut item);
-        nbt.put_compound("item", item);
+        if let Some(item) = item_stack.copy_with_count(1).to_nbt() {
+            nbt.put_compound("item", item);
+        }
     }
 
     fn read_item_stack_nbt(nbt: &pumpkin_nbt::compound::NbtCompound) -> Option<ItemStack> {
@@ -570,6 +570,15 @@ impl EntityBase for ArrowEntity {
             if event.cancelled {
                 return;
             }
+        }
+
+        // Pickup callbacks may teleport or respawn the player.
+        if player.living_entity.health.load() <= 0.0
+            || player.is_spectator()
+            || player.world().uuid != self.entity.world.load().uuid
+            || !crate::world::pickup_area(player).intersects(&self.entity.bounding_box.load())
+        {
+            return;
         }
 
         // Try to insert an arrow into the player's inventory
