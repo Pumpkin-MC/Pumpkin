@@ -45,6 +45,16 @@ pub async fn server_with_entity_tracking(
     .await
 }
 
+/// A server where players do not push each other.
+pub async fn server_without_player_collisions(
+    folder: &tempfile::TempDir,
+) -> Result<Arc<Server>, Box<dyn std::error::Error>> {
+    server_advanced(folder, |advanced| {
+        advanced.collisions.player_collisions = false;
+    })
+    .await
+}
+
 /// A server with the values `configure` sets.
 pub async fn server_advanced(
     folder: &tempfile::TempDir,

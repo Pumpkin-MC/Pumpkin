@@ -27,6 +27,59 @@ pub trait ScoreboardTarget: Send + Sync {
         be_packet: &B,
     );
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J);
+    /// `false` while `collisions.player_collisions` is off: the clients are told that no
+    /// team collides, and a player that leaves a team is put back into [`NO_COLLISION_TEAM`].
+    fn players_collide(&self) -> bool {
+        true
+    }
+}
+
+/// Team that players without a team are in on the clients.
+///
+/// Used while `collisions.player_collisions` is off, so clients stop pushing their player
+/// into others. It is never listed or saved; the leading space keeps `/team` from naming it.
+pub const NO_COLLISION_TEAM: &str = " pumpkin:no_player_collisions";
+
+/// What the clients are told about [`NO_COLLISION_TEAM`]. Like every team while player
+/// collisions are off its members collide with nobody, and otherwise they look like
+/// players without a team: no colour, no prefix, and an invisible member stays unseen.
+const fn no_collision_parameters(empty: &TextComponent) -> TeamParameters<'_> {
+    const ALLOW_FRIENDLY_FIRE: u8 = 1;
+    const RESET_COLOR: i32 = 21;
+    TeamParameters {
+        display_name: empty,
+        options: ALLOW_FRIENDLY_FIRE as _,
+        nametag_visibility: NameTagVisibility::Always.to_str(),
+        collision_rule: CollisionRule::Never.to_str(),
+        color: RESET_COLOR,
+        player_prefix: empty,
+        player_suffix: empty,
+    }
+}
+
+/// Creates [`NO_COLLISION_TEAM`] with `players` in it, or adds them to it.
+fn send_no_collision_team(
+    create: bool,
+    mut players: Vec<String>,
+    send: impl FnOnce(&CSetPlayerTeam),
+) {
+    // Mobs are in teams under their UUID and keep colliding with players: only player
+    // names go in.
+    players.retain(|name| uuid::Uuid::parse_str(name).is_err());
+    if players.is_empty() && !create {
+        return;
+    }
+    let empty = TextComponent::text("");
+    send(&CSetPlayerTeam {
+        team_name: NO_COLLISION_TEAM.to_string(),
+        method: if create {
+            TeamMethod::Create
+        } else {
+            TeamMethod::AddPlayers
+        },
+        parameters: create.then(|| no_collision_parameters(&empty)),
+        players: players.into(),
+    });
 }
 
 impl ScoreboardTarget for World {
@@ -40,6 +93,10 @@ impl ScoreboardTarget for World {
 
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
         self.broadcast_packet_all(je_packet);
+    }
+
+    fn players_collide(&self) -> bool {
+        self.player_collisions
     }
 }
 
@@ -55,6 +112,10 @@ impl<T: ScoreboardTarget + ?Sized> ScoreboardTarget for &T {
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
         (*self).send_je(je_packet);
     }
+
+    fn players_collide(&self) -> bool {
+        (*self).players_collide()
+    }
 }
 
 impl ScoreboardTarget for std::sync::Arc<World> {
@@ -68,6 +129,10 @@ impl ScoreboardTarget for std::sync::Arc<World> {
 
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
         self.broadcast_packet_all(je_packet);
+    }
+
+    fn players_collide(&self) -> bool {
+        self.player_collisions
     }
 }
 
@@ -83,6 +148,10 @@ impl ScoreboardTarget for Player {
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
         self.try_send_client_packet(je_packet);
     }
+
+    fn players_collide(&self) -> bool {
+        self.world().player_collisions
+    }
 }
 
 impl ScoreboardTarget for std::sync::Arc<Player> {
@@ -96,6 +165,10 @@ impl ScoreboardTarget for std::sync::Arc<Player> {
 
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
         self.try_send_client_packet(je_packet);
+    }
+
+    fn players_collide(&self) -> bool {
+        self.world().player_collisions
     }
 }
 
@@ -484,16 +557,7 @@ impl Scoreboard {
             return;
         }
 
-        let parameters = TeamParameters {
-            display_name: &team.display_name,
-            options: team.options,
-            nametag_visibility: team.nametag_visibility.to_str(),
-            collision_rule: team.collision_rule.to_str(),
-            color: team.color as i32,
-            player_prefix: &team.player_prefix,
-            player_suffix: &team.player_suffix,
-        };
-
+        let parameters = team.parameters(target.players_collide());
         target.send_je(&CSetPlayerTeam {
             team_name: team.name.clone(),
             method: TeamMethod::Create,
@@ -514,16 +578,7 @@ impl Scoreboard {
             return;
         }
 
-        let parameters = TeamParameters {
-            display_name: &team.display_name,
-            options: team.options,
-            nametag_visibility: team.nametag_visibility.to_str(),
-            collision_rule: team.collision_rule.to_str(),
-            color: team.color as i32,
-            player_prefix: &team.player_prefix,
-            player_suffix: &team.player_suffix,
-        };
-
+        let parameters = team.parameters(target.players_collide());
         target.send_je(&CSetPlayerTeam {
             team_name: team.name.clone(),
             method: TeamMethod::Update,
@@ -547,7 +602,11 @@ impl Scoreboard {
             players: Box::new([]),
         });
 
-        self.teams.remove(name);
+        if let Some(team) = self.teams.remove(name)
+            && !target.players_collide()
+        {
+            send_no_collision_team(false, team.players, |packet| target.send_je(packet));
+        }
     }
 
     pub fn add_player_to_team(
@@ -604,6 +663,11 @@ impl Scoreboard {
         });
 
         team.players.retain(|p| p != player);
+        if !target.players_collide() {
+            send_no_collision_team(false, vec![player.to_string()], |packet| {
+                target.send_je(packet);
+            });
+        }
     }
 
     pub fn clear_team_players(&mut self, target: &impl ScoreboardTarget, team_name: &str) {
@@ -619,15 +683,17 @@ impl Scoreboard {
             return;
         }
 
-        let players_to_remove = team.players.clone();
+        let players_to_remove = std::mem::take(&mut team.players);
         target.send_je(&CSetPlayerTeam {
             team_name: team_name.to_string(),
             method: TeamMethod::RemovePlayers,
             parameters: None,
-            players: players_to_remove.into(),
+            players: players_to_remove.clone().into(),
         });
 
-        team.players.clear();
+        if !target.players_collide() {
+            send_no_collision_team(false, players_to_remove, |packet| target.send_je(packet));
+        }
     }
 
     pub fn send_to_player(&self, player: &Player) {
@@ -694,23 +760,46 @@ impl Scoreboard {
             }
         }
 
+        let players_collide = player.players_collide();
         for team in self.teams.values() {
-            let parameters = TeamParameters {
-                display_name: &team.display_name,
-                options: team.options,
-                nametag_visibility: team.nametag_visibility.to_str(),
-                collision_rule: team.collision_rule.to_str(),
-                color: team.color as i32,
-                player_prefix: &team.player_prefix,
-                player_suffix: &team.player_suffix,
-            };
             let je_packet = CSetPlayerTeam {
                 team_name: team.name.clone(),
                 method: TeamMethod::Create,
-                parameters: Some(parameters),
+                parameters: Some(team.parameters(players_collide)),
                 players: team.players.clone().into(),
             };
             player.try_send_client_packet(&je_packet);
+        }
+
+        self.send_no_collision_team_to(player);
+    }
+
+    /// With player collisions off: the player gets [`NO_COLLISION_TEAM`] with everybody in
+    /// its world who has no team, and the others get the player.
+    fn send_no_collision_team_to(&self, player: &Player) {
+        let world = player.world();
+        if !world.player_collisions {
+            let own = &player.gameprofile.name;
+            let teamless = |name: &&String| self.get_entity_team(name).is_none();
+            let members: Vec<String> = world
+                .players
+                .load()
+                .iter()
+                .map(|other| &other.gameprofile.name)
+                .filter(|name| *name != own)
+                .chain(std::iter::once(own))
+                .filter(teamless)
+                .cloned()
+                .collect();
+            let joins = members.last().is_some_and(|name| name == own);
+            send_no_collision_team(true, members, |packet| {
+                player.try_send_client_packet(packet);
+            });
+            if joins {
+                send_no_collision_team(false, vec![own.clone()], |packet| {
+                    world.broadcast_packet_all(packet);
+                });
+            }
         }
     }
 }
@@ -838,6 +927,26 @@ impl Team {
     #[must_use]
     pub const fn can_see_friendly_invisibles(&self) -> bool {
         self.options & Self::SEE_FRIENDLY_INVISIBLES != 0
+    }
+
+    /// The team as the clients are told it. Not vanilla: while players do not
+    /// collide its rule is `never`, so no client pushes its player against another one.
+    /// The team keeps its own rule.
+    pub(crate) const fn parameters(&self, players_collide: bool) -> TeamParameters<'_> {
+        let collision_rule = if players_collide {
+            self.collision_rule
+        } else {
+            CollisionRule::Never
+        };
+        TeamParameters {
+            display_name: &self.display_name,
+            options: self.options,
+            nametag_visibility: self.nametag_visibility.to_str(),
+            collision_rule: collision_rule.to_str(),
+            color: self.color as i32,
+            player_prefix: &self.player_prefix,
+            player_suffix: &self.player_suffix,
+        }
     }
 }
 
@@ -1280,5 +1389,24 @@ impl BedrockScoreboardBuilder {
     #[must_use]
     pub fn build(self) -> BedrockScoreboard {
         self.scoreboard
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_team_without_player_collisions_looks_like_no_team_to_a_client() {
+        let empty = TextComponent::text("");
+        let parameters = no_collision_parameters(&empty);
+        // Like every team while player collisions are off.
+        assert_eq!(parameters.collision_rule, "never");
+        // Friendly fire on, invisible members unseen, names shown and not coloured.
+        assert_eq!(parameters.options, 1);
+        assert_eq!(parameters.nametag_visibility, "always");
+        assert_eq!(parameters.color, 21);
+        // `/team` only takes letters, digits and `_-.+` in a name.
+        assert!(NO_COLLISION_TEAM.contains([' ', ':']));
     }
 }

@@ -87,9 +87,14 @@ mod tests {
     use crate::entity::passive::cow::CowEntity;
     use crate::plugin::api::events::entity::entity_damage::EntityDamageEvent;
     use crate::plugin::player::player_velocity::PlayerVelocityEvent;
+    use pumpkin_data::packet::CURRENT_MC_VERSION;
+    use pumpkin_protocol::java::client::play::{CSetPlayerTeam, TeamMethod};
+    use pumpkin_protocol::ser::NetworkReadExt;
 
-    use crate::test_support::{Client, TestResult, count, server, shutdown};
-    use crate::world::scoreboard::{NameTagVisibility, Team};
+    use crate::test_support::{
+        Client, TestResult, count, id, server, server_without_player_collisions, shutdown,
+    };
+    use crate::world::scoreboard::{NO_COLLISION_TEAM, NameTagVisibility, Team};
 
     fn velocities(entities: &[&Entity]) -> Vec<Vector3<f64>> {
         entities
@@ -175,6 +180,255 @@ mod tests {
         // no push back and no cramming for the second player.
         assert_eq!(pushed.velocity.load(), one_push);
         assert!(second.player.living_entity.health.load() > 1.0);
+        shutdown(&server).await;
+        Ok(())
+    }
+
+    fn team(name: &str, players: Vec<String>) -> Team {
+        Team {
+            name: name.to_string(),
+            display_name: TextComponent::text(name.to_string()),
+            options: 0,
+            nametag_visibility: NameTagVisibility::Always,
+            collision_rule: CollisionRule::Always,
+            color: NamedColor::White,
+            player_prefix: TextComponent::text(""),
+            player_suffix: TextComponent::text(""),
+            players,
+        }
+    }
+
+    #[tokio::test]
+    async fn with_player_collisions_off_players_push_mobs_but_not_each_other() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let server = server_without_player_collisions(&folder).await?;
+        let world = server.worlds.load()[0].clone();
+        let first = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        let second = Client::join(&server, 2, Vector3::new(0.85, 100.0, 0.5));
+        let players = world.players.load_full();
+        let bodies = [first.player.get_entity(), second.player.get_entity()];
+
+        push_entities(&world, &players);
+        assert!(velocities(&bodies).iter().all(|v| *v == Vector3::default()));
+
+        // Not even a team that collides with everybody makes them push each other.
+        let names = [&first, &second].map(|client| client.player.gameprofile.name.clone());
+        world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .add_team(&world, team("red", names.to_vec()));
+        push_entities(&world, &players);
+        assert!(velocities(&bodies).iter().all(|v| *v == Vector3::default()));
+
+        // Without a team again, the players push a mob as ever.
+        world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove_team(&world, "red");
+        let cow: Arc<dyn EntityBase> = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 100.0, 1.0),
+            &EntityType::COW,
+        ));
+        world.add_entity_silent(cow.clone());
+        push_entities(&world, &players);
+        assert_ne!(cow.get_entity().velocity.load(), Vector3::default());
+
+        // And the mob pushes them back.
+        velocities(&bodies);
+        if let Some(living) = cow.get_living_entity() {
+            living.push_entities(cow.as_ref());
+        }
+        assert!(velocities(&bodies).iter().all(|v| *v != Vector3::default()));
+        shutdown(&server).await;
+        Ok(())
+    }
+
+    /// How each packet about the team without player collisions changes it: 0 creates it,
+    /// 3 adds players.
+    fn no_collision_team_methods(packets: &[pumpkin_protocol::RawPacket]) -> Vec<u8> {
+        let name = NO_COLLISION_TEAM.as_bytes();
+        packets
+            .iter()
+            .filter(|packet| packet.id == id::<CSetPlayerTeam<'static>>())
+            .filter(|packet| packet.payload.get(1..=name.len()) == Some(name))
+            .map(|packet| packet.payload[name.len() + 1])
+            .collect()
+    }
+
+    /// The payloads of the packets about team `name`.
+    fn team_payloads(packets: &[pumpkin_protocol::RawPacket], name: &str) -> Vec<Vec<u8>> {
+        packets
+            .iter()
+            .filter(|packet| packet.id == id::<CSetPlayerTeam<'static>>())
+            .filter(|packet| packet.payload.get(1..=name.len()) == Some(name.as_bytes()))
+            .map(|packet| packet.payload.to_vec())
+            .collect()
+    }
+
+    /// The payload of `team` as a client gets it from `method`, with the team's own rule.
+    fn team_payload(
+        team: &Team,
+        method: TeamMethod,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let players: Box<[String]> = if method == TeamMethod::Create {
+            team.players.clone().into()
+        } else {
+            Box::new([])
+        };
+        let packet = CSetPlayerTeam {
+            team_name: team.name.clone(),
+            method,
+            parameters: Some(team.parameters(true)),
+            players,
+        };
+        let data = crate::net::java::JavaClient::serialize_packet_for_version(
+            &packet,
+            CURRENT_MC_VERSION,
+        )?;
+        let mut payload = &data[..];
+        payload.get_var_int()?;
+        Ok(payload.to_vec())
+    }
+
+    #[tokio::test]
+    async fn clients_are_told_a_team_collides_only_while_players_collide() -> TestResult {
+        for players_collide in [true, false] {
+            let folder = tempfile::tempdir()?;
+            let server = if players_collide {
+                server(&folder).await?
+            } else {
+                server_without_player_collisions(&folder).await?
+            };
+            let world = server.worlds.load()[0].clone();
+            let mut client = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+            client.received().await?;
+            let red = team("red", vec![client.player.gameprofile.name.clone()]);
+            let scoreboard = || {
+                world
+                    .scoreboard
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+            };
+
+            // Created, changed, and sent whole to a player joining.
+            scoreboard().add_team(&world, red.clone());
+            scoreboard().update_team(&world, red.clone());
+            scoreboard().send_to_player(&client.player);
+            let mut told = red.clone();
+            if !players_collide {
+                told.collision_rule = CollisionRule::Never;
+            }
+            let expected = [
+                team_payload(&told, TeamMethod::Create)?,
+                team_payload(&told, TeamMethod::Update)?,
+                team_payload(&told, TeamMethod::Create)?,
+            ];
+            assert_eq!(team_payloads(&client.received().await?, "red"), expected);
+            // On the server the team keeps its rule.
+            let rule = scoreboard().get_team("red").map(|team| team.collision_rule);
+            assert_eq!(rule, Some(CollisionRule::Always));
+            shutdown(&server).await;
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn clients_keep_players_without_a_team_in_the_team_without_player_collisions()
+    -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let server = server_without_player_collisions(&folder).await?;
+        let world = server.worlds.load()[0].clone();
+        let mut client = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        client.received().await?;
+        let name = client.player.gameprofile.name.clone();
+        let scoreboard = || {
+            world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+
+        // On joining: the team with the player in it, and the player for everybody else.
+        scoreboard().send_to_player(&client.player);
+        assert_eq!(no_collision_team_methods(&client.received().await?), [0, 3]);
+
+        // A team of the scoreboard takes the player over without a word about the other.
+        scoreboard().add_team(&world, team("red", vec![name.clone()]));
+        assert!(no_collision_team_methods(&client.received().await?).is_empty());
+        scoreboard().send_to_player(&client.player);
+        assert_eq!(no_collision_team_methods(&client.received().await?), [0]);
+
+        // Leaving it, however that happens, puts the player back.
+        scoreboard().remove_player_from_team(&world, "red", &name);
+        assert_eq!(no_collision_team_methods(&client.received().await?), [3]);
+        scoreboard().add_player_to_team(&world, "red", name.clone());
+        scoreboard().clear_team_players(&world, "red");
+        assert_eq!(no_collision_team_methods(&client.received().await?), [3]);
+        scoreboard().add_player_to_team(&world, "red", name);
+        scoreboard().remove_team(&world, "red");
+        assert_eq!(no_collision_team_methods(&client.received().await?), [3]);
+        assert!(scoreboard().get_teams().is_empty());
+        shutdown(&server).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_mob_leaving_a_team_stays_out_of_the_team_without_player_collisions() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let server = server_without_player_collisions(&folder).await?;
+        let world = server.worlds.load()[0].clone();
+        let mut client = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        client.received().await?;
+        let cow: Arc<dyn EntityBase> = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(4.5, 100.0, 0.5),
+            &EntityType::COW,
+        ));
+        world.add_entity_silent(cow.clone());
+        let cow = cow.get_scoreboard_name();
+        let scoreboard = || {
+            world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+
+        // `/team join`, then `/team leave`, `/team empty` and `/team remove`.
+        scoreboard().add_team(&world, team("red", vec![cow.clone()]));
+        scoreboard().remove_player_from_team(&world, "red", &cow);
+        scoreboard().add_player_to_team(&world, "red", cow.clone());
+        scoreboard().clear_team_players(&world, "red");
+        scoreboard().add_player_to_team(&world, "red", cow);
+        scoreboard().remove_team(&world, "red");
+        assert!(no_collision_team_methods(&client.received().await?).is_empty());
+        shutdown(&server).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn with_player_collisions_on_no_client_hears_of_the_team_without_them() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let world = server.worlds.load()[0].clone();
+        let mut client = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        client.received().await?;
+        let name = client.player.gameprofile.name.clone();
+        let scoreboard = || {
+            world
+                .scoreboard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        scoreboard().send_to_player(&client.player);
+        scoreboard().add_team(&world, team("red", vec![name.clone()]));
+        scoreboard().remove_player_from_team(&world, "red", &name);
+        scoreboard().remove_team(&world, "red");
+
+        assert!(no_collision_team_methods(&client.received().await?).is_empty());
+        assert_eq!(client.player.get_team_collision(), None);
         shutdown(&server).await;
         Ok(())
     }

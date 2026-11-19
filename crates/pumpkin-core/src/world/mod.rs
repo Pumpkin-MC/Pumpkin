@@ -300,6 +300,8 @@ pub struct World {
     pub(crate) encoded_chunk_cache: DashMap<Vector2<i32>, crate::net::chunk_sender::EncodedChunk>,
     /// Entity tracker responsible for tracking entity visibility and sending delta/status packets to watchers.
     pub entity_tracker: entity_tracker::EntityTracker,
+    /// `collisions.player_collisions`: whether players push each other.
+    pub(crate) player_collisions: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -415,6 +417,9 @@ impl World {
             .upgrade()
             .map(|server| server.advanced_config.entity_tracking)
             .unwrap_or_default();
+        let player_collisions = server
+            .upgrade()
+            .is_none_or(|server| server.advanced_config.collisions.player_collisions);
 
         Self {
             uuid: Uuid::new_v4(),
@@ -463,6 +468,7 @@ impl World {
             custom_block_entity_data: DashMap::new(),
             encoded_chunk_cache: DashMap::new(),
             entity_tracker: entity_tracker::EntityTracker::new(entity_tracking),
+            player_collisions,
         }
     }
 

@@ -32,6 +32,7 @@ pub mod recipe;
 pub mod resource_pack;
 
 pub use chat::{AntiSpamConfig, ChatConfig};
+pub use collisions::CollisionsConfig;
 pub use commands::{CommandOverride, CommandsConfig};
 pub use entity_tracking::EntityTrackingConfig;
 pub use networking::auth::AuthenticationConfig;
@@ -63,6 +64,7 @@ pub mod lighting;
 pub mod op;
 
 mod advancement;
+mod collisions;
 mod player_data;
 mod pvp;
 mod server_links;
@@ -170,6 +172,8 @@ pub struct AdvancedConfiguration {
     pub chat: ChatConfig,
     /// Player-vs-player rules and mechanics.
     pub pvp: PVPConfig,
+    /// Collisions between entities.
+    pub collisions: CollisionsConfig,
     /// Server links configuration exposed to clients.
     pub server_links: ServerLinksConfig,
     /// Persistent player data handling and storage behaviour.

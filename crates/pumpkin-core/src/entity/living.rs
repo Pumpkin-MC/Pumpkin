@@ -2014,12 +2014,16 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let entity_bb = self.entity.bounding_box.load();
         let mut own_team: Option<Option<(String, CollisionRule)>> = None;
+        // Not vanilla: with player collisions off no player pushes another,
+        // whatever their teams say.
+        let skips_players = !world.player_collisions && dyn_self.get_player().is_some();
 
         world
             .get_all_at_box(&entity_bb)
             .into_iter()
             .filter(|entity| {
                 if entity.get_entity().entity_id == self.entity.entity_id
+                    || (skips_players && entity.get_player().is_some())
                     || !lookup.is_pushable(entity.as_ref())
                 {
                     return false;
