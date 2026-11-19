@@ -6406,6 +6406,20 @@ impl World {
         }
     }
 
+    pub(crate) fn fire_item_spawn_event(&self, entity: &Entity, stack: &ItemStack) -> bool {
+        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
+            entity.entity_id,
+            entity.pos.load(),
+            stack.item.registry_key.to_string(),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut item_event);
+        }
+        !item_event.cancelled
+    }
+
     pub fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
         if stack.is_empty() {
             return;
@@ -6423,17 +6437,7 @@ impl World {
         };
 
         let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
-        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
-            entity.entity_id,
-            spawn_pos,
-            stack.item.registry_key.to_string(),
-        );
-        if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut item_event);
-        }
-        if item_event.cancelled {
+        if !self.fire_item_spawn_event(&entity, &stack) {
             return;
         }
 
@@ -6507,17 +6511,7 @@ impl World {
         };
 
         let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
-        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
-            entity.entity_id,
-            spawn_pos,
-            stack.item.registry_key.to_string(),
-        );
-        if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut item_event);
-        }
-        if item_event.cancelled {
+        if !self.fire_item_spawn_event(&entity, &stack) {
             return;
         }
 
