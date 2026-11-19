@@ -3,6 +3,7 @@ mod combat;
 mod gaze;
 mod home;
 
+use self::home::HeartHome;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicI32, Ordering::Relaxed},
@@ -45,7 +46,7 @@ pub struct CreakingEntity {
     can_move: AtomicBool,
     is_active: AtomicBool,
     is_tearing_down: AtomicBool,
-    home_pos: AtomicCell<Option<BlockPos>>,
+    home_pos: AtomicCell<Option<HeartHome>>,
     home_chunk_ticket: Mutex<Option<home::HeartChunkTicket>>,
     pending_home_feedback: AtomicCell<Option<(BlockPos, bool)>>,
     attack_animation_remaining_ticks: AtomicI32,
@@ -76,11 +77,23 @@ impl CreakingEntity {
     }
 
     pub fn set_transient(&self, pos: BlockPos) {
+        self.set_heart_home(HeartHome::Current(pos));
+    }
+
+    pub(crate) fn is_live_in_world(&self, world: &World) -> bool {
+        let living = &self.mob_entity.living_entity;
+        !living.entity.is_removed()
+            && !living.is_dead_or_dying()
+            && std::ptr::eq(living.entity.world.load().as_ref(), world)
+    }
+
+    fn set_heart_home(&self, home: HeartHome) {
+        let pos = home.pos();
         let mut ticket = self
             .home_chunk_ticket
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if self.home_pos.swap(Some(pos)) != Some(pos) {
+        if self.home_pos.swap(Some(home)).map(HeartHome::pos) != Some(pos) {
             *ticket = None;
             self.pending_home_feedback.store(None);
         }
@@ -134,7 +147,7 @@ impl CreakingEntity {
     }
 
     pub fn get_home_pos(&self) -> Option<BlockPos> {
-        self.home_pos.load()
+        self.home_pos.load().map(HeartHome::pos)
     }
 
     fn stop_in_place(&self) {
@@ -228,10 +241,6 @@ impl Mob for CreakingEntity {
         gaze::MAX_GAZE_RANGE
     }
 
-    fn is_allowed_in_peaceful(&self) -> bool {
-        false
-    }
-
     fn can_be_leashed(&self) -> bool {
         false
     }
@@ -274,8 +283,17 @@ impl Mob for CreakingEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        if let Some(home) = self.get_home_pos() {
-            nbt.put("home_pos", block_pos_to_tag(home));
+        match self.home_pos.load() {
+            Some(HeartHome::Current(pos)) => nbt.put("home_pos", block_pos_to_tag(pos)),
+            Some(HeartHome::Legacy(pos)) => {
+                // A save before the home chunk loads must retain its migration eligibility.
+                let mut legacy = NbtCompound::new();
+                legacy.put_int("x", pos.0.x);
+                legacy.put_int("y", pos.0.y);
+                legacy.put_int("z", pos.0.z);
+                nbt.put_compound("home_pos", legacy);
+            }
+            None => {}
         }
     }
 
@@ -290,7 +308,7 @@ impl Mob for CreakingEntity {
             )
         {
             self.mob_entity.clear_home();
-            self.set_transient(BlockPos::new(x, y, z));
+            self.set_heart_home(HeartHome::Legacy(BlockPos::new(x, y, z)));
         }
     }
 

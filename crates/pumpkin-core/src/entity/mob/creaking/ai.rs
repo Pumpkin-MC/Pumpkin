@@ -127,57 +127,11 @@ pub(super) fn nearest_players(creaking: &CreakingEntity) -> Vec<Arc<Player>> {
 
 pub(super) fn tick(creaking: &CreakingEntity) {
     let mob = &creaking.mob_entity;
-    let previous = mob.stored_target();
-    let previous_id = previous.as_deref().map(entity_id);
-    let unreachable_since = mob.with_brain(creaking, |brain| {
-        // The Wasm host can set MobEntity's target directly, including during plugin callbacks.
-        if brain
-            .get(types::ATTACK_TARGET)
-            .map(|target| entity_id(target.as_ref()))
-            != previous_id
-        {
-            brain.set_optional(types::ATTACK_TARGET, previous.clone());
-        }
-        brain.get(types::CANT_REACH_WALK_TARGET_SINCE).copied()
-    });
-    mob.tick_brain(creaking);
-    if creaking.get_entity().is_removed() {
-        return;
-    }
-
-    let stored = mob.stored_target();
-    let proposed_change = mob.with_brain(creaking, |brain| {
-        if stored.as_deref().map(entity_id) != previous_id {
-            brain.set_optional(types::ATTACK_TARGET, stored);
-            return None;
-        }
-        let candidate = brain.get(types::ATTACK_TARGET).cloned();
-        if candidate.as_deref().map(entity_id) == previous_id {
-            return None;
-        }
-        // EntityTargetEvent is synchronous. Expose the old target until it has been approved.
-        brain.set_optional(types::ATTACK_TARGET, previous);
-        Some(candidate)
-    });
-    let restore_unreachable_since = proposed_change.as_ref().is_some_and(|candidate| {
-        let installing_target = candidate.is_some();
-        let reason = if installing_target {
-            TargetReason::ClosestPlayer
-        } else {
-            TargetReason::ForgotTarget
-        };
-        !creaking.set_mob_target(candidate.clone(), reason) && installing_target
-    });
+    mob.tick_brain_with_target_events(creaking, TargetReason::ClosestPlayer);
     if creaking.get_entity().is_removed() {
         return;
     }
     mob.with_brain(creaking, |brain| {
-        if proposed_change.is_some() {
-            brain.set_optional(types::ATTACK_TARGET, mob.stored_target());
-        }
-        if restore_unreachable_since {
-            brain.set_optional(types::CANT_REACH_WALK_TARGET_SINCE, unreachable_since);
-        }
         if creaking.can_move() {
             brain.set_active_activity_to_first_valid(&[Activity::Fight, Activity::Idle]);
         } else {
@@ -236,6 +190,16 @@ mod tests {
             Vector3::new(0.0, 64.0, 0.0),
             &EntityType::CREAKING,
         ));
+        let previous = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(3.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        creaking.mob_entity.set_target(Some(previous.clone()));
+        creaking.mob_entity.with_brain(creaking.as_ref(), |brain| {
+            brain.set(types::ATTACK_TARGET, previous);
+            brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 123);
+        });
         let cow = CowEntity::new(Entity::new(
             world.clone(),
             Vector3::new(2.0, 64.0, 0.0),
@@ -255,12 +219,20 @@ mod tests {
         assert!(completed?);
         creaking.set_can_move(false);
         tick(&creaking);
-        let restored_target = creaking.mob_entity.with_brain(creaking.as_ref(), |brain| {
-            brain
-                .get(types::ATTACK_TARGET)
-                .map(|target| entity_id(target.as_ref()))
+        creaking.mob_entity.with_brain(creaking.as_ref(), |brain| {
+            assert_eq!(
+                brain
+                    .get(types::ATTACK_TARGET)
+                    .map(|target| entity_id(target.as_ref())),
+                Some(cow.get_entity().entity_id),
+            );
+            assert!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE).is_none());
+            brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 456);
         });
-        assert_eq!(restored_target, Some(cow.get_entity().entity_id));
+        tick(&creaking);
+        creaking.mob_entity.with_brain(creaking.as_ref(), |brain| {
+            assert_eq!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE), Some(&456));
+        });
         world.level.shutdown().await;
         Ok(())
     }

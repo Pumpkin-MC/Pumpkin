@@ -5,8 +5,24 @@ use pumpkin_world::{chunk_system::ChunkLoading, level::Level};
 
 use super::CreakingEntity;
 use crate::{
-    block::entities::creaking_heart::CreakingHeartBlockEntity, entity::EntityBase, world::World,
+    block::entities::creaking_heart::CreakingHeartBlockEntity,
+    entity::EntityBase,
+    world::{BlockEntityLookup, World},
 };
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum HeartHome {
+    Current(BlockPos),
+    Legacy(BlockPos),
+}
+
+impl HeartHome {
+    pub(super) const fn pos(self) -> BlockPos {
+        match self {
+            Self::Current(pos) | Self::Legacy(pos) => pos,
+        }
+    }
+}
 
 pub(super) struct HeartChunkTicket {
     level: Arc<Level>,
@@ -46,23 +62,19 @@ impl CreakingEntity {
             .take();
     }
 
-    pub(super) fn request_unloaded_home(
+    pub(super) fn request_home_chunk(
         &self,
         world: &World,
         home: BlockPos,
         hit_by_player: Option<bool>,
-    ) -> bool {
+    ) {
         let chunk = home.chunk_position();
-        if !world.is_in_build_limit(home) || world.level.is_chunk_loaded(&chunk) {
-            return false;
-        }
-
         let mut ticket = self
             .home_chunk_ticket
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         if self.get_entity().is_removed() || self.get_home_pos() != Some(home) {
-            return false;
+            return;
         }
         if ticket
             .as_ref()
@@ -78,38 +90,47 @@ impl CreakingEntity {
         {
             world.defer_creaking_heart_hit(self.get_entity().entity_id);
         }
-        true
     }
 
     pub(super) fn check_home(&self) -> bool {
-        let Some(home) = self.get_home_pos() else {
+        let Some(link) = self.home_pos.load() else {
             return true;
         };
+        let home = link.pos();
         let living = &self.mob_entity.living_entity;
         if living.is_dead_or_dying() {
             return true;
         }
         let entity = self.get_entity();
         let world = entity.world.load();
-        if self.request_unloaded_home(&world, home, None) {
+        let BlockEntityLookup::Loaded(block_entity) = world.get_block_entity_if_chunk_loaded(&home)
+        else {
+            self.request_home_chunk(&world, home, None);
+            return false;
+        };
+        if self.home_pos.load() != Some(link) {
             return false;
         }
-        let linked = world
-            .get_block_entity(&home)
+        let legacy = matches!(link, HeartHome::Legacy(_));
+        let linked = block_entity
             .as_deref()
-            .and_then(|block_entity| self.linked_heart(block_entity))
-            .is_some();
-        if self.get_home_pos() != Some(home) {
-            return false;
-        }
+            .and_then(|block_entity| {
+                block_entity
+                    .as_any()
+                    .downcast_ref::<CreakingHeartBlockEntity>()
+            })
+            .is_some_and(|heart| {
+                heart.is_protector(entity.entity_uuid)
+                    || legacy && heart.try_adopt_legacy_protector(&world, self)
+            });
         if !linked {
-            // Without a ticket a chunk can unload in between the two lookups.
-            if self.request_unloaded_home(&world, home, None) {
-                return false;
-            }
             living.set_health(0.0);
             self.pending_home_feedback.store(None);
             self.release_home_ticket();
+        } else if legacy {
+            let _ = self
+                .home_pos
+                .compare_exchange(Some(link), Some(HeartHome::Current(home)));
         }
         true
     }
@@ -118,9 +139,10 @@ impl CreakingEntity {
         let Some((home, hit_by_player)) = self.pending_home_feedback.load() else {
             return true;
         };
-        if !world.level.is_chunk_loaded(&home.chunk_position()) {
+        let BlockEntityLookup::Loaded(block_entity) = world.get_block_entity_if_chunk_loaded(&home)
+        else {
             return false;
-        }
+        };
         if self
             .pending_home_feedback
             .compare_exchange(Some((home, hit_by_player)), None)
@@ -131,7 +153,7 @@ impl CreakingEntity {
         if self.get_home_pos() == Some(home)
             && !self.get_entity().is_removed()
             && !self.mob_entity.living_entity.is_dead_or_dying()
-            && let Some(block_entity) = world.get_block_entity(&home)
+            && let Some(block_entity) = block_entity
             && let Some(heart) = self.linked_heart(block_entity.as_ref())
         {
             self.play_heart_feedback(world, heart, hit_by_player);
@@ -174,7 +196,11 @@ mod tests {
     use super::*;
     use crate::{
         block::entities::BlockEntity,
-        entity::{Entity, ai::test_support::world, mob::Mob},
+        entity::{
+            Entity,
+            ai::{brain::memory::codec::block_pos_from_tag, test_support::world},
+            mob::Mob,
+        },
     };
 
     #[tokio::test]
@@ -193,7 +219,8 @@ mod tests {
         assert!(!world.level.is_chunk_loaded(&chunk_pos));
         assert!(!creaking.prepare_mob_tick());
         assert!(creaking.mob_entity.living_entity.is_alive());
-        assert!(creaking.request_unloaded_home(&world, home, Some(false)));
+        creaking.request_home_chunk(&world, home, Some(false));
+        assert!(creaking.pending_home_feedback.load().is_some());
         assert!(!creaking.finish_pending_heart_hit(&world, false));
 
         let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
@@ -227,6 +254,59 @@ mod tests {
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .is_none()
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn legacy_home_preserves_its_format_until_the_heart_can_adopt()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let creaking = CreakingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::CREAKING,
+        ));
+        let home = BlockPos::new(32, 64, 0);
+        let mut coords = NbtCompound::new();
+        coords.put_int("x", 32);
+        coords.put_int("y", 64);
+        coords.put_int("z", 0);
+        let mut legacy = NbtCompound::new();
+        legacy.put_compound("home_pos", coords);
+        creaking.mob_read_nbt(&legacy);
+        assert_eq!(creaking.get_home_pos(), Some(home));
+        assert!(!creaking.prepare_mob_tick());
+
+        let mut before_home_load = NbtCompound::new();
+        creaking.mob_write_nbt(&mut before_home_load);
+        assert!(before_home_load.get_compound("home_pos").is_some());
+        creaking.mob_read_nbt(&before_home_load);
+
+        let chunk_pos = home.chunk_position();
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        world.level.loaded_chunks.insert(chunk_pos, chunk);
+        world.set_block_state(
+            &home,
+            Block::CREAKING_HEART.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
+        assert!(creaking.prepare_mob_tick());
+        assert!(creaking.mob_entity.living_entity.is_alive());
+        assert!(
+            world
+                .get_block_entity(&home)
+                .as_deref()
+                .is_some_and(|heart| creaking.linked_heart(heart).is_some())
+        );
+
+        let mut migrated = NbtCompound::new();
+        creaking.mob_write_nbt(&mut migrated);
+        assert_eq!(
+            migrated.get("home_pos").and_then(block_pos_from_tag),
+            Some(home),
         );
         world.level.shutdown().await;
         Ok(())

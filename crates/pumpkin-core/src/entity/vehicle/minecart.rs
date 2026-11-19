@@ -699,10 +699,8 @@ impl EntityBase for MinecartEntity {
                 }
             } else {
                 // Vanilla `AbstractMinecart.push`
-                self_entity.push_by(Vector3::new(-xa, 0.0, -za));
-                if entity.accepts_push_impulses() {
-                    other_entity.push_by(Vector3::new(xa / 4.0, 0.0, za / 4.0));
-                }
+                self.push_by(Vector3::new(-xa, 0.0, -za));
+                entity.push_by(Vector3::new(xa / 4.0, 0.0, za / 4.0));
             }
         }
     }

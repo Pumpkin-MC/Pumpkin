@@ -1,7 +1,7 @@
-use pumpkin_data::block_properties::COLLISION_SHAPES;
+use pumpkin_data::block_properties::ScaffoldingLikeProperties;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 use crate::world::BlockAccessor;
@@ -39,6 +39,19 @@ pub struct ClipContext {
     pub to: Vector3<f64>,
     pub block: ClipBlock,
     pub fluid: ClipFluid,
+    visual_viewer: Option<VisualViewer>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct VisualViewer {
+    bottom: f64,
+    descending: bool,
+}
+
+impl VisualViewer {
+    fn is_above(self, height: f64) -> bool {
+        self.bottom > height - f64::from(1.0e-5f32)
+    }
 }
 
 impl ClipContext {
@@ -54,7 +67,15 @@ impl ClipContext {
             to,
             block,
             fluid,
+            visual_viewer: None,
         }
+    }
+
+    /// Applies viewer-dependent visual shapes using the viewer's feet and descent input.
+    #[must_use]
+    pub const fn with_visual_viewer(mut self, bottom: f64, descending: bool) -> Self {
+        self.visual_viewer = Some(VisualViewer { bottom, descending });
+        self
     }
 }
 
@@ -243,53 +264,6 @@ fn clip_block_shapes(
     closest_hit
 }
 
-fn clip_visual(
-    state: &BlockState,
-    block_pos: &BlockPos,
-    from: Vector3<f64>,
-    to: Vector3<f64>,
-) -> Option<(f64, BlockDirection, Vector3<f64>, bool)> {
-    // Vanilla delegates to collision unless the block class overrides getVisualShape.
-    let block = Block::from_state_id(state.id);
-    if matches!(
-        block.id,
-        BlockId::GLASS
-            | BlockId::TINTED_GLASS
-            | BlockId::GLASS_PANE
-            | BlockId::IRON_BARS
-            | BlockId::POWDER_SNOW
-    ) || block.name.ends_with("_stained_glass")
-        || block.name.ends_with("_stained_glass_pane")
-        || block.name.ends_with("copper_bars")
-        || block.name.ends_with("copper_grate")
-    {
-        return None;
-    }
-
-    if matches!(block.id, BlockId::MUD | BlockId::SOUL_SAND | BlockId::SNOW)
-        || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES)
-    {
-        return clip_block_shapes(
-            state
-                .outline_shapes
-                .iter()
-                .map(|&id| COLLISION_SHAPES[usize::from(id)]),
-            state,
-            block_pos,
-            from,
-            to,
-        );
-    }
-
-    clip_block_shapes(
-        state.get_block_collision_shapes_at(block_pos),
-        state,
-        block_pos,
-        from,
-        to,
-    )
-}
-
 fn clip_fluid(
     state: &BlockState,
     block_pos: &BlockPos,
@@ -324,6 +298,43 @@ fn clip_fluid(
     intersects_aabb_with_hit(from, to, world_min, world_max)
 }
 
+fn clip_visual_shape(
+    state: &BlockState,
+    block_pos: &BlockPos,
+    context: &ClipContext,
+) -> Option<(f64, BlockDirection, Vector3<f64>, bool)> {
+    let block_y = f64::from(block_pos.0.y);
+    if let Some(viewer) = context.visual_viewer
+        && state.id.to_block() == &Block::SCAFFOLDING
+        && (viewer.descending || !viewer.is_above(block_y + 1.0))
+    {
+        // ScaffoldingBlock.getCollisionShape selects the bottom slab for this context.
+        const SHAPE_UNSTABLE_BOTTOM: BoundingBox = BoundingBox {
+            min: Vector3::new(0.0, 0.0, 0.0),
+            max: Vector3::new(1.0, 0.125, 1.0),
+        };
+        let props = ScaffoldingLikeProperties::from_state_id(state.id);
+        if props.distance != 0 && props.bottom && viewer.is_above(block_y) {
+            return clip_block_shapes(
+                std::iter::once(SHAPE_UNSTABLE_BOTTOM),
+                state,
+                block_pos,
+                context.from,
+                context.to,
+            );
+        }
+        return None;
+    }
+
+    clip_block_shapes(
+        state.get_block_visual_shapes_at(block_pos),
+        state,
+        block_pos,
+        context.from,
+        context.to,
+    )
+}
+
 fn check_block(
     accessor: &(impl BlockAccessor + ?Sized),
     block_pos: &BlockPos,
@@ -348,7 +359,7 @@ fn check_block(
             from,
             to,
         ),
-        ClipBlock::Visual => clip_visual(state, block_pos, from, to),
+        ClipBlock::Visual => clip_visual_shape(state, block_pos, context),
         ClipBlock::FallDamageResetting => {
             if Block::from_state_id(state.id)
                 .has_tag(&pumpkin_data::tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING)
@@ -672,5 +683,56 @@ mod tests {
         assert!(visual_glass.is_miss());
         assert_eq!(collider_glass.block_pos, BlockPos::new(2, 0, 0));
         assert!(collider_glass.is_hit());
+    }
+
+    #[test]
+    fn scaffolding_visual_shape_uses_viewer_context() {
+        let mut world = TestWorld::new();
+        let position = BlockPos::new(2, 10, 0);
+        world.set_block(position, &Block::SCAFFOLDING);
+        let across = |y| {
+            ClipContext::new(
+                Vector3::new(0.5, y, 0.5),
+                Vector3::new(5.5, y, 0.5),
+                ClipBlock::Visual,
+                ClipFluid::None,
+            )
+        };
+
+        let top = 10.9375;
+        assert!(world.clip(&across(top)).is_hit());
+        assert!(
+            world
+                .clip(&across(top).with_visual_viewer(10.0, false))
+                .is_miss()
+        );
+        assert!(
+            world
+                .clip(&across(top).with_visual_viewer(11.0, false))
+                .is_hit()
+        );
+        assert!(
+            world
+                .clip(&across(top).with_visual_viewer(11.0, true))
+                .is_miss()
+        );
+
+        let mut props = ScaffoldingLikeProperties::default(&Block::SCAFFOLDING);
+        props.distance = 1;
+        props.bottom = true;
+        world
+            .blocks
+            .insert(position, props.to_state_id(&Block::SCAFFOLDING));
+        let bottom = 10.0625;
+        assert!(
+            world
+                .clip(&across(bottom).with_visual_viewer(10.0, false))
+                .is_hit()
+        );
+        assert!(
+            world
+                .clip(&across(bottom).with_visual_viewer(9.5, false))
+                .is_miss()
+        );
     }
 }

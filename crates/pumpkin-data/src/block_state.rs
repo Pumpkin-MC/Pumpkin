@@ -248,6 +248,16 @@ impl BlockState {
             .map(move |shape| shape.shift(offset))
     }
 
+    pub fn get_block_visual_shapes_at(
+        &self,
+        pos: &BlockPos,
+    ) -> impl Iterator<Item = BoundingBox> + '_ {
+        let offset = Block::from_state_id(self.id).shape_offset_delta(pos);
+        self.visual_shape_ids()
+            .iter()
+            .map(move |&id| COLLISION_SHAPES[usize::from(id)].shift(offset))
+    }
+
     pub fn get_block_outline_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
         let base_shapes = self
             .outline_shapes

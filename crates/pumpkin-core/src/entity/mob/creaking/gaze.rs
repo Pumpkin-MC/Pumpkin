@@ -26,7 +26,9 @@ impl CreakingEntity {
         }
 
         let position = entity.pos.load();
-        let eyes = player.eye_position();
+        let viewer_position = player_entity.pos.load();
+        let eyes = viewer_position.add_raw(0.0, player_entity.get_eye_height(), 0.0);
+        let descending = player_entity.is_sneaking();
         let pitch = player_entity.pitch.load().to_radians();
         let yaw = -player_entity.head_yaw.load().to_radians();
         let pitch_cos = cos(pitch);
@@ -47,12 +49,10 @@ impl CreakingEntity {
                 && distance_squared <= MAX_GAZE_RANGE.powi(2)
                 && view.dot(&offset.normalize()) > 0.5
                 && world
-                    .clip(&ClipContext::new(
-                        eyes,
-                        point,
-                        ClipBlock::Visual,
-                        ClipFluid::None,
-                    ))
+                    .clip(
+                        &ClipContext::new(eyes, point, ClipBlock::Visual, ClipFluid::None)
+                            .with_visual_viewer(viewer_position.y, descending),
+                    )
                     .is_miss()
         })
     }

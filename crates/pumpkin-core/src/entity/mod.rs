@@ -1057,9 +1057,32 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Vanilla `Entity.push(Vec3)`, including a mob's push override.
+    fn push_by(&self, impulse: Vector3<f64>) {
+        if self.apply_push_impulse(impulse) {
+            let entity = self.get_entity();
+            entity.velocity_dirty.store(true, Ordering::SeqCst);
+            if self.get_player().is_some() {
+                entity
+                    .push_impulse
+                    .store(entity.push_impulse.load() + impulse);
+            }
+        }
+    }
+
     fn accepts_push_impulses(&self) -> bool {
         self.get_mob()
             .is_none_or(mob::Mob::mob_accepts_push_impulses)
+    }
+
+    /// Applies a push. The caller handles velocity synchronization.
+    fn apply_push_impulse(&self, impulse: Vector3<f64>) -> bool {
+        if !self.accepts_push_impulses() {
+            return false;
+        }
+        let entity = self.get_entity();
+        entity.velocity.store(entity.velocity.load() + impulse);
+        true
     }
 
     fn can_use_portal(&self) -> bool {
@@ -1114,13 +1137,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             dz *= PUSH_STRENGTH;
 
             if !self_entity.has_passengers() && self.is_pushable() {
-                self_entity.push_by(Vector3::new(-dx, 0.0, -dz));
+                self.push_by(Vector3::new(-dx, 0.0, -dz));
             }
 
             // A Java client runs only the other side's `pushEntities` on its player, so
             // the pusher's own half stays off the Bedrock impulse
-            if !other_entity.has_passengers() && entity.is_pushable() {
-                other_entity.push_back_by(Vector3::new(dx, 0.0, dz));
+            if !other_entity.has_passengers()
+                && entity.is_pushable()
+                && entity.apply_push_impulse(Vector3::new(dx, 0.0, dz))
+            {
+                other_entity.velocity_dirty.store(true, Ordering::SeqCst);
             }
         }
     }
@@ -3040,22 +3066,6 @@ impl Entity {
         }
         self.last_pos.store(pos);
         old
-    }
-
-    /// Vanilla `Entity.push(Vec3)`. A player's pushes are also kept apart for Bedrock,
-    /// whose client doesn't predict them.
-    pub fn push_by(&self, impulse: Vector3<f64>) {
-        self.velocity.store(self.velocity.load() + impulse);
-        self.velocity_dirty.store(true, Ordering::SeqCst);
-        if self.entity_type == &EntityType::PLAYER {
-            self.push_impulse.store(self.push_impulse.load() + impulse);
-        }
-    }
-
-    /// `push_by` on the pusher in its own `pushEntities`, which stays off the Bedrock impulse.
-    pub fn push_back_by(&self, impulse: Vector3<f64>) {
-        self.velocity.store(self.velocity.load() + impulse);
-        self.velocity_dirty.store(true, Ordering::SeqCst);
     }
 
     /// Vanilla `getKnownMovement`: a player's own client motion, otherwise the velocity.

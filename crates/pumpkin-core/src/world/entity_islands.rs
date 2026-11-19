@@ -20,7 +20,9 @@ use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
 use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
-use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
+use crate::plugin::api::events::block::{
+    block_physics::BlockPhysicsEvent, entity_block_form::EntityBlockFormEvent,
+};
 use crate::plugin::api::events::entity::{
     entity_breed::EntityBreedEvent, entity_damage::EntityDamageEvent,
     entity_damage_by_block::EntityDamageByBlockEvent,
@@ -29,9 +31,9 @@ use crate::plugin::api::events::entity::{
 };
 use crate::plugin::api::events::world::generic_game::GenericGameEvent;
 use crate::plugin::{
-    api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
+    PluginManager, api::events::vehicle::vehicle_update::VehicleUpdateEvent,
+    server::packet::PacketSentEvent,
 };
-use crate::server::Server;
 use crate::world::World;
 
 /// Reach of same-tick neighbour updates: a full wire line, the powered block and one component.
@@ -135,8 +137,7 @@ impl Schedule {
 /// A plugin listens to an event an entity tick can fire. Its handler may touch anything,
 /// so the tick runs in list order.
 #[must_use]
-pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
-    let plugins = &server.plugin_manager;
+pub(super) fn plugins_observe_entity_ticks(plugins: &PluginManager) -> bool {
     plugins.has_handlers::<EntityTargetEvent>()
         || plugins.has_handlers::<EntityBreedEvent>()
         || plugins.has_handlers::<PigZombieAngerEvent>()
@@ -144,13 +145,16 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<EntityBlockFormEvent>()
 }
 
-pub(crate) fn plugins_observe_passive_block_writes(server: &Server) -> bool {
-    let plugins = &server.plugin_manager;
+pub(super) fn plugins_observe_creaking_feedback(plugins: &PluginManager) -> bool {
     plugins.has_handlers::<EntityDamageEvent>()
         || plugins.has_handlers::<EntityDamageByEntityEvent>()
         || plugins.has_handlers::<EntityDamageByBlockEvent>()
         || plugins.has_handlers::<GenericGameEvent>()
         || plugins.has_handlers::<PacketSentEvent>()
+}
+
+pub(super) fn plugins_observe_passive_block_writes(plugins: &PluginManager) -> bool {
+    plugins_observe_creaking_feedback(plugins) || plugins.has_handlers::<BlockPhysicsEvent>()
 }
 
 /// What one entity can read or change next tick.
@@ -1142,6 +1146,24 @@ impl DisjointSets {
 mod tests {
     use super::*;
     use pumpkin_util::math::vector3::Vector3;
+
+    #[test]
+    fn block_physics_listener_requires_serial_passive_writes() {
+        use crate::plugin::{EventHandler, api::events::EventPriority};
+        use std::sync::Arc;
+
+        struct PhysicsHandler;
+        impl EventHandler<BlockPhysicsEvent> for PhysicsHandler {}
+
+        let plugins = PluginManager::new(Vec::new());
+        assert!(!plugins_observe_passive_block_writes(&plugins));
+        plugins.register::<BlockPhysicsEvent, _>(
+            Arc::new(PhysicsHandler),
+            EventPriority::Normal,
+            true,
+        );
+        assert!(plugins_observe_passive_block_writes(&plugins));
+    }
 
     #[test]
     fn serial_schedule_retries_after_twenty_ticks_or_a_count_change() {

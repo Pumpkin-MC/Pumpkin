@@ -1,5 +1,4 @@
 use std::{
-    collections::hash_map::Entry,
     path::PathBuf,
     str::FromStr,
     sync::{
@@ -35,6 +34,9 @@ pub mod anvil;
 pub mod linear;
 pub mod pump;
 
+const BLOCK_ENTITY_RECORDS_CHECKED: u8 = 1 << 5;
+const BLOCK_ENTITY_RECORDS_CHECKED_TAG: &str = "PumpkinBlockEntityRecordsChecked";
+
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
@@ -48,7 +50,7 @@ impl SingleChunkDataSerializer for ChunkData {
 
     #[inline]
     fn to_pump_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        Ok(self.internal_to_pump_bytes())
+        self.internal_to_pump_bytes()
     }
 
     #[inline]
@@ -213,41 +215,13 @@ where
     })
 }
 
-impl ChunkData {
-    fn recover_missing_creaking_hearts(
-        section: &ChunkSections,
-        position: Vector2<i32>,
-        block_entities: &mut FxHashMap<BlockPos, NbtCompound>,
-    ) -> bool {
-        let is_heart = |id: BlockStateId| id.to_block_id() == BlockId::CREAKING_HEART;
-        let sections = section
-            .block_sections
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut repaired = false;
-        for (section_index, palette) in sections.iter().enumerate() {
-            if !palette.contains_matching(is_heart) {
-                continue;
-            }
-            let section_y = section.min_y + section_coords::section_to_block(section_index as i32);
-            for (index, _) in palette.iter().enumerate().filter(|(_, id)| is_heart(*id)) {
-                let x = section_coords::section_to_block(position.x) + (index % 16) as i32;
-                let y = section_y + (index / 256) as i32;
-                let z = section_coords::section_to_block(position.y) + (index / 16 % 16) as i32;
-                if let Entry::Vacant(entry) = block_entities.entry(BlockPos::new(x, y, z)) {
-                    let mut heart = NbtCompound::new();
-                    heart.put_string("id", "minecraft:creaking_heart".to_string());
-                    heart.put_int("x", x);
-                    heart.put_int("y", y);
-                    heart.put_int("z", z);
-                    entry.insert(heart);
-                    repaired = true;
-                }
-            }
-        }
-        repaired
-    }
+fn pump_block_entity_limit(section_count: usize) -> usize {
+    // Keep the original allowance for older files with records outside their stored sections.
+    const LEGACY_LIMIT: usize = 65_536;
+    LEGACY_LIMIT.max(section_count * BlockPalette::VOLUME)
+}
 
+impl ChunkData {
     #[allow(clippy::too_many_lines)]
     pub fn internal_from_bytes(
         chunk_data: &[u8],
@@ -423,6 +397,9 @@ impl ChunkData {
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
             min_y,
+            block_entity_records_checked: AtomicBool::new(
+                root_tag.get_bool(BLOCK_ENTITY_RECORDS_CHECKED_TAG) == Some(true),
+            ),
         };
 
         let heightmaps = root_tag.get_compound("Heightmaps").map_or(
@@ -507,14 +484,12 @@ impl ChunkData {
             .cloned()
             .unwrap_or_default();
 
-        let repaired_hearts =
-            Self::recover_missing_creaking_hearts(&section, position, &mut block_entities);
         Ok(Self {
             section,
             heightmap: std::sync::Mutex::new(heightmaps),
             x: position.x,
             z: position.y,
-            dirty: AtomicBool::new(repaired_hearts),
+            dirty: AtomicBool::new(false),
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             pending_block_entities: std::sync::Mutex::new(block_entities),
@@ -542,6 +517,10 @@ impl ChunkData {
             .light_populated
             .load(std::sync::atomic::Ordering::Relaxed);
 
+        let block_entity_records_checked = self
+            .section
+            .block_entity_records_checked
+            .load(Ordering::Acquire);
         let block_entities_nbt = {
             let entities_guard = self
                 .pending_block_entities
@@ -713,6 +692,9 @@ impl ChunkData {
             block_entities_list.push(NbtTag::Compound(entity_comp));
         }
         root_compound.put_list("block_entities", block_entities_list);
+        if block_entity_records_checked {
+            root_compound.put_bool(BLOCK_ENTITY_RECORDS_CHECKED_TAG, true);
+        }
 
         root_compound.put_bool("isLightOn", is_light_correct);
         root_compound.put_long(
@@ -733,15 +715,24 @@ impl ChunkData {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn internal_to_pump_bytes(&self) -> Bytes {
+    pub fn internal_to_pump_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
         const PUMP_CHUNK_VERSION: u8 = 1;
 
         let is_light_correct = self.light_populated.load(Ordering::Relaxed);
+        let block_entity_records_checked = self
+            .section
+            .block_entity_records_checked
+            .load(Ordering::Acquire);
         let block_entities_nbt = {
             let entities_guard = self
                 .pending_block_entities
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let count = entities_guard.len();
+            let limit = pump_block_entity_limit(self.section.count);
+            if count > limit {
+                return Err(ChunkSerializingError::TooManyBlockEntities { count, limit });
+            }
             entities_guard.values().cloned().collect::<Vec<_>>()
         };
 
@@ -794,6 +785,9 @@ impl ChunkData {
         }
         if has_custom {
             flags |= 1 << 4;
+        }
+        if block_entity_records_checked {
+            flags |= BLOCK_ENTITY_RECORDS_CHECKED;
         }
 
         let status_u8 = match self.status {
@@ -894,7 +888,7 @@ impl ChunkData {
             out.extend_from_slice(&bytes);
         }
 
-        out.into()
+        Ok(out.into())
     }
 
     #[allow(clippy::too_many_lines)]
@@ -905,7 +899,6 @@ impl ChunkData {
         const HEADER_MIN_LEN: usize = 4 + 1 + 4 + 4 + 4 + 4 + 1 + 1 + 8;
         const MAX_SECTIONS: usize = 256;
         const MAX_TICKS: usize = 65_536;
-        const MAX_BLOCK_ENTITIES: usize = 65_536;
 
         if chunk_data.len() < HEADER_MIN_LEN || chunk_data[..4] != pump::PUMP_CHUNK_MAGIC {
             return Err(ChunkParsingError::ErrorDeserializingChunk(
@@ -1037,6 +1030,9 @@ impl ChunkData {
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
             min_y,
+            block_entity_records_checked: AtomicBool::new(
+                flags & BLOCK_ENTITY_RECORDS_CHECKED != 0,
+            ),
         };
         let light_engine = ChunkLight {
             block_light: block_lights.into_boxed_slice(),
@@ -1111,10 +1107,11 @@ impl ChunkData {
             ));
         }
         let be_count = buf.get_u32() as usize;
-        if be_count > MAX_BLOCK_ENTITIES {
-            return Err(ChunkParsingError::ErrorDeserializingChunk(
-                "Invalid block entity count".into(),
-            ));
+        let be_limit = pump_block_entity_limit(section_count);
+        if be_count > be_limit {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Block entity count {be_count} exceeds maximum {be_limit}"
+            )));
         }
         let mut block_entities = FxHashMap::default();
         for _ in 0..be_count {
@@ -1166,14 +1163,12 @@ impl ChunkData {
             NbtCompound::default()
         };
 
-        let repaired_hearts =
-            Self::recover_missing_creaking_hearts(&section, position, &mut block_entities);
         Ok(Self {
             section,
             heightmap: std::sync::Mutex::new(heightmaps),
             x: position.x,
             z: position.y,
-            dirty: AtomicBool::new(repaired_hearts),
+            dirty: AtomicBool::new(false),
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             pending_block_entities: std::sync::Mutex::new(block_entities),
@@ -1543,54 +1538,72 @@ mod tests {
     }
 
     #[test]
-    fn chunk_formats_recover_only_missing_creaking_heart_data() -> Result<(), ChunkParsingError> {
-        let chunk_pos = Vector2::new(3, -2);
+    fn dense_block_entity_chunk_round_trips_in_pump_format()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let chunk_pos = Vector2::new(0, 0);
         let original = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
-        let missing = BlockPos::new(50, -29, -19);
-        let linked = BlockPos::new(61, 18, -28);
-        let state = Block::CREAKING_HEART.default_state.id;
-        original.set_block_absolute_y(2, missing.0.y, 13, state);
-        original.set_block_absolute_y(13, linked.0.y, 4, state);
-
-        let mut saved = NbtCompound::new();
-        saved.put_string("id", "minecraft:creaking_heart".to_string());
-        saved.put_int("x", linked.0.x);
-        saved.put_int("y", linked.0.y);
-        saved.put_int("z", linked.0.z);
-        saved.put("creaking", NbtTag::IntArray(vec![1, 2, 3, 4]));
+        let min_y = original.section.min_y;
+        // A full seventeenth section of block entities exceeded the old decoder limit.
+        let section_count = 17;
         original
-            .pending_block_entities
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(linked, saved.clone());
-
-        for bytes in [
-            original.internal_to_bytes(),
-            original.internal_to_pump_bytes(),
-        ] {
-            let recovered = ChunkData::internal_from_bytes(&bytes, chunk_pos)?;
-            assert!(recovered.is_dirty());
-            let entities = recovered
+            .section
+            .block_sections
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)[..section_count]
+            .fill(BlockPalette::Homogeneous(Block::CHEST.default_state.id));
+        {
+            let mut records = original
                 .pending_block_entities
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            assert_eq!(entities.len(), 2);
-            assert_eq!(entities.get(&linked), Some(&saved));
-            let Some(heart) = entities.get(&missing) else {
-                return Err(ChunkParsingError::ErrorDeserializingChunk(
-                    "missing Creaking Heart after decode".into(),
-                ));
-            };
-            assert_eq!(heart.get_string("id"), Some("minecraft:creaking_heart"));
-            assert_eq!(heart.get_int("x"), Some(missing.0.x));
-            assert_eq!(heart.get_int("y"), Some(missing.0.y));
-            assert_eq!(heart.get_int("z"), Some(missing.0.z));
-            assert!(!heart.has("creaking"));
-            drop(entities);
+            for relative_y in 0..section_count * BlockPalette::SIZE {
+                let y = min_y + relative_y as i32;
+                for z in 0..BlockPalette::SIZE as i32 {
+                    for x in 0..BlockPalette::SIZE as i32 {
+                        let mut chest = NbtCompound::new();
+                        chest.put_string("id", "minecraft:chest".to_string());
+                        chest.put_int("x", x);
+                        chest.put_int("y", y);
+                        chest.put_int("z", z);
+                        records.insert(BlockPos::new(x, y, z), chest);
+                    }
+                }
+            }
+        }
 
-            let serialized = recovered.internal_to_pump_bytes();
-            let reloaded = ChunkData::internal_from_bytes(&serialized, chunk_pos)?;
-            assert!(!reloaded.is_dirty());
+        let serialized = original.internal_to_pump_bytes()?;
+        let reloaded = ChunkData::internal_from_bytes(&serialized, chunk_pos)?;
+        let records = reloaded
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(records.len(), section_count * BlockPalette::VOLUME);
+        assert_eq!(
+            reloaded.section.get_block_absolute_y(0, min_y + 256, 0),
+            Some(Block::CHEST.default_state.id)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_block_entity_recovery_marker_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        let chunk_pos = Vector2::new(2, -3);
+        let original = ChunkData::empty(chunk_pos.x, chunk_pos.y);
+        original.set_block_absolute_y(3, 80, 11, Block::CHEST.default_state.id);
+        original
+            .section
+            .block_entity_records_checked
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+
+        for serialize in [ChunkData::to_bytes, ChunkData::to_pump_bytes] {
+            let decoded = ChunkData::from_bytes(&serialize(&original)?, chunk_pos)?;
+            assert_eq!(
+                decoded.legacy_block_entity_positions(),
+                Some(vec![BlockPos::new(35, 80, -37)])
+            );
+            decoded.finish_block_entity_recovery();
+            let checked = ChunkData::from_bytes(&serialize(&decoded)?, chunk_pos)?;
+            assert_eq!(checked.legacy_block_entity_positions(), None);
         }
         Ok(())
     }

@@ -1,4 +1,5 @@
 use crate::chunk::format::LightContainer;
+use crate::generation::section_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use palette::{BiomePalette, BlockPalette, has_random_ticking_fluid};
 use pumpkin_data::block_properties::{blocks_movement, has_random_ticks, is_air};
@@ -11,8 +12,8 @@ use pumpkin_util::math::position::BlockPos;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, Ordering};
 use thiserror::Error;
 
 pub mod format;
@@ -110,6 +111,7 @@ pub struct ChunkSections {
     pub randomly_ticking_mask: std::sync::atomic::AtomicU32,
     pub biome_sections: RwLock<Box<[BiomePalette]>>,
     pub min_y: i32,
+    block_entity_records_checked: AtomicBool,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -350,6 +352,7 @@ impl ChunkSections {
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_sections),
             min_y,
+            block_entity_records_checked: AtomicBool::new(true),
         }
     }
 
@@ -375,6 +378,7 @@ impl ChunkSections {
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_sections),
             min_y,
+            block_entity_records_checked: AtomicBool::new(true),
         }
     }
 
@@ -385,13 +389,19 @@ impl ChunkSections {
         y: i32,
         relative_z: usize,
     ) -> Option<BlockStateId> {
-        let y = y - self.min_y;
-        if y < 0 {
-            None
-        } else {
-            let relative_y = y as usize;
-            self.get_relative_block(relative_x, relative_y, relative_z)
-        }
+        self.read_block_absolute_y(relative_x, y, relative_z, std::convert::identity)
+    }
+
+    /// Reads the block while keeping the section locked through the supplied operation.
+    pub fn read_block_absolute_y<R>(
+        &self,
+        relative_x: usize,
+        y: i32,
+        relative_z: usize,
+        read: impl FnOnce(BlockStateId) -> R,
+    ) -> Option<R> {
+        let relative_y = usize::try_from(y.checked_sub(self.min_y)?).ok()?;
+        self.read_relative_block(relative_x, relative_y, relative_z, read)
     }
 
     pub fn set_block_absolute_y(
@@ -437,6 +447,17 @@ impl ChunkSections {
         relative_y: usize,
         relative_z: usize,
     ) -> Option<BlockStateId> {
+        self.read_relative_block(relative_x, relative_y, relative_z, std::convert::identity)
+    }
+
+    #[inline]
+    fn read_relative_block<R>(
+        &self,
+        relative_x: usize,
+        relative_y: usize,
+        relative_z: usize,
+        read: impl FnOnce(BlockStateId) -> R,
+    ) -> Option<R> {
         debug_assert!(relative_x < BlockPalette::SIZE);
         debug_assert!(relative_z < BlockPalette::SIZE);
 
@@ -446,7 +467,7 @@ impl ChunkSections {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(section_index)
-            .map(|section| section.get(relative_x, relative_y, relative_z))
+            .map(|section| read(section.get(relative_x, relative_y, relative_z)))
     }
 
     /// Sets the given block in the chunk, returning the old block state ID
@@ -628,6 +649,55 @@ impl ChunkSections {
 }
 
 impl ChunkData {
+    /// Finds candidate positions for the one-time repair of older chunk saves.
+    #[must_use]
+    pub fn legacy_block_entity_positions(&self) -> Option<Vec<BlockPos>> {
+        if self
+            .section
+            .block_entity_records_checked
+            .load(Ordering::Acquire)
+        {
+            return None;
+        }
+
+        let origin_x = section_coords::section_to_block(self.x);
+        let origin_z = section_coords::section_to_block(self.z);
+        let is_block_entity = |state: BlockStateId| state.to_state().block_entity_type != u16::MAX;
+        let sections = self
+            .section
+            .block_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut positions = Vec::new();
+        for (section_index, palette) in sections.iter().enumerate() {
+            if !palette.contains_matching(is_block_entity) {
+                continue;
+            }
+            positions.extend(
+                palette
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, state)| is_block_entity(*state))
+                    .filter_map(|(index, _)| {
+                        let x = origin_x + (index % CHUNK_WIDTH) as i32;
+                        let y = self.section.min_y.checked_add(
+                            (section_index * CHUNK_WIDTH + index / CHUNK_AREA) as i32,
+                        )?;
+                        let z = origin_z + (index / CHUNK_WIDTH % CHUNK_WIDTH) as i32;
+                        Some(BlockPos::new(x, y, z))
+                    }),
+            );
+        }
+        Some(positions)
+    }
+
+    /// Marks a legacy chunk checked after any recovered records have been stored.
+    pub fn finish_block_entity_recovery(&self) {
+        self.section
+            .block_entity_records_checked
+            .store(true, Ordering::Release);
+    }
+
     #[must_use]
     pub fn empty(x: i32, z: i32) -> Self {
         Self {
@@ -977,6 +1047,8 @@ pub enum ChunkParsingError {
 pub enum ChunkSerializingError {
     #[error("Error serializing chunk: {0}")]
     ErrorSerializingChunk(pumpkin_nbt::Error),
+    #[error("Block entity count {count} exceeds maximum {limit}")]
+    TooManyBlockEntities { count: usize, limit: usize },
 }
 
 #[cfg(test)]

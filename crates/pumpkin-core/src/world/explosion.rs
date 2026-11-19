@@ -592,10 +592,12 @@ impl<'a> Explosion<'a> {
                 } else {
                     Some(knockback)
                 };
-                if let Some(knockback) = knockback {
+                if let Some(knockback) = knockback
+                    && entity_base.apply_push_impulse(knockback)
+                {
                     // TODO vanilla sends a player's knockback in `ClientboundExplodePacket`, added to the client's
                     // motion. Setting the motion here starts from the server's stale copy of a player's velocity.
-                    entity.add_velocity(knockback);
+                    entity.send_velocity();
                 }
             }
 

@@ -16,7 +16,7 @@ use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, position::BlockPos, vector3::Vector3, wrap_degrees,
 };
-use pumpkin_world::{chunk::io::Dirtiable, world::BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use rand::{RngExt, seq::SliceRandom};
 use rustc_hash::FxHashSet;
 use uuid::Uuid;
@@ -281,11 +281,26 @@ impl CreakingHeartBlockEntity {
     }
 
     fn mark_changed(&self, world: &World) {
+        // Periodic saves serialize the chunk copy, not the live block entity.
+        world.update_block_entity_nbt(self, |nbt| {
+            nbt.child_tags.remove("creaking_uuid");
+            if let Some(uuid) = self.creaking_uuid() {
+                nbt.put_uuid("creaking", uuid);
+            } else {
+                nbt.child_tags.remove("creaking");
+            }
+        });
+    }
+
+    fn is_current_and_awake(&self, world: &World) -> bool {
         world
-            .level
-            .read_chunk_sync(&self.position.chunk_position(), |chunk| {
-                chunk.mark_dirty(true);
-            });
+            .get_block_state_id_if_loaded(&self.position)
+            .is_some_and(|id| {
+                id.to_block() == &Block::CREAKING_HEART
+                    && CreakingHeartLikeProperties::from_state_id(id).creaking_heart_state
+                        == CreakingHeartState::Awake
+            })
+            && self.is_current(world)
     }
 
     #[must_use]
@@ -311,6 +326,7 @@ impl CreakingHeartBlockEntity {
         }
         if let Some(creaking) = world.get_entity_by_uuid(protector.uuid)
             && !creaking.get_entity().is_removed()
+            && creaking.get_entity().world.load().uuid == world.uuid
             && Self::as_creaking(creaking.as_ref()).is_some()
         {
             *protector = Protector::loaded(&creaking);
@@ -335,6 +351,31 @@ impl CreakingHeartBlockEntity {
         self.creaking_uuid() == Some(creaking_uuid)
     }
 
+    pub(crate) fn try_adopt_legacy_protector(
+        &self,
+        world: &World,
+        candidate: &CreakingEntity,
+    ) -> bool {
+        let entity = candidate.get_entity();
+        if candidate.get_home_pos() != Some(self.position)
+            || entity.is_removed()
+            || !self.is_current(world)
+        {
+            return false;
+        }
+        let mut state = self.lock_state();
+        if state.retired {
+            return false;
+        }
+        if let Some(protector) = &state.protector {
+            return protector.uuid == entity.entity_uuid;
+        }
+        state.protector = Some(Protector::pending(entity.entity_uuid));
+        drop(state);
+        self.mark_changed(world);
+        true
+    }
+
     fn distance_to_creaking(&self, creaking: &dyn EntityBase) -> f64 {
         let bottom_center = self.position.to_f64();
         creaking
@@ -347,7 +388,8 @@ impl CreakingHeartBlockEntity {
 
     fn try_spawn_protector(&self, world: &Arc<World>) {
         let position = self.position.0.to_f64();
-        if !world.should_spawn_monsters()
+        if !self.is_current_and_awake(world)
+            || !world.should_spawn_monsters()
             || world
                 .get_nearest_player(position, PLAYER_DETECTION_RANGE, |player| {
                     !player.is_spectator()
@@ -375,7 +417,32 @@ impl CreakingHeartBlockEntity {
         ) else {
             return;
         };
+        self.finish_spawn_protector(world, &creaking);
+    }
+
+    fn validate_spawn(&self, world: &World, creaking: &CreakingEntity) -> bool {
+        if !creaking.is_live_in_world(world)
+            || creaking
+                .get_home_pos()
+                .is_some_and(|home| home != self.position)
+        {
+            return false;
+        }
+        if self.is_current_and_awake(world) {
+            return true;
+        }
+        creaking.tear_down();
+        false
+    }
+
+    fn finish_spawn_protector(&self, world: &Arc<World>, creaking: &Arc<CreakingEntity>) {
+        if !self.validate_spawn(world, creaking) {
+            return;
+        }
         creaking.play_ambient_sound();
+        if !self.validate_spawn(world, creaking) {
+            return;
+        }
         let entity = creaking.get_entity();
         world.emit_game_event_with_context(
             "entity_place",
@@ -384,14 +451,22 @@ impl CreakingHeartBlockEntity {
                 source_entity: Some(creaking.as_ref()),
             },
         );
+        if !self.validate_spawn(world, creaking) {
+            return;
+        }
         world.broadcast_entity_event(entity, EntityStatus::Poof, ActorEventID::None);
+        if !self.validate_spawn(world, creaking) {
+            return;
+        }
         creaking.set_transient(self.position);
+        if !self.validate_spawn(world, creaking) {
+            return;
+        }
 
-        let is_current = self.is_current(world);
-        let protector = creaking.clone() as Arc<dyn EntityBase>;
+        let protector: Arc<dyn EntityBase> = creaking.clone();
         let linked = {
             let mut state = self.lock_state();
-            if is_current && !state.retired && state.protector.is_none() {
+            if !state.retired && state.protector.is_none() {
                 state.protector = Some(Protector::loaded(&protector));
                 true
             } else {
@@ -404,11 +479,13 @@ impl CreakingHeartBlockEntity {
         }
         self.mark_changed(world);
         creaking.make_sound(Sound::EntityCreakingSpawn);
-        world.play_sound(
-            Sound::BlockCreakingHeartSpawn,
-            SoundCategory::Blocks,
-            &self.position.to_centered_f64(),
-        );
+        if self.can_notify_protector(world, creaking) {
+            world.play_sound(
+                Sound::BlockCreakingHeartSpawn,
+                SoundCategory::Blocks,
+                &self.position.to_centered_f64(),
+            );
+        }
     }
 
     fn create_protector(entity: Entity) -> Arc<CreakingEntity> {
@@ -439,27 +516,37 @@ impl CreakingHeartBlockEntity {
         cause: Option<&dyn EntityBase>,
         retire: bool,
     ) -> bool {
-        let protector = {
+        let (protector, changed) = {
             let mut state = self.lock_state();
             if state.retired {
                 return false;
             }
             state.retired = retire;
+            let had_protector = state.protector.is_some();
             let protector = Self::resolve_protector(world, &mut state);
             if protector.is_some() {
                 state.protector = None;
             }
-            protector
+            (protector, had_protector && state.protector.is_none())
         };
+        if changed {
+            self.mark_changed(world);
+        }
         if let Some(creaking) = protector.as_deref().and_then(Self::as_creaking) {
             if let Some(damage_type) = damage_type {
                 creaking.start_teardown(damage_type, source, cause);
             } else {
                 creaking.tear_down();
             }
-            self.mark_changed(world);
         }
         true
+    }
+
+    pub(crate) fn can_notify_protector(&self, world: &World, creaking: &CreakingEntity) -> bool {
+        creaking.is_live_in_world(world)
+            && creaking.get_home_pos() == Some(self.position)
+            && self.is_protector(creaking.get_entity().entity_uuid)
+            && self.is_current(world)
     }
 
     pub fn creaking_hurt(&self, world: &Arc<World>, creaking: &CreakingEntity) {
@@ -491,6 +578,10 @@ impl CreakingHeartBlockEntity {
         {
             let clumps = rand::rng().random_range(2..=3);
             for _ in 0..clumps {
+                if !self.can_notify_protector(world, creaking) || !self.is_current_and_awake(world)
+                {
+                    break;
+                }
                 if let Some(pos) = self.spread_resin(world) {
                     world.play_sound(
                         Sound::BlockResinPlace,
@@ -667,5 +758,180 @@ impl CreakingHeartBlockEntity {
         }
         *attached = true;
         Some(resin.to_state_id(&Block::RESIN_CLUMP))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicUsize;
+
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_world::chunk::{ChunkData, format::anvil::SingleChunkDataSerializer};
+
+    use super::*;
+    use crate::{
+        entity::ai::test_support::{server, world},
+        plugin::{
+            BoxFuture, EventHandler,
+            api::events::{EventPriority, world::generic_game::GenericGameEvent},
+        },
+        server::Server,
+    };
+
+    struct RemoveProtector {
+        world: Arc<World>,
+        entity_id: i32,
+        event_key: &'static str,
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl EventHandler<GenericGameEvent> for RemoveProtector {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut GenericGameEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.event_key == self.event_key {
+                    self.calls.fetch_add(1, Relaxed);
+                    if let Some(protector) = self.world.get_entity_by_id(self.entity_id) {
+                        self.world.remove_entity(protector.as_ref());
+                    }
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn heart_effects_stop_when_a_game_event_removes_the_protector()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk_pos, ChunkData::empty_sync(chunk_pos.x, chunk_pos.y));
+        let awake = CreakingHeartLikeProperties {
+            creaking_heart_state: CreakingHeartState::Awake,
+            ..CreakingHeartLikeProperties::from_state_id(Block::CREAKING_HEART.default_state.id)
+        };
+        for log in [position.up(), position.down()] {
+            world.set_block_state(
+                &log,
+                Block::PALE_OAK_LOG.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
+        world.set_block_state(
+            &position,
+            awake.to_state_id(&Block::CREAKING_HEART),
+            BlockFlags::NOTIFY_ALL,
+        );
+        let block_entity = world.get_block_entity(&position).ok_or("missing heart")?;
+        let heart: &CreakingHeartBlockEntity = block_entity
+            .as_any()
+            .downcast_ref()
+            .ok_or("wrong heart type")?;
+
+        let create = || {
+            CreakingEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(10.5, 64.0, 8.5),
+                &EntityType::CREAKING,
+            ))
+        };
+        let interrupted = create();
+        let make_listener = |event_key, protector: &CreakingEntity| {
+            let calls = Arc::new(AtomicUsize::new(0));
+            server.plugin_manager.register::<GenericGameEvent, _>(
+                Arc::new(RemoveProtector {
+                    world: world.clone(),
+                    entity_id: protector.get_entity().entity_id,
+                    event_key,
+                    calls: calls.clone(),
+                }),
+                EventPriority::Normal,
+                true,
+            );
+            calls
+        };
+        let spawn_calls = make_listener("entity_place", &interrupted);
+        assert!(world.spawn_entity(interrupted.clone()));
+        heart.finish_spawn_protector(&world, &interrupted);
+        assert_eq!(spawn_calls.load(Relaxed), 1);
+        assert!(interrupted.get_entity().is_removed());
+        assert_eq!(interrupted.get_home_pos(), None);
+        assert_eq!(heart.creaking_uuid(), None);
+
+        let protector = create();
+        assert!(world.spawn_entity(protector.clone()));
+        heart.finish_spawn_protector(&world, &protector);
+        assert_eq!(
+            heart.creaking_uuid(),
+            Some(protector.get_entity().entity_uuid)
+        );
+        let resin_calls = make_listener("block_place", &protector);
+        heart.creaking_hurt(&world, &protector);
+        assert_eq!(resin_calls.load(Relaxed), 1);
+        assert!(protector.get_entity().is_removed());
+        server.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn adopted_protector_is_in_the_chunk_save_until_the_link_expires()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let position = BlockPos::new(0, 64, 0);
+        let chunk_pos = position.chunk_position();
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        world.level.loaded_chunks.insert(chunk_pos, chunk.clone());
+        world.set_block_state(
+            &position,
+            Block::CREAKING_HEART.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
+        let heart = Arc::new(CreakingHeartBlockEntity::new(position));
+        world.add_block_entity(heart.clone());
+        let mut original = NbtCompound::new();
+        heart.write_internal(&mut original);
+        original.put_int("other_data", 42);
+        world.add_block_entity_nbt(position, &original);
+        let candidate = CreakingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(2.5, 64.0, 0.5),
+            &EntityType::CREAKING,
+        ));
+        candidate.set_transient(position);
+        let uuid = candidate.get_entity().entity_uuid;
+        assert!(heart.try_adopt_legacy_protector(&world, &candidate));
+        let saved_nbt = || -> Result<NbtCompound, Box<dyn std::error::Error>> {
+            let stored = ChunkData::from_bytes(&chunk.to_pump_bytes()?, chunk_pos)?;
+            let entries = stored
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            entries
+                .get(&position)
+                .cloned()
+                .ok_or_else(|| "Missing saved heart".into())
+        };
+        assert_eq!(saved_nbt()?.get_uuid("creaking"), Some(uuid));
+        heart
+            .lock_state()
+            .protector
+            .as_mut()
+            .ok_or("Missing live link")?
+            .ticks_missing = TICKS_GRACE_PERIOD;
+        assert!(heart.remove_protector(&world, None, None, None, false));
+        let cleared = saved_nbt()?;
+        assert!(cleared.get("creaking").is_none());
+        assert_eq!(cleared.get_int("other_data"), Some(42));
+        world.level.shutdown().await;
+        Ok(())
     }
 }

@@ -19,7 +19,7 @@ use super::{
 use crate::block::entities::creaking_heart::CreakingHeartBlockEntity;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::{EntityBase, living::LivingEntity, mob::Mob};
-use crate::world::World;
+use crate::world::{BlockEntityLookup, World};
 
 // Reserve the hit during plugin callbacks without starting the animation timer.
 const DAMAGE_IN_PROGRESS: i32 = -1;
@@ -93,6 +93,7 @@ impl CreakingEntity {
         }
         let living = &self.mob_entity.living_entity;
         let entity = &living.entity;
+        let world = entity.world.load_full();
         if entity.is_invulnerable_to(&damage_type, cause)
             || living.is_dead_or_dying()
             || self
@@ -118,7 +119,7 @@ impl CreakingEntity {
         if living
             .fire_damage_events(amount, damage_type, position, source, cause)
             .is_none()
-            || living.is_dead_or_dying()
+            || !self.is_live_in_world(&world)
             || entity.is_invulnerable_to(&damage_type, cause)
             || self.get_home_pos() != Some(home_pos)
         {
@@ -130,17 +131,27 @@ impl CreakingEntity {
         self.blame_source_for_damage(damage_type, attacker, credit);
         self.invulnerability_animation_remaining_ticks
             .store(INVULNERABILITY_ANIMATION_DURATION, Relaxed);
-        let world = entity.world.load();
         world.broadcast_entity_event(entity, EntityStatus::Shake, ActorEventID::None);
-        entity.emit_own_game_event(self, GameEvent::EntityAction);
-        let hit_by_player = credit.resolves_to_player(living);
-        if self.request_unloaded_home(&world, home_pos, Some(hit_by_player)) {
+        if !self.is_live_in_world(&world) || self.get_home_pos() != Some(home_pos) {
             return Some(true);
         }
-        if let Some(block_entity) = world.get_block_entity(&home_pos)
-            && let Some(heart) = self.linked_heart(block_entity.as_ref())
-        {
-            self.play_heart_feedback(&world, heart, hit_by_player);
+        entity.emit_own_game_event(self, GameEvent::EntityAction);
+        if !self.is_live_in_world(&world) || self.get_home_pos() != Some(home_pos) {
+            return Some(true);
+        }
+        let hit_by_player = credit.resolves_to_player(living);
+        match world.get_block_entity_if_chunk_loaded(&home_pos) {
+            BlockEntityLookup::Unloaded => {
+                self.request_home_chunk(&world, home_pos, Some(hit_by_player));
+            }
+            BlockEntityLookup::Loaded(block_entity) => {
+                if let Some(heart) = block_entity
+                    .as_deref()
+                    .and_then(|block_entity| self.linked_heart(block_entity))
+                {
+                    self.play_heart_feedback(&world, heart, hit_by_player);
+                }
+            }
         }
         Some(true)
     }
@@ -151,10 +162,15 @@ impl CreakingEntity {
         heart: &CreakingHeartBlockEntity,
         hit_by_player: bool,
     ) {
+        if !heart.can_notify_protector(world, self) {
+            return;
+        }
         if hit_by_player {
             heart.creaking_hurt(world, self);
         }
-        self.make_sound(Sound::EntityCreakingSway);
+        if heart.can_notify_protector(world, self) {
+            self.make_sound(Sound::EntityCreakingSway);
+        }
     }
 
     fn blame_source_for_damage(
