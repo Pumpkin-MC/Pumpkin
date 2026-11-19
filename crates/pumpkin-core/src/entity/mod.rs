@@ -4593,12 +4593,22 @@ impl Entity {
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
-        self.set_pose_if(pose, || true);
+        self.set_pose_if(pose, || true, || {});
     }
 
-    pub(crate) fn set_pose_if(&self, pose: EntityPose, should_apply: impl FnOnce() -> bool) {
+    /// Commits related state after approval and before sending observable metadata.
+    pub(crate) fn set_pose_if(
+        &self,
+        pose: EntityPose,
+        should_apply: impl FnOnce() -> bool,
+        commit: impl FnOnce(),
+    ) -> bool {
         if self.pose.load() == pose {
-            return;
+            if !should_apply() {
+                return false;
+            }
+            commit();
+            return true;
         }
 
         let mut pose_event =
@@ -4611,12 +4621,12 @@ impl Entity {
                 .plugin_manager
                 .fire_blocking(&server, &mut pose_event);
             if pose_event.cancelled {
-                return;
+                return false;
             }
         }
 
         if !should_apply() {
-            return;
+            return false;
         }
         self.pose.store(pose);
         let pose = pose as i32;
@@ -4624,7 +4634,9 @@ impl Entity {
         bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
         self.refresh_dimensions_into(&mut bedrock_meta);
         self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
+        commit();
         self.send_bedrock_actor_data(&bedrock_meta);
+        true
     }
 
     /// Vanilla `getDefaultDimensions` changed, e.g. a baby growing up.

@@ -59,6 +59,9 @@ const BLOCK_UPDATE_REACH: f64 = SIGNAL_MAX as f64 + 2.0;
 // The extra block covers the face offset and block rounding.
 const WIND_CHARGE_TICK_MARGIN: f64 = 6.0 + BLOCK_UPDATE_REACH + 16.0 + 1.0;
 
+// Block effects can send sounds two chunks away, independent of the player's watched chunks.
+const WIND_CHARGE_PACKET_MARGIN: f64 = WIND_CHARGE_TICK_MARGIN + 3.0 * CHUNK_WIDTH as f64;
+
 /// Grid cell size for large boxes.
 const CELL_SIZE: f64 = 16.0;
 const SMALL_CELL_SIZE: f64 = 4.0;
@@ -170,14 +173,10 @@ fn plugins_observe_wind_charge_tick(
     plugins: &PluginManager,
     world: &World,
     charge: &WindChargeEntity,
+    movement: f64,
 ) -> bool {
-    // Enqueueing velocity, burst and hit packets can call the observer synchronously.
-    // An owner in another dimension can also receive packets for a hit it was credited with.
     if plugins.has_handlers::<PacketSentEvent>()
-        && (!world.players.load().is_empty()
-            || charge
-                .get_projectile_owner()
-                .is_some_and(|owner| owner.get_player(world).is_some()))
+        && wind_charge_has_packet_recipients(world, charge, movement)
     {
         return true;
     }
@@ -233,6 +232,114 @@ fn plugins_observe_wind_charge_tick(
         NotePlayEvent::get_name_static(),
         BellRingEvent::get_name_static(),
     ])
+}
+
+fn wind_charge_has_packet_recipients(
+    world: &World,
+    charge: &WindChargeEntity,
+    movement: f64,
+) -> bool {
+    let entity = charge.get_entity();
+    // Hit credit can reach owners in other dimensions. Tracking survives until unpairing.
+    let tracker = &world.entity_tracker;
+    if charge
+        .get_projectile_owner()
+        .is_some_and(|owner| owner.get_player(world).is_some())
+        || tracker
+            .get_tracked_entity(entity.entity_id)
+            .is_some_and(|tracked| tracked.has_viewers())
+    {
+        return true;
+    }
+
+    let players = world.players.load();
+    if players.is_empty() {
+        return false;
+    }
+    if !movement.is_finite() {
+        return true;
+    }
+
+    let body = entity.bounding_box.load();
+    let area = body.expand(
+        movement + WIND_CHARGE_TICK_MARGIN,
+        movement + WIND_CHARGE_TICK_MARGIN,
+        movement + WIND_CHARGE_TICK_MARGIN,
+    );
+    let bounds = body.expand(
+        movement + WIND_CHARGE_PACKET_MARGIN,
+        0.0,
+        movement + WIND_CHARGE_PACKET_MARGIN,
+    );
+    let min_chunk = area.min_block_pos().chunk_position();
+    let max_chunk = area.max_block_pos().chunk_position();
+    if players.iter().any(|player| {
+        let position = player.position();
+        let watch = player.watched_section.load();
+        // This also covers the 64-block explosion broadcast, which doesn't use watchers.
+        ((bounds.min.x..=bounds.max.x).contains(&position.x)
+            && (bounds.min.z..=bounds.max.z).contains(&position.z))
+            || watch.is_within_distance(
+                watch.center.x.clamp(min_chunk.x, max_chunk.x),
+                watch.center.y.clamp(min_chunk.y, max_chunk.y),
+            )
+    }) {
+        return true;
+    }
+
+    // A hit can reach distant viewers and players credited for a kill, or broadcast a block sound.
+    if world.get_entities_at_box(&area).iter().any(|other| {
+        other.get_entity().entity_id != entity.entity_id
+            && (tracker
+                .get_tracked_entity(other.get_entity().entity_id)
+                .is_some_and(|tracked| tracked.has_viewers())
+                || other
+                    .get_living_entity()
+                    .is_some_and(|living| living.is_blocking() || living.has_player_kill_credit()))
+    }) {
+        return true;
+    }
+
+    // Portals can move the charge outside the area covered by the recipient checks.
+    let contact = body.expand(movement, movement, movement);
+    entity
+        .portal_manager
+        .lock()
+        .map_or(true, |manager| manager.is_some())
+        || wind_charge_can_reach_portal(world, &contact)
+}
+
+fn wind_charge_can_reach_portal(world: &World, contact: &BoundingBox) -> bool {
+    let min = contact.min_block_pos().0;
+    let max = contact.max_block_pos().0;
+    let mut x = get_section_cord(min.x)..=get_section_cord(max.x);
+    let y = get_section_cord(min.y.max(world.get_bottom_y()))
+        ..=get_section_cord(max.y.min(world.get_top_y()));
+    let z = get_section_cord(min.z)..=get_section_cord(max.z);
+    if y.is_empty() {
+        return false;
+    }
+    if [&x, &y, &z]
+        .into_iter()
+        .try_fold(1, |count: usize, range| {
+            count.checked_mul(cell_count(range)?)
+        })
+        .is_none_or(|count| count > MAX_CONTACT_SECTIONS as usize)
+    {
+        return true;
+    }
+    x.any(|x| {
+        z.clone().any(|z| {
+            y.clone().any(|y| {
+                section_may_contain_block(world, x, y, z, |block| {
+                    block == &Block::END_GATEWAY
+                        || block == &Block::END_PORTAL
+                        || block == &Block::NETHER_PORTAL
+                })
+                .unwrap_or(false)
+            })
+        })
+    })
 }
 
 /// What one entity can read or change next tick.
@@ -453,7 +560,12 @@ impl EntityReach {
             || wind_charge.is_some_and(|charge| {
                 let world = base.world.load();
                 world.server.upgrade().is_some_and(|server| {
-                    plugins_observe_wind_charge_tick(&server.plugin_manager, &world, charge)
+                    plugins_observe_wind_charge_tick(
+                        &server.plugin_manager,
+                        &world,
+                        charge,
+                        movement,
+                    )
                 })
             })
             || entity
@@ -718,26 +830,33 @@ fn contact_may_change_blocks(
 }
 
 fn contact_section_may_change_blocks(world: &World, x: i32, y: i32, z: i32) -> bool {
-    world
-        .level
-        .read_chunk_sync(&Vector2::new(x, z), |chunk| {
-            let blocks = chunk
-                .section
-                .block_sections
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let index = y - get_section_cord(chunk.section.min_y);
-            usize::try_from(index)
-                .ok()
-                .and_then(|index| blocks.get(index))
-                .is_none_or(|palette| {
-                    palette.contains_matching(|state| {
-                        let block = Block::from_state_id(state);
-                        block.id == Block::END_GATEWAY.id || changes_on_contact(block)
-                    })
-                })
-        })
-        .unwrap_or(true)
+    section_may_contain_block(world, x, y, z, |block| {
+        block.id == Block::END_GATEWAY.id || changes_on_contact(block)
+    })
+    .unwrap_or(true)
+}
+
+fn section_may_contain_block(
+    world: &World,
+    x: i32,
+    y: i32,
+    z: i32,
+    predicate: impl Fn(&Block) -> bool,
+) -> Option<bool> {
+    world.level.read_chunk_sync(&Vector2::new(x, z), |chunk| {
+        let blocks = chunk
+            .section
+            .block_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let index = y - get_section_cord(chunk.section.min_y);
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| blocks.get(index))
+            .is_none_or(|palette| {
+                palette.contains_matching(|state| predicate(Block::from_state_id(state)))
+            })
+    })
 }
 
 fn grown_body(audited: &AuditedReach, extra: f64) -> BoundingBox {
@@ -1223,14 +1342,18 @@ mod tests {
 
         plugins.register::<PlayerChatEvent, _>(Arc::new(IgnoreEvent), EventPriority::Normal, true);
         plugins.register::<PacketSentEvent, _>(Arc::new(IgnoreEvent), EventPriority::Normal, true);
-        assert!(!plugins_observe_wind_charge_tick(&plugins, &world, charge));
+        assert!(!plugins_observe_wind_charge_tick(
+            &plugins, &world, charge, 0.0
+        ));
 
         plugins.register::<EntityExplodeEvent, _>(
             Arc::new(IgnoreEvent),
             EventPriority::Normal,
             true,
         );
-        assert!(plugins_observe_wind_charge_tick(&plugins, &world, charge));
+        assert!(plugins_observe_wind_charge_tick(
+            &plugins, &world, charge, 0.0
+        ));
 
         let plugins = PluginManager::new(Vec::new());
         plugins.register::<EntityPoseChangeEvent, _>(
@@ -1238,7 +1361,9 @@ mod tests {
             EventPriority::Normal,
             true,
         );
-        assert!(plugins_observe_wind_charge_tick(&plugins, &world, charge));
+        assert!(plugins_observe_wind_charge_tick(
+            &plugins, &world, charge, 0.0
+        ));
 
         world.level.shutdown().await;
         Ok(())

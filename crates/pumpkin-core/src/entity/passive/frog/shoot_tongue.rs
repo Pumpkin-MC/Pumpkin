@@ -84,25 +84,26 @@ impl ShootTongue {
         );
     }
 
-    fn eat_entity(mob: &dyn Mob, sound: Sound) {
+    fn eat_entity(mob: &dyn Mob, target: &Arc<dyn EntityBase>, sound: Sound) {
         let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>() else {
             return;
         };
         let entity = frog.get_entity();
-        if entity.is_removed() {
+        let world = entity.world.load_full();
+        let prey_is_current = || {
+            is_alive(frog)
+                && Arc::ptr_eq(&entity.world.load(), &world)
+                && is_alive(target.as_ref())
+                && Arc::ptr_eq(&target.get_entity().world.load(), &world)
+                && frog
+                    .get_tongue_target()
+                    .is_some_and(|current| Arc::ptr_eq(&current, target))
+        };
+        if !prey_is_current() {
             return;
         }
-        entity.world.load().play_sound_fine(
-            sound,
-            SoundCategory::Neutral,
-            &entity.pos.load(),
-            2.0,
-            1.0,
-        );
-        let Some(target) = frog.get_tongue_target() else {
-            return;
-        };
-        if entity.is_removed() || !is_alive(target.as_ref()) {
+        world.play_sound_fine(sound, SoundCategory::Neutral, &entity.pos.load(), 2.0, 1.0);
+        if !prey_is_current() {
             return;
         }
         mob.do_hurt_target(target.as_ref());
@@ -233,7 +234,7 @@ impl Behavior for ShootTongue {
                 if elapsed >= CATCH_ANIMATION_DURATION {
                     self.state = State::EatAnimation;
                     let sound = self.eat_sound;
-                    tick.defer(move |mob| Self::eat_entity(mob, sound));
+                    tick.defer(move |mob| Self::eat_entity(mob, &target, sound));
                 }
             }
             State::EatAnimation => {

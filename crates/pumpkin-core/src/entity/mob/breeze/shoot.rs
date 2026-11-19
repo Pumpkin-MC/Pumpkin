@@ -179,26 +179,28 @@ fn fire_wind_charge(tick: &mut BrainTick<'_>, target: Arc<dyn EntityBase>, aim_a
         let entity = shooter.get_entity();
         let target_entity = target.get_entity();
         let body = shooter.get_mob_entity();
-        if !body.living_entity.is_alive()
-            || entity.pos.load() != position
-            || !Arc::ptr_eq(&entity.world.load(), &world)
-            || !target
-                .get_living_entity()
-                .is_some_and(crate::entity::living::LivingEntity::is_alive)
-            || !Arc::ptr_eq(&target_entity.world.load(), &world)
-            || !body.with_brain(shooter, |brain| {
-                brain.has_memory_value(types::BREEZE_SHOOT.id())
-                    && brain
-                        .get(types::ATTACK_TARGET)
-                        .is_some_and(|current| Arc::ptr_eq(current, &target))
-            })
-        {
+        let shot_is_current = || {
+            body.living_entity.is_alive()
+                && entity.pos.load() == position
+                && Arc::ptr_eq(&entity.world.load(), &world)
+                && target
+                    .get_living_entity()
+                    .is_some_and(crate::entity::living::LivingEntity::is_alive)
+                && Arc::ptr_eq(&target_entity.world.load(), &world)
+                && body.with_brain(shooter, |brain| {
+                    brain.has_memory_value(types::BREEZE_SHOOT.id())
+                        && brain
+                            .get(types::ATTACK_TARGET)
+                            .is_some_and(|current| Arc::ptr_eq(current, &target))
+                })
+        };
+        if !shot_is_current() {
             return;
         }
-        if world.spawn_entity(charge.clone()) {
+        if world.spawn_entity_if(charge.clone(), shot_is_current) {
             apply_on_projectile_spawned(charge.get_entity(), ItemStack::EMPTY, None, None);
         }
-        if body.living_entity.is_alive() && Arc::ptr_eq(&entity.world.load(), &world) {
+        if shot_is_current() {
             shooter.play_entity_sound(Sound::EntityBreezeShoot, SHOOT_VOLUME, 1.0);
         }
     });

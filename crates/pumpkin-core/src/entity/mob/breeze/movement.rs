@@ -125,6 +125,7 @@ fn snap_to_surface(world: &World, target: Vector3<f64>) -> Option<BlockPos> {
             ClipFluid::None,
         ));
         if hit.is_hit() {
+            // Java floors the hit point before moving up, even at an integer surface.
             return Some(BlockPos::floored_v(hit.location).up());
         }
     }
@@ -141,6 +142,7 @@ impl LongJump {
         &mut self,
         tick: &mut BrainTick<'_>,
         pose: EntityPose,
+        commit: impl FnOnce(&dyn Mob) + Send + 'static,
         action: impl FnOnce(&dyn Mob, &dyn Fn() -> bool) + Send + 'static,
     ) {
         let active = Arc::new(AtomicBool::new(true));
@@ -155,6 +157,7 @@ impl LongJump {
                     && Arc::ptr_eq(&world, &entity.world.load())
                     && entity.pos.load() == position
             },
+            commit,
             action,
         );
     }
@@ -283,18 +286,23 @@ impl Behavior for LongJump {
                 .set_with_expiry(types::BREEZE_JUMP_INHALING, (), INHALING_DURATION_TICKS);
         }
         let target = tick.state.get(types::BREEZE_JUMP_TARGET).copied();
-        self.transition(tick, EntityPose::Inhaling, move |breeze, current| {
-            let entity = breeze.get_entity();
-            entity
-                .world
-                .load()
-                .play_sound_from_entity(breeze, Sound::EntityBreezeCharge);
-            if current()
-                && let Some(target) = target
-            {
-                look_from_eyes(entity, target.to_centered_f64());
-            }
-        });
+        self.transition(
+            tick,
+            EntityPose::Inhaling,
+            |_| {},
+            move |breeze, current| {
+                let entity = breeze.get_entity();
+                entity
+                    .world
+                    .load()
+                    .play_sound_from_entity(breeze, Sound::EntityBreezeCharge);
+                if current()
+                    && let Some(target) = target
+                {
+                    look_from_eyes(entity, target.to_centered_f64());
+                }
+            },
+        );
     }
 
     fn tick(&mut self, tick: &mut BrainTick<'_>) {
@@ -318,23 +326,23 @@ impl Behavior for LongJump {
                 tick.set_pose(EntityPose::Standing);
                 return;
             };
-            // Commit pose before playing transition sounds so a canceled pose stays silent.
-            self.transition(tick, EntityPose::LongJumping, move |breeze, current| {
-                let body = breeze.get_mob_entity();
-                if in_water {
-                    body.with_brain(breeze, |brain| {
-                        brain.set(types::BREEZE_LEAVING_WATER, ());
-                    });
-                }
-                breeze.play_entity_sound(Sound::EntityBreezeJump, 1.0, 1.0);
-                if !current() {
-                    return;
-                }
-                let living = &body.living_entity;
-                living.entity.yaw.store(living.entity.body_yaw.load());
-                living.discard_friction.store(true, Relaxed);
-                living.entity.velocity.store(velocity);
-            });
+            self.transition(
+                tick,
+                EntityPose::LongJumping,
+                move |breeze| {
+                    let body = breeze.get_mob_entity();
+                    if in_water {
+                        body.with_brain(breeze, |brain| {
+                            brain.set(types::BREEZE_LEAVING_WATER, ());
+                        });
+                    }
+                    let living = &body.living_entity;
+                    living.entity.yaw.store(living.entity.body_yaw.load());
+                    living.discard_friction.store(true, Relaxed);
+                    living.entity.velocity.store(velocity);
+                },
+                |breeze, _| breeze.play_entity_sound(Sound::EntityBreezeJump, 1.0, 1.0),
+            );
         } else if pose == EntityPose::LongJumping
             && (entity.on_ground.load(Relaxed)
                 || in_water
@@ -347,18 +355,19 @@ impl Behavior for LongJump {
             } else {
                 JUMP_COOLDOWN_TICKS
             };
-            self.transition(tick, EntityPose::Standing, move |breeze, current| {
-                let body = breeze.get_mob_entity();
-                breeze.play_entity_sound(Sound::EntityBreezeLand, 1.0, 1.0);
-                if !current() {
-                    return;
-                }
-                body.living_entity.discard_friction.store(false, Relaxed);
-                body.with_brain(breeze, |brain| {
-                    brain.set_with_expiry(types::BREEZE_JUMP_COOLDOWN, (), cooldown);
-                    brain.set_with_expiry(types::BREEZE_SHOOT, (), 100);
-                });
-            });
+            self.transition(
+                tick,
+                EntityPose::Standing,
+                move |breeze| {
+                    let body = breeze.get_mob_entity();
+                    body.living_entity.discard_friction.store(false, Relaxed);
+                    body.with_brain(breeze, |brain| {
+                        brain.set_with_expiry(types::BREEZE_JUMP_COOLDOWN, (), cooldown);
+                        brain.set_with_expiry(types::BREEZE_SHOOT, (), 100);
+                    });
+                },
+                |breeze, _| breeze.play_entity_sound(Sound::EntityBreezeLand, 1.0, 1.0),
+            );
         }
     }
 
@@ -497,11 +506,16 @@ impl Behavior for SlideToTargetSink {
 
     fn stop(&mut self, tick: &mut BrainTick<'_>) {
         self.0.stop(tick);
-        let has_target = tick.state.has_memory_value(types::ATTACK_TARGET.id());
+        let target = tick.state.get(types::ATTACK_TARGET).cloned();
         tick.set_pose_then(EntityPose::Standing, move |breeze| {
-            if has_target {
+            if let Some(target) = target {
                 breeze.get_mob_entity().with_brain(breeze, |brain| {
-                    brain.set_with_expiry(types::BREEZE_SHOOT, (), 60);
+                    if brain
+                        .get(types::ATTACK_TARGET)
+                        .is_some_and(|current| Arc::ptr_eq(current, &target))
+                    {
+                        brain.set_with_expiry(types::BREEZE_SHOOT, (), 60);
+                    }
                 });
             }
         });
@@ -523,6 +537,58 @@ mod tests {
         brain::{Brain, activity::ActivityData, behavior::Status},
         test_support,
     };
+    use crate::entity::{EntityBase, r#type::from_type};
+
+    #[tokio::test]
+    async fn slide_stop_only_prepares_a_shot_for_the_original_target()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = test_support::world(&folder);
+        let position = Vector3::new(0.0, 64.0, 0.0);
+        let breeze = BreezeEntity::new(Entity::new(world.clone(), position, &EntityType::BREEZE));
+        let target = from_type(
+            &EntityType::IRON_GOLEM,
+            position,
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        let replacement = from_type(
+            &EntityType::IRON_GOLEM,
+            position,
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        let body = breeze.get_mob_entity();
+        for (current, can_shoot) in [
+            (Some(target.clone()), true),
+            (Some(replacement.clone()), false),
+            (None, false),
+        ] {
+            breeze.get_entity().set_pose(EntityPose::Sliding);
+            let effects = body.with_brain(breeze.as_ref(), |brain| {
+                brain.erase(types::BREEZE_SHOOT.id());
+                brain.set(types::ATTACK_TARGET, target.clone());
+                SlideToTargetSink(MoveToTargetSink::new(20, 40)).stop(&mut BrainTick {
+                    mob: breeze.as_ref(),
+                    world: &world,
+                    state: brain,
+                    time: 0,
+                });
+                brain.set_optional(types::ATTACK_TARGET, current);
+                brain.take_effects()
+            });
+            for effect in effects {
+                effect(breeze.as_ref());
+            }
+            assert_eq!(breeze.get_entity().pose.load(), EntityPose::Standing);
+            assert_eq!(
+                body.brain_has_memory_value(types::BREEZE_SHOOT.id()),
+                can_shoot
+            );
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn expired_long_jump_restores_friction_before_committing_the_pose()

@@ -5493,6 +5493,14 @@ impl World {
     ///
     /// [`EntitySpawnEvent`]: crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent
     pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) -> bool {
+        self.spawn_entity_if(entity, || true)
+    }
+
+    pub(crate) fn spawn_entity_if(
+        self: &Arc<Self>,
+        entity: Arc<dyn EntityBase>,
+        should_spawn: impl FnOnce() -> bool,
+    ) -> bool {
         let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
             entity.get_entity().entity_id,
             entity.get_entity().entity_type.id.to_string(),
@@ -5502,7 +5510,7 @@ impl World {
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
-        if event.cancelled {
+        if event.cancelled || !should_spawn() {
             return false;
         }
 

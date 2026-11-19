@@ -68,13 +68,14 @@ impl BrainTick<'_> {
         pose: EntityPose,
         action: impl FnOnce(&dyn Mob) + Send + 'static,
     ) {
-        self.set_pose_then_if(pose, |_| true, move |mob, _| action(mob));
+        self.set_pose_then_if(pose, |_| true, |_| {}, move |mob, _| action(mob));
     }
 
     pub(crate) fn set_pose_then_if(
         &mut self,
         pose: EntityPose,
         should_apply: impl Fn(&dyn Mob) -> bool + Send + 'static,
+        commit: impl FnOnce(&dyn Mob) + Send + 'static,
         action: impl FnOnce(&dyn Mob, &dyn Fn() -> bool) + Send + 'static,
     ) {
         self.defer_pose_change(pose, move |mob| {
@@ -82,10 +83,14 @@ impl BrainTick<'_> {
             if !should_apply(mob) {
                 return;
             }
-            entity.set_pose_if(pose, || !entity.is_removed() && should_apply(mob));
+            let applied = entity.set_pose_if(
+                pose,
+                || !entity.is_removed() && should_apply(mob),
+                || commit(mob),
+            );
             let current =
                 || !entity.is_removed() && entity.pose.load() == pose && should_apply(mob);
-            if current() {
+            if applied && current() {
                 action(mob, &current);
             }
         });

@@ -610,6 +610,14 @@ impl LivingEntity {
         self.entity.world.load().get_player_by_uuid(uuid)
     }
 
+    /// A player may receive kill credit even while away from this entity.
+    pub(crate) fn has_player_kill_credit(&self) -> bool {
+        self.last_hurt_by_player
+            .load()
+            .or_else(|| self.last_hurt_by_mob.load().map(|attacker| attacker.uuid))
+            .is_some_and(|uuid| self.entity.world.load().get_player_by_uuid(uuid).is_some())
+    }
+
     /// Returns the entity that should receive kill credit for this entity's death.
     /// Following vanilla Java logic (`LivingEntity.getKillCredit`):
     /// 1. Prioritize `last_hurt_by_player`, which is forgotten 100 ticks after the hit.
