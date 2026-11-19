@@ -27,6 +27,33 @@ fn next_phase(counter: &AtomicU32) -> u32 {
     }
 }
 
+/// The lists of runs sinks are done with. In a crowd every job of a phase fills a run for
+/// every client, and allocating them anew each phase costs more than the packets.
+static SPARE_RUNS: Mutex<Vec<Vec<PacketRun>>> = Mutex::new(Vec::new());
+
+/// Lists kept in [`SPARE_RUNS`]: the jobs of two phases.
+const MAX_SPARE_LISTS: usize = 128;
+
+/// Sinks after which the spare lists are dropped, so the room one burst of packets needed
+/// is not kept for good. A tick uses a few sinks.
+const SPARE_RUNS_SINKS: u32 = 4096;
+
+/// A run that grew past this many bytes is not kept.
+const MAX_SPARE_RUN_LEN: usize = 16 * 1024;
+
+/// A list of empty runs, with the room of an earlier phase when there is one.
+fn spare_runs() -> Vec<PacketRun> {
+    let mut runs = SPARE_RUNS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .pop()
+        .unwrap_or_default();
+    for run in &mut runs {
+        run.reset(MAX_SPARE_RUN_LEN);
+    }
+    runs
+}
+
 /// What one job of a phase queued, by the client's place among the players of the phase.
 struct Collecting {
     phase: u32,
@@ -83,7 +110,7 @@ impl<'a> PacketSink<'a> {
         COLLECTING.with_borrow_mut(|collecting| {
             collecting.push(Collecting {
                 phase: self.phase,
-                runs: Vec::new(),
+                runs: spare_runs(),
             });
         });
         PacketRuns(self, PhantomData)
@@ -99,26 +126,31 @@ impl Drop for PacketSink<'_> {
         if collected.is_empty() {
             return;
         }
-        let mut by_client: Vec<Vec<PacketRun>> = Vec::new();
-        by_client.resize_with(self.players.len(), Vec::new);
-        for job in collected.drain(..) {
-            for (runs, run) in by_client.iter_mut().zip(job) {
-                if !run.is_empty() {
-                    runs.push(run);
-                }
-            }
-        }
+        let jobs = collected.as_slice();
         // Each client is queued by one thread, so none of them waits for another.
         self.players
             .par_iter()
-            .zip(by_client.par_iter_mut())
-            .for_each(|(player, runs)| {
-                if !runs.is_empty()
+            .enumerate()
+            .for_each(|(place, player)| {
+                let runs = jobs
+                    .iter()
+                    .filter_map(|job| job.get(place))
+                    .filter(|run| !run.is_empty());
+                if runs.clone().next().is_some()
                     && let Some(client) = player.client.java()
                 {
                     client.try_enqueue_runs(runs);
                 }
             });
+        let mut spare = SPARE_RUNS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.phase.is_multiple_of(SPARE_RUNS_SINKS) {
+            spare.clear();
+        } else {
+            let room = MAX_SPARE_LISTS.saturating_sub(spare.len());
+            spare.extend(collected.drain(..).take(room));
+        }
     }
 }
 
@@ -130,6 +162,7 @@ impl Drop for PacketRuns<'_> {
         let Some(collecting) = COLLECTING.with_borrow_mut(Vec::pop) else {
             return;
         };
+        // Also a list nothing was queued in, so the sink hands it on to a later phase.
         if !collecting.runs.is_empty() {
             self.0
                 .collected
@@ -247,6 +280,26 @@ mod tests {
         // Each collected packet counted once: nothing stays reserved once all is written.
         java(&first).send_packet_now_data(numbered(8, 0)).await;
         assert_eq!(java(&first).pending_bytes.load(Ordering::Acquire), 0);
+        shutdown(&server).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn runs_filled_again_carry_only_the_new_packets() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let mut client = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        client.received().await?;
+        let players = server.worlds.load()[0].players.load_full();
+
+        // The second sink gets the runs of the first one back.
+        for id in 1..=3 {
+            let sink = PacketSink::new(&players);
+            let runs = sink.collect();
+            java(&client).try_enqueue_packet(numbered(id, 0));
+            drop(runs);
+        }
+        assert_eq!(ids(&mut client).await?, [1, 2, 3]);
         shutdown(&server).await;
         Ok(())
     }

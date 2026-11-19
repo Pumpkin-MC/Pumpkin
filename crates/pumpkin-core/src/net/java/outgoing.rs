@@ -1350,9 +1350,8 @@ mod tests {
         // Outside play no plugin sees a packet, whatever plugins other tests register.
         client.connection_state.store(ConnectionState::Config);
         client.suspend_flushing();
-        let mut runs = vec![run(1..=2), run(3..=3), run(4..=6)];
-        client.try_enqueue_runs(&mut runs);
-        assert!(runs.is_empty());
+        let runs = [run(1..=2), run(3..=3), run(4..=6)];
+        client.try_enqueue_runs(runs.iter());
         // One buffer for the writer, however many the tick threads filled.
         assert_eq!(client.lock_tick_batch().len(), 1);
         client.resume_flushing();

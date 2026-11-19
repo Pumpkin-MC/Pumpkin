@@ -115,18 +115,28 @@ impl PacketRun {
         self.ends.is_empty()
     }
 
-    /// The packets of `runs` in one run, in order. Leaves `runs` empty.
-    fn merged(runs: &mut Vec<Self>) -> Self {
+    /// The packets of `runs` in one run, in order.
+    fn merged<'a>(runs: impl Iterator<Item = &'a Self> + Clone) -> Self {
         let mut merged = Self {
-            bytes: Vec::with_capacity(runs.iter().map(|run| run.bytes.len()).sum()),
-            ends: Vec::with_capacity(runs.iter().map(|run| run.ends.len()).sum()),
+            bytes: Vec::with_capacity(runs.clone().map(|run| run.bytes.len()).sum()),
+            ends: Vec::with_capacity(runs.clone().map(|run| run.ends.len()).sum()),
         };
-        for run in runs.drain(..) {
+        for run in runs {
             let start = merged.bytes.len();
             merged.bytes.extend_from_slice(&run.bytes);
             merged.ends.extend(run.ends.iter().map(|end| start + end));
         }
         merged
+    }
+
+    /// Empties the run and keeps its room for the next packets, up to `keep` bytes.
+    fn reset(&mut self, keep: usize) {
+        if self.bytes.capacity() > keep {
+            *self = Self::default();
+        } else {
+            self.bytes.clear();
+            self.ends.clear();
+        }
     }
 
     fn into_packets(self) -> impl Iterator<Item = Bytes> {
@@ -735,14 +745,10 @@ impl JavaClient {
         }
     }
 
-    /// [`Self::try_enqueue_run`] for several runs in order; leaves `runs` empty. Joining them
-    /// here frees the small buffers on the threads that filled them.
-    pub fn try_enqueue_runs(&self, runs: &mut Vec<PacketRun>) {
-        if runs.len() > 1 {
-            self.try_enqueue_run(PacketRun::merged(runs));
-        } else if let Some(run) = runs.pop() {
-            self.try_enqueue_run(run);
-        }
+    /// [`Self::try_enqueue_run`] for several runs in order, copied into one for the writer
+    /// task. The runs keep their room, so a tick phase can fill them again.
+    pub fn try_enqueue_runs<'a>(&self, runs: impl Iterator<Item = &'a PacketRun> + Clone) {
+        self.try_enqueue_run(PacketRun::merged(runs));
     }
 
     /// `false` once the writer is gone. Then the connection is closed.
