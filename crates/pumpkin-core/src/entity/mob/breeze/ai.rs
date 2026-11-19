@@ -22,7 +22,6 @@ pub(super) fn make_brain(breeze: &BreezeEntity, packed: &PackedMemories) -> Brai
     let mut brain = BrainProvider {
         memory_types: &[],
         sensor_types: &[
-            SensorType::NearestLivingEntities,
             SensorType::HurtBy,
             SensorType::NearestPlayers,
             SensorType::BreezeAttackEntity,

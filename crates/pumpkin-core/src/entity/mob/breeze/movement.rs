@@ -341,13 +341,19 @@ impl Behavior for LongJump {
     }
 
     fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        if let Some(breeze) = breeze_from_tick(tick)
-            && matches!(
+        if let Some(breeze) = breeze_from_tick(tick) {
+            // An interrupted jump may never run the landing callback.
+            breeze
+                .mob_entity
+                .living_entity
+                .discard_friction
+                .store(false, Relaxed);
+            if matches!(
                 breeze.planned_pose(),
                 EntityPose::LongJumping | EntityPose::Inhaling
-            )
-        {
-            breeze.change_pose(EntityPose::Standing, |_| {});
+            ) {
+                breeze.change_pose(EntityPose::Standing, |_| {});
+            }
         }
         Self::clear_jump_memories(tick.state);
     }
@@ -484,5 +490,46 @@ impl Behavior for SlideToTargetSink {
 
     fn debug_name(&self) -> &'static str {
         "BreezeSlideToTargetSink"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::entity::EntityType;
+
+    use super::super::BreezeEntity;
+    use super::*;
+    use crate::entity::ai::{brain::behavior::Status, test_support};
+
+    #[tokio::test]
+    async fn expired_long_jump_restores_friction_before_committing_the_pose()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = test_support::world(&folder);
+        let breeze = BreezeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BREEZE,
+        ));
+        let living = &breeze.mob_entity.living_entity;
+        living.entity.pose.store(EntityPose::LongJumping);
+        living.discard_friction.store(true, Relaxed);
+
+        let mut state = BrainState::default();
+        let mut jump = Timed::new(LongJump);
+        let duration = jump.inner().max_duration();
+        jump.start_at(0, duration);
+        jump.tick_or_stop(&mut BrainTick {
+            mob: breeze.as_ref(),
+            world: &world,
+            state: &mut state,
+            time: i64::from(duration) + 1,
+        });
+        world.level.shutdown().await;
+
+        assert_eq!(jump.status(), Status::Stopped);
+        assert_eq!(living.entity.pose.load(), EntityPose::LongJumping);
+        assert!(!living.discard_friction.load(Relaxed));
+        Ok(())
     }
 }

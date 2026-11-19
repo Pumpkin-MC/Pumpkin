@@ -382,9 +382,13 @@ impl HurtingProjectile {
     }
 
     pub fn read_nbt(&self, nbt: &NbtCompound) {
+        self.read_nbt_with_default(nbt, Self::DEFAULT_ACCELERATION_POWER);
+    }
+
+    fn read_nbt_with_default(&self, nbt: &NbtCompound, default_power: f64) {
         self.set_acceleration_power(
             nbt.get_double("acceleration_power")
-                .unwrap_or(Self::DEFAULT_ACCELERATION_POWER),
+                .unwrap_or(default_power),
         );
     }
 

@@ -26,6 +26,7 @@ use crate::{
 };
 
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
+const INITIAL_ACCELERATION_POWER: f64 = 0.0;
 pub const WIND_CHARGE_GRAVITY: f64 = 0.0;
 
 enum WindChargeKind {
@@ -71,7 +72,10 @@ impl WindChargeEntity {
             kind: WindChargeKind::Normal {
                 deflect_cooldown: AtomicU8::new(DEFAULT_DEFLECT_COOLDOWN),
             },
-            thrown_item_entity: HurtingProjectile::new(thrown_item_entity, 0.0),
+            thrown_item_entity: HurtingProjectile::new(
+                thrown_item_entity,
+                INITIAL_ACCELERATION_POWER,
+            ),
         }
     }
 
@@ -79,7 +83,10 @@ impl WindChargeEntity {
     pub const fn new_breeze(thrown_item_entity: ThrownItemEntity) -> Self {
         Self {
             kind: WindChargeKind::Breeze,
-            thrown_item_entity: HurtingProjectile::new(thrown_item_entity, 0.0),
+            thrown_item_entity: HurtingProjectile::new(
+                thrown_item_entity,
+                INITIAL_ACCELERATION_POWER,
+            ),
         }
     }
 
@@ -155,7 +162,9 @@ impl EntityBase for WindChargeEntity {
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
-        self.thrown_item_entity.read_nbt(nbt);
+        // Older Pumpkin saves omitted the field and loaded charges with zero acceleration.
+        self.thrown_item_entity
+            .read_nbt_with_default(nbt, INITIAL_ACCELERATION_POWER);
     }
 
     fn on_deflection(&self, by_attack: bool) {
@@ -238,5 +247,44 @@ impl EntityBase for WindChargeEntity {
                 self.create_explosion(hit_pos + normal);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::{ai::test_support, r#type::load_entity};
+
+    #[tokio::test]
+    async fn old_wind_charges_load_without_acceleration_and_keep_explicit_values()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = test_support::world(&folder);
+        let position = Vector3::new(0.0, 64.0, 0.0);
+
+        for (entity_type, default_power) in [
+            (&EntityType::WIND_CHARGE, 0.0),
+            (&EntityType::BREEZE_WIND_CHARGE, 0.0),
+            (&EntityType::FIREBALL, 0.1),
+        ] {
+            for saved_power in [None, Some(0.0), Some(0.05), Some(0.1)] {
+                let mut nbt = NbtCompound::new();
+                if let Some(power) = saved_power {
+                    nbt.put_double("acceleration_power", power);
+                }
+                let entity = load_entity(entity_type, position, &nbt, &world);
+                let mut output = NbtCompound::new();
+                entity.write_custom_nbt(&mut output);
+                assert_eq!(
+                    output.get_double("acceleration_power").map(f64::to_bits),
+                    Some(saved_power.unwrap_or(default_power).to_bits()),
+                    "{} with saved acceleration {saved_power:?}",
+                    entity_type.resource_name,
+                );
+            }
+        }
+
+        world.level.shutdown().await;
+        Ok(())
     }
 }
