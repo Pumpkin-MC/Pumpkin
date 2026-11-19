@@ -318,7 +318,11 @@ impl Context {
     ) where
         H: EventRoHandler<E> + 'static,
     {
-        self.plugin_manager.register_nonblocking(handler, priority);
+        self.plugin_manager.register_nonblocking(
+            handler,
+            priority,
+            Some(self.metadata.name.clone()),
+        );
     }
 
     /// Registers an event handler for a specific event type.
@@ -340,7 +344,8 @@ impl Context {
     ) where
         H: EventRwHandler<E> + 'static,
     {
-        self.plugin_manager.register_blocking(handler, priority);
+        self.plugin_manager
+            .register_blocking(handler, priority, Some(self.metadata.name.clone()));
     }
 
     /// Registers an event handler for a specific event type.
@@ -354,10 +359,7 @@ impl Context {
     ///
     /// # Constraints
     /// The handler must implement the `DynEventHandler` trait.
-    pub fn register_event_dyn<H>(&self, event_type: &'static str, handler: Arc<H>)
-    where
-        H: DynEventHandler + 'static,
-    {
+    pub fn register_event_dyn(&self, event_type: &'static str, handler: &Arc<dyn DynEventHandler>) {
         self.plugin_manager.register_dyn(event_type, handler);
     }
 
