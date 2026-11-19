@@ -694,16 +694,17 @@ impl Mob for PandaEntity {
         if self.is_holding_item() || !can_pick_up_and_eat(item) {
             return;
         }
-        let count = item
+        let stack = item
             .get_item_stack()
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .item_count;
+            .clone();
+        let count = stack.item_count;
         let living = &self.mob_entity.living_entity;
         if !living.pickup(item.get_entity(), u32::from(count)) {
             return;
         }
-        living.on_item_pickup(item);
+        living.on_item_pickup(item, &stack);
         let taken = std::mem::replace(
             &mut *item
                 .get_item_stack()

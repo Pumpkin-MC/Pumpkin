@@ -973,7 +973,7 @@ impl LivingEntity {
     }
 
     /// Vanilla `LivingEntity.onItemPickup`, with the ground stack as it was before the pickup.
-    fn on_item_pickup(&self, item: &crate::entity::item::ItemEntity, stack: &ItemStack) {
+    pub(crate) fn on_item_pickup(&self, item: &crate::entity::item::ItemEntity, stack: &ItemStack) {
         let Some(owner) = item.get_owner_entity() else {
             return;
         };
