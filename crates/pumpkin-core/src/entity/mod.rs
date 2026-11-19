@@ -2350,6 +2350,12 @@ impl Entity {
         {
             return EntityDimensions::new(default.width, 1.0, 0.85);
         }
+        // Vanilla `LivingEntity.getDefaultDimensions`: when baby_dimensions is already
+        // defined (pre-scaled baby size), do not apply entity.scale again to avoid
+        // double-scaling. The scale attribute is used separately for visual model scaling.
+        if baby && self.entity_type.baby_dimensions.is_some() {
+            return default;
+        }
         default.scale(self.scale.load())
     }
 
