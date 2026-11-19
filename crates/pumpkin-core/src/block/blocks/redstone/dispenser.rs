@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use uuid::Uuid;
 
-use crate::block::blocks::carved_pumpkin::find_golem_pattern;
+use crate::block::blocks::carved_pumpkin::can_spawn_golem;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::wither_skull::find_wither_pattern;
@@ -13,17 +13,12 @@ use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
     OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
-use crate::entity::ageable::AgeableMob;
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::item::ItemEntity;
-use crate::entity::mob::skeleton::bogged::BoggedSkeletonEntity;
+use crate::entity::mob::Mob;
 use crate::entity::mob::sulfur_cube::{SulfurCubeEntity, is_swallowable_item};
 use crate::entity::passive::abstract_horse::try_equip_dispenser_chest;
 use crate::entity::passive::armadillo::ArmadilloEntity;
-use crate::entity::passive::copper_golem::CopperGolemEntity;
-use crate::entity::passive::mooshroom::MooshroomEntity;
-use crate::entity::passive::sheep::SheepEntity;
-use crate::entity::passive::snow_golem::SnowGolemEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::projectile::egg::EggEntity;
@@ -49,6 +44,7 @@ use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
 use crate::item::items::minecart::MinecartItem;
 use crate::item::items::spawn_egg::prepare_egg_mob;
+use crate::plugin::api::events::block::block_shear_entity::BlockShearEntityEvent;
 use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
 use crate::world::World;
 
@@ -1099,54 +1095,49 @@ impl DispenserBlock {
                 continue;
             }
 
-            if entity.get_entity().shear_off_all_leash_connections(false) {
-                return true;
+            match entity
+                .get_entity()
+                .shear_off_all_leash_connections(entity.as_ref(), None)
+            {
+                Some(true) => return true,
+                Some(false) => continue,
+                None => {}
             }
 
-            if !entity.get_entity().is_alive() {
+            // Vanilla `LivingEntity.isAlive` also needs health left, so mobs in their death animation are skipped.
+            if !entity.get_entity().is_alive()
+                || entity
+                    .get_living_entity()
+                    .is_some_and(|living| living.health.load() <= 0.0)
+            {
+                continue;
+            }
+            let Some(shearable) = entity.get_mob().and_then(Mob::as_shearable) else {
+                continue;
+            };
+            if !shearable.ready_for_shearing() {
                 continue;
             }
 
-            let any = entity.cast_any();
-            let sheared = if let Some(sheep) = any.downcast_ref::<SheepEntity>()
-                && sheep.ready_for_shearing()
-            {
-                sheep.shear(SoundCategory::Blocks, tool);
-                true
-            } else if let Some(mooshroom) = any.downcast_ref::<MooshroomEntity>()
-                && !mooshroom.is_baby()
-            {
-                mooshroom.shear(SoundCategory::Blocks, tool);
-                true
-            } else if let Some(snow_golem) = any.downcast_ref::<SnowGolemEntity>()
-                && snow_golem.ready_for_shearing()
-            {
-                snow_golem.shear(SoundCategory::Blocks, tool);
-                true
-            } else if let Some(sulfur_cube) = any.downcast_ref::<SulfurCubeEntity>()
-                && sulfur_cube.has_body_item()
-            {
-                sulfur_cube.shear();
-                true
-            } else if let Some(copper_golem) = any.downcast_ref::<CopperGolemEntity>()
-                && copper_golem.ready_for_shearing()
-            {
-                copper_golem.shear(SoundCategory::Blocks);
-                true
-            } else if let Some(bogged) = any.downcast_ref::<BoggedSkeletonEntity>()
-                && bogged.ready_for_shearing()
-            {
-                bogged.shear(SoundCategory::Blocks, tool);
-                true
-            } else {
-                false
-            };
-
-            if sheared {
-                ctx.world
-                    .emit_game_event(GameEvent::Shear.name(), target.to_centered_f64());
-                return true;
+            if let Some(server) = ctx.world.server.upgrade() {
+                let mut event = BlockShearEntityEvent::new(
+                    *ctx.position,
+                    ctx.world.clone(),
+                    entity.clone(),
+                    tool.clone(),
+                );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    continue;
+                }
             }
+
+            if !shearable.shear(SoundCategory::Blocks, tool) {
+                continue;
+            }
+            ctx.world
+                .emit_game_event(GameEvent::Shear.name(), target.to_centered_f64());
+            return true;
         }
 
         false
@@ -1280,7 +1271,7 @@ impl DispenserBlock {
             && if block == &Block::WITHER_SKELETON_SKULL {
                 find_wither_pattern(ctx.world, &target).is_some()
             } else {
-                find_golem_pattern(ctx.world, &target).is_some()
+                can_spawn_golem(ctx.world, &target)
             };
 
         if summons_mob {
@@ -1465,11 +1456,86 @@ impl DispenserBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity::ageable::AgeableMob;
     use crate::entity::ai::test_support::world;
+    use crate::entity::mob::skeleton::bogged::BoggedSkeletonEntity;
     use crate::entity::passive::abstract_horse::AbstractHorse;
+    use crate::entity::passive::copper_golem::CopperGolemEntity;
     use crate::entity::passive::copper_golem::EQUIPMENT_SLOT_ANTENNA;
     use crate::entity::passive::donkey::DonkeyEntity;
+    use crate::entity::passive::snow_golem::SnowGolemEntity;
+    use crate::entity::shearable::Shearable;
     use pumpkin_data::data_component_impl::SulfurCubeContentImpl;
+
+    #[tokio::test]
+    async fn dispenser_cuts_leash_connections_before_shearing_the_pumpkin()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let golem = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(1.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let holder = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(8.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let attached = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(10.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let outside = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(17.9, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        world.spawn_entity(golem.clone());
+        world.spawn_entity(holder.clone());
+        world.spawn_entity(attached.clone());
+        world.spawn_entity(outside.clone());
+        golem
+            .get_entity()
+            .attach_leash(&(holder as Arc<dyn EntityBase>));
+        let golem_base: Arc<dyn EntityBase> = golem.clone();
+        attached.get_entity().attach_leash(&golem_base);
+        outside.get_entity().attach_leash(&golem_base);
+        let position = BlockPos::new(0, 64, 0);
+        let ctx = DispenseContext {
+            world: &world,
+            position: &position,
+            facing: Facing::East,
+        };
+        let mut shears = ItemStack::new(1, &Item::SHEARS);
+        DispenserBlock::dispense_shears(&ctx, &mut shears);
+        assert!(golem.has_pumpkin());
+        assert!(golem.get_entity().get_leash_holder().is_none());
+        assert!(attached.get_entity().get_leash_holder().is_none());
+        assert!(outside.get_entity().get_leash_holder().is_some());
+        assert_eq!(shears.get_damage(), 1);
+        let leads: usize = world
+            .entities
+            .load()
+            .iter()
+            .filter_map(|entity| entity.cast_any().downcast_ref::<ItemEntity>())
+            .map(|item| {
+                let stack = item.get_item_stack().lock().unwrap();
+                if stack.item == &Item::LEAD {
+                    usize::from(stack.item_count)
+                } else {
+                    0
+                }
+            })
+            .sum();
+        assert_eq!(leads, 2);
+        DispenserBlock::dispense_shears(&ctx, &mut shears);
+        assert!(!golem.has_pumpkin());
+        assert_eq!(shears.get_damage(), 2);
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 

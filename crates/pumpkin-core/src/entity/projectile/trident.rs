@@ -559,9 +559,9 @@ impl EntityBase for TridentEntity {
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         self.flight.write_nbt(nbt);
-        let mut item = NbtCompound::new();
-        self.item().write_item_stack(&mut item);
-        nbt.put_compound("item", item);
+        if let Some(item) = self.item().to_nbt() {
+            nbt.put_compound("item", item);
+        }
         nbt.put_bool("crit", self.is_critical.load(Ordering::Relaxed));
         nbt.put_double("damage", self.base_damage.load());
         nbt.put_byte(

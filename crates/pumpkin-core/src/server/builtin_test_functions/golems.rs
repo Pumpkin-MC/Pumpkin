@@ -1,6 +1,43 @@
-use pumpkin_data::Block;
+use pumpkin_data::{Block, block_properties::OakLeavesLikeProperties};
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
+
+pub(super) async fn test_snow_golem_snow_trail_support(
+    test: GameTestContext,
+) -> GameTestResult<()> {
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
+    test.set_block_default(&BlockPos::new(2, 0, 1), &Block::ICE)
+        .await?;
+    let mut leaves = OakLeavesLikeProperties::from_state_id(Block::OAK_LEAVES.default_state.id);
+    leaves.persistent = true;
+    test.set_block(
+        &BlockPos::new(1, 0, 2),
+        leaves.to_state_id(&Block::OAK_LEAVES),
+    )
+    .await?;
+    test.set_block_default(&BlockPos::new(2, 0, 2), &Block::STONE_SLAB)
+        .await?;
+    test.execute_command(
+        &BlockPos::new(2, 1, 2),
+        "summon minecraft:snow_golem ~-0.5 ~ ~-0.5 {NoAI:1b,NoGravity:1b}",
+    )
+    .await?;
+    test.start_sequence()
+        .then_idle(5)
+        .then_execute(|test| async move {
+            test.assert_block_present(&BlockPos::new(1, 1, 1), &Block::SNOW)
+                .await?;
+            test.assert_block_present(&BlockPos::new(1, 1, 2), &Block::SNOW)
+                .await?;
+            test.assert_block_present(&BlockPos::new(2, 1, 1), &Block::AIR)
+                .await?;
+            test.assert_block_present(&BlockPos::new(2, 1, 2), &Block::AIR)
+                .await
+        })
+        .then_succeed();
+    Ok(())
+}
 
 pub(super) async fn test_snow_golem_pattern_spawns(test: GameTestContext) -> GameTestResult<()> {
     test.set_dimensions(5, 5, 5).await?;

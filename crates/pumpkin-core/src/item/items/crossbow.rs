@@ -197,12 +197,7 @@ impl CrossbowItem {
             return false;
         }
 
-        let mut charged_nbts = Vec::with_capacity(drawn.len());
-        for item in drawn {
-            let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
-            item.write_item_stack(&mut arrow_nbt);
-            charged_nbts.push(arrow_nbt);
-        }
+        let charged_nbts: Vec<_> = drawn.iter().filter_map(ItemStack::to_nbt).collect();
 
         stack
             .patch

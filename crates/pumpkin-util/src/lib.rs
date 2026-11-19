@@ -281,6 +281,15 @@ impl Hand {
             _ => Err(InvalidHand),
         }
     }
+
+    /// The `hand` value of a play packet, the inverse of [`Self::from_packet_id`].
+    #[must_use]
+    pub const fn packet_id(self) -> u8 {
+        match self {
+            Self::Right => 0,
+            Self::Left => 1,
+        }
+    }
 }
 
 /// Error type for invalid hand conversion.

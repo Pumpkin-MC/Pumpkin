@@ -95,6 +95,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:detector_rail_minecart", rails::test_detector_rail_minecart);
         register_test_function("pumpkin:tripwire_entity_collision", tripwire::test_tripwire_entity_collision);
         register_test_function("pumpkin:snow_golem_pattern_spawns", golems::test_snow_golem_pattern_spawns);
+        register_test_function("pumpkin:snow_golem_snow_trail_support", golems::test_snow_golem_snow_trail_support);
         register_test_function("pumpkin:iron_golem_pattern_spawns", golems::test_iron_golem_pattern_spawns);
         register_test_function("pumpkin:wither_pattern_spawns", golems::test_wither_pattern_spawns);
         register_test_function("pumpkin:item_entities_merge", entities_and_ai::test_item_entities_merge);

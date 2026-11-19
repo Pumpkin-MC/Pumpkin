@@ -1,5 +1,6 @@
 use crate::block::blocks::bubble_column;
 use crate::{
+    block::stop_vertical_movement_after_fall,
     entity::{
         ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag},
         decoration::leash_knot::LeashKnotEntity,
@@ -102,6 +103,7 @@ pub mod passive;
 pub mod player;
 pub mod projectile;
 pub mod projectile_deflection;
+pub mod shearable;
 pub mod spawn_util;
 pub mod synched_entity_data;
 pub mod tnt;
@@ -165,6 +167,14 @@ pub enum GearDamage {
 
 /// Returns the [`EntityStatus`] that should be broadcast when the given
 /// equipment slot breaks.
+#[must_use]
+pub const fn hand_equipment_slot(hand: pumpkin_util::Hand) -> EquipmentSlot {
+    match hand {
+        pumpkin_util::Hand::Right => EquipmentSlot::MAIN_HAND,
+        pumpkin_util::Hand::Left => EquipmentSlot::OFF_HAND,
+    }
+}
+
 #[must_use]
 pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
     match slot {
@@ -583,10 +593,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .is_some_and(|living| !self.is_spectator() && living.is_alive())
     }
 
-    fn can_be_seen_as_enemy(&self) -> bool {
+    fn is_visible_and_vulnerable(&self) -> bool {
         self.get_living_entity()
             .is_some_and(|living| !living.entity.invulnerable.load(Ordering::Relaxed))
             && self.can_be_seen_by_anyone()
+    }
+
+    fn can_be_seen_as_enemy(&self) -> bool {
+        self.is_visible_and_vulnerable()
     }
 
     fn is_stepping_carefully(&self) -> bool {
@@ -965,11 +979,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn interact_with_hand(
         &self,
-        _player: &Arc<Player>,
-        _item_stack: &mut ItemStack,
-        _hand: pumpkin_util::Hand,
+        player: &Arc<Player>,
+        item_stack: &mut ItemStack,
+        hand: pumpkin_util::Hand,
     ) -> Option<bool> {
-        None
+        interact_with_shears(self, player, item_stack, hand)
     }
 
     fn set_on_fire_for(&self, seconds: f32) {
@@ -1392,7 +1406,7 @@ fn y_rot(vector: Vector3<f64>, angle: f32) -> Vector3<f64> {
 }
 
 /// Attachment points for the entity's current pose and age, and the scale they grow with.
-fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) {
+fn attachments_of(entity: &(impl EntityBase + ?Sized)) -> (&'static EntityAttachments, f64) {
     let base = entity.get_entity();
     let entity_type = base.entity_type;
     let living = entity.get_living_entity();
@@ -1409,6 +1423,17 @@ fn attachments_of(entity: &dyn EntityBase) -> (&'static EntityAttachments, f64) 
 pub(crate) fn attachment_point(point: [f64; 3], scale: f64, yaw: f32) -> Vector3<f64> {
     let [x, y, z] = point;
     y_rot(Vector3::new(x, y, z) * scale, -yaw.to_radians())
+}
+
+pub(crate) fn average_passenger_attachment(entity: &(impl EntityBase + ?Sized)) -> Vector3<f64> {
+    let (attachments, scale) = attachments_of(entity);
+    let points = attachments.passenger;
+    if points.is_empty() {
+        return Vector3::default();
+    }
+    points.iter().fold(Vector3::default(), |sum, point| {
+        sum + Vector3::new(point[0], point[1], point[2])
+    }) * (scale / points.len() as f64)
 }
 
 pub fn default_passenger_attachment_point(
@@ -2480,12 +2505,27 @@ impl Entity {
             {
                 let distance_to_ground = bounding_box.min.y - grounded_box.min.y;
                 let stepped = step_from_ground - Vector3::new(0.0, distance_to_ground, 0.0);
+                let on_ground = movement.y != stepped.y && movement.y < 0.0;
                 self.vertical_collision
                     .store(movement.y != stepped.y, Ordering::SeqCst);
-                self.on_ground.store(
-                    movement.y != stepped.y && movement.y < 0.0,
-                    Ordering::SeqCst,
-                );
+                self.on_ground.store(on_ground, Ordering::SeqCst);
+                // Vanilla checks support after the step, the pre-step support is stale.
+                let supporting = on_ground
+                    .then(|| {
+                        let area = Self::support_test_area(&bounding_box.shift(stepped))
+                            .expand_towards(-stepped.x, 0.0, -stepped.z);
+                        let (collisions, block_positions) =
+                            self.world.load().get_block_collisions(area, caller);
+                        Self::supporting_block_after(
+                            &collisions,
+                            &block_positions,
+                            &bounding_box,
+                            stepped,
+                            self.pos.load(),
+                        )
+                    })
+                    .flatten();
+                self.supporting_block_pos.store(supporting);
                 self.horizontal_collision.store(
                     movement.x != stepped.x || movement.z != stepped.z,
                     Ordering::SeqCst,
@@ -2602,8 +2642,9 @@ impl Entity {
             return movement;
         }
         let collision = self.collide(movement, caller);
+        // Vanilla `onGround`: stopped while moving down, even with no supporting block found.
         self.on_ground
-            .store(collision.supporting.is_some(), Ordering::SeqCst);
+            .store(collision.vertical && movement.y < 0.0, Ordering::SeqCst);
         self.supporting_block_pos.store(collision.supporting);
         self.horizontal_collision
             .store(collision.horizontal, Ordering::SeqCst);
@@ -2626,84 +2667,105 @@ impl Entity {
             return Collision::free(movement);
         }
 
-        let mut adjusted_movement = movement;
-        let mut supporting = None;
-        let mut vertical = false;
-
-        // Y-Axis adjustment
-        if movement.get_axis(Axis::Y) != 0.0 {
-            let mut max_time = 1.0;
-            let mut positions = block_positions.into_iter();
-            if let Some((mut collisions_len, mut position)) = positions.next() {
-                let mut supporting_block_pos = None;
-
-                for (i, inert_box) in collisions.iter().enumerate() {
-                    if i == collisions_len {
-                        let Some((next_len, next_pos)) = positions.next() else {
-                            break;
-                        };
-                        collisions_len = next_len;
-                        position = next_pos;
-                    }
-
-                    if let Some(collision_time) = bounding_box.calculate_collision_time(
-                        inert_box,
-                        adjusted_movement,
-                        Axis::Y,
-                        max_time,
-                    ) {
-                        max_time = collision_time;
-
-                        // If the entity is moving downwards and collides, set the supporting block position
-                        if movement.get_axis(Axis::Y) < 0.0 {
-                            supporting_block_pos = Some(position);
-                        }
-                    }
-                }
-
-                if max_time != 1.0 {
-                    vertical = true;
-                    let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-                    adjusted_movement.set_axis(Axis::Y, changed_component);
-                }
-
-                supporting = supporting_block_pos;
-            }
-        }
-
-        let mut horizontal_collision = false;
-
-        for axis in Axis::horizontal() {
-            if movement.get_axis(axis) == 0.0 {
+        // Vanilla `collideWithShapes`: Y, then the larger horizontal axis, on the already moved box.
+        let order = if movement.x.abs() < movement.z.abs() {
+            [Axis::Y, Axis::Z, Axis::X]
+        } else {
+            [Axis::Y, Axis::X, Axis::Z]
+        };
+        let mut adjusted_movement = Vector3::new(0.0, 0.0, 0.0);
+        for axis in order {
+            let wanted = movement.get_axis(axis);
+            if wanted == 0.0 {
                 continue;
             }
-
-            let mut max_time = 1.0;
-
-            for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    axis,
-                    max_time,
-                ) {
-                    max_time = collision_time;
-                }
-            }
-
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(axis) * max_time;
-                adjusted_movement.set_axis(axis, changed_component);
-                horizontal_collision = true;
-            }
+            let (allowed, _) =
+                bounding_box
+                    .shift(adjusted_movement)
+                    .collide_along(axis, &collisions, wanted);
+            adjusted_movement.set_axis(axis, allowed);
         }
+
+        // Vanilla `Mth.equal`: sideways cuts under 1e-5 are not a collision.
+        let horizontal = (movement.x - adjusted_movement.x).abs() >= 1.0e-5
+            || (movement.z - adjusted_movement.z).abs() >= 1.0e-5;
+        let vertical = adjusted_movement.y != movement.y;
+
+        let supporting = if vertical && movement.y < 0.0 {
+            Self::supporting_block_after(
+                &collisions,
+                &block_positions,
+                &bounding_box,
+                adjusted_movement,
+                self.pos.load(),
+            )
+        } else {
+            None
+        };
 
         Collision {
             movement: adjusted_movement,
             supporting,
-            horizontal: horizontal_collision,
+            horizontal,
             vertical,
         }
+    }
+
+    /// Vanilla `checkSupportingBlock`: a thin box under the final position, else under the start X/Z.
+    fn supporting_block_after(
+        collisions: &[BoundingBox],
+        block_positions: &[(usize, BlockPos)],
+        start_box: &BoundingBox,
+        movement: Vector3<f64>,
+        start_pos: Vector3<f64>,
+    ) -> Option<BlockPos> {
+        let test_area = Self::support_test_area(&start_box.shift(movement));
+        let position = start_pos + movement;
+        Self::find_supporting_block(collisions, block_positions, &test_area, &position).or_else(
+            || {
+                Self::find_supporting_block(
+                    collisions,
+                    block_positions,
+                    &test_area.shift(Vector3::new(-movement.x, 0.0, -movement.z)),
+                    &position,
+                )
+            },
+        )
+    }
+
+    fn support_test_area(final_box: &BoundingBox) -> BoundingBox {
+        BoundingBox::new(
+            Vector3::new(final_box.min.x, final_box.min.y - 1.0e-6, final_box.min.z),
+            Vector3::new(final_box.max.x, final_box.min.y, final_box.max.z),
+        )
+    }
+
+    /// Vanilla `CollisionGetter.findSupportingBlock`: the colliding block closest to `position`.
+    fn find_supporting_block(
+        collisions: &[BoundingBox],
+        block_positions: &[(usize, BlockPos)],
+        area: &BoundingBox,
+        position: &Vector3<f64>,
+    ) -> Option<BlockPos> {
+        let mut best: Option<(f64, BlockPos)> = None;
+        let mut start = 0;
+        for &(end, pos) in block_positions {
+            if collisions[start..end].iter().any(|s| s.intersects(area)) {
+                let distance = pos.to_centered_f64().squared_distance_to_vec(position);
+                // Ties go to the larger position in vanilla `Vec3i.compareTo` order (y, z, x).
+                let better = best.is_none_or(|(best_distance, best_pos)| {
+                    distance < best_distance
+                        || (distance == best_distance
+                            && (best_pos.0.y, best_pos.0.z, best_pos.0.x)
+                                < (pos.0.y, pos.0.z, pos.0.x))
+                });
+                if better {
+                    best = Some((distance, pos));
+                }
+            }
+            start = end;
+        }
+        best.map(|(_, pos)| pos)
     }
 
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
@@ -3327,9 +3389,17 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        let velocity_multiplier = f64::from(caller.get_block_speed_factor());
-
-        self.velocity.store(final_move * velocity_multiplier);
+        // Vanilla `Entity.move`: velocity is kept, a wall zeroes its axis, the speed factor only slows X/Z.
+        let speed_factor = f64::from(caller.get_block_speed_factor());
+        let mut velocity = self.velocity.load();
+        if (motion.x - final_move.x).abs() >= 1.0e-5 {
+            velocity.x = 0.0;
+        }
+        if (motion.z - final_move.z).abs() >= 1.0e-5 {
+            velocity.z = 0.0;
+        }
+        self.velocity
+            .store(velocity.multiply(speed_factor, 1.0, speed_factor));
 
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
@@ -3338,10 +3408,17 @@ impl Entity {
 
         let (effect_pos, effect_block, effect_state) = self.get_block_with_y_offset(0.2);
         if motion.y != final_move.y {
-            let world = self.world.load();
-            world
-                .block_registry
-                .update_entity_movement_after_fall_on(effect_block, caller);
+            if motion.y < 0.0 {
+                let world = self.world.load();
+                world
+                    .block_registry
+                    .update_entity_movement_after_fall_on(effect_block, caller);
+            } else {
+                // Vanilla `restituteMovementAfterCollisions`: block bounciness only applies when landing.
+                // TODO vanilla also applies the `BOUNCINESS` attribute (+ sulfur cubes) on
+                // walls and ceilings
+                stop_vertical_movement_after_fall(caller);
+            }
         }
 
         if self.is_removed() {
@@ -3604,6 +3681,7 @@ impl Entity {
             }
         }
 
+        // TODO: vanilla rolls from the entity `random`; same odds, not seed-reproducible.
         let amplitude = rand::random::<f64>().mul_add(PUSH_OUT_RANDOM_SPEED, PUSH_OUT_MIN_SPEED);
 
         let axis = direction.to_axis().into();
@@ -4911,7 +4989,7 @@ impl Entity {
 
     /// Fires `PlayerLeashEntityEvent` when a player becomes the holder. Returns false if a plugin
     /// cancelled it.
-    fn fire_leash_event(&self, holder: &Arc<dyn EntityBase>) -> bool {
+    pub(crate) fn fire_leash_event(&self, holder: &Arc<dyn EntityBase>) -> bool {
         let world = self.world.load();
         if let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
@@ -4978,7 +5056,8 @@ impl Entity {
         );
     }
 
-    pub fn unleash(&self) {
+    /// Removes the leash unless plugins cancel, returning whether this call removed it.
+    pub fn unleash(&self) -> bool {
         let world = self.world.load();
         if let Some(server) = world.server.upgrade() {
             let mut event =
@@ -4988,23 +5067,14 @@ impl Entity {
                 );
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
-                return;
+                return false;
             }
         }
 
-        let old_holder = self
-            .leashed_to
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        let Some(old_holder) = old_holder else {
-            return;
+        let Some(holder) = self.get_leash_holder() else {
+            return false;
         };
-        self.send_leash_removed();
-
-        let holder = old_holder.upgrade();
-        if let Some(holder) = &holder
-            && let Some(server) = world.server.upgrade()
+        if let Some(server) = world.server.upgrade()
             && let Some(player) = holder.get_player()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
         {
@@ -5014,24 +5084,118 @@ impl Entity {
                 cancelled: false,
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
         }
-        if let Some(holder) = holder {
-            holder.notify_leashee_removed();
-        }
+        self.remove_leash()
     }
 
-    pub fn remove_leash(&self) {
-        let old_holder = self
+    /// Cuts leash connections, returning `None` when there are none to cut.
+    /// `Some(false)` means no cut succeeded; callers must not fall through to shearing.
+    pub fn shear_off_all_leash_connections(
+        &self,
+        caller: &(impl EntityBase + ?Sized),
+        player: Option<&Arc<Player>>,
+    ) -> Option<bool> {
+        let world = self.world.load();
+        let area = BoundingBox::of_size(self.bounding_box.load().get_center(), 32.0, 32.0, 32.0);
+        let connections = world
+            .get_entities_at_box(&area)
+            .into_iter()
+            .filter(|entity| {
+                entity
+                    .get_entity()
+                    .get_leash_holder()
+                    .is_some_and(|holder| holder.get_entity().entity_id == self.entity_id)
+            })
+            .collect::<Vec<_>>();
+        if self.get_leash_holder().is_none() && connections.is_empty() {
+            return None;
+        }
+        let mut dropped = self.drop_leash_from_shearing(player, None);
+        for entity in connections {
+            dropped |= entity
+                .get_entity()
+                .drop_leash_from_shearing(player, Some(self.entity_id));
+        }
+        if dropped {
+            world.emit_game_event_with_context(
+                GameEvent::Shear.name(),
+                self.pos.load(),
+                &crate::world::game_event::GameEventContext {
+                    source_entity: player.map(|player| player.as_ref() as &dyn EntityBase),
+                },
+            );
+            world.play_sound(
+                Sound::ItemShearsSnip,
+                player.map_or_else(|| caller.sound_source(), |player| player.sound_source()),
+                &self.block_pos.load().to_centered_f64(),
+            );
+        }
+        Some(dropped)
+    }
+
+    fn drop_leash_from_shearing(&self, player: Option<&Arc<Player>>, held_by: Option<i32>) -> bool {
+        if self.get_leash_holder().is_none() {
+            return false;
+        }
+        if let Some(server) = self.world.load().server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_unleash::EntityUnleashEvent::new(
+                    self.entity_id,
+                    "unleashed".to_string(),
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+            if let Some(player) = player {
+                let mut event = crate::plugin::api::events::player::player_unleash_entity::PlayerUnleashEntityEvent {
+                    player: player.clone(),
+                    entity_id: self.entity_id,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
+        }
+        if !self.take_leash(held_by) {
+            return false;
+        }
+        self.spawn_at_location(ItemStack::new(1, &pumpkin_data::item::Item::LEAD));
+        true
+    }
+
+    /// Removes the leash, returning whether this call took the connection.
+    pub fn remove_leash(&self) -> bool {
+        self.take_leash(None)
+    }
+
+    fn take_leash(&self, held_by: Option<i32>) -> bool {
+        let mut leashed_to = self
             .leashed_to
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if let Some(old_holder) = old_holder {
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(holder_id) = held_by
+            && leashed_to
+                .as_ref()
+                .and_then(Weak::upgrade)
+                .is_none_or(|holder| holder.get_entity().entity_id != holder_id)
+        {
+            return false;
+        }
+        let old_holder = leashed_to.take();
+        drop(leashed_to);
+        if let Some(old_holder) = &old_holder {
             self.send_leash_removed();
             if let Some(holder) = old_holder.upgrade() {
                 holder.notify_leashee_removed();
             }
         }
+        old_holder.is_some()
     }
 
     pub fn drop_leash(&self) -> bool {
@@ -5085,23 +5249,6 @@ impl Entity {
             world.emit_game_event(
                 pumpkin_data::game_event::GameEvent::Shear.name(),
                 self.pos.load(),
-            );
-        }
-        dropped
-    }
-
-    pub fn shear_off_all_leash_connections(&self, by_player: bool) -> bool {
-        let dropped = self.drop_all_leash_connections();
-        if dropped {
-            let category = if by_player {
-                SoundCategory::Players
-            } else {
-                SoundCategory::Neutral
-            };
-            self.world.load().play_block_sound(
-                Sound::ItemShearsSnip,
-                category,
-                self.block_pos.load(),
             );
         }
         dropped
@@ -5367,12 +5514,16 @@ impl Entity {
     }
 
     pub fn spawn_at_location(&self, stack: ItemStack) {
+        self.spawn_at_location_with_offset(stack, Vector3::default());
+    }
+
+    pub fn spawn_at_location_with_offset(&self, stack: ItemStack, offset: Vector3<f64>) {
         if stack.is_empty() {
             return;
         }
         let world = self.world.load();
         let item_entity = ItemEntity::new(
-            Self::new(world.clone(), self.pos.load(), &EntityType::ITEM),
+            Self::new(world.clone(), self.pos.load() + offset, &EntityType::ITEM),
             stack,
         );
         world.spawn_entity(Arc::new(item_entity));
@@ -6340,15 +6491,14 @@ impl Entity {
     }
 }
 
-impl EntityBase for Entity {
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+impl Entity {
+    pub(crate) fn base_tick(&self, caller: &dyn EntityBase) {
         // Recomputed during movement/block-collision handling in the same tick.
         let was_in_powder_snow = self.is_in_powder_snow.load(Ordering::Relaxed);
         self.was_in_powder_snow
             .store(was_in_powder_snow, Ordering::Relaxed);
         self.is_in_powder_snow.store(false, Ordering::Relaxed);
 
-        self.update_last_pos();
         self.tick_portal(caller);
         self.update_fluid_state(caller);
         self.check_out_of_world(caller);
@@ -6382,6 +6532,13 @@ impl EntityBase for Entity {
                 .store(riding_cooldown - 1, Ordering::Relaxed);
         }
         self.first_tick.store(false, Ordering::Relaxed);
+    }
+}
+
+impl EntityBase for Entity {
+    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+        self.update_last_pos();
+        self.base_tick(caller);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -6463,9 +6620,91 @@ impl Flag {
     }
 }
 
+fn interact_with_shears(
+    target: &(impl EntityBase + ?Sized),
+    player: &Arc<Player>,
+    stack: &mut ItemStack,
+    hand: pumpkin_util::Hand,
+) -> Option<bool> {
+    if stack.item != &pumpkin_data::item::Item::SHEARS {
+        return None;
+    }
+    if let Some(sheared) = target
+        .get_entity()
+        .shear_off_all_leash_connections(target, Some(player))
+    {
+        if sheared {
+            let _ = player.damage_held_stack(stack, 1, hand);
+        }
+        return Some(sheared);
+    }
+    let mob = target.get_mob()?;
+    if mob.can_shear_equipment(player) && !player.get_entity().is_sneaking() {
+        mob.attempt_to_shear_equipment(player, stack, hand)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn concurrent_leash_shearing_drops_one_lead_per_connection()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{ai::test_support::world, passive::snow_golem::SnowGolemEntity};
+        use std::sync::{Barrier, atomic::AtomicUsize};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let golem = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let holder: Arc<dyn EntityBase> = SnowGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(4.5, 64.0, 0.5),
+            &EntityType::SNOW_GOLEM,
+        ));
+        let removals = AtomicUsize::new(0);
+        for _ in 0..16 {
+            golem.get_entity().attach_leash(&holder);
+            let barrier = Barrier::new(8);
+            std::thread::scope(|scope| {
+                for _ in 0..8 {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        if golem.get_entity().drop_leash_from_shearing(None, None) {
+                            removals.fetch_add(1, Ordering::Relaxed);
+                        }
+                    });
+                }
+            });
+        }
+        assert_eq!(removals.load(Ordering::Relaxed), 16);
+        let leads: usize = world
+            .entities
+            .load()
+            .iter()
+            .filter_map(|entity| entity.cast_any().downcast_ref::<item::ItemEntity>())
+            .map(|item| {
+                let stack = item
+                    .get_item_stack()
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if stack.item == &pumpkin_data::item::Item::LEAD {
+                    usize::from(stack.item_count)
+                } else {
+                    0
+                }
+            })
+            .sum();
+        assert_eq!(leads, 16);
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[test]
     fn equipment_break_status_maps_all_slots() {

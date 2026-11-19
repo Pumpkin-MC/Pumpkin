@@ -106,6 +106,9 @@ fn non_climbable_shape_max_y(world: &World, pos: &BlockPos) -> Option<f64> {
 
 fn is_block_dangerous(entity_type: &'static EntityType, state: &BlockState) -> bool {
     let block = Block::from_state_id(state.id);
+    if block.has_tag(entity_type.immune_to) {
+        return false;
+    }
     if !entity_type.fire_immune && is_burning_block(block, state) {
         return true;
     }
