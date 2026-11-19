@@ -10,6 +10,8 @@ use crate::entity::EntityBase;
 use crate::entity::ai::goal::breed::BreedGoal;
 
 const BREED_RANGE: f64 = 3.0;
+const DEFAULT_SPEED_MODIFIER: f32 = 1.0;
+const DEFAULT_CLOSE_ENOUGH_DISTANCE: i32 = 2;
 const DURATION: i32 = 110;
 const MIN_CHILD_DELAY: i32 = 60;
 const CHILD_DELAY_SPREAD: i32 = 50;
@@ -35,10 +37,23 @@ pub struct AnimalMakeLove {
 impl AnimalMakeLove {
     #[must_use]
     pub const fn new(partner_type: &'static EntityType) -> Self {
+        Self::with_speed_and_distance(
+            partner_type,
+            DEFAULT_SPEED_MODIFIER,
+            DEFAULT_CLOSE_ENOUGH_DISTANCE,
+        )
+    }
+
+    #[must_use]
+    pub const fn with_speed_and_distance(
+        partner_type: &'static EntityType,
+        speed_modifier: f32,
+        close_enough_distance: i32,
+    ) -> Self {
         Self {
             partner_type,
-            speed_modifier: 1.0,
-            close_enough_distance: 2,
+            speed_modifier,
+            close_enough_distance,
             spawn_child_at_time: 0,
         }
     }
@@ -60,35 +75,6 @@ impl AnimalMakeLove {
             .get(types::BREED_TARGET)
             .filter(|target| target.get_entity().entity_type == self.partner_type)
             .cloned()
-    }
-
-    fn lock_gaze_and_walk_to_each_other(
-        &self,
-        tick: &mut BrainTick<'_>,
-        partner: &Arc<dyn EntityBase>,
-    ) {
-        utils::set_walk_and_look_target_memories_to_entity(
-            tick.state,
-            partner.clone(),
-            self.speed_modifier,
-            self.close_enough_distance,
-        );
-        let Some(partner_mob) = partner.get_mob() else {
-            return;
-        };
-        let Some(body) = tick.world.get_entity_by_id(tick.mob.get_entity().entity_id) else {
-            return;
-        };
-        partner_mob
-            .get_mob_entity()
-            .with_brain(partner_mob, |brain| {
-                utils::set_walk_and_look_target_memories_to_entity(
-                    brain,
-                    body,
-                    self.speed_modifier,
-                    self.close_enough_distance,
-                );
-            });
     }
 }
 
@@ -122,7 +108,12 @@ impl Behavior for AnimalMakeLove {
                 .get_mob_entity()
                 .with_brain(partner_mob, |brain| brain.set(types::BREED_TARGET, body));
         }
-        self.lock_gaze_and_walk_to_each_other(tick, &partner);
+        utils::lock_gaze_and_walk_to_each_other(
+            tick,
+            &partner,
+            self.speed_modifier,
+            self.close_enough_distance,
+        );
         let delay = MIN_CHILD_DELAY
             + rand::RngExt::random_range(&mut tick.mob.get_random(), 0..CHILD_DELAY_SPREAD);
         self.spawn_child_at_time = tick.time + i64::from(delay);
@@ -147,7 +138,12 @@ impl Behavior for AnimalMakeLove {
         let Some(partner) = self.breed_target(tick.state) else {
             return;
         };
-        self.lock_gaze_and_walk_to_each_other(tick, &partner);
+        utils::lock_gaze_and_walk_to_each_other(
+            tick,
+            &partner,
+            self.speed_modifier,
+            self.close_enough_distance,
+        );
         let distance = tick
             .mob
             .get_entity()
@@ -155,7 +151,7 @@ impl Behavior for AnimalMakeLove {
             .load()
             .squared_distance_to_vec(&partner.get_entity().pos.load());
         if distance < BREED_RANGE * BREED_RANGE && tick.time >= self.spawn_child_at_time {
-            BreedGoal::breed(tick.mob, partner.as_ref());
+            BreedGoal::breed(tick.mob, partner.as_ref(), Some(tick.state));
             tick.state.erase(types::BREED_TARGET.id());
             if let Some(partner_mob) = partner.get_mob() {
                 partner_mob

@@ -19351,6 +19351,8 @@ pub mod bedrock {
         "accessibility.store.offerDescription.share";
     #[doc = "Wish List"]
     pub const ACCESSIBILITY_STORE_WISHLIST_BUTTON: &str = "accessibility.store.wishlist.button";
+    #[doc = "Redeem code or gift card"]
+    pub const ACCESSIBILITY_STORE_REDEEM5X5_BUTTON: &str = "accessibility.store.redeem5x5.button";
     #[doc = "%s of %s"]
     pub const ACCESSIBILITY_INDEX: &str = "accessibility.index";
     #[doc = "%s percent"]
@@ -19911,6 +19913,8 @@ pub mod bedrock {
     pub const ACTION_INTERACT_EDIT: &str = "action.interact.edit";
     #[doc = "Leave Boat"]
     pub const ACTION_INTERACT_EXIT_BOAT: &str = "action.interact.exit.boat";
+    #[doc = "Leave Raft"]
+    pub const ACTION_INTERACT_EXIT_RAFT: &str = "action.interact.exit.raft";
     #[doc = "Feed"]
     pub const ACTION_INTERACT_FEED: &str = "action.interact.feed";
     #[doc = "Fish"]
@@ -20031,6 +20035,8 @@ pub mod bedrock {
     pub const ACTION_INTERACT_REMOVENAUTILUSARMOR: &str = "action.interact.removenautilusarmor";
     #[doc = "Spawn Baby"]
     pub const ACTION_INTERACT_SPAWN_EGG_BABY: &str = "action.interact.spawn_egg_baby";
+    #[doc = "Give"]
+    pub const ACTION_INTERACT_GIVE: &str = "action.interact.give";
     #[doc = "@e = all entities"]
     pub const ADVMODE_ALLENTITIES: &str = "advMode.allEntities";
     #[doc = "@a = all players"]
@@ -20103,9 +20109,16 @@ pub mod bedrock {
     pub const ATTRIBUTE_NAME_GENERIC_MAXHEALTH: &str = "attribute.name.generic.maxHealth";
     #[doc = "Attack Damage"]
     pub const ATTRIBUTE_NAME_GENERIC_ATTACKDAMAGE: &str = "attribute.name.generic.attackDamage";
+    #[doc = "Mining Efficiency"]
+    pub const ATTRIBUTE_NAME_GENERIC_MININGEFFICIENCY: &str =
+        "attribute.name.generic.miningEfficiency";
+    #[doc = "Dig Efficiency"]
+    pub const ATTRIBUTE_NAME_GENERIC_DIGEFFICIENCY: &str = "attribute.name.generic.digEfficiency";
+    #[doc = "Chop Efficiency"]
+    pub const ATTRIBUTE_NAME_GENERIC_CHOPEFFICIENCY: &str = "attribute.name.generic.chopEfficiency";
     #[doc = "Armor"]
     pub const ATTRIBUTE_NAME_GENERIC_ARMOR: &str = "attribute.name.generic.armor";
-    #[doc = "Armor Toughness"]
+    #[doc = "Toughness"]
     pub const ATTRIBUTE_NAME_GENERIC_ARMORTOUGHNESS: &str = "attribute.name.generic.armorToughness";
     #[doc = "Knockback Resistance"]
     pub const ATTRIBUTE_NAME_GENERIC_KNOCKBACKRESISTANCE: &str =
@@ -20117,20 +20130,78 @@ pub mod bedrock {
     #[doc = "Zombie Reinforcements"]
     pub const ATTRIBUTE_NAME_ZOMBIE_SPAWNREINFORCEMENTS: &str =
         "attribute.name.zombie.spawnReinforcements";
-    #[doc = "When on Head:"]
-    pub const SLOT_ARMOR_HEAD_WHEN_EQUIPPED: &str = "slot.armor.head.when_equipped";
-    #[doc = "When on Chest:"]
-    pub const SLOT_ARMOR_CHEST_WHEN_EQUIPPED: &str = "slot.armor.chest.when_equipped";
-    #[doc = "When on Legs:"]
-    pub const SLOT_ARMOR_LEGS_WHEN_EQUIPPED: &str = "slot.armor.legs.when_equipped";
-    #[doc = "When on Feet:"]
-    pub const SLOT_ARMOR_FEET_WHEN_EQUIPPED: &str = "slot.armor.feet.when_equipped";
-    #[doc = "When equipped:"]
-    pub const SLOT_ARMOR_BODY_WHEN_EQUIPPED: &str = "slot.armor.body.when_equipped";
     #[doc = "Go Back"]
     pub const ATTRIBUTION_GOBACK: &str = "attribution.goBack";
     #[doc = "To view attributions, please visit https://minecraft.net/attribution in any web browser."]
     pub const ATTRIBUTION_VIEWATTRIBUTION: &str = "attribution.viewAttribution";
+    #[doc = "Make stuff"]
+    pub const TILE_CRAFTING_TABLE_TOOLTIP: &str = "tile.crafting_table.tooltip";
+    #[doc = "Smelt & cook"]
+    pub const TILE_FURNACE_TOOLTIP: &str = "tile.furnace.tooltip";
+    #[doc = "Smelt metal faster"]
+    pub const TILE_BLAST_FURNACE_TOOLTIP: &str = "tile.blast_furnace.tooltip";
+    #[doc = "Cook food faster"]
+    pub const TILE_SMOKER_TOOLTIP: &str = "tile.smoker.tooltip";
+    #[doc = "Storage"]
+    pub const TILE_STORAGE_TOOLTIP: &str = "tile.storage.tooltip";
+    #[doc = "Make bone meal"]
+    pub const TILE_COMPOSTER_TOOLTIP: &str = "tile.composter.tooltip";
+    #[doc = "Decorate banners"]
+    pub const TILE_LOOM_TOOLTIP: &str = "tile.loom.tooltip";
+    #[doc = "Modify Maps"]
+    pub const TILE_CARTOGRAPHY_TABLE_TOOLTIP: &str = "tile.cartography_table.tooltip";
+    #[doc = "Upgrade tools & armor"]
+    pub const TILE_SMITHING_TABLE_TOOLTIP: &str = "tile.smithing_table.tooltip";
+    #[doc = "Cut stone & copper"]
+    pub const TILE_STONECUTTER_BLOCK_TOOLTIP: &str = "tile.stonecutter_block.tooltip";
+    #[doc = "Display books"]
+    pub const TILE_LECTERN_TOOLTIP: &str = "tile.lectern.tooltip";
+    #[doc = "Remove enchantments"]
+    pub const TILE_GRINDSTONE_TOOLTIP: &str = "tile.grindstone.tooltip";
+    #[doc = "Brew potions"]
+    pub const TILE_BREWING_STAND_TOOLTIP: &str = "tile.brewing_stand.tooltip";
+    #[doc = "Holds liquids & potions"]
+    pub const TILE_CAULDRON_TOOLTIP: &str = "tile.cauldron.tooltip";
+    #[doc = "Repair & enchant tools"]
+    pub const TILE_ANVIL_TOOLTIP: &str = "tile.anvil.tooltip";
+    #[doc = "Enchant tools & books"]
+    pub const TILE_ENCHANTING_TABLE_TOOLTIP: &str = "tile.enchanting_table.tooltip";
+    #[doc = "Add items to chest"]
+    pub const TILE_HOPPER_TOOLTIP: &str = "tile.hopper.tooltip";
+    #[doc = "Eject items"]
+    pub const TILE_DROPPER_TOOLTIP: &str = "tile.dropper.tooltip";
+    #[doc = "Automate actions"]
+    pub const TILE_DISPENSER_TOOLTIP: &str = "tile.dispenser.tooltip";
+    #[doc = "Detects change"]
+    pub const TILE_OBSERVER_TOOLTIP: &str = "tile.observer.tooltip";
+    #[doc = "Automate crafting"]
+    pub const TILE_CRAFTER_TOOLTIP: &str = "tile.crafter.tooltip";
+    #[doc = "Push blocks"]
+    pub const TILE_PISTON_TOOLTIP: &str = "tile.piston.tooltip";
+    #[doc = "Pull blocks"]
+    pub const TILE_STICKY_PISTON_TOOLTIP: &str = "tile.sticky_piston.tooltip";
+    #[doc = "Reads signal strength"]
+    pub const TILE_COMPARATOR_TOOLTIP: &str = "tile.comparator.tooltip";
+    #[doc = "Farming"]
+    pub const TILE_HOE_TOOLTIP: &str = "tile.hoe.tooltip";
+    #[doc = "Cut & trim"]
+    pub const TILE_SHEARS_TOOLTIP: &str = "tile.shears.tooltip";
+    #[doc = "Excavate & brush"]
+    pub const TILE_BRUSH_TOOLTIP: &str = "tile.brush.tooltip";
+    #[doc = "Make fire"]
+    pub const TILE_FLINT_AND_STEEL_TOOLTIP: &str = "tile.flint_and_steel.tooltip";
+    #[doc = "Points to world spawn"]
+    pub const TILE_COMPASS_TOOLTIP: &str = "tile.compass.tooltip";
+    #[doc = "Points to lodestone"]
+    pub const TILE_LODESTONECOMPASS_TOOLTIP: &str = "tile.lodestonecompass.tooltip";
+    #[doc = "See where you died"]
+    pub const TILE_RECOVERY_COMPASS_TOOLTIP: &str = "tile.recovery_compass.tooltip";
+    #[doc = "Redstone power source"]
+    pub const TILE_REDSTONE_TAG_SOURCE: &str = "tile.redstone.tag.source";
+    #[doc = "Redstone conductor"]
+    pub const TILE_REDSTONE_TAG_CONDUCTOR: &str = "tile.redstone.tag.conductor";
+    #[doc = "Redstone powered"]
+    pub const TILE_REDSTONE_TAG_POWERED: &str = "tile.redstone.tag.powered";
     #[doc = "Starting the demo experience..."]
     pub const AUTHENTICATION_DEMO_BODY_DEFAULT: &str = "authentication.demo.body.default";
     #[doc = "We're sorry, but this lesson is not currently available."]
@@ -20178,7 +20249,7 @@ pub mod bedrock {
     #[doc = "How to purchase"]
     pub const AUTHENTICATION_CLICKTOPURCHASE: &str = "authentication.clickToPurchase";
     #[doc = "We can't connect to the service you need right now. Please check your internet connection and try again."]
-    pub const AUTHENTICATION_ADALEXCEPTION: &str = "authentication.adalException";
+    pub const AUTHENTICATION_ENTRAEXCEPTION: &str = "authentication.entraException";
     #[doc = "Go to the App Store"]
     pub const AUTHENTICATION_BUYMINECRAFT: &str = "authentication.buyMinecraft";
     #[doc = "You've been logged out"]
@@ -20970,7 +21041,7 @@ pub mod bedrock {
     pub const COMMANDS_DEFAULTGAMEMODE_SUCCESS: &str = "commands.defaultgamemode.success";
     #[doc = "Revokes operator status from a player."]
     pub const COMMANDS_DEOP_DESCRIPTION: &str = "commands.deop.description";
-    #[doc = "Could not de-op (permission level too high): %s"]
+    #[doc = "Could not de-op: %s"]
     pub const COMMANDS_DEOP_FAILED: &str = "commands.deop.failed";
     #[doc = "De-opped: %s"]
     pub const COMMANDS_DEOP_SUCCESS: &str = "commands.deop.success";
@@ -21518,6 +21589,8 @@ pub mod bedrock {
     pub const COMMANDS_LOOT_REPLACESUCCESS_BLOCK: &str = "commands.loot.replaceSuccess.block";
     #[doc = "Only one entity is allowed, but the provided selector allows more than one"]
     pub const COMMANDS_SELECTOR_ERROR_MORETHANONE: &str = "commands.selector.error.moreThanOne";
+    #[doc = "Manages the server identity key. Use save, delete, or status."]
+    pub const COMMANDS_SERVERIDENTITY_DESCRIPTION: &str = "commands.serveridentity.description";
     #[doc = "Lists all tags associated with the given item."]
     pub const COMMANDS_TAGSFROMITEM_DESCRIPTION: &str = "commands.tagsfromitem.description";
     #[doc = "There is %d tag on the item %s:"]
@@ -21586,7 +21659,7 @@ pub mod bedrock {
     pub const COMMANDS_MUSIC_SUCCESS_VOLUMEACTION: &str = "commands.music.success.volumeAction";
     #[doc = "Grants operator status to a player."]
     pub const COMMANDS_OP_DESCRIPTION: &str = "commands.op.description";
-    #[doc = "Could not op (already op or higher): %s"]
+    #[doc = "Could not op: %s"]
     pub const COMMANDS_OP_FAILED: &str = "commands.op.failed";
     #[doc = "Opped: %s"]
     pub const COMMANDS_OP_SUCCESS: &str = "commands.op.success";
@@ -22390,6 +22463,25 @@ pub mod bedrock {
     pub const COMMANDS_TICKINGAREA_LIST_TYPE_CIRCLE: &str = "commands.tickingarea-list.type.circle";
     #[doc = "Added %1$d to the time"]
     pub const COMMANDS_TIME_ADDED: &str = "commands.time.added";
+    #[doc = "Added %1$d time to '%2$s'. Time is now %3$d"]
+    pub const COMMANDS_TIME_CLOCK_ADDED: &str = "commands.time.clock.added";
+    #[doc = "Cannot find clock '%1$s'"]
+    pub const COMMANDS_TIME_CLOCK_FAILED: &str = "commands.time.clock.failed";
+    #[doc = "Cannot set time to before 0 ticks, the number must be at least %1$d"]
+    pub const COMMANDS_TIME_CLOCK_NUM_TOOSMALL: &str = "commands.time.clock.num.tooSmall";
+    #[doc = "Paused '%1$s' at %2$d"]
+    pub const COMMANDS_TIME_CLOCK_PAUSED: &str = "commands.time.clock.paused";
+    #[doc = "Time of '%1$s' is %2$d"]
+    pub const COMMANDS_TIME_CLOCK_QUERY_TIME: &str = "commands.time.clock.query.time";
+    #[doc = "Resumed '%1$s' at %2$d"]
+    pub const COMMANDS_TIME_CLOCK_RESUMED: &str = "commands.time.clock.resumed";
+    #[doc = "Set the time of '%1$s' to %2$d"]
+    pub const COMMANDS_TIME_CLOCK_SET: &str = "commands.time.clock.set";
+    #[doc = "Cannot find time marker '%1$s' on '%2$s'"]
+    pub const COMMANDS_TIME_CLOCK_TIMEMARKER_FAILED: &str = "commands.time.clock.timemarker.failed";
+    #[doc = "No previous occurrence of '%1$s' on '%2$s'"]
+    pub const COMMANDS_TIME_CLOCK_TIMEMARKER_PREVIOUS_FAILED: &str =
+        "commands.time.clock.timemarker.previous.failed";
     #[doc = "Changes or queries the world's game time."]
     pub const COMMANDS_TIME_DESCRIPTION: &str = "commands.time.description";
     #[doc = "Always Day is enabled in this world."]
@@ -23503,6 +23595,11 @@ pub mod bedrock {
     #[doc = "Use \"-beta\" versions of API modules in add-on packs"]
     pub const CREATEWORLDSCREEN_EXPERIMENTALGAMETESTDESCRIPTION: &str =
         "createWorldScreen.experimentalGameTestDescription";
+    #[doc = "Points of Interest (POI)"]
+    pub const CREATEWORLDSCREEN_EXPERIMENTALPOI: &str = "createWorldScreen.experimentalPoi";
+    #[doc = "Adds poi to locate command and Script API"]
+    pub const CREATEWORLDSCREEN_EXPERIMENTALPOIDESCRIPTION: &str =
+        "createWorldScreen.experimentalPoiDescription";
     #[doc = "Villager Trade Rebalancing"]
     pub const CREATEWORLDSCREEN_EXPERIMENTALVILLAGERTRADESREBALANCE: &str =
         "createWorldScreen.experimentalVillagerTradesRebalance";
@@ -23521,12 +23618,12 @@ pub mod bedrock {
     #[doc = "Enables custom projectile improvements"]
     pub const CREATEWORLDSCREEN_EXPERIMENTALCUSTOMPROJECTILESDESCRIPTION: &str =
         "createWorldScreen.experimentalCustomProjectilesDescription";
-    #[doc = "Drop 3 of 2026"]
-    pub const CREATEWORLDSCREEN_EXPERIMENTALY2026DROP3: &str =
-        "createWorldScreen.experimentalY2026Drop3";
-    #[doc = "Explore a new surface biome and find the abandoned camps spread throughout the world"]
-    pub const CREATEWORLDSCREEN_EXPERIMENTALY2026DROP3DESCRIPTION: &str =
-        "createWorldScreen.experimentalY2026Drop3Description";
+    #[doc = "Drop 4 of 2026"]
+    pub const CREATEWORLDSCREEN_EXPERIMENTALY2026DROP4: &str =
+        "createWorldScreen.experimentalY2026Drop4";
+    #[doc = "Venture into a frozen new cave and brave its icy hazards"]
+    pub const CREATEWORLDSCREEN_EXPERIMENTALY2026DROP4DESCRIPTION: &str =
+        "createWorldScreen.experimentalY2026Drop4Description";
     #[doc = "World Preferences"]
     pub const CREATEWORLDSCREEN_WORLDPREFERENCES: &str = "createWorldScreen.worldPreferences";
     #[doc = "Starting Map"]
@@ -24342,7 +24439,7 @@ pub mod bedrock {
     #[doc = "You cannot play online multiplayer because of how your Microsoft account is set up. Please ensure your online safety settings allow Multiplayer. See instructions for changing these settings at aka.ms/MCMultiplayerHelp."]
     pub const NETWORKWORLD_MULTIPLAYERPRIVILEGESBLOCKED: &str =
         "networkWorld.multiplayerPrivilegesBlocked";
-    #[doc = "You cannot play online multiplayer because of how your Microsoft account is set up. Please ensure you have an active Xbox Live Gold subscription and your online safety settings allow Multiplayer. See instructions for changing these settings at aka.ms/MCMultiplayerHelp."]
+    #[doc = "You cannot play online multiplayer because of how your Microsoft account is set up. Please ensure you have an active Xbox Game Pass Core subscription and your online safety settings allow Multiplayer. See instructions for changing these settings at aka.ms/MCMultiplayerHelp."]
     pub const NETWORKWORLD_MULTIPLAYERPRIVILEGESBLOCKEDONCONSOLE: &str =
         "networkWorld.multiplayerPrivilegesBlockedOnConsole";
     #[doc = "You cannot play online multiplayer because of how your Microsoft account is set up."]
@@ -24496,9 +24593,6 @@ pub mod bedrock {
     #[doc = "Manage \"%s\""]
     pub const REALMSSETTINGSSCREEN_SELECTORSECTIONLABEL_MANAGE: &str =
         "realmsSettingsScreen.selectorSectionLabel.manage";
-    #[doc = "Edit \"%s\""]
-    pub const REALMSSETTINGSSCREEN_SELECTORSECTIONLABEL: &str =
-        "realmsSettingsScreen.selectorSectionLabel";
     #[doc = "Realm"]
     pub const REALMSSETTINGSSCREEN_SELECTORSECTIONLABELREALM: &str =
         "realmsSettingsScreen.selectorSectionLabelRealm";
@@ -24954,7 +25048,7 @@ pub mod bedrock {
     #[doc = "Your Realm has expired. Go ahead and extend it using the new auto-renewing subscription, that way you don't have to worry about keeping your Realm up and running ever again."]
     pub const REALMSSETTINGSSCREEN_CONSUMABLETOSUBSCRIPTIONTRANSITIONINFOEXPIRED: &str =
         "realmsSettingsScreen.consumableToSubscriptionTransitionInfoExpired";
-    #[doc = "Upload failed. The world size exceeds the maximum uploadable limit of %s."]
+    #[doc = "Upload failed. The world size exceeds the maximum uploadable limit."]
     pub const REALMSSETTINGSSCREEN_UPLOAD_WORLDTOOBIG: &str =
         "realmsSettingsScreen.upload.worldtoobig";
     #[doc = "Download failed. The world size exceeds the maximum downloadable limit of %s."]
@@ -25951,6 +26045,26 @@ pub mod bedrock {
     #[doc = "Server policy forbids client join."]
     pub const DISCONNECTIONSCREEN_EDITOR_JOININTENTPOLICYFAILURE: &str =
         "disconnectionScreen.editor.joinIntentPolicyFailure";
+    #[doc = "World is not an Editor Project."]
+    pub const DISCONNECTIONSCREEN_EDITOR_JOININTENTPOLICYFAILURE_EDITORWORLDREQUIRED: &str =
+        "disconnectionScreen.editor.joinIntentPolicyFailure.editorWorldRequired";
+    #[doc = "Client is not Editor-capable."]
+    pub const DISCONNECTIONSCREEN_EDITOR_JOININTENTPOLICYFAILURE_EDITORCLIENTREQUIRED: &str =
+        "disconnectionScreen.editor.joinIntentPolicyFailure.editorClientRequired";
+    #[doc = "Server only accepts vanilla connections."]
+    pub const DISCONNECTIONSCREEN_EDITOR_JOININTENTPOLICYFAILURE_VANILLACLIENTREQUIRED: &str =
+        "disconnectionScreen.editor.joinIntentPolicyFailure.vanillaClientRequired";
+    #[doc = "Editor world only accepts Editor clients with EditorIntent."]
+    pub const DISCONNECTIONSCREEN_EDITOR_JOININTENTPOLICYFAILURE_EDITORCLIENTWITHEDITORINTENTREQUIRED : & str = "disconnectionScreen.editor.joinIntentPolicyFailure.editorClientWithEditorIntentRequired" ;
+    #[doc = "Non-Editor world only accepts vanilla connections."]
+    pub const DISCONNECTIONSCREEN_EDITOR_JOININTENTPOLICYFAILURE_VANILLACONNECTIONREQUIRED: &str =
+        "disconnectionScreen.editor.joinIntentPolicyFailure.vanillaConnectionRequired";
+    #[doc = "Unknown server policy."]
+    pub const DISCONNECTIONSCREEN_EDITOR_JOININTENTPOLICYFAILURE_UNKNOWNSERVERPOLICY: &str =
+        "disconnectionScreen.editor.joinIntentPolicyFailure.unknownServerPolicy";
+    #[doc = "Unknown connection join error."]
+    pub const DISCONNECTIONSCREEN_EDITOR_JOININTENTPOLICYFAILURE_UNKNOWNERROR: &str =
+        "disconnectionScreen.editor.joinIntentPolicyFailure.unknownError";
     #[doc = "You aren't allowed to join this server as an Editor."]
     pub const DISCONNECTIONSCREEN_EDITOR_NOTALLOWED: &str = "disconnectionScreen.editor.notAllowed";
     #[doc = "Server and Client have different values set for feature toggle 'Client Side Generation'"]
@@ -25973,6 +26087,9 @@ pub mod bedrock {
     pub const DISCONNECTIONSCREEN_ERRORCODE: &str = "disconnectionScreen.errorCode";
     #[doc = "There was a problem loading into the server."]
     pub const DISCONNECTIONSCREEN_FAILEDASYNCCHECK: &str = "disconnectionScreen.failedAsyncCheck";
+    #[doc = "Missing structure data from server."]
+    pub const DISCONNECTIONSCREEN_MISSINGSTRUCTUREDATA: &str =
+        "disconnectionScreen.missingStructureData";
     #[doc = "You are banned by the host."]
     pub const DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST: &str =
         "disconnectionScreen.title.bannedByHost";
@@ -27304,15 +27421,15 @@ pub mod bedrock {
     pub const GUI_SUBMITFEEDBACK_BODY_TEXT: &str = "gui.submitFeedback.body.text";
     #[doc = "What do you like? What could be better?"]
     pub const GUI_SUBMITFEEDBACK_PLACEHOLDER_TEXT: &str = "gui.submitFeedback.placeHolder.text";
-    #[doc = "Thank you for sharing your review!"]
+    #[doc = "Thank you for sharing your feedback!"]
     pub const GUI_SUBMITFEEDBACK_SUCCESS: &str = "gui.submitFeedback.success";
     #[doc = "You do not own this item you are trying to provide feedback for. (Error Code: %d)"]
     pub const GUI_SUBMITFEEDBACK_FAILURE_STATUS_UNPROCESSABLEENTITY: &str =
         "gui.submitFeedback.failure.status.unprocessableEntity";
-    #[doc = "Oh no! You have sent too many reviews, please try again later. (Error Code: %d)"]
+    #[doc = "Oh no! You've submitted feedback too many times in a short period. Please wait a few minutes and try again. (Error Code: %d)"]
     pub const GUI_SUBMITFEEDBACK_FAILURE_STATUS_TOOMANYREQUESTS: &str =
         "gui.submitFeedback.failure.status.tooManyRequests";
-    #[doc = "Cannot submit your review at this time, please try again later. (Error Code: %d)"]
+    #[doc = "Cannot submit your feedback at this time, please try again later. (Error Code: %d)"]
     pub const GUI_SUBMITFEEDBACK_FAILURE_STATUS_OTHER: &str =
         "gui.submitFeedback.failure.status.other";
     #[doc = "Press to disable slot"]
@@ -30824,7 +30941,7 @@ pub mod bedrock {
     pub const ITEM_CLOCK_NAME: &str = "item.clock.name";
     #[doc = "Coal"]
     pub const ITEM_COAL_NAME: &str = "item.coal.name";
-    #[doc = "Redstone Comparator"]
+    #[doc = "Comparator"]
     pub const ITEM_COMPARATOR_NAME: &str = "item.comparator.name";
     #[doc = "Compass"]
     pub const ITEM_COMPASS_NAME: &str = "item.compass.name";
@@ -30978,17 +31095,17 @@ pub mod bedrock {
     pub const ITEM_FIREWORKSCHARGE_SILVER: &str = "item.fireworksCharge.silver";
     #[doc = "Trail"]
     pub const ITEM_FIREWORKSCHARGE_TRAIL: &str = "item.fireworksCharge.trail";
-    #[doc = "Unknown Shape"]
+    #[doc = "Unknown shape explosion"]
     pub const ITEM_FIREWORKSCHARGE_TYPE: &str = "item.fireworksCharge.type";
-    #[doc = "Small Ball"]
+    #[doc = "Small ball explosion"]
     pub const ITEM_FIREWORKSCHARGE_TYPE_0: &str = "item.fireworksCharge.type.0";
-    #[doc = "Large Ball"]
+    #[doc = "Large ball explosion"]
     pub const ITEM_FIREWORKSCHARGE_TYPE_1: &str = "item.fireworksCharge.type.1";
-    #[doc = "Star-shaped"]
+    #[doc = "Star-shaped explosion"]
     pub const ITEM_FIREWORKSCHARGE_TYPE_2: &str = "item.fireworksCharge.type.2";
-    #[doc = "Creeper-shaped"]
+    #[doc = "Creeper-shaped explosion"]
     pub const ITEM_FIREWORKSCHARGE_TYPE_3: &str = "item.fireworksCharge.type.3";
-    #[doc = "Burst"]
+    #[doc = "Burst explosion"]
     pub const ITEM_FIREWORKSCHARGE_TYPE_4: &str = "item.fireworksCharge.type.4";
     #[doc = "White"]
     pub const ITEM_FIREWORKSCHARGE_WHITE: &str = "item.fireworksCharge.white";
@@ -31124,9 +31241,9 @@ pub mod bedrock {
     pub const ITEM_MAGMA_CREAM_NAME: &str = "item.magma_cream.name";
     #[doc = "Map"]
     pub const ITEM_MAP_NAME: &str = "item.map.name";
-    #[doc = "Woodland Explorer Map"]
+    #[doc = "Woodland Mansion Map"]
     pub const ITEM_MAP_EXPLORATION_MANSION_NAME: &str = "item.map.exploration.mansion.name";
-    #[doc = "Ocean Explorer Map"]
+    #[doc = "Ocean Monument Map"]
     pub const ITEM_MAP_EXPLORATION_MONUMENT_NAME: &str = "item.map.exploration.monument.name";
     #[doc = "Treasure Map"]
     pub const ITEM_MAP_EXPLORATION_TREASURE_NAME: &str = "item.map.exploration.treasure.name";
@@ -31148,14 +31265,50 @@ pub mod bedrock {
     #[doc = "Desert Village Map"]
     pub const ITEM_MAP_EXPLORATION_VILLAGE_DESERT_NAME: &str =
         "item.map.exploration.village_desert.name";
-    #[doc = "Jungle Explorer Map"]
+    #[doc = "Jungle Pyramid Map"]
     pub const ITEM_MAP_EXPLORATION_JUNGLE_TEMPLE_NAME: &str =
         "item.map.exploration.jungle_temple.name";
-    #[doc = "Swamp Explorer Map"]
+    #[doc = "Swamp Hut Map"]
     pub const ITEM_MAP_EXPLORATION_SWAMP_HUT_NAME: &str = "item.map.exploration.swamp_hut.name";
-    #[doc = "Trial Explorer Map"]
+    #[doc = "Buried Trial Chambers Map"]
     pub const ITEM_MAP_EXPLORATION_TRIAL_CHAMBERS_NAME: &str =
         "item.map.exploration.trial_chambers.name";
+    #[doc = "Dappled Forest Camp Map"]
+    pub const ITEM_MAP_EXPLORATION_ABANDONED_CAMP_DAPPLED_FOREST_NAME: &str =
+        "item.map.exploration.abandoned_camp_dappled_forest.name";
+    #[doc = "Bamboo Camp Map"]
+    pub const ITEM_MAP_EXPLORATION_ABANDONED_CAMP_BAMBOO_JUNGLE_NAME: &str =
+        "item.map.exploration.abandoned_camp_bamboo_jungle.name";
+    #[doc = "Birch Forest Camp Map"]
+    pub const ITEM_MAP_EXPLORATION_ABANDONED_CAMP_BIRCH_FOREST_NAME: &str =
+        "item.map.exploration.abandoned_camp_birch_forest.name";
+    #[doc = "Cherry Grove Camp Map"]
+    pub const ITEM_MAP_EXPLORATION_ABANDONED_CAMP_CHERRY_GROVE_NAME: &str =
+        "item.map.exploration.abandoned_camp_cherry_grove.name";
+    #[doc = "Windswept Forest Camp Map"]
+    pub const ITEM_MAP_EXPLORATION_ABANDONED_CAMP_EXTREME_HILLS_PLUS_TREES_NAME: &str =
+        "item.map.exploration.abandoned_camp_extreme_hills_plus_trees.name";
+    #[doc = "Flower Forest Camp Map"]
+    pub const ITEM_MAP_EXPLORATION_ABANDONED_CAMP_FLOWER_FOREST_NAME: &str =
+        "item.map.exploration.abandoned_camp_flower_forest.name";
+    #[doc = "Pale Garden Camp Map"]
+    pub const ITEM_MAP_EXPLORATION_ABANDONED_CAMP_PALE_GARDEN_NAME: &str =
+        "item.map.exploration.abandoned_camp_pale_garden.name";
+    #[doc = "Swamp Camp Map"]
+    pub const ITEM_MAP_EXPLORATION_ABANDONED_CAMP_SWAMPLAND_NAME: &str =
+        "item.map.exploration.abandoned_camp_swampland.name";
+    #[doc = "Buried Ancient City Map"]
+    pub const ITEM_MAP_EXPLORATION_BURIED_ANCIENT_CITY_NAME: &str =
+        "item.map.exploration.buried_ancient_city.name";
+    #[doc = "Buried Mineshaft Map"]
+    pub const ITEM_MAP_EXPLORATION_BURIED_MINESHAFT_NAME: &str =
+        "item.map.exploration.buried_mineshaft.name";
+    #[doc = "Desert Pyramid Map"]
+    pub const ITEM_MAP_EXPLORATION_DESERT_PYRAMID_NAME: &str =
+        "item.map.exploration.desert_pyramid.name";
+    #[doc = "Warm Ocean Ruins Map"]
+    pub const ITEM_MAP_EXPLORATION_WARM_OCEAN_RUINS_NAME: &str =
+        "item.map.exploration.warm_ocean_ruins.name";
     #[doc = "Melon Slice"]
     pub const ITEM_MELON_NAME: &str = "item.melon.name";
     #[doc = "Milk Bucket"]
@@ -33019,6 +33172,24 @@ pub mod bedrock {
         "menu.multiplayer.nintendo.broadcast.name";
     #[doc = "Settings for PlayStation™Network"]
     pub const MENU_MULTIPLAYER_SONY_BROADCAST_NAME: &str = "menu.multiplayer.sony.broadcast.name";
+    #[doc = "Party"]
+    pub const MENU_PARTY_TAB_TITLE: &str = "menu.party.tab.title";
+    #[doc = "It's your party. You make the rules."]
+    pub const MENU_PARTY_TAB_DESCRIPTION: &str = "menu.party.tab.description";
+    #[doc = "Microsoft Account settings"]
+    pub const MENU_PARTY_GROUP_ACCOUNTSETTINGS_TITLE: &str =
+        "menu.party.group.accountSettings.title";
+    #[doc = "To adjust these settings, you'll need to visit the Microsoft privacy & online safety website"]
+    pub const MENU_PARTY_GROUP_ACCOUNTSETTINGS_DESCRIPTION: &str =
+        "menu.party.group.accountSettings.description";
+    #[doc = "Privacy & online safety"]
+    pub const MENU_PARTY_PRIVACYANDSAFETY_TITLE: &str = "menu.party.privacyAndSafety.title";
+    #[doc = "Worth a read"]
+    pub const MENU_PARTY_PRIVACYANDSAFETY_DESCRIPTION: &str =
+        "menu.party.privacyAndSafety.description";
+    #[doc = "Open"]
+    pub const MENU_PARTY_PRIVACYANDSAFETY_BUTTONLABEL: &str =
+        "menu.party.privacyAndSafety.buttonLabel";
     #[doc = "Preview"]
     pub const MENU_PREVIEW_TAB_TITLE: &str = "menu.preview.tab.title";
     #[doc = "Storage"]
@@ -33650,23 +33821,16 @@ pub mod bedrock {
     pub const OPTIONS_DEV_RENDERMOBINFOSTATE: &str = "options.dev_renderMobInfoState";
     #[doc = "Reset client ID"]
     pub const OPTIONS_DEV_RESETCLIENTID: &str = "options.dev_resetClientId";
-    #[doc = "Show chunk map"]
-    pub const OPTIONS_DEV_SHOWCHUNKMAP: &str = "options.dev_showChunkMap";
     #[doc = "Chunk Map View Mode"]
     pub const OPTIONS_DEV_CHUNKMAPMODE: &str = "options.dev_chunkMapMode";
     #[doc = "Off"]
     pub const OPTIONS_DEV_CHUNK_MAP_MODE_OFF: &str = "options.dev_chunk_map_mode_off";
-    #[doc = "Client"]
-    pub const OPTIONS_DEV_CHUNK_MAP_MODE_CLIENT: &str = "options.dev_chunk_map_mode_client";
-    #[doc = "Client (MainChunkSource)"]
-    pub const OPTIONS_DEV_CHUNK_MAP_MODE_CLIENT_MAIN_CHUNKSOURCE: &str =
-        "options.dev_chunk_map_mode_client_main_chunksource";
-    #[doc = "Server"]
-    pub const OPTIONS_DEV_CHUNK_MAP_MODE_SERVER_CHUNK_STATE: &str =
-        "options.dev_chunk_map_mode_server_chunk_state";
-    #[doc = "Server (DB State)"]
-    pub const OPTIONS_DEV_CHUNK_MAP_MODE_SERVER_CHUNK_DEBUG_DISPLAY_STATE: &str =
-        "options.dev_chunk_map_mode_server_chunk_debug_display_state";
+    #[doc = "Full"]
+    pub const OPTIONS_DEV_CHUNK_MAP_MODE_FULL: &str = "options.dev_chunk_map_mode_full";
+    #[doc = "Legend"]
+    pub const OPTIONS_DEV_CHUNK_MAP_MODE_LEGEND: &str = "options.dev_chunk_map_mode_legend";
+    #[doc = "Limited"]
+    pub const OPTIONS_DEV_CHUNK_MAP_MODE_LIMITED: &str = "options.dev_chunk_map_mode_limited";
     #[doc = "Disable Terrain Drawing"]
     pub const OPTIONS_DEV_DISABLERENDERTERRAIN: &str = "options.dev_disableRenderTerrain";
     #[doc = "Disable Entities Drawing"]
@@ -33772,9 +33936,6 @@ pub mod bedrock {
         "options.dev_enableDebugHudOverlay.cachestorageusage";
     #[doc = "Transport Layer Type"]
     pub const OPTIONS_DEV_TRANSPORT_LAYER: &str = "options.dev_transport_layer";
-    #[doc = "Override MUTS Transport Layer Locally"]
-    pub const OPTIONS_DEV_CONTROLTOWER_OVERRIDE_TRANSPORT_LAYER: &str =
-        "options.dev_controltower_override_transport_layer";
     #[doc = "RakNet"]
     pub const OPTIONS_DEV_TRANSPORT_LAYER_RAKNET: &str = "options.dev_transport_layer.raknet";
     #[doc = "NetherNet (MPSD)"]
@@ -34068,6 +34229,8 @@ pub mod bedrock {
     pub const OPTIONS_DEV_CLEARDOWNLOADECACHE: &str = "options.dev_clearDownloadeCache";
     #[doc = "Clear download cache"]
     pub const OPTIONS_DEV_CLEARDOWNLOADECACHE_NAME: &str = "options.dev_clearDownloadeCache.name";
+    #[doc = "Clear Layout Cache"]
+    pub const OPTIONS_CLEARLAYOUTCACHE: &str = "options.clearLayoutCache";
     #[doc = "Clear Library Cache"]
     pub const OPTIONS_DEV_CLEARLIBRARYCACHE: &str = "options.dev_clearLibraryCache";
     #[doc = "Clear Screenshots Cache"]
@@ -34335,6 +34498,9 @@ pub mod bedrock {
     #[doc = "Makes the game react faster when you press buttons or move. May increase power consumption"]
     pub const OPTIONS_IMPROVEDINPUTRESPONSEPLACEHOLDER_DESCRIPTION: &str =
         "options.improvedInputResponsePlaceholder.description";
+    #[doc = "Improved Input Response is not used when V-Sync is off or when using Vibrant Visuals or Ray Tracing."]
+    pub const OPTIONS_IMPROVEDINPUTRESPONSEPLACEHOLDER_INFO_BANNER: &str =
+        "options.improvedInputResponsePlaceholder.info_banner";
     #[doc = "Frame pacing"]
     pub const OPTIONS_FRAMEPACING: &str = "options.framePacing";
     #[doc = "Turn this on for a smoother, more stable experience. This may cap your game at a lower frame rate."]
@@ -34469,9 +34635,11 @@ pub mod bedrock {
     pub const OPTIONS_HIDEHAND_DESCRIPTION: &str = "options.hidehand.description";
     #[doc = "Chat Background Opacity"]
     pub const OPTIONS_CHATBACKGROUNDOPACITY: &str = "options.chatBackgroundOpacity";
-    #[doc = "Controls backgrounds for chat messages"]
+    #[doc = "Adjust background darkness for chat messages and closed captions"]
     pub const OPTIONS_CHATBACKGROUNDOPACITY_DESCRIPTION: &str =
         "options.chatBackgroundOpacity.description";
+    #[doc = "Background opacity (chat & captions)"]
+    pub const OPTIONS_CHATBACKGROUNDOPACITY_NAME: &str = "options.chatBackgroundOpacity.name";
     #[doc = "Outline Selection"]
     pub const OPTIONS_CLASSIC_BOX_SELECTION: &str = "options.classic_box_selection";
     #[doc = "Makes it easier to see which block you’re looking at"]
@@ -34695,7 +34863,7 @@ pub mod bedrock {
         "options.joystickVisibilityOption.hiddenJoystickWhenUnused.name";
     #[doc = "Sneak"]
     pub const OPTIONS_SNEAKOPTION: &str = "options.sneakOption";
-    #[doc = "Sneak button behaviour"]
+    #[doc = "Sneak button behavior"]
     pub const OPTIONS_SNEAKOPTION_NAME: &str = "options.sneakOption.name";
     #[doc = "Choose your preferred control method for crouching"]
     pub const OPTIONS_SNEAKOPTION_DESCRIPTION: &str = "options.sneakOption.description";
@@ -34726,15 +34894,20 @@ pub mod bedrock {
     pub const OPTIONS_TOPBUTTONSCALE_SMALL: &str = "options.topButtonScale.small";
     #[doc = "Text Background Opacity"]
     pub const OPTIONS_HUDTEXTBACKGROUNDOPACITY: &str = "options.hudTextBackgroundOpacity";
-    #[doc = "Controls backgrounds for tooltips and text from the /title command"]
+    #[doc = "Adjust background darkness for /title commands and contextual tips"]
     pub const OPTIONS_HUDTEXTBACKGROUNDOPACITY_DESCRIPTION: &str =
         "options.hudTextBackgroundOpacity.description";
+    #[doc = "Background opacity (text & tooltips)"]
+    pub const OPTIONS_HUDTEXTBACKGROUNDOPACITY_NAME: &str = "options.hudTextBackgroundOpacity.name";
     #[doc = "Action Bar Background Opacity"]
     pub const OPTIONS_ACTIONBARTEXTBACKGROUNDOPACITY: &str =
         "options.actionBarTextBackgroundOpacity";
-    #[doc = "How much you can see-through the action bar"]
+    #[doc = "Adjust background darkness for temporary messages displayed above the hotbar"]
     pub const OPTIONS_ACTIONBARTEXTBACKGROUNDOPACITY_DESCRIPTION: &str =
         "options.actionBarTextBackgroundOpacity.description";
+    #[doc = "Action bar opacity"]
+    pub const OPTIONS_ACTIONBARTEXTBACKGROUNDOPACITY_NAME: &str =
+        "options.actionBarTextBackgroundOpacity.name";
     #[doc = "Hide Paper Doll"]
     pub const OPTIONS_HIDEPAPERDOLL: &str = "options.hidepaperdoll";
     #[doc = "Hide your character preview when swimming, sneaking, flying, or riding"]
@@ -34894,7 +35067,7 @@ pub mod bedrock {
     pub const OPTIONS_PARTY: &str = "options.party";
     #[doc = "Party Settings"]
     pub const OPTIONS_PARTYTITLE: &str = "options.partyTitle";
-    #[doc = "Receive party invites from"]
+    #[doc = "You can receive invites from"]
     pub const OPTIONS_PARTYINVITERECEIVEDFILTER: &str = "options.partyInviteReceivedFilter";
     #[doc = "Everyone"]
     pub const OPTIONS_PARTYINVITERECEIVEDFILTER_EVERYONE: &str =
@@ -34902,24 +35075,49 @@ pub mod bedrock {
     #[doc = "Friends only"]
     pub const OPTIONS_PARTYINVITERECEIVEDFILTER_FRIENDSONLY: &str =
         "options.partyInviteReceivedFilter.friendsOnly";
-    #[doc = "Default party privacy"]
+    #[doc = "Everyone on the same server as you"]
+    pub const OPTIONS_PARTYINVITERECEIVEDFILTER_EVERYONE_DESCRIPTION: &str =
+        "options.partyInviteReceivedFilter.everyone.description";
+    #[doc = "Players you know and trust"]
+    pub const OPTIONS_PARTYINVITERECEIVEDFILTER_FRIENDSONLY_DESCRIPTION: &str =
+        "options.partyInviteReceivedFilter.friendsOnly.description";
+    #[doc = "Default party mode"]
     pub const OPTIONS_PARTYPRIVACY: &str = "options.partyPrivacy";
-    #[doc = "Open"]
+    #[doc = "Public"]
     pub const OPTIONS_PARTYPRIVACY_OPEN: &str = "options.partyPrivacy.open";
-    #[doc = "Invite Only"]
+    #[doc = "Private"]
     pub const OPTIONS_PARTYPRIVACY_INVITEONLY: &str = "options.partyPrivacy.inviteOnly";
     #[doc = "Your friends and friends of party members can join an open party that you've created without an invite."]
     pub const OPTIONS_PARTYPRIVACY_OPEN_LABEL: &str = "options.partyPrivacy.open.label";
     #[doc = "Players can only join a party that you've created if they're invited."]
     pub const OPTIONS_PARTYPRIVACY_INVITEONLY_LABEL: &str = "options.partyPrivacy.inviteOnly.label";
-    #[doc = "Who can send party invites in your party"]
+    #[doc = "Open to everyone"]
+    pub const OPTIONS_PARTYPRIVACY_OPEN_DESCRIPTION: &str = "options.partyPrivacy.open.description";
+    #[doc = "Invite only"]
+    pub const OPTIONS_PARTYPRIVACY_INVITEONLY_DESCRIPTION: &str =
+        "options.partyPrivacy.inviteOnly.description";
+    #[doc = "Who can send invites"]
     pub const OPTIONS_PARTYINVITESENDPRIVILEGES: &str = "options.partyInviteSendPrivileges";
     #[doc = "Party leader & members"]
     pub const OPTIONS_PARTYINVITESENDPRIVILEGES_PARTYMEMBERS: &str =
         "options.partyInviteSendPrivileges.partyMembers";
-    #[doc = "Party leader only"]
+    #[doc = "Party leader"]
     pub const OPTIONS_PARTYINVITESENDPRIVILEGES_PARTYLEADERONLY: &str =
         "options.partyInviteSendPrivileges.partyLeaderOnly";
+    #[doc = "All players in the party can invite others"]
+    pub const OPTIONS_PARTYINVITESENDPRIVILEGES_PARTYMEMBERS_DESCRIPTION: &str =
+        "options.partyInviteSendPrivileges.partyMembers.description";
+    #[doc = "Only the party leader can invite others"]
+    pub const OPTIONS_PARTYINVITESENDPRIVILEGES_PARTYLEADERONLY_DESCRIPTION: &str =
+        "options.partyInviteSendPrivileges.partyLeaderOnly.description";
+    #[doc = "Reset to default"]
+    pub const OPTIONS_PARTY_RESETSETTINGS: &str = "options.party.resetSettings";
+    #[doc = "Set all options to their original values"]
+    pub const OPTIONS_PARTY_RESETSETTINGS_DESCRIPTION: &str =
+        "options.party.resetSettings.description";
+    #[doc = "Reset"]
+    pub const OPTIONS_PARTY_RESETSETTINGS_BUTTONLABEL: &str =
+        "options.party.resetSettings.buttonLabel";
     #[doc = "Patch Notes"]
     pub const OPTIONS_PATCHNOTES: &str = "options.patchNotes";
     #[doc = "Video Performance Settings..."]
@@ -35200,7 +35398,7 @@ pub mod bedrock {
     pub const OPTIONS_HIDEENDFLASH_DESCRIPTION: &str = "options.hideEndFlash.description";
     #[doc = "Camera Shake"]
     pub const OPTIONS_SCREENSHAKE: &str = "options.screenShake";
-    #[doc = "Set up camera shake using macros or chat"]
+    #[doc = "Allow effects triggered by the /camerashake command"]
     pub const OPTIONS_SCREENSHAKE_DESCRIPTION: &str = "options.screenShake.description";
     #[doc = "Adjust how dark the screen can get during the Darkness effect (caused by mobs and other sources)"]
     pub const OPTIONS_DARKNESSEFFECTMODIFIER_MESSAGE: &str =
@@ -35354,6 +35552,16 @@ pub mod bedrock {
         "options.touch.resetSettings.description";
     #[doc = "Reset"]
     pub const OPTIONS_TOUCH_RESETSETTINGS_LABEL: &str = "options.touch.resetSettings.label";
+    #[doc = "Enable advanced save settings"]
+    pub const OPTIONS_ENABLEADVANCEDSAVESETTINGS: &str = "options.enableAdvancedSaveSettings";
+    #[doc = "Decide if worlds are saved locally or to the cloud"]
+    pub const OPTIONS_ENABLEADVANCEDSAVESETTINGS_DESCRIPTION: &str =
+        "options.enableAdvancedSaveSettings.description";
+    #[doc = "Enable global cloud save"]
+    pub const OPTIONS_ENABLEGLOBALCLOUDSAVE: &str = "options.enableGlobalCloudSave";
+    #[doc = "All worlds are automatically saved to the cloud"]
+    pub const OPTIONS_ENABLEGLOBALCLOUDSAVE_DESCRIPTION: &str =
+        "options.enableGlobalCloudSave.description";
     #[doc = "Enable Copy Coordinate UI"]
     pub const OPTIONS_COPYCOORDINATEUI: &str = "options.copyCoordinateUI";
     #[doc = "Enable Copy Coordinate"]
@@ -35449,7 +35657,7 @@ pub mod bedrock {
     #[doc = "Buy An Additional Realm"]
     pub const OPTIONS_VIEWSUBSCRIPTIONS_BUYANADDITIONALREALM: &str =
         "options.viewSubscriptions.buyAnAdditionalRealm";
-    #[doc = "Realms plus subscription for Realm %s."]
+    #[doc = "Realms Plus subscription for Realm %s."]
     pub const OPTIONS_VIEWSUBSCRIPTIONS_REALMSPLUSSUBSCRIPTIONFORREALM: &str =
         "options.viewSubscriptions.realmsPlusSubscriptionForRealm";
     #[doc = "Additional subscription for Realm %s."]
@@ -35917,22 +36125,20 @@ pub mod bedrock {
     pub const OPTIONS_SHADOWQUALITY_HIGH: &str = "options.shadowQuality.high";
     #[doc = "Ultra"]
     pub const OPTIONS_SHADOWQUALITY_ULTRA: &str = "options.shadowQuality.ultra";
-    #[doc = "Point Light Quality"]
-    pub const OPTIONS_POINTLIGHTLODINGQUALITY: &str = "options.pointLightLODingQuality";
-    #[doc = "Adjust level of detail for point light"]
-    pub const OPTIONS_POINTLIGHTLODINGQUALITY_DESCRIPTION: &str =
-        "options.pointLightLODingQuality.description";
-    #[doc = "Off"]
-    pub const OPTIONS_POINTLIGHTLODINGQUALITY_OFF: &str = "options.pointLightLODingQuality.off";
-    #[doc = "Low"]
-    pub const OPTIONS_POINTLIGHTLODINGQUALITY_LOW: &str = "options.pointLightLODingQuality.low";
-    #[doc = "Medium"]
-    pub const OPTIONS_POINTLIGHTLODINGQUALITY_MEDIUM: &str =
-        "options.pointLightLODingQuality.medium";
-    #[doc = "High"]
-    pub const OPTIONS_POINTLIGHTLODINGQUALITY_HIGH: &str = "options.pointLightLODingQuality.high";
-    #[doc = "Ultra"]
-    pub const OPTIONS_POINTLIGHTLODINGQUALITY_ULTRA: &str = "options.pointLightLODingQuality.ultra";
+    #[doc = "Block Light Quality"]
+    pub const OPTIONS_BLOCKLIGHTQUALITY: &str = "options.blockLightQuality";
+    #[doc = "Adjust the quality of block lighting"]
+    pub const OPTIONS_BLOCKLIGHTQUALITY_DESCRIPTION: &str = "options.blockLightQuality.description";
+    #[doc = "Standard"]
+    pub const OPTIONS_BLOCKLIGHTQUALITY_OFF: &str = "options.blockLightQuality.off";
+    #[doc = "Volumetric Lights"]
+    pub const OPTIONS_BLOCKLIGHTQUALITY_LOW: &str = "options.blockLightQuality.low";
+    #[doc = "Point Lights"]
+    pub const OPTIONS_BLOCKLIGHTQUALITY_MEDIUM: &str = "options.blockLightQuality.medium";
+    #[doc = "Point Lights+"]
+    pub const OPTIONS_BLOCKLIGHTQUALITY_HIGH: &str = "options.blockLightQuality.high";
+    #[doc = "Point Lights++"]
+    pub const OPTIONS_BLOCKLIGHTQUALITY_ULTRA: &str = "options.blockLightQuality.ultra";
     #[doc = "Volumetric Fog Quality"]
     pub const OPTIONS_VOLUMETRICFOGQUALITY: &str = "options.volumetricFogQuality";
     #[doc = "Light shaft resolution for more immersive fog"]
@@ -35957,6 +36163,9 @@ pub mod bedrock {
     pub const OPTIONS_UPSCALINGPERCENTAGE_HUNDRED: &str = "options.upscalingPercentage.hundred";
     #[doc = "Automatic"]
     pub const OPTIONS_UPSCALINGPERCENTAGE_ZERO: &str = "options.upscalingPercentage.zero";
+    #[doc = "Automatic resolution is only valid for presets"]
+    pub const OPTIONS_UPSCALINGPERCENTAGE_AUTOMATICPRESETONLY: &str =
+        "options.upscalingPercentage.automaticPresetOnly";
     #[doc = "Upscaling mode"]
     pub const OPTIONS_UPSCALINGMODE: &str = "options.upscalingMode";
     #[doc = "Select your preferred technique for upscaling"]
@@ -36454,7 +36663,7 @@ pub mod bedrock {
     pub const PERMISSIONS_REALMSADDFRIENDS: &str = "permissions.RealmsAddFriends";
     #[doc = "You cannot save your worlds to your Xbox profile because of how your account is set up. This can be changed in your privacy & online safety settings on Xbox.com."]
     pub const PERMISSIONS_CLOUDSAVE: &str = "permissions.CloudSave";
-    #[doc = "You cannot play on Realms because of how your Microsoft account is set up. Please ensure your online safety settings allow Multiplayer and you have an active Xbox Live Gold subscription. See instructions for changing these settings at aka.ms/MCMultiplayerHelp."]
+    #[doc = "You cannot play on Realms because of how your Microsoft account is set up. Please ensure your online safety settings allow Multiplayer and you have an active Xbox Game Pass Core subscription. See instructions for changing these settings at aka.ms/MCMultiplayerHelp."]
     pub const PERMISSIONS_MULTIPLAYERSESSIONSONCONSOLE: &str =
         "permissions.MultiplayerSessionsOnConsole";
     #[doc = "You cannot play on Realms because of how your Microsoft account is set up."]
@@ -36605,8 +36814,6 @@ pub mod bedrock {
     pub const POTION_DIGSLOWDOWN: &str = "potion.digSlowDown";
     #[doc = "Haste"]
     pub const POTION_DIGSPEED: &str = "potion.digSpeed";
-    #[doc = "When Applied:"]
-    pub const POTION_EFFECTS_WHENDRANK: &str = "potion.effects.whenDrank";
     #[doc = "No Effects"]
     pub const POTION_EMPTY: &str = "potion.empty";
     #[doc = "Water Bottle"]
@@ -36717,6 +36924,7 @@ pub mod bedrock {
     pub const POTION_POISON_SPLASH_NAME: &str = "potion.poison.splash.name";
     #[doc = "Lingering Potion of Poison"]
     pub const POTION_POISON_LINGER_NAME: &str = "potion.poison.linger.name";
+    #[doc = "I"]
     pub const POTION_POTENCY_0: &str = "potion.potency.0";
     #[doc = "II"]
     pub const POTION_POTENCY_1: &str = "potion.potency.1";
@@ -36857,6 +37065,29 @@ pub mod bedrock {
         "profileScreen.create_persona_classic_skin_details";
     #[doc = "Select the Type"]
     pub const PROFILESCREEN_CREATE_PERSONA_TITLE: &str = "profileScreen.create_persona_title";
+    #[doc = "Skin Upload Error"]
+    pub const PERSONA_CUSTOMSKINS_ERROR_TITLE: &str = "persona.customskins.error.title";
+    #[doc = "The uploaded PNG exceeds the configured maximum size in bytes."]
+    pub const PERSONA_CUSTOMSKINS_ERROR_IMAGETOOLARGE: &str =
+        "persona.customskins.error.imagetoolarge";
+    #[doc = "The uploaded PNG's width/height combination is not in the allowed set."]
+    pub const PERSONA_CUSTOMSKINS_ERROR_INVALIDDIMENSIONS: &str =
+        "persona.customskins.error.invaliddimensions";
+    #[doc = "The supplied string is not valid Base64."]
+    pub const PERSONA_CUSTOMSKINS_ERROR_INVALIDBASE64: &str =
+        "persona.customskins.error.invalidbase64";
+    #[doc = "The decoded bytes could not be loaded as a PNG image."]
+    pub const PERSONA_CUSTOMSKINS_ERROR_FAILEDLOADINGPNG: &str =
+        "persona.customskins.error.failedloadingpng";
+    #[doc = "No Skin exists in storage for the requested SkinId."]
+    pub const PERSONA_CUSTOMSKINS_ERROR_RECORDNOTFOUND: &str =
+        "persona.customskins.error.recordnotfound";
+    #[doc = "The uploaded skin was flagged as violating community standards."]
+    pub const PERSONA_CUSTOMSKINS_ERROR_COMMUNITYSTANDARDSVIOLATION: &str =
+        "persona.customskins.error.communitystandardsviolation";
+    #[doc = "Unexpected error during Custom Skin upload."]
+    pub const PERSONA_CUSTOMSKINS_ERROR_UNEXPECTEDERROR: &str =
+        "persona.customskins.error.unexpectederror";
     #[doc = "In Pass"]
     pub const PERSONA_CSB_SEE_SUBSCRIPTION: &str = "persona.csb.see.subscription";
     #[doc = "Try Free"]
@@ -36923,6 +37154,9 @@ pub mod bedrock {
     #[doc = "Clearing Storage Cache"]
     pub const PROGRESSSCREEN_TITLE_DELETESTORAGEAREACONTENT: &str =
         "progressScreen.title.deleteStorageAreaContent";
+    #[doc = "Clearing Layout Cache"]
+    pub const PROGRESSSCREEN_TITLE_DELETELAYOUTCACHE: &str =
+        "progressScreen.title.deleteLayoutCache";
     #[doc = "Clearing Download Cache"]
     pub const PROGRESSSCREEN_TITLE_DELETEDOWNLOADCONTENT: &str =
         "progressScreen.title.deleteDownloadContent";
@@ -36961,6 +37195,8 @@ pub mod bedrock {
     #[doc = "Please do not exit the game. Exiting might corrupt the export."]
     pub const PROGRESSSCREEN_MESSAGE_EXPORTING_WARNING: &str =
         "progressScreen.message.exporting.warning";
+    #[doc = "Processing..."]
+    pub const PROGRESSSCREEN_MESSAGE_PROCESSING: &str = "progressScreen.message.processing";
     #[doc = "Importing world"]
     pub const PROGRESSSCREEN_MESSAGE_IMPORTING: &str = "progressScreen.message.importing";
     #[doc = "Step 2 of 2 - Importing Content"]
@@ -37054,6 +37290,21 @@ pub mod bedrock {
         "progressScreen.message.createLevelStorageFailed";
     #[doc = "An error occurred"]
     pub const PROGRESSSCREEN_MESSAGE_UNKNOWNERROR: &str = "progressScreen.message.unknownError";
+    #[doc = "The server failed to receive your world."]
+    pub const PROGRESSSCREEN_MESSAGE_UPLOADINGFAILEDSINGLE: &str =
+        "progressScreen.message.uploadingFailedSingle";
+    #[doc = "The server failed to receive a part of your world."]
+    pub const PROGRESSSCREEN_MESSAGE_UPLOADINGFAILEDMULTI: &str =
+        "progressScreen.message.uploadingFailedMulti";
+    #[doc = "We couldn't complete the upload process."]
+    pub const PROGRESSSCREEN_MESSAGE_UPLOADINGFAILEDCOMPLETION: &str =
+        "progressScreen.message.uploadingFailedCompletion";
+    #[doc = "We couldn't renew your upload information."]
+    pub const PROGRESSSCREEN_MESSAGE_REFRESHUPLOADSESSIONFAILED: &str =
+        "progressScreen.message.refreshUploadSessionFailed";
+    #[doc = "The server failed while processing your world."]
+    pub const PROGRESSSCREEN_MESSAGE_UPLOADINGPROCESSINGFAILED: &str =
+        "progressScreen.message.uploadingProcessingFailed";
     #[doc = "This world can't be opened because of a directory issue in the pack."]
     pub const PROGRESSSCREEN_MESSAGE_DIRECTORYDEPTHERROR: &str =
         "progressScreen.message.directoryDepthError";
@@ -37108,15 +37359,9 @@ pub mod bedrock {
     #[doc = "Syncing World Data Succeeded"]
     pub const PROGRESSSCREEN_DIALOG_TITLE_STORAGEPROVIDERSUCCEEDED: &str =
         "progressScreen.dialog.title.storageProviderSucceeded";
-    #[doc = "Checking Party Eligibility"]
-    pub const PROGRESSSCREEN_DIALOG_TITLE_PARTYELIGIBILITYCHECK: &str =
-        "progressScreen.dialog.title.partyEligibilityCheck";
     #[doc = "Loading World"]
     pub const PROGRESSSCREEN_DIALOG_TITLE_WORLDTRANSFER: &str =
         "progressScreen.dialog.title.worldTransfer";
-    #[doc = "Exclusive content"]
-    pub const PROGRESSSCREEN_DIALOG_TITLE_EXCLUSIVECONTENT: &str =
-        "progressScreen.dialog.title.exclusiveContent";
     #[doc = "Some optional resource packs applied to this world include ray tracing. Your device is not compatible with advanced lighting and texture features so you will see the world without these advanced effects."]
     pub const PROGRESSSCREEN_DIALOG_MESSAGE_RESOURCEPACK_NORAYTRACINGSUPPORT_OPTIONAL: &str =
         "progressScreen.dialog.message.resourcePack.noRayTracingSupport.optional";
@@ -37156,12 +37401,6 @@ pub mod bedrock {
     #[doc = "Syncing this world is taking a long time. Would you like to continue waiting?"]
     pub const PROGRESSSCREEN_DIALOG_MESSAGE_STORAGEPROVIDERLONGWAIT: &str =
         "progressScreen.dialog.message.storageProviderLongWait";
-    #[doc = "Some party members don't have permission to play content exclusive to this world. If you choose to join this world, they won't be able to join you."]
-    pub const PROGRESSSCREEN_DIALOG_MESSAGE_PARTYPARTIALLYELIGIBLE: &str =
-        "progressScreen.dialog.message.partyPartiallyEligible";
-    #[doc = "Your party does not have permission to play content exclusive to this world."]
-    pub const PROGRESSSCREEN_DIALOG_MESSAGE_PARTYNOTELIGIBLE: &str =
-        "progressScreen.dialog.message.partyNotEligible";
     #[doc = "Enter World"]
     pub const PROGRESSSCREEN_DIALOG_BUTTON_ENTER: &str = "progressScreen.dialog.button.enter";
     #[doc = "Download Everything & Join - %1"]
@@ -37464,6 +37703,9 @@ pub mod bedrock {
         "resourcePack.incompatible.match_game_version";
     #[doc = "%s Settings"]
     pub const RESOURCEPACK_PACKSETTINGSTITLE: &str = "resourcePack.packSettingsTitle";
+    #[doc = "(none selected)"]
+    pub const RESOURCEPACK_PACKSETTINGSMULTISELECTNONESELECTED: &str =
+        "resourcePack.packSettingsMultiselectNoneSelected";
     #[doc = "This pack is missing!"]
     pub const RESOURCEPACK_MISSINGPACKDESCRIPTION: &str = "resourcePack.missingPackDescription";
     #[doc = "Legacy Resource Pack"]
@@ -37592,6 +37834,9 @@ pub mod bedrock {
     #[doc = "Old Retail worlds"]
     pub const STORAGEMANAGER_CONTENTTYPE_RETAILTOPREVIEW_WORLDS_NAME: &str =
         "storageManager.contentType.retailtopreview_worlds.name";
+    #[doc = "Retail worlds"]
+    pub const STORAGEMANAGER_CONTENTTYPE_RETAILLOCALTOPREVIEW_WORLDS_NAME: &str =
+        "storageManager.contentType.retaillocaltopreview_worlds.name";
     #[doc = "Local"]
     pub const STORAGEMANAGER_STORAGELOCATION_LOCAL: &str = "storageManager.storageLocation.local";
     #[doc = "Cloud"]
@@ -37608,6 +37853,9 @@ pub mod bedrock {
     pub const STORAGEMANAGER_SYNC: &str = "storageManager.sync";
     #[doc = "Sync to look for old worlds"]
     pub const STORAGEMANAGER_SYNC_DESCRIPTION: &str = "storageManager.sync.description";
+    #[doc = "No old worlds found"]
+    pub const STORAGEMANAGER_SYNC_NOWORLDS_DESCRIPTION: &str =
+        "storageManager.sync.noWorlds.description";
     #[doc = "Clearing storage cache"]
     pub const STORAGEMANAGER_PROGRESS_CACHE_TITLE: &str = "storageManager.progress.cache.title";
     #[doc = "This may take a few minutes"]
@@ -37845,8 +38093,6 @@ pub mod bedrock {
     pub const ACTION_HINT_EXIT_RAFT: &str = "action.hint.exit.raft";
     #[doc = "Tap dismount to dismount"]
     pub const ACTION_HINT_EXIT_SCHEME_CAMEL: &str = "action.hint.exit.scheme.camel";
-    #[doc = "Leave Raft"]
-    pub const ACTION_INTERACT_EXIT_RAFT: &str = "action.interact.exit.raft";
     #[doc = "Item can't be upgraded this way"]
     pub const CONTAINER_SMITHING_TABLE_ARROW_TOOLTIP_CANNOT_CRAFT: &str =
         "container.smithing_table.arrow_tooltip_cannot_craft";
@@ -37909,8 +38155,6 @@ pub mod bedrock {
     pub const ITEM_ANGLER_POTTERY_SHERD_NAME: &str = "item.angler_pottery_sherd.name";
     #[doc = "Archer Pottery Sherd"]
     pub const ITEM_ARCHER_POTTERY_SHERD_NAME: &str = "item.archer_pottery_sherd.name";
-    #[doc = "Upgrade:"]
-    pub const ITEM_ARMOR_UPGRADE: &str = "item.armor.upgrade";
     #[doc = "Arms Up Pottery Sherd"]
     pub const ITEM_ARMS_UP_POTTERY_SHERD_NAME: &str = "item.arms_up_pottery_sherd.name";
     #[doc = "Bamboo Door"]
@@ -38170,63 +38414,63 @@ pub mod bedrock {
     pub const TILE_SUSPICIOUS_GRAVEL_NAME: &str = "tile.suspicious_gravel.name";
     #[doc = "Suspicious Sand"]
     pub const TILE_SUSPICIOUS_SAND_NAME: &str = "tile.suspicious_sand.name";
-    #[doc = "Amethyst Material"]
+    #[doc = "Amethyst"]
     pub const TRIM_MATERIAL_AMETHYST_NAME: &str = "trim_material.amethyst.name";
-    #[doc = "Copper Material"]
+    #[doc = "Copper"]
     pub const TRIM_MATERIAL_COPPER_NAME: &str = "trim_material.copper.name";
-    #[doc = "Diamond Material"]
+    #[doc = "Diamond"]
     pub const TRIM_MATERIAL_DIAMOND_NAME: &str = "trim_material.diamond.name";
-    #[doc = "Emerald Material"]
+    #[doc = "Emerald"]
     pub const TRIM_MATERIAL_EMERALD_NAME: &str = "trim_material.emerald.name";
-    #[doc = "Gold Material"]
+    #[doc = "Gold"]
     pub const TRIM_MATERIAL_GOLD_NAME: &str = "trim_material.gold.name";
-    #[doc = "Iron Material"]
+    #[doc = "Iron"]
     pub const TRIM_MATERIAL_IRON_NAME: &str = "trim_material.iron.name";
-    #[doc = "Lapis Material"]
+    #[doc = "Lapis"]
     pub const TRIM_MATERIAL_LAPIS_NAME: &str = "trim_material.lapis.name";
-    #[doc = "Netherite Material"]
+    #[doc = "Netherite"]
     pub const TRIM_MATERIAL_NETHERITE_NAME: &str = "trim_material.netherite.name";
-    #[doc = "Quartz Material"]
+    #[doc = "Quartz"]
     pub const TRIM_MATERIAL_QUARTZ_NAME: &str = "trim_material.quartz.name";
-    #[doc = "Redstone Material"]
+    #[doc = "Redstone"]
     pub const TRIM_MATERIAL_REDSTONE_NAME: &str = "trim_material.redstone.name";
-    #[doc = "Resin Material"]
+    #[doc = "Resin"]
     pub const TRIM_MATERIAL_RESIN_NAME: &str = "trim_material.resin.name";
-    #[doc = "Coast Armor Trim"]
+    #[doc = "Coast Trim"]
     pub const TRIM_PATTERN_COAST_NAME: &str = "trim_pattern.coast.name";
-    #[doc = "Dune Armor Trim"]
+    #[doc = "Dune Trim"]
     pub const TRIM_PATTERN_DUNE_NAME: &str = "trim_pattern.dune.name";
-    #[doc = "Eye Armor Trim"]
+    #[doc = "Eye Trim"]
     pub const TRIM_PATTERN_EYE_NAME: &str = "trim_pattern.eye.name";
-    #[doc = "Host Armor Trim"]
+    #[doc = "Host Trim"]
     pub const TRIM_PATTERN_HOST_NAME: &str = "trim_pattern.host.name";
-    #[doc = "Raiser Armor Trim"]
+    #[doc = "Raiser Trim"]
     pub const TRIM_PATTERN_RAISER_NAME: &str = "trim_pattern.raiser.name";
-    #[doc = "Rib Armor Trim"]
+    #[doc = "Rib Trim"]
     pub const TRIM_PATTERN_RIB_NAME: &str = "trim_pattern.rib.name";
-    #[doc = "Sentry Armor Trim"]
+    #[doc = "Sentry Trim"]
     pub const TRIM_PATTERN_SENTRY_NAME: &str = "trim_pattern.sentry.name";
-    #[doc = "Shaper Armor Trim"]
+    #[doc = "Shaper Trim"]
     pub const TRIM_PATTERN_SHAPER_NAME: &str = "trim_pattern.shaper.name";
-    #[doc = "Silence Armor Trim"]
+    #[doc = "Silence Trim"]
     pub const TRIM_PATTERN_SILENCE_NAME: &str = "trim_pattern.silence.name";
-    #[doc = "Snout Armor Trim"]
+    #[doc = "Snout Trim"]
     pub const TRIM_PATTERN_SNOUT_NAME: &str = "trim_pattern.snout.name";
-    #[doc = "Spire Armor Trim"]
+    #[doc = "Spire Trim"]
     pub const TRIM_PATTERN_SPIRE_NAME: &str = "trim_pattern.spire.name";
-    #[doc = "Tide Armor Trim"]
+    #[doc = "Tide Trim"]
     pub const TRIM_PATTERN_TIDE_NAME: &str = "trim_pattern.tide.name";
-    #[doc = "Vex Armor Trim"]
+    #[doc = "Vex Trim"]
     pub const TRIM_PATTERN_VEX_NAME: &str = "trim_pattern.vex.name";
-    #[doc = "Ward Armor Trim"]
+    #[doc = "Ward Trim"]
     pub const TRIM_PATTERN_WARD_NAME: &str = "trim_pattern.ward.name";
-    #[doc = "Wayfinder Armor Trim"]
+    #[doc = "Wayfinder Trim"]
     pub const TRIM_PATTERN_WAYFINDER_NAME: &str = "trim_pattern.wayfinder.name";
-    #[doc = "Wild Armor Trim"]
+    #[doc = "Wild Trim"]
     pub const TRIM_PATTERN_WILD_NAME: &str = "trim_pattern.wild.name";
-    #[doc = "Bolt Armor Trim"]
+    #[doc = "Bolt Trim"]
     pub const TRIM_PATTERN_BOLT_NAME: &str = "trim_pattern.bolt.name";
-    #[doc = "Flow Armor Trim"]
+    #[doc = "Flow Trim"]
     pub const TRIM_PATTERN_FLOW_NAME: &str = "trim_pattern.flow.name";
     #[doc = "%s - 1 Item"]
     pub const STORAGEMANAGER_MAINSIZELABEL: &str = "storageManager.mainSizeLabel";
@@ -39012,6 +39256,8 @@ pub mod bedrock {
     pub const STORE_LOADING_ERROR_ACCOUNT_BANNED: &str = "store.loading.error.account.banned";
     #[doc = "You've been logged out from your Microsoft account. Please log in and try again"]
     pub const STORE_LOADING_ERROR_TRYLOGINAGAIN: &str = "store.loading.error.tryLoginAgain";
+    #[doc = "Oops! Something went wrong. If the problem persists, please contact support"]
+    pub const STORE_LOADING_ERROR_EDU: &str = "store.loading.error.edu";
     #[doc = "Day %s"]
     pub const STORE_GIFTPROMO_DAY: &str = "store.giftPromo.day";
     #[doc = "Claimed"]
@@ -39234,6 +39480,10 @@ pub mod bedrock {
     pub const STORE_CSB_UPSELL_RIGHTBULLET_3: &str = "store.csb.upsell.rightBullet.3";
     #[doc = "Learn more"]
     pub const STORE_CSB_UPSELL_LEARNMORE: &str = "store.csb.upsell.learnMore";
+    #[doc = "Try Free"]
+    pub const STORE_CSB_UPSELL_TRYFREE: &str = "store.csb.upsell.tryFree";
+    #[doc = "Available Now"]
+    pub const STORE_CSB_UPSELL_AVAILABLENOW: &str = "store.csb.upsell.availableNow";
     #[doc = "%s/Month"]
     pub const STORE_CSB_UPSELL_PRICE: &str = "store.csb.upsell.price";
     #[doc = "%s/30 days"]
@@ -39328,6 +39578,14 @@ pub mod bedrock {
     pub const STORE_TOAST_AUTOFULFILLMENT_MESSAGE: &str = "store.toast.autofulfillment.message";
     #[doc = "Go Back"]
     pub const STORE_POPUP_GOBACK: &str = "store.popup.goBack";
+    #[doc = "Gifting Limit Reached"]
+    pub const STORE_GIFTING_LIMITREACHED_TITLE: &str = "store.gifting.limitReached.title";
+    #[doc = "%s"]
+    pub const STORE_GIFTING_LIMITREACHED_MESSAGE: &str = "store.gifting.limitReached.message";
+    #[doc = "Learn More"]
+    pub const STORE_GIFTING_LIMITREACHED_LEARNMORE: &str = "store.gifting.limitReached.learnMore";
+    #[doc = "Go Back"]
+    pub const STORE_GIFTING_LIMITREACHED_GOBACK: &str = "store.gifting.limitReached.goBack";
     #[doc = "Sign in for Free"]
     pub const STORE_POPUP_XBLREQUIRED_TITLE: &str = "store.popup.xblRequired.title";
     #[doc = "Sign In"]
@@ -39385,6 +39643,18 @@ pub mod bedrock {
     pub const STORE_POPUP_DOWNLOAD_UNOWNED_TITLE: &str = "store.popup.download.unOwned.title";
     #[doc = "Would you like to purchase the packs used by this world?"]
     pub const STORE_POPUP_DOWNLOAD_UNOWNED_MSG: &str = "store.popup.download.unOwned.msg";
+    #[doc = "Pack Unavailable"]
+    pub const STORE_POPUP_DOWNLOAD_UNOWNED_NOTAVAILABLE_TITLE: &str =
+        "store.popup.download.unOwned.notAvailable.title";
+    #[doc = "We couldn't find a Marketplace offer for the pack this world uses. It may not be available for purchase on this platform."]
+    pub const STORE_POPUP_DOWNLOAD_UNOWNED_NOTAVAILABLE_MSG: &str =
+        "store.popup.download.unOwned.notAvailable.msg";
+    #[doc = "Marketplace Unavailable"]
+    pub const STORE_POPUP_DOWNLOAD_UNOWNED_STOREUNAVAILABLE_TITLE: &str =
+        "store.popup.download.unOwned.storeUnavailable.title";
+    #[doc = "We couldn't reach the Marketplace to look up the pack this world uses. Check your connection and try again later."]
+    pub const STORE_POPUP_DOWNLOAD_UNOWNED_STOREUNAVAILABLE_MSG: &str =
+        "store.popup.download.unOwned.storeUnavailable.msg";
     #[doc = "Purchase World Template?"]
     pub const STORE_POPUP_DOWNLOAD_UNOWNEDTEMPLATE_TITLE: &str =
         "store.popup.download.unOwnedTemplate.title";
@@ -39547,10 +39817,14 @@ pub mod bedrock {
     pub const STORE_MASHUP_COUNT_ADDONPACK: &str = "store.mashup.count.addonPack";
     #[doc = "%s Add-Ons"]
     pub const STORE_MASHUP_COUNT_ADDONPACKS: &str = "store.mashup.count.addonPacks";
+    #[doc = "%s Audio"]
+    pub const STORE_MASHUP_COUNT_AUDIO: &str = "store.mashup.count.audio";
     #[doc = "Mash-Up"]
     pub const STORE_MASHUP_COUNT_MASHUP: &str = "store.mashup.count.mashup";
     #[doc = "Add-Ons can be applied to any world."]
     pub const STORE_MASHUP_HOVER_LABEL_ADDONPACK: &str = "store.mashup.hover.label.addonPack";
+    #[doc = "Add new sounds and music to your world."]
+    pub const STORE_MASHUP_HOVER_LABEL_AUDIO: &str = "store.mashup.hover.label.audio";
     #[doc = "A hand-crafted Minecraft map."]
     pub const STORE_MASHUP_HOVER_LABEL_WORLD: &str = "store.mashup.hover.label.world";
     #[doc = "Apply a new look to your character."]
@@ -40025,6 +40299,8 @@ pub mod bedrock {
     pub const STORE_SEARCH_FILTER_WORLDTEMPLATES: &str = "store.search.filter.worldTemplates";
     #[doc = "Add-Ons"]
     pub const STORE_SEARCH_FILTER_ADDONS: &str = "store.search.filter.addOns";
+    #[doc = "Audio"]
+    pub const STORE_SEARCH_FILTER_AUDIO: &str = "store.search.filter.audio";
     #[doc = "Installed State"]
     pub const STORE_SEARCH_FILTER_INSTALLED_STATE: &str = "store.search.filter.installed_state";
     #[doc = "Installed"]
@@ -42718,6 +42994,9 @@ pub mod bedrock {
     pub const WORLDCONVERSIONERRORPROMPT_TITLE: &str = "worldConversionErrorPrompt.title";
     #[doc = "Oops, something went wrong during world conversion. Try again later."]
     pub const WORLDCONVERSIONERRORPROMPT_MESSAGE: &str = "worldConversionErrorPrompt.message";
+    #[doc = "You don't have enough free storage space to import this world. Free up some space and try again."]
+    pub const WORLDCONVERSIONERRORPROMPT_MESSAGENOSPACE: &str =
+        "worldConversionErrorPrompt.messageNoSpace";
     #[doc = "is corrupted and can't be started."]
     pub const WORLDERROR_CORRUPTED: &str = "worldError.corrupted";
     #[doc = "was created with invalid arguments."]
@@ -45350,6 +45629,47 @@ pub mod bedrock {
     pub const BUILD_INFO_TOAST_COPIED_TITLE: &str = "build_info.toast.copied.title";
     #[doc = "Build information has been copied to your clipboard."]
     pub const BUILD_INFO_TOAST_COPIED_BODY: &str = "build_info.toast.copied.body";
+    #[doc = "In queue: %s"]
+    pub const MATCHMAKING_TOAST_INQUEUE: &str = "matchmaking.toast.inQueue";
+    #[doc = "Loading %s!"]
+    pub const MATCHMAKING_TOAST_LOADING: &str = "matchmaking.toast.loading";
+    #[doc = "In Queue"]
+    pub const MATCHMAKING_TOAST_INQUEUELABEL: &str = "matchmaking.toast.inQueueLabel";
+    #[doc = "Exit Queue"]
+    pub const MATCHMAKING_TOAST_EXITQUEUE: &str = "matchmaking.toast.exitQueue";
+    #[doc = "The party has left the queue"]
+    pub const MATCHMAKING_TOAST_PARTYLEFTQUEUE: &str = "matchmaking.toast.partyLeftQueue";
+    #[doc = "You left the queue"]
+    pub const MATCHMAKING_TOAST_QUEUECANCELED: &str = "matchmaking.toast.queueCanceled";
+    #[doc = "You left the experience, the queue is canceled"]
+    pub const MATCHMAKING_TOAST_LEFTEXPERIENCE: &str = "matchmaking.toast.leftExperience";
+    #[doc = "The queue was canceled"]
+    pub const MATCHMAKING_TOAST_CANCELED: &str = "matchmaking.toast.canceled";
+    #[doc = "%s canceled the queue"]
+    pub const MATCHMAKING_TOAST_CANCELEDBYPLAYER: &str = "matchmaking.toast.canceledByPlayer";
+    #[doc = "You left the server, the queue is canceled"]
+    pub const MATCHMAKING_TOAST_LOCALPLAYERLEFTSERVER: &str =
+        "matchmaking.toast.localPlayerLeftServer";
+    #[doc = "%s left the server, the queue is canceled"]
+    pub const MATCHMAKING_TOAST_PLAYERLEFTSERVER: &str = "matchmaking.toast.playerLeftServer";
+    #[doc = "The server shut down, the queue is canceled"]
+    pub const MATCHMAKING_TOAST_SERVERSHUTDOWN: &str = "matchmaking.toast.serverShutdown";
+    #[doc = "The queue timed out"]
+    pub const MATCHMAKING_TOAST_TIMEDOUT: &str = "matchmaking.toast.timedOut";
+    #[doc = "Rejoining the queue with your party"]
+    pub const MATCHMAKING_TOAST_REQUEUEASPARTY: &str = "matchmaking.toast.requeueAsParty";
+    #[doc = "Leave experience?"]
+    pub const MATCHMAKING_LEAVEEXPERIENCE_TITLE: &str = "matchmaking.leaveExperience.title";
+    #[doc = "Are you sure you want to leave the experience?"]
+    pub const MATCHMAKING_LEAVEEXPERIENCE_MESSAGE: &str = "matchmaking.leaveExperience.message";
+    #[doc = "Doing so will cause your entire party to leave the queue."]
+    pub const MATCHMAKING_LEAVEEXPERIENCE_WARNING: &str = "matchmaking.leaveExperience.warning";
+    #[doc = "Are you sure you want to leave the experience? Doing so will cause your entire party to leave the queue."]
+    pub const MATCHMAKING_LEAVEEXPERIENCE_TTS: &str = "matchmaking.leaveExperience.tts";
+    #[doc = "Leave"]
+    pub const MATCHMAKING_LEAVEEXPERIENCE_CONFIRM: &str = "matchmaking.leaveExperience.confirm";
+    #[doc = "Go back"]
+    pub const MATCHMAKING_MODAL_GOBACK: &str = "matchmaking.modal.goBack";
     #[doc = "Party loading - %s"]
     pub const PARTIES_TOAST_TRAVELTOWORLD: &str = "parties.toast.travelToWorld";
     #[doc = "Party has entered %s"]
@@ -45787,6 +46107,8 @@ pub mod bedrock {
     pub const SUBTITLES_BLOCK_SNIFFER_EGG_PLOP: &str = "subtitles.block.sniffer_egg.plop";
     #[doc = "Sponge sucks"]
     pub const SUBTITLES_BLOCK_SPONGE_ABSORB: &str = "subtitles.block.sponge.absorb";
+    #[doc = "Straw Bed breaks"]
+    pub const SUBTITLES_BLOCK_STRAW_BED_BREAK_LEAVE: &str = "subtitles.block.straw_bed.break_leave";
     #[doc = "Berries pop"]
     pub const SUBTITLES_BLOCK_SWEET_BERRY_BUSH_PICK_BERRIES: &str =
         "subtitles.block.sweet_berry_bush.pick_berries";
@@ -47676,4 +47998,317 @@ pub mod bedrock {
     pub const CHATLOGGING_TITLE: &str = "chatlogging.title";
     #[doc = "Chat messages may be monitored or reviewed by your school or organization, or their service providers. Chat is here to help you work together and learn.  Be respectful, be helpful, and have fun building!"]
     pub const CHATLOGGING_DESCRIPTION: &str = "chatlogging.description";
+    #[doc = "Press :_input_key.sneak: to get up"]
+    pub const ACTION_HINT_EXIT_CONSOLE_CUSHION: &str = "action.hint.exit.console.cushion";
+    #[doc = "Get Up"]
+    pub const ACTION_HINT_EXIT_SCHEME_CUSHION: &str = "action.hint.exit.scheme.cushion";
+    #[doc = "Sit"]
+    pub const ACTION_INTERACT_RIDE_CUSHION: &str = "action.interact.ride.cushion";
+    #[doc = "Cushion"]
+    pub const ENTITY_CUSHION_NAME: &str = "entity.cushion.name";
+    #[doc = "Poplar Boat"]
+    pub const ITEM_BOAT_POPLAR_NAME: &str = "item.boat.poplar.name";
+    #[doc = "Poplar Boat with Chest"]
+    pub const ITEM_CHEST_BOAT_POPLAR_NAME: &str = "item.chest_boat.poplar.name";
+    #[doc = "Black Cushion"]
+    pub const ITEM_CUSHION_BLACK_NAME: &str = "item.cushion.black.name";
+    #[doc = "Blue Cushion"]
+    pub const ITEM_CUSHION_BLUE_NAME: &str = "item.cushion.blue.name";
+    #[doc = "Brown Cushion"]
+    pub const ITEM_CUSHION_BROWN_NAME: &str = "item.cushion.brown.name";
+    #[doc = "Cyan Cushion"]
+    pub const ITEM_CUSHION_CYAN_NAME: &str = "item.cushion.cyan.name";
+    #[doc = "Gray Cushion"]
+    pub const ITEM_CUSHION_GRAY_NAME: &str = "item.cushion.gray.name";
+    #[doc = "Green Cushion"]
+    pub const ITEM_CUSHION_GREEN_NAME: &str = "item.cushion.green.name";
+    #[doc = "Light Blue Cushion"]
+    pub const ITEM_CUSHION_LIGHTBLUE_NAME: &str = "item.cushion.lightBlue.name";
+    #[doc = "Lime Cushion"]
+    pub const ITEM_CUSHION_LIME_NAME: &str = "item.cushion.lime.name";
+    #[doc = "Magenta Cushion"]
+    pub const ITEM_CUSHION_MAGENTA_NAME: &str = "item.cushion.magenta.name";
+    #[doc = "Orange Cushion"]
+    pub const ITEM_CUSHION_ORANGE_NAME: &str = "item.cushion.orange.name";
+    #[doc = "Pink Cushion"]
+    pub const ITEM_CUSHION_PINK_NAME: &str = "item.cushion.pink.name";
+    #[doc = "Purple Cushion"]
+    pub const ITEM_CUSHION_PURPLE_NAME: &str = "item.cushion.purple.name";
+    #[doc = "Red Cushion"]
+    pub const ITEM_CUSHION_RED_NAME: &str = "item.cushion.red.name";
+    #[doc = "Light Gray Cushion"]
+    pub const ITEM_CUSHION_SILVER_NAME: &str = "item.cushion.silver.name";
+    #[doc = "White Cushion"]
+    pub const ITEM_CUSHION_WHITE_NAME: &str = "item.cushion.white.name";
+    #[doc = "Yellow Cushion"]
+    pub const ITEM_CUSHION_YELLOW_NAME: &str = "item.cushion.yellow.name";
+    #[doc = "Poplar Door"]
+    pub const ITEM_POPLAR_DOOR_NAME: &str = "item.poplar_door.name";
+    #[doc = "Poplar Hanging Sign"]
+    pub const ITEM_POPLAR_HANGING_SIGN_NAME: &str = "item.poplar_hanging_sign.name";
+    #[doc = "Poplar Sign"]
+    pub const ITEM_POPLAR_SIGN_NAME: &str = "item.poplar_sign.name";
+    #[doc = "Cushions"]
+    pub const ITEMGROUP_NAME_CUSHION: &str = "itemGroup.name.cushion";
+    #[doc = "Poplar Button"]
+    pub const TILE_POPLAR_BUTTON_NAME: &str = "tile.poplar_button.name";
+    #[doc = "Poplar Double Slab"]
+    pub const TILE_POPLAR_DOUBLE_SLAB_NAME: &str = "tile.poplar_double_slab.name";
+    #[doc = "Poplar Fence"]
+    pub const TILE_POPLAR_FENCE_NAME: &str = "tile.poplar_fence.name";
+    #[doc = "Poplar Fence Gate"]
+    pub const TILE_POPLAR_FENCE_GATE_NAME: &str = "tile.poplar_fence_gate.name";
+    #[doc = "Poplar Log"]
+    pub const TILE_POPLAR_LOG_NAME: &str = "tile.poplar_log.name";
+    #[doc = "Poplar Planks"]
+    pub const TILE_POPLAR_PLANKS_NAME: &str = "tile.poplar_planks.name";
+    #[doc = "Poplar Pressure Plate"]
+    pub const TILE_POPLAR_PRESSURE_PLATE_NAME: &str = "tile.poplar_pressure_plate.name";
+    #[doc = "Poplar Slab"]
+    pub const TILE_POPLAR_SLAB_NAME: &str = "tile.poplar_slab.name";
+    #[doc = "Poplar Stairs"]
+    pub const TILE_POPLAR_STAIRS_NAME: &str = "tile.poplar_stairs.name";
+    #[doc = "Poplar Trapdoor"]
+    pub const TILE_POPLAR_TRAPDOOR_NAME: &str = "tile.poplar_trapdoor.name";
+    #[doc = "Poplar Wood"]
+    pub const TILE_POPLAR_WOOD_NAME: &str = "tile.poplar_wood.name";
+    #[doc = "Stripped Poplar Log"]
+    pub const TILE_STRIPPED_POPLAR_LOG_NAME: &str = "tile.stripped_poplar_log.name";
+    #[doc = "Stripped Poplar Wood"]
+    pub const TILE_STRIPPED_POPLAR_WOOD_NAME: &str = "tile.stripped_poplar_wood.name";
+    #[doc = "Poplar Door"]
+    pub const TILE_POPLAR_DOOR_NAME: &str = "tile.poplar_door.name";
+    #[doc = "Poplar Hanging Sign"]
+    pub const TILE_POPLAR_HANGING_SIGN_NAME: &str = "tile.poplar_hanging_sign.name";
+    #[doc = "Poplar Sign"]
+    pub const TILE_POPLAR_STANDING_SIGN_NAME: &str = "tile.poplar_standing_sign.name";
+    #[doc = "Poplar Wall Sign"]
+    pub const TILE_POPLAR_WALL_SIGN_NAME: &str = "tile.poplar_wall_sign.name";
+    #[doc = "Poplar Sapling"]
+    pub const TILE_POPLAR_SAPLING_NAME: &str = "tile.poplar_sapling.name";
+    #[doc = "Orange Poplar Leaves"]
+    pub const TILE_ORANGE_POPLAR_LEAVES_NAME: &str = "tile.orange_poplar_leaves.name";
+    #[doc = "Red Poplar Leaves"]
+    pub const TILE_RED_POPLAR_LEAVES_NAME: &str = "tile.red_poplar_leaves.name";
+    #[doc = "Yellow Poplar Leaves"]
+    pub const TILE_YELLOW_POPLAR_LEAVES_NAME: &str = "tile.yellow_poplar_leaves.name";
+    #[doc = "Poplar Shelf"]
+    pub const TILE_POPLAR_SHELF_NAME: &str = "tile.poplar_shelf.name";
+    #[doc = "Red Shrub"]
+    pub const TILE_RED_SHRUB_NAME: &str = "tile.red_shrub.name";
+    #[doc = "Shelf Mushroom"]
+    pub const TILE_SHELF_MUSHROOM_NAME: &str = "tile.shelf_mushroom.name";
+    #[doc = "Blue Wool Stairs"]
+    pub const TILE_BLUE_WOOL_STAIRS_NAME: &str = "tile.blue_wool_stairs.name";
+    #[doc = "Red Wool Stairs"]
+    pub const TILE_RED_WOOL_STAIRS_NAME: &str = "tile.red_wool_stairs.name";
+    #[doc = "White Wool Stairs"]
+    pub const TILE_WHITE_WOOL_STAIRS_NAME: &str = "tile.white_wool_stairs.name";
+    #[doc = "Orange Wool Stairs"]
+    pub const TILE_ORANGE_WOOL_STAIRS_NAME: &str = "tile.orange_wool_stairs.name";
+    #[doc = "Magenta Wool Stairs"]
+    pub const TILE_MAGENTA_WOOL_STAIRS_NAME: &str = "tile.magenta_wool_stairs.name";
+    #[doc = "Light Blue Wool Stairs"]
+    pub const TILE_LIGHT_BLUE_WOOL_STAIRS_NAME: &str = "tile.light_blue_wool_stairs.name";
+    #[doc = "Yellow Wool Stairs"]
+    pub const TILE_YELLOW_WOOL_STAIRS_NAME: &str = "tile.yellow_wool_stairs.name";
+    #[doc = "Lime Wool Stairs"]
+    pub const TILE_LIME_WOOL_STAIRS_NAME: &str = "tile.lime_wool_stairs.name";
+    #[doc = "Pink Wool Stairs"]
+    pub const TILE_PINK_WOOL_STAIRS_NAME: &str = "tile.pink_wool_stairs.name";
+    #[doc = "Gray Wool Stairs"]
+    pub const TILE_GRAY_WOOL_STAIRS_NAME: &str = "tile.gray_wool_stairs.name";
+    #[doc = "Light Gray Wool Stairs"]
+    pub const TILE_LIGHT_GRAY_WOOL_STAIRS_NAME: &str = "tile.light_gray_wool_stairs.name";
+    #[doc = "Cyan Wool Stairs"]
+    pub const TILE_CYAN_WOOL_STAIRS_NAME: &str = "tile.cyan_wool_stairs.name";
+    #[doc = "Purple Wool Stairs"]
+    pub const TILE_PURPLE_WOOL_STAIRS_NAME: &str = "tile.purple_wool_stairs.name";
+    #[doc = "Green Wool Stairs"]
+    pub const TILE_GREEN_WOOL_STAIRS_NAME: &str = "tile.green_wool_stairs.name";
+    #[doc = "Brown Wool Stairs"]
+    pub const TILE_BROWN_WOOL_STAIRS_NAME: &str = "tile.brown_wool_stairs.name";
+    #[doc = "Black Wool Stairs"]
+    pub const TILE_BLACK_WOOL_STAIRS_NAME: &str = "tile.black_wool_stairs.name";
+    #[doc = "White Wool Slab"]
+    pub const TILE_WHITE_WOOL_SLAB_NAME: &str = "tile.white_wool_slab.name";
+    #[doc = "Light Gray Wool Slab"]
+    pub const TILE_LIGHT_GRAY_WOOL_SLAB_NAME: &str = "tile.light_gray_wool_slab.name";
+    #[doc = "Gray Wool Slab"]
+    pub const TILE_GRAY_WOOL_SLAB_NAME: &str = "tile.gray_wool_slab.name";
+    #[doc = "Black Wool Slab"]
+    pub const TILE_BLACK_WOOL_SLAB_NAME: &str = "tile.black_wool_slab.name";
+    #[doc = "Brown Wool Slab"]
+    pub const TILE_BROWN_WOOL_SLAB_NAME: &str = "tile.brown_wool_slab.name";
+    #[doc = "Red Wool Slab"]
+    pub const TILE_RED_WOOL_SLAB_NAME: &str = "tile.red_wool_slab.name";
+    #[doc = "Orange Wool Slab"]
+    pub const TILE_ORANGE_WOOL_SLAB_NAME: &str = "tile.orange_wool_slab.name";
+    #[doc = "Yellow Wool Slab"]
+    pub const TILE_YELLOW_WOOL_SLAB_NAME: &str = "tile.yellow_wool_slab.name";
+    #[doc = "Lime Wool Slab"]
+    pub const TILE_LIME_WOOL_SLAB_NAME: &str = "tile.lime_wool_slab.name";
+    #[doc = "Green Wool Slab"]
+    pub const TILE_GREEN_WOOL_SLAB_NAME: &str = "tile.green_wool_slab.name";
+    #[doc = "Cyan Wool Slab"]
+    pub const TILE_CYAN_WOOL_SLAB_NAME: &str = "tile.cyan_wool_slab.name";
+    #[doc = "Light Blue Wool Slab"]
+    pub const TILE_LIGHT_BLUE_WOOL_SLAB_NAME: &str = "tile.light_blue_wool_slab.name";
+    #[doc = "Blue Wool Slab"]
+    pub const TILE_BLUE_WOOL_SLAB_NAME: &str = "tile.blue_wool_slab.name";
+    #[doc = "Purple Wool Slab"]
+    pub const TILE_PURPLE_WOOL_SLAB_NAME: &str = "tile.purple_wool_slab.name";
+    #[doc = "Magenta Wool Slab"]
+    pub const TILE_MAGENTA_WOOL_SLAB_NAME: &str = "tile.magenta_wool_slab.name";
+    #[doc = "Pink Wool Slab"]
+    pub const TILE_PINK_WOOL_SLAB_NAME: &str = "tile.pink_wool_slab.name";
+    #[doc = "White Wool Double Slab"]
+    pub const TILE_WHITE_WOOL_DOUBLE_SLAB_NAME: &str = "tile.white_wool_double_slab.name";
+    #[doc = "Light Gray Wool Double Slab"]
+    pub const TILE_LIGHT_GRAY_WOOL_DOUBLE_SLAB_NAME: &str = "tile.light_gray_wool_double_slab.name";
+    #[doc = "Gray Wool Double Slab"]
+    pub const TILE_GRAY_WOOL_DOUBLE_SLAB_NAME: &str = "tile.gray_wool_double_slab.name";
+    #[doc = "Black Wool Double Slab"]
+    pub const TILE_BLACK_WOOL_DOUBLE_SLAB_NAME: &str = "tile.black_wool_double_slab.name";
+    #[doc = "Brown Wool Double Slab"]
+    pub const TILE_BROWN_WOOL_DOUBLE_SLAB_NAME: &str = "tile.brown_wool_double_slab.name";
+    #[doc = "Red Wool Double Slab"]
+    pub const TILE_RED_WOOL_DOUBLE_SLAB_NAME: &str = "tile.red_wool_double_slab.name";
+    #[doc = "Orange Wool Double Slab"]
+    pub const TILE_ORANGE_WOOL_DOUBLE_SLAB_NAME: &str = "tile.orange_wool_double_slab.name";
+    #[doc = "Yellow Wool Double Slab"]
+    pub const TILE_YELLOW_WOOL_DOUBLE_SLAB_NAME: &str = "tile.yellow_wool_double_slab.name";
+    #[doc = "Lime Wool Double Slab"]
+    pub const TILE_LIME_WOOL_DOUBLE_SLAB_NAME: &str = "tile.lime_wool_double_slab.name";
+    #[doc = "Green Wool Double Slab"]
+    pub const TILE_GREEN_WOOL_DOUBLE_SLAB_NAME: &str = "tile.green_wool_double_slab.name";
+    #[doc = "Cyan Wool Double Slab"]
+    pub const TILE_CYAN_WOOL_DOUBLE_SLAB_NAME: &str = "tile.cyan_wool_double_slab.name";
+    #[doc = "Light Blue Wool Double Slab"]
+    pub const TILE_LIGHT_BLUE_WOOL_DOUBLE_SLAB_NAME: &str = "tile.light_blue_wool_double_slab.name";
+    #[doc = "Blue Wool Double Slab"]
+    pub const TILE_BLUE_WOOL_DOUBLE_SLAB_NAME: &str = "tile.blue_wool_double_slab.name";
+    #[doc = "Purple Wool Double Slab"]
+    pub const TILE_PURPLE_WOOL_DOUBLE_SLAB_NAME: &str = "tile.purple_wool_double_slab.name";
+    #[doc = "Magenta Wool Double Slab"]
+    pub const TILE_MAGENTA_WOOL_DOUBLE_SLAB_NAME: &str = "tile.magenta_wool_double_slab.name";
+    #[doc = "Pink Wool Double Slab"]
+    pub const TILE_PINK_WOOL_DOUBLE_SLAB_NAME: &str = "tile.pink_wool_double_slab.name";
+    #[doc = "Yellow Concrete Stairs"]
+    pub const TILE_YELLOW_CONCRETE_STAIRS_NAME: &str = "tile.yellow_concrete_stairs.name";
+    #[doc = "White Concrete Stairs"]
+    pub const TILE_WHITE_CONCRETE_STAIRS_NAME: &str = "tile.white_concrete_stairs.name";
+    #[doc = "Light Gray Concrete Stairs"]
+    pub const TILE_LIGHT_GRAY_CONCRETE_STAIRS_NAME: &str = "tile.light_gray_concrete_stairs.name";
+    #[doc = "Gray Concrete Stairs"]
+    pub const TILE_GRAY_CONCRETE_STAIRS_NAME: &str = "tile.gray_concrete_stairs.name";
+    #[doc = "Black Concrete Stairs"]
+    pub const TILE_BLACK_CONCRETE_STAIRS_NAME: &str = "tile.black_concrete_stairs.name";
+    #[doc = "Brown Concrete Stairs"]
+    pub const TILE_BROWN_CONCRETE_STAIRS_NAME: &str = "tile.brown_concrete_stairs.name";
+    #[doc = "Red Concrete Stairs"]
+    pub const TILE_RED_CONCRETE_STAIRS_NAME: &str = "tile.red_concrete_stairs.name";
+    #[doc = "Orange Concrete Stairs"]
+    pub const TILE_ORANGE_CONCRETE_STAIRS_NAME: &str = "tile.orange_concrete_stairs.name";
+    #[doc = "Lime Concrete Stairs"]
+    pub const TILE_LIME_CONCRETE_STAIRS_NAME: &str = "tile.lime_concrete_stairs.name";
+    #[doc = "Green Concrete Stairs"]
+    pub const TILE_GREEN_CONCRETE_STAIRS_NAME: &str = "tile.green_concrete_stairs.name";
+    #[doc = "Cyan Concrete Stairs"]
+    pub const TILE_CYAN_CONCRETE_STAIRS_NAME: &str = "tile.cyan_concrete_stairs.name";
+    #[doc = "Light Blue Concrete Stairs"]
+    pub const TILE_LIGHT_BLUE_CONCRETE_STAIRS_NAME: &str = "tile.light_blue_concrete_stairs.name";
+    #[doc = "Blue Concrete Stairs"]
+    pub const TILE_BLUE_CONCRETE_STAIRS_NAME: &str = "tile.blue_concrete_stairs.name";
+    #[doc = "Purple Concrete Stairs"]
+    pub const TILE_PURPLE_CONCRETE_STAIRS_NAME: &str = "tile.purple_concrete_stairs.name";
+    #[doc = "Magenta Concrete Stairs"]
+    pub const TILE_MAGENTA_CONCRETE_STAIRS_NAME: &str = "tile.magenta_concrete_stairs.name";
+    #[doc = "Pink Concrete Stairs"]
+    pub const TILE_PINK_CONCRETE_STAIRS_NAME: &str = "tile.pink_concrete_stairs.name";
+    #[doc = "White Concrete Slab"]
+    pub const TILE_WHITE_CONCRETE_SLAB_NAME: &str = "tile.white_concrete_slab.name";
+    #[doc = "Light Gray Concrete Slab"]
+    pub const TILE_LIGHT_GRAY_CONCRETE_SLAB_NAME: &str = "tile.light_gray_concrete_slab.name";
+    #[doc = "Gray Concrete Slab"]
+    pub const TILE_GRAY_CONCRETE_SLAB_NAME: &str = "tile.gray_concrete_slab.name";
+    #[doc = "Black Concrete Slab"]
+    pub const TILE_BLACK_CONCRETE_SLAB_NAME: &str = "tile.black_concrete_slab.name";
+    #[doc = "Brown Concrete Slab"]
+    pub const TILE_BROWN_CONCRETE_SLAB_NAME: &str = "tile.brown_concrete_slab.name";
+    #[doc = "Red Concrete Slab"]
+    pub const TILE_RED_CONCRETE_SLAB_NAME: &str = "tile.red_concrete_slab.name";
+    #[doc = "Orange Concrete Slab"]
+    pub const TILE_ORANGE_CONCRETE_SLAB_NAME: &str = "tile.orange_concrete_slab.name";
+    #[doc = "Yellow Concrete Slab"]
+    pub const TILE_YELLOW_CONCRETE_SLAB_NAME: &str = "tile.yellow_concrete_slab.name";
+    #[doc = "Lime Concrete Slab"]
+    pub const TILE_LIME_CONCRETE_SLAB_NAME: &str = "tile.lime_concrete_slab.name";
+    #[doc = "Green Concrete Slab"]
+    pub const TILE_GREEN_CONCRETE_SLAB_NAME: &str = "tile.green_concrete_slab.name";
+    #[doc = "Cyan Concrete Slab"]
+    pub const TILE_CYAN_CONCRETE_SLAB_NAME: &str = "tile.cyan_concrete_slab.name";
+    #[doc = "Light Blue Concrete Slab"]
+    pub const TILE_LIGHT_BLUE_CONCRETE_SLAB_NAME: &str = "tile.light_blue_concrete_slab.name";
+    #[doc = "Blue Concrete Slab"]
+    pub const TILE_BLUE_CONCRETE_SLAB_NAME: &str = "tile.blue_concrete_slab.name";
+    #[doc = "Purple Concrete Slab"]
+    pub const TILE_PURPLE_CONCRETE_SLAB_NAME: &str = "tile.purple_concrete_slab.name";
+    #[doc = "Magenta Concrete Slab"]
+    pub const TILE_MAGENTA_CONCRETE_SLAB_NAME: &str = "tile.magenta_concrete_slab.name";
+    #[doc = "Pink Concrete Slab"]
+    pub const TILE_PINK_CONCRETE_SLAB_NAME: &str = "tile.pink_concrete_slab.name";
+    #[doc = "White Concrete Double Slab"]
+    pub const TILE_WHITE_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.white_concrete_double_slab.name";
+    #[doc = "Light Gray Concrete Double Slab"]
+    pub const TILE_LIGHT_GRAY_CONCRETE_DOUBLE_SLAB_NAME: &str =
+        "tile.light_gray_concrete_double_slab.name";
+    #[doc = "Gray Concrete Double Slab"]
+    pub const TILE_GRAY_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.gray_concrete_double_slab.name";
+    #[doc = "Black Concrete Double Slab"]
+    pub const TILE_BLACK_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.black_concrete_double_slab.name";
+    #[doc = "Brown Concrete Double Slab"]
+    pub const TILE_BROWN_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.brown_concrete_double_slab.name";
+    #[doc = "Red Concrete Double Slab"]
+    pub const TILE_RED_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.red_concrete_double_slab.name";
+    #[doc = "Orange Concrete Double Slab"]
+    pub const TILE_ORANGE_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.orange_concrete_double_slab.name";
+    #[doc = "Yellow Concrete Double Slab"]
+    pub const TILE_YELLOW_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.yellow_concrete_double_slab.name";
+    #[doc = "Lime Concrete Double Slab"]
+    pub const TILE_LIME_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.lime_concrete_double_slab.name";
+    #[doc = "Green Concrete Double Slab"]
+    pub const TILE_GREEN_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.green_concrete_double_slab.name";
+    #[doc = "Cyan Concrete Double Slab"]
+    pub const TILE_CYAN_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.cyan_concrete_double_slab.name";
+    #[doc = "Light Blue Concrete Double Slab"]
+    pub const TILE_LIGHT_BLUE_CONCRETE_DOUBLE_SLAB_NAME: &str =
+        "tile.light_blue_concrete_double_slab.name";
+    #[doc = "Blue Concrete Double Slab"]
+    pub const TILE_BLUE_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.blue_concrete_double_slab.name";
+    #[doc = "Purple Concrete Double Slab"]
+    pub const TILE_PURPLE_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.purple_concrete_double_slab.name";
+    #[doc = "Magenta Concrete Double Slab"]
+    pub const TILE_MAGENTA_CONCRETE_DOUBLE_SLAB_NAME: &str =
+        "tile.magenta_concrete_double_slab.name";
+    #[doc = "Pink Concrete Double Slab"]
+    pub const TILE_PINK_CONCRETE_DOUBLE_SLAB_NAME: &str = "tile.pink_concrete_double_slab.name";
+    #[doc = "Straw Bed"]
+    pub const TILE_STRAW_BED_NAME: &str = "tile.straw_bed.name";
+    #[doc = "Straw Bed"]
+    pub const ITEM_STRAW_BED_NAME: &str = "item.straw_bed.name";
+    #[doc = "Leaves rustle"]
+    pub const SUBTITLES_BLOCK_POPLAR_LEAVES_AMBIENT: &str = "subtitles.block.poplar_leaves.ambient";
+    #[doc = "Jumping on Poplar Leaves"]
+    pub const SUBTITLES_BLOCK_POPLAR_LEAVES_JUMP: &str = "subtitles.block.poplar_leaves.jump";
+    #[doc = "Landing on Poplar Leaves"]
+    pub const SUBTITLES_BLOCK_POPLAR_LEAVES_LAND: &str = "subtitles.block.poplar_leaves.land";
+    #[doc = "Cushion breaks"]
+    pub const SUBTITLES_ENTITY_CUSHION_BREAK: &str = "subtitles.entity.cushion.break";
+    #[doc = "Cushion placed"]
+    pub const SUBTITLES_ENTITY_CUSHION_PLACE: &str = "subtitles.entity.cushion.place";
+    #[doc = "Gets up from Cushion"]
+    pub const SUBTITLES_ENTITY_CUSHION_GET_UP: &str = "subtitles.entity.cushion.get_up";
+    #[doc = "Sits on Cushion"]
+    pub const SUBTITLES_ENTITY_CUSHION_SIT: &str = "subtitles.entity.cushion.sit";
 }

@@ -35,10 +35,7 @@ impl PlantBlockBase for CactusFlowerBlock {
     ) -> bool {
         let support_pos = pos.down();
         let (support_block, support_block_state) = block_accessor.get_block_and_state(&support_pos);
-        if supports_cactus_flower(support_block, support_block_state) {
-            return true;
-        }
-        false
+        supports_cactus_flower(support_block, support_block_state)
     }
     fn get_state_for_neighbor_update(
         &self,

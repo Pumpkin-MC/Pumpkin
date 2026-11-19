@@ -2,11 +2,11 @@ use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 pub struct OcelotAttackGoal {
     goal_control: Controls,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     attack_time: i32,
 }
 
@@ -38,12 +38,12 @@ impl Goal for OcelotAttackGoal {
             return false;
         }
 
-        self.target = Some(target);
+        self.target = Some(Arc::downgrade(&target));
         true
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let Some(target) = &self.target else {
+        let Some(target) = self.target.as_ref().and_then(Weak::upgrade) else {
             return false;
         };
 
@@ -76,7 +76,7 @@ impl Goal for OcelotAttackGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(target) = &self.target else {
+        let Some(target) = self.target.as_ref().and_then(Weak::upgrade) else {
             return;
         };
 
@@ -85,7 +85,7 @@ impl Goal for OcelotAttackGoal {
             .look_control
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .look_at_entity_with_range(target, 30.0, 30.0);
+            .look_at_entity_with_range(&target, 30.0, 30.0);
 
         let bb_width = mob.get_entity().entity_dimension.load().width;
         let melee_radius_sq = (bb_width * 2.0) * (bb_width * 2.0);

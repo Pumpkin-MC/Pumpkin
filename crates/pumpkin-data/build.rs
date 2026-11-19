@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let datapack_dir = assets_dir.join("datapack");
     let mc_data_dir = datapack_dir.join("data").join("minecraft");
 
-    println!("cargo:rerun-if-changed={}", mc_data_dir.display());
+    // Creating the datapack must not invalidate the build that generated it.
     println!(
         "cargo:rerun-if-changed={}",
         assets_dir.join("conventional_tags").display()

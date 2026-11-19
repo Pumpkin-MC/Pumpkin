@@ -16054,7 +16054,54 @@ pub static ARCHAEOLOGY_DESERT_WELL: LootTable = LootTable {
                 weight: 1i32,
                 quality: 0i32,
                 condition: LootCondition::None,
-                functions: &[],
+                functions: &[LootFunction {
+                    kind: LootFunctionKind::SetStewEffect(std::borrow::Cow::Borrowed(&[
+                        LootStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:night_vision"),
+                            duration: LootNumberProvider::Uniform {
+                                min: 7f64,
+                                max: 10f64,
+                            },
+                        },
+                        LootStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:jump_boost"),
+                            duration: LootNumberProvider::Uniform {
+                                min: 7f64,
+                                max: 10f64,
+                            },
+                        },
+                        LootStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:weakness"),
+                            duration: LootNumberProvider::Uniform {
+                                min: 6f64,
+                                max: 8f64,
+                            },
+                        },
+                        LootStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:blindness"),
+                            duration: LootNumberProvider::Uniform {
+                                min: 5f64,
+                                max: 7f64,
+                            },
+                        },
+                        LootStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:poison"),
+                            duration: LootNumberProvider::Uniform {
+                                min: 10f64,
+                                max: 20f64,
+                            },
+                        },
+                        LootStewEffect {
+                            effect: std::borrow::Cow::Borrowed("minecraft:saturation"),
+                            duration: LootNumberProvider::Uniform {
+                                min: 7f64,
+                                max: 10f64,
+                            },
+                        },
+                    ])),
+                    enchantment: None,
+                    condition: LootCondition::None,
+                }],
             },
         ],
         rolls: LootNumberProvider::Constant(1f64),
@@ -43929,17 +43976,39 @@ pub static CHESTS_ANCIENT_CITY_ICE_BOX: LootTable = LootTable {
                 weight: 1i32,
                 quality: 0i32,
                 condition: LootCondition::None,
-                functions: &[LootFunction {
-                    kind: LootFunctionKind::SetCount {
-                        count: LootNumberProvider::Uniform {
-                            min: 2f64,
-                            max: 6f64,
-                        },
-                        add: false,
+                functions: &[
+                    LootFunction {
+                        kind: LootFunctionKind::SetStewEffect(std::borrow::Cow::Borrowed(&[
+                            LootStewEffect {
+                                effect: std::borrow::Cow::Borrowed("minecraft:night_vision"),
+                                duration: LootNumberProvider::Uniform {
+                                    min: 7f64,
+                                    max: 10f64,
+                                },
+                            },
+                            LootStewEffect {
+                                effect: std::borrow::Cow::Borrowed("minecraft:blindness"),
+                                duration: LootNumberProvider::Uniform {
+                                    min: 5f64,
+                                    max: 7f64,
+                                },
+                            },
+                        ])),
+                        enchantment: None,
+                        condition: LootCondition::None,
                     },
-                    enchantment: None,
-                    condition: LootCondition::None,
-                }],
+                    LootFunction {
+                        kind: LootFunctionKind::SetCount {
+                            count: LootNumberProvider::Uniform {
+                                min: 2f64,
+                                max: 6f64,
+                            },
+                            add: false,
+                        },
+                        enchantment: None,
+                        condition: LootCondition::None,
+                    },
+                ],
             },
             LootEntry {
                 kind: LootEntryKind::Item("minecraft:golden_carrot"),
@@ -48088,7 +48157,54 @@ pub static CHESTS_SHIPWRECK_SUPPLY: LootTable = LootTable {
                     weight: 10i32,
                     quality: 0i32,
                     condition: LootCondition::None,
-                    functions: &[],
+                    functions: &[LootFunction {
+                        kind: LootFunctionKind::SetStewEffect(std::borrow::Cow::Borrowed(&[
+                            LootStewEffect {
+                                effect: std::borrow::Cow::Borrowed("minecraft:night_vision"),
+                                duration: LootNumberProvider::Uniform {
+                                    min: 7f64,
+                                    max: 10f64,
+                                },
+                            },
+                            LootStewEffect {
+                                effect: std::borrow::Cow::Borrowed("minecraft:jump_boost"),
+                                duration: LootNumberProvider::Uniform {
+                                    min: 7f64,
+                                    max: 10f64,
+                                },
+                            },
+                            LootStewEffect {
+                                effect: std::borrow::Cow::Borrowed("minecraft:weakness"),
+                                duration: LootNumberProvider::Uniform {
+                                    min: 6f64,
+                                    max: 8f64,
+                                },
+                            },
+                            LootStewEffect {
+                                effect: std::borrow::Cow::Borrowed("minecraft:blindness"),
+                                duration: LootNumberProvider::Uniform {
+                                    min: 5f64,
+                                    max: 7f64,
+                                },
+                            },
+                            LootStewEffect {
+                                effect: std::borrow::Cow::Borrowed("minecraft:poison"),
+                                duration: LootNumberProvider::Uniform {
+                                    min: 10f64,
+                                    max: 20f64,
+                                },
+                            },
+                            LootStewEffect {
+                                effect: std::borrow::Cow::Borrowed("minecraft:saturation"),
+                                duration: LootNumberProvider::Uniform {
+                                    min: 7f64,
+                                    max: 10f64,
+                                },
+                            },
+                        ])),
+                        enchantment: None,
+                        condition: LootCondition::None,
+                    }],
                 },
                 LootEntry {
                     kind: LootEntryKind::Item("minecraft:coal"),

@@ -12,6 +12,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -25,12 +26,12 @@ use crate::entity::{
         wander_around::WanderAroundGoal,
     },
     item::ItemEntity,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, drop_from_gift_loot_table},
     passive::animal::Animal,
     player::Player,
 };
 
-pub const SNIFFER_FOOD: &[&Item] = &[&Item::TORCHFLOWER_SEEDS, &Item::PITCHER_POD];
+const SNIFFER_DIGGING_LOOT_TABLE: &str = "minecraft:gameplay/sniffer_digging";
 pub const SNIFFER_BABY_START_AGE: i32 = -48000;
 pub const DIGGING_DROP_SEED_OFFSET_TICKS: i32 = 120;
 
@@ -99,7 +100,14 @@ impl SnifferEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, BreedGoal::new(1.0));
-            goal_selector.add_goal(2, Box::new(TemptGoal::new(1.2, SNIFFER_FOOD, false)));
+            goal_selector.add_goal(
+                2,
+                Box::new(TemptGoal::with_tag(
+                    1.2,
+                    &tag::Item::MINECRAFT_SNIFFER_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(3, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -124,6 +132,21 @@ impl SnifferEntity {
             pumpkin_data::tracked_data::sniffer::STATE,
             VarInt(state.id()),
         );
+        self.update_dimensions();
+    }
+
+    /// Vanilla `Sniffer.getDefaultDimensions`: 0.4 lower while digging, by age otherwise.
+    fn update_dimensions(&self) {
+        let entity = self.get_entity();
+        let baby = entity.age.load(Ordering::Relaxed) < 0;
+        let dimensions = if self.get_state() == SnifferState::Digging {
+            let size = Entity::type_dimensions(&EntityType::SNIFFER);
+            let digging = EntityDimensions::new(size.width, size.height - 0.4, 0.81);
+            if baby { digging.scale(0.5) } else { digging }
+        } else {
+            Entity::age_dimensions(&EntityType::SNIFFER, baby)
+        };
+        entity.set_default_dimensions(dimensions);
     }
 
     pub fn transition_to(&self, state: SnifferState) {
@@ -266,16 +289,11 @@ impl SnifferEntity {
 
         if self.drop_seed_at_tick.load(Ordering::Relaxed) == current_tick {
             let head_pos = self.get_head_position();
-            let seed_item = if rand::random::<bool>() {
-                &Item::TORCHFLOWER_SEEDS
-            } else {
-                &Item::PITCHER_POD
-            };
-            let item_stack = ItemStack::new(1, seed_item);
-
-            let item_entity = Entity::new(world.clone(), head_pos, &EntityType::ITEM);
-            let item_arc = Arc::new(ItemEntity::new(item_entity, item_stack));
-            world.spawn_entity_non_save(item_arc as Arc<dyn EntityBase>);
+            drop_from_gift_loot_table(self, SNIFFER_DIGGING_LOOT_TABLE, |item_stack| {
+                let item_entity = Entity::new(world.clone(), head_pos, &EntityType::ITEM);
+                let item_arc = Arc::new(ItemEntity::new(item_entity, item_stack));
+                world.spawn_entity_non_save(item_arc as Arc<dyn EntityBase>);
+            });
 
             world.play_sound(
                 Sound::EntitySnifferDropSeed,
@@ -314,6 +332,10 @@ impl AgeableMob for SnifferEntity {
     fn get_baby_start_age(&self) -> i32 {
         SNIFFER_BABY_START_AGE
     }
+
+    fn age_boundary_reached(&self) {
+        self.update_dimensions();
+    }
 }
 
 impl Animal for SnifferEntity {
@@ -324,7 +346,6 @@ impl Animal for SnifferEntity {
 
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_SNIFFER_FOOD)
-            || SNIFFER_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
@@ -355,7 +376,7 @@ impl Mob for SnifferEntity {
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(state_id) = nbt.get_int("State") {
-            self.state.store(state_id, Ordering::Relaxed);
+            self.set_state(SnifferState::from_id(state_id));
         }
         if let Some(drop_tick) = nbt.get_int("DropSeedAtTick") {
             self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);

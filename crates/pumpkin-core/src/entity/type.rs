@@ -17,6 +17,7 @@ use crate::entity::decoration::{
     end_crystal::EndCrystalEntity,
     item_frame::ItemFrameEntity,
     leash_knot::LeashKnotEntity,
+    mannequin::MannequinEntity,
     painting::PaintingEntity,
 };
 use crate::entity::experience_orb::ExperienceOrbEntity;
@@ -55,6 +56,7 @@ use crate::entity::mob::skeleton::{
 };
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::mob::spider::SpiderEntity;
+use crate::entity::mob::sulfur_cube::SulfurCubeEntity;
 use crate::entity::mob::vex::VexEntity;
 use crate::entity::mob::vindicator::VindicatorEntity;
 use crate::entity::mob::warden::WardenEntity;
@@ -63,6 +65,7 @@ use crate::entity::mob::zoglin::ZoglinEntity;
 use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
 use crate::entity::mob::zombie::{drowned::DrownedEntity, husk::HuskEntity, zombie::ZombieEntity};
 use crate::entity::mob::zombified_piglin::ZombifiedPiglinEntity;
+use crate::entity::ominous_item_spawner::OminousItemSpawnerEntity;
 use crate::entity::passive::allay::AllayEntity;
 use crate::entity::passive::armadillo::ArmadilloEntity;
 use crate::entity::passive::axolotl::AxolotlEntity;
@@ -108,8 +111,10 @@ use crate::entity::passive::villager::VillagerEntity;
 use crate::entity::passive::wandering_trader::WanderingTraderEntity;
 use crate::entity::passive::wolf::WolfEntity;
 use crate::entity::passive::zombie_horse::ZombieHorseEntity;
+use crate::entity::passive::zombie_nautilus::ZombieNautilusEntity;
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::ArrowEntity;
+use crate::entity::projectile::dragon_fireball::DragonFireballEntity;
 use crate::entity::projectile::egg::EggEntity;
 use crate::entity::projectile::ender_pearl::EnderPearlEntity;
 use crate::entity::projectile::experience_bottle::ExperienceBottleEntity;
@@ -132,7 +137,6 @@ use crate::entity::{Entity, EntityBase, mob};
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_nbt::compound::NbtCompound;
-use std::sync::atomic::AtomicBool;
 use tracing::{debug, warn};
 
 #[expect(clippy::too_many_lines)]
@@ -232,6 +236,7 @@ pub fn from_type(
         id if id == EntityType::TADPOLE.id => TadpoleEntity::new(entity),
         id if id == EntityType::DOLPHIN.id => DolphinEntity::new(entity),
         id if id == EntityType::NAUTILUS.id => NautilusEntity::new(entity),
+        id if id == EntityType::ZOMBIE_NAUTILUS.id => ZombieNautilusEntity::new(entity),
 
         id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity),
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity),
@@ -243,6 +248,7 @@ pub fn from_type(
             crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)
         }
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
+        id if id == EntityType::MANNEQUIN.id => MannequinEntity::new(entity),
         id if id == EntityType::CUSHION.id => Arc::new(CushionEntity::new(entity, 0)),
         id if id == EntityType::BLOCK_DISPLAY.id => BlockDisplayEntity::new(entity),
         id if id == EntityType::ITEM_DISPLAY.id => ItemDisplayEntity::new(entity),
@@ -261,6 +267,7 @@ pub fn from_type(
         id if id == EntityType::EGG.id => Arc::new(EggEntity::new(entity)),
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity),
         id if id == EntityType::SLIME.id => SlimeEntity::new(entity),
+        id if id == EntityType::SULFUR_CUBE.id => SulfurCubeEntity::new(entity),
         id if id == EntityType::SHULKER.id => ShulkerEntity::new(entity),
         id if id == EntityType::SHULKER_BULLET.id => {
             // Shulker bullets are normally spawned by ShulkerEntity directly;
@@ -291,14 +298,13 @@ pub fn from_type(
             Arc::new(MinecartEntity::new(entity))
         }
         id if id == EntityType::FIREBALL.id => Arc::new(FireballEntity::new(entity)),
+        id if id == EntityType::DRAGON_FIREBALL.id => Arc::new(DragonFireballEntity::new(entity)),
         id if id == EntityType::SMALL_FIREBALL.id => Arc::new(SmallFireballEntity::new(entity)),
         id if id == EntityType::WITHER_SKULL.id => Arc::new(WitherSkullEntity::new(entity)),
         id if id == EntityType::WIND_CHARGE.id => {
             let thrown = ThrownItemEntity {
                 entity,
                 owner: ProjectileOwner::none(),
-                collides_with_projectiles: false,
-                has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new_normal(thrown))
@@ -307,14 +313,13 @@ pub fn from_type(
             let thrown = ThrownItemEntity {
                 entity,
                 owner: ProjectileOwner::none(),
-                collides_with_projectiles: false,
-                has_hit: AtomicBool::new(false),
                 gravity: WIND_CHARGE_GRAVITY,
             };
             Arc::new(WindChargeEntity::new_breeze(thrown))
         }
         id if id == EntityType::LIGHTNING_BOLT.id => Arc::new(LightningBoltEntity::new(entity)),
         id if id == EntityType::MARKER.id => MarkerEntity::new(entity),
+        id if id == EntityType::OMINOUS_ITEM_SPAWNER.id => OminousItemSpawnerEntity::new(entity),
         id if id == EntityType::INTERACTION.id => InteractionEntity::new(entity),
         id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
@@ -478,18 +483,30 @@ pub fn check_spawn_rules(
         || id == EntityType::VINDICATOR.id
         || id == EntityType::WARDEN.id
     {
-        return mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering, reason);
+        return mob::MobEntity::check_monster_spawn_rules(
+            entity_type,
+            world,
+            pos,
+            is_thundering,
+            reason,
+        );
     }
 
     // Any-light monsters (Blaze, Breeze, Zoglin)
     if id == EntityType::BLAZE.id || id == EntityType::BREEZE.id || id == EntityType::ZOGLIN.id {
-        return mob::MobEntity::check_any_light_monster_spawn_rules(world, pos, reason);
+        return mob::MobEntity::check_any_light_monster_spawn_rules(
+            entity_type,
+            world,
+            pos,
+            reason,
+        );
     }
 
     // Surface monsters (Husk, Parched, Camel Husk)
     if id == EntityType::HUSK.id || id == EntityType::PARCHED.id || id == EntityType::CAMEL_HUSK.id
     {
         return mob::MobEntity::check_surface_monsters_spawn_rules(
+            entity_type,
             world,
             pos,
             is_thundering,
@@ -499,7 +516,13 @@ pub fn check_spawn_rules(
 
     // Stray
     if id == EntityType::STRAY.id {
-        if !mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering, reason) {
+        if !mob::MobEntity::check_monster_spawn_rules(
+            entity_type,
+            world,
+            pos,
+            is_thundering,
+            reason,
+        ) {
             return false;
         }
         let mut check_sky_pos = *pos;
@@ -514,17 +537,22 @@ pub fn check_spawn_rules(
         if world.get_block_light_level(pos).unwrap_or(0) > 8 {
             return false;
         }
-        return mob::MobEntity::check_any_light_monster_spawn_rules(world, pos, reason);
+        return mob::MobEntity::check_any_light_monster_spawn_rules(
+            entity_type,
+            world,
+            pos,
+            reason,
+        );
     }
 
     // Endermite & Silverfish
     if id == EntityType::ENDERMITE.id || id == EntityType::SILVERFISH.id {
-        if !mob::MobEntity::check_any_light_monster_spawn_rules(world, pos, reason) {
+        if !mob::MobEntity::check_any_light_monster_spawn_rules(entity_type, world, pos, reason) {
             return false;
         }
         return reason.is_spawner()
             || world
-                .get_closest_player(pos.to_centered_f64(), 5.0)
+                .get_nearest_player(pos.to_centered_f64(), 5.0, |player| !player.is_spectator())
                 .is_none();
     }
 
@@ -536,7 +564,7 @@ pub fn check_spawn_rules(
         if rand::random_range(0..20) != 0 {
             return false;
         }
-        return mob::MobEntity::check_mob_spawn_rules(world, pos, reason);
+        return mob::MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason);
     }
 
     // Magma Cube
@@ -544,7 +572,7 @@ pub fn check_spawn_rules(
         if world.level_info.load().difficulty == pumpkin_util::Difficulty::Peaceful {
             return false;
         }
-        return mob::MobEntity::check_mob_spawn_rules(world, pos, reason);
+        return mob::MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason);
     }
 
     // Sulfur Cube
@@ -554,7 +582,7 @@ pub fn check_spawn_rules(
 
     // Slime
     if id == EntityType::SLIME.id {
-        return SlimeEntity::check_slime_spawn_rules(world, pos, reason);
+        return SlimeEntity::check_slime_spawn_rules(entity_type, world, pos, reason);
     }
 
     // Nether Mobs: Hoglin, Piglin, Zombified Piglin
@@ -563,7 +591,7 @@ pub fn check_spawn_rules(
         if world.get_block(&below) == &pumpkin_data::Block::NETHER_WART_BLOCK {
             return false;
         }
-        return mob::MobEntity::check_mob_spawn_rules(world, pos, reason);
+        return mob::MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason);
     }
     if id == EntityType::ZOMBIFIED_PIGLIN.id {
         if world.level_info.load().difficulty == pumpkin_util::Difficulty::Peaceful {
@@ -573,7 +601,7 @@ pub fn check_spawn_rules(
         if world.get_block(&below) == &pumpkin_data::Block::NETHER_WART_BLOCK {
             return false;
         }
-        return mob::MobEntity::check_mob_spawn_rules(world, pos, reason);
+        return mob::MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason);
     }
 
     // Strider
@@ -590,7 +618,7 @@ pub fn check_spawn_rules(
 
     // Bat
     if id == EntityType::BAT.id {
-        return bat::BatEntity::check_bat_spawn_rules(world, pos);
+        return bat::BatEntity::check_bat_spawn_rules(entity_type, world, pos, reason);
     }
 
     // Animals (General)
@@ -678,7 +706,7 @@ pub fn check_spawn_rules(
         if rand::random_range(0..3) == 0 {
             return false;
         }
-        return mob::MobEntity::check_mob_spawn_rules(world, pos, reason);
+        return mob::MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason);
     }
     if id == EntityType::POLAR_BEAR.id {
         let below = pos.down();
@@ -801,7 +829,7 @@ pub fn check_spawn_rules(
 
     // Generic mob spawn rules (Iron Golem, Snow Golem, Villager, Phantom, Shulker, Wandering Trader, Ender Dragon, etc.)
     if entity_type.mob {
-        return mob::MobEntity::check_mob_spawn_rules(world, pos, reason);
+        return mob::MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason);
     }
 
     true

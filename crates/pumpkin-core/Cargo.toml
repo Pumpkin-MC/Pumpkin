@@ -90,7 +90,6 @@ rustc-hash.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 
 # System details & Rustc version
-libc = { workspace = true }
 sysinfo.workspace = true
 
 flate2.workspace = true
@@ -107,6 +106,8 @@ png = { version = "0.18.1", default-features = false }
 indexmap.workspace = true
 xxhash-rust.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
 
 [dev-dependencies]
 tempfile.workspace = true

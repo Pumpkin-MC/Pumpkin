@@ -14,8 +14,9 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::{
     block::{
-        BlockBehaviour, CanPlaceAtArgs, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs,
-        NormalUseArgs, PathComputationType, UseWithItemArgs,
+        BlockBehaviour, CanPlaceAtArgs, ExplodeArgs, GetComparatorOutputArgs,
+        GetStateForNeighborUpdateArgs, NormalUseArgs, OnProjectileHitArgs, PathComputationType,
+        UseWithItemArgs,
         blocks::cake::{CakeBlock, FULL_CAKE_SIGNAL},
         registry::BlockActionResult,
     },
@@ -113,6 +114,43 @@ impl BlockBehaviour for CandleCakeBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         Self::consume_and_drop_candle(args.block, args.player, args.position, args.world)
+    }
+
+    fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
+        let mut properties = CandleCakeProperties::from_state_id(args.state.id);
+        if args.projectile.get_entity().is_on_fire() && !properties.lit {
+            properties.lit = true;
+            args.world.set_block_state(
+                args.position,
+                properties.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+        }
+    }
+
+    fn explode(&self, args: ExplodeArgs<'_>) {
+        let (current_block, current_state) = args.world.get_block_and_state(args.position);
+        if current_block != args.block {
+            return;
+        }
+        let mut properties = CandleCakeProperties::from_state_id(current_state.id);
+        if properties.lit {
+            properties.lit = false;
+            args.world.set_block_state(
+                args.position,
+                properties.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+            args.world.play_sound(
+                Sound::BlockCandleExtinguish,
+                SoundCategory::Blocks,
+                &args.position.to_centered_f64(),
+            );
+            args.world.emit_game_event(
+                GameEvent::BlockChange.name(),
+                args.position.to_centered_f64(),
+            );
+        }
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {

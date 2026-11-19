@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU8, Ordering};
 
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
@@ -12,7 +12,9 @@ use pumpkin_data::data_component_impl::{MapIdImpl, MapPostProcessingImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::statistic::StatisticCategory;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_protocol::java::server::play::SlotActionType;
 
 #[must_use]
@@ -74,13 +76,17 @@ impl CartographyTableScreenHandler {
     }
 
     pub fn slots_changed(&mut self) {
+        self.slots_changed_with_player(None);
+    }
+
+    pub fn slots_changed_with_player(&mut self, player: Option<&dyn InventoryPlayer>) {
         let map_stack = self.input_inventory.get_stack(0);
         let additional_stack = self.input_inventory.get_stack(1);
         let result_stack = self.output_inventory.get_stack(0);
 
         if result_stack.is_empty() || (!map_stack.is_empty() && !additional_stack.is_empty()) {
             if !map_stack.is_empty() && !additional_stack.is_empty() {
-                self.setup_result_slot();
+                self.setup_result_slot_with_player(player);
             }
         } else {
             self.output_inventory.set_stack(0, ItemStack::EMPTY.clone());
@@ -88,23 +94,38 @@ impl CartographyTableScreenHandler {
     }
 
     pub fn setup_result_slot(&mut self) {
-        let mut map_stack = self.input_inventory.get_stack(0);
+        self.setup_result_slot_with_player(None);
+    }
+
+    pub fn setup_result_slot_with_player(&mut self, player: Option<&dyn InventoryPlayer>) {
+        let map_stack = self.input_inventory.get_stack(0);
         let additional_stack = self.input_inventory.get_stack(1);
 
         if !map_stack.is_empty() && !additional_stack.is_empty() && is_map_item(&map_stack) {
-            let result = if additional_stack.item.id == Item::PAPER.id {
-                map_stack.item_count = 1;
-                map_stack.set_data_component(MapPostProcessingImpl::SCALE);
-                map_stack
-            } else if additional_stack.item.id == Item::GLASS_PANE.id {
-                map_stack.item_count = 1;
-                map_stack.set_data_component(MapPostProcessingImpl::LOCK);
-                map_stack
+            let (locked, scale) = map_stack
+                .get_data_component::<MapIdImpl>()
+                .and_then(|id| player.and_then(|p| p.map_state(id.id)))
+                .unwrap_or((false, 0));
+
+            let result = if additional_stack.item.id == Item::PAPER.id
+                && map_stack
+                    .item
+                    .has_tag(&tag::Item::MINECRAFT_EXTENDABLE_MAPS)
+                && !locked
+                && scale < 4
+            {
+                let mut out = map_stack.copy_with_count(1);
+                out.set_data_component(MapPostProcessingImpl::SCALE);
+                out
+            } else if additional_stack.item.id == Item::GLASS_PANE.id && !locked {
+                let mut out = map_stack.copy_with_count(1);
+                out.set_data_component(MapPostProcessingImpl::LOCK);
+                out
             } else if additional_stack.item.id == Item::MAP.id {
-                map_stack.item_count = 2;
-                map_stack
+                map_stack.copy_with_count(2)
             } else {
-                ItemStack::EMPTY.clone()
+                self.output_inventory.set_stack(0, ItemStack::EMPTY.clone());
+                return;
             };
 
             let current_result = self.output_inventory.get_stack(0);
@@ -142,69 +163,78 @@ impl ScreenHandler for CartographyTableScreenHandler {
         player: &dyn InventoryPlayer,
     ) {
         self.internal_on_slot_click(slot_index, button, action_type, player);
-        if (0..=2).contains(&slot_index) {
-            self.slots_changed();
+        if slot_index == Self::RESULT_SLOT as i32 {
+            let mut cursor = self
+                .behaviour
+                .cursor_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !cursor.is_empty() {
+                player.on_crafted_post_process(&mut cursor);
+            }
         }
+        self.slots_changed_with_player(Some(player));
     }
 
     fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        let mut clicked = ItemStack::EMPTY.clone();
-        let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
-
-        if let Some(slot) = slot {
-            let mut stack = slot.get_cloned_stack();
-            if !stack.is_empty() {
-                clicked = stack.clone();
-                if slot_index == 2 {
-                    if !self.insert_item(&mut stack, 3, 39, true) {
-                        return ItemStack::EMPTY.clone();
-                    }
-                    slot.on_quick_move_crafted(stack.clone(), clicked.clone());
-                    let mut taken_stack = clicked.clone();
-                    taken_stack.set_count(clicked.item_count - stack.item_count);
-                    slot.on_take_item(player, &taken_stack);
-                } else if slot_index != 1 && slot_index != 0 {
-                    if is_map_item(&stack) {
-                        if !self.insert_item(&mut stack, 0, 1, false) {
-                            return ItemStack::EMPTY.clone();
-                        }
-                    } else if !is_additional_item(&stack) {
-                        if (3..30).contains(&slot_index) {
-                            if !self.insert_item(&mut stack, 30, 39, false) {
-                                return ItemStack::EMPTY.clone();
-                            }
-                        } else if (30..39).contains(&slot_index)
-                            && !self.insert_item(&mut stack, 3, 30, false)
-                        {
-                            return ItemStack::EMPTY.clone();
-                        }
-                    } else if !self.insert_item(&mut stack, 1, 2, false) {
-                        return ItemStack::EMPTY.clone();
-                    }
-                } else if !self.insert_item(&mut stack, 3, 39, false) {
-                    return ItemStack::EMPTY.clone();
-                }
-                self.slots_changed();
-
-                if stack.is_empty() {
-                    slot.set_stack(ItemStack::EMPTY.clone());
-                } else {
-                    slot.set_stack(stack.clone());
-                }
-
-                if stack.item_count == clicked.item_count {
-                    return ItemStack::EMPTY.clone();
-                }
-
-                self.slots_changed();
-            }
+        let Some(slot) = self.get_behaviour().slots.get(slot_index as usize).cloned() else {
+            return ItemStack::EMPTY.clone();
+        };
+        if !slot.has_stack() {
+            return ItemStack::EMPTY.clone();
         }
+
+        let mut stack = slot.get_cloned_stack();
+        let clicked = stack.clone();
+        if slot_index == 2 {
+            player.on_crafted_post_process(&mut stack);
+            if !self.insert_item(&mut stack, 3, 39, true) {
+                return ItemStack::EMPTY.clone();
+            }
+            slot.on_quick_move_crafted(stack.clone(), clicked.clone());
+        } else if slot_index != 1 && slot_index != 0 {
+            if is_map_item(&stack) {
+                if !self.insert_item(&mut stack, 0, 1, false) {
+                    return ItemStack::EMPTY.clone();
+                }
+            } else if !is_additional_item(&stack) {
+                if (3..30).contains(&slot_index) {
+                    if !self.insert_item(&mut stack, 30, 39, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if (30..39).contains(&slot_index)
+                    && !self.insert_item(&mut stack, 3, 30, false)
+                {
+                    return ItemStack::EMPTY.clone();
+                }
+            } else if !self.insert_item(&mut stack, 1, 2, false) {
+                return ItemStack::EMPTY.clone();
+            }
+        } else if !self.insert_item(&mut stack, 3, 39, false) {
+            return ItemStack::EMPTY.clone();
+        }
+
+        slot.set_stack(if stack.is_empty() {
+            ItemStack::EMPTY.clone()
+        } else {
+            stack.clone()
+        });
+        slot.mark_dirty();
+        self.slots_changed_with_player(Some(player));
+
+        if stack.item_count == clicked.item_count {
+            return ItemStack::EMPTY.clone();
+        }
+
+        slot.on_take_item(player, &stack);
+        self.slots_changed_with_player(Some(player));
 
         clicked
     }
 
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player);
+        self.output_inventory.set_stack(0, ItemStack::EMPTY.clone());
         self.drop_inventory(player, self.input_inventory.clone());
     }
 }
@@ -324,6 +354,7 @@ impl Slot for CartographyAdditionalSlot {
 pub struct CartographyResultSlot {
     inventory: Arc<dyn Inventory>,
     input_inventory: Arc<dyn Inventory>,
+    last_sound_time: AtomicI64,
     index: usize,
     id: AtomicU8,
 }
@@ -337,6 +368,7 @@ impl CartographyResultSlot {
         Self {
             inventory,
             input_inventory,
+            last_sound_time: AtomicI64::new(0),
             index,
             id: AtomicU8::new(0),
         }
@@ -361,13 +393,17 @@ impl Slot for CartographyResultSlot {
     }
 
     fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        self.input_inventory.remove_stack_specific(0, 1);
+        self.input_inventory.remove_stack_specific(1, 1);
         player.increment_stat(
             StatisticCategory::Crafted,
             stack.item.id as i32,
             stack.item_count as i32,
         );
-        self.input_inventory.remove_stack_specific(0, 1);
-        self.input_inventory.remove_stack_specific(1, 1);
+        let game_time = player.game_time();
+        if self.last_sound_time.swap(game_time, Ordering::Relaxed) != game_time {
+            player.play_block_sound(Sound::UiCartographyTableTakeResult, 1.0);
+        }
         self.mark_dirty();
     }
 

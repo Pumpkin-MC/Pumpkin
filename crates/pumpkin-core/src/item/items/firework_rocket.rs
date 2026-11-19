@@ -98,10 +98,10 @@ impl ItemBehaviour for FireworkRocketItem {
                 let is_leashed_to_player = ent.leashed_to.try_lock().is_ok_and(|guard| {
                     guard
                         .as_ref()
+                        .and_then(std::sync::Weak::upgrade)
                         .is_some_and(|holder| holder.get_entity().entity_id == player_id)
                 });
-                if is_leashed_to_player {
-                    ent.unleash();
+                if is_leashed_to_player && ent.unleash() {
                     world.drop_stack(&ent.block_pos.load(), ItemStack::new(1, &Item::LEAD));
                     dropped_leash = true;
                 }

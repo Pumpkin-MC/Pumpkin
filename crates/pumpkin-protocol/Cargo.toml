@@ -13,7 +13,7 @@ query = []
 
 [dependencies]
 pumpkin-nbt.workspace = true
-pumpkin-data = { workspace = true, features = ["default", "bedrock_creative", "bedrock_biome"] }
+pumpkin-data = { workspace = true, features = ["default", "bedrock_creative", "bedrock_biome", "bedrock_jigsaw", "bedrock_recipe", "bedrock_voxel_shape"] }
 pumpkin-macros.workspace = true
 pumpkin-util.workspace = true
 serde = { workspace = true, features = ["derive"] }
@@ -27,7 +27,6 @@ bytes.workspace = true
 # encryption
 aes.workspace = true
 cfb8.workspace = true
-hybrid-array = "0.4"
 
 # compression
 flate2.workspace = true

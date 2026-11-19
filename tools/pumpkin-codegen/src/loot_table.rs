@@ -242,6 +242,14 @@ impl Generator {
                         quote! { LootFunctionKind::ApplyBonus(#formula) }
                     }
                     LootFunctionKind::FurnaceSmelt => quote! { LootFunctionKind::FurnaceSmelt },
+                    LootFunctionKind::SetStewEffect(ref effects) => {
+                        let effects = effects.iter().map(|effect| {
+                            let name = effect.effect.as_ref();
+                            let duration = number_tokens(effect.duration);
+                            quote! { LootStewEffect { effect: std::borrow::Cow::Borrowed(#name), duration: #duration } }
+                        });
+                        quote! { LootFunctionKind::SetStewEffect(std::borrow::Cow::Borrowed(&[#(#effects),*])) }
+                    }
                 };
                 let condition = self.condition(&function.condition);
                 let enchantment = function.enchantment.as_ref().map_or_else(|| quote! {None}, |name| quote! {Some(#name)});

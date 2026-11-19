@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
@@ -18,7 +18,7 @@ pub type MobFilter = fn(&dyn Mob) -> bool;
 
 pub struct RevengeGoal {
     track_target_goal: TrackTargetGoal,
-    target: Option<Arc<dyn EntityBase>>,
+    target: Option<Weak<dyn EntityBase>>,
     timestamp: i32,
     target_predicate: TargetPredicate,
     ignore_damage_from: Option<EntityTypeFilter>,
@@ -171,7 +171,7 @@ impl Goal for RevengeGoal {
             return false;
         }
 
-        self.target = Some(attacker);
+        self.target = Some(Arc::downgrade(&attacker));
         true
     }
 
@@ -181,22 +181,23 @@ impl Goal for RevengeGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
+        let target = self.target.as_ref().and_then(Weak::upgrade);
         self.track_target_goal.start_targeting(
             mob,
-            self.target.clone(),
+            target.clone(),
             TargetReason::TargetAttackedEntity,
         );
 
         let mob_entity = mob.get_mob_entity();
         // Vanilla `targetMob = mob.getTarget()`: what the event left, not the attacker.
         self.track_target_goal
-            .set_target_mob(mob_entity.get_target());
+            .set_target_mob(mob_entity.get_target().as_ref());
         self.timestamp = mob_entity.living_entity.get_last_hurt_by_mob_timestamp();
         self.track_target_goal.max_time_without_visibility = 300;
 
         let alarm = self.alarm_when.is_some_and(|filter| filter(mob));
         if (self.alert_others || alarm)
-            && let Some(attacker) = self.target.clone()
+            && let Some(attacker) = target
         {
             self.alert_others(mob, &attacker);
         }
