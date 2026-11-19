@@ -4320,6 +4320,11 @@ impl EntityBase for LivingEntity {
 
         // Vanilla `LivingEntity.onAttributeUpdated(SCALE)`: resize when the attribute moves.
         let scale = self.get_attribute_value(&Attributes::SCALE) as f32;
+        let scale = if self.entity.entity_type == &EntityType::SHULKER {
+            scale.min(super::mob::shulker::MAX_SCALE)
+        } else {
+            scale
+        };
         if (self.entity.scale.load() - scale).abs() > f32::EPSILON {
             self.entity.scale.store(scale);
             self.entity.refresh_dimensions();
@@ -5128,57 +5133,6 @@ mod consumable_effect_tests {
         assert_eq!(random_teleport_coordinate(10.0, 16.0, 1.0), 18.0);
     }
 }
-/// Returns `true` if `damage_type` is in `#minecraft:bypasses_armor` (1.21.11).
-/// These sources bypass armor entirely (fall, drown, freeze, etc.).
-pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
-    // Bitmask lookup: O(1) with two instructions (shift + AND), no array scan.
-    // DamageType IDs can exceed 31; use u64 for sufficient range.
-    // TODO: Make data-driven once the data pack system can handle it without performance regressions.
-    // Compile-time assertions: ensure all bypassing types fit in u64 bitmask.
-    const _: () = assert!(
-        DamageType::FALL.id < 64
-            && DamageType::FLY_INTO_WALL.id < 64
-            && DamageType::ON_FIRE.id < 64
-            && DamageType::IN_WALL.id < 64
-            && DamageType::CRAMMING.id < 64
-            && DamageType::DROWN.id < 64
-            && DamageType::GENERIC.id < 64
-            && DamageType::WITHER.id < 64
-            && DamageType::DRAGON_BREATH.id < 64
-            && DamageType::STARVE.id < 64
-            && DamageType::ENDER_PEARL.id < 64
-            && DamageType::FREEZE.id < 64
-            && DamageType::STALAGMITE.id < 64
-            && DamageType::MAGIC.id < 64
-            && DamageType::INDIRECT_MAGIC.id < 64
-            && DamageType::OUT_OF_WORLD.id < 64
-            && DamageType::GENERIC_KILL.id < 64
-            && DamageType::SONIC_BOOM.id < 64
-            && DamageType::OUTSIDE_BORDER.id < 64,
-        "One or more bypass DamageType IDs exceed u64 bitmask width (>= 64)"
-    );
-    const BYPASS_MASK: u64 = (1u64 << DamageType::FALL.id)
-        | (1u64 << DamageType::FLY_INTO_WALL.id)
-        | (1u64 << DamageType::ON_FIRE.id)
-        | (1u64 << DamageType::IN_WALL.id)
-        | (1u64 << DamageType::CRAMMING.id)
-        | (1u64 << DamageType::DROWN.id)
-        | (1u64 << DamageType::GENERIC.id)
-        | (1u64 << DamageType::WITHER.id)
-        | (1u64 << DamageType::DRAGON_BREATH.id)
-        | (1u64 << DamageType::STARVE.id)
-        | (1u64 << DamageType::ENDER_PEARL.id)
-        | (1u64 << DamageType::FREEZE.id)
-        | (1u64 << DamageType::STALAGMITE.id)
-        | (1u64 << DamageType::MAGIC.id)
-        | (1u64 << DamageType::INDIRECT_MAGIC.id)
-        | (1u64 << DamageType::OUT_OF_WORLD.id)
-        | (1u64 << DamageType::GENERIC_KILL.id)
-        | (1u64 << DamageType::SONIC_BOOM.id)
-        | (1u64 << DamageType::OUTSIDE_BORDER.id);
-    (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
-}
-
 pub(crate) fn prevents_armor_change(stack: &ItemStack) -> bool {
     stack
         .get_data_component::<EnchantmentsImpl>()
@@ -5203,68 +5157,6 @@ pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── bypasses_armor_durability ─────────────────────────────────────
-
-    /// Every member of `minecraft:bypasses_armor` (1.21.11) must return `true`.
-    #[test]
-    fn bypasses_armor_durability_returns_true_for_tag_members() {
-        // Exact contents of the minecraft:bypasses_armor tag in 1.21.11.
-        let bypassing: &[DamageType] = &[
-            DamageType::ON_FIRE,
-            DamageType::IN_WALL,
-            DamageType::CRAMMING,
-            DamageType::DROWN,
-            DamageType::FLY_INTO_WALL,
-            DamageType::GENERIC,
-            DamageType::WITHER,
-            DamageType::DRAGON_BREATH,
-            DamageType::STARVE,
-            DamageType::FALL,
-            DamageType::ENDER_PEARL,
-            DamageType::FREEZE,
-            DamageType::STALAGMITE,
-            DamageType::MAGIC,
-            DamageType::INDIRECT_MAGIC,
-            DamageType::OUT_OF_WORLD,
-            DamageType::GENERIC_KILL,
-            DamageType::SONIC_BOOM,
-            DamageType::OUTSIDE_BORDER,
-        ];
-        for dt in bypassing {
-            assert!(
-                bypasses_armor_durability(dt),
-                "{} should bypass armor durability",
-                dt.message_id
-            );
-        }
-    }
-
-    /// Physical/combat damage types must NOT bypass armor durability.
-    #[test]
-    fn bypasses_armor_durability_returns_false_for_physical_sources() {
-        let physical: &[DamageType] = &[
-            DamageType::MOB_ATTACK,
-            DamageType::PLAYER_ATTACK,
-            DamageType::ARROW,
-            DamageType::CACTUS,
-            DamageType::SWEET_BERRY_BUSH,
-            DamageType::LAVA,
-            DamageType::EXPLOSION,
-            DamageType::PLAYER_EXPLOSION,
-            DamageType::LIGHTNING_BOLT,
-            DamageType::FIREBALL,
-            DamageType::THORNS,
-            DamageType::TRIDENT,
-        ];
-        for dt in physical {
-            assert!(
-                !bypasses_armor_durability(dt),
-                "{} should NOT bypass armor durability",
-                dt.message_id
-            );
-        }
-    }
 
     #[test]
     fn hurt_sound_for_entity_uses_zombie_family_sounds() {

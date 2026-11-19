@@ -129,3 +129,62 @@ pub(super) async fn test_arrow_falls_onto_block_below(
         .then_succeed();
     Ok(())
 }
+
+pub(super) async fn test_shulker_bullet_damage_and_levitation(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    build_stone_floor(&helper, 5, 5).await?;
+    let origin = BlockPos::new(2, 1, 2);
+    helper
+        .execute_command(
+            &origin,
+            r#"summon minecraft:cow ~ ~ ~ {NoAI:1b,NoGravity:1b,Tags:["shulker_bullet_target"]}"#,
+        )
+        .await?;
+    helper
+        .execute_command(
+            &origin,
+            "summon minecraft:shulker_bullet ~ ~0.5 ~-1.5 {NoGravity:1b,Motion:[0.0d,0.0d,0.5d]}",
+        )
+        .await?;
+    let immune_origin = BlockPos::new(3, 1, 2);
+    helper
+        .execute_command(
+            &immune_origin,
+            r#"summon minecraft:cow ~ ~ ~ {NoAI:1b,NoGravity:1b,Invulnerable:1b,Tags:["shulker_bullet_immune_target"],active_effects:[{id:"minecraft:speed",duration:200,show_icon:1b}]}"#,
+        )
+        .await?;
+    helper
+        .execute_command(
+            &immune_origin,
+            "summon minecraft:shulker_bullet ~ ~0.5 ~-1.5 {NoGravity:1b,Motion:[0.0d,0.0d,0.5d]}",
+        )
+        .await?;
+    helper
+        .start_sequence()
+        .then_idle(4)
+        .then_execute(move |helper| async move {
+            let health = helper
+                .execute_command(&origin, "data get entity @e[type=minecraft:cow,tag=shulker_bullet_target,limit=1] Health")
+                .await?;
+            helper.assert_true(health == 6, "shulker bullet must deal four damage")?;
+            let levitation = helper
+                .execute_command(&origin, r#"execute if data entity @e[type=minecraft:cow,tag=shulker_bullet_target,limit=1] active_effects[{id:"minecraft:levitation"}]"#)
+                .await?;
+            helper.assert_true(levitation == 1, "shulker bullet must apply levitation after damage")?;
+            let immune_health = helper
+                .execute_command(&immune_origin, "data get entity @e[type=minecraft:cow,tag=shulker_bullet_immune_target,limit=1] Health")
+                .await?;
+            helper.assert_true(immune_health == 10, "invulnerability must reject shulker bullet damage")?;
+            let effect_count = helper
+                .execute_command(&immune_origin, "data get entity @e[type=minecraft:cow,tag=shulker_bullet_immune_target,limit=1] active_effects")
+                .await?;
+            helper.assert_true(effect_count == 1, "rejected damage must not add an effect")?;
+            let speed = helper
+                .execute_command(&immune_origin, r#"execute if data entity @e[type=minecraft:cow,tag=shulker_bullet_immune_target,limit=1] active_effects[{id:"minecraft:speed"}]"#)
+                .await?;
+            helper.assert_true(speed == 1, "rejected damage must preserve the existing effect")
+        })
+        .then_succeed();
+    Ok(())
+}

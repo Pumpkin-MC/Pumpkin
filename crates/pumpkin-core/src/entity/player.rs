@@ -826,6 +826,20 @@ fn decode_skin_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     Some((width, height, rgba))
 }
 
+fn reserve_position_correction(
+    counter: &AtomicI32,
+    pending: &mut Option<(VarInt, Vector3<f64>)>,
+    position: Vector3<f64>,
+    coalesce: bool,
+) -> Option<i32> {
+    if coalesce && pending.is_some() {
+        return None;
+    }
+    let id = counter.fetch_add(1, Ordering::Relaxed) + 1;
+    *pending = Some((id.into(), position));
+    Some(id)
+}
+
 impl Player {
     pub const FULL_SLEEP_TICKS: u8 = 100;
     pub const SLEEP_TIMER_RESET_TICKS: u8 = 110;
@@ -4949,9 +4963,6 @@ impl Player {
     /// Rarly used, for example when waking up the player from a bed or their first time spawn. Otherwise, the `teleport` method should be used.
     /// The player should respond with the `SConfirmTeleport` packet.
     pub fn request_teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
-        // This is the ultra special magic code used to create the teleport id
-        // This returns the old value
-        // This operation wraps around on overflow.
         let Some(server) = self.world().server.upgrade() else {
             return;
         };
@@ -4968,23 +4979,42 @@ impl Player {
             }
         }
 
-        let i = self.teleport_id_count.fetch_add(1, Ordering::Relaxed);
         self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
-        let teleport_id = i + 1;
         self.living_entity.entity.set_pos(position);
         let entity = &self.living_entity.entity;
         entity.set_rotation(yaw, pitch);
+        self.send_position_correction(yaw, pitch, Vec::new(), false);
+    }
+
+    fn send_position_correction(
+        &self,
+        yaw: f32,
+        pitch: f32,
+        relatives: Vec<pumpkin_protocol::PositionFlag>,
+        coalesce: bool,
+    ) {
+        let position = self.living_entity.entity.pos.load();
         // Moves are ignored until the client confirms (teleport confirmation was added in 1.9).
-        if !matches!(
+        let teleport_id = if matches!(
             self.client.as_ref(),
             ClientPlatform::Java(c) if c.version.load() < JavaMinecraftVersion::V_1_9
         ) {
-            *self
+            self.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1
+        } else {
+            let mut pending = self
                 .awaiting_teleport
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some((teleport_id.into(), position));
-        }
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(id) = reserve_position_correction(
+                &self.teleport_id_count,
+                &mut pending,
+                position,
+                coalesce && self.client.java().is_some(),
+            ) else {
+                return;
+            };
+            id
+        };
         match self.client.as_ref() {
             ClientPlatform::Java(client) => {
                 let packet = CPlayerPosition::new(
@@ -4993,8 +5023,7 @@ impl Player {
                     Vector3::new(0.0, 0.0, 0.0),
                     yaw,
                     pitch,
-                    // TODO
-                    Vec::new(),
+                    relatives,
                 );
                 if let Ok(data) = client.serialize_packet(&packet) {
                     client.try_enqueue_packet(data);
@@ -5004,6 +5033,37 @@ impl Player {
                 self.send_bedrock_teleport(client);
             }
         }
+    }
+
+    /// Corrects external movement while preserving the client's velocity and look.
+    pub(crate) fn sync_position_after_external_move(&self) {
+        let entity = &self.living_entity.entity;
+        let position = entity.pos.load();
+        self.send_position_correction(
+            0.0,
+            0.0,
+            vec![
+                pumpkin_protocol::PositionFlag::DeltaX,
+                pumpkin_protocol::PositionFlag::DeltaY,
+                pumpkin_protocol::PositionFlag::DeltaZ,
+                pumpkin_protocol::PositionFlag::YRot,
+                pumpkin_protocol::PositionFlag::XRot,
+            ],
+            true,
+        );
+        entity.last_sent_pos.store(position);
+        entity.world.load().broadcast_to_chunk_except(
+            entity.chunk_pos.load(),
+            &[entity.entity_uuid],
+            &CEntityPositionSync::new(
+                entity.entity_id.into(),
+                position,
+                entity.velocity.load(),
+                entity.yaw.load(),
+                entity.pitch.load(),
+                entity.on_ground.load(Ordering::Relaxed),
+            ),
+        );
     }
 
     /// `MovePlayer` at the current position and rotation, for the own client and watchers
@@ -9433,6 +9493,37 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn external_corrections_keep_the_outstanding_id_until_acknowledgement() {
+        let counter = std::sync::atomic::AtomicI32::new(0);
+        let first = pumpkin_util::math::vector3::Vector3::new(0.0, 64.0, 0.0);
+        let latest = pumpkin_util::math::vector3::Vector3::new(0.2, 64.0, 0.0);
+        let mut pending = None;
+        assert_eq!(
+            super::reserve_position_correction(&counter, &mut pending, first, true),
+            Some(1)
+        );
+        for _ in 0..5 {
+            assert_eq!(
+                super::reserve_position_correction(&counter, &mut pending, latest, true),
+                None
+            );
+        }
+        assert_eq!(
+            pending,
+            Some((pumpkin_protocol::codec::var_int::VarInt(1), first))
+        );
+        pending = None;
+        assert_eq!(
+            super::reserve_position_correction(&counter, &mut pending, latest, true),
+            Some(2)
+        );
+        assert_eq!(
+            pending,
+            Some((pumpkin_protocol::codec::var_int::VarInt(2), latest))
+        );
+    }
+
     use super::{
         bedrock_container_slot, bedrock_container_type, read_last_death_location,
         read_root_vehicle, write_last_death_location, write_root_vehicle,

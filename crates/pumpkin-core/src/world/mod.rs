@@ -2666,6 +2666,24 @@ impl World {
         })
     }
 
+    pub(crate) fn loaded_and_entity_can_stand_on_face(
+        &self,
+        pos: &BlockPos,
+        entity: &dyn EntityBase,
+        face: BlockDirection,
+    ) -> bool {
+        let Some(state) = self.get_block_state_if_loaded(pos) else {
+            return false;
+        };
+        if state.id.to_block() == &Block::POWDER_SNOW {
+            crate::block::blocks::powder_snow::collision_shape_for_entity(entity, pos).is_some_and(
+                |shape| BlockState::collision_shape_is_face_full(std::iter::once(shape), face),
+            )
+        } else {
+            state.is_collision_face_full(face)
+        }
+    }
+
     pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
         self.is_space_empty(bounding_box)
             && self.no_entity_collision(source, bounding_box)
@@ -2685,7 +2703,7 @@ impl World {
         !self.get_all_at_box(&area).iter().any(|entity| {
             let other = entity.get_entity();
             !entity.is_spectator()
-                && (other.entity_type == &EntityType::SHULKER
+                && ((other.entity_type == &EntityType::SHULKER && entity.is_collidable(None))
                     || other.entity_type == &EntityType::HAPPY_GHAST
                     || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
                 && !source.get_entity().is_passenger_of_same_vehicle(other)

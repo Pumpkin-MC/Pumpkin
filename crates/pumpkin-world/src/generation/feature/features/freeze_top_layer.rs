@@ -4,7 +4,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, GrassBlockLikeProperties, SnowLikeProperties,
 };
 use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockId, BlockState, BlockStateId};
+use pumpkin_data::{Block, BlockId, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 
@@ -58,7 +58,9 @@ impl FreezeTopLayerFeature {
                         && !below.to_state().is_air()
                         && !below_block.has_tag(tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
                         && (below_block.has_tag(tag::Block::MINECRAFT_SUPPORT_OVERRIDE_SNOW_LAYER)
-                            || is_top_face_full(below.to_state())
+                            || below
+                                .to_state()
+                                .is_collision_face_full(pumpkin_data::BlockDirection::Up)
                             || is_full_snow_layer(below))
                         && block_light_at(chunk, x, y, z) < 10
                     {
@@ -78,43 +80,6 @@ impl FreezeTopLayerFeature {
 
         true
     }
-}
-
-// `Block.isFaceFull` equivalent: the union of the collision shapes
-// must fully cover the top face (per-shape checks miss multipart blocks
-// whose boxes only cover it together).
-fn is_top_face_full(state: &BlockState) -> bool {
-    let mut boxes = Vec::new();
-    let mut xs = vec![0.0, 1.0];
-    let mut zs = vec![0.0, 1.0];
-    for shape in state.get_block_collision_shapes() {
-        if shape.max.y < 1.0 {
-            continue;
-        }
-        let (x0, x1) = (shape.min.x.max(0.0), shape.max.x.min(1.0));
-        let (z0, z1) = (shape.min.z.max(0.0), shape.max.z.min(1.0));
-        if x0 < x1 && z0 < z1 {
-            xs.push(x0);
-            xs.push(x1);
-            zs.push(z0);
-            zs.push(z1);
-            boxes.push((x0, x1, z0, z1));
-        }
-    }
-    if boxes.is_empty() {
-        return false;
-    }
-    xs.sort_by(f64::total_cmp);
-    zs.sort_by(f64::total_cmp);
-    xs.dedup();
-    zs.dedup();
-    xs.windows(2).all(|xw| {
-        zs.windows(2).all(|zw| {
-            boxes
-                .iter()
-                .any(|&(x0, x1, z0, z1)| x0 <= xw[0] && xw[1] <= x1 && z0 <= zw[0] && zw[1] <= z1)
-        })
-    })
 }
 
 // Vanilla's `SnowLayerBlock.canSurvive` also accepts a full eight-layer snow

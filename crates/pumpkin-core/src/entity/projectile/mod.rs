@@ -288,18 +288,8 @@ fn on_hit(projectile: &dyn EntityBase, hit: ProjectileHit, server: &Server) {
         ProjectileHit::Entity {
             entity, hit_pos, ..
         } => {
-            if is_redirectable(entity.get_entity())
-                && let Some(owner) = projectile.get_projectile_owner()
-            {
-                let shooter = owner.get(&world);
-                deflect(
-                    entity.as_ref(),
-                    ProjectileDeflection::AimDeflect,
-                    shooter.as_deref(),
-                    owner.uuid(),
-                    true,
-                    Vector3::new(1.0, 1.0, 1.0),
-                );
+            if is_redirectable(entity.get_entity()) {
+                projectile.on_redirect_projectile(entity.as_ref());
             }
             *hit_pos
         }
