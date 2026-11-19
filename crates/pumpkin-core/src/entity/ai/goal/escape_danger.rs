@@ -40,12 +40,6 @@ pub struct EscapeDangerGoal {
 impl EscapeDangerGoal {
     #[must_use]
     pub fn new(speed: f64) -> Box<Self> {
-        Self::new_with_tag(speed, panic_causes)
-    }
-
-    /// For mobs whose panic damage tag depends on the mob, like the polar bear's age.
-    #[must_use]
-    pub fn new_with_tag(speed: f64, panic_causes: PanicTag) -> Box<Self> {
         Box::new(Self {
             speed,
             panic_tag: panic_causes,
