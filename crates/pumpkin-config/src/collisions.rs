@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct CollisionsConfig {
     /// Whether players push each other. Off, players walk through each other
     /// whatever team they are in, also teams of plugins, and the clients are told that no
-    /// team collides. Players still push and are pushed by mobs.
+    /// team collides. Players still push mobs, but mobs no longer push Java players.
     pub player_collisions: bool,
 }
 
