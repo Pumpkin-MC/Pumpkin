@@ -28,7 +28,6 @@ pub struct MeleeAttackGoal {
     last_target_position: Option<Vector3<f64>>,
     gate: Option<MobFilter>,
     attack: Option<fn(&dyn Mob, &dyn EntityBase)>,
-    // A goal with `check` or `attack` can do anything in its hook, so its `tick_reach` must stay `None`.
     check: Option<AttackCheck>,
     on_stop: Option<fn(&dyn Mob)>,
 }
@@ -92,8 +91,13 @@ impl MeleeAttackGoal {
     }
 
     #[must_use]
+    pub const fn get_ticks_until_next_attack(&self) -> i32 {
+        self.cooldown
+    }
+
+    #[must_use]
     pub const fn is_time_to_attack(&self) -> bool {
-        self.cooldown <= 0
+        self.get_ticks_until_next_attack() <= 0
     }
 
     #[must_use]

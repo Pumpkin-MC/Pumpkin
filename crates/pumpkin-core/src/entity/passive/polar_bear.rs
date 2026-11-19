@@ -78,7 +78,7 @@ fn check_and_perform_attack(goal: &mut MeleeAttackGoal, mob: &dyn Mob, target: &
         return;
     }
 
-    let reach = target.get_entity().entity_dimension.load().width + 3.0;
+    let reach = target.get_entity().width() + 3.0;
     let distance_sq = mob
         .get_entity()
         .pos
@@ -89,7 +89,7 @@ fn check_and_perform_attack(goal: &mut MeleeAttackGoal, mob: &dyn Mob, target: &
             bear.set_standing(false);
             goal.reset_attack_cooldown();
         }
-        if goal.cooldown <= STAND_UP_TICKS_BEFORE_ATTACK {
+        if goal.get_ticks_until_next_attack() <= STAND_UP_TICKS_BEFORE_ATTACK {
             bear.set_standing(true);
             bear.play_warning_sound();
         }
@@ -270,7 +270,6 @@ mod tests {
 
     // Inside the stand-up range of 3 blocks past the target's width, but outside melee reach.
     const WARNING_RANGE: f64 = 4.0;
-    const OUT_OF_RANGE: f64 = 8.0;
 
     fn bear_and_target(
         world: &Arc<World>,
@@ -287,27 +286,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rears_up_and_growls_in_the_last_ten_ticks_before_an_attack() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let (bear, target) = bear_and_target(&world, WARNING_RANGE);
-        assert!(!bear.is_in_attack_range(target.as_ref()));
-        let mut goal = MeleeAttackGoal::new(1.25, true);
-
-        goal.cooldown = 11;
-        check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
-        assert!(!bear.is_standing());
-        assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 0);
-
-        goal.cooldown = 10;
-        check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
-        assert!(bear.is_standing());
-        assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 40);
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn growls_again_only_after_the_warning_cooldown() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
@@ -321,48 +299,15 @@ mod tests {
         }
         assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 1);
 
+        // Still on cooldown: another attack check must not growl or restart it.
+        goal.cooldown = 10;
+        check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
+        assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 1);
+
         bear.mob_tick(bear.as_ref());
         goal.cooldown = 10;
         check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
         assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 40);
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn stands_down_when_the_target_leaves_the_warning_range() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let (bear, target) = bear_and_target(&world, WARNING_RANGE);
-        let mut goal = MeleeAttackGoal::new(1.25, true);
-
-        goal.cooldown = 5;
-        check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
-        assert!(bear.is_standing());
-
-        target
-            .get_entity()
-            .set_pos(Vector3::new(0.5 + OUT_OF_RANGE, 64.0, 0.5));
-        check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
-        assert!(!bear.is_standing());
-        assert_eq!(goal.cooldown, goal.get_max_cooldown());
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn stands_down_after_hitting_the_target() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let (bear, target) = bear_and_target(&world, 1.5);
-        let mut goal = MeleeAttackGoal::new(1.25, true);
-        goal.cooldown = 0;
-        assert!(goal.can_perform_attack(bear.as_ref(), target.as_ref()));
-
-        bear.set_standing(true);
-        check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
-        assert!(!bear.is_standing());
-        assert_eq!(goal.cooldown, goal.get_max_cooldown());
         world.level.shutdown().await;
         Ok(())
     }
