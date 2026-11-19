@@ -110,26 +110,35 @@ fn queue(player: &Player, data: &bytes::Bytes) {
 
 /// To every watcher, or with `near_only` to those that are not on the far rhythm.
 fn send_to_watchers<P: ClientPacket>(tracked: &TrackedEntity, packet: &P, near_only: bool) {
+    send_to_watchers_then(tracked, packet, near_only, || {});
+}
+
+/// [`send_to_watchers`], then `sent` before another watcher can be paired.
+fn send_to_watchers_then<P: ClientPacket>(
+    tracked: &TrackedEntity,
+    packet: &P,
+    near_only: bool,
+    sent: impl FnOnce(),
+) {
     let seen_by = tracked
         .seen_by
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if seen_by.is_empty() {
-        return;
-    }
-    let Some(data) = serialize(packet) else {
-        return;
-    };
-    let far = tracked
-        .far
-        .as_ref()
-        .filter(|_| near_only)
-        .map(FarWatchers::read);
-    for (uuid, player) in seen_by.iter() {
-        if !far.as_ref().is_some_and(|far| far.contains_key(uuid)) {
-            queue(player, &data);
+    if !seen_by.is_empty()
+        && let Some(data) = serialize(packet)
+    {
+        let far = tracked
+            .far
+            .as_ref()
+            .filter(|_| near_only)
+            .map(FarWatchers::read);
+        for (uuid, player) in seen_by.iter() {
+            if !far.as_ref().is_some_and(|far| far.contains_key(uuid)) {
+                queue(player, &data);
+            }
         }
     }
+    sent();
 }
 
 /// To the watchers on the far rhythm in a state that `gets` the packet.
@@ -376,9 +385,10 @@ impl TrackedEntity {
 
             if self.entity.is_passenger() {
                 if rot_changed {
-                    self.send_move(entity, MoveSync::Rot, yaw, pitch);
-                    entity.last_sent_yaw.store(yaw, Relaxed);
-                    entity.last_sent_pitch.store(pitch, Relaxed);
+                    self.send_move(entity, MoveSync::Rot, yaw, pitch, || {
+                        entity.last_sent_yaw.store(yaw, Relaxed);
+                        entity.last_sent_pitch.store(pitch, Relaxed);
+                    });
                 }
                 entity.last_sent_pos.store(entity.pos.load());
                 entity.send_dirty_entity_data();
@@ -390,18 +400,17 @@ impl TrackedEntity {
                     self.send_motion(entity, world);
                 }
                 if let Some(sync) = sync {
-                    self.send_move(entity, sync, yaw, pitch);
+                    self.send_move(entity, sync, yaw, pitch, || {
+                        if sync.sends_position() {
+                            entity.last_sent_pos.store(pos);
+                        }
+                        if sync.sends_rotation() {
+                            entity.last_sent_yaw.store(yaw, Relaxed);
+                            entity.last_sent_pitch.store(pitch, Relaxed);
+                        }
+                    });
                 }
                 entity.send_dirty_entity_data();
-                if let Some(sync) = sync {
-                    if sync.sends_position() {
-                        entity.last_sent_pos.store(pos);
-                    }
-                    if sync.sends_rotation() {
-                        entity.last_sent_yaw.store(yaw, Relaxed);
-                        entity.last_sent_pitch.store(pitch, Relaxed);
-                    }
-                }
                 self.was_riding.store(false, Relaxed);
             }
 
@@ -492,12 +501,14 @@ impl TrackedEntity {
     }
 
     /// Java only -> Bedrock uses [`Self::send_bedrock_move`].
-    fn send_move(&self, entity: &Entity, sync: MoveSync, yaw: u8, pitch: u8) {
+    /// `sent` moves the baselines of the move, before another watcher can be paired: a
+    /// watcher paired in between would be spawned at the old ones and never get the move.
+    fn send_move(&self, entity: &Entity, sync: MoveSync, yaw: u8, pitch: u8, sent: impl FnOnce()) {
         self.with_move_packet(entity, sync, yaw, pitch, |packet| match packet {
-            MovePacket::Pos(packet) => send_to_watchers(self, packet, true),
-            MovePacket::Rot(packet) => send_to_watchers(self, packet, true),
-            MovePacket::PosRot(packet) => send_to_watchers(self, packet, true),
-            MovePacket::Sync(packet) => send_to_watchers(self, packet, true),
+            MovePacket::Pos(packet) => send_to_watchers_then(self, packet, true, sent),
+            MovePacket::Rot(packet) => send_to_watchers_then(self, packet, true, sent),
+            MovePacket::PosRot(packet) => send_to_watchers_then(self, packet, true, sent),
+            MovePacket::Sync(packet) => send_to_watchers_then(self, packet, true, sent),
         });
     }
 
@@ -862,12 +873,21 @@ impl TrackedEntity {
                 {
                     return;
                 }
-                let inserted = self
-                    .seen_by
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(player.gameprofile.id, player.clone())
-                    .is_none();
+                let inserted = {
+                    let mut seen_by = self
+                        .seen_by
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let inserted = seen_by
+                        .insert(player.gameprofile.id, player.clone())
+                        .is_none();
+                    if inserted {
+                        // Under the lock, so a movement and its baselines come either
+                        // before the spawn or after it.
+                        player.client.try_enqueue_spawn_packet(&self.entity);
+                    }
+                    inserted
+                };
                 if inserted {
                     if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
                         self.bedrock_watchers.fetch_add(1, Relaxed);
@@ -1014,9 +1034,9 @@ impl TrackedEntity {
         }
     }
 
+    /// What a new watcher gets after the spawn packet.
     #[allow(clippy::too_many_lines)]
     pub fn add_pairing(&self, player: &Arc<Player>) {
-        player.client.try_enqueue_spawn_packet(&self.entity);
         player.try_restore_vehicle(&self.entity);
 
         if let Some(target_player) = self.entity.get_player() {

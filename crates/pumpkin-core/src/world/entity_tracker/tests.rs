@@ -12,6 +12,7 @@ use crate::test_support::{
     Client, TestResult, count, id, server, server_with_entity_tracking, shutdown,
 };
 use pumpkin_util::version::JavaMinecraftVersion;
+use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 /// Where a client that got `packets` draws entity `entity_id`, starting from `pos`.
 fn drawn_at(
@@ -614,6 +615,85 @@ async fn watchers_follow_a_player_while_a_plugin_watches_packets() -> TestResult
     assert_close(drawn, entity.pos.load());
     // Every packet of the tracker went through the event, one by one.
     assert_eq!(seen.0.load(Relaxed) as usize, packets.len());
+    shutdown(&server).await;
+    Ok(())
+}
+
+/// Stands in for a join that reaches the tracker while it sends a movement.
+struct PairsMidPass {
+    walker: i32,
+    viewer: Arc<Player>,
+    near: Vector3<f64>,
+    paired: AtomicBool,
+}
+impl EventHandler<PacketSentEvent> for PairsMidPass {
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
+    ) -> BoxFuture<'a, ()> {
+        // The walker's own copy of its metadata is queued right after its movement.
+        if event.packet_id == id::<CSetEntityMetadata>()
+            && event.player.entity_id() == self.walker
+            && !self.paired.swap(true, Relaxed)
+        {
+            let world = server.worlds.load()[0].clone();
+            self.viewer.get_entity().set_pos(self.near);
+            world
+                .entity_tracker
+                .pair_new_player_with_tracked_entities(&self.viewer, &world);
+        }
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_watcher_paired_right_after_a_move_draws_the_player_where_it_is() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.worlds.load()[0].clone();
+    let walker = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+    let _watcher = Client::join(&server, 2, Vector3::new(3.5, 100.0, 0.5));
+    // Out of range, with the walker's chunk already sent.
+    let mut viewer = Client::join(&server, 3, Vector3::new(1000.5, 100.0, 0.5));
+    let entity = walker.player.get_entity();
+    let chunk = entity.chunk_pos.load();
+    viewer
+        .player
+        .watched_section
+        .store(Cylindrical::new(chunk, get_view_distance(&viewer.player)));
+    lock_briefly(&viewer.player.chunk_sender).mark_sent_out_of_band(chunk);
+    world.entity_tracker.update_all(&world);
+    viewer.received().await?;
+    server.plugin_manager.register(
+        Arc::new(PairsMidPass {
+            walker: walker.entity_id(),
+            viewer: viewer.player.clone(),
+            near: Vector3::new(5.5, 100.0, 0.5),
+            paired: AtomicBool::new(false),
+        }),
+        EventPriority::Normal,
+        true,
+    );
+
+    entity.set_pos(Vector3::new(1.5, 100.0, 0.5));
+    entity.set_sneaking(true);
+    world.entity_tracker.update_all(&world);
+    let mut drawn = drawn_at(None, walker.entity_id(), &viewer.received().await?)?;
+    assert_close(drawn, entity.pos.load());
+
+    for step in 1..=4 {
+        entity.set_pos(Vector3::new(
+            0.2f64.mul_add(f64::from(step), 1.5),
+            100.0,
+            0.5,
+        ));
+        world.entity_tracker.update_all(&world);
+    }
+    // The last step goes out on the next even tick.
+    world.entity_tracker.update_all(&world);
+    drawn = drawn_at(drawn, walker.entity_id(), &viewer.received().await?)?;
+    assert_close(drawn, entity.pos.load());
     shutdown(&server).await;
     Ok(())
 }
