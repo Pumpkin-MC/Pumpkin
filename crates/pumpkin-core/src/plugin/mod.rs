@@ -192,8 +192,12 @@ pub type HandlerMap = HashMap<&'static str, Vec<Arc<dyn DynEventHandler>>>;
 
 /// Whether any plugin handles `PacketSentEvent`. Every outgoing play packet asks, so the
 /// answer is kept here instead of being looked up in the handler map each time.
-// One server per process, so a global flag is enough.
 static PACKET_SENT_OBSERVED: AtomicBool = AtomicBool::new(false);
+
+/// The handler maps with a `PacketSentEvent` handler, by address. Tests run several servers
+/// in one process, and one of them must not answer for another. A map that is gone can stay
+/// listed: then packets only take the longer way through an empty lookup.
+static PACKET_SENT_OBSERVERS: std::sync::Mutex<Vec<usize>> = std::sync::Mutex::new(Vec::new());
 
 /// Whether an outgoing packet has to go through `PacketSentEvent` at all.
 #[must_use]
@@ -202,19 +206,23 @@ pub fn packet_sent_observed() -> bool {
 }
 
 /// Sets [`packet_sent_observed`] from the handler map; called after every change of the map.
-/// Checks the map again afterwards, so a change made meanwhile on another thread is not
-/// overwritten by an older answer.
+/// One refresh at a time, so an older answer never overwrites a newer one.
 pub(crate) fn refresh_packet_sent_observed(handlers: &ArcSwap<HandlerMap>) {
     let name =
         <api::events::server::packet::PacketSentEvent as api::events::Payload>::get_name_static();
-    loop {
-        let map = handlers.load_full();
-        let observed = map.get(name).is_some_and(|handlers| !handlers.is_empty());
-        PACKET_SENT_OBSERVED.store(observed, std::sync::atomic::Ordering::Relaxed);
-        if Arc::ptr_eq(&map, &handlers.load_full()) {
-            return;
-        }
+    let map = std::ptr::from_ref(handlers) as usize;
+    let mut observers = PACKET_SENT_OBSERVERS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    observers.retain(|observer| *observer != map);
+    if handlers
+        .load()
+        .get(name)
+        .is_some_and(|handlers| !handlers.is_empty())
+    {
+        observers.push(map);
     }
+    PACKET_SENT_OBSERVED.store(!observers.is_empty(), std::sync::atomic::Ordering::Relaxed);
 }
 
 /// Plugin loading state
@@ -1434,15 +1442,31 @@ mod tests {
 
     #[test]
     fn packet_sent_flag_follows_the_handler_map() {
+        // Other tests run servers in this process, so only this map's own answer is exact.
+        let observes = |manager: &PluginManager| {
+            let map = std::ptr::from_ref::<ArcSwap<HandlerMap>>(&manager.handlers) as usize;
+            PACKET_SENT_OBSERVERS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .contains(&map)
+        };
         let manager = PluginManager::new(Vec::new());
         refresh_packet_sent_observed(&manager.handlers);
-        assert!(!packet_sent_observed(), "no handler, no packet-sent work");
+        assert!(!observes(&manager), "no handler, no packet-sent work");
 
         manager.register(Arc::new(SeesPackets), EventPriority::Normal, false);
-        assert!(packet_sent_observed(), "a handler turns it on");
+        assert!(
+            observes(&manager) && packet_sent_observed(),
+            "a handler turns it on"
+        );
+
+        // A server without a handler does not answer for the one that has it.
+        let other = PluginManager::new(Vec::new());
+        refresh_packet_sent_observed(&other.handlers);
+        assert!(packet_sent_observed());
 
         manager.handlers.store(Arc::new(HashMap::new()));
         refresh_packet_sent_observed(&manager.handlers);
-        assert!(!packet_sent_observed(), "an empty map turns it off");
+        assert!(!observes(&manager), "an empty map turns it off");
     }
 }
