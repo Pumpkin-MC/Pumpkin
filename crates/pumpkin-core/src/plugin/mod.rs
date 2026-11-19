@@ -5,7 +5,6 @@ use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
-    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     pin::{Pin, pin},
     sync::{Arc, RwLock as SyncRwLock, atomic::AtomicBool},
@@ -61,7 +60,7 @@ impl QueuedEvent {
         &self,
     ) -> Result<Option<RwLockReadGuard<'_, E>>, tokio::sync::TryLockError> {
         Ok(RwLockReadGuard::try_map(self.storage.try_read()?, |slot| {
-            (slot as &dyn Any).downcast_ref::<Option<E>>()?.as_ref()
+            slot.payload()?.downcast_ref()
         })
         .ok())
     }
@@ -80,7 +79,7 @@ impl QueuedEvent {
         }
         Ok(
             RwLockWriteGuard::try_map(self.storage.try_write()?, |slot| {
-                (slot as &mut dyn Any).downcast_mut::<Option<E>>()?.as_mut()
+                slot.payload_mut()?.downcast_mut()
             })
             .ok(),
         )
@@ -88,7 +87,7 @@ impl QueuedEvent {
 }
 
 // The erased lock and typed lock both refer to the same allocation.
-trait EventSlot: Any + Send + Sync {
+trait EventSlot: Send + Sync {
     fn payload(&self) -> Option<&dyn Payload>;
     fn payload_mut(&mut self) -> Option<&mut dyn Payload>;
 }
@@ -175,7 +174,7 @@ where
             let guard = event.read::<E>();
             let payload = guard.unwrap().unwrap();
 
-            self.handler.handle(server, payload.deref()).await;
+            self.handler.handle(server, &*payload).await;
         })
     }
 
@@ -219,7 +218,7 @@ where
             let guard = event.write::<E>();
             let mut payload = guard.unwrap().unwrap();
 
-            self.handler.handle(server, payload.deref_mut()).await;
+            self.handler.handle(server, &mut *payload).await;
         })
     }
 
@@ -1262,39 +1261,47 @@ impl PluginManager {
     }
 
     /// Register an event handler
-    pub fn register_nonblocking<E, H>(&self, handler: Arc<H>, priority: EventPriority)
-    where
+    pub fn register_nonblocking<E, H>(
+        &self,
+        handler: Arc<H>,
+        priority: EventPriority,
+        source: Option<String>,
+    ) where
         E: Payload + Send + Sync + 'static,
         H: EventRoHandler<E> + 'static,
     {
-        let typed_handler = Arc::new(TypedEventRoHandler {
+        let typed_handler: Arc<dyn DynEventHandler> = Arc::new(TypedEventRoHandler {
             handler,
             priority,
-            source: None,
+            source,
             _phantom: std::marker::PhantomData,
         });
 
-        self.register_dyn(E::get_name_static(), typed_handler);
+        self.register_dyn(E::get_name_static(), &typed_handler);
     }
 
     /// Register an event handler
-    pub fn register_blocking<E, H>(&self, handler: Arc<H>, priority: EventPriority)
-    where
+    pub fn register_blocking<E, H>(
+        &self,
+        handler: Arc<H>,
+        priority: EventPriority,
+        source: Option<String>,
+    ) where
         E: Payload + Send + Sync + 'static,
         H: EventRwHandler<E> + 'static,
     {
-        let typed_handler = Arc::new(TypedEventRwHandler {
+        let typed_handler: Arc<dyn DynEventHandler> = Arc::new(TypedEventRwHandler {
             handler,
             priority,
-            source: None,
+            source,
             _phantom: std::marker::PhantomData,
         });
 
-        self.register_dyn(E::get_name_static(), typed_handler);
+        self.register_dyn(E::get_name_static(), &typed_handler);
     }
 
     /// Register an event handler
-    pub fn register_dyn(&self, event_type: &'static str, handler: Arc<dyn DynEventHandler>) {
+    pub fn register_dyn(&self, event_type: &'static str, handler: &Arc<dyn DynEventHandler>) {
         self.handlers.rcu(|handlers| {
             let mut new_handlers = (**handlers).clone();
             new_handlers

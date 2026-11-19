@@ -1501,6 +1501,7 @@ pub struct WasmPluginEventHandler {
     pub priority: EventPriority,
     pub blocking: bool,
     pub plugin: Arc<WasmPlugin>,
+    pub source: String,
 }
 
 pub trait ToFromWasmEvent {
@@ -1725,7 +1726,6 @@ impl DynEventHandler for WasmPluginEventHandler {
     }
 
     fn source(&self) -> Option<&str> {
-        // TODO: extra from self.plugin.store somehow?
-        None
+        Some(&self.source)
     }
 }
