@@ -434,7 +434,8 @@ impl WitherEntity {
             if new_count <= 0 {
                 let pos = entity.pos.load();
                 let eye_y = pos.y + entity.get_eye_height();
-                world.explode(
+                world.explode_from(
+                    self,
                     Vector3::new(pos.x, eye_y, pos.z),
                     7.0,
                     ExplosionInteraction::Mob,
@@ -601,6 +602,10 @@ impl WitherEntity {
 impl Mob for WitherEntity {
     fn on_removed(&self) {
         self.remove_all_bossbar(&self.get_entity().world.load());
+    }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        false
     }
 
     fn get_mob_entity(&self) -> &MobEntity {

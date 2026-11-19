@@ -1,9 +1,11 @@
 use std::any::Any;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::{Arc, Mutex};
 
 use pumpkin_data::Block;
+use pumpkin_data::data_component_impl::{IDSetContent, LockImpl};
 use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -14,9 +16,10 @@ use pumpkin_inventory::beacon_screen_handler::{
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::text::TextComponent;
 use pumpkin_world::chunk::ChunkHeightmapType;
 
-use crate::block::entities::{BlockEntity, PropertyDelegate};
+use crate::block::entities::{BlockEntity, ContainerMetadata, PropertyDelegate};
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::world::World;
 
@@ -38,8 +41,7 @@ pub struct BeaconBlockEntity {
     last_check_y: AtomicI32,
     /// Set when the primary effect changes while the beam is up; consumed by `tick`.
     play_select_sound: AtomicBool,
-    custom_name: Mutex<Option<String>>,
-    lock_key: Mutex<Option<String>>,
+    metadata: ContainerMetadata,
 }
 
 /// Blocks the beam passes through and takes its colour from (`BeaconBeamBlock` in vanilla).
@@ -53,7 +55,7 @@ impl BeaconBlockEntity {
     pub const ID: &'static str = "minecraft:beacon";
 
     #[must_use]
-    pub const fn new(position: BlockPos) -> Self {
+    pub fn new(position: BlockPos) -> Self {
         Self {
             position,
             primary_effect: AtomicI32::new(0),
@@ -64,8 +66,7 @@ impl BeaconBlockEntity {
             checking_beam_blocked: AtomicBool::new(false),
             last_check_y: AtomicI32::new(position.0.y - 1),
             play_select_sound: AtomicBool::new(false),
-            custom_name: Mutex::new(None),
-            lock_key: Mutex::new(None),
+            metadata: ContainerMetadata::default(),
         }
     }
 
@@ -180,10 +181,17 @@ impl BeaconBlockEntity {
     }
 
     fn effect_from_nbt(nbt: &NbtCompound, key: &str) -> i32 {
-        encode_effect(filter_effect(
-            nbt.get_string(key)
-                .and_then(StatusEffect::from_minecraft_name),
-        ))
+        let effect = nbt
+            .get_string(key)
+            .and_then(|name| {
+                StatusEffect::from_minecraft_name(name).or_else(|| StatusEffect::from_name(name))
+            })
+            .or_else(|| {
+                u16::try_from(nbt.get_int(key)?)
+                    .ok()
+                    .and_then(<StatusEffect as IDSetContent>::from_id)
+            });
+        encode_effect(filter_effect(effect))
     }
 
     fn effect_to_nbt(nbt: &mut NbtCompound, key: &str, encoded: i32) {
@@ -239,7 +247,10 @@ impl BlockEntity for BeaconBlockEntity {
     }
 
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self {
-        let entity = Self::new(position);
+        let entity = Self {
+            metadata: ContainerMetadata::from_nbt(nbt),
+            ..Self::new(position)
+        };
         entity.primary_effect.store(
             Self::effect_from_nbt(nbt, "primary_effect"),
             Ordering::Relaxed,
@@ -250,16 +261,6 @@ impl BlockEntity for BeaconBlockEntity {
         );
         // `Levels` is saved but, as in vanilla, not loaded: a reloaded beacon starts at 0 and
         // replays its activation on the first pulse.
-        *entity
-            .custom_name
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            nbt.get_string("CustomName").map(str::to_string);
-        *entity
-            .lock_key
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            nbt.get_string("Lock").map(str::to_string);
         entity
     }
 
@@ -275,22 +276,27 @@ impl BlockEntity for BeaconBlockEntity {
             self.secondary_effect.load(Ordering::Relaxed),
         );
         nbt.put_int("Levels", self.levels.load(Ordering::Relaxed));
-        if let Some(name) = self
-            .custom_name
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-        {
-            nbt.put_string("CustomName", name.clone());
-        }
-        if let Some(lock) = self
-            .lock_key
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-        {
-            nbt.put_string("Lock", lock.clone());
-        }
+        self.metadata.write_nbt(nbt);
+    }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        self.metadata.apply_item_components(stack);
+    }
+
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_name_only(stack);
+    }
+
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.metadata.collect_item_components(stack);
+    }
+
+    fn get_lock(&self) -> Option<LockImpl> {
+        self.metadata.get_lock()
+    }
+
+    fn get_custom_name(&self) -> Option<TextComponent> {
+        self.metadata.get_custom_name()
     }
 
     /// Mirrors `BeaconBlockEntity.tick`.
@@ -382,14 +388,13 @@ impl BlockEntity for BeaconBlockEntity {
         &self,
         _state_id: pumpkin_data::BlockStateId,
     ) -> Option<NbtCompound> {
-        let name_guard = self.custom_name.lock().ok();
-        let name = name_guard.as_ref().and_then(|n| n.as_deref());
+        let name = self.metadata.get_custom_name().map(TextComponent::get_text);
         Some(build_beacon_actor(
             self.position,
             self.primary_effect().map_or(0, StatusEffect::to_bedrock_id),
             self.secondary_effect()
                 .map_or(0, StatusEffect::to_bedrock_id),
-            name,
+            name.as_deref(),
         ))
     }
 
@@ -438,6 +443,31 @@ mod tests {
         assert_eq!(nbt.get_int("primary"), Some(1));
         assert_eq!(nbt.get_int("secondary"), Some(1));
         assert_eq!(nbt.get_bool("isMovable"), Some(false));
+    }
+
+    #[test]
+    fn loads_legacy_beacon_data_and_writes_current_format() {
+        let position = BlockPos::new(5, 64, 5);
+        let mut legacy = NbtCompound::new();
+        legacy.put_int("primary_effect", i32::from(StatusEffect::SPEED.id));
+        legacy.put_string("secondary_effect", "regeneration".to_string());
+        legacy.put_int("Levels", 4);
+        legacy.put_string("custom_name", "Power station".to_string());
+        legacy.put_string("Lock", "Beacon key".to_string());
+
+        let beacon = BeaconBlockEntity::from_nbt(&legacy, position);
+        assert_eq!(beacon.levels(), 0);
+        assert!(beacon.get_lock().is_some());
+
+        let mut saved = NbtCompound::new();
+        beacon.write_nbt(&mut saved);
+        assert_eq!(saved.get_string("primary_effect"), Some("minecraft:speed"));
+        assert_eq!(
+            saved.get_string("secondary_effect"),
+            Some("minecraft:regeneration")
+        );
+        assert_eq!(saved.get_string("CustomName"), Some("Power station"));
+        assert!(saved.get_compound("lock").is_some());
     }
 
     #[test]

@@ -643,17 +643,17 @@ impl SpearItem {
         to: Vector3<f64>,
         margin: f64,
     ) -> bool {
-        if contains(bounding_box, from) || clip(bounding_box, from, to).is_some() {
+        if bounding_box.contains(from) || bounding_box.clip(from, to).is_some() {
             return true;
         }
-        let Some(outside_hit) = clip(&bounding_box.expand_all(margin), from, to) else {
+        let Some(outside_hit) = bounding_box.expand_all(margin).clip(from, to) else {
             return false;
         };
-        let mut towards_target = bounding_box.min.add(&bounding_box.max) * 0.5;
+        let mut towards_target = bounding_box.get_center();
         if let Some(block_hit) = Self::clip_blocks(world, outside_hit, towards_target) {
             towards_target = block_hit;
         }
-        clip(bounding_box, outside_hit, towards_target).is_some()
+        bounding_box.clip(outside_hit, towards_target).is_some()
     }
 
     fn clip_blocks(world: &World, from: Vector3<f64>, to: Vector3<f64>) -> Option<Vector3<f64>> {
@@ -734,7 +734,7 @@ impl SpearItem {
         world
             .get_block_state(pos)
             .get_block_collision_shapes_at(pos)
-            .filter_map(|shape| clip(&shape.shift(pos.0.to_f64()), from, to))
+            .filter_map(|shape| shape.shift(pos.0.to_f64()).clip(from, to))
             .min_by(|a, b| {
                 from.squared_distance_to_vec(a)
                     .total_cmp(&from.squared_distance_to_vec(b))
@@ -771,55 +771,4 @@ impl SpearItem {
         }
         user.get_entity().root_vehicle_id() != entity.root_vehicle_id()
     }
-}
-
-fn contains(bounding_box: &BoundingBox, point: Vector3<f64>) -> bool {
-    point.x >= bounding_box.min.x
-        && point.x < bounding_box.max.x
-        && point.y >= bounding_box.min.y
-        && point.y < bounding_box.max.y
-        && point.z >= bounding_box.min.z
-        && point.z < bounding_box.max.z
-}
-
-fn clip(bounding_box: &BoundingBox, from: Vector3<f64>, to: Vector3<f64>) -> Option<Vector3<f64>> {
-    let min = [bounding_box.min.x, bounding_box.min.y, bounding_box.min.z];
-    let max = [bounding_box.max.x, bounding_box.max.y, bounding_box.max.z];
-    let origin = [from.x, from.y, from.z];
-    let delta = [to.x - from.x, to.y - from.y, to.z - from.z];
-    let mut scale = 1.0;
-    let mut hit = false;
-    for axis in 0..3 {
-        if delta[axis] > 1.0e-7 {
-            hit |= clip_point(&mut scale, axis, min[axis], &origin, &delta, &min, &max);
-        } else if delta[axis] < -1.0e-7 {
-            hit |= clip_point(&mut scale, axis, max[axis], &origin, &delta, &min, &max);
-        }
-    }
-    hit.then(|| from.add(&(to.sub(&from) * scale)))
-}
-
-fn clip_point(
-    scale: &mut f64,
-    axis: usize,
-    plane: f64,
-    origin: &[f64; 3],
-    delta: &[f64; 3],
-    min: &[f64; 3],
-    max: &[f64; 3],
-) -> bool {
-    let s = (plane - origin[axis]) / delta[axis];
-    if s <= 0.0 || s >= *scale {
-        return false;
-    }
-    let b = (axis + 1) % 3;
-    let c = (axis + 2) % 3;
-    let pb = origin[b] + s * delta[b];
-    let pc = origin[c] + s * delta[c];
-    if min[b] - 1.0e-7 < pb && pb < max[b] + 1.0e-7 && min[c] - 1.0e-7 < pc && pc < max[c] + 1.0e-7
-    {
-        *scale = s;
-        return true;
-    }
-    false
 }

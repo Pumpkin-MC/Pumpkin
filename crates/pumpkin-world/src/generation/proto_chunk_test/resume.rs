@@ -289,3 +289,58 @@ fn heightmap_roundtrip_through_chunk_data_resume() {
         "resumed chunk surface differs from uninterrupted generation (stone-trail bug)"
     );
 }
+
+// Guards the bulk block copy in `from_chunk_data`. The ocean floor heightmap is not saved,
+// so an ocean chunk (floor below the water surface) shows whether it is rebuilt correctly.
+#[test]
+fn blocks_and_ocean_floor_survive_chunk_data_resume() {
+    use pumpkin_config::lighting::LightingEngineConfig;
+
+    let seed = Seed(1_782_124_772_053_846_960);
+    let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+    let WorldGenerator::Noise(generator) = &*world_gen else {
+        unreachable!()
+    };
+
+    let mut proto = ProtoChunk::new(-553, 174, &world_gen);
+    proto.step_to_biomes(generator);
+    proto.set_structure_starts(generator);
+    proto.set_structure_references(generator);
+    proto.step_to_noise(generator);
+    assert_ne!(
+        proto.flat_ocean_floor_height_map, proto.flat_surface_height_map,
+        "test chunk must have water above its ocean floor"
+    );
+
+    let height = i32::from(proto.height());
+    let expected_ocean_floor = proto.flat_ocean_floor_height_map;
+    let mut expected_blocks = Vec::with_capacity((height * 256) as usize);
+    for x in 0..16 {
+        for y in 0..height {
+            for z in 0..16 {
+                expected_blocks.push(proto.get_block_state_raw(x, y, z));
+            }
+        }
+    }
+
+    let mut staged = Chunk::Proto(Box::new(proto));
+    staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+    let Chunk::Level(chunk_data) = staged else {
+        unreachable!()
+    };
+    let resumed = ProtoChunk::from_chunk_data(&chunk_data, &world_gen);
+
+    let mut resumed_blocks = Vec::with_capacity(expected_blocks.len());
+    for x in 0..16 {
+        for y in 0..height {
+            for z in 0..16 {
+                resumed_blocks.push(resumed.get_block_state_raw(x, y, z));
+            }
+        }
+    }
+    assert!(
+        resumed_blocks == expected_blocks,
+        "blocks changed in the round trip"
+    );
+    assert_eq!(resumed.flat_ocean_floor_height_map, expected_ocean_floor);
+}

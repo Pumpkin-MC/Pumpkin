@@ -90,6 +90,13 @@ pub fn validate_effects(
     secondary_level == 0 || secondary_level >= 4 || primary.map(|e| e.id) == secondary.map(|e| e.id)
 }
 
+fn is_beacon_payment(stack: &ItemStack) -> bool {
+    !stack.is_empty()
+        && stack
+            .item
+            .has_tag(&tag::Item::MINECRAFT_BEACON_PAYMENT_ITEMS)
+}
+
 /// Accepts a single item tagged `minecraft:beacon_payment_items`.
 struct PaymentSlot {
     inventory: Arc<dyn Inventory>,
@@ -110,9 +117,7 @@ impl Slot for PaymentSlot {
     }
 
     fn can_insert(&self, stack: &ItemStack) -> bool {
-        stack
-            .item
-            .has_tag(&tag::Item::MINECRAFT_BEACON_PAYMENT_ITEMS)
+        is_beacon_payment(stack)
     }
 
     fn get_max_item_count(&self) -> u8 {
@@ -130,6 +135,13 @@ pub fn create_beacon_handler(
     beacon_data: &Arc<dyn PropertyDelegate>,
 ) -> BeaconScreenHandler {
     BeaconScreenHandler::new(sync_id, player_inventory, beacon_data)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum BeaconUpdateResult {
+    Applied,
+    InvalidPayment,
+    InvalidEffects,
 }
 
 pub struct BeaconScreenHandler {
@@ -186,23 +198,17 @@ impl BeaconScreenHandler {
         self.beacon_data.get_property(DATA_LEVELS)
     }
 
-    #[must_use]
-    pub fn has_payment(&self) -> bool {
-        !self.payment.get_stack(0).is_empty()
-    }
-
-    /// Mirrors `BeaconMenu.updateEffects`: validates against the current tier, stores the
-    /// effects, and consumes the payment item. Returns `false` when the request is invalid.
+    /// Validates payment and effects before applying the selection and consuming one item.
     pub fn update_effects(
         &mut self,
         primary: Option<&'static StatusEffect>,
         secondary: Option<&'static StatusEffect>,
-    ) -> bool {
-        if !self.has_payment() {
-            return false;
+    ) -> BeaconUpdateResult {
+        if !is_beacon_payment(&self.payment.get_stack(0)) {
+            return BeaconUpdateResult::InvalidPayment;
         }
         if !validate_effects(primary, secondary, self.get_levels()) {
-            return false;
+            return BeaconUpdateResult::InvalidEffects;
         }
         self.beacon_data
             .set_property(DATA_PRIMARY, encode_effect(primary));
@@ -210,7 +216,7 @@ impl BeaconScreenHandler {
             .set_property(DATA_SECONDARY, encode_effect(secondary));
         self.payment.remove_stack_specific(0, 1);
         self.send_content_updates();
-        true
+        BeaconUpdateResult::Applied
     }
 }
 

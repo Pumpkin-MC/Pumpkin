@@ -2,11 +2,10 @@
 use super::*;
 use pumpkin_data::data_component_impl::IDSetContent;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_inventory::beacon_screen_handler::BeaconScreenHandler;
+use pumpkin_inventory::beacon_screen_handler::{BeaconScreenHandler, BeaconUpdateResult};
 use pumpkin_protocol::java::server::play::SSetBeacon;
 
 impl JavaClient {
-    /// Mirrors `ServerGamePacketListenerImpl.handleSetBeaconPacket`.
     pub fn handle_set_beacon(&self, player: &Arc<Player>, packet: &SSetBeacon) {
         // `None` = no effect; an id that is not a status effect is a malformed packet.
         let decode = |id: &Option<VarInt>| {
@@ -18,7 +17,7 @@ impl JavaClient {
                     .ok_or(())
             })
         };
-        let valid = match (
+        let invalid_effects = match (
             decode(&packet.primary_effect),
             decode(&packet.secondary_effect),
         ) {
@@ -39,12 +38,12 @@ impl JavaClient {
                     );
                     return;
                 };
-                beacon.update_effects(primary, secondary)
+                beacon.update_effects(primary, secondary) == BeaconUpdateResult::InvalidEffects
             }
-            _ => false,
+            _ => true,
         };
 
-        if !valid {
+        if invalid_effects {
             warn!(
                 "Player {} tried to set invalid beacon effects: primary {:?}, secondary {:?}",
                 player.gameprofile.name, packet.primary_effect, packet.secondary_effect

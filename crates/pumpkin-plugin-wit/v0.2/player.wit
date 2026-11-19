@@ -479,6 +479,8 @@ interface player {
     enum bedrock-minecraft-version {
         v-1-21,
         v-1-26-30,
+        v-1-26-51,
+        v-1-26-60,
         unknown,
     }
 
@@ -1434,6 +1436,9 @@ interface player {
         /// Returns the Minecraft Java Edition version of the player.
         get-version: func() -> java-minecraft-version;
 
+        /// Returns the network connection ID assigned when the client connected.
+        get-connection-id: func() -> u64;
+
         /// Returns the brand of the player's client (e.g., \"vanilla\", \"fabric\").
         get-brand: func() -> string;
 
@@ -1445,6 +1450,9 @@ interface player {
 
         /// Sends a Java-specific clientbound packet to the player.
         send-packet: async func(packet: java-packet);
+
+        /// Sends an already-encoded clientbound packet directly to the player without re-observing it.
+        send-raw-packet: func(packet-id: s32, payload: list<u8>);
 
         /// Sends a custom payload packet (plugin message) to the player.
         send-custom-payload: async func(channel: string, data: list<u8>);
@@ -1485,6 +1493,12 @@ interface player {
         /// Returns the Minecraft Bedrock Edition version of the player.
         get-version: func() -> bedrock-minecraft-version;
 
+        /// Returns the raw Bedrock network protocol version spoken by the client.
+        get-protocol-version: func() -> u32;
+
+        /// Returns the network connection ID assigned when the client connected.
+        get-connection-id: func() -> u64;
+
         /// Returns the player's configuration settings.
         get-settings: func() -> bedrock-player-settings;
 
@@ -1507,6 +1521,9 @@ interface player {
 
         /// Sends a Bedrock-specific clientbound packet to the player.
         send-packet: async func(packet: bedrock-packet);
+
+        /// Sends an already-encoded clientbound Bedrock game packet directly to the player.
+        send-raw-packet: func(packet-id: u16, payload: list<u8>);
 
         /// Opens a Bedrock custom form for the player.
         open-form: async func(form: form) -> u32;

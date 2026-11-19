@@ -4,7 +4,7 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_inventory::mount_screen_handler::MountScreenHandler;
 use pumpkin_inventory::{
     anvil::anvil_screen_handler::AnvilScreenHandler,
-    beacon_screen_handler::{BEACON_EFFECTS, BeaconScreenHandler},
+    beacon_screen_handler::{BEACON_EFFECTS, BeaconScreenHandler, BeaconUpdateResult},
     cartography_table_screen_handler::CartographyTableScreenHandler,
     grindstone_screen_handler::GrindstoneScreenHandler,
     loom_screen_handler::LoomScreenHandler,
@@ -477,36 +477,29 @@ impl BedrockClient {
                                     break;
                                 }
                                 let available = handler.get_available_recipes(&input_stack);
-                                let recipe_idx = crate::net::bedrock::recipe::static_recipes()
-                                    .iter()
-                                    .find_map(|r| match r {
-                                        pumpkin_protocol::bedrock::client::BedrockRecipe::Shapeless(s)
-                                            if s.block == "stonecutter"
-                                                && s.recipe_network_id == recipe_id =>
-                                        {
-                                            s.output.first().and_then(|out| {
-                                                let out_id = out.id.0;
-                                                available.iter().position(|r| {
-                                                    let item_id = r
-                                                        .result_id
-                                                        .strip_prefix("minecraft:")
-                                                        .unwrap_or(&r.result_id);
-                                                    pumpkin_data::item::Item::from_registry_key(
-                                                        item_id,
+                                let server = player.world().server.upgrade();
+                                let recipe_idx =
+                                    crate::net::bedrock::recipe::stonecutter_output_for_recipe_id(
+                                        server.as_deref().map(|s| s.recipe_manager.as_ref()),
+                                        recipe_id.0,
+                                    )
+                                    .and_then(|(out_id, out_aux)| {
+                                        available.iter().position(|r| {
+                                            let item_id = r
+                                                .result_id
+                                                .strip_prefix("minecraft:")
+                                                .unwrap_or(&r.result_id);
+                                            pumpkin_data::item::Item::from_registry_key(item_id)
+                                                .and_then(|item| {
+                                                    pumpkin_data::item::JavaToBedrockItemMapping::from_java_item_id(
+                                                        item.id,
                                                     )
-                                                    .and_then(|item| {
-                                                        pumpkin_data::item::JavaToBedrockItemMapping::from_java_item_id(
-                                                            item.id,
-                                                        )
-                                                    })
-                                                    .is_some_and(|m| {
-                                                        (m.bedrock_item.id as i32) == out_id
-                                                    })
                                                 })
-                                            })
-                                        }
-                                        pumpkin_protocol::bedrock::client::BedrockRecipe::Shapeless(_)
-                                        | pumpkin_protocol::bedrock::client::BedrockRecipe::Shaped(_) => None,
+                                                .is_some_and(|m| {
+                                                    m.bedrock_item.id == out_id
+                                                        && m.bedrock_data == out_aux
+                                                })
+                                        })
                                     })
                                     .or_else(|| {
                                         ((recipe_id.0 as usize) < available.len())
@@ -896,7 +889,9 @@ fn update_beacon_effects(handler: &mut BeaconScreenHandler, primary: i32, second
             .ok_or(())
     };
     match (decode(primary), decode(secondary)) {
-        (Ok(primary), Ok(secondary)) => handler.update_effects(primary, secondary),
+        (Ok(primary), Ok(secondary)) => {
+            handler.update_effects(primary, secondary) == BeaconUpdateResult::Applied
+        }
         _ => false,
     }
 }
@@ -1691,8 +1686,16 @@ mod tests {
         beacon.set_property(DATA_LEVELS, 1);
         let mut handler = create_beacon_handler(1, &inventory, &beacon);
         let payment = handler.get_behaviour().slots[0].clone();
+        assert_eq!(
+            handler.update_effects(Some(&StatusEffect::SPEED), None),
+            BeaconUpdateResult::InvalidPayment
+        );
         assert!(!update_beacon_effects(&mut handler, 1, 0));
         payment.set_stack(ItemStack::new(1, &Item::IRON_INGOT));
+        assert_eq!(
+            handler.update_effects(Some(&StatusEffect::STRENGTH), None),
+            BeaconUpdateResult::InvalidEffects
+        );
 
         // Invalid IDs and effects above the current tier must leave payment and state intact.
         for (primary, secondary) in [(-1, 0), (999, 0), (1, 999), (5, 0), (1, 10)] {
@@ -1710,6 +1713,20 @@ mod tests {
         assert!(!update_beacon_effects(&mut handler, 1, 0));
 
         beacon.set_property(DATA_LEVELS, 4);
+        payment.set_stack(ItemStack::new(1, &Item::DIRT));
+        assert!(!update_beacon_effects(
+            &mut handler,
+            StatusEffect::HASTE.to_bedrock_id(),
+            StatusEffect::REGENERATION.to_bedrock_id(),
+        ));
+        assert_eq!(payment.get_stack().item.id, Item::DIRT.id);
+        assert_eq!(payment.get_stack().item_count, 1);
+        assert_eq!(
+            beacon.get_property(DATA_PRIMARY),
+            encode_effect(Some(&StatusEffect::SPEED))
+        );
+        assert_eq!(beacon.get_property(DATA_SECONDARY), 0);
+
         payment.set_stack(ItemStack::new(1, &Item::IRON_INGOT));
         assert!(update_beacon_effects(&mut handler, 1, 10));
         assert_eq!(

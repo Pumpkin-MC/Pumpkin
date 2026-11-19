@@ -18,8 +18,9 @@ use crate::block::{
     BlockBehaviour, BrokenArgs, ExplodeArgs, OnNeighborUpdateArgs, OnProjectileHitArgs, PlacedArgs,
     UseWithItemArgs,
 };
-use crate::entity::EntityBase;
+use crate::entity::projectile::may_interact;
 use crate::entity::tnt::TNTEntity;
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 
 #[pumpkin_block("minecraft:tnt")]
@@ -28,6 +29,11 @@ pub struct TNTBlock;
 impl TNTBlock {
     /// Vanilla `TntBlock.prime` plus the block removal its callers do.
     pub fn prime(world: &Arc<World>, location: &BlockPos) -> bool {
+        Self::prime_by(world, location, None)
+    }
+
+    /// Like [`Self::prime`], crediting the explosion to `source`.
+    pub fn prime_by(world: &Arc<World>, location: &BlockPos, source: Option<&Entity>) -> bool {
         if !world.level_info.load().game_rules.tnt_explodes {
             return false;
         }
@@ -43,7 +49,7 @@ impl TNTBlock {
             return false;
         };
 
-        if Self::spawn_primed(world, location) {
+        if Self::spawn_primed(world, location, source) {
             return true;
         }
 
@@ -59,8 +65,8 @@ impl TNTBlock {
     }
 
     /// Primes a TNT block the caller already took out of the world.
-    pub fn spawn_primed(world: &Arc<World>, location: &BlockPos) -> bool {
-        let Some(tnt) = Self::prepare(world, location) else {
+    pub fn spawn_primed(world: &Arc<World>, location: &BlockPos, source: Option<&Entity>) -> bool {
+        let Some(tnt) = Self::prepare(world, location, source) else {
             return false;
         };
         Self::ignite(world, location, tnt);
@@ -68,7 +74,11 @@ impl TNTBlock {
     }
 
     /// Gamerule and plugin events; `None` when priming is denied.
-    fn prepare(world: &Arc<World>, location: &BlockPos) -> Option<Arc<TNTEntity>> {
+    fn prepare(
+        world: &Arc<World>,
+        location: &BlockPos,
+        source: Option<&Entity>,
+    ) -> Option<Arc<TNTEntity>> {
         if !world.level_info.load().game_rules.tnt_explodes {
             return None;
         }
@@ -83,7 +93,7 @@ impl TNTBlock {
             return None;
         }
 
-        let tnt = TNTEntity::primed(world, location, TNTEntity::DEFAULT_FUSE);
+        let tnt = TNTEntity::primed(world, location, TNTEntity::DEFAULT_FUSE, source);
         let mut prime_event =
             crate::plugin::api::events::entity::explosion_prime::ExplosionPrimeEvent::new(
                 tnt.get_entity().entity_id,
@@ -121,7 +131,7 @@ impl BlockBehaviour for TNTBlock {
             return BlockActionResult::PassToDefaultBlockAction;
         }
 
-        if Self::prime(args.world, args.position) {
+        if Self::prime_by(args.world, args.position, Some(args.player.get_entity())) {
             if args.player.gamemode.load() != GameMode::Creative {
                 if item_id == Item::FLINT_AND_STEEL.id {
                     let _ = args.item_stack.damage_item(1);
@@ -160,14 +170,25 @@ impl BlockBehaviour for TNTBlock {
             let props = TntLikeProperties::from_state_id(args.state.id);
             if props.r#unstable {
                 // `break_block` already swapped the TNT away, so `prime` would find no TNT here.
-                Self::spawn_primed(args.world, args.position);
+                Self::spawn_primed(args.world, args.position, None);
             }
         }
     }
 
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
-        if args.projectile.get_entity().is_on_fire() {
-            Self::prime(args.world, args.position);
+        if args.projectile.get_entity().is_on_fire()
+            && may_interact(args.projectile, args.world, args.position)
+        {
+            let owner = args
+                .projectile
+                .get_projectile_owner()
+                .and_then(|owner| owner.get(args.world))
+                .filter(|owner| owner.get_living_entity().is_some());
+            Self::prime_by(
+                args.world,
+                args.position,
+                owner.as_ref().map(|owner| owner.get_entity()),
+            );
         }
     }
 
@@ -177,7 +198,8 @@ impl BlockBehaviour for TNTBlock {
             return;
         }
         let fuse = TNTEntity::random_short_fuse(TNTEntity::DEFAULT_FUSE);
-        let tnt = TNTEntity::primed(args.world, args.position, fuse);
+        let owner = args.explosion.indirect_source().map(EntityBase::get_entity);
+        let tnt = TNTEntity::primed(args.world, args.position, fuse, owner);
         args.world.spawn_entity(tnt);
     }
 

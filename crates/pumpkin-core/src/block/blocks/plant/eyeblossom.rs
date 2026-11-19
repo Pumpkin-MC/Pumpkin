@@ -28,6 +28,21 @@ const EYEBLOSSOM_Y_RANGE: i32 = 2;
 
 pub struct EyeblossomBlock;
 
+impl EyeblossomBlock {
+    #[must_use]
+    pub const fn bee_interaction_effect() -> pumpkin_data::potion::Effect {
+        pumpkin_data::potion::Effect {
+            effect_type: &StatusEffect::POISON,
+            duration: 25,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: true,
+        }
+    }
+}
+
 impl BlockMetadata for EyeblossomBlock {
     fn ids() -> Box<[BlockId]> {
         Box::new([BlockId::OPEN_EYEBLOSSOM, BlockId::CLOSED_EYEBLOSSOM])
@@ -93,16 +108,7 @@ impl BlockBehaviour for EyeblossomBlock {
             && let Some(living_entity) = args.entity.get_living_entity()
             && !living_entity.has_effect(&StatusEffect::POISON)
         {
-            let effect = pumpkin_data::potion::Effect {
-                effect_type: &StatusEffect::POISON,
-                duration: 25,
-                amplifier: 0,
-                ambient: false,
-                show_particles: true,
-                show_icon: true,
-                blend: true,
-            };
-            living_entity.add_effect(effect);
+            living_entity.add_effect(Self::bee_interaction_effect());
         }
     }
 }
