@@ -2675,14 +2675,22 @@ impl World {
         }
 
         let area = bounding_box.expand_all(1.0E-7);
-        !self.get_all_at_box(&area).iter().any(|entity| {
-            let other = entity.get_entity();
-            !entity.is_spectator()
-                && ((other.entity_type == &EntityType::SHULKER && entity.is_collidable(None))
-                    || other.entity_type == &EntityType::HAPPY_GHAST
-                    || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
-                && !source.get_entity().is_passenger_of_same_vehicle(other)
-        })
+        !self
+            .get_all_at_box(&area)
+            .iter()
+            .any(|entity| Self::entity_blocks_collision(source, entity.as_ref()))
+    }
+
+    pub(crate) fn entity_blocks_collision(
+        source: &dyn EntityBase,
+        entity: &dyn EntityBase,
+    ) -> bool {
+        let other = entity.get_entity();
+        !entity.is_spectator()
+            && ((other.entity_type == &EntityType::SHULKER && entity.is_collidable(None))
+                || other.entity_type == &EntityType::HAPPY_GHAST
+                || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
+            && !source.get_entity().is_passenger_of_same_vehicle(other)
     }
 
     pub fn no_border_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {

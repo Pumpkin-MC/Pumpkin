@@ -3547,10 +3547,26 @@ impl Entity {
     }
 
     fn refresh_support_after_external_move(&self, caller: &dyn EntityBase) {
-        let support = self
-            .collide(Vector3::new(0.0, -1.0E-5, 0.0), caller)
-            .supporting;
-        self.on_ground.store(support.is_some(), Ordering::Relaxed);
+        let motion = Vector3::new(0.0, -1.0E-5, 0.0);
+        let support = self.collide(motion, caller).supporting;
+        let bounds = self.bounding_box.load();
+        let entity_support = support.is_none()
+            && self
+                .world
+                .load()
+                .get_all_at_box(&bounds.stretch(motion))
+                .iter()
+                .any(|other| {
+                    World::entity_blocks_collision(caller, other.as_ref())
+                        && Self::collide_axis(
+                            &bounds,
+                            &other.get_entity().bounding_box.load(),
+                            Axis::Y,
+                            motion.y,
+                        ) > motion.y
+                });
+        self.on_ground
+            .store(support.is_some() || entity_support, Ordering::Relaxed);
         self.supporting_block_pos.store(support);
     }
 
@@ -5921,15 +5937,28 @@ impl Entity {
     }
 
     pub fn remove_passenger(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, true);
+        self.remove_passenger_internal(passenger_id, true, &|| true);
     }
 
     pub fn remove_passenger_before_teleport(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, false);
+        self.remove_passenger_internal(passenger_id, false, &|| true);
+    }
+
+    pub(crate) fn remove_passenger_before_teleport_if(
+        &self,
+        passenger_id: i32,
+        can_unlink: &dyn Fn() -> bool,
+    ) {
+        self.remove_passenger_internal(passenger_id, false, can_unlink);
     }
 
     #[allow(clippy::too_many_lines)]
-    fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
+    fn remove_passenger_internal(
+        &self,
+        passenger_id: i32,
+        reposition: bool,
+        can_unlink: &dyn Fn() -> bool,
+    ) {
         let mut dismount_event =
             crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
                 passenger_id,
@@ -5948,7 +5977,7 @@ impl Entity {
                 .plugin_manager
                 .fire_blocking(&server, &mut vehicle_exit);
         }
-        if dismount_event.cancelled || vehicle_exit.cancelled {
+        if dismount_event.cancelled || vehicle_exit.cancelled || !can_unlink() {
             return;
         }
 
@@ -5996,11 +6025,7 @@ impl Entity {
                 // Use fallback position as placeholder — updated below with real position
                 let placeholder =
                     Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
-                *player
-                    .awaiting_teleport
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                    Some((id.into(), placeholder));
+                player.set_awaiting_teleport(id.into(), placeholder);
                 Some(id)
             } else {
                 None
@@ -6219,11 +6244,7 @@ impl Entity {
                 if let Some(id) = teleport_id {
                     player.get_entity().set_pos(dismount_pos);
                     // Update awaiting_teleport with the real dismount position
-                    *player
-                        .awaiting_teleport
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                        Some((id.into(), dismount_pos));
+                    player.set_awaiting_teleport(id.into(), dismount_pos);
                     // Use send_client_packet so the teleport goes through
                     // the same packet queue as CSetPassengers, preserving send order.
                     // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
@@ -6907,6 +6928,41 @@ mod dimension_tests {
 
     fn close(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-6
+    }
+
+    #[tokio::test]
+    async fn horizontal_shell_displacement_recognizes_entity_support_without_a_fake_block()
+    -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let shulker = crate::entity::mob::shulker::ShulkerEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::SHULKER,
+        ));
+        world.spawn_entity(shulker.clone());
+        let player = Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 65.0, 0.5),
+            &EntityType::PLAYER,
+        );
+        player.move_by_shulker(&player, Vector3::new(0.1, 0.0, 0.0));
+        assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(player.supporting_block_pos.load().is_none());
+        player.move_by_shulker(&player, Vector3::new(1.0, 0.0, 0.0));
+        assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        player.set_pos(Vector3::new(0.5, 64.5, 1.2));
+        player.move_by_shulker(&player, Vector3::new(0.1, 0.0, 0.0));
+        assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        shulker
+            .get_living_entity()
+            .ok_or("missing living entity")?
+            .set_health(0.0);
+        player.set_pos(Vector3::new(0.5, 65.0, 0.5));
+        player.move_by_shulker(&player, Vector3::new(0.1, 0.0, 0.0));
+        assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]

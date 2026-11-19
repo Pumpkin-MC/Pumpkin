@@ -667,6 +667,8 @@ pub struct Player {
     pub teleport_id_count: AtomicI32,
     /// The pending teleport information, including the teleport ID and target location.
     pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
+    // Retired server-issued IDs, never populated by client input.
+    pub(crate) superseded_teleports: Mutex<VecDeque<VarInt>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
     /// The last time the player performed an action (for idle timeout).
@@ -830,6 +832,7 @@ fn decode_skin_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
 fn reserve_position_correction(
     counter: &AtomicI32,
     pending: &mut Option<(VarInt, Vector3<f64>)>,
+    superseded: Option<&mut VecDeque<VarInt>>,
     position: Vector3<f64>,
     coalesce: bool,
 ) -> Option<i32> {
@@ -837,8 +840,27 @@ fn reserve_position_correction(
         return None;
     }
     let id = counter.fetch_add(1, Ordering::Relaxed) + 1;
-    *pending = Some((id.into(), position));
+    replace_pending_position(pending, superseded, id.into(), position);
     Some(id)
+}
+
+fn replace_pending_position(
+    pending: &mut Option<(VarInt, Vector3<f64>)>,
+    superseded: Option<&mut VecDeque<VarInt>>,
+    id: VarInt,
+    position: Vector3<f64>,
+) {
+    if let Some(superseded) = superseded {
+        // Dismount finalizes a reserved ID after calculating its destination.
+        superseded.retain(|previous| *previous != id);
+        if let Some((previous, _)) = pending.as_ref()
+            && *previous != id
+            && !superseded.contains(previous)
+        {
+            superseded.push_back(*previous);
+        }
+    }
+    *pending = Some((id, position));
 }
 
 impl Player {
@@ -986,6 +1008,7 @@ impl Player {
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
+            superseded_teleports: Mutex::new(VecDeque::new()),
             breath_manager: BreathManager::default(),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
@@ -5043,9 +5066,14 @@ impl Player {
                 .awaiting_teleport
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut superseded = self
+                .superseded_teleports
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let Some(id) = reserve_position_correction(
                 &self.teleport_id_count,
                 &mut pending,
+                self.client.java().map(|_| &mut *superseded),
                 position,
                 coalesce && self.client.java().is_some(),
             ) else {
@@ -5071,6 +5099,24 @@ impl Player {
                 self.send_bedrock_teleport(client);
             }
         }
+    }
+
+    /// Retains superseded Java IDs when replacing a pending correction.
+    pub(crate) fn set_awaiting_teleport(&self, id: VarInt, position: Vector3<f64>) {
+        let mut pending = self
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut superseded = self
+            .superseded_teleports
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        replace_pending_position(
+            &mut pending,
+            self.client.java().map(|_| &mut *superseded),
+            id,
+            position,
+        );
     }
 
     /// Corrects external movement while preserving the client's velocity and look.
@@ -9679,12 +9725,12 @@ mod tests {
         let latest = pumpkin_util::math::vector3::Vector3::new(0.2, 64.0, 0.0);
         let mut pending = None;
         assert_eq!(
-            super::reserve_position_correction(&counter, &mut pending, first, true),
+            super::reserve_position_correction(&counter, &mut pending, None, first, true),
             Some(1)
         );
         for _ in 0..5 {
             assert_eq!(
-                super::reserve_position_correction(&counter, &mut pending, latest, true),
+                super::reserve_position_correction(&counter, &mut pending, None, latest, true),
                 None
             );
         }
@@ -9694,7 +9740,7 @@ mod tests {
         );
         pending = None;
         assert_eq!(
-            super::reserve_position_correction(&counter, &mut pending, latest, true),
+            super::reserve_position_correction(&counter, &mut pending, None, latest, true),
             Some(2)
         );
         assert_eq!(
@@ -9712,6 +9758,59 @@ mod tests {
     use pumpkin_protocol::bedrock::network_item::ContainerName;
     use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
     use uuid::Uuid;
+
+    #[test]
+    fn explicit_corrections_and_dismount_reservations_keep_only_superseded_ids() {
+        use pumpkin_protocol::codec::var_int::VarInt;
+        let counter = std::sync::atomic::AtomicI32::new(0);
+        let mut pending = None;
+        let mut superseded = std::collections::VecDeque::new();
+        let start = Vector3::new(0.5, 64.0, 0.5);
+        let destination = Vector3::new(5.5, 64.0, 0.5);
+        assert_eq!(
+            super::reserve_position_correction(
+                &counter,
+                &mut pending,
+                Some(&mut superseded),
+                start,
+                true
+            ),
+            Some(1)
+        );
+        assert_eq!(
+            super::reserve_position_correction(
+                &counter,
+                &mut pending,
+                Some(&mut superseded),
+                destination,
+                false
+            ),
+            Some(2)
+        );
+        assert_eq!(superseded, [VarInt(1)]);
+        super::replace_pending_position(
+            &mut pending,
+            Some(&mut superseded),
+            VarInt(2),
+            destination,
+        );
+        assert_eq!(superseded, [VarInt(1)]);
+        assert_eq!(
+            super::reserve_position_correction(
+                &counter,
+                &mut pending,
+                Some(&mut superseded),
+                destination,
+                true
+            ),
+            None
+        );
+        assert_eq!(superseded, [VarInt(1)]);
+        // An overlapping explicit teleport can retire a reserved dismount ID before it is finalized.
+        super::replace_pending_position(&mut pending, Some(&mut superseded), VarInt(1), start);
+        assert_eq!(pending, Some((VarInt(1), start)));
+        assert_eq!(superseded, [VarInt(2)]);
+    }
 
     #[test]
     fn bedrock_container_types_and_slots_map_consistently() {

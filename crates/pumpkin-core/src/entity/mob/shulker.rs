@@ -456,9 +456,15 @@ impl ShulkerEntity {
                 }
             }
             if let Some(vehicle) = entity.get_vehicle() {
+                if self.find_teleport_attachment(&candidate).is_none() {
+                    continue;
+                }
                 vehicle
                     .get_entity()
-                    .remove_passenger_before_teleport(entity.entity_id);
+                    .remove_passenger_before_teleport_if(entity.entity_id, &|| {
+                        self.mob_entity.living_entity.is_alive()
+                            && self.find_teleport_attachment(&candidate).is_some()
+                    });
                 if entity.has_vehicle() {
                     return false;
                 }
@@ -1314,6 +1320,55 @@ mod tests {
         );
         assert_eq!(position.y, 65.0);
         assert!(world.is_space_empty(bounds));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn invalidated_teleport_keeps_the_rider_linked_before_unlinking() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+        let shulker = spawn(&world);
+        let vehicle = Arc::new(Entity::new(
+            world.clone(),
+            shulker.get_entity().pos.load(),
+            &EntityType::COW,
+        ));
+        world.spawn_entity(vehicle.clone());
+        vehicle.add_passenger_silently(vehicle.clone(), shulker.clone());
+        let candidate = BlockPos::new(2, 64, 2);
+        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+        world.set_block_state(&candidate.down(), Block::STONE.default_state.id, flags);
+        assert!(shulker.find_teleport_attachment(&candidate).is_some());
+        vehicle.remove_passenger_before_teleport_if(shulker.get_entity().entity_id, &|| {
+            world.set_block_state(&candidate, Block::STONE.default_state.id, flags);
+            shulker.find_teleport_attachment(&candidate).is_some()
+        });
+        assert!(shulker.get_entity().has_vehicle());
+        assert_eq!(
+            vehicle
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .len(),
+            1
+        );
+        world.set_block_state(&candidate, Block::AIR.default_state.id, flags);
+        vehicle.remove_passenger_before_teleport_if(shulker.get_entity().entity_id, &|| {
+            shulker.find_teleport_attachment(&candidate).is_some()
+        });
+        assert!(!shulker.get_entity().has_vehicle());
+        assert!(
+            vehicle
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+        );
         world.level.shutdown().await;
         Ok(())
     }

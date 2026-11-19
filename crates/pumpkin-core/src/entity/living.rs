@@ -1392,6 +1392,23 @@ impl LivingEntity {
         removal_time.fetch_sub(1, Relaxed) - 1 <= 0
     }
 
+    fn update_scale(&self) {
+        let scale = self.get_attribute_value(&Attributes::SCALE) as f32;
+        let scale = if self.entity.entity_type == &EntityType::SHULKER {
+            scale.min(super::mob::shulker::MAX_SCALE)
+        } else {
+            scale
+        };
+        if (self.entity.scale.load() - scale).abs() > f32::EPSILON {
+            self.entity.scale.store(scale);
+            if self.entity.entity_type == &EntityType::SHULKER && self.entity.has_vehicle() {
+                self.entity.refresh_dimensions_without_relocation();
+            } else {
+                self.entity.refresh_dimensions();
+            }
+        }
+    }
+
     /// Returns the computed value for `attribute` using the local instance, falling back
     /// to `attribute.default_value` if no local instance exists.
     pub fn get_attribute_value(&self, attribute: &Attributes) -> f64 {
@@ -4505,16 +4522,7 @@ impl EntityBase for LivingEntity {
         // post-friction motion together with the new position.
 
         // Vanilla `LivingEntity.onAttributeUpdated(SCALE)`: resize when the attribute moves.
-        let scale = self.get_attribute_value(&Attributes::SCALE) as f32;
-        let scale = if self.entity.entity_type == &EntityType::SHULKER {
-            scale.min(super::mob::shulker::MAX_SCALE)
-        } else {
-            scale
-        };
-        if (self.entity.scale.load() - scale).abs() > f32::EPSILON {
-            self.entity.scale.store(scale);
-            self.entity.refresh_dimensions();
-        }
+        self.update_scale();
 
         let pre_tick_pos = self.entity.last_pos.load();
         self.entity.tick(caller, server);
@@ -5353,6 +5361,50 @@ pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn mounted_shulker_scale_keeps_the_seat_and_other_entities_still_relocate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::ai::test_support::world;
+        use crate::entity::mob::shulker::ShulkerEntity;
+        use crate::entity::passive::cow::CowEntity;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let seat = Vector3::new(0.5, 64.25, 0.5);
+        let shulker = ShulkerEntity::new(Entity::new(world.clone(), seat, &EntityType::SHULKER));
+        world.spawn_entity(shulker.clone());
+        let vehicle = Arc::new(Entity::new(world.clone(), seat, &EntityType::COW));
+        world.spawn_entity(vehicle.clone());
+        vehicle.add_passenger_silently(vehicle.clone(), shulker.clone());
+        let living = shulker.get_living_entity().ok_or("missing living entity")?;
+        living.entity.set_pos(seat);
+        living.entity.first_tick.store(false, Relaxed);
+        living.update_attribute(&Attributes::SCALE, |attribute| {
+            attribute.base_value = 2.0;
+            attribute.mark_dirty();
+        });
+        living.update_scale();
+        assert_eq!(living.entity.pos.load(), seat);
+        assert_eq!(living.entity.entity_dimension.load().width, 2.0);
+        assert_eq!(living.entity.bounding_box.load().max.y, seat.y + 2.0);
+
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(10.5, 64.0, 0.5),
+            &EntityType::COW,
+        ));
+        world.spawn_entity(cow.clone());
+        let living = cow.get_living_entity().ok_or("missing living entity")?;
+        living.entity.first_tick.store(false, Relaxed);
+        living.update_attribute(&Attributes::SCALE, |attribute| {
+            attribute.base_value = 2.0;
+            attribute.mark_dirty();
+        });
+        living.update_scale();
+        assert!(living.entity.pos.load().y < 64.0);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
     use super::*;
 
     #[test]
