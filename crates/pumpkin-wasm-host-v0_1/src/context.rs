@@ -23,7 +23,11 @@ fn register_typed_event<E: pumpkin_core::plugin::Payload + ToFromWasmEvent + Clo
     priority: pumpkin_core::plugin::EventPriority,
     blocking: bool,
 ) {
-    ctx.register_event::<E, _>(Arc::clone(handler), priority, blocking);
+    if blocking {
+        ctx.register_event_blocking::<E, _>(Arc::clone(handler), priority);
+    } else {
+        ctx.register_event_nonblocking::<E, _>(Arc::clone(handler), priority);
+    }
 }
 
 #[expect(clippy::too_many_lines)]

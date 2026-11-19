@@ -12,7 +12,7 @@ use wasmtime::component::Resource;
 use crate::pumpkin::{self, plugin::event::Event as WasmEvent};
 use pumpkin_core::{
     entity::player::Player,
-    plugin::{BoxFuture, EventHandler, Payload, QueuedEventHandler},
+    plugin::{BoxFuture, DynEventHandler, EventPriority, Payload, QueuedEvent},
     server::Server,
     world::World,
 };
@@ -1498,6 +1498,8 @@ impl pumpkin::plugin::event::HostEvent for PluginHostState {
 
 pub struct WasmPluginEventHandler {
     pub handler_id: u32,
+    pub priority: EventPriority,
+    pub blocking: bool,
     pub plugin: Arc<WasmPlugin>,
 }
 
@@ -1676,16 +1678,8 @@ pub(super) fn consume_world(
         .expect("invalid world resource handle")
 }
 
-pub use pumpkin_core::plugin::QueuedEvent as EventHandle;
-
-impl<E: Payload + ToFromWasmEvent + 'static> EventHandler<E> for WasmPluginEventHandler {
-    fn queued_handler(&self) -> Option<&dyn QueuedEventHandler> {
-        Some(self)
-    }
-}
-
-impl QueuedEventHandler for WasmPluginEventHandler {
-    fn dispatch<'a>(&'a self, server: &'a Arc<Server>, event: EventHandle) -> BoxFuture<'a, ()> {
+impl DynEventHandler for WasmPluginEventHandler {
+    fn handle_dyn<'a>(&'a self, server: &'a Arc<Server>, event: QueuedEvent) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             type ServerResource = Resource<crate::pumpkin::plugin::server::Server>;
 
@@ -1720,5 +1714,18 @@ impl QueuedEventHandler for WasmPluginEventHandler {
                 tracing::error!(handler_id, %error, "Wasm event dispatch failed");
             }
         })
+    }
+
+    fn get_priority(&self) -> &pumpkin_core::plugin::EventPriority {
+        &self.priority
+    }
+
+    fn is_blocking(&self) -> bool {
+        self.blocking
+    }
+
+    fn source(&self) -> Option<&str> {
+        // TODO: extra from self.plugin.store somehow?
+        None
     }
 }
