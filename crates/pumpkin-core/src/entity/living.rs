@@ -973,7 +973,7 @@ impl LivingEntity {
     }
 
     /// Vanilla `LivingEntity.onItemPickup`, with the ground stack as it was before the pickup.
-    fn on_item_pickup(&self, item: &crate::entity::item::ItemEntity, stack: &ItemStack) {
+    pub(crate) fn on_item_pickup(&self, item: &crate::entity::item::ItemEntity, stack: &ItemStack) {
         let Some(owner) = item.get_owner_entity() else {
             return;
         };
@@ -2532,7 +2532,7 @@ impl LivingEntity {
         }
     }
 
-    fn jump_from_ground(&self, multiplier: f32) {
+    pub(crate) fn jump_from_ground(&self, multiplier: f32) {
         let jump = self.get_jump_velocity(f64::from(multiplier));
 
         if jump <= 1.0e-5 {
