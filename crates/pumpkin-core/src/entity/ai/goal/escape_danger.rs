@@ -1,5 +1,5 @@
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::tag::{self, Tag, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::Ordering::Relaxed;
@@ -15,38 +15,47 @@ const WATER_SEARCH_Y: i32 = 1;
 const HORIZONTAL_RANGE: i32 = 5;
 const VERTICAL_RANGE: i32 = 4;
 
-/// Vanilla `PanicGoal`'s `Function<PathfinderMob, TagKey<DamageType>>`.
-type PanicTagFn = fn(&dyn Mob) -> &'static tag::Tag;
+/// Vanilla `PanicGoal`'s function from the mob to the damage type tag that makes it panic.
+pub type PanicTag = fn(&dyn Mob) -> &'static Tag;
+
+/// Ends a panic route early, as vanilla `PandaPanicGoal.canContinueToUse` does for a sitting panda.
+pub type GiveUpCheck = fn(&dyn Mob) -> bool;
+
+fn panic_causes(_mob: &dyn Mob) -> &'static Tag {
+    &tag::DamageType::MINECRAFT_PANIC_CAUSES
+}
 
 pub struct EscapeDangerGoal {
     speed: f64,
+    panic_tag: PanicTag,
+    give_up_when: Option<GiveUpCheck>,
     goal_control: Controls,
     target: Option<Vector3<f64>>,
     running: bool,
     calm_while_mob_controlled: bool,
     teleport_to_owner: bool,
     water_search_xz: Option<i32>,
-    panic_causes: PanicTagFn,
 }
 
 impl EscapeDangerGoal {
     #[must_use]
     pub fn new(speed: f64) -> Box<Self> {
-        Self::new_with_tag(speed, |_| &tag::DamageType::MINECRAFT_PANIC_CAUSES)
+        Self::new_with_tag(speed, panic_causes)
     }
 
     /// For mobs whose panic damage tag depends on the mob, like the polar bear's age.
     #[must_use]
-    pub fn new_with_tag(speed: f64, panic_causes: PanicTagFn) -> Box<Self> {
+    pub fn new_with_tag(speed: f64, panic_causes: PanicTag) -> Box<Self> {
         Box::new(Self {
             speed,
+            panic_tag: panic_causes,
+            give_up_when: None,
             goal_control: Controls::MOVE,
             target: None,
             running: false,
             calm_while_mob_controlled: false,
             teleport_to_owner: false,
             water_search_xz: None,
-            panic_causes,
         })
     }
 
@@ -73,19 +82,32 @@ impl EscapeDangerGoal {
         goal
     }
 
+    /// The damage type tag that makes this mob panic, from the mob itself.
+    #[must_use]
+    pub const fn with_panic_tag(mut self: Box<Self>, panic_tag: PanicTag) -> Box<Self> {
+        self.panic_tag = panic_tag;
+        self
+    }
+
+    /// The mob stops its route and the goal ends as soon as `give_up_when` holds.
+    #[must_use]
+    pub const fn giving_up_when(mut self: Box<Self>, give_up_when: GiveUpCheck) -> Box<Self> {
+        self.give_up_when = Some(give_up_when);
+        self
+    }
+
     #[must_use]
     pub const fn is_running(&self) -> bool {
         self.running
     }
 
-    /// Only damage in the mob's panic tag makes it flee, and only while the source is still
-    /// remembered.
+    /// Only damage of the mob's panic tag (`#minecraft:panic_causes` by default) makes it flee,
+    /// and only while the source is still remembered.
     fn should_panic(&self, mob: &dyn Mob) -> bool {
-        let panic_causes = (self.panic_causes)(mob);
         mob.get_mob_entity()
             .living_entity
             .get_last_damage_type()
-            .is_some_and(|damage_type| damage_type.has_tag(panic_causes))
+            .is_some_and(|damage_type| damage_type.has_tag((self.panic_tag)(mob)))
     }
 
     /// Nearest water within `xz_dist` blocks horizontally, only when the mob is not stuck in a block.
@@ -170,6 +192,10 @@ impl Goal for EscapeDangerGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.give_up_when.is_some_and(|give_up| give_up(mob)) {
+            mob.get_mob_entity().steered().navigator().stop();
+            return false;
+        }
         !mob.is_navigator_idle()
     }
 
