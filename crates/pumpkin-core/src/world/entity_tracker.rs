@@ -559,18 +559,23 @@ impl TrackedEntity {
             VarInt(self.entity_id),
             entity.last_sent_head_yaw.load(Relaxed),
         );
+        // Out of the map first: a plugin watching packets may come back for its lock.
+        let mut leaving = Vec::new();
         far.write().retain(|_, watcher| {
-            if watcher.state != FarState::Leaving {
-                return true;
+            let stays = watcher.state != FarState::Leaving;
+            if !stays {
+                leaving.push(watcher.player.clone());
             }
+            stays
+        });
+        for player in leaving {
             self.with_move_packet(entity, base, 0, 0, |packet| {
                 if let MovePacket::Sync(packet) = packet {
-                    send_to(&watcher.player, packet);
+                    send_to(&player, packet);
                 }
             });
-            send_to(&watcher.player, &head);
-            false
-        });
+            send_to(&player, &head);
+        }
     }
 
     /// `send_changes` for the far watchers: the same packets, every `far.interval` ticks.
