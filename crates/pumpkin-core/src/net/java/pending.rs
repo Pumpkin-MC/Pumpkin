@@ -60,6 +60,7 @@ const HANDSHAKE_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 
 pub struct PendingConnection {
     pub id: u64,
+    pub(crate) latency: Option<super::latency::TcpLatency>,
     pub address: SocketAddr,
     pub server_address: String,
     pub version: AtomicCell<JavaMinecraftVersion>,
@@ -93,15 +94,18 @@ impl PendingConnection {
         packet_limiter: PacketRateLimiter,
         server: Weak<Server>,
     ) -> Self {
+        let latency = super::latency::TcpLatency::new(&tcp_stream);
         let (read, write) = tcp_stream.into_split();
-        Self::from_transport(
+        let mut connection = Self::from_transport(
             Box::new(read),
             Box::new(write),
             address,
             id,
             packet_limiter,
             server,
-        )
+        );
+        connection.latency = latency;
+        connection
     }
 
     /// A connection over any byte stream, such as the in-memory pipe of an integrated server.
@@ -116,6 +120,7 @@ impl PendingConnection {
     ) -> Self {
         Self {
             id,
+            latency: None,
             address,
             server_address: String::new(),
             version: AtomicCell::new(CURRENT_MC_VERSION),

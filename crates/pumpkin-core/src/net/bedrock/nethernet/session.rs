@@ -5,7 +5,7 @@ use std::{
         Arc, Mutex as StdMutex,
         atomic::{AtomicBool, AtomicU8, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use webrtc::{
     data_channel::{DataChannel, DataChannelEvent},
-    peer_connection::PeerConnection,
+    peer_connection::{PeerConnection, RTCStatsReportEntry, StatsSelector},
 };
 
 use super::ice_router::Registration;
@@ -300,6 +300,25 @@ impl NetherNetSession {
         .await
     }
 
+    /// Returns the active ICE connection's measured round-trip time in milliseconds.
+    pub(in crate::net::bedrock) async fn latency(&self) -> Option<u32> {
+        let report = self
+            .peer
+            .get_stats(Instant::now(), StatsSelector::None)
+            .await;
+        let transport = report.transport()?;
+        let RTCStatsReportEntry::IceCandidatePair(pair) =
+            report.get(&transport.selected_candidate_pair_id)?
+        else {
+            return None;
+        };
+        if pair.responses_received == 0 {
+            return None;
+        }
+        let rtt = Duration::try_from_secs_f64(pair.current_round_trip_time).ok()?;
+        Some(rtt.as_millis().min(u128::from(u32::MAX)) as u32)
+    }
+
     pub const fn client_public_key(&self) -> Option<&PublicKey> {
         self.client_public_key.as_ref()
     }
@@ -366,6 +385,87 @@ impl FragmentBuffer {
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
+
+    #[tokio::test]
+    async fn latency_is_measured_after_ice_connects() {
+        use webrtc::peer_connection::{
+            PeerConnectionBuilder, PeerConnectionEventHandler, RTCIceGatheringState,
+        };
+
+        struct GatherHandler(mpsc::Sender<()>);
+
+        #[async_trait::async_trait]
+        impl PeerConnectionEventHandler for GatherHandler {
+            async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+                if state == RTCIceGatheringState::Complete {
+                    let _ = self.0.send(()).await;
+                }
+            }
+        }
+
+        let (gathered, mut gathering) = mpsc::channel(2);
+        let offerer = Box::pin(
+            PeerConnectionBuilder::new()
+                .with_handler(Arc::new(GatherHandler(gathered.clone())))
+                .with_udp_addrs(vec!["127.0.0.1:0"])
+                .build(),
+        )
+        .await
+        .unwrap();
+        let answerer = Arc::new(
+            Box::pin(
+                PeerConnectionBuilder::new()
+                    .with_handler(Arc::new(GatherHandler(gathered)))
+                    .with_udp_addrs(vec!["127.0.0.1:0"])
+                    .build(),
+            )
+            .await
+            .unwrap(),
+        );
+        let (incoming, _sessions) = mpsc::channel(1);
+        let session = NetherNetSession::new(
+            answerer.clone(),
+            None,
+            "127.0.0.1:19132".parse().unwrap(),
+            incoming,
+        );
+        assert_eq!(session.latency().await, None);
+
+        let result = tokio::time::timeout(Duration::from_secs(10), async {
+            let _channel = offerer
+                .create_data_channel(RELIABLE_CHANNEL, None)
+                .await
+                .unwrap();
+            let offer = offerer.create_offer(None).await.unwrap();
+            offerer.set_local_description(offer).await.unwrap();
+            gathering.recv().await.unwrap();
+            answerer
+                .set_remote_description(offerer.local_description().await.unwrap())
+                .await
+                .unwrap();
+            let answer = answerer.create_answer(None).await.unwrap();
+            answerer.set_local_description(answer).await.unwrap();
+            gathering.recv().await.unwrap();
+            offerer
+                .set_remote_description(answerer.local_description().await.unwrap())
+                .await
+                .unwrap();
+            loop {
+                if let Some(ping) = session.latency().await {
+                    return ping;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        offerer.close().await.unwrap();
+        answerer.close().await.unwrap();
+        assert!(
+            result.is_ok(),
+            "connected ICE transport did not report a ping"
+        );
+    }
 
     #[tokio::test]
     async fn reliable_delivery_waits_until_no_bytes_are_outstanding() {

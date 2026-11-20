@@ -860,8 +860,11 @@ interface player {
         set-gamemode: async func (mode: game-mode) -> bool;
         /// Returns the player's locale (e.g., \"en_us\").
         get-locale: func () -> string;
-        /// Returns the player's current ping in milliseconds.
+        /// Returns smoothed game-packet round-trip time in milliseconds, including processing delays.
         get-ping: func () -> u32;
+        /// Returns transport round-trip time in milliseconds, excluding game processing delays.
+        /// None means unavailable or not yet measured; zero is a valid sub-millisecond measurement.
+        get-latency: func () -> option<u32>;
 
         // Permissions & metadata
 

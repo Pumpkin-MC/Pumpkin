@@ -59,6 +59,7 @@ pub type JavaWriteHalf = Box<dyn AsyncWrite + Send + Sync + Unpin>;
 
 pub mod chunk_data;
 pub mod handshake;
+pub(crate) mod latency;
 pub mod login;
 mod outgoing;
 pub mod pending;
@@ -96,6 +97,7 @@ fn frame_packet(packet_id: i32, payload: &[u8]) -> Option<Bytes> {
 #[repr(C)]
 pub struct JavaClient {
     pub id: u64,
+    pub(crate) latency: std::sync::Mutex<Option<latency::TcpLatency>>,
     /// The protocol the client speaks. Play packets are always encoded/decoded as
     /// `CURRENT_MC_VERSION`. Older clients are not admitted; the packet events are the hook
     /// for a plugin that converts them.
@@ -164,6 +166,7 @@ impl JavaClient {
 
         Self {
             id: pending.id,
+            latency: std::sync::Mutex::new(pending.latency),
             gameprofile,
             config: ArcSwap::from_pointee(config),
             server_address: pending.server_address,
@@ -834,6 +837,10 @@ impl JavaClient {
     /// Packets already queued are still written and flushed, bounded by `DISCONNECT_FLUSH_TIMEOUT`.
     pub fn close(&self) {
         self.close_token.cancel();
+        self.latency
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
     }
 
     pub fn is_closed(&self) -> bool {

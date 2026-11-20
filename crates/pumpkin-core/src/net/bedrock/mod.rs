@@ -174,6 +174,7 @@ pub struct BedrockClient {
     /// Serializes sub-client admission (`can_complete_login` + `add_player`) on this connection.
     sub_client_login_lock: Mutex<()>,
     session: Arc<NetherNetSession>,
+    pub(crate) latency: Arc<AtomicCell<Option<u32>>>,
     /// The client's IP address.
     pub address: SocketAddr,
     pub player: ArcSwap<Option<Arc<Player>>>,
@@ -255,6 +256,7 @@ impl BedrockClient {
             saving_sub_clients: std::sync::Mutex::new(HashSet::new()),
             sub_client_login_lock: Mutex::new(()),
             session,
+            latency: Arc::new(AtomicCell::new(None)),
             player: ArcSwap::new(Arc::new(None)),
             address,
             protocol_version: AtomicU32::new(0),
@@ -318,6 +320,7 @@ impl BedrockClient {
             saving_sub_clients: std::sync::Mutex::new(HashSet::new()),
             sub_client_login_lock: Mutex::new(()),
             session: self.session.clone(),
+            latency: self.latency.clone(),
             player: ArcSwap::new(Arc::new(None)),
             address: self.address,
             protocol_version: AtomicU32::new(self.protocol_version.load(Ordering::Relaxed)),
@@ -365,8 +368,27 @@ impl BedrockClient {
         }
     }
 
+    fn start_latency_task(self: &Arc<Self>) {
+        let client = self.clone();
+        self.spawn_task(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                tokio::select! {
+                    biased;
+                    () = client.close_token.cancelled() => break,
+                    _ = interval.tick() => {
+                        client.latency.store(client.session.latency().await);
+                    }
+                }
+            }
+        });
+    }
+
     pub fn start_outgoing_packet_task(self: &Arc<Self>) {
         const MAX_BATCH_SIZE: usize = 64;
+
+        self.start_latency_task();
 
         let client = self.clone();
         self.spawn_task(async move {
