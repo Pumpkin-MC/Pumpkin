@@ -132,15 +132,8 @@ pub trait DynEventHandler: Send + Sync {
 
 /// A trait for handling specific events.
 ///
-/// This trait allows for handling events of a specific type that implements the `Event` trait.
-pub trait EventRwHandler<E: Payload>: Send + Sync {
-    /// Asynchronously handles a blocking event of type `E`.
-    ///
-    /// # Arguments
-    /// - `event`: A mutable reference to the event to handle.
-    fn handle<'a>(&'a self, _server: &'a Arc<Server>, _event: &'a mut E) -> BoxFuture<'a, ()>;
-}
-
+/// These handlers are the non-blocking variant (ran concurrently), and
+/// are given read-only access to the event (conforming to the `Event` trait).
 pub trait EventRoHandler<E: Payload>: Send + Sync {
     /// Asynchronously handles an event of type `E`.
     ///
@@ -149,9 +142,21 @@ pub trait EventRoHandler<E: Payload>: Send + Sync {
     fn handle<'a>(&'a self, _server: &'a Arc<Server>, _event: &'a E) -> BoxFuture<'a, ()>;
 }
 
-/// A struct representing a typed event handler.
+/// A trait for handling specific events.
 ///
-/// This struct holds a reference to an event handler, its priority, and whether it is blocking.
+/// These handlers are the blocking variant (ran sequentially), and are allowed
+/// to both read AND write the event (conforming to the `Event` trait).
+pub trait EventRwHandler<E: Payload>: Send + Sync {
+    /// Asynchronously handles a blocking event of type `E`.
+    ///
+    /// # Arguments
+    /// - `event`: A mutable reference to the event to handle.
+    fn handle<'a>(&'a self, _server: &'a Arc<Server>, _event: &'a mut E) -> BoxFuture<'a, ()>;
+}
+
+/// A struct representing a typed read-only/non-blocking event handler.
+///
+/// This struct holds a reference to an event handler, and its priority.
 pub struct TypedEventRoHandler<E, H>
 where
     E: Payload + 'static,
@@ -193,9 +198,9 @@ where
     }
 }
 
-/// A struct representing a typed event handler.
+/// A struct representing a typed read-write/blocking event handler.
 ///
-/// This struct holds a reference to an event handler, its priority, and whether it is blocking.
+/// This struct holds a reference to an event handler, and its priority.
 pub struct TypedEventRwHandler<E, H>
 where
     E: Payload + 'static,
@@ -1260,7 +1265,8 @@ impl PluginManager {
         }
     }
 
-    /// Register an event handler
+    /// Register a non-blocking/concurrently-ran event handler that may
+    /// only read, but not modify, the event.
     pub fn register_nonblocking<E, H>(
         &self,
         handler: Arc<H>,
@@ -1280,7 +1286,8 @@ impl PluginManager {
         self.register_dyn(E::get_name_static(), &typed_handler);
     }
 
-    /// Register an event handler
+    /// Register a blocking/sequentially-ran event handler that may
+    /// both read and write events.
     pub fn register_blocking<E, H>(
         &self,
         handler: Arc<H>,
@@ -1300,7 +1307,8 @@ impl PluginManager {
         self.register_dyn(E::get_name_static(), &typed_handler);
     }
 
-    /// Register an event handler
+    /// Register a dynamic event handler, that may be either blocking or
+    /// unblocking, and that consumes a raw `QueuedEvent` handle.
     pub fn register_dyn(&self, event_type: &'static str, handler: &Arc<dyn DynEventHandler>) {
         self.handlers.rcu(|handlers| {
             let mut new_handlers = (**handlers).clone();
