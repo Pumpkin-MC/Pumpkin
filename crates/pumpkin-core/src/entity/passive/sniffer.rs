@@ -20,15 +20,19 @@ use rand::RngExt;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
-    ai::goal::{
-        breed::BreedGoal, follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+    ai::{
+        goal::{
+            breed::BreedGoal, follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+            look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+            wander_around::WanderAroundGoal,
+        },
+        pathfinder::node::PathType,
     },
     item::ItemEntity,
     mob::{Mob, MobEntity, drop_from_gift_loot_table},
     passive::animal::Animal,
     player::Player,
+    r#type::from_type,
 };
 
 const SNIFFER_DIGGING_LOOT_TABLE: &str = "minecraft:gameplay/sniffer_digging";
@@ -93,6 +97,18 @@ impl SnifferEntity {
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
+        };
+
+        {
+            let mut navigator = mob_arc
+                .mob_entity
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            navigator.set_can_float(true);
+            navigator.set_pathfinding_malus(PathType::Water, -1.0);
+            navigator.set_pathfinding_malus(PathType::PowderSnow, -1.0);
+            navigator.set_pathfinding_malus(PathType::DamageCautious, -1.0);
         };
 
         {
@@ -302,26 +318,6 @@ impl SnifferEntity {
             );
         }
     }
-
-    pub fn spawn_child_from_breeding(&self, partner: &dyn EntityBase) {
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        let pos = entity.pos.load();
-
-        let item_stack = ItemStack::new(1, &Item::SNIFFER_EGG);
-        let egg_entity = Entity::new(world.clone(), pos, &EntityType::ITEM);
-        let egg_arc = Arc::new(ItemEntity::new(egg_entity, item_stack));
-        world.spawn_entity_non_save(egg_arc as Arc<dyn EntityBase>);
-
-        world.play_sound(Sound::BlockSnifferEggPlop, SoundCategory::Neutral, &pos);
-
-        self.mob_entity.reset_love_ticks();
-        self.mob_entity
-            .breeding_cooldown
-            .store(6000, Ordering::Relaxed);
-        partner.reset_love();
-        partner.set_breeding_cooldown(6000);
-    }
 }
 
 impl AgeableMob for SnifferEntity {
@@ -347,6 +343,55 @@ impl Animal for SnifferEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_SNIFFER_FOOD)
     }
+
+    fn can_mate(&self, partner: &dyn EntityBase) -> bool {
+        let is_valid_state = |state: SnifferState| {
+            matches!(
+                state,
+                SnifferState::Idling | SnifferState::Scenting | SnifferState::FeelingHappy
+            )
+        };
+        is_valid_state(self.get_state())
+            && partner
+                .cast_any()
+                .downcast_ref::<Self>()
+                .is_some_and(|partner_sniffer| is_valid_state(partner_sniffer.get_state()))
+    }
+
+    fn spawns_offspring(&self) -> bool {
+        false
+    }
+
+    fn on_bred_without_offspring(&self, _brain: Option<&mut crate::entity::ai::brain::BrainState>) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+
+        let item_stack = ItemStack::new(1, &Item::SNIFFER_EGG);
+        let egg_entity = Entity::new(world.clone(), pos, &EntityType::ITEM);
+        let egg_arc = Arc::new(ItemEntity::new(egg_entity, item_stack));
+        world.spawn_entity_non_save(egg_arc as Arc<dyn EntityBase>);
+
+        let mut rng = rand::rng();
+        let pitch = 0.2f32.mul_add(rng.random::<f32>() - rng.random::<f32>(), 0.5);
+        world.play_sound_fine(
+            Sound::BlockSnifferEggPlop,
+            SoundCategory::Neutral,
+            &pos,
+            1.0,
+            pitch,
+        );
+    }
+
+    fn get_breed_offspring(&self, _partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        from_type(
+            &EntityType::SNIFFER,
+            entity.pos.load(),
+            &entity.world.load(),
+            uuid::Uuid::new_v4(),
+        )
+    }
 }
 
 impl Mob for SnifferEntity {
@@ -356,6 +401,34 @@ impl Mob for SnifferEntity {
 
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntitySnifferStep, 0.15, 1.0);
+    }
+
+    fn get_max_head_rotation(&self) -> f32 {
+        50.0
+    }
+
+    fn on_jump_from_ground(&self) {
+        let entity = self.get_entity();
+        let steered = self.mob_entity.steered();
+        let speed = steered.move_control().get_speed_modifier();
+        if speed > 0.0 && entity.velocity.load().horizontal_length_squared() < 0.01 {
+            entity.update_velocity_from_input(Vector3::new(0.0, 0.0, 1.0), 0.1);
+        }
+    }
+
+    fn on_die(&self, _killer: Option<&dyn EntityBase>) {
+        self.transition_to(SnifferState::Idling);
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        if matches!(
+            self.get_state(),
+            SnifferState::Digging | SnifferState::Searching
+        ) {
+            None
+        } else {
+            Some(Sound::EntitySnifferIdle)
+        }
     }
 
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
@@ -388,6 +461,13 @@ impl Mob for SnifferEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let in_water_or_fire = self.mob_entity.living_entity.is_in_water()
+            || self.mob_entity.living_entity.entity.is_on_fire();
+        let target_water_malus = if in_water_or_fire { 0.0 } else { -1.0 };
+        if let Ok(mut navigator) = self.mob_entity.navigator.try_lock() {
+            navigator.set_pathfinding_malus(PathType::Water, target_water_malus);
+        }
+
         let state = self.get_state();
         match state {
             SnifferState::Searching => {
@@ -427,5 +507,136 @@ impl Mob for SnifferEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         self.animal_interact(player, item_stack)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::ai::test_support::world;
+
+    #[tokio::test]
+    async fn sniffer_can_mate_requires_valid_states() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity1 = Entity::new(world.clone(), Vector3::default(), &EntityType::SNIFFER);
+        let sniffer1 = SnifferEntity::new(entity1);
+
+        let entity2 = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer2 = SnifferEntity::new(entity2);
+
+        // Both in Idling -> can mate
+        assert!(sniffer1.can_mate(sniffer2.as_ref()));
+
+        // When partner is in Scenting or FeelingHappy -> can mate
+        sniffer2.set_state(SnifferState::Scenting);
+        assert!(sniffer1.can_mate(sniffer2.as_ref()));
+        sniffer2.set_state(SnifferState::FeelingHappy);
+        assert!(sniffer1.can_mate(sniffer2.as_ref()));
+
+        // When partner is Digging or Searching -> cannot mate
+        sniffer2.set_state(SnifferState::Digging);
+        assert!(!sniffer1.can_mate(sniffer2.as_ref()));
+        sniffer2.set_state(SnifferState::Searching);
+        assert!(!sniffer1.can_mate(sniffer2.as_ref()));
+
+        // When self is Digging -> cannot mate
+        sniffer1.set_state(SnifferState::Digging);
+        sniffer2.set_state(SnifferState::Idling);
+        assert!(!sniffer1.can_mate(sniffer2.as_ref()));
+    }
+
+    #[tokio::test]
+    async fn sniffer_on_die_resets_state_to_idling() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        sniffer.set_state(SnifferState::Digging);
+        assert_eq!(sniffer.get_state(), SnifferState::Digging);
+
+        sniffer.on_die(None);
+        assert_eq!(sniffer.get_state(), SnifferState::Idling);
+    }
+
+    #[tokio::test]
+    async fn sniffer_max_head_rotation_is_50() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        assert!((sniffer.get_max_head_rotation() - 50.0).abs() < f32::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn sniffer_ambient_sound_suppressed_while_digging_or_searching() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        sniffer.set_state(SnifferState::Idling);
+        assert_eq!(sniffer.get_ambient_sound(), Some(Sound::EntitySnifferIdle));
+
+        sniffer.set_state(SnifferState::Digging);
+        assert_eq!(sniffer.get_ambient_sound(), None);
+
+        sniffer.set_state(SnifferState::Searching);
+        assert_eq!(sniffer.get_ambient_sound(), None);
+
+        sniffer.set_state(SnifferState::FeelingHappy);
+        assert_eq!(sniffer.get_ambient_sound(), Some(Sound::EntitySnifferIdle));
+    }
+
+    #[tokio::test]
+    async fn sniffer_on_bred_without_offspring_drops_egg() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world.clone(), Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        assert_eq!(world.entities.load().len(), 0);
+        assert!(!sniffer.spawns_offspring());
+
+        sniffer.on_bred_without_offspring(None);
+        let entities = world.entities.load();
+        assert_eq!(entities.len(), 1);
+        let item_entity = entities[0].get_item_entity().expect("expected item entity");
+        assert_eq!(
+            item_entity
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .item,
+            &pumpkin_data::item::Item::SNIFFER_EGG
+        );
+    }
+
+    #[tokio::test]
+    async fn sniffer_navigator_maluses() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        let navigator = sniffer
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(navigator.get_pathfinding_malus(PathType::Water), -1.0);
+        assert_eq!(navigator.get_pathfinding_malus(PathType::PowderSnow), -1.0);
+        assert_eq!(
+            navigator.get_pathfinding_malus(PathType::DamageCautious),
+            -1.0
+        );
     }
 }
