@@ -504,6 +504,16 @@ impl TrackedEntity {
         }
     }
 
+    /// The baselines a movement stores under the read lock of `seen_by`.
+    fn move_baselines(&self) -> (Vector3<f64>, u8, u8) {
+        let entity = self.entity.get_entity();
+        (
+            entity.last_sent_pos.load(),
+            entity.last_sent_yaw.load(Relaxed),
+            entity.last_sent_pitch.load(Relaxed),
+        )
+    }
+
     /// Java only -> Bedrock uses [`Self::send_bedrock_move`].
     /// `sent` moves the baselines of the move, before another watcher can be paired: a
     /// watcher paired in between would be spawned at the old ones and never get the move.
@@ -895,26 +905,51 @@ impl TrackedEntity {
                 {
                     return;
                 }
-                let inserted = {
+                let uuid = player.gameprofile.id;
+                let baselines = {
                     let mut seen_by = self
                         .seen_by
                         .write()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let inserted = seen_by
-                        .insert(player.gameprofile.id, player.clone())
-                        .is_none();
-                    if inserted {
-                        // Under the lock, so a movement and its baselines come either
-                        // before the spawn or after it.
-                        player.client.try_enqueue_spawn_packet(&self.entity);
+                    if seen_by.insert(uuid, player.clone()).is_some() {
+                        return;
                     }
-                    inserted
+                    self.move_baselines()
                 };
-                if inserted {
-                    if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
-                        self.bedrock_watchers.fetch_add(1, Relaxed);
+                let bedrock = matches!(player.client.as_ref(), ClientPlatform::Bedrock(_));
+                if bedrock {
+                    self.bedrock_watchers.fetch_add(1, Relaxed);
+                }
+                // `seen_by` is not locked while the spawn packet is queued: a plugin watching
+                // packets may ask the tracker about this entity.
+                player.client.try_enqueue_spawn_packet(&self.entity);
+                // A movement sent meanwhile moved the baselines. It reached the watcher ahead
+                // of its spawn packet or is missing from it, so the watcher starts over in
+                // the next pass.
+                let in_order = {
+                    let mut seen_by = self
+                        .seen_by
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let in_order =
+                        self.move_baselines() == baselines && seen_by.contains_key(&uuid);
+                    if !in_order && seen_by.remove(&uuid).is_some() && bedrock {
+                        self.bedrock_watchers.fetch_sub(1, Relaxed);
                     }
+                    in_order
+                };
+                if in_order {
                     self.add_pairing(player);
+                } else {
+                    self.forget_far(player);
+                    self.remove_pairing(player);
+                    // The removal also took the entity from the watcher if it was paired
+                    // again meanwhile, so whoever tracks the entity now starts over.
+                    let world = self.entity.get_entity().world.load();
+                    if let Some(current) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+                        current.remove_player(player);
+                        current.pos_dirty.store(true, Relaxed);
+                    }
                 }
                 return;
             }

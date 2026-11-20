@@ -64,6 +64,13 @@ fn drawn_at(
     Ok(pos)
 }
 
+/// Whether a packet with this id and payload spawns entity `entity_id`.
+fn spawns_entity(packet_id: i32, payload: &[u8], entity_id: i32) -> bool {
+    packet_id == id::<CSpawnEntity>()
+        && CSpawnEntity::read_packet_data(payload, &CURRENT_MC_VERSION)
+            .is_ok_and(|spawn| spawn.entity_id.0 == entity_id)
+}
+
 fn assert_close(drawn: Option<Vector3<f64>>, actual: Vector3<f64>) {
     // Deltas are sent in 1/4096 of a block.
     assert!(
@@ -660,6 +667,16 @@ async fn watchers_follow_a_player_while_a_plugin_watches_packets() -> TestResult
     Ok(())
 }
 
+/// Makes `viewer` a player that got the chunk of `entity`, wherever it stands.
+fn send_chunk_of(entity: &Entity, viewer: &Client) {
+    let chunk = entity.chunk_pos.load();
+    viewer
+        .player
+        .watched_section
+        .store(Cylindrical::new(chunk, get_view_distance(&viewer.player)));
+    lock_briefly(&viewer.player.chunk_sender).mark_sent_out_of_band(chunk);
+}
+
 /// Stands in for a join that reaches the tracker while it sends a movement.
 struct PairsMidPass {
     walker: i32,
@@ -698,12 +715,7 @@ async fn a_watcher_paired_right_after_a_move_draws_the_player_where_it_is() -> T
     // Out of range, with the walker's chunk already sent.
     let mut viewer = Client::join(&server, 3, Vector3::new(1000.5, 100.0, 0.5));
     let entity = walker.player.get_entity();
-    let chunk = entity.chunk_pos.load();
-    viewer
-        .player
-        .watched_section
-        .store(Cylindrical::new(chunk, get_view_distance(&viewer.player)));
-    lock_briefly(&viewer.player.chunk_sender).mark_sent_out_of_band(chunk);
+    send_chunk_of(entity, &viewer);
     world.entity_tracker.update_all(&world);
     viewer.received().await?;
     server.plugin_manager.register(
@@ -734,6 +746,158 @@ async fn a_watcher_paired_right_after_a_move_draws_the_player_where_it_is() -> T
     // The last step goes out on the next even tick.
     world.entity_tracker.update_all(&world);
     drawn = drawn_at(drawn, walker.entity_id(), &viewer.received().await?)?;
+    assert_close(drawn, entity.pos.load());
+    shutdown(&server).await;
+    Ok(())
+}
+
+/// Stands in for a plugin that asks the tracker about an entity when its spawn packet goes
+/// out, at the moment the entity's next movement is sent.
+struct MovesWhileSpawned {
+    walker: Arc<TrackedEntity>,
+    step: Vector3<f64>,
+    spawned: AtomicBool,
+    locked: AtomicBool,
+}
+impl EventHandler<PacketSentEvent> for MovesWhileSpawned {
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
+    ) -> BoxFuture<'a, ()> {
+        if spawns_entity(event.packet_id, &event.payload, self.walker.entity_id)
+            && !self.spawned.swap(true, Relaxed)
+        {
+            if self.walker.seen_by.try_read().is_err() {
+                self.locked.store(true, Relaxed);
+            } else {
+                let world = server.worlds.load()[0].clone();
+                self.walker.entity.get_entity().set_pos(self.step);
+                // A player is sent in every other pass.
+                for _ in 0..2 {
+                    self.walker.send_changes(&world);
+                }
+            }
+        }
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_sees_a_spawn_packet_with_the_watchers_unlocked() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.worlds.load()[0].clone();
+    let walker = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+    // Out of range, with the walker's chunk already sent.
+    let mut viewer = Client::join(&server, 2, Vector3::new(1000.5, 100.0, 0.5));
+    let entity = walker.player.get_entity();
+    send_chunk_of(entity, &viewer);
+    world.entity_tracker.update_all(&world);
+    viewer.received().await?;
+    let tracked = world
+        .entity_tracker
+        .get_tracked_entity(walker.entity_id())
+        .ok_or("the walker is tracked")?;
+    let plugin = Arc::new(MovesWhileSpawned {
+        walker: tracked,
+        step: Vector3::new(1.5, 100.0, 0.5),
+        spawned: AtomicBool::new(false),
+        locked: AtomicBool::new(false),
+    });
+    server
+        .plugin_manager
+        .register(plugin.clone(), EventPriority::Normal, true);
+
+    viewer
+        .player
+        .get_entity()
+        .set_pos(Vector3::new(5.5, 100.0, 0.5));
+    world
+        .entity_tracker
+        .pair_new_player_with_tracked_entities(&viewer.player, &world);
+    assert!(plugin.spawned.load(Relaxed));
+    assert!(
+        !plugin.locked.load(Relaxed),
+        "the watchers are locked while a plugin sees the spawn packet"
+    );
+
+    // The move went out while the spawn packet did, so the next pass pairs the two anew.
+    world.entity_tracker.update_all(&world);
+    let mut drawn = drawn_at(None, walker.entity_id(), &viewer.received().await?)?;
+    assert_close(drawn, entity.pos.load());
+    for step in 1..=4 {
+        entity.set_pos(Vector3::new(
+            0.2f64.mul_add(f64::from(step), 1.5),
+            100.0,
+            0.5,
+        ));
+        world.entity_tracker.update_all(&world);
+    }
+    world.entity_tracker.update_all(&world);
+    drawn = drawn_at(drawn, walker.entity_id(), &viewer.received().await?)?;
+    assert_close(drawn, entity.pos.load());
+    shutdown(&server).await;
+    Ok(())
+}
+
+/// Stands in for a player that respawns while its spawn packet for a new watcher goes out.
+struct RespawnsWhileSpawned {
+    walker: Arc<Player>,
+    spawned: AtomicBool,
+}
+impl EventHandler<PacketSentEvent> for RespawnsWhileSpawned {
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
+    ) -> BoxFuture<'a, ()> {
+        if spawns_entity(event.packet_id, &event.payload, self.walker.entity_id())
+            && !self.spawned.swap(true, Relaxed)
+        {
+            let world = server.worlds.load()[0].clone();
+            let entity: Arc<dyn EntityBase> = self.walker.clone();
+            world.entity_tracker.respawn_entity(&entity, &world);
+        }
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_player_respawning_while_its_spawn_packet_goes_out_stays_drawn() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.worlds.load()[0].clone();
+    let walker = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+    // Out of range, with the walker's chunk already sent.
+    let mut viewer = Client::join(&server, 2, Vector3::new(1000.5, 100.0, 0.5));
+    let entity = walker.player.get_entity();
+    send_chunk_of(entity, &viewer);
+    world.entity_tracker.update_all(&world);
+    viewer.received().await?;
+    let plugin = Arc::new(RespawnsWhileSpawned {
+        walker: walker.player.clone(),
+        spawned: AtomicBool::new(false),
+    });
+    server
+        .plugin_manager
+        .register(plugin.clone(), EventPriority::Normal, true);
+
+    // Paired by the tracker pass: a join iterates the entity map, which a respawn waits for.
+    viewer
+        .player
+        .get_entity()
+        .set_pos(Vector3::new(5.5, 100.0, 0.5));
+    world
+        .entity_tracker
+        .update_player_position(&viewer.player, &world);
+    world.entity_tracker.update_all(&world);
+    assert!(plugin.spawned.load(Relaxed));
+
+    // The removal took the respawned player from the watcher too, so the next pass pairs
+    // the two anew.
+    world.entity_tracker.update_all(&world);
+    let drawn = drawn_at(None, walker.entity_id(), &viewer.received().await?)?;
     assert_close(drawn, entity.pos.load());
     shutdown(&server).await;
     Ok(())
