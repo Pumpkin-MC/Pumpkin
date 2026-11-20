@@ -495,7 +495,11 @@ impl MobEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             self.apply_navigation_updates(&mut navigator);
-            navigator.tick(&self.living_entity)
+            if mob.ticks_navigation() {
+                navigator.tick(&self.living_entity)
+            } else {
+                None
+            }
         };
 
         // Vanilla PathNavigation.tick hands its waypoint to `mob.getMoveControl()`.
@@ -1112,47 +1116,76 @@ impl MobEntity {
         item_stack: &mut ItemStack,
         can_be_leashed: bool,
     ) -> bool {
+        self.interact_leash(player, item_stack, can_be_leashed)
+            .unwrap_or(false)
+    }
+
+    fn interact_leash(
+        &self,
+        player: &Arc<Player>,
+        item_stack: &mut ItemStack,
+        can_be_leashed: bool,
+    ) -> Option<bool> {
         let entity = &self.living_entity.entity;
 
-        if item_stack.item.id == pumpkin_data::item::Item::SHEARS.id
-            && entity.shear_off_all_leash_connections(true)
+        let holder = entity.get_leash_holder();
+        if holder
+            .as_ref()
+            .is_some_and(|holder| holder.get_entity().entity_id == player.entity_id())
         {
-            let _ = player.damage_item_stack(item_stack, 1);
-            return true;
+            if !entity.unleash() {
+                return Some(false);
+            }
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                entity.spawn_at_location(ItemStack::new(1, &Item::LEAD));
+            }
+            emit_entity_interact(entity, player);
+            entity.world.load().play_sound(
+                Sound::ItemLeadUntied,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+            );
+            return Some(true);
         }
 
-        // If already leashed to player, right-clicking unleashes the mob
-        let currently_leashed = entity.is_leashed();
-
-        if currently_leashed {
-            entity.unleash();
-            let lead_item =
-                pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
-            entity
-                .world
-                .load()
-                .drop_stack(&entity.block_pos.load(), lead_item);
-            return true;
-        }
-
-        // If holding a lead, leash the mob to the player
-        if (item_stack.item.registry_key == "lead"
-            || item_stack.item.registry_key == "minecraft:lead")
+        if item_stack.item == &Item::LEAD
             && can_be_leashed
+            && holder
+                .as_ref()
+                .is_none_or(|holder| holder.get_player().is_none())
         {
             let diff = entity.pos.load() - player.get_entity().pos.load();
-            let dist_sq = diff.length_squared();
-            if dist_sq <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
-                if entity.leash_to(player.clone() as Arc<dyn EntityBase>)
-                    && player.gamemode.load() != pumpkin_util::GameMode::Creative
+            if diff.length_squared() <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
+                let new_holder: Arc<dyn EntityBase> = player.clone();
+                if !entity.fire_leash_event(&new_holder) {
+                    return Some(false);
+                }
+                if holder.is_some() {
+                    if !entity.unleash() {
+                        return Some(false);
+                    }
+                    entity.spawn_at_location(ItemStack::new(1, &Item::LEAD));
+                }
+                entity.attach_leash(&new_holder);
+                if entity
+                    .get_leash_holder()
+                    .is_none_or(|holder| holder.get_entity().entity_id != player.entity_id())
                 {
+                    return Some(false);
+                }
+                if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                     item_stack.decrement(1);
                 }
-                return true;
+                entity.world.load().play_sound(
+                    Sound::ItemLeadTied,
+                    SoundCategory::Neutral,
+                    &entity.pos.load(),
+                );
+                return Some(true);
             }
         }
 
-        false
+        None
     }
 
     pub fn check_despawn(&self, mob: &dyn Mob) {
@@ -1759,6 +1792,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn can_use_non_melee_weapon(&self, _stack: &ItemStack) -> bool {
+        false
+    }
+
     fn can_use_slot(&self, _slot: &EquipmentSlot) -> bool {
         true
     }
@@ -1789,7 +1826,13 @@ pub trait Mob: EntityBase + Send + Sync {
         !self.get_entity().has_passengers()
     }
 
-    fn attempt_to_shear_equipment(&self, player: &Arc<Player>, shears: &mut ItemStack) -> bool {
+    /// Returns `None` without shearable equipment and `Some(false)` when plugins cancel.
+    fn attempt_to_shear_equipment(
+        &self,
+        player: &Arc<Player>,
+        shears: &mut ItemStack,
+        hand: pumpkin_util::Hand,
+    ) -> Option<bool> {
         let mob_entity = self.get_mob_entity();
         let living = &mob_entity.living_entity;
         let creative = player.gamemode.load() == pumpkin_util::GameMode::Creative;
@@ -1820,9 +1863,7 @@ pub trait Mob: EntityBase + Send + Sync {
                     .then(|| (slot, stack.clone(), shearing_sound))
             })
         };
-        let Some((slot, stack, shearing_sound)) = sheared else {
-            return false;
-        };
+        let (slot, stack, shearing_sound) = sheared?;
 
         let entity = &living.entity;
         let world = entity.world.load();
@@ -1830,22 +1871,35 @@ pub trait Mob: EntityBase + Send + Sync {
             let mut event = PlayerShearEntityEvent {
                 player: player.clone(),
                 entity_id: entity.entity_id,
-                hand: 0,
+                hand: hand.packet_id(),
                 cancelled: false,
             };
             server.plugin_manager.fire_blocking(&server, &mut event);
             if event.cancelled {
-                return false;
+                return Some(false);
             }
         }
 
-        let _ = player.damage_item_stack(shears, 1);
+        let _ = player.damage_held_stack(shears, 1, hand);
         mob_entity.set_item_slot(&slot, ItemStack::EMPTY.clone());
         world.emit_game_event(GameEvent::Unequip.name(), entity.pos.load());
-        world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
-        entity.spawn_at_location(stack);
+        world.emit_game_event_with_context(
+            GameEvent::Shear.name(),
+            entity.pos.load(),
+            &crate::world::game_event::GameEventContext {
+                source_entity: Some(player.as_ref()),
+            },
+        );
+        let item_id = stack.item.registry_key.to_string();
+        entity.spawn_at_location_with_offset(stack, super::average_passenger_attachment(self));
+        player.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerShearedEquipment {
+                entity_type: format!("minecraft:{}", entity.entity_type.resource_name),
+                item_id,
+            },
+        );
         world.play_sound_event(&shearing_sound, SoundCategory::Neutral, &entity.pos.load());
-        true
+        Some(true)
     }
 
     fn check_spawn_obstruction(&self, world: &World) -> bool {
@@ -1928,6 +1982,18 @@ pub trait Mob: EntityBase + Send + Sync {
     fn before_mob_ai_step(&self) {}
 
     fn mob_ai_step(&self) {}
+
+    fn ticks_navigation(&self) -> bool {
+        true
+    }
+
+    fn conservative_block_read_radius(&self) -> f64 {
+        0.0
+    }
+
+    fn fluid_jump_velocity(&self) -> f64 {
+        0.04
+    }
 
     fn tick_jump_control(&self, jump: bool) {
         self.get_mob_entity()
@@ -2082,6 +2148,10 @@ pub trait Mob: EntityBase + Send + Sync {
         _cause: Option<&dyn EntityBase>,
     ) -> bool {
         self.pre_damage(damage_type, source)
+    }
+
+    fn mob_can_be_seen_as_enemy(&self) -> bool {
+        true
     }
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
@@ -2240,6 +2310,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
+        None
+    }
+
+    fn as_shearable(&self) -> Option<&dyn crate::entity::shearable::Shearable> {
         None
     }
 
@@ -2820,6 +2894,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_is_pushed_by_fluids()
     }
 
+    fn can_be_seen_as_enemy(&self) -> bool {
+        self.mob_can_be_seen_as_enemy() && self.is_visible_and_vulnerable()
+    }
+
     fn sound_source(&self) -> SoundCategory {
         self.mob_sound_source()
     }
@@ -3008,17 +3086,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        if item_stack.get_item() == &Item::SHEARS
-            && self.can_shear_equipment(player)
-            && !player.get_entity().is_sneaking()
-            && self.attempt_to_shear_equipment(player, item_stack)
-        {
-            return true;
-        }
-        self.mob_interact(player, item_stack)
+        let interacted = self.mob_interact(player, item_stack)
             || self
                 .as_ageable()
-                .is_some_and(|ageable| ageable.ageable_interact(player, item_stack))
+                .is_some_and(|ageable| ageable.ageable_interact(player, item_stack));
+        if interacted {
+            emit_entity_interact(self.get_entity(), player);
+        }
+        interacted
     }
 
     fn interact_with_hand(
@@ -3027,7 +3102,40 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         item_stack: &mut ItemStack,
         hand: pumpkin_util::Hand,
     ) -> Option<bool> {
-        self.mob_interact_with_hand(player, item_stack, hand)
+        let entity = self.get_entity();
+        if !self.get_mob_entity().living_entity.is_alive() {
+            return Some(false);
+        }
+        if item_stack.item == &Item::NAME_TAG
+            && entity.entity_type.saveable
+            && item_stack
+                .get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
+                .is_some()
+        {
+            let world = entity.world.load();
+            let server = world.server.upgrade()?;
+            let target = world.get_entity_by_id(entity.entity_id)?;
+            server
+                .item_registry
+                .get_pumpkin_item(item_stack.item.id)?
+                .use_on_entity(item_stack, player, target);
+            emit_entity_interact(entity, player);
+            return Some(true);
+        }
+        if let Some(handled) = super::interact_with_shears(self, player, item_stack, hand) {
+            return Some(handled);
+        }
+        if let Some(handled) =
+            self.get_mob_entity()
+                .interact_leash(player, item_stack, self.can_be_leashed())
+        {
+            return Some(handled);
+        }
+        let interacted = self.mob_interact_with_hand(player, item_stack, hand)?;
+        if interacted {
+            emit_entity_interact(entity, player);
+        }
+        Some(interacted)
     }
 
     fn on_player_collision(&self, player: &Arc<Player>) {
@@ -3208,6 +3316,16 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 pub trait RangedAttackMob: Mob + Send + Sync {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, power: f32);
+}
+
+fn emit_entity_interact(entity: &Entity, player: &Arc<Player>) {
+    entity.world.load().emit_game_event_with_context(
+        GameEvent::EntityInteract.name(),
+        entity.pos.load(),
+        &crate::world::game_event::GameEventContext {
+            source_entity: Some(player.as_ref()),
+        },
+    );
 }
 
 #[cfg(test)]

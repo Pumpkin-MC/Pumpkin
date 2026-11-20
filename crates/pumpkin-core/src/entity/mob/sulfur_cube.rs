@@ -49,6 +49,7 @@ use crate::entity::mob::spawn::{EntitySpawnReason, SpawnGroupData};
 use crate::entity::mob::{Mob, MobEntity, conversion};
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::projectile::arrow::ArrowEntity;
+use crate::entity::shearable::Shearable;
 use crate::entity::tnt::TNTEntity;
 use crate::entity::{Entity, EntityBase};
 use crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent;
@@ -586,15 +587,21 @@ impl SulfurCubeEntity {
         true
     }
 
-    pub(crate) fn shear(&self) {
-        let body_item = self.body_item();
-        self.mob_entity
+    /// Ejects the body item and returns it, or `None` when another shear took it first.
+    fn shear(&self) -> Option<ItemStack> {
+        // Taking the item and emptying the slot in one step keeps two shears from both ejecting it.
+        let body_item = self
+            .mob_entity
             .set_item_slot(&EquipmentSlot::BODY, ItemStack::EMPTY.clone());
+        if body_item.is_empty() {
+            return None;
+        }
         self.detect_body_item_change();
-        self.spawn_at_attachment(body_item);
+        self.spawn_at_attachment(body_item.clone());
         self.play_sound(Sound::EntitySulfurCubeEject);
         self.pickup_timer
             .store(PICKUP_TIMER_DURATION, Ordering::Relaxed);
+        Some(body_item)
     }
 
     fn apply_contact_damage(&self, target: &dyn EntityBase) {
@@ -781,7 +788,22 @@ impl Bucketable for SulfurCubeEntity {
     }
 }
 
+/// Sulfur cubes eject their body item with their own sound, whatever the shearer.
+impl Shearable for SulfurCubeEntity {
+    fn shear(&self, _sound_category: SoundCategory, _tool: &ItemStack) -> bool {
+        Self::shear(self).is_some()
+    }
+
+    fn ready_for_shearing(&self) -> bool {
+        self.has_body_item()
+    }
+}
+
 impl Mob for SulfurCubeEntity {
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -873,29 +895,20 @@ impl Mob for SulfurCubeEntity {
             return;
         }
         let living = &self.mob_entity.living_entity;
-        if !living.pickup(item.get_entity(), 1) {
+        let Some(taken) = living.pick_up_from(item, 1, |ground| {
+            // Event already dispatched, a concurrent insert may have filled BODY.
+            if self.has_body_item() {
+                return ItemStack::EMPTY.clone();
+            }
+            ground.split(1)
+        }) else {
             return;
-        }
-        living.on_item_pickup(item);
-        let taken = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .split(1);
+        };
+        // TODO vanilla `SulfurCube.pickUpItem`: onItemPickup, setItemSlot(BODY, split(1)), absorb sound,
+        // setGuaranteedDrop, take. Pickup animation is after the body item is set.
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::BODY, taken);
         self.play_sound(Sound::EntitySulfurCubeAbsorb);
-
-        let empty = item
-            .get_item_stack()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_empty();
-        if empty {
-            item.get_entity().remove();
-        } else {
-            item.init_data_tracker();
-        }
     }
 
     fn can_use_slot(&self, slot: &EquipmentSlot) -> bool {
@@ -1118,8 +1131,9 @@ impl Mob for SulfurCubeEntity {
                     }
                 }
 
-                let sheared_item = self.body_item();
-                self.shear();
+                let Some(sheared_item) = Self::shear(self) else {
+                    return false;
+                };
                 world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
                 let _ = player.damage_item_stack(item_stack, 1);
                 player.trigger_advancement(AdvancementTrigger::PlayerShearedEquipment {

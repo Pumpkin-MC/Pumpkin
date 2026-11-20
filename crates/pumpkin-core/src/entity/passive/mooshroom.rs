@@ -1,6 +1,6 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicI32, Ordering},
+    atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
 use crossbeam::atomic::AtomicCell;
@@ -12,7 +12,6 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::entity_variant::MooshroomVariant;
-use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
@@ -41,9 +40,9 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
+    shearable::{Shearable, shear_by_player},
 };
 use crate::item::items::bucket::{create_filled_result, fill_bucket_stack};
-use crate::world::game_event::GameEventContext;
 use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
 const MUTATE_CHANCE: i32 = 1024;
@@ -56,6 +55,8 @@ pub struct MooshroomEntity {
     variant: AtomicI32,
     stew_effects: std::sync::Mutex<Option<SuspiciousStewEffectsImpl>>,
     last_lightning_bolt_uuid: AtomicCell<Option<Uuid>>,
+    /// Claimed by the first shear, so two shears landing at once convert it only once.
+    sheared: AtomicBool,
 }
 
 impl MooshroomEntity {
@@ -66,6 +67,7 @@ impl MooshroomEntity {
             variant: AtomicI32::new(MooshroomVariant::DEFAULT.id()),
             stew_effects: std::sync::Mutex::new(None),
             last_lightning_bolt_uuid: AtomicCell::new(None),
+            sheared: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(mooshroom);
         let mob_weak: Weak<dyn Mob> = {
@@ -176,7 +178,48 @@ impl MooshroomEntity {
         }
     }
 
-    pub fn shear(&self, category: SoundCategory, tool: &ItemStack) {
+    fn milk_stew(&self, player: &Player, item_stack: &mut ItemStack) {
+        let (stew, sound) = self.take_stew_effects().map_or_else(
+            || {
+                (
+                    ItemStack::new(1, &Item::MUSHROOM_STEW),
+                    Sound::EntityMooshroomMilk,
+                )
+            },
+            |effects| {
+                let mut stew = ItemStack::new(1, &Item::SUSPICIOUS_STEW);
+                stew.patch
+                    .push((DataComponent::SuspiciousStewEffects, Some(effects.to_dyn())));
+                (stew, Sound::EntityMooshroomSuspiciousMilk)
+            },
+        );
+        create_filled_result(item_stack, player, stew, false);
+        self.play_entity_sound(sound, 1.0, 1.0);
+    }
+
+    fn feed_flower(&self, player: &Player, item_stack: &mut ItemStack) -> bool {
+        let Some(effects) = Self::get_effects_from_item_stack(item_stack) else {
+            return false;
+        };
+        if self.has_stew_effects() {
+            self.spawn_feeding_particles(Particle::Smoke, 2);
+        } else {
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            *self
+                .stew_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(effects);
+            self.play_entity_sound(Sound::EntityMooshroomEat, 2.0, 1.0);
+        }
+        true
+    }
+}
+
+impl Shearable for MooshroomEntity {
+    fn shear(&self, category: SoundCategory, tool: &ItemStack) -> bool {
+        if self.sheared.swap(true, Ordering::Relaxed) {
+            return false;
+        }
         let entity = self.get_entity();
         let world = entity.world.load_full();
         world.play_sound(Sound::EntityMooshroomShear, category, &entity.pos.load());
@@ -217,70 +260,11 @@ impl MooshroomEntity {
                 }
             },
         );
-    }
-
-    fn milk_stew(&self, player: &Player, item_stack: &mut ItemStack) {
-        let (stew, sound) = self.take_stew_effects().map_or_else(
-            || {
-                (
-                    ItemStack::new(1, &Item::MUSHROOM_STEW),
-                    Sound::EntityMooshroomMilk,
-                )
-            },
-            |effects| {
-                let mut stew = ItemStack::new(1, &Item::SUSPICIOUS_STEW);
-                stew.patch
-                    .push((DataComponent::SuspiciousStewEffects, Some(effects.to_dyn())));
-                (stew, Sound::EntityMooshroomSuspiciousMilk)
-            },
-        );
-        create_filled_result(item_stack, player, stew, false);
-        self.play_entity_sound(sound, 1.0, 1.0);
-    }
-
-    fn try_shear(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        if let Some(server) = world.server.upgrade() {
-            let mut event =
-                crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
-                    player: player.clone(),
-                    entity_id: entity.entity_id,
-                    hand: 0,
-                    cancelled: false,
-                };
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return false;
-            }
-        }
-        self.shear(SoundCategory::Players, item_stack);
-        world.emit_game_event_with_context(
-            GameEvent::Shear.name(),
-            entity.pos.load(),
-            &GameEventContext {
-                source_entity: Some(player.as_ref()),
-            },
-        );
-        let _ = player.damage_item_stack(item_stack, 1);
         true
     }
 
-    fn feed_flower(&self, player: &Player, item_stack: &mut ItemStack) -> bool {
-        let Some(effects) = Self::get_effects_from_item_stack(item_stack) else {
-            return false;
-        };
-        if self.has_stew_effects() {
-            self.spawn_feeding_particles(Particle::Smoke, 2);
-        } else {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            *self
-                .stew_effects
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(effects);
-            self.play_entity_sound(Sound::EntityMooshroomEat, 2.0, 1.0);
-        }
-        true
+    fn ready_for_shearing(&self) -> bool {
+        !self.is_baby()
     }
 }
 
@@ -383,6 +367,10 @@ impl Mob for MooshroomEntity {
         Some(self)
     }
 
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
@@ -434,8 +422,8 @@ impl Mob for MooshroomEntity {
             return true;
         }
 
-        if item == &Item::SHEARS && !self.is_baby() {
-            return self.try_shear(player, item_stack);
+        if item == &Item::SHEARS && self.ready_for_shearing() {
+            return shear_by_player(self, player, item_stack);
         }
 
         if self.get_variant() == MooshroomVariant::Brown

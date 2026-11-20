@@ -1831,7 +1831,7 @@ impl Player {
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos);
+                    combat::spawn_sweep_particle(attacker_entity, &world);
 
                     let mut sweep_damage = 1.0;
                     if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>()
@@ -1998,6 +1998,26 @@ impl Player {
     /// Damages a stack through the player's item events; the caller handles inventory and break updates.
     pub fn damage_item_stack(&self, stack: &mut ItemStack, amount: i32) -> DamageResult {
         self.damage_item_stack_internal(stack, amount, true)
+    }
+
+    /// Vanilla `hurtAndBreak` on a held stack: also counts the break and plays it for `hand`.
+    pub fn damage_held_stack(
+        &self,
+        stack: &mut ItemStack,
+        amount: i32,
+        hand: Hand,
+    ) -> DamageResult {
+        let item_id = stack.item.id;
+        let result = self.damage_item_stack(stack, amount);
+        if result == DamageResult::Broken {
+            self.increment_stat(statistics::StatisticCategory::Broken, i32::from(item_id), 1);
+            self.world().send_entity_status(
+                &self.living_entity.entity,
+                super::equipment_break_status(&super::hand_equipment_slot(hand)),
+                ActorEventID::None,
+            );
+        }
+        result
     }
 
     /// Vanilla `ItemStack.hurtWithoutBreaking`: applies durability damage clamped at `max_damage - 1`.
@@ -7829,10 +7849,8 @@ impl NBTStorage for PlayerInventory {
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for (i, stack) in main_inv.iter().enumerate() {
-                if !stack.is_empty() {
-                    let mut item_compound = NbtCompound::new();
+                if let Some(mut item_compound) = stack.to_nbt() {
                     item_compound.put_byte("Slot", i as i8);
-                    stack.write_item_stack(&mut item_compound);
                     items.push(NbtTag::Compound(item_compound));
                 }
             }
@@ -7845,9 +7863,7 @@ impl NBTStorage for PlayerInventory {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for (slot, stack) in &equipment_guard.equipment {
-                if !stack.is_empty() {
-                    let mut item_compound = NbtCompound::new();
-                    stack.write_item_stack(&mut item_compound);
+                if let Some(item_compound) = stack.to_nbt() {
                     let vanilla_slot = match slot {
                         EquipmentSlot::Feet(_) => {
                             equipment_compound.put_compound("feet", item_compound.clone());
@@ -7872,9 +7888,8 @@ impl NBTStorage for PlayerInventory {
                         _ => None,
                     };
                     if let Some(slot_byte) = vanilla_slot {
-                        let mut inv_item_compound = NbtCompound::new();
+                        let mut inv_item_compound = item_compound;
                         inv_item_compound.put_byte("Slot", slot_byte);
-                        stack.write_item_stack(&mut inv_item_compound);
                         items.push(NbtTag::Compound(inv_item_compound));
                     }
                 }
@@ -7969,10 +7984,8 @@ impl NBTStorage for EnderChestInventory {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for (i, stack) in ec_items.iter().enumerate() {
-            if !stack.is_empty() {
-                let mut item_compound = NbtCompound::new();
+            if let Some(mut item_compound) = stack.to_nbt() {
                 item_compound.put_byte("Slot", i as i8);
-                stack.write_item_stack(&mut item_compound);
                 items.push(NbtTag::Compound(item_compound));
             }
         }

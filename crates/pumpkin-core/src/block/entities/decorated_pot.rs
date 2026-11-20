@@ -1,6 +1,6 @@
 use super::BlockEntity;
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, fill_chest_inventory_handle};
+use crate::world::loot::{LootContextParameters, generate_loot_from_handle, place_items_in_slots};
 use pumpkin_data::data_component_impl::{
     ContainerImpl, ContainerLootImpl, DataComponentImpl, PotDecorationsImpl,
 };
@@ -23,6 +23,8 @@ pub struct DecoratedPotBlockEntity {
     pub comparator_dirty: AtomicBool,
 }
 
+// TODO vanilla `getTheItem`/`setTheItem`/`splitTheItem` unpack the loot table on every slot access.
+// Hopper `get_container` unpacks once; other inventory reads still skip it.
 impl BlockEntity for DecoratedPotBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
@@ -79,10 +81,8 @@ impl BlockEntity for DecoratedPotBlockEntity {
             }
         } else if let Ok(item) = self.item.lock()
             && let Some(it) = item.as_ref()
-            && !it.is_empty()
+            && let Some(it_nbt) = it.to_nbt()
         {
-            let mut it_nbt = NbtCompound::new();
-            it.write_item_stack(&mut it_nbt);
             nbt.put_compound("item", it_nbt);
         }
     }
@@ -101,10 +101,8 @@ impl BlockEntity for DecoratedPotBlockEntity {
         if !has_loot
             && let Ok(item) = self.item.try_lock()
             && let Some(ref it) = *item
-            && !it.is_empty()
+            && let Some(it_nbt) = it.to_nbt()
         {
-            let mut it_nbt = NbtCompound::new();
-            it.write_item_stack(&mut it_nbt);
             nbt.put_compound("item", it_nbt);
         }
         Some(nbt)
@@ -166,14 +164,11 @@ impl BlockEntity for DecoratedPotBlockEntity {
         }
     }
 
-    fn take_loot_table(&self) -> Option<(String, i64)> {
-        let mut guard = self
-            .loot_table
+    fn loot_table_key(&self) -> Option<String> {
+        self.loot_table
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        guard
-            .take()
-            .map(|key| (key, self.loot_table_seed.swap(0, Ordering::Relaxed)))
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     fn has_loot_table(&self) -> bool {
@@ -230,21 +225,43 @@ impl DecoratedPotBlockEntity {
         }
     }
 
+    /// Takes the pending loot-table key and seed.
+    fn take_loot_table(&self) -> Option<(String, i64)> {
+        let mut guard = self
+            .loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .take()
+            .map(|key| (key, self.loot_table_seed.swap(0, Ordering::Relaxed)))
+    }
+
     pub fn unpack_loot_table(this: &Arc<Self>, world: &Arc<World>) {
         if let Some((loot_key, seed)) = this.take_loot_table()
             && let Some(handle) = world.get_loot_table(&loot_key)
         {
-            let inv: Arc<dyn Inventory> = this.clone();
-            fill_chest_inventory_handle(
-                &inv,
+            // Generate without the item lock, then check the slot and place under one lock so a
+            // concurrently inserted item is kept. Like vanilla `LootTable.fill` with no empty
+            // slot, the loot is dropped with a warning.
+            let generated = generate_loot_from_handle(
                 &handle,
                 seed,
                 &LootContextParameters {
                     world: Some(world),
+                    // TODO vanilla `RandomizableContainer.unpackLootTable` ORIGIN is `Vec3.atCenterOf`.
                     position: Some(this.position.to_f64()),
                     ..Default::default()
                 },
             );
+            let mut item = this
+                .item
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut slots = [item.take().unwrap_or_else(|| ItemStack::EMPTY.clone())];
+            place_items_in_slots(&mut slots, generated, seed);
+            let [slot] = slots;
+            *item = (!slot.is_empty()).then_some(slot);
+            drop(item);
             this.mark_dirty();
         }
     }
@@ -410,6 +427,21 @@ impl Inventory for DecoratedPotBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             (!stack.is_empty()).then_some(stack);
         self.mark_dirty();
+    }
+
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot != 0 {
+            return false;
+        }
+        // One lock for read and write, a parallel insert can't be overwritten.
+        let mut guard = self
+            .item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut stack = guard.take().unwrap_or_else(|| ItemStack::EMPTY.clone());
+        let changed = update(&mut stack);
+        *guard = (!stack.is_empty()).then_some(stack);
+        changed
     }
 
     fn mark_dirty(&self) {

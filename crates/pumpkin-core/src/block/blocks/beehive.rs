@@ -4,8 +4,8 @@ use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::entities::beehive::BeehiveBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockMetadata, BrokenArgs, ExplodeArgs, GetComparatorOutputArgs, OnPlaceArgs,
-    PlacedArgs, UseWithItemArgs,
+    BlockBehaviour, BlockMetadata, ExplodeArgs, GetComparatorOutputArgs,
+    GetStateForNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::item::ItemEntity;
 use crate::entity::passive::bee::BeeEntity;
@@ -20,9 +20,8 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::StatisticCategory;
-use pumpkin_data::{BlockId, BlockState, BlockStateId, Enchantment};
+use pumpkin_data::{Block, BlockId, BlockState, BlockStateId};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
-use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -39,23 +38,8 @@ impl BlockMetadata for BeehiveBlock {
 impl BeehiveBlock {
     const MAX_HONEY_LEVEL: u8 = 5;
 
-    fn hive_contains_bees(world: &World, pos: &BlockPos) -> bool {
-        let Some(entity) = world.get_block_entity(pos) else {
-            return false;
-        };
-        let Some(beehive) = entity.as_any().downcast_ref::<BeehiveBlockEntity>() else {
-            return false;
-        };
-        beehive
-            .bees
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-            .is_some_and(|bees| !bees.is_empty())
-    }
-
     /// Vanilla `BeehiveBlock.angerNearbyBees`.
-    fn anger_nearby_bees(world: &World, pos: &BlockPos) {
+    pub(crate) fn anger_nearby_bees(world: &World, pos: &BlockPos) {
         let min = pos.to_f64();
         let search_box = BoundingBox::new(min, min.add_raw(1.0, 1.0, 1.0)).expand(8.0, 6.0, 8.0);
         let players = world.get_players_at_box(&search_box);
@@ -221,9 +205,12 @@ impl BlockBehaviour for BeehiveBlock {
             .increment_stat(StatisticCategory::Used, i32::from(used_item_id), 1);
 
         if !CampfireBlock::is_smokey_pos(args.world, args.position)
-            && Self::hive_contains_bees(args.world, args.position)
+            && let Some(entity) = args.world.get_block_entity(args.position)
+            && let Some(hive) = entity.as_any().downcast_ref::<BeehiveBlockEntity>()
+            && !hive.is_empty()
         {
             Self::anger_nearby_bees(args.world, args.position);
+            hive.release_occupants(args.world, state_id, true, Some(args.player));
         }
 
         props.honey_level = 0;
@@ -236,21 +223,21 @@ impl BlockBehaviour for BeehiveBlock {
         BlockActionResult::Success
     }
 
-    fn broken(&self, args: BrokenArgs<'_>) {
-        if args.player.gamemode.load() != GameMode::Creative
-            && args
-                .player
-                .inventory()
-                .held_item()
-                .get_enchantment_level(&Enchantment::SILK_TOUCH)
-                == 0
-        {
-            Self::anger_nearby_bees(args.world, args.position);
-        }
-    }
-
     fn explode(&self, args: ExplodeArgs<'_>) {
         Self::anger_nearby_bees(args.world, args.position);
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if Block::from_state_id(args.neighbor_state_id) == &Block::FIRE
+            && let Some(entity) = args.world.get_block_entity(args.position)
+            && let Some(hive) = entity.as_any().downcast_ref::<BeehiveBlockEntity>()
+        {
+            hive.release_for_fire();
+        }
+        args.state_id
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
