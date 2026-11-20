@@ -514,6 +514,15 @@ impl TrackedEntity {
         )
     }
 
+    /// The baselines [`Self::send_bedrock_move`] stores ahead of its packet.
+    fn bedrock_baselines(&self) -> (Vector3<f64>, [u8; 3], [u32; 3]) {
+        (
+            self.bedrock_pos.load(),
+            self.bedrock_rot.load(),
+            self.bedrock_player_rot.load(),
+        )
+    }
+
     /// Java only -> Bedrock uses [`Self::send_bedrock_move`].
     /// `sent` moves the baselines of the move, before another watcher can be paired: a
     /// watcher paired in between would be spawned at the old ones and never get the move.
@@ -906,7 +915,16 @@ impl TrackedEntity {
                     return;
                 }
                 let uuid = player.gameprofile.id;
-                let baselines = {
+                let bedrock = matches!(player.client.as_ref(), ClientPlatform::Bedrock(_));
+                // A Bedrock watcher also gets the movement that is sent to Bedrock only. Its
+                // baselines are stored before the packet is queued, not under the lock.
+                let baselines = || {
+                    (
+                        self.move_baselines(),
+                        bedrock.then(|| self.bedrock_baselines()),
+                    )
+                };
+                let paired_at = {
                     let mut seen_by = self
                         .seen_by
                         .write()
@@ -914,9 +932,8 @@ impl TrackedEntity {
                     if seen_by.insert(uuid, player.clone()).is_some() {
                         return;
                     }
-                    self.move_baselines()
+                    baselines()
                 };
-                let bedrock = matches!(player.client.as_ref(), ClientPlatform::Bedrock(_));
                 if bedrock {
                     self.bedrock_watchers.fetch_add(1, Relaxed);
                 }
@@ -931,8 +948,7 @@ impl TrackedEntity {
                         .seen_by
                         .write()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let in_order =
-                        self.move_baselines() == baselines && seen_by.contains_key(&uuid);
+                    let in_order = baselines() == paired_at && seen_by.contains_key(&uuid);
                     if !in_order && seen_by.remove(&uuid).is_some() && bedrock {
                         self.bedrock_watchers.fetch_sub(1, Relaxed);
                     }

@@ -886,6 +886,39 @@ async fn a_plugin_sees_a_spawn_packet_with_the_watchers_unlocked() -> TestResult
     Ok(())
 }
 
+/// What a Bedrock watcher paired during such a pass is checked against: it gets a player in
+/// every pass and with its angles unpacked, so a pass can send it what Java watchers do not
+/// get.
+#[tokio::test]
+async fn a_pass_moves_the_bedrock_baselines_also_when_java_watchers_get_nothing() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.worlds.load()[0].clone();
+    let walker = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+    let entity = walker.player.get_entity();
+    let tracked = world
+        .entity_tracker
+        .get_tracked_entity(walker.entity_id())
+        .ok_or("the walker is tracked")?;
+    let java = tracked.move_baselines();
+
+    // A turn too small to change the packed angles.
+    let bedrock = tracked.bedrock_baselines();
+    entity.set_rotation(0.1, 0.0);
+    tracked.send_changes(&world);
+    assert_eq!(tracked.move_baselines(), java);
+    assert_ne!(tracked.bedrock_baselines(), bedrock);
+
+    // A step in the pass between two updates of the Java watchers.
+    let bedrock = tracked.bedrock_baselines();
+    entity.set_pos(Vector3::new(0.7, 100.0, 0.5));
+    tracked.send_changes(&world);
+    assert_eq!(tracked.move_baselines(), java);
+    assert_ne!(tracked.bedrock_baselines(), bedrock);
+    shutdown(&server).await;
+    Ok(())
+}
+
 /// Stands in for a player that respawns while its spawn packet for a new watcher goes out.
 struct RespawnsWhileSpawned {
     walker: Arc<Player>,
