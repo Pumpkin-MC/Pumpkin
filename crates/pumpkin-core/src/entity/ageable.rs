@@ -113,8 +113,8 @@ pub trait AgeableMob: Mob {
         if (old_age < 0 && new_age >= 0) || (old_age >= 0 && new_age < 0) {
             let is_baby = new_age < 0;
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, is_baby);
-            entity.refresh_dimensions();
             self.age_boundary_reached();
+            entity.refresh_dimensions();
             // Full refresh, so growing up also clears the Bedrock baby flag and scale.
             let mut actor_data = entity.bedrock_metadata();
             if let Some(meta) = self.mob_metadata() {

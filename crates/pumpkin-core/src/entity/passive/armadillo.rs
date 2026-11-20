@@ -31,7 +31,7 @@ use crate::entity::{
 const ARMADILLO_BRUSH_LOOT_TABLE: &str = "minecraft:brush/armadillo";
 const ARMADILLO_SHED_LOOT_TABLE: &str = "minecraft:gameplay/armadillo_shed";
 pub const ARMADILLO_BABY_START_AGE: i32 = -48000;
-pub const ARMADILLO_BABY_SCALE: f32 = 0.6;
+const ARMADILLO_BABY_SCALE: f32 = 0.6;
 pub const SCARE_CHECK_INTERVAL: i32 = 80;
 pub const SCARE_DISTANCE_HORIZONTAL: f64 = 7.0;
 pub const SCARE_DISTANCE_VERTICAL: f64 = 2.0;
@@ -317,9 +317,9 @@ impl AgeableMob for ArmadilloEntity {
             ARMADILLO_BABY_SCALE
         } else {
             1.0
-        };
+        }
+        .clamp(0.1, 2.0);
         self.get_entity().scale.store(scale);
-        self.get_entity().refresh_dimensions();
     }
 }
 
@@ -478,5 +478,113 @@ impl Mob for ArmadilloEntity {
             return false;
         }
         self.animal_interact(player, item_stack)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::ai::test_support::world;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::vector3::Vector3;
+    use std::sync::atomic::Ordering::Relaxed;
+    use tempfile::TempDir;
+
+    const ARMADILLO_ADULT_WIDTH: f32 = 0.7;
+    const ARMADILLO_ADULT_HEIGHT: f32 = 0.65;
+    const ARMADILLO_BABY_WIDTH: f32 = 0.42;
+    const ARMADILLO_BABY_HEIGHT: f32 = 0.39;
+
+    fn spawn_armadillo(
+        world: &std::sync::Arc<crate::world::World>,
+    ) -> std::sync::Arc<ArmadilloEntity> {
+        let armadillo = ArmadilloEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::ARMADILLO,
+        ));
+        world.spawn_entity(armadillo.clone());
+        armadillo
+    }
+
+    #[tokio::test]
+    async fn baby_armadillo_has_06_scale() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = TempDir::new()?;
+        let world = world(&folder);
+        let armadillo = spawn_armadillo(&world);
+
+        // Start as adult (age 0)
+        assert_eq!(armadillo.get_entity().scale.load(Relaxed), 1.0);
+
+        // Become a baby
+        armadillo.set_baby(true);
+        assert!(armadillo.is_baby());
+        assert_eq!(
+            armadillo.get_entity().scale.load(Relaxed),
+            ARMADILLO_BABY_SCALE
+        );
+
+        // Grow up
+        armadillo.set_baby(false);
+        assert!(!armadillo.is_baby());
+        assert_eq!(armadillo.get_entity().scale.load(Relaxed), 1.0);
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn baby_armadillo_uses_baby_dimensions_without_scale()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = TempDir::new()?;
+        let world = world(&folder);
+        let armadillo = spawn_armadillo(&world);
+
+        // Adult: dimensions are 0.7 x 0.65
+        armadillo.set_baby(false);
+        let adult_dims = armadillo
+            .get_entity()
+            .get_dimensions(armadillo.get_entity().pose.load());
+        assert!((adult_dims.width - ARMADILLO_ADULT_WIDTH).abs() < f32::EPSILON);
+        assert!((adult_dims.height - ARMADILLO_ADULT_HEIGHT).abs() < f32::EPSILON);
+
+        // Baby: dimensions are baby_dimensions (0.42 x 0.39), NOT scaled by entity.scale
+        armadillo.set_baby(true);
+        let baby_dims = armadillo
+            .get_entity()
+            .get_dimensions(armadillo.get_entity().pose.load());
+        assert!((baby_dims.width - ARMADILLO_BABY_WIDTH).abs() < f32::EPSILON);
+        assert!((baby_dims.height - ARMADILLO_BABY_HEIGHT).abs() < f32::EPSILON);
+
+        // Sanity: baby dimensions match 0.6 * adult dimensions exactly
+        assert!(
+            (ARMADILLO_BABY_WIDTH - ARMADILLO_ADULT_WIDTH * ARMADILLO_BABY_SCALE).abs()
+                < f32::EPSILON
+        );
+        assert!(
+            (ARMADILLO_BABY_HEIGHT - ARMADILLO_ADULT_HEIGHT * ARMADILLO_BABY_SCALE).abs()
+                < f32::EPSILON
+        );
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn armadillo_scale_stays_in_valid_range() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = TempDir::new()?;
+        let world = world(&folder);
+        let armadillo = spawn_armadillo(&world);
+
+        // Adult scale is 1.0
+        armadillo.set_baby(false);
+        assert!((armadillo.get_entity().scale.load(Relaxed) - 1.0).abs() < f32::EPSILON);
+
+        // Baby scale is 0.6
+        armadillo.set_baby(true);
+        assert!((armadillo.get_entity().scale.load(Relaxed) - 0.6).abs() < f32::EPSILON);
+
+        world.level.shutdown().await;
+        Ok(())
     }
 }
