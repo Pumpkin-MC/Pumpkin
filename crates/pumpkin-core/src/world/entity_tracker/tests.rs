@@ -71,6 +71,26 @@ fn spawns_entity(packet_id: i32, payload: &[u8], entity_id: i32) -> bool {
             .is_ok_and(|spawn| spawn.entity_id.0 == entity_id)
 }
 
+/// How many of `packets` spawn entity `entity_id`.
+fn spawns(packets: &[RawPacket], entity_id: i32) -> usize {
+    packets
+        .iter()
+        .filter(|packet| spawns_entity(packet.id, &packet.payload, entity_id))
+        .count()
+}
+
+/// How many of `packets` remove entity `entity_id`.
+fn removals(packets: &[RawPacket], entity_id: i32) -> usize {
+    let removed = |packet: &&RawPacket| {
+        let mut payload = &packet.payload[..];
+        packet.id == id::<CRemoveEntities>()
+            && payload.get_var_int().is_ok_and(|count| {
+                (0..count.0).any(|_| payload.get_var_int().is_ok_and(|id| id.0 == entity_id))
+            })
+    };
+    packets.iter().filter(removed).count()
+}
+
 fn assert_close(drawn: Option<Vector3<f64>>, actual: Vector3<f64>) {
     // Deltas are sent in 1/4096 of a block.
     assert!(
@@ -112,6 +132,12 @@ async fn watchers_follow_a_player_from_the_tracker() -> TestResult {
         let pos = entity.pos.load();
         let target = Vector3::new(pos.x + jump, pos.y, pos.z);
         walker.player.teleport(target, None, None, world.clone());
+        // The teleport alone reaches the watcher with the next update.
+        for _ in 0..2 {
+            world.entity_tracker.update_all(&world);
+        }
+        drawn = drawn_at(drawn, walker.entity_id(), &watcher.received().await?)?;
+        assert_close(drawn, target);
         for step in 1..=2 {
             entity.set_pos(Vector3::new(
                 target.x,
@@ -188,15 +214,7 @@ async fn a_pass_pairs_and_unpairs_who_changed_and_leaves_the_rest_alone() -> Tes
     assert!(drawn_at(None, leaves.entity_id(), &packets)?.is_some());
     assert!(drawn_at(None, arrives.entity_id(), &packets)?.is_none());
 
-    // How often `packets` draw the entity anew, and whether they leave it drawn.
-    let spawns = |packets: &[RawPacket], entity_id: i32| {
-        let spawned = |packet: &&RawPacket| {
-            packet.id == id::<CSpawnEntity>()
-                && CSpawnEntity::read_packet_data(&packet.payload[..], &CURRENT_MC_VERSION)
-                    .is_ok_and(|spawn| spawn.entity_id.0 == entity_id)
-        };
-        packets.iter().filter(spawned).count()
-    };
+    // Whether `packets` leave the entity drawn.
     let kept = |packets: &[RawPacket], entity_id: i32| {
         drawn_at(Some(Vector3::default()), entity_id, packets).map(|drawn| drawn.is_some())
     };
@@ -526,7 +544,8 @@ async fn a_respawned_or_removed_player_is_redrawn_or_gone() -> TestResult {
         world.entity_tracker.update_all(&world);
     }
     let packets = watcher.received().await?;
-    assert_eq!(count::<CRemoveEntities>(&packets), 1);
+    assert_eq!(removals(&packets, walker.entity_id()), 1);
+    assert_eq!(spawns(&packets, walker.entity_id()), 1);
     drawn = drawn_at(drawn, walker.entity_id(), &packets)?;
     assert_close(drawn, entity.pos.load());
 
