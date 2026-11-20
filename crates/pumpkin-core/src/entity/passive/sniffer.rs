@@ -1,9 +1,10 @@
 use std::sync::{
-    Arc, Weak,
+    Arc,
     atomic::{AtomicI32, Ordering},
 };
 
 use pumpkin_data::BlockState;
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -21,12 +22,12 @@ use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::{
-        goal::{
-            breed::BreedGoal, follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-            look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-            wander_around::WanderAroundGoal,
+        brain::{
+            Brain, BrainState,
+            memory::{GlobalPos, PackedMemories, types},
         },
         pathfinder::node::PathType,
+        util::land_random_pos,
     },
     item::ItemEntity,
     mob::{Mob, MobEntity, drop_from_gift_loot_table},
@@ -34,6 +35,8 @@ use crate::entity::{
     player::Player,
     r#type::from_type,
 };
+
+pub(crate) mod ai;
 
 const SNIFFER_DIGGING_LOOT_TABLE: &str = "minecraft:gameplay/sniffer_digging";
 pub const SNIFFER_BABY_START_AGE: i32 = -48000;
@@ -94,10 +97,6 @@ impl SnifferEntity {
             explored_positions: std::sync::Mutex::new(Vec::new()),
         };
         let mob_arc = Arc::new(sniffer);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
 
         {
             let mut navigator = mob_arc
@@ -109,28 +108,6 @@ impl SnifferEntity {
             navigator.set_pathfinding_malus(PathType::Water, -1.0);
             navigator.set_pathfinding_malus(PathType::PowderSnow, -1.0);
             navigator.set_pathfinding_malus(PathType::DamageCautious, -1.0);
-        };
-
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, BreedGoal::new(1.0));
-            goal_selector.add_goal(
-                2,
-                Box::new(TemptGoal::with_tag(
-                    1.2,
-                    &tag::Item::MINECRAFT_SNIFFER_FOOD,
-                    false,
-                )),
-            );
-            goal_selector.add_goal(3, Box::new(FollowParentGoal::new(1.1)));
-            goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                5,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
@@ -237,8 +214,7 @@ impl SnifferEntity {
 
     pub fn on_digging_complete(&self, success: bool) {
         if success {
-            let head_block = self.get_head_block().down();
-            self.store_explored_position(head_block);
+            self.store_explored_position(self.get_entity().get_on_pos());
         }
     }
 
@@ -261,16 +237,61 @@ impl SnifferEntity {
     }
 
     #[must_use]
+    pub fn is_tempted(&self) -> bool {
+        self.mob_entity
+            .brain_has_memory_value(types::TEMPTING_PLAYER.id())
+    }
+
+    #[must_use]
+    pub fn can_sniff(&self) -> bool {
+        let entity = self.get_entity();
+        !self.is_tempted()
+            && !self.is_panicking()
+            && !self.mob_entity.living_entity.is_in_water()
+            && !self.mob_entity.is_in_love()
+            && entity.on_ground.load(Ordering::Relaxed)
+            && !entity.is_passenger()
+            && !entity.is_leashed()
+    }
+
+    #[must_use]
+    pub fn can_sniff_with_brain(&self, state: &BrainState) -> bool {
+        let entity = self.get_entity();
+        !state.has_memory_value(types::TEMPTING_PLAYER.id())
+            && !state.has_memory_value(types::IS_PANICKING.id())
+            && !self.mob_entity.living_entity.is_in_water()
+            && !self.mob_entity.is_in_love()
+            && entity.on_ground.load(Ordering::Relaxed)
+            && !entity.is_passenger()
+            && !entity.is_leashed()
+    }
+
+    #[must_use]
     pub fn can_dig(&self) -> bool {
         let entity = self.get_entity();
         !self.is_panicking()
-            && !self.is_baby()
+            && !self.is_tempted()
+            && !self.mob_entity.living_entity.is_baby()
             && !self.mob_entity.living_entity.is_in_water()
             && entity.on_ground.load(Ordering::Relaxed)
+            && !entity.is_passenger()
             && self.can_dig_at(self.get_head_block().down())
     }
 
-    fn can_dig_at(&self, pos: BlockPos) -> bool {
+    #[must_use]
+    pub fn can_dig_with_brain(&self, state: &BrainState) -> bool {
+        let entity = self.get_entity();
+        !state.has_memory_value(types::IS_PANICKING.id())
+            && !state.has_memory_value(types::TEMPTING_PLAYER.id())
+            && !self.mob_entity.living_entity.is_baby()
+            && !self.mob_entity.living_entity.is_in_water()
+            && entity.on_ground.load(Ordering::Relaxed)
+            && !entity.is_passenger()
+            && self.can_dig_at_with_brain(state, self.get_head_block().down())
+    }
+
+    #[must_use]
+    pub fn can_dig_at(&self, pos: BlockPos) -> bool {
         let entity = self.get_entity();
         let world = entity.world.load();
         let block_state = world.get_block_state(&pos);
@@ -284,10 +305,68 @@ impl SnifferEntity {
             .explored_positions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        !explored.contains(&pos)
+        if explored.contains(&pos) {
+            return false;
+        }
+
+        let mob_entity = self.get_mob_entity();
+        let steered = mob_entity.steered();
+        steered
+            .navigator()
+            .create_path(&mob_entity.living_entity, pos.0.to_f64(), 1)
+            .is_some_and(|p| p.can_reach())
     }
 
-    fn store_explored_position(&self, pos: BlockPos) {
+    #[must_use]
+    pub fn can_dig_at_with_brain(&self, state: &BrainState, pos: BlockPos) -> bool {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let block_state = world.get_block_state(&pos);
+        let block = pumpkin_data::Block::from_state_id(block_state.id);
+
+        if !block.has_tag(&tag::Block::MINECRAFT_SNIFFER_DIGGABLE_BLOCK) {
+            return false;
+        }
+
+        if let Some(explored) = state.get(types::SNIFFER_EXPLORED_POSITIONS) {
+            let dimension = Dimension::from_name(world.dimension.minecraft_name)
+                .unwrap_or(&Dimension::OVERWORLD);
+            let global_pos = GlobalPos::new(dimension, pos);
+            if explored.contains(&global_pos) {
+                return false;
+            }
+        }
+
+        let mob_entity = self.get_mob_entity();
+        let steered = mob_entity.steered();
+        steered
+            .navigator()
+            .create_path(&mob_entity.living_entity, pos.0.to_f64(), 1)
+            .is_some_and(|p| p.can_reach())
+    }
+
+    #[must_use]
+    pub fn calculate_dig_position(&self, state: &BrainState) -> Option<BlockPos> {
+        let world = self.get_entity().world.load();
+        let border = world
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for idx in 0..5 {
+            if let Some(target_vec) = land_random_pos::get_pos(self, 10 + 2 * idx, 3) {
+                let containing = BlockPos::floored_v(target_vec);
+                if border.contains_block(containing.0.x, containing.0.z) {
+                    let below = containing.down();
+                    if self.can_dig_at_with_brain(state, below) {
+                        return Some(below);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn store_explored_position(&self, pos: BlockPos) {
         let mut explored = self
             .explored_positions
             .lock()
@@ -395,6 +474,17 @@ impl Animal for SnifferEntity {
 }
 
 impl Mob for SnifferEntity {
+    fn make_brain(&self, packed: &PackedMemories) -> Brain {
+        ai::make_brain(self, packed)
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        self.mob_entity.tick_brain(self);
+        self.mob_entity.with_brain(self, |brain| {
+            ai::update_activity(brain);
+        });
+    }
+
     fn mob_support_quad_leash(&self) -> bool {
         true
     }
@@ -638,5 +728,121 @@ mod tests {
             navigator.get_pathfinding_malus(PathType::DamageCautious),
             -1.0
         );
+    }
+
+    #[tokio::test]
+    async fn sniffer_reset_sniffing_resets_memories_and_state() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        sniffer.set_state(SnifferState::Digging);
+        sniffer.mob_entity.with_brain(sniffer.as_ref(), |brain| {
+            brain.set(types::SNIFFER_DIGGING, true);
+            brain.set(types::SNIFFER_SNIFFING_TARGET, BlockPos::new(10, 64, 10));
+            ai::reset_sniffing(brain, sniffer.as_ref());
+
+            assert_eq!(sniffer.get_state(), SnifferState::Idling);
+            assert!(!brain.has_memory_value(types::SNIFFER_DIGGING.id()));
+            assert!(!brain.has_memory_value(types::SNIFFER_SNIFFING_TARGET.id()));
+        });
+    }
+
+    #[tokio::test]
+    async fn sniffer_brain_activity_transitions() {
+        use crate::entity::ai::brain::memory::walk_target::WalkTarget;
+        use pumpkin_data::environment_attribute::Activity;
+
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        sniffer.mob_entity.with_brain(sniffer.as_ref(), |brain| {
+            // Initial state defaults to Idle
+            ai::update_activity(brain);
+            assert_eq!(brain.get_active_non_core_activity(), Some(Activity::Idle));
+
+            // With sniffing target and walk target -> Sniff activity
+            let target_pos = BlockPos::new(5, 64, 5);
+            brain.set(types::SNIFFER_SNIFFING_TARGET, target_pos);
+            brain.set(
+                types::WALK_TARGET,
+                WalkTarget::from_block_pos(target_pos, 1.25, 0),
+            );
+            ai::update_activity(brain);
+            assert_eq!(brain.get_active_non_core_activity(), Some(Activity::Sniff));
+
+            // With digging memory and no walk target -> Dig activity
+            brain.erase(types::WALK_TARGET.id());
+            brain.erase(types::SNIFFER_SNIFFING_TARGET.id());
+            brain.set(types::SNIFFER_DIGGING, true);
+            ai::update_activity(brain);
+            assert_eq!(brain.get_active_non_core_activity(), Some(Activity::Dig));
+
+            // While panicking -> sniffing is reset, Dig and Sniff are rejected, falls back to Idle
+            ai::reset_sniffing(brain, sniffer.as_ref());
+            brain.set(types::IS_PANICKING, true);
+            ai::update_activity(brain);
+            assert_eq!(brain.get_active_non_core_activity(), Some(Activity::Idle));
+        });
+    }
+
+    #[tokio::test]
+    async fn sniffer_store_explored_position_limits_to_20() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        sniffer.mob_entity.with_brain(sniffer.as_ref(), |brain| {
+            for i in 0..25 {
+                ai::store_explored_position(brain, sniffer.as_ref(), BlockPos::new(i, 64, 0));
+            }
+
+            let positions = brain
+                .get(types::SNIFFER_EXPLORED_POSITIONS)
+                .unwrap_or_else(|| panic!("missing explored positions"));
+            assert_eq!(positions.len(), 20);
+            assert_eq!(positions[0].pos, BlockPos::new(24, 64, 0));
+
+            let local_explored = sniffer
+                .explored_positions
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            assert_eq!(local_explored.len(), 20);
+            assert_eq!(local_explored[0], BlockPos::new(24, 64, 0));
+        });
+    }
+
+    #[tokio::test]
+    async fn sniffer_can_sniff_and_can_dig_predicates() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        sniffer.mob_entity.with_brain(sniffer.as_ref(), |brain| {
+            // Grounded, not panicking, not in water, not baby -> can sniff
+            sniffer
+                .get_entity()
+                .on_ground
+                .store(true, Ordering::Relaxed);
+            assert!(sniffer.can_sniff_with_brain(brain));
+
+            // Panicking -> cannot sniff
+            brain.set(types::IS_PANICKING, true);
+            assert!(!sniffer.can_sniff_with_brain(brain));
+            brain.erase(types::IS_PANICKING.id());
+
+            // Baby cannot dig
+            sniffer.get_entity().age.store(-100, Ordering::Relaxed);
+            assert!(!sniffer.can_dig_with_brain(brain));
+        });
     }
 }
