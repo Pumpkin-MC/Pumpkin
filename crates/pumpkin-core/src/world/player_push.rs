@@ -357,7 +357,7 @@ mod tests {
         };
 
         // On joining: the team with the player in it, and the player for everybody else.
-        scoreboard().send_to_player(&client.player);
+        client.player.send_scoreboard();
         assert_eq!(no_collision_team_methods(&client.received().await?), [0, 3]);
 
         // A team of the scoreboard takes the player over without a word about the other.
@@ -376,6 +376,41 @@ mod tests {
         scoreboard().remove_team(&world, "red");
         assert_eq!(no_collision_team_methods(&client.received().await?), [3]);
         assert!(scoreboard().get_teams().is_empty());
+        shutdown(&server).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_scoreboard_of_a_players_own_tells_nobody_else_about_its_teams() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let server = server_without_player_collisions(&folder).await?;
+        let world = server.worlds.load()[0].clone();
+        let mut owner = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        let mut other = Client::join(&server, 2, Vector3::new(3.5, 100.0, 0.5));
+        let name = owner.player.gameprofile.name.clone();
+        // For everybody the owner is in a team of the world.
+        world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .add_team(&world, team("red", vec![name]));
+        owner.received().await?;
+        other.received().await?;
+
+        // In its own scoreboard the owner has no team. That is nobody else's business.
+        let own = crate::world::scoreboard::Scoreboard::default();
+        owner
+            .player
+            .as_java()
+            .ok_or("a Java player")?
+            .set_scoreboard(Some(own));
+        assert!(no_collision_team_methods(&other.received().await?).is_empty());
+        assert_eq!(no_collision_team_methods(&owner.received().await?), [0]);
+
+        // Back on the world's scoreboard the owner is in its team again, for itself too.
+        owner.player.reset_scoreboard();
+        assert!(no_collision_team_methods(&other.received().await?).is_empty());
+        assert_eq!(no_collision_team_methods(&owner.received().await?), [0]);
         shutdown(&server).await;
         Ok(())
     }

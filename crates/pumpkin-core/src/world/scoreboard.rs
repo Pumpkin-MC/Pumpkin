@@ -775,7 +775,7 @@ impl Scoreboard {
     }
 
     /// With player collisions off: the player gets [`NO_COLLISION_TEAM`] with everybody in
-    /// its world who has no team, and the others get the player.
+    /// its world who has no team in this scoreboard.
     fn send_no_collision_team_to(&self, player: &Player) {
         let world = player.world();
         if !world.player_collisions {
@@ -791,15 +791,22 @@ impl Scoreboard {
                 .filter(teamless)
                 .cloned()
                 .collect();
-            let joins = members.last().is_some_and(|name| name == own);
             send_no_collision_team(true, members, |packet| {
                 player.try_send_client_packet(packet);
             });
-            if joins {
-                send_no_collision_team(false, vec![own.clone()], |packet| {
-                    world.broadcast_packet_all(packet);
-                });
-            }
+        }
+    }
+
+    /// With player collisions off: everybody in the player's world gets it as a member of
+    /// [`NO_COLLISION_TEAM`] when it has no team here. Only for the scoreboard of the
+    /// world: what a player sees in one of its own is not what the others see.
+    pub(crate) fn broadcast_no_collision_member(&self, player: &Player) {
+        let world = player.world();
+        let own = &player.gameprofile.name;
+        if !world.player_collisions && self.get_entity_team(own).is_none() {
+            send_no_collision_team(false, vec![own.clone()], |packet| {
+                world.broadcast_packet_all(packet);
+            });
         }
     }
 }

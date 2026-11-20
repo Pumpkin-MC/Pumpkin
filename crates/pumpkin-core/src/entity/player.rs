@@ -4538,11 +4538,13 @@ impl Player {
             }
             _ => {
                 drop(guard);
-                self.world()
+                let world = self.world();
+                let scoreboard = world
                     .scoreboard
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .send_to_player(self);
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                scoreboard.send_to_player(self);
+                scoreboard.broadcast_no_collision_member(self);
             }
         }
     }
