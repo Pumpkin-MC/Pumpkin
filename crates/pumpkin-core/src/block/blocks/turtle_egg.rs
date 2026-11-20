@@ -131,9 +131,8 @@ impl BlockBehaviour for TurtleEggBlock {
     }
 
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance, 1.0);
-        }
+        args.entity
+            .cause_fall_damage(args.entity, args.fall_distance, 1.0);
 
         if args.entity.get_entity().entity_type.id != EntityType::ZOMBIE.id {
             let entity_pos = args.entity.get_entity().pos.load();

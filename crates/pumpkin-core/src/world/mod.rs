@@ -2520,8 +2520,12 @@ impl World {
         let min = BlockPos::floored_v(bounding_box.min.add_raw(0.0, -0.50001, 0.0));
         let max = bounding_box.max_block_pos();
         let pos_iter = BlockPos::iterate(min, max);
+        let ignored = entity.ignored_block_collisions();
 
         for pos in pos_iter {
+            if ignored.is_some_and(|(below, slope)| pos == below || slope == Some(pos)) {
+                continue;
+            }
             let state = self.get_block_state(&pos);
 
             if state.is_air() {

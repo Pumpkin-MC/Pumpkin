@@ -1,6 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
-use crate::entity::vehicle::minecart::MinecartEntity;
+use crate::entity::vehicle::minecart::AbstractMinecart;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::SSetCommandMinecart;
 
@@ -18,7 +18,7 @@ impl JavaClient {
         let Some(entity) = world.get_entity_by_id(packet.entity_id.0) else {
             return;
         };
-        let Some(minecart) = entity.cast_any().downcast_ref::<MinecartEntity>() else {
+        let Some(minecart) = entity.cast_any().downcast_ref::<AbstractMinecart>() else {
             return;
         };
         let Some(command_block) = minecart.command_block() else {

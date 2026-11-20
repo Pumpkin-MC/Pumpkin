@@ -2,7 +2,7 @@ use crossbeam::atomic::AtomicCell;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::entity::Entity;
-use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_data::tracked_data;
 
 use crate::entity::EntityBase;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -25,21 +25,15 @@ impl VehicleEntity {
         }
     }
 
+    /// Vanilla `AbstractMinecart`/`AbstractBoat.tick` start: wobble fades, plugins see the tick.
     pub fn tick(&self) {
-        let current_hurt = self.hurt_time.load(Ordering::Relaxed);
-        let hurt_ticked = current_hurt > 0;
-        if hurt_ticked {
-            self.hurt_time.store(current_hurt - 1, Ordering::Relaxed);
+        let hurt_time = self.get_hurt_time();
+        if hurt_time > 0 {
+            self.set_hurt_time(hurt_time - 1);
         }
-
-        let current_damage = self.damage.load();
-        let damage_ticked = current_damage > 0.0;
-        if damage_ticked {
-            self.damage.store(current_damage - 1.0);
-        }
-
-        if hurt_ticked || damage_ticked {
-            self.send_wobble_metadata();
+        let damage = self.get_damage();
+        if damage > 0.0 {
+            self.set_damage(damage - 1.0);
         }
 
         let mut update_event =
@@ -50,11 +44,6 @@ impl VehicleEntity {
             server
                 .plugin_manager
                 .fire_blocking(&server, &mut update_event);
-        }
-
-        // Coalesce pushed velocity to once per tick (boats use the default push()).
-        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-            self.entity.send_velocity();
         }
     }
 
@@ -122,6 +111,8 @@ impl VehicleEntity {
 
     pub fn set_damage(&self, damage: f32) {
         self.damage.store(damage);
+        self.entity
+            .set_synced_data(tracked_data::boat::ID_DAMAGE, damage);
     }
 
     pub fn get_damage(&self) -> f32 {
@@ -130,6 +121,8 @@ impl VehicleEntity {
 
     pub fn set_hurt_time(&self, hurt_time: i32) {
         self.hurt_time.store(hurt_time, Ordering::Relaxed);
+        self.entity
+            .set_synced_data(tracked_data::boat::ID_HURT, VarInt(hurt_time));
     }
 
     pub fn get_hurt_time(&self) -> i32 {
@@ -138,33 +131,20 @@ impl VehicleEntity {
 
     pub fn set_hurt_dir(&self, hurt_dir: i32) {
         self.hurt_dir.store(hurt_dir, Ordering::Relaxed);
+        self.entity
+            .set_synced_data(tracked_data::boat::ID_HURTDIR, VarInt(hurt_dir));
     }
 
     pub fn get_hurt_dir(&self) -> i32 {
         self.hurt_dir.load(Ordering::Relaxed)
     }
 
-    pub fn send_wobble_metadata(&self) {
-        self.entity.send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat::ID_HURT,
-                    VarInt(self.get_hurt_time()),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat::ID_HURTDIR,
-                    VarInt(self.get_hurt_dir()),
-                ),
-            ],
-            None,
-        );
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::boat::ID_DAMAGE,
-                self.get_damage(),
-            )],
-            None,
-        );
+    /// Vanilla `hurtServer`/`activateMinecart` wobble: flips the side, restarts the shake.
+    pub fn wobble(&self, damage: f32) {
+        self.set_hurt_dir(-self.get_hurt_dir());
+        self.set_hurt_time(10);
+        self.set_damage(damage);
+        self.entity.mark_hurt();
     }
 
     pub fn kill_and_drop_self(&self) {
@@ -245,49 +225,10 @@ impl VehicleEntity {
         true
     }
 
-    /// Applies the standard minecart damage wobble without destroying the vehicle.
-    /// TNT minecarts use this before deciding whether damage primes or breaks them.
+    /// Vanilla `VehicleEntity.hurtServer` wobble without destroying the vehicle.
     pub fn apply_damage_wobble(&self, amount: f32) -> f32 {
-        let current_side = self.get_hurt_dir();
-        self.set_hurt_dir(-current_side);
-        self.set_hurt_time(10);
-        self.entity.velocity_dirty.store(true, Ordering::SeqCst);
-
-        let current_strength = self.get_damage();
-        let new_strength = current_strength + amount * 10.0;
-        self.set_damage(new_strength);
-
-        self.send_wobble_metadata();
+        let new_strength = self.get_damage() + amount * 10.0;
+        self.wobble(new_strength);
         new_strength
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use pumpkin_protocol::codec::var_int::VarInt;
-    use pumpkin_protocol::java::client::play::Metadata;
-    use pumpkin_util::version::JavaMinecraftVersion;
-
-    fn wobble_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10))
-            .write(&mut bytes, &version)
-            .unwrap();
-        Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1))
-            .write(&mut bytes, &version)
-            .unwrap();
-        Metadata::new(pumpkin_data::tracked_data::boat::ID_DAMAGE, 10.0f32)
-            .write(&mut bytes, &version)
-            .unwrap();
-        bytes
-    }
-
-    #[test]
-    fn wobble_metadata_serializes_hurt_and_damage_together() {
-        let mut expected = vec![8, 1, 10, 9, 1, 0xff, 0xff, 0xff, 0xff, 0x0f, 10, 3];
-        expected.extend(10.0f32.to_be_bytes());
-
-        assert_eq!(wobble_metadata(JavaMinecraftVersion::V_1_21_11), expected);
-        assert_eq!(wobble_metadata(JavaMinecraftVersion::V_26_2), expected);
     }
 }

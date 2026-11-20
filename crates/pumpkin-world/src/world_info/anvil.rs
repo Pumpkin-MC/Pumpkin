@@ -27,7 +27,7 @@ use crate::world_info::{
     default_data_packs,
 };
 
-use super::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
+use super::{FEATURE_PACKS, LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 
 pub const LEVEL_DAT_FILE_NAME: &str = "level.dat";
 pub const LEVEL_DAT_BACKUP_FILE_NAME: &str = "level.dat_old";
@@ -240,6 +240,17 @@ fn level_data_from_nbt(data: &NbtCompound, seed: i64) -> LevelData {
     if let Some(data_packs) = data.get_compound("DataPacks") {
         level_data.data_packs = data_packs_from_nbt(data_packs);
     }
+    if let Some(features) = data.get_list("enabled_features") {
+        level_data.enabled_features = strings_from_nbt(features);
+    } else {
+        // Older Pumpkin saves have no `enabled_features`: their flags came from the pack names.
+        level_data.enabled_features.extend(
+            FEATURE_PACKS
+                .iter()
+                .filter(|(pack, _)| level_data.data_packs.enabled.iter().any(|p| p == pack))
+                .map(|(_, flag)| (*flag).to_owned()),
+        );
+    }
     if let Some(data_version) = data.get_int("DataVersion") {
         level_data.data_version = data_version;
     }
@@ -307,6 +318,7 @@ fn level_data_to_nbt(info: &LevelData, data: &mut NbtCompound) {
     data.put_double("BorderWarningBlocks", info.border_warning_blocks);
     data.put_double("BorderWarningTime", info.border_warning_time);
     data.put_compound("DataPacks", data_packs_to_nbt(&info.data_packs));
+    data.put_list("enabled_features", strings_to_nbt(&info.enabled_features));
     data.put_int("DataVersion", info.data_version);
 
     // 26.2 difficulty_settings
@@ -845,6 +857,9 @@ mod test {
         original.border_center_x = 8.0;
         original.day_time = 12_345;
         original.map_id = 3;
+        original
+            .enabled_features
+            .push("minecraft:minecart_improvements".to_string());
 
         AnvilLevelInfo
             .write_world_info(&original, temp_dir.path())
@@ -923,6 +938,7 @@ mod test {
                 ],
                 enabled: vec!["vanilla".to_string()],
             },
+            enabled_features: vec!["minecraft:vanilla".to_string()],
             data_version: 4189,
             day_time: 1727,
             difficulty: Difficulty::Normal,

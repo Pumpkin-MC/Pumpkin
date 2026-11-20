@@ -54,7 +54,7 @@ impl Mob for BreezeEntity {
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,
-        fall_distance: f32,
+        fall_distance: f64,
         damage_modifier: f32,
     ) -> bool {
         if fall_distance > 3.0 {

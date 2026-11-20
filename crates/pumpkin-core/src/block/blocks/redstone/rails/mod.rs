@@ -163,6 +163,14 @@ impl Rail {
     }
 }
 
+/// Vanilla `BaseRailBlock.isRail` + `getShapeProperty`: the shape, `None` for a non-rail.
+#[must_use]
+pub fn rail_shape(block: &Block, state_id: BlockStateId) -> Option<RailShape> {
+    block
+        .has_tag(&tag::Block::MINECRAFT_RAILS)
+        .then(|| RailProperties::new(state_id, block).shape())
+}
+
 enum RailProperties {
     Rail(RailLikeProperties),
     StraightRail(PoweredRailLikeProperties),

@@ -1302,7 +1302,7 @@ impl BlockRegistry {
         &self,
         block: &Block,
         world: &Arc<World>,
-        fall_distance: f32,
+        fall_distance: f64,
         entity: &dyn EntityBase,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block.id);
@@ -1313,9 +1313,10 @@ impl BlockRegistry {
                 fall_distance,
                 entity,
             });
-        } else if let Some(living) = entity.get_living_entity() {
-            let reduced_fall_distance = fall_distance * (1.0 - block.fall_distance_reduction);
-            living.handle_fall_damage(entity, reduced_fall_distance, 1.0);
+        } else {
+            let reduced_fall_distance =
+                fall_distance * f64::from(1.0 - block.fall_distance_reduction);
+            entity.cause_fall_damage(entity, reduced_fall_distance, 1.0);
         }
     }
 

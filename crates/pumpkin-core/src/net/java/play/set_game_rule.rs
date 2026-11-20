@@ -14,18 +14,12 @@ impl JavaClient {
         }
 
         let world = player.world();
-        let minecart_improvements_enabled = world.server.upgrade().map_or_else(
-            || {
-                world
-                    .level_info
-                    .load()
-                    .data_packs
-                    .enabled
-                    .iter()
-                    .any(|p| p == "minecart_improvements" || p == "file/minecart_improvements")
-            },
-            |s| s.is_feature_enabled("minecraft:minecart_improvements"),
-        );
+        let minecart_improvements_enabled = world
+            .level_info
+            .load()
+            .enabled_features
+            .iter()
+            .any(|feature| feature == "minecraft:minecart_improvements");
 
         for entry in &packet.entries {
             let key = entry

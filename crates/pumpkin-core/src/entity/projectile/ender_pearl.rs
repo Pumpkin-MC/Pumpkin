@@ -170,8 +170,8 @@ impl EntityBase for EnderPearlEntity {
                 &teleport_pos,
             );
 
+            owner.get_entity().fall_distance.store(0.0);
             if let Some(living) = owner.get_living_entity() {
-                living.fall_distance.store(0.0);
                 living.reset_current_impulse_context();
             }
             if is_player {

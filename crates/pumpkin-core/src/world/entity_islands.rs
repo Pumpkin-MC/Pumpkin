@@ -17,7 +17,8 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
+use crate::entity::velocity_transfer::PUSH_STRENGTH;
+use crate::entity::{DelayedLeash, EntityBase, tnt::TNTEntity};
 use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
 use crate::plugin::api::events::entity::{
     entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
@@ -278,8 +279,10 @@ pub enum EntityReach {
 #[derive(Clone, Copy)]
 pub(crate) enum BlockWriteCheck {
     Unconditional,
+    /// Contact callbacks anywhere in the reach body.
     Contact,
-    DetectorRail(BlockPos),
+    /// Contact callbacks within a known area, narrower than a conservative body.
+    ContactWithin(BoundingBox),
 }
 
 impl EntityReach {
@@ -291,7 +294,7 @@ impl EntityReach {
                 if entity.get_entity().entity_type == &EntityType::CHEST_MINECART
                     && entity
                         .cast_any()
-                        .is::<crate::entity::vehicle::minecart::MinecartEntity>()
+                        .is::<crate::entity::vehicle::minecart::AbstractMinecart>()
                     && reach.links.is_empty() =>
             {
                 let base = entity.get_entity();
@@ -302,9 +305,10 @@ impl EntityReach {
                 }) {
                     return BlockWriteCheck::Unconditional;
                 }
-                // Chest carts only activate the rail inspected before movement. Their tick
-                // does not run Entity's general contact callbacks.
-                BlockWriteCheck::DetectorRail(BlockPos::floored_v(base.pos.load()))
+                // Chest carts change blocks only through contact callbacks along this
+                // tick's move. One extra block covers rail snapping and slope steps.
+                let reach = base.velocity.load().length() + 1.0;
+                BlockWriteCheck::ContactWithin(base.bounding_box.load().expand(reach, reach, reach))
             }
             _ => BlockWriteCheck::Unconditional,
         }
@@ -497,28 +501,17 @@ pub(crate) fn prune_block_writes(
         }
         let contact = match checks[slot] {
             BlockWriteCheck::Unconditional => continue,
-            BlockWriteCheck::Contact => {
-                let area = reach.body.expand_towards(0.0, -1.0, 0.0);
-                let contact = BoundingBox::new(
-                    area.min_block_pos().0.to_f64(),
-                    area.max_block_pos().0.to_f64() + Vector3::new(1.0, 1.0, 1.0),
-                );
-                if contact_may_change_blocks(world, &contact, &mut sections) {
-                    continue;
-                }
-                contact
-            }
-            BlockWriteCheck::DetectorRail(pos) => {
-                if !world.level.is_chunk_loaded(&pos.chunk_position())
-                    || [pos, pos.down()]
-                        .iter()
-                        .any(|pos| world.get_block(pos).id == Block::DETECTOR_RAIL.id)
-                {
-                    continue;
-                }
-                BoundingBox::from_block(&pos).expand_towards(0.0, -1.0, 0.0)
-            }
+            BlockWriteCheck::Contact => reach.body,
+            BlockWriteCheck::ContactWithin(area) => area,
         };
+        let area = contact.expand_towards(0.0, -1.0, 0.0);
+        let contact = BoundingBox::new(
+            area.min_block_pos().0.to_f64(),
+            area.max_block_pos().0.to_f64() + Vector3::new(1.0, 1.0, 1.0),
+        );
+        if contact_may_change_blocks(world, &contact, &mut sections) {
+            continue;
+        }
         active[slot] = false;
         contacts.insert(candidates.len(), contact, &mut budget)?;
         candidates.push(slot);
@@ -1722,9 +1715,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn chest_cart_writes_only_bridge_elevated_readers_when_a_rail_can_activate()
+    async fn chest_cart_writes_only_bridge_elevated_readers_when_a_contact_block_is_near()
     -> Result<(), Box<dyn std::error::Error>> {
-        use crate::entity::{Entity, vehicle::minecart::MinecartEntity};
+        use crate::entity::Entity;
+        use crate::entity::vehicle::minecart::{AbstractMinecart, MinecartType};
 
         let folder = tempfile::tempdir()?;
         let world = crate::entity::ai::test_support::world(&folder);
@@ -1734,11 +1728,11 @@ mod tests {
             .loaded_chunks
             .insert(Vector2::new(0, 0), chunk.clone());
         let pos = BlockPos::new(8, 40, 8);
-        let cart = MinecartEntity::new(Entity::new(
+        let cart = AbstractMinecart::new(
             world.clone(),
             Vector3::new(8.5, 40.0, 8.5),
-            &EntityType::CHEST_MINECART,
-        ));
+            MinecartType::Chest,
+        );
         let config = EntityIslandsConfig::default();
         let custom = Entity::new(
             world.clone(),

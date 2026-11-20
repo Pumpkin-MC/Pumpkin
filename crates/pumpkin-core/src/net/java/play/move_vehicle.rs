@@ -20,9 +20,7 @@ impl JavaClient {
                 .on_ground
                 .store(packet.on_ground, Ordering::Relaxed);
             vehicle_entity.emit_client_movement(vehicle.as_ref(), pos - old_pos);
-            if let Some(living) = vehicle.get_living_entity() {
-                living.fall(vehicle.as_ref(), pos.y - old_y, packet.on_ground);
-            }
+            vehicle.check_fall_damage(vehicle.as_ref(), pos.y - old_y, packet.on_ground);
 
             let world = player.world();
             let vehicle_pos = pos.to_block_pos();
