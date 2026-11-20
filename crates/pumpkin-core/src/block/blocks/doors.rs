@@ -401,7 +401,7 @@ impl BlockBehaviour for DoorBlock {
                 args.world.break_block(
                     &other_half_pos,
                     None,
-                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
+                    (args.flags & BlockFlags::SKIP_DROPS) | BlockFlags::NOTIFY_ALL,
                 );
             }
         }
@@ -421,4 +421,52 @@ fn has_support(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     world
         .get_block_state(&block_pos.down())
         .is_side_solid(BlockDirection::Up)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn door_break_upper_half_drops_door() {
+        use pumpkin_data::block_properties::DoubleBlockHalf;
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::chunk::ChunkData;
+
+        let folder = tempfile::tempdir().unwrap();
+        let world = crate::entity::ai::test_support::world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+
+        let lower_pos = BlockPos::new(0, 64, 0);
+        let upper_pos = BlockPos::new(0, 65, 0);
+
+        let mut lower_props = DoorProperties::default(&Block::OAK_DOOR);
+        lower_props.half = DoubleBlockHalf::Lower;
+        world.set_block_state(
+            &lower_pos,
+            lower_props.to_state_id(&Block::OAK_DOOR),
+            BlockFlags::NOTIFY_ALL,
+        );
+
+        let mut upper_props = DoorProperties::default(&Block::OAK_DOOR);
+        upper_props.half = DoubleBlockHalf::Upper;
+        world.set_block_state(
+            &upper_pos,
+            upper_props.to_state_id(&Block::OAK_DOOR),
+            BlockFlags::NOTIFY_ALL,
+        );
+
+        assert_eq!(world.entities.load().len(), 0);
+        world.break_block(&upper_pos, None, BlockFlags::NOTIFY_ALL);
+        let entities = world.entities.load();
+        assert_eq!(entities.len(), 1);
+        let item_entity = entities[0].get_item_entity().expect("expected item entity");
+        assert_eq!(
+            item_entity.get_item_stack().lock().unwrap().item,
+            &pumpkin_data::item::Item::OAK_DOOR
+        );
+    }
 }
