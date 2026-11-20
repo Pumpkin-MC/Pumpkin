@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use pumpkin_data::BlockState;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
@@ -15,7 +16,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
-    Entity, EntityBase,
+    Entity, EntityBase, LivingEntity,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -320,6 +321,14 @@ impl AgeableMob for ArmadilloEntity {
         }
         .clamp(0.1, 2.0);
         self.get_entity().scale.store(scale);
+        // Also update the SCALE attribute so LivingEntity::tick() does not
+        // reset the scale back to 1.0 on the next tick.
+        self.get_mob_entity()
+            .living_entity
+            .update_attribute(&Attributes::SCALE, |inst| {
+                inst.base_value = scale as f64;
+                inst.mark_dirty();
+            });
     }
 }
 
@@ -487,7 +496,6 @@ mod tests {
     use crate::entity::ai::test_support::world;
     use pumpkin_data::entity::EntityType;
     use pumpkin_util::math::vector3::Vector3;
-    use std::sync::atomic::Ordering::Relaxed;
     use tempfile::TempDir;
 
     const ARMADILLO_ADULT_WIDTH: f32 = 0.7;
@@ -514,20 +522,17 @@ mod tests {
         let armadillo = spawn_armadillo(&world);
 
         // Start as adult (age 0)
-        assert_eq!(armadillo.get_entity().scale.load(Relaxed), 1.0);
+        assert!((armadillo.get_entity().scale.load() - 1.0).abs() < f32::EPSILON);
 
         // Become a baby
         armadillo.set_baby(true);
         assert!(armadillo.is_baby());
-        assert_eq!(
-            armadillo.get_entity().scale.load(Relaxed),
-            ARMADILLO_BABY_SCALE
-        );
+        assert!((armadillo.get_entity().scale.load() - ARMADILLO_BABY_SCALE).abs() < f32::EPSILON);
 
         // Grow up
         armadillo.set_baby(false);
         assert!(!armadillo.is_baby());
-        assert_eq!(armadillo.get_entity().scale.load(Relaxed), 1.0);
+        assert!((armadillo.get_entity().scale.load() - 1.0).abs() < f32::EPSILON);
 
         world.level.shutdown().await;
         Ok(())
@@ -578,11 +583,11 @@ mod tests {
 
         // Adult scale is 1.0
         armadillo.set_baby(false);
-        assert!((armadillo.get_entity().scale.load(Relaxed) - 1.0).abs() < f32::EPSILON);
+        assert!((armadillo.get_entity().scale.load() - 1.0).abs() < f32::EPSILON);
 
         // Baby scale is 0.6
         armadillo.set_baby(true);
-        assert!((armadillo.get_entity().scale.load(Relaxed) - 0.6).abs() < f32::EPSILON);
+        assert!((armadillo.get_entity().scale.load() - 0.6).abs() < f32::EPSILON);
 
         world.level.shutdown().await;
         Ok(())
