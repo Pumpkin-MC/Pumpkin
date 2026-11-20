@@ -1363,25 +1363,6 @@ mod tests {
         assert_eq!(client.pending_bytes.load(Ordering::Acquire), 0);
     }
 
-    struct SeesPackets;
-    impl crate::plugin::EventHandler<crate::plugin::server::packet::PacketSentEvent> for SeesPackets {}
-
-    #[tokio::test]
-    async fn a_run_still_arrives_when_a_plugin_watches_packets() {
-        let plugins = crate::plugin::PluginManager::new(Vec::new());
-        plugins.register(
-            Arc::new(SeesPackets),
-            crate::plugin::EventPriority::Normal,
-            false,
-        );
-        let (client, mut received) = java_client();
-        client.try_enqueue_run(run(1..=3));
-
-        for id in 1..=3 {
-            assert_eq!(received.get_raw_packet().await.unwrap().id, id);
-        }
-    }
-
     #[tokio::test]
     async fn a_kick_mid_tick_follows_the_packets_queued_before_it() {
         let (client, mut received) = java_client();

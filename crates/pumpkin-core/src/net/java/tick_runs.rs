@@ -414,6 +414,29 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_run_goes_through_a_plugin_watching_packets_one_by_one() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let mut client = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        client.received().await?;
+        let mut run = PacketRun::default();
+        for id in 1..=3 {
+            run.push(&numbered(id, 0));
+        }
+        // Collected before the plugin was there, handed over after.
+        let seen = Arc::new(CountsPackets(AtomicU32::new(0)));
+        server
+            .plugin_manager
+            .register(seen.clone(), EventPriority::Normal, false);
+        java(&client).try_enqueue_run(run);
+
+        assert_eq!(ids(&mut client).await?, [1, 2, 3]);
+        assert_eq!(seen.0.load(Ordering::Relaxed), 3);
+        shutdown(&server).await;
+        Ok(())
+    }
+
     /// Stands in for a plugin that tells another player about an arm swing.
     struct TellsWatcher {
         watcher: Arc<Player>,
