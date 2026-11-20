@@ -235,7 +235,7 @@ ed25519-dalek = { version = "3.0", default-features = false, features = ["fast"]
 hex = { version = "0.4", default-features = false, features = ["std"] }
 rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
 rustyline = { version = "19.0.0", default-features = false, features = ["with-file-history"] }
-zrip = { version = "0.8.21", default-features = false, features = ["std", "simd"] }
+zrip = { version = "0.8.23", default-features = false, features = ["std", "simd"] }
 sha1 = { version = "=0.11.0", default-features = false, features = ["oid"] }
 sha2 = { version = "0.11", default-features = false, features = ["oid"] }
 tracing = { version = "0.1.44", default-features = false, features = ["std", "attributes"] }
