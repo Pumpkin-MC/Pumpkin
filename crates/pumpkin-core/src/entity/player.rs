@@ -18,7 +18,9 @@ use std::time::{Duration, Instant};
 use crate::entity::attributes::{Modifier, ModifierOperation};
 use crate::entity::passive::abstract_horse::player_jump_pending_scale;
 use crate::plugin::api::events::enchantment::{EnchantItemEvent, PrepareItemEnchantEvent};
-use crate::world::scoreboard::{BedrockScoreboard, CollisionRule, Scoreboard};
+use crate::world::scoreboard::{
+    BedrockScoreboard, CollisionRule, Scoreboard, broadcast_no_collision_member,
+};
 use advancement::PlayerAdvancement;
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
@@ -4539,12 +4541,17 @@ impl Player {
             _ => {
                 drop(guard);
                 let world = self.world();
-                let scoreboard = world
-                    .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                scoreboard.send_to_player(self);
-                scoreboard.broadcast_no_collision_member(self);
+                let has_team = {
+                    let scoreboard = world
+                        .scoreboard
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    scoreboard.send_to_player(self);
+                    scoreboard.get_entity_team(&self.gameprofile.name).is_some()
+                };
+                if !world.player_collisions && !has_team {
+                    broadcast_no_collision_member(&world, self);
+                }
             }
         }
     }

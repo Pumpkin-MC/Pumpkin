@@ -796,18 +796,38 @@ impl Scoreboard {
             });
         }
     }
+}
 
-    /// With player collisions off: everybody in the player's world gets it as a member of
-    /// [`NO_COLLISION_TEAM`] when it has no team here. Only for the scoreboard of the
-    /// world: what a player sees in one of its own is not what the others see.
-    pub(crate) fn broadcast_no_collision_member(&self, player: &Player) {
-        let world = player.world();
-        let own = &player.gameprofile.name;
-        if !world.player_collisions && self.get_entity_team(own).is_none() {
-            send_no_collision_team(false, vec![own.clone()], |packet| {
-                world.broadcast_packet_all(packet);
-            });
+/// With player collisions off: everybody in `world` gets `player`, which has no team in the
+/// world's scoreboard, as a member of [`NO_COLLISION_TEAM`]. Only for the scoreboard of the
+/// world: what a player sees in one of its own is not what the others see.
+///
+/// The scoreboard is not locked while the packet is queued: a plugin watching packets may
+/// ask about teams. A change of the player's team can then reach a client ahead of the
+/// packet, which takes the player out of that team again. So the team is read once more
+/// afterwards and sent the same way, until it is the one the clients were told last.
+pub(crate) fn broadcast_no_collision_member(world: &World, player: &Player) {
+    let name = &player.gameprofile.name;
+    let mut told: Option<String> = None;
+    loop {
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: told
+                .clone()
+                .unwrap_or_else(|| NO_COLLISION_TEAM.to_string()),
+            method: TeamMethod::AddPlayers,
+            parameters: None,
+            players: vec![name.clone()].into(),
+        });
+        let team = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_entity_team(name)
+            .map(|team| team.name.clone());
+        if team == told {
+            return;
         }
+        told = team;
     }
 }
 

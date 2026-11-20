@@ -78,7 +78,7 @@ pub(super) fn push_entities(world: &World, players: &[Arc<Player>]) {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::Ordering;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     use pumpkin_data::entity::EntityType;
     use pumpkin_data::game_rules::{GameRule, GameRuleValue};
@@ -92,6 +92,9 @@ mod tests {
     use crate::entity::passive::cow::CowEntity;
     use crate::plugin::api::events::entity::entity_damage::EntityDamageEvent;
     use crate::plugin::player::player_velocity::PlayerVelocityEvent;
+    use crate::plugin::server::packet::PacketSentEvent;
+    use crate::plugin::{BoxFuture, EventHandler, EventPriority};
+    use crate::server::Server;
     use pumpkin_data::packet::CURRENT_MC_VERSION;
     use pumpkin_protocol::java::client::play::{CSetPlayerTeam, TeamMethod};
     use pumpkin_protocol::ser::NetworkReadExt;
@@ -261,6 +264,88 @@ mod tests {
             .filter(|packet| packet.payload.get(1..=name.len()) == Some(name))
             .map(|packet| packet.payload[name.len() + 1])
             .collect()
+    }
+
+    /// The team a packet is about and how it changes the team: 0 creates it, 3 adds players.
+    fn team_method(packet_id: i32, mut payload: &[u8]) -> Option<(String, u8)> {
+        if packet_id != id::<CSetPlayerTeam<'static>>() {
+            return None;
+        }
+        let team = payload.get_str().ok()?;
+        Some((team.into(), payload.get_u8().ok()?))
+    }
+
+    /// Stands in for a plugin that puts a player into a team of its own when it sees the
+    /// player being added to the team without player collisions.
+    struct JoinsTeam {
+        world: Arc<World>,
+        team: Team,
+        seen: AtomicBool,
+        locked: AtomicBool,
+    }
+    impl EventHandler<PacketSentEvent> for JoinsTeam {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            let joins = (NO_COLLISION_TEAM.to_string(), 3);
+            if team_method(event.packet_id, &event.payload) == Some(joins)
+                && !self.seen.swap(true, Ordering::Relaxed)
+            {
+                if let Ok(mut scoreboard) = self.world.scoreboard.try_lock() {
+                    scoreboard.add_team(&self.world, self.team.clone());
+                } else {
+                    self.locked.store(true, Ordering::Relaxed);
+                }
+            }
+            Box::pin(async {})
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_plugin_sees_a_player_join_the_team_without_player_collisions_unlocked() -> TestResult
+    {
+        let folder = tempfile::tempdir()?;
+        let server = server_without_player_collisions(&folder).await?;
+        let world = server.worlds.load()[0].clone();
+        let client = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        let mut other = Client::join(&server, 2, Vector3::new(3.5, 100.0, 0.5));
+        other.received().await?;
+        let plugin = Arc::new(JoinsTeam {
+            world,
+            team: team("red", vec![client.player.gameprofile.name.clone()]),
+            seen: AtomicBool::new(false),
+            locked: AtomicBool::new(false),
+        });
+        server
+            .plugin_manager
+            .register(plugin.clone(), EventPriority::Normal, true);
+
+        client.player.send_scoreboard();
+        assert!(plugin.seen.load(Ordering::Relaxed));
+        assert!(
+            !plugin.locked.load(Ordering::Relaxed),
+            "the scoreboard is locked while a plugin sees the player join the team"
+        );
+
+        // The plugin's team reached the other client ahead of the packet it answered, which
+        // took the player out of it again. So the client is told that team once more.
+        let told: Vec<(String, u8)> = other
+            .received()
+            .await?
+            .iter()
+            .filter_map(|packet| team_method(packet.id, &packet.payload))
+            .collect();
+        let red = "red".to_string();
+        let expected = [
+            (red.clone(), 0),
+            (NO_COLLISION_TEAM.to_string(), 3),
+            (red, 3),
+        ];
+        assert_eq!(told, expected);
+        shutdown(&server).await;
+        Ok(())
     }
 
     /// The payloads of the packets about team `name`.
