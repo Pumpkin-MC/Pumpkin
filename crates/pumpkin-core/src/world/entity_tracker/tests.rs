@@ -810,15 +810,18 @@ impl EventHandler<PacketSentEvent> for MovesWhileSpawned {
         if spawns_entity(event.packet_id, &event.payload, self.walker.entity_id)
             && !self.spawned.swap(true, Relaxed)
         {
-            if self.walker.seen_by.try_read().is_err() {
-                self.locked.store(true, Relaxed);
-            } else {
+            // For writing: a plugin may also remove a watcher, and whoever only reads the
+            // watchers keeps that waiting too. The probe is let go before the movement.
+            let unlocked = self.walker.seen_by.try_write().is_ok();
+            if unlocked {
                 let world = server.worlds.load()[0].clone();
                 self.walker.entity.get_entity().set_pos(self.step);
                 // A player is sent in every other pass.
                 for _ in 0..2 {
                     self.walker.send_changes(&world);
                 }
+            } else {
+                self.locked.store(true, Relaxed);
             }
         }
         Box::pin(async {})
