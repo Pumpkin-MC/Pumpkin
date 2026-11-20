@@ -5808,6 +5808,11 @@ impl Player {
 
         let gamemode = event.new_gamemode;
         self.gamemode.store(gamemode);
+        // Vanilla pairs a player again with its next move packet, `ChunkMap.move`. Here
+        // only a change of position does that, so a player standing still would stay as
+        // visible as it was.
+        let world = self.world();
+        world.entity_tracker.update_player_position(self, &world);
         // TODO: Fix this when mojang fixes it
         // This is intentional to keep the pure vanilla mojang experience
         // self.previous_gamemode.store(self.previous_gamemode.load());

@@ -526,10 +526,8 @@ async fn a_spectator_is_hidden_and_its_moves_stay_private() -> TestResult {
     let mut drawn = drawn_at(None, ghost.entity_id(), &watcher.received().await?)?;
     assert!(drawn.is_some());
 
-    ghost.player.gamemode.store(GameMode::Spectator);
-    world
-        .entity_tracker
-        .update_player_position(&ghost.player, &world);
+    // Neither of them moves: the change of game mode alone hides the player.
+    assert!(ghost.player.set_gamemode(GameMode::Spectator));
     world.entity_tracker.update_all(&world);
     drawn = drawn_at(drawn, ghost.entity_id(), &watcher.received().await?)?;
     assert!(drawn.is_none());
