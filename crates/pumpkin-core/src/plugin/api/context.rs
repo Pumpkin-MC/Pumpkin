@@ -301,6 +301,10 @@ impl Context {
 
     /// Registers an event handler for a specific event type.
     ///
+    /// The handler may only read, not modify the event payload.
+    /// All nonblocking handlers are ran concurrently, after the
+    /// blocking ones are done.
+    ///
     /// # Type Parameters
     /// - `E`: The event type that the handler will respond to.
     /// - `H`: The type of the event handler.
@@ -327,6 +331,10 @@ impl Context {
 
     /// Registers an event handler for a specific event type.
     ///
+    /// The handler is permitted to modify the event payload.
+    /// Blocking handlers are run sequentially, before any
+    /// non-blocking ones.
+    ///
     /// # Type Parameters
     /// - `E`: The event type that the handler will respond to.
     /// - `H`: The type of the event handler.
@@ -336,7 +344,7 @@ impl Context {
     /// - `priority`: The priority of the event handler.
     ///
     /// # Constraints
-    /// The handler must implement the `EventRoHandler<E>` trait.
+    /// The handler must implement the `EventRwHandler<E>` trait.
     pub fn register_event_blocking<E: Payload + 'static, H>(
         &self,
         handler: Arc<H>,
