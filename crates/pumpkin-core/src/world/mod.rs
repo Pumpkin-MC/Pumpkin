@@ -962,6 +962,13 @@ impl World {
         let mut new_info = (**current_info).clone();
         match (new_info.game_rules.get_mut(rule), value) {
             (GameRuleValue::Int(target), GameRuleValue::Int(val)) => {
+                if rule
+                    .int_bounds()
+                    .is_some_and(|(min, max)| !(i64::from(min)..=i64::from(max)).contains(&val))
+                {
+                    warn!("Game rule {rule} value {val} is out of range");
+                    return;
+                }
                 *target = val;
             }
             (GameRuleValue::Bool(target), GameRuleValue::Bool(val)) => {

@@ -2873,6 +2873,8 @@ impl Entity {
         */
     }
 
+    // TODO: vanilla `applyEffectsFromBlocks` checks the blocks along every move of the tick,
+    // not only the final box.
     pub fn tick_block_collisions(&self, caller: &dyn EntityBase) -> bool {
         if !self.is_affected_by_blocks() {
             return false;

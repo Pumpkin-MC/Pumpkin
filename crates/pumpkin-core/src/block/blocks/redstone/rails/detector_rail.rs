@@ -210,7 +210,9 @@ impl BlockBehaviour for DetectorRailBlock {
                 .filter_map(|cart| cart.cast_any().downcast_ref::<AbstractMinecart>())
         };
         if let Some(command_block) = carts().find_map(AbstractMinecart::command_block) {
-            return Some(command_block.get_success_count() as u8);
+            // Vanilla passes the count on unclamped; saturate instead of wrapping.
+            let count = command_block.get_success_count().max(0);
+            return Some(u8::try_from(count).unwrap_or(u8::MAX));
         }
         Some(
             carts()

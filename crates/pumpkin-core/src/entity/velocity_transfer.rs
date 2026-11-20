@@ -198,4 +198,37 @@ mod tests {
         assert!(exchange(&beside).is_none());
         assert!(exchange(&ahead).is_some());
     }
+
+    #[test]
+    fn furnace_keeps_its_speed_and_the_plain_cart_is_pushed() {
+        let plain = Motion {
+            pos: Vector3::new(0.0, 64.0, 0.0),
+            velocity: Vector3::new(0.1, 0.0, 0.0),
+        };
+        let furnace = Motion {
+            pos: Vector3::new(0.5, 64.0, 0.0),
+            velocity: Vector3::new(0.3, 0.0, 0.0),
+        };
+        let exchange = |this: (&Motion, CartClass), other: (&Motion, CartClass)| {
+            let push = minecart_push(this.0, other.0).unwrap();
+            minecart_exchange(this, other, ExchangeRule::Always, push).unwrap()
+        };
+        // 0.1 * 0.2 + 0.3 - 0.05 (the push) for the plain cart, 0.3 * 0.95 for the furnace.
+        let resync_and_x = |result: CartVelocity| match result {
+            CartVelocity::Set(velocity) => (false, velocity.x),
+            CartVelocity::Push(velocity) => (true, velocity.x),
+        };
+        let assert_outcome = |plain_result: CartVelocity, furnace_result: CartVelocity| {
+            let (plain_resync, plain_x) = resync_and_x(plain_result);
+            let (furnace_resync, furnace_x) = resync_and_x(furnace_result);
+            assert!(plain_resync && !furnace_resync);
+            assert!((plain_x - 0.27).abs() < 1e-8, "plain x {plain_x}");
+            assert!((furnace_x - 0.285).abs() < 1e-12, "furnace x {furnace_x}");
+        };
+
+        let (this, other) = exchange((&plain, CartClass::Plain), (&furnace, CartClass::Furnace));
+        assert_outcome(this, other);
+        let (this, other) = exchange((&furnace, CartClass::Furnace), (&plain, CartClass::Plain));
+        assert_outcome(other, this);
+    }
 }

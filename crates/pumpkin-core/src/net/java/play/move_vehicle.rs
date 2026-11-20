@@ -15,6 +15,8 @@ impl JavaClient {
             let old_pos = vehicle_entity.pos.load();
             let old_y = old_pos.y;
             vehicle_entity.set_pos(pos);
+            // Vanilla `handlePlayerKnownMovement`: the driver moves as its vehicle did.
+            entity.movement.store(pos - old_pos);
             vehicle_entity.set_rotation(packet.yaw, packet.pitch);
             vehicle_entity
                 .on_ground

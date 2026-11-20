@@ -71,7 +71,13 @@ fn find_pack_name(server: &Server, input: &str) -> Option<String> {
 
 /// Vanilla refuses a pack whose flags this world doesn't have.
 fn check_flags(server: &Server, pack: &str) -> Result<(), CommandSyntaxError> {
-    let missing = crate::data::datapack::DatapackManager::missing_features(server, pack);
+    // Vanilla doesn't know a pack it can't read.
+    let Some(missing) = crate::data::datapack::DatapackManager::missing_features(server, pack)
+    else {
+        return Err(
+            ERROR_UNKNOWN_DATAPACK.create_without_context(TextComponent::text(pack.to_owned()))
+        );
+    };
     if missing.is_empty() {
         return Ok(());
     }

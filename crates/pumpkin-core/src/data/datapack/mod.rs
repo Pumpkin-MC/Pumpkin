@@ -915,15 +915,18 @@ impl DatapackManager {
     }
 
     /// The flags `pack` requests that this world doesn't have; vanilla won't enable it then.
+    /// `None` when vanilla can't read the pack at all.
     #[must_use]
-    pub fn missing_features(server: &Server, pack: &str) -> Vec<&'static str> {
+    pub fn missing_features(server: &Server, pack: &str) -> Option<Vec<&'static str>> {
         let world_path = server.basic_config.get_world_path();
         let enabled = &server.level_info.load().enabled_features;
-        requested_features(&world_path, pack)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|feature| !enabled.iter().any(|enabled| enabled == feature))
-            .collect()
+        let requested = requested_features(&world_path, pack)?;
+        Some(
+            requested
+                .into_iter()
+                .filter(|feature| !enabled.iter().any(|enabled| enabled == feature))
+                .collect(),
+        )
     }
 
     /// Vanilla `MinecraftServer.configurePackRepository`: the packs and features `level` runs
@@ -1258,7 +1261,10 @@ impl DatapackManager {
         let all = Self::get_all_known_packs(server);
         // Vanilla lists only packs this world's features allow.
         all.into_iter()
-            .filter(|p| !enabled.contains(p) && Self::missing_features(server, p).is_empty())
+            .filter(|p| {
+                !enabled.contains(p)
+                    && Self::missing_features(server, p).is_some_and(|missing| missing.is_empty())
+            })
             .collect()
     }
 
@@ -1283,14 +1289,25 @@ impl DatapackManager {
     pub fn get_pack_info(server: &Server, name_or_id: &str) -> Option<DatapackInfo> {
         let resolved_name = Self::find_pack_name(server, name_or_id)?;
         let enabled_packs = Self::get_enabled_packs(server);
-        let is_enabled = enabled_packs.contains(&resolved_name);
-
         let loaded = server.datapack_manager.get_loaded_packs();
-        if let Some(pack) = loaded
-            .iter()
-            .find(|p| p.id == resolved_name || p.name == resolved_name)
-        {
-            return Some(DatapackInfo {
+        Some(Self::pack_info(
+            server,
+            &resolved_name,
+            &enabled_packs,
+            &loaded,
+        ))
+    }
+
+    /// Details of the known pack `resolved_name`.
+    fn pack_info(
+        server: &Server,
+        resolved_name: &str,
+        enabled_packs: &[String],
+        loaded: &[LoadedDatapack],
+    ) -> DatapackInfo {
+        let is_enabled = enabled_packs.iter().any(|pack| pack == resolved_name);
+        if let Some(pack) = loaded.iter().find(|p| p.id == resolved_name) {
+            return DatapackInfo {
                 id: pack.id.clone(),
                 name: pack.name.clone(),
                 description: pack.description.clone(),
@@ -1298,7 +1315,7 @@ impl DatapackManager {
                 is_enabled,
                 recipe_count: pack.recipe_count,
                 function_count: pack.function_count,
-            });
+            };
         }
 
         let (id, name, description, pack_format) = if resolved_name == "vanilla" {
@@ -1308,10 +1325,10 @@ impl DatapackManager {
                 "The default data pack".to_string(),
                 61,
             )
-        } else if Self::is_embedded_pack(&resolved_name) {
+        } else if Self::is_embedded_pack(resolved_name) {
             (
-                resolved_name.clone(),
-                resolved_name.clone(),
+                resolved_name.to_owned(),
+                resolved_name.to_owned(),
                 format!("Embedded datapack: {resolved_name}"),
                 61,
             )
@@ -1322,17 +1339,17 @@ impl DatapackManager {
                 .join("datapacks")
                 .join(stripped);
             let (desc, format, _) = read_pack_mcmeta(&pack_path);
-            (resolved_name.clone(), stripped.to_string(), desc, format)
+            (resolved_name.to_owned(), stripped.to_string(), desc, format)
         } else {
             (
-                resolved_name.clone(),
-                resolved_name.clone(),
+                resolved_name.to_owned(),
+                resolved_name.to_owned(),
                 format!("Bundled datapack: {resolved_name}"),
                 61,
             )
         };
 
-        Some(DatapackInfo {
+        DatapackInfo {
             id,
             name,
             description,
@@ -1340,30 +1357,29 @@ impl DatapackManager {
             is_enabled,
             recipe_count: 0,
             function_count: 0,
-        })
+        }
+    }
+
+    /// Details of `packs`, already resolved ids, without rescanning the packs per entry.
+    fn pack_infos(server: &Server, packs: &[String]) -> Vec<DatapackInfo> {
+        let enabled_packs = Self::get_enabled_packs(server);
+        let loaded = server.datapack_manager.get_loaded_packs();
+        packs
+            .iter()
+            .map(|pack| Self::pack_info(server, pack, &enabled_packs, &loaded))
+            .collect()
     }
 
     pub fn list_all_packs(server: &Server) -> Vec<DatapackInfo> {
-        let all = Self::get_all_known_packs(server);
-        all.into_iter()
-            .filter_map(|p| Self::get_pack_info(server, &p))
-            .collect()
+        Self::pack_infos(server, &Self::get_all_known_packs(server))
     }
 
     pub fn list_enabled_packs(server: &Server) -> Vec<DatapackInfo> {
-        let enabled = Self::get_enabled_packs(server);
-        enabled
-            .into_iter()
-            .filter_map(|p| Self::get_pack_info(server, &p))
-            .collect()
+        Self::pack_infos(server, &Self::get_enabled_packs(server))
     }
 
     pub fn list_available_packs(server: &Server) -> Vec<DatapackInfo> {
-        let available = Self::get_available_packs(server);
-        available
-            .into_iter()
-            .filter_map(|p| Self::get_pack_info(server, &p))
-            .collect()
+        Self::pack_infos(server, &Self::get_available_packs(server))
     }
 
     pub fn is_pack_enabled(server: &Server, name: &str) -> bool {
@@ -1386,7 +1402,9 @@ impl DatapackManager {
         if enabled.contains(&resolved_name) {
             return Err(format!("Datapack '{resolved_name}' is already enabled"));
         }
-        let missing = Self::missing_features(server, &resolved_name);
+        let Some(missing) = Self::missing_features(server, &resolved_name) else {
+            return Err(format!("Unknown datapack '{resolved_name}'"));
+        };
         if !missing.is_empty() {
             return Err(format!(
                 "Pack '{resolved_name}' cannot be enabled, since required flags are not enabled in this world: {}!",
@@ -1690,21 +1708,16 @@ fn load_bundled_datapacks(
         "minecart_improvements",
         "redstone_experiments",
     ] {
-        let is_enabled = enabled_packs.iter().any(|p| {
-            p == bundled
-                || p == &format!("minecraft:{bundled}")
-                || p == &format!("file/{bundled}")
-                || p.strip_prefix("file/") == Some(bundled)
-                || p.strip_prefix("minecraft:") == Some(bundled)
-        });
-        let already_loaded = loaded_packs_vec.iter().any(|p| {
-            p.id == bundled || p.id == format!("minecraft:{bundled}") || p.name == bundled
-        });
-        if is_enabled
-            && !already_loaded
-            && let Some(pack_path) = find_bundled_datapack_dir(bundled)
-            && read_pack_features(bundled, &pack_path).is_some()
-        {
+        // Vanilla ids: `minecart_improvements` is this pack, `file/minecart_improvements` a
+        // world pack.
+        if !enabled_packs.iter().any(|p| p == bundled) {
+            continue;
+        }
+        let Some(pack_path) = find_bundled_datapack_dir(bundled) else {
+            warn!("Missing bundled data pack {bundled}");
+            continue;
+        };
+        if read_pack_features(bundled, &pack_path).is_some() {
             let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
             let counts = load_pack_contents(&pack_path, acc);
             info!(
@@ -1727,7 +1740,7 @@ fn load_bundled_datapacks(
                 counts.tags,
             );
             loaded_packs_vec.push(LoadedDatapack {
-                id: format!("minecraft:{bundled}"),
+                id: bundled.to_string(),
                 name: bundled.to_string(),
                 description,
                 pack_format,
@@ -1769,10 +1782,7 @@ fn scan_datapacks_dir(
         }
 
         let pack_id = format!("file/{file_name}");
-        let is_enabled = enabled_packs
-            .iter()
-            .any(|p| p == &pack_id || p == &file_name);
-        if !is_enabled {
+        if !enabled_packs.contains(&pack_id) {
             continue;
         }
 
@@ -2193,31 +2203,62 @@ fn available_packs(world_path: &Path) -> Vec<(String, Vec<&'static str>)> {
     packs
 }
 
-/// Vanilla `FeatureFlagsMetadataSection` of a `pack.mcmeta`, `None` when it names an unknown
-/// flag, which keeps vanilla from loading the pack.
+/// Why vanilla `Pack.readPackMetadata` refuses a pack.
+enum PackMetaError {
+    /// No `pack.mcmeta` or no `pack` section in it.
+    Missing,
+    /// Unreadable or malformed metadata.
+    Invalid(String),
+    UnknownFeatures(Vec<String>),
+}
+
+/// Vanilla `FeatureFlagsMetadataSection` of a `pack.mcmeta`, `None` when vanilla can't load the
+/// pack.
 fn read_pack_features(pack_id: &str, pack_path: &Path) -> Option<Vec<&'static str>> {
     match mcmeta_features(pack_path) {
         Ok(features) => Some(features),
-        Err(unknown) => {
+        Err(PackMetaError::Missing) => {
+            warn!("Missing metadata in pack {pack_id}");
+            None
+        }
+        Err(PackMetaError::Invalid(error)) => {
+            warn!("Failed to read pack {pack_id} metadata: {error}");
+            None
+        }
+        Err(PackMetaError::UnknownFeatures(unknown)) => {
             warn!("Failed to read pack {pack_id} metadata: unknown feature ids {unknown:?}");
             None
         }
     }
 }
 
-/// The flags a `pack.mcmeta` requests, `Err` with the ids no flag has.
-fn mcmeta_features(pack_path: &Path) -> Result<Vec<&'static str>, Vec<String>> {
-    let Some(requested) = fs::read_to_string(pack_path.join("pack.mcmeta"))
-        .ok()
-        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
-        .and_then(|meta| meta.pointer("/features/enabled").cloned())
-    else {
+/// The flags a `pack.mcmeta` requests; no `features` section requests none.
+fn mcmeta_features(pack_path: &Path) -> Result<Vec<&'static str>, PackMetaError> {
+    let content = match fs::read_to_string(pack_path.join("pack.mcmeta")) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(PackMetaError::Missing);
+        }
+        Err(error) => return Err(PackMetaError::Invalid(error.to_string())),
+    };
+    let meta: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|error| PackMetaError::Invalid(error.to_string()))?;
+    if meta.get("pack").is_none() {
+        return Err(PackMetaError::Missing);
+    }
+    let Some(section) = meta.get("features") else {
         return Ok(Vec::new());
     };
+    let requested = section
+        .get("enabled")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| PackMetaError::Invalid("features.enabled is not a list".to_owned()))?;
     let mut features = Vec::new();
     let mut unknown = Vec::new();
-    for id in requested.as_array().into_iter().flatten() {
-        let id = id.as_str().unwrap_or_default();
+    for id in requested {
+        let id = id
+            .as_str()
+            .ok_or_else(|| PackMetaError::Invalid("feature id is not a string".to_owned()))?;
         let full = if id.contains(':') {
             id.to_owned()
         } else {
@@ -2231,7 +2272,7 @@ fn mcmeta_features(pack_path: &Path) -> Result<Vec<&'static str>, Vec<String>> {
     if unknown.is_empty() {
         Ok(features)
     } else {
-        Err(unknown)
+        Err(PackMetaError::UnknownFeatures(unknown))
     }
 }
 

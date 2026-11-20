@@ -100,6 +100,7 @@ impl CommandExecutor for RideDismountExecutor {
             || Err(ERROR_NOT_RIDING.create_without_context(target.get_display_name())),
             |vehicle| {
                 let target_id = target.get_entity().entity_id;
+                // TODO: a plugin-cancelled dismount still reports success.
                 vehicle.get_entity().remove_passenger(target_id);
 
                 let msg = TextComponent::translate_cross(

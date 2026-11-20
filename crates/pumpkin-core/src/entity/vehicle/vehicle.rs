@@ -177,7 +177,14 @@ impl VehicleEntity {
         if !self.entity.is_alive() {
             return true;
         }
+        if !self.damage_event_allows(amount, source) {
+            return false;
+        }
+        self.apply_damage(amount, source)
+    }
 
+    /// Fires `VehicleDamageEvent`, `false` when a plugin cancelled the hit.
+    pub fn damage_event_allows(&self, amount: f32, source: Option<&dyn EntityBase>) -> bool {
         let attacker_id = source.map(|s| s.get_entity().entity_id);
         let mut damage_event =
             crate::plugin::api::events::vehicle::vehicle_damage::VehicleDamageEvent::new(
@@ -190,10 +197,12 @@ impl VehicleEntity {
                 .plugin_manager
                 .fire_blocking(&server, &mut damage_event);
         }
-        if damage_event.cancelled {
-            return false;
-        }
+        !damage_event.cancelled
+    }
 
+    /// Vanilla `VehicleEntity.hurtServer` after the damage event allowed the hit.
+    pub fn apply_damage(&self, amount: f32, source: Option<&dyn EntityBase>) -> bool {
+        let attacker_id = source.map(|s| s.get_entity().entity_id);
         let new_strength = self.apply_damage_wobble(amount);
 
         let is_creative = source

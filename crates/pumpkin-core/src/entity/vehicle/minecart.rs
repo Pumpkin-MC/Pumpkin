@@ -741,16 +741,22 @@ impl EntityBase for AbstractMinecart {
             .and_then(EntityBase::get_player)
             .is_some_and(|player| player.gamemode.load() == GameMode::Creative);
 
+        let entity = &self.vehicle.entity;
+        if !entity.is_alive() {
+            return true;
+        }
+        // Plugins cancel the hit before a TNT cart can prime or explode.
+        if !self.vehicle.damage_event_allows(amount, source) {
+            return false;
+        }
         if let MinecartKind::Tnt(minecart) = &self.kind
             && self.tnt_hurt(minecart, amount, damage_type, source, cause, creative)
         {
             return true;
         }
 
-        let entity = &self.vehicle.entity;
-        let breaks =
-            entity.is_alive() && !creative && self.vehicle.get_damage() + amount * 10.0 > 40.0;
-        let damaged = self.vehicle.damage_with_context(amount, source);
+        let breaks = !creative && self.vehicle.get_damage() + amount * 10.0 > 40.0;
+        let damaged = self.vehicle.apply_damage(amount, source);
         if breaks && entity.is_removed() {
             self.drop_on_destroy();
         }

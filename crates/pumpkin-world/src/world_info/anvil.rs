@@ -247,7 +247,15 @@ fn level_data_from_nbt(data: &NbtCompound, seed: i64) -> LevelData {
         level_data.enabled_features.extend(
             FEATURE_PACKS
                 .iter()
-                .filter(|(pack, _)| level_data.data_packs.enabled.iter().any(|p| p == pack))
+                .filter(|(pack, _)| {
+                    level_data.data_packs.enabled.iter().any(|p| {
+                        let name = p
+                            .strip_prefix("file/")
+                            .or_else(|| p.strip_prefix("minecraft:"))
+                            .unwrap_or(p);
+                        name == *pack
+                    })
+                })
                 .map(|(_, flag)| (*flag).to_owned()),
         );
     }
@@ -594,7 +602,10 @@ mod test {
         },
     };
 
-    use super::{AnvilLevelInfo, LEVEL_DAT_FILE_NAME, LevelDat, WorldInfoReader, WorldInfoWriter};
+    use super::{
+        AnvilLevelInfo, LEVEL_DAT_FILE_NAME, LevelDat, WorldInfoReader, WorldInfoWriter,
+        level_data_from_nbt, strings_to_nbt,
+    };
 
     const CONVERTED_LEVEL_NAME: &str = "Converted World";
 
@@ -840,6 +851,31 @@ mod test {
         let reloaded = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
 
         assert_eq!(reloaded.world_gen_settings.seed, 8_675_309);
+    }
+
+    #[test]
+    fn older_saves_infer_flags_from_any_pack_alias() {
+        let mut packs = NbtCompound::new();
+        packs.put_list(
+            "Enabled",
+            strings_to_nbt(&[
+                "vanilla".to_string(),
+                "file/minecart_improvements".to_string(),
+                "minecraft:trade_rebalance".to_string(),
+            ]),
+        );
+        let mut data = NbtCompound::new();
+        data.put_compound("DataPacks", packs);
+
+        let level = level_data_from_nbt(&data, 1);
+        assert_eq!(
+            level.enabled_features,
+            [
+                "minecraft:vanilla",
+                "minecraft:trade_rebalance",
+                "minecraft:minecart_improvements"
+            ]
+        );
     }
 
     #[test]

@@ -81,7 +81,7 @@ fn yaw_along(x: f64, z: f64) -> f32 {
     180.0 - (z.atan2(x) * 180.0 / std::f64::consts::PI) as f32
 }
 
-/// Vanilla `isDecending`.
+/// Whether `movement` heads down the slope of `shape`.
 const fn is_descending(movement: Vector3<f64>, shape: RailShape) -> bool {
     match shape {
         RailShape::AscendingEast => movement.x < 0.0,

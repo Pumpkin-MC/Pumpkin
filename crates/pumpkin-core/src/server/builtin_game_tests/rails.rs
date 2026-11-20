@@ -183,15 +183,29 @@ pub(super) async fn test_minecart_dismounts_beside_its_motion(
                 .await?;
             Ok(())
         })
-        .then_execute(|helper| async move {
-            let north = helper
-                .assert_entity_present_at("minecraft:zombie", &BlockPos::new(2, 1, 1))
-                .await;
-            if north.is_ok() {
-                return north;
-            }
+        .then_execute(move |helper| async move {
+            // A second dismount fails once the zombie no longer rides.
+            let still_riding = helper
+                .execute_command(
+                    &cart,
+                    "ride @e[type=minecraft:zombie,limit=1,sort=nearest] dismount",
+                )
+                .await
+                .is_ok();
+            helper.assert_true(!still_riding, "the zombie still rides the cart")?;
+            let (expected, other) = if helper
+                .is_feature_enabled("minecraft:minecart_improvements")
+                .await?
+            {
+                (BlockPos::new(1, 1, 2), BlockPos::new(2, 1, 1))
+            } else {
+                (BlockPos::new(2, 1, 1), BlockPos::new(1, 1, 2))
+            };
             helper
-                .assert_entity_present_at("minecraft:zombie", &BlockPos::new(1, 1, 2))
+                .assert_entity_present_at("minecraft:zombie", &expected)
+                .await?;
+            helper
+                .assert_entity_not_present_at("minecraft:zombie", &other)
                 .await
         })
         .then_succeed();
