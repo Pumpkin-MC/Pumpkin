@@ -48,7 +48,7 @@ static OPENRPC_SCHEMA: LazyLock<Value> = LazyLock::new(|| {
 
 /// One request sets the entity broadcast range at a time, so the setting and the trackers
 /// end on the same value.
-static SETTING_BROADCAST_RANGE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static SETTING_BROADCAST_RANGE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn extract_param<'a>(params: Option<&'a Value>, param_name: &str) -> Result<&'a Value, RpcError> {
     match params {

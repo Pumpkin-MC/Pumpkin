@@ -560,6 +560,18 @@ impl Server {
             new_worlds.push(world.clone());
             new_worlds
         });
+        // Listed first and under the lock of the request that sets the range, so the world
+        // has the range of the setting whichever of the two comes first.
+        let setting = crate::net::management::handlers::SETTING_BROADCAST_RANGE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let range = self
+            .management_hub
+            .settings
+            .entity_broadcast_range
+            .load(Ordering::Relaxed);
+        world.entity_tracker.set_entity_broadcast_range(range);
+        drop(setting);
         let mut event =
             crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
         self.plugin_manager.fire_blocking(self, &mut event);

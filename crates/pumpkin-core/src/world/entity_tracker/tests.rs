@@ -283,6 +283,31 @@ async fn the_entity_broadcast_range_scales_tracking_ranges() -> TestResult {
     Ok(())
 }
 
+#[tokio::test]
+async fn a_world_created_later_gets_the_entity_broadcast_range_that_was_set() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    // What `minecraft:serversettings/entity_broadcast_range/set` does.
+    server
+        .management_hub
+        .settings
+        .entity_broadcast_range
+        .store(30, Relaxed);
+    for world in server.worlds.load().iter() {
+        world.entity_tracker.set_entity_broadcast_range(30);
+    }
+
+    let world = server.create_world(
+        "later".to_string(),
+        pumpkin_data::dimension::Dimension::OVERWORLD,
+    );
+    let tracker = &world.entity_tracker;
+    // A cow is tracked from 160 blocks, 30% of that are 48.
+    assert_eq!(tracker.scaled_range(&EntityType::COW), 48);
+    shutdown(&server).await;
+    Ok(())
+}
+
 /// A walker at the origin, one watcher 3 blocks away and one 40 blocks away, with players
 /// from 16 blocks on the far rhythm of 4 ticks.
 async fn near_and_far_watchers(
