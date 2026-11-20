@@ -16,7 +16,7 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
-    Entity, EntityBase, LivingEntity,
+    Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -322,12 +322,15 @@ impl AgeableMob for ArmadilloEntity {
         .clamp(0.1, 2.0);
         self.get_entity().scale.store(scale);
         // Also update the SCALE attribute so LivingEntity::tick() does not
-        // reset the scale back to 1.0 on the next tick.
+        // reset the scale back to 1.0 on the next tick. Only override the
+        // default base value; preserve any custom scale that was set.
         self.get_mob_entity()
             .living_entity
             .update_attribute(&Attributes::SCALE, |inst| {
-                inst.base_value = scale as f64;
-                inst.mark_dirty();
+                if (inst.base_value - 1.0).abs() < f64::EPSILON {
+                    inst.base_value = scale as f64;
+                    inst.mark_dirty();
+                }
             });
     }
 }
