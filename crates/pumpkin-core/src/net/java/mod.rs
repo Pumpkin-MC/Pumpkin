@@ -666,7 +666,9 @@ impl JavaClient {
         self.try_enqueue_packet_data(packet_data);
     }
 
-    /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
+    /// `false` when the packet was dropped instead (cancelled, closed, buffer full). A short
+    /// packet collected in a [`PacketSink`] counts as queued: a connection that is closed
+    /// before the sink hands it over drops it there.
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
         if self.goes_out_unchanged(true) && tick_runs::push(self, &packet_data) {
             return true;
