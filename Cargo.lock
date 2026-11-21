@@ -3068,6 +3068,7 @@ dependencies = [
  "indexmap",
  "libc",
  "libloading",
+ "md5",
  "notify",
  "png",
  "pumpkin-auth",
