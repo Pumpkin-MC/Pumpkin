@@ -1,11 +1,12 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
+use crate::block::blocks::weathering_copper;
 use crate::block::entities::BlockEntity;
 use crate::block::entities::chest::ChestBlockEntity;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalFacing};
-use pumpkin_data::block_transformer::get_unwaxed;
+use pumpkin_data::block_transformer::{get_unwaxed, get_waxed};
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
@@ -506,6 +507,85 @@ impl CopperChestBlock {
             other
         };
         props.to_state_id(least_oxidized)
+    }
+
+    /// The copper chest with the same age and wax as `copper_block`.
+    pub(crate) fn chest_block_for_copper(copper_block: &Block) -> &'static Block {
+        let unwaxed = get_unwaxed(copper_block.id).map(BlockId::to_block);
+        let age = weathering_copper::get_weather_state(unwaxed.unwrap_or(copper_block))
+            .map_or(0, |state| state.ordinal());
+        let mut chest = &Block::COPPER_CHEST;
+        for _ in 0..age {
+            chest = weathering_copper::get_next(chest).unwrap_or(chest);
+        }
+        if unwaxed.is_some() {
+            chest = get_waxed(chest.id).map_or(chest, BlockId::to_block);
+        }
+        chest
+    }
+
+    pub(crate) fn place_from_copper_block(
+        world: &Arc<World>,
+        pos: &BlockPos,
+        copper_block: &Block,
+        facing: HorizontalFacing,
+    ) {
+        let chest_block = Self::chest_block_for_copper(copper_block);
+        let chest_type = if get_chest_properties_if_can_connect(
+            world,
+            chest_block,
+            pos,
+            facing,
+            facing.rotate_clockwise(),
+            ChestType::Single,
+        )
+        .is_some()
+        {
+            ChestType::Left
+        } else if get_chest_properties_if_can_connect(
+            world,
+            chest_block,
+            pos,
+            facing,
+            facing.rotate_counter_clockwise(),
+            ChestType::Single,
+        )
+        .is_some()
+        {
+            ChestType::Right
+        } else {
+            ChestType::Single
+        };
+
+        let mut props = ChestLikeProperties::default(chest_block);
+        props.facing = facing;
+        props.r#type = chest_type;
+        let state_id =
+            Self::least_oxidized_of_connected(world, pos, props.to_state_id(chest_block));
+        let chest_block = Block::from_state_id(state_id);
+
+        world.set_block_state(pos, state_id, BlockFlags::NOTIFY_LISTENERS);
+        if world.get_block_entity(pos).is_none() {
+            world.add_block_entity(Arc::new(ChestBlockEntity::new(*pos)));
+        }
+
+        if let Some(connected_towards) = connected_direction(props)
+            && let Some(mut neighbor_props) = get_chest_properties_if_can_connect(
+                world,
+                chest_block,
+                pos,
+                facing,
+                connected_towards,
+                ChestType::Single,
+            )
+        {
+            neighbor_props.r#type = chest_type.opposite();
+            world.set_block_state(
+                &pos.offset(connected_towards.to_offset()),
+                neighbor_props.to_state_id(chest_block),
+                BlockFlags::NOTIFY_LISTENERS,
+            );
+        }
     }
 
     pub(crate) fn get_hinge_sound(block: &Block, open: bool) -> Sound {
