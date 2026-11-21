@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use pumpkin_data::registry::RegistryEntryData;
 use pumpkin_nbt::Nbt;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use rayon::prelude::*;
 use serde_json::Value;
 
 pub const DYNAMIC_REGISTRIES: &[(&str, &[&str])] = &[
@@ -270,6 +271,49 @@ pub fn json_to_registry_nbt_bytes(val: &Value) -> Box<[u8]> {
     }
 }
 
+/// Collects all JSON files recursively before processing them in parallel.
+fn collect_registry_files(current_dir: &Path, files: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(current_dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        if path.is_dir() {
+            collect_registry_files(&path, files);
+        } else if path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        {
+            files.push(path);
+        }
+    }
+}
+
+/// Loads a single registry JSON file and converts it into registry data.
+fn load_registry_file(namespace: &str, base_dir: &Path, path: &Path) -> Option<RegistryEntryData> {
+    let rel_path = path.strip_prefix(base_dir).ok()?;
+
+    let mut stem_path = rel_path.to_string_lossy().to_string();
+
+    if let Some(stem) = stem_path.strip_suffix(".json") {
+        stem_path = stem.to_string();
+    }
+
+    let stem_path = stem_path.replace('\\', "/");
+    let entry_id = format!("{namespace}:{stem_path}");
+
+    let content = fs::read_to_string(path).ok()?;
+    let val = serde_json::from_str::<Value>(&content).ok()?;
+    let nbt_bytes = json_to_registry_nbt_bytes(&val);
+
+    Some(RegistryEntryData {
+        entry_id,
+        data: Some(nbt_bytes),
+    })
+}
+
 /// Recursively loads JSON files from `current_dir` and inserts them into `registry_map`.
 fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
     namespace: &str,
@@ -277,38 +321,17 @@ fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
     current_dir: &Path,
     registry_map: &mut HashMap<String, RegistryEntryData, S>,
 ) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            load_registry_dir_recursive(namespace, base_dir, &path, registry_map);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            && let Ok(rel_path) = path.strip_prefix(base_dir)
-        {
-            let mut stem_path = rel_path.to_string_lossy().to_string();
-            if let Some(stem) = stem_path.strip_suffix(".json") {
-                stem_path = stem.to_string();
-            }
-            let stem_path = stem_path.replace('\\', "/");
-            let entry_id = format!("{namespace}:{stem_path}");
+    let mut files = Vec::new();
+    collect_registry_files(current_dir, &mut files);
+    files.sort_unstable();
 
-            if let Ok(content) = fs::read_to_string(&path)
-                && let Ok(val) = serde_json::from_str::<Value>(&content)
-            {
-                let nbt_bytes = json_to_registry_nbt_bytes(&val);
-                registry_map.insert(
-                    entry_id.clone(),
-                    RegistryEntryData {
-                        entry_id,
-                        data: Some(nbt_bytes),
-                    },
-                );
-            }
-        }
+    let loaded_entries: Vec<RegistryEntryData> = files
+        .par_iter()
+        .filter_map(|path| load_registry_file(namespace, base_dir, path))
+        .collect();
+
+    for entry in loaded_entries {
+        registry_map.insert(entry.entry_id.clone(), entry);
     }
 }
 
