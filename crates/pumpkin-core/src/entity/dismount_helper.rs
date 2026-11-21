@@ -1,12 +1,33 @@
 use pumpkin_data::block_properties::{CampfireLikeProperties, TrapdoorProperties};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::{Block as BlockTag, Taggable};
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::EntityBase;
 use crate::world::World;
+
+const DISMOUNT_EPSILON: f64 = 1.0E-5f32 as f64;
+const MAX_FREE_POSITION_DIMENSION: f32 = 4.0;
+
+pub(super) fn offsets_for_direction(forward: BlockDirection) -> [Vector3<i32>; 8] {
+    let right = forward.rotate_clockwise().to_offset();
+    let left = forward.rotate_counter_clockwise().to_offset();
+    let back = forward.opposite().to_offset();
+    let forward = forward.to_offset();
+    [
+        right,
+        left,
+        back + right,
+        back + left,
+        forward + right,
+        forward + left,
+        back,
+        forward,
+    ]
+}
 
 pub fn find_safe_dismount_location(
     entity_type: &'static EntityType,
@@ -58,7 +79,7 @@ pub fn find_safe_dismount_location(
     Some(position)
 }
 
-fn is_block_floor_valid(block_floor_height: f64) -> bool {
+pub(super) fn is_block_floor_valid(block_floor_height: f64) -> bool {
     block_floor_height.is_finite() && block_floor_height < 1.0
 }
 
@@ -67,15 +88,28 @@ fn can_dismount_to(world: &World, bounding_box: &BoundingBox) -> bool {
         return false;
     }
 
+    is_within_border(world, *bounding_box, 1.0E-5)
+}
+
+pub(super) fn can_dismount_passenger(
+    world: &World,
+    passenger: &dyn EntityBase,
+    bounds: BoundingBox,
+) -> bool {
+    world.get_block_collisions(bounds, passenger).0.is_empty()
+        && is_within_border(world, bounds, DISMOUNT_EPSILON)
+}
+
+fn is_within_border(world: &World, bounds: BoundingBox, epsilon: f64) -> bool {
     let border = world
         .worldborder
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    border.contains(bounding_box.min.x, bounding_box.min.z)
-        && border.contains(bounding_box.max.x - 1.0E-5, bounding_box.max.z - 1.0E-5)
+    border.contains(bounds.min.x, bounds.min.z)
+        && border.contains(bounds.max.x - epsilon, bounds.max.z - epsilon)
 }
 
-fn block_floor_height(world: &World, pos: &BlockPos) -> f64 {
+pub(super) fn block_floor_height(world: &World, pos: &BlockPos) -> f64 {
     if let Some(shape_max) = non_climbable_shape_max_y(world, pos) {
         return shape_max;
     }
@@ -84,6 +118,31 @@ fn block_floor_height(world: &World, pos: &BlockPos) -> f64 {
         Some(below_max) if below_max >= 1.0 => below_max - 1.0,
         _ => f64::NEG_INFINITY,
     }
+}
+
+/// Vanilla `LivingEntity.dismountVehicle` when the vehicle was removed or is in a portal.
+pub(super) fn find_free_dismount_position(
+    world: &World,
+    passenger: &dyn EntityBase,
+    target: Vector3<f64>,
+) -> Vector3<f64> {
+    let dimensions = passenger.get_entity().entity_dimension.load();
+    if dimensions.width > MAX_FREE_POSITION_DIMENSION
+        || dimensions.height > MAX_FREE_POSITION_DIMENSION
+    {
+        return target;
+    }
+    let width = f64::from(dimensions.width);
+    let height = f64::from(dimensions.height);
+    let center = target.add_raw(0.0, height / 2.0, 0.0);
+    world
+        .find_free_position(
+            passenger,
+            &BoundingBox::of_size(center, width, height, width),
+            center,
+            Vector3::new(width, height, width),
+        )
+        .map_or(target, |free| free.add_raw(0.0, -height / 2.0, 0.0))
 }
 
 fn non_climbable_shape_max_y(world: &World, pos: &BlockPos) -> Option<f64> {

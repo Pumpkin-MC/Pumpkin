@@ -83,6 +83,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:iron_golem_pattern_spawns",
     "pumpkin:wither_pattern_spawns",
     "pumpkin:item_entities_merge",
+    "pumpkin:empty_boat_falls",
     "pumpkin:zombie_pathfinds_to_villager",
     // redstone_wire_and_power (14)
     "pumpkin:redstone_wire_attenuation_1_to_4",
@@ -548,6 +549,13 @@ pub fn ensure_builtin_game_tests_registered() {
             80,
             0,
             entities_and_ai::test_item_entities_merge,
+        );
+        register_function_test(
+            "pumpkin:empty_boat_falls",
+            "pumpkin:empty_4x4x4",
+            40,
+            0,
+            entities_and_ai::test_empty_boat_falls,
         );
         register_flaky_function_test(
             "pumpkin:zombie_pathfinds_to_villager",

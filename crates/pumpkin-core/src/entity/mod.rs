@@ -129,6 +129,7 @@ pub const MAX_SCOREBOARD_TAGS: usize = 1024;
 
 /// Push strength per axis in `Entity.push`.
 pub(crate) const PUSH_STRENGTH: f64 = 0.05f32 as f64;
+const MIN_PUSH_DISTANCE: f64 = 0.01f32 as f64;
 
 const MAX_LOADED_MOTION: f64 = 10.0;
 const MAX_HORIZONTAL_POSITION: f64 = 3.000_051_2E7;
@@ -1078,6 +1079,19 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let self_entity = self.get_entity();
         let other_entity = entity.get_entity();
 
+        if self_entity.entity_type.boat.is_some() {
+            let bounds = self_entity.bounding_box.load();
+            let other_bottom = other_entity.bounding_box.load().min.y;
+            let can_push = if other_entity.entity_type.boat.is_some() {
+                other_bottom < bounds.max.y
+            } else {
+                other_bottom <= bounds.min.y
+            };
+            if !can_push {
+                return;
+            }
+        }
+
         if self_entity.no_physics.load(Ordering::Relaxed)
             || other_entity.no_physics.load(Ordering::Relaxed)
         {
@@ -1091,7 +1105,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         let mut dx = other_entity.pos.load().x - self_entity.pos.load().x;
         let mut dz = other_entity.pos.load().z - self_entity.pos.load().z;
         let mut d = dx.abs().max(dz.abs());
-        if d >= 0.01 {
+        if d >= MIN_PUSH_DISTANCE {
             d = d.sqrt();
             dx /= d;
             dz /= d;
@@ -2462,10 +2476,11 @@ impl Entity {
         &self,
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
+        border_walls: &[BoundingBox],
     ) -> Vector3<f64> {
         let was_on_ground = self.on_ground.load(Ordering::SeqCst);
         let bounding_box = self.bounding_box.load();
-        let movement_step = self.collide_bounding_box(movement, caller);
+        let movement_step = self.collide_bounding_box(movement, caller, border_walls);
 
         let max_up_step = Self::max_up_step(caller);
         let horizontal_collision = movement.x != movement_step.x || movement.z != movement_step.z;
@@ -2487,7 +2502,8 @@ impl Entity {
         if !on_ground_after_collision {
             step_up_box = step_up_box.expand_towards(0.0, f64::from(-1.0E-5f32), 0.0);
         }
-        let (colliders, _) = self.world.load().get_block_collisions(step_up_box, caller);
+        let (mut colliders, _) = self.world.load().get_block_collisions(step_up_box, caller);
+        colliders.extend(self.get_boat_collisions(step_up_box, caller));
 
         for step_height in Self::candidate_step_up_heights(
             &grounded_box,
@@ -2584,7 +2600,7 @@ impl Entity {
         candidates
     }
 
-    /// Resolves Y first, then the larger horizontal axis last.
+    /// Resolves Y first, then the larger horizontal component first.
     fn collide_with_boxes(
         movement: Vector3<f64>,
         bounding_box: BoundingBox,
@@ -2597,51 +2613,29 @@ impl Entity {
         };
         let mut resolved = Vector3::new(0.0, 0.0, 0.0);
         for axis in axes {
-            let mut amount = movement.get_axis(axis);
-            if amount == 0.0 {
+            let distance = movement.get_axis(axis);
+            if distance == 0.0 {
                 continue;
             }
-            let moved = bounding_box.shift(resolved);
-            for collider in colliders {
-                amount = Self::collide_axis(&moved, collider, axis, amount);
-            }
-            resolved.set_axis(axis, amount);
+            let (allowed, _) = bounding_box
+                .shift(resolved)
+                .collide_along(axis, colliders, distance);
+            resolved.set_axis(axis, allowed);
         }
         resolved
-    }
-
-    /// How far `moving` can travel along `axis` before it hits `other`.
-    fn collide_axis(moving: &BoundingBox, other: &BoundingBox, axis: Axis, amount: f64) -> f64 {
-        const EPSILON: f64 = 1.0E-7;
-        let overlaps = [Axis::X, Axis::Y, Axis::Z]
-            .into_iter()
-            .filter(|&other_axis| other_axis != axis)
-            .all(|other_axis| {
-                moving.max.get_axis(other_axis) - EPSILON > other.min.get_axis(other_axis)
-                    && moving.min.get_axis(other_axis) + EPSILON < other.max.get_axis(other_axis)
-            });
-        if !overlaps {
-            return amount;
-        }
-        if amount > 0.0 && other.min.get_axis(axis) >= moving.max.get_axis(axis) - EPSILON {
-            amount.min(other.min.get_axis(axis) - moving.max.get_axis(axis))
-        } else if amount < 0.0 && other.max.get_axis(axis) <= moving.min.get_axis(axis) + EPSILON {
-            amount.max(other.max.get_axis(axis) - moving.min.get_axis(axis))
-        } else {
-            amount
-        }
     }
 
     fn collide_bounding_box(
         &self,
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
+        border_walls: &[BoundingBox],
     ) -> Vector3<f64> {
         self.vertical_collision.store(false, Ordering::SeqCst);
         if movement.length_squared() == 0.0 {
             return movement;
         }
-        let collision = self.collide(movement, caller);
+        let collision = self.collide(movement, caller, border_walls);
         // Vanilla `onGround`: stopped while moving down, even with no supporting block found.
         self.on_ground
             .store(collision.vertical && movement.y < 0.0, Ordering::SeqCst);
@@ -2655,36 +2649,23 @@ impl Entity {
 
     /// Vanilla `collide` without writing state.
     #[expect(clippy::float_cmp)]
-    pub(crate) fn collide(&self, movement: Vector3<f64>, caller: &dyn EntityBase) -> Collision {
+    pub(crate) fn collide(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+        border_walls: &[BoundingBox],
+    ) -> Collision {
         let bounding_box = self.bounding_box.load();
-
-        let (collisions, block_positions) = self
-            .world
-            .load()
-            .get_block_collisions(bounding_box.stretch(movement), caller);
-
+        let swept = bounding_box.stretch(movement);
+        let (mut collisions, block_positions) =
+            self.world.load().get_block_collisions(swept, caller);
+        collisions.extend(self.get_boat_collisions(swept, caller));
+        collisions.extend_from_slice(border_walls);
         if collisions.is_empty() {
             return Collision::free(movement);
         }
 
-        // Vanilla `collideWithShapes`: Y, then the larger horizontal axis, on the already moved box.
-        let order = if movement.x.abs() < movement.z.abs() {
-            [Axis::Y, Axis::Z, Axis::X]
-        } else {
-            [Axis::Y, Axis::X, Axis::Z]
-        };
-        let mut adjusted_movement = Vector3::new(0.0, 0.0, 0.0);
-        for axis in order {
-            let wanted = movement.get_axis(axis);
-            if wanted == 0.0 {
-                continue;
-            }
-            let (allowed, _) =
-                bounding_box
-                    .shift(adjusted_movement)
-                    .collide_along(axis, &collisions, wanted);
-            adjusted_movement.set_axis(axis, allowed);
-        }
+        let adjusted_movement = Self::collide_with_boxes(movement, bounding_box, &collisions);
 
         // Vanilla `Mth.equal`: sideways cuts under 1e-5 are not a collision.
         let horizontal = (movement.x - adjusted_movement.x).abs() >= 1.0e-5
@@ -2709,6 +2690,103 @@ impl Entity {
             horizontal,
             vertical,
         }
+    }
+
+    /// Swept entity shapes for a boat, or boat shapes for another mover.
+    pub(crate) fn get_boat_collisions(
+        &self,
+        bounds: BoundingBox,
+        caller: &dyn EntityBase,
+    ) -> Vec<BoundingBox> {
+        let world = self.world.load();
+        let area = bounds.expand_all(1.0E-7);
+        let is_boat = caller.get_entity().entity_type.boat.is_some();
+        let candidates = if is_boat {
+            world.get_all_at_box(&area)
+        } else {
+            world.get_boats_at_box(&area)
+        };
+        if candidates.is_empty() {
+            return Vec::new();
+        }
+        let root = self.root_vehicle_id();
+        candidates
+            .iter()
+            .filter_map(|other| {
+                let entity = other.get_entity();
+                (entity.is_alive()
+                    && !other.is_spectator()
+                    && entity.root_vehicle_id() != root
+                    && (!is_boat || Self::can_collide_with_boat(other.as_ref())))
+                .then(|| entity.bounding_box.load())
+            })
+            .collect()
+    }
+
+    fn can_collide_with_boat(other: &dyn EntityBase) -> bool {
+        if let Some(living) = other.get_living_entity() {
+            if living.health.load() <= 0.0 {
+                return false;
+            }
+            if other.cast_any().is::<mob::shulker::ShulkerEntity>() {
+                return true;
+            }
+            if let Some(ghast) = other
+                .cast_any()
+                .downcast_ref::<passive::happy_ghast::HappyGhastEntity>()
+                && !ageable::AgeableMob::is_baby(ghast)
+                && ghast.is_on_still_timeout()
+            {
+                return true;
+            }
+        }
+        other.is_collidable(None) || other.is_pushable()
+    }
+
+    pub(crate) fn has_new_boat_collision(
+        &self,
+        caller: &dyn EntityBase,
+        movement: Vector3<f64>,
+    ) -> bool {
+        const COLLISION_EPSILON: f64 = 1.0E-5f32 as f64;
+        const MOVED_WRONGLY_THRESHOLD: f64 = 0.0625;
+        if self.no_physics.load(Ordering::Relaxed)
+            || caller.is_spectator()
+            || movement == Vector3::default()
+        {
+            return false;
+        }
+        let bounds = self.bounding_box.load();
+        let previous = bounds.expand_all(-COLLISION_EPSILON);
+        let destination = bounds.shift(movement).expand_all(-COLLISION_EPSILON);
+        let world = self.world.load();
+        let is_boat = self.entity_type.boat.is_some();
+        if is_boat {
+            let (_, destination_blocks) = world.get_block_collisions(destination, caller);
+            if !destination_blocks.is_empty() {
+                // Each block contributes one voxel shape, even if made up of several boxes.
+                let (_, previous_blocks) = world.get_block_collisions(previous, caller);
+                if destination_blocks
+                    .iter()
+                    .any(|(_, pos)| !previous_blocks.iter().any(|(_, old)| old == pos))
+                {
+                    return true;
+                }
+            }
+        }
+        let swept = bounds.stretch(movement);
+        let mut colliders = self.get_boat_collisions(swept, caller);
+        if is_boat && let Some(walls) = world.border_collision_walls(self, &swept) {
+            colliders.extend(walls);
+        }
+        // Vanilla allows leaving an existing overlap.
+        colliders.retain(|shape| !shape.intersects(&previous));
+        // Vanilla's moved-wrongly check discards the vertical residual.
+        colliders.iter().any(|shape| shape.intersects(&destination))
+            || (!colliders.is_empty()
+                && (movement - Self::collide_with_boxes(movement, bounds, &colliders))
+                    .horizontal_length_squared()
+                    > MOVED_WRONGLY_THRESHOLD)
     }
 
     /// Vanilla `checkSupportingBlock`: a thin box under the final position, else under the start X/Z.
@@ -2976,7 +3054,11 @@ impl Entity {
 
         for pos in BlockPos::iterate(min, max) {
             let (block, state) = world.get_block_and_state(&pos);
-            if state.is_air() {
+            // Boat movement visits lily pads and bubble columns along its swept path.
+            if state.is_air()
+                || (self.entity_type.boat.is_some()
+                    && (block == &Block::LILY_PAD || block == &Block::BUBBLE_COLUMN))
+            {
                 continue;
             }
 
@@ -3094,7 +3176,23 @@ impl Entity {
         let mut fluid_height: [f64; 2] = [0.0, 0.0];
 
         let entity_box = self.bounding_box.load();
-        let bounding_box = entity_box.expand(-0.001, -0.001, -0.001);
+        let bounds = entity_box.expand_all(-0.001);
+        let bounding_box = if let Some(vehicle) = self.get_vehicle()
+            && let Some(boat) = vehicle
+                .cast_any()
+                .downcast_ref::<vehicle::boat::BoatEntity>()
+        {
+            let Some(bounds) = boat.modify_passenger_fluid_interaction_box(bounds) else {
+                self.water_height.store(0.0);
+                self.lava_height.store(0.0);
+                self.touching_water.store(false, Ordering::SeqCst);
+                self.touching_lava.store(false, Ordering::SeqCst);
+                return Vec::new();
+            };
+            bounds
+        } else {
+            bounds
+        };
 
         let min = bounding_box.min_block_pos();
 
@@ -3192,27 +3290,31 @@ impl Entity {
         fluids.into_values().collect()
     }
 
-    fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
-        if push.length_squared() != 0.0 {
-            if n > 0 {
-                push = push * (1.0 / (n as f64));
-            }
-
-            if self.entity_type != &EntityType::PLAYER {
-                push = push.normalize();
-            }
-
-            push = push * speed;
-
-            let velo = self.velocity.load();
-
-            if velo.x.abs() < 0.003 && velo.z.abs() < 0.003 && velo.length_squared() < 0.000_020_25
-            {
-                push = push.normalize() * 0.0045;
-            }
-
-            self.velocity.store(velo + push);
+    fn push_by_fluid(&self, speed: f64, push: Vector3<f64>, n: usize) {
+        const MIN_CURRENT_SPEED: f64 = 0.003;
+        const MIN_CURRENT_IMPULSE: f64 = MIN_CURRENT_SPEED * 1.5;
+        // Vanilla's CurrentAccumulator compares the squared length directly to this threshold.
+        if n == 0 || push.length_squared() < f64::from(1.0e-5f32) {
+            return;
         }
+        let mut push = if self.entity_type == &EntityType::PLAYER {
+            push * (1.0 / n as f64)
+        } else {
+            push / push.length()
+        } * speed;
+        let velocity = self.velocity.load();
+        let impulse_length = push.length();
+        if velocity.x.abs() < MIN_CURRENT_SPEED
+            && velocity.z.abs() < MIN_CURRENT_SPEED
+            && impulse_length < MIN_CURRENT_IMPULSE
+        {
+            push = if impulse_length < f64::from(1.0e-5f32) {
+                Vector3::default()
+            } else {
+                push / impulse_length * MIN_CURRENT_IMPULSE
+            };
+        }
+        self.velocity.store(velocity + push);
     }
 
     fn get_pos_with_y_offset(
@@ -3359,9 +3461,27 @@ impl Entity {
     // Move by a delta, adjust for collisions, and send
 
     // Does not send movement. That must be done separately
-    pub fn move_entity(&self, caller: &dyn EntityBase, mut motion: Vector3<f64>) {
+    pub fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
+        let walls = self.entity_type.boat.and_then(|_| {
+            let swept = self.bounding_box.load().stretch(motion);
+            self.world.load().border_collision_walls(self, &swept)
+        });
+        if let Some((requested, resolved)) =
+            self.apply_entity_motion(caller, motion, walls.as_slice().as_flattened())
+        {
+            self.finish_entity_movement(caller, requested, resolved);
+        }
+    }
+
+    /// Resolves and applies movement before invoking block or plugin callbacks.
+    fn apply_entity_motion(
+        &self,
+        caller: &dyn EntityBase,
+        mut motion: Vector3<f64>,
+        border_walls: &[BoundingBox],
+    ) -> Option<(Vector3<f64>, Vector3<f64>)> {
         if caller.get_player().is_some() {
-            return;
+            return None;
         }
 
         if self.no_physics.load(Ordering::Relaxed) {
@@ -3370,7 +3490,7 @@ impl Entity {
             self.vertical_collision.store(false, Ordering::Relaxed);
             self.on_ground.store(false, Ordering::Relaxed);
 
-            return;
+            return None;
         }
 
         let movement_multiplier = self.movement_multiplier.swap(Vector3::default());
@@ -3385,7 +3505,7 @@ impl Entity {
             self.velocity.store(Vector3::default());
         }
 
-        let final_move = self.adjust_movement_for_collisions(motion, caller);
+        let final_move = self.adjust_movement_for_collisions(motion, caller, border_walls);
 
         self.move_pos(final_move);
 
@@ -3401,6 +3521,15 @@ impl Entity {
         self.velocity
             .store(velocity.multiply(speed_factor, 1.0, speed_factor));
 
+        Some((motion, final_move))
+    }
+
+    fn finish_entity_movement(
+        &self,
+        caller: &dyn EntityBase,
+        motion: Vector3<f64>,
+        final_move: Vector3<f64>,
+    ) {
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
             living.fall(caller, final_move.y, on_ground);
@@ -3421,10 +3550,9 @@ impl Entity {
             }
         }
 
-        if self.is_removed() {
-            return;
+        if !self.is_removed() {
+            self.emit_movement(caller, final_move, &effect_pos, effect_state);
         }
-        self.emit_movement(caller, final_move, &effect_pos, effect_state);
     }
 
     /// The emission part of vanilla `Entity.move` for movement the client already resolved,
@@ -4822,6 +4950,16 @@ impl Entity {
         pitch: Option<f32>,
         world: &World,
     ) {
+        let (chunk, packet) = self.apply_teleport(position, yaw, pitch);
+        world.broadcast_to_chunk(chunk, &packet);
+    }
+
+    fn apply_teleport(
+        &self,
+        position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+    ) -> (Vector2<i32>, CEntityPositionSync) {
         // Update server-side position and bounding box
         self.set_pos(position);
         if let Some(yaw) = yaw {
@@ -4844,9 +4982,9 @@ impl Entity {
                 .store((pitch * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
         }
         let chunk_pos = self.chunk_pos.load();
-        world.broadcast_to_chunk(
+        (
             chunk_pos,
-            &CEntityPositionSync::new(
+            CEntityPositionSync::new(
                 self.entity_id.into(),
                 position,
                 self.velocity.load(),
@@ -4854,7 +4992,7 @@ impl Entity {
                 pitch.unwrap_or(self.pitch.load()),
                 self.on_ground.load(Ordering::SeqCst),
             ),
-        );
+        )
     }
 
     pub fn get_eye_pos(&self) -> Vector3<f64> {
@@ -5914,175 +6052,18 @@ impl Entity {
                 return;
             }
 
-            // Calculate dismount directions and offsets (vanilla DismountHelper)
-            let vehicle_yaw = self.yaw.load();
-            // Wrap yaw to 0..360 range
-            let wrapped_yaw = (vehicle_yaw % 360.0 + 360.0) % 360.0;
-            let forward_dir = if !(45.0..315.0).contains(&wrapped_yaw) {
-                BlockDirection::South
-            } else if (45.0..135.0).contains(&wrapped_yaw) {
-                BlockDirection::West
-            } else if (135.0..225.0).contains(&wrapped_yaw) {
-                BlockDirection::North
+            let dismount_pos = if self.entity_type.boat.is_some() {
+                vehicle::boat::BoatEntity::get_dismount_location_for_passenger(
+                    self,
+                    passenger.as_ref(),
+                )
+            } else if self.entity_type.has_tag(&tag::EntityType::C_MINECARTS) {
+                vehicle::minecart::MinecartEntity::get_dismount_location_for_passenger(
+                    self,
+                    passenger.as_ref(),
+                )
             } else {
-                BlockDirection::East
-            };
-
-            let get_step = |dir: BlockDirection| -> (i32, i32) {
-                match dir {
-                    BlockDirection::North => (0, -1),
-                    BlockDirection::South => (0, 1),
-                    BlockDirection::East => (1, 0),
-                    BlockDirection::West => (-1, 0),
-                    _ => (0, 0),
-                }
-            };
-
-            let get_clockwise = |dir: BlockDirection| -> BlockDirection {
-                match dir {
-                    BlockDirection::North => BlockDirection::East,
-                    BlockDirection::East => BlockDirection::South,
-                    BlockDirection::South => BlockDirection::West,
-                    BlockDirection::West => BlockDirection::North,
-                    other => other,
-                }
-            };
-
-            let get_opposite = |dir: BlockDirection| -> BlockDirection {
-                match dir {
-                    BlockDirection::North => BlockDirection::South,
-                    BlockDirection::South => BlockDirection::North,
-                    BlockDirection::East => BlockDirection::West,
-                    BlockDirection::West => BlockDirection::East,
-                    other => other,
-                }
-            };
-
-            let right_dir = get_clockwise(forward_dir);
-            let left_dir = get_opposite(right_dir);
-            let back_dir = get_opposite(forward_dir);
-
-            let (fx, fz) = get_step(forward_dir);
-            let (rx, rz) = get_step(right_dir);
-            let (lx, lz) = get_step(left_dir);
-            let (bx, bz) = get_step(back_dir);
-
-            let offsets = [
-                (rx, rz),
-                (lx, lz),
-                (bx + rx, bz + rz),
-                (bx + lx, bz + lz),
-                (fx + rx, fz + rz),
-                (fx + lx, fz + lz),
-                (bx, bz),
-                (fx, fz),
-            ];
-
-            let target_block_y = vehicle_box.max.y.floor() as i32;
-            let below_pos = BlockPos(Vector3::new(
-                self.pos.load().x.floor() as i32,
-                target_block_y - 1,
-                self.pos.load().z.floor() as i32,
-            ));
-
-            let below_state_id = world.get_block_state_id(&below_pos);
-            // Vanilla: isWater checks specifically for water fluid, not any fluid
-            let is_water = Fluid::from_state_id(below_state_id)
-                .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id);
-
-            let fallback_pos =
-                Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
-
-            let dismount_pos = if is_water {
-                fallback_pos
-            } else {
-                // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
-                let poses_and_heights = [
-                    (EntityPose::Standing, vec![0, 1, -1]),
-                    (EntityPose::Crouching, vec![0, 1, -1]),
-                    (EntityPose::Swimming, vec![0, 1]),
-                ];
-
-                let vehicle_block_pos = self.block_pos.load();
-                let mut found = None;
-
-                'search: for (pose, y_offsets) in poses_and_heights {
-                    let dims = passenger_entity.get_dimensions(pose);
-
-                    for y_offset in y_offsets {
-                        for &(ox, oz) in &offsets {
-                            let target_block_x = vehicle_block_pos.0.x + ox;
-                            let target_block_y = vehicle_block_pos.0.y + y_offset;
-                            let target_block_z = vehicle_block_pos.0.z + oz;
-
-                            let target_pos = BlockPos(Vector3::new(
-                                target_block_x,
-                                target_block_y,
-                                target_block_z,
-                            ));
-                            let height = world.get_dismount_height(&target_pos);
-
-                            if height.is_finite() && height < 1.0 {
-                                let location = Vector3::new(
-                                    f64::from(target_block_x) + 0.5,
-                                    f64::from(target_block_y) + height,
-                                    f64::from(target_block_z) + 0.5,
-                                );
-
-                                let bbox = BoundingBox::new_from_pos(
-                                    location.x, location.y, location.z, &dims,
-                                );
-                                if world.is_space_empty(bbox) {
-                                    found = Some((location, pose));
-                                    break 'search;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if let Some((pos, pose)) = found {
-                    if pose != EntityPose::Standing {
-                        passenger_entity.set_pose(pose);
-                    }
-                    pos
-                } else {
-                    // Try dismounting directly on top of the vehicle as fallback
-                    let mut found_fallback = None;
-                    let vehicle_top = vehicle_box.max.y;
-
-                    let poses = [
-                        EntityPose::Standing,
-                        EntityPose::Crouching,
-                        EntityPose::Swimming,
-                    ];
-
-                    for pose in poses {
-                        let dims = passenger_entity.get_dimensions(pose);
-                        let bbox = BoundingBox::new_from_pos(
-                            self.pos.load().x,
-                            vehicle_top,
-                            self.pos.load().z,
-                            &dims,
-                        );
-                        if world.is_space_empty(bbox) {
-                            found_fallback = Some((
-                                Vector3::new(self.pos.load().x, vehicle_top, self.pos.load().z),
-                                pose,
-                            ));
-                            break;
-                        }
-                    }
-
-                    if let Some((pos, pose)) = found_fallback {
-                        if pose != EntityPose::Standing {
-                            passenger_entity.set_pose(pose);
-                        }
-                        pos
-                    } else {
-                        fallback_pos
-                    }
-                }
+                self.generic_dismount_position(&world, passenger.as_ref(), vehicle_box)
             };
 
             // Clean up any remaining reference to the dismounted passenger.
@@ -6136,6 +6117,84 @@ impl Entity {
                 &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
             );
         }
+    }
+
+    fn generic_dismount_position(
+        &self,
+        world: &World,
+        passenger: &dyn EntityBase,
+        vehicle_box: BoundingBox,
+    ) -> Vector3<f64> {
+        let rider = passenger.get_entity();
+        let vehicle_pos = self.pos.load();
+        let fallback = Vector3::new(vehicle_pos.x, vehicle_box.max.y, vehicle_pos.z);
+        let below = BlockPos::floored(vehicle_pos.x, vehicle_box.max.y, vehicle_pos.z).down();
+        if Fluid::from_state_id(world.get_block_state_id(&below))
+            .is_some_and(|fluid| fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id)
+        {
+            return fallback;
+        }
+
+        // Keep the legacy yaw ranges used by vehicles without a dedicated dismount rule.
+        let yaw = (self.yaw.load() % 360.0 + 360.0) % 360.0;
+        let forward = if !(45.0..315.0).contains(&yaw) {
+            BlockDirection::South
+        } else if (45.0..135.0).contains(&yaw) {
+            BlockDirection::West
+        } else if (135.0..225.0).contains(&yaw) {
+            BlockDirection::North
+        } else {
+            BlockDirection::East
+        };
+        let offsets = dismount_helper::offsets_for_direction(forward);
+        let block_pos = self.block_pos.load();
+        let poses_and_heights: [(EntityPose, &[i32]); 3] = [
+            (EntityPose::Standing, &[0, 1, -1]),
+            (EntityPose::Crouching, &[0, 1, -1]),
+            (EntityPose::Swimming, &[0, 1]),
+        ];
+        let fits = |pos: Vector3<f64>, dimensions: &EntityDimensions| {
+            world.is_space_empty(BoundingBox::new_from_pos(pos.x, pos.y, pos.z, dimensions))
+        };
+        let accept_pose = |pos, pose: Option<EntityPose>| {
+            if let Some(pose) = pose {
+                rider.set_pose(pose);
+            }
+            fits(pos, &rider.entity_dimension.load())
+        };
+        for (pose, heights) in poses_and_heights {
+            let dimensions = rider.get_dimensions(pose);
+            let mut pose_to_try = (pose != EntityPose::Standing).then_some(pose);
+            for &height in heights {
+                for offset in offsets {
+                    let target = block_pos.offset(offset.add_raw(0, height, 0));
+                    let floor = world.get_dismount_height(&target);
+                    if !dismount_helper::is_block_floor_valid(floor) {
+                        continue;
+                    }
+                    let pos = target.0.to_f64().add_raw(0.5, floor, 0.5);
+                    if fits(pos, &dimensions) && accept_pose(pos, pose_to_try.take()) {
+                        return pos;
+                    }
+                }
+            }
+        }
+
+        let mut fallback_pose_rejected = false;
+        for (pose, _) in poses_and_heights {
+            let dimensions = rider.get_dimensions(pose);
+            if fits(fallback, &dimensions) {
+                let pose_to_try = (pose != EntityPose::Standing).then_some(pose);
+                if accept_pose(fallback, pose_to_try) {
+                    return fallback;
+                }
+                fallback_pose_rejected = true;
+            }
+        }
+        if fallback_pose_rejected {
+            return dismount_helper::find_free_dismount_position(world, passenger, fallback);
+        }
+        fallback
     }
 
     pub fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
@@ -6492,6 +6551,7 @@ impl Entity {
 }
 
 impl Entity {
+    /// Shared tick work after the entity has recorded its previous position.
     pub(crate) fn base_tick(&self, caller: &dyn EntityBase) {
         // Recomputed during movement/block-collision handling in the same tick.
         let was_in_powder_snow = self.is_in_powder_snow.load(Ordering::Relaxed);
@@ -6649,6 +6709,218 @@ fn interact_with_shears(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn boat_client_collision_checks_new_block_shapes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = ai::test_support::world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        let position = Vector3::new(7.0, 64.0, 8.5);
+        let boat = Entity::new(world.clone(), position, &EntityType::OAK_BOAT);
+        let toward_wall = Vector3::new(0.5, 0.0, 0.0);
+        chunk.set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+        assert!(!boat.has_new_boat_collision(&boat, toward_wall));
+
+        chunk.set_block_absolute_y(8, 64, 8, Block::STONE.default_state.id);
+        assert!(boat.has_new_boat_collision(&boat, toward_wall));
+        boat.set_pos(position + toward_wall);
+        assert!(!boat.has_new_boat_collision(&boat, toward_wall * -1.0));
+
+        // Ignoring an old overlap must not ignore an unrelated obstruction.
+        chunk.set_block_absolute_y(9, 64, 8, Block::STONE.default_state.id);
+        assert!(boat.has_new_boat_collision(&boat, Vector3::new(1.0, 0.0, 0.0)));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn generic_dismount_skips_an_exit_when_its_pose_change_is_cancelled()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::data::VanillaData;
+        use crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent;
+        use crate::plugin::{EventHandler, EventPriority};
+        use crate::server::Server;
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use pumpkin_data::block_properties::{SlabType, WhiteWoolSlabLikeProperties};
+
+        struct CancelPose;
+        impl EventHandler<EntityPoseChangeEvent> for CancelPose {
+            fn handle_blocking<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut EntityPoseChangeEvent,
+            ) -> futures::future::BoxFuture<'a, ()> {
+                Box::pin(async { event.cancelled = true })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let config = BasicConfiguration {
+            default_level_name: folder.path().to_string_lossy().into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..Default::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.bedrock.online_mode = false;
+        let server = Server::new(
+            config,
+            advanced,
+            TelemetryConfig::default(),
+            VanillaData::default(),
+            Vec::new(),
+        )
+        .await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        let slab = WhiteWoolSlabLikeProperties {
+            r#type: SlabType::Top,
+            waterlogged: false,
+        }
+        .to_state_id(&Block::STONE_SLAB);
+        chunk.set_block_absolute_y(7, 63, 8, Block::STONE.default_state.id);
+        chunk.set_block_absolute_y(7, 65, 8, slab);
+        chunk.set_block_absolute_y(7, 66, 8, Block::STONE.default_state.id);
+
+        let center = Vector3::new(8.5, 64.0, 8.5);
+        let horse = Entity::new(world.clone(), center, &EntityType::HORSE);
+        let rider = Entity::new(world.clone(), center, &EntityType::PLAYER);
+        let horse_box = horse.bounding_box.load();
+        let side = Vector3::new(7.5, 64.0, 8.5);
+        assert_eq!(
+            horse.generic_dismount_position(&world, &rider, horse_box),
+            side
+        );
+        assert_eq!(rider.pose.load(), EntityPose::Crouching);
+
+        rider.set_pose(EntityPose::Standing);
+        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
+            Arc::new(CancelPose),
+            EventPriority::Normal,
+            true,
+        );
+        let exit = horse.generic_dismount_position(&world, &rider, horse_box);
+        let vehicle_top = Vector3::new(center.x, horse_box.max.y, center.z);
+        assert_eq!(exit, vehicle_top);
+        assert_eq!(rider.pose.load(), EntityPose::Standing);
+
+        chunk.set_block_absolute_y(8, 67, 8, Block::STONE.default_state.id);
+        let standing = |pos: Vector3<f64>| {
+            BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &rider.entity_dimension.load())
+        };
+        assert!(!world.is_space_empty(standing(vehicle_top)));
+        let exit = horse.generic_dismount_position(&world, &rider, horse_box);
+        assert!(world.is_space_empty(standing(exit)));
+        assert_eq!(rider.pose.load(), EntityPose::Standing);
+        server.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn boat_movement_stops_at_world_border() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = ai::test_support::world(&folder);
+        world
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .new_diameter = 16.0;
+        let boat = Entity::new(
+            world.clone(),
+            Vector3::new(7.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        );
+        let motion = Vector3::new(0.75, 0.0, 0.125);
+        assert!(boat.has_new_boat_collision(&boat, motion));
+
+        boat.move_entity(&boat, motion);
+        assert_eq!(boat.pos.load(), Vector3::new(7.3125, 64.0, 0.125));
+        assert!(boat.horizontal_collision.load(Ordering::Relaxed));
+        assert!(!boat.has_new_boat_collision(&boat, Vector3::new(-0.25, 0.0, 0.0)));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn non_constraining_boat_preserves_block_slide() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let folder = tempfile::tempdir()?;
+        let world = ai::test_support::world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        chunk.set_block_absolute_y(1, 64, 1, Block::STONE.default_state.id);
+
+        let movement = Vector3::new(0.75, 0.0, 1.0);
+        let bounds = BoundingBox {
+            min: Vector3::new(0.25, 64.0, 0.0),
+            max: Vector3::new(0.75, 65.0, 0.5),
+        };
+        let movers = [
+            (&EntityType::ARMOR_STAND, Vector3::new(0.25, 0.0, 1.0)),
+            (&EntityType::OAK_BOAT, Vector3::new(0.25, 0.0, 1.0)),
+        ]
+        .map(|(kind, expected)| {
+            let mover = Entity::new(world.clone(), Vector3::new(0.5, 64.0, 0.25), kind);
+            mover.bounding_box.store(bounds);
+            let before = mover.collide(movement, &mover, &[]).movement;
+            (mover, before, expected)
+        });
+        let collider = Arc::new(vehicle::boat::BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::OAK_BOAT,
+        )));
+        let hull = collider.get_entity();
+        hull.set_pos(Vector3::new(0.5, 64.0 - f64::from(hull.height()), 0.5));
+        world.add_entity_silent(collider);
+
+        for (mover, before, expected) in movers {
+            assert_eq!(
+                mover
+                    .get_boat_collisions(bounds.stretch(movement), &mover)
+                    .len(),
+                1
+            );
+            assert_eq!(mover.collide(movement, &mover, &[]).movement, before);
+            assert_eq!(before, expected);
+            // Moving down does constrain the move, but the hull is not a supporting block.
+            let landing = mover.collide(Vector3::new(0.0, -0.25, 0.0), &mover, &[]);
+            assert!(landing.vertical);
+            assert_eq!(landing.movement, Vector3::default());
+            assert!(landing.supporting.is_none());
+        }
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn fluid_current_ignores_very_small_accumulated_pushes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = ai::test_support::world(&folder);
+        let entity = Entity::new(world.clone(), Vector3::default(), &EntityType::OAK_BOAT);
+        for push in [Vector3::default(), Vector3::new(0.002, 0.0, 0.0)] {
+            entity.push_by_fluid(WATER_PUSH_SPEED, push, 1);
+            assert_eq!(entity.velocity.load(), Vector3::default());
+        }
+        entity.push_by_fluid(WATER_PUSH_SPEED, Vector3::new(0.004, 0.0, 0.0), 1);
+        assert_eq!(entity.velocity.load(), Vector3::new(0.014, 0.0, 0.0));
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn concurrent_leash_shearing_drops_one_lead_per_connection()

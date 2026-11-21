@@ -234,9 +234,9 @@ pub fn open(
 }
 
 pub(super) fn velocity(
-    entity: &Entity,
     inventory: &MinecartInventory,
     velocity: Vector3<f64>,
+    in_water: bool,
 ) -> Vector3<f64> {
     let has_loot = inventory
         .loot_table
@@ -268,10 +268,7 @@ pub(super) fn velocity(
     } else {
         0.98 + f64::from(15 - signal) * 0.001
     };
-    if entity
-        .touching_water
-        .load(std::sync::atomic::Ordering::Relaxed)
-    {
+    if in_water {
         friction *= 0.95;
     }
     velocity.multiply(friction, 0.0, friction)

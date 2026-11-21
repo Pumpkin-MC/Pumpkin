@@ -1,10 +1,7 @@
 //! Splits a tick's entities into islands that touch disjoint state. Each island ticks in list
 //! order on its own thread, which gives the same result as ticking the whole list in order.
 
-use std::collections::VecDeque;
-
-#[cfg(debug_assertions)]
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 use pumpkin_data::{Block, attributes::Attributes, entity::EntityType, tag, tag::Taggable};
 use pumpkin_util::math::{
@@ -17,12 +14,26 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
-use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
-use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
-    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+use crate::entity::{
+    DelayedLeash, EntityBase, PUSH_STRENGTH,
+    tnt::TNTEntity,
+    vehicle::{boat::BoatEntity, minecart::MinecartEntity},
 };
+use crate::plugin::api::events::block::{
+    block_break::BlockBreakEvent, entity_block_form::EntityBlockFormEvent,
+};
+use crate::plugin::api::events::entity::{
+    entity_breed::EntityBreedEvent, entity_combust::EntityCombustEvent,
+    entity_dismount::EntityDismountEvent, entity_portal::EntityPortalEvent,
+    entity_pose_change::EntityPoseChangeEvent, entity_spawn::EntitySpawnEvent,
+    entity_target::EntityTargetEvent, entity_toggle_sit::EntityToggleSitEvent,
+    item_spawn::ItemSpawnEvent, pig_zombie_anger::PigZombieAngerEvent,
+};
+use crate::plugin::api::events::vehicle::{
+    vehicle_damage::VehicleDamageEvent, vehicle_destroy::VehicleDestroyEvent,
+    vehicle_exit::VehicleExitEvent, vehicle_move::VehicleMoveEvent,
+};
+use crate::plugin::api::events::world::generic_game::GenericGameEvent;
 use crate::plugin::{
     api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
 };
@@ -258,6 +269,8 @@ fn changes_on_contact(block: &Block) -> bool {
             &Block::BIG_DRIPLEAF,
             &Block::TURTLE_EGG,
             &Block::POWDER_SNOW,
+            &Block::WATER_CAULDRON,
+            &Block::POWDER_SNOW_CAULDRON,
             &Block::SCULK_SHRIEKER,
             &Block::SCULK_SENSOR,
             &Block::CALIBRATED_SCULK_SENSOR,
@@ -273,6 +286,11 @@ fn changes_on_contact(block: &Block) -> bool {
 pub enum EntityReach {
     Audited(AuditedReach),
     Conservative(TickReach),
+    Boat {
+        reach: TickReach,
+        start: BoundingBox,
+        world: Arc<World>,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -316,10 +334,17 @@ impl EntityReach {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
+        let boat = entity.cast_any().downcast_ref::<BoatEntity>();
         let movement = base.velocity.load().length()
             + entity
                 .get_mob()
-                .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement);
+                .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement)
+            + boat.map_or(0.0, BoatEntity::additional_tick_movement)
+            + if entity.cast_any().is::<MinecartEntity>() {
+                MinecartEntity::additional_tick_movement()
+            } else {
+                0.0
+            };
         let radius = movement
             + config.unaudited_reach
             + entity.get_living_entity().map_or(0.0, |living| {
@@ -327,8 +352,8 @@ impl EntityReach {
                     .get_attribute_value(&Attributes::FOLLOW_RANGE)
                     .max(0.0)
             });
-        let mut reach =
-            TickReach::conservative(&base.bounding_box.load(), radius, links_of(entity));
+        let bounds = base.bounding_box.load();
+        let mut reach = TickReach::conservative(&bounds, radius, links_of(entity));
         if let Some(mob) = entity.get_mob() {
             let player_radius = radius.max(mob.player_tick_range() + movement);
             reach.players =
@@ -351,6 +376,45 @@ impl EntityReach {
                 .cast_any()
                 .downcast_ref::<TNTEntity>()
                 .is_some_and(TNTEntity::is_about_to_explode);
+        if base.entity_type == &EntityType::MINECART {
+            // An earlier entity can power the rail before the cart ejects its passenger.
+            let world = base.world.load();
+            let pos = base.block_pos.load();
+            reach.global |= world.get_block(&pos) == &Block::ACTIVATOR_RAIL
+                || world.get_block(&pos.down()) == &Block::ACTIVATOR_RAIL;
+        }
+        if boat.is_some() {
+            let world = base.world.load_full();
+            reach.entities =
+                reach
+                    .entities
+                    .expand(BoatEntity::CONTACT_RANGE, 0.0, BoatEntity::CONTACT_RANGE);
+            // An earlier dismount may move a ridden boat before its own turn.
+            reach.global |= base.has_vehicle()
+                || world.server.upgrade().is_some_and(|server| {
+                    let plugins = &server.plugin_manager;
+                    plugins.has_handlers::<VehicleMoveEvent>()
+                        || plugins.has_handlers::<VehicleUpdateEvent>()
+                        || plugins.has_handlers::<EntityDismountEvent>()
+                        || plugins.has_handlers::<EntityPortalEvent>()
+                        || plugins.has_handlers::<EntityPoseChangeEvent>()
+                        || plugins.has_handlers::<VehicleExitEvent>()
+                        || plugins.has_handlers::<BlockBreakEvent>()
+                        || plugins.has_handlers::<PacketSentEvent>()
+                        || plugins.has_handlers::<GenericGameEvent>()
+                        || plugins.has_handlers::<EntityCombustEvent>()
+                        || plugins.has_handlers::<VehicleDamageEvent>()
+                        || plugins.has_handlers::<VehicleDestroyEvent>()
+                        || plugins.has_handlers::<ItemSpawnEvent>()
+                        || plugins.has_handlers::<EntitySpawnEvent>()
+                })
+                || boat_may_need_serial_contact(&world, &reach.body);
+            return Self::Boat {
+                reach,
+                start: bounds,
+                world,
+            };
+        }
         Self::Conservative(reach)
     }
 }
@@ -418,13 +482,17 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
 /// Turns reports into reaches.
 ///
 /// Audited bodies grow by the pushes they can receive, and by
-/// `knockback_reach` within reach of an unaudited entity.
+/// `knockback_reach` within reach of an unaudited entity. Boat bodies also grow by the
+/// hull pushes they can receive before their turn.
 /// Returns `None` when the tick needs serial execution or planning exceeds its budget.
 #[must_use]
-pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Option<Vec<TickReach>> {
+pub fn resolve(
+    mut reports: Vec<EntityReach>,
+    config: &EntityIslandsConfig,
+) -> Option<Vec<TickReach>> {
     if reports.iter().any(|report| match report {
         EntityReach::Audited(reach) => reach.global,
-        EntityReach::Conservative(reach) => reach.global,
+        EntityReach::Conservative(reach) | EntityReach::Boat { reach, .. } => reach.global,
     }) {
         return None;
     }
@@ -432,17 +500,47 @@ pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Optio
     budget.spend(reports.len())?;
     let mut pushers = Grid::default();
     let mut threats = Grid::default();
-    for report in &reports {
-        if let EntityReach::Conservative(reach) = report {
-            pushers.insert(pushers.boxes.len(), reach.body, &mut budget)?;
-            threats.insert(threats.boxes.len(), reach.entities, &mut budget)?;
-        }
-    }
+    let mut hull_contacts = Grid::default();
     let mut query = Query::new(reports.len());
+    for report in &mut reports {
+        let reach = match report {
+            EntityReach::Audited(_) => continue,
+            EntityReach::Conservative(reach) => reach,
+            EntityReach::Boat {
+                reach,
+                start,
+                world,
+            } => {
+                // Earlier boats can push this hull at its starting position before its turn.
+                // Index their expanded contact areas to account for cascades of pushes.
+                let mut count = 0;
+                hull_contacts
+                    .for_each_overlapping(&mut query, start, &mut budget, |_| count += 1)?;
+                if count > 0 {
+                    let extra = PUSH_SPEED * count as f64;
+                    let grow = |bounds: BoundingBox| bounds.expand(extra, 0.0, extra);
+                    reach.body = grow(reach.body);
+                    reach.entities = grow(reach.entities);
+                    reach.players = grow(reach.players);
+                    reach.block_reads = grow(reach.block_reads);
+                    reach.block_writes = reach.block_writes.map(grow);
+                    if boat_may_need_serial_contact(world, &reach.body) {
+                        return None;
+                    }
+                }
+                hull_contacts.insert(hull_contacts.boxes.len(), reach.entities, &mut budget)?;
+                reach
+            }
+        };
+        pushers.insert(pushers.boxes.len(), reach.body, &mut budget)?;
+        threats.insert(threats.boxes.len(), reach.entities, &mut budget)?;
+    }
     let mut reaches = Vec::with_capacity(reports.len());
     for report in reports {
         match report {
-            EntityReach::Conservative(reach) => reaches.push(reach),
+            EntityReach::Conservative(reach) | EntityReach::Boat { reach, .. } => {
+                reaches.push(reach);
+            }
             EntityReach::Audited(audited) => {
                 let mut count = 0;
                 pushers.for_each_overlapping(
@@ -471,6 +569,19 @@ pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Optio
         }
     }
     Some(reaches)
+}
+
+fn boat_may_need_serial_contact(world: &World, body: &BoundingBox) -> bool {
+    let has_handlers = world
+        .server
+        .upgrade()
+        .is_some_and(|server| server.plugin_manager.has_event_handlers());
+    any_contact_section(world, body, |x, y, z| {
+        section_contains_block(world, x, y, z, |block| {
+            // Breaking a lily pad can run loot, spawn and arbitrary neighbor callbacks.
+            block == &Block::END_GATEWAY || (has_handlers && changes_on_contact(block))
+        })
+    })
 }
 
 /// Removes contact-write fallbacks that no writer can make necessary.
@@ -557,6 +668,18 @@ fn contact_may_change_blocks(
     contact: &BoundingBox,
     sections: &mut FxHashMap<(i32, i32, i32), bool>,
 ) -> bool {
+    any_contact_section(world, contact, |x, y, z| {
+        *sections
+            .entry((x, y, z))
+            .or_insert_with(|| contact_section_may_change_blocks(world, x, y, z))
+    })
+}
+
+fn any_contact_section(
+    world: &World,
+    contact: &BoundingBox,
+    mut matches: impl FnMut(i32, i32, i32) -> bool,
+) -> bool {
     if [
         contact.min.x,
         contact.min.y,
@@ -570,22 +693,22 @@ fn contact_may_change_blocks(
     {
         return true;
     }
-    let bottom = world.dimension.min_y;
-    let top = bottom + world.dimension.height;
-    let min_y = (contact.min.y as i32).max(bottom);
-    let max_y = ((contact.max.y - 1.0) as i32).min(top - 1);
+    let min_block = contact.min_block_pos().0;
+    let max_block = contact.max_block_pos().0;
+    let min_y = min_block.y.max(world.get_bottom_y());
+    let max_y = max_block.y.min(world.get_top_y());
     if min_y > max_y {
         return false;
     }
     let min = [
-        get_section_cord(contact.min.x as i32),
+        get_section_cord(min_block.x),
         get_section_cord(min_y),
-        get_section_cord(contact.min.z as i32),
+        get_section_cord(min_block.z),
     ];
     let max = [
-        get_section_cord((contact.max.x - 1.0) as i32),
+        get_section_cord(max_block.x),
         get_section_cord(max_y),
-        get_section_cord((contact.max.z - 1.0) as i32),
+        get_section_cord(max_block.z),
     ];
     let volume = (0..3).fold(1i64, |volume, axis| {
         volume.saturating_mul(i64::from(max[axis]) - i64::from(min[axis]) + 1)
@@ -596,10 +719,7 @@ fn contact_may_change_blocks(
     for x in min[0]..=max[0] {
         for z in min[2]..=max[2] {
             for y in min[1]..=max[1] {
-                if *sections
-                    .entry((x, y, z))
-                    .or_insert_with(|| contact_section_may_change_blocks(world, x, y, z))
-                {
+                if matches(x, y, z) {
                     return true;
                 }
             }
@@ -609,6 +729,18 @@ fn contact_may_change_blocks(
 }
 
 fn contact_section_may_change_blocks(world: &World, x: i32, y: i32, z: i32) -> bool {
+    section_contains_block(world, x, y, z, |block| {
+        block.id == Block::END_GATEWAY.id || changes_on_contact(block)
+    })
+}
+
+fn section_contains_block(
+    world: &World,
+    x: i32,
+    y: i32,
+    z: i32,
+    matches: impl Fn(&Block) -> bool,
+) -> bool {
     world
         .level
         .read_chunk_sync(&Vector2::new(x, z), |chunk| {
@@ -622,10 +754,7 @@ fn contact_section_may_change_blocks(world: &World, x: i32, y: i32, z: i32) -> b
                 .ok()
                 .and_then(|index| blocks.get(index))
                 .is_none_or(|palette| {
-                    palette.contains_matching(|state| {
-                        let block = Block::from_state_id(state);
-                        block.id == Block::END_GATEWAY.id || changes_on_contact(block)
-                    })
+                    palette.contains_matching(|state| matches(Block::from_state_id(state)))
                 })
         })
         .unwrap_or(true)
@@ -1360,6 +1489,75 @@ mod tests {
             ];
             assert_eq!(islands(&nodes, &[], &[]), [vec![0], vec![1], vec![2]]);
         }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn boat_near_gateway_requires_serial_tick() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::Entity;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), chunk.clone());
+        let boat = BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(8.0, 64.0, 8.0),
+            &EntityType::OAK_BOAT,
+        ));
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            ..Default::default()
+        };
+        assert!(resolve(vec![EntityReach::of(&boat, &config)], &config).is_some());
+        chunk.set_block_absolute_y(8, 64, 8, Block::END_GATEWAY.default_state.id);
+        assert!(resolve(vec![EntityReach::of(&boat, &config)], &config).is_none());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn hull_pushes_expand_later_boat_reach() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::Entity;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        world.level.loaded_chunks.insert(
+            Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        let [early, middle, late] = [5.0, 8.0, 11.625].map(|x| {
+            BoatEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(x, 64.0, 8.0),
+                &EntityType::OAK_BOAT,
+            ))
+        });
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            ..Default::default()
+        };
+        let resolve_boats = |boats: &[&BoatEntity]| {
+            resolve(
+                boats
+                    .iter()
+                    .map(|boat| EntityReach::of(*boat, &config))
+                    .collect(),
+                &config,
+            )
+            .ok_or("unexpected serial fallback")
+        };
+        let before = resolve_boats(&[&middle, &late])?;
+        let after = resolve_boats(&[&early, &middle, &late])?;
+        let late_first = resolve_boats(&[&late, &early, &middle])?;
+        // The middle boat's initial reach misses the last boat, but an earlier push
+        // can extend it far enough to affect the last boat's movement on this tick.
+        assert!(after[2].body.max.x > before[1].body.max.x);
+        assert_box(&late_first[0].body, &before[1].body);
         world.level.shutdown().await;
         Ok(())
     }

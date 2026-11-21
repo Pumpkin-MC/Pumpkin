@@ -77,7 +77,7 @@ pub use explosion::{
     ExplosionInteraction, SimpleExplosionDamageCalculator,
 };
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::block_properties::{blocks_movement, is_air};
+use pumpkin_data::block_properties::is_air;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
@@ -1675,7 +1675,7 @@ impl World {
         let player_count = players.len();
 
         let t_players = std::time::Instant::now();
-        // Vanilla handles all packets before any player ticks
+        // Apply inbound moves before player ticks and before planning entity islands.
         players.par_iter().for_each(|player| {
             player.process_inbound_packets();
         });
@@ -2348,6 +2348,14 @@ impl World {
         fluid0: &Fluid,
         state0: &FluidState,
     ) -> Vector3<f64> {
+        let normalize = |velocity: Vector3<f64>| {
+            let length = velocity.length();
+            if length < f64::from(1.0e-5f32) {
+                Vector3::default()
+            } else {
+                velocity / length
+            }
+        };
         let mut velo = Vector3::default();
 
         for dir in BlockDirection::horizontal() {
@@ -2356,36 +2364,32 @@ impl World {
 
             let (neighbor_fluid, neighbor_state) = self.get_fluid_and_fluid_state(&pos);
 
-            if neighbor_fluid.matches_type(fluid0) {
+            if neighbor_state.is_empty || neighbor_fluid.matches_type(fluid0) {
                 let mut neighbor_height = neighbor_state.height;
-                let mut amplitude = 0.0;
+                let mut amplitude = 0.0f32;
 
                 if neighbor_height == 0.0 {
-                    let state_id = self.get_block_state_id(&pos);
-                    let block_id = state_id.to_block_id();
-                    let block_state = state_id.to_state();
-
-                    let blocks_movement = blocks_movement(block_state, block_id);
-
-                    if !blocks_movement {
+                    if !self
+                        .get_block(&pos)
+                        .has_tag(&tag::Block::MINECRAFT_BLOCKS_FLUID_FLOW)
+                    {
                         let down_pos = pos.down();
                         let (down_fluid, down_state) = self.get_fluid_and_fluid_state(&down_pos);
 
-                        if down_fluid.matches_type(fluid0) {
+                        if down_state.is_empty || down_fluid.matches_type(fluid0) {
                             neighbor_height = down_state.height;
                             if neighbor_height > 0.0 {
-                                amplitude = f64::from(state0.height)
-                                    - (f64::from(neighbor_height) - 0.888_888_9);
+                                amplitude = state0.height - (neighbor_height - 0.888_888_9);
                             }
                         }
                     }
                 } else if neighbor_height > 0.0 {
-                    amplitude = f64::from(state0.height) - f64::from(neighbor_height);
+                    amplitude = state0.height - neighbor_height;
                 }
 
                 if amplitude != 0.0 {
-                    velo.x += f64::from(offset.x) * amplitude;
-                    velo.z += f64::from(offset.z) * amplitude;
+                    velo.x += f64::from(offset.x) * f64::from(amplitude);
+                    velo.z += f64::from(offset.z) * f64::from(amplitude);
                 }
             }
         }
@@ -2397,28 +2401,21 @@ impl World {
                 if self.is_solid_face(fluid0.id, pos, dir.to_block_direction())
                     || self.is_solid_face(fluid0.id, pos.up(), dir.to_block_direction())
                 {
-                    if velo.length_squared() != 0.0 {
-                        velo = velo.normalize();
-                    }
-
+                    velo = normalize(velo);
                     velo.y -= 6.0;
                     break;
                 }
             }
         }
 
-        if velo.length_squared() == 0.0 {
-            velo
-        } else {
-            velo.normalize()
-        }
+        normalize(velo)
     }
 
     // FlowingFluid.isSolidFace()
     fn is_solid_face(&self, fluid0_id: u16, pos: BlockPos, direction: BlockDirection) -> bool {
         let id = self.get_block_state_id(&pos);
 
-        let fluid = Fluid::from_state_id(id).unwrap_or(&Fluid::EMPTY);
+        let fluid = Self::get_fluid_from_state_id(id);
 
         if Fluid::same_fluid_type(fluid.id, fluid0_id) {
             return false;
@@ -2430,8 +2427,6 @@ impl World {
 
         let block = Block::from_state_id(id);
         let state = BlockState::from_id(id);
-
-        // Doesn't count blue ice or packed ice
 
         if block == &Block::ICE || block == &Block::FROSTED_ICE {
             return false;
@@ -2674,6 +2669,19 @@ impl World {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         !border.is_inside_close_to_border(source.get_entity(), &bounding_box)
             || border.collision_shape_contains(&bounding_box)
+    }
+
+    pub(crate) fn border_collision_walls(
+        &self,
+        source: &Entity,
+        swept: &BoundingBox,
+    ) -> Option<[BoundingBox; 4]> {
+        let border = self
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (border.is_inside_close_to_border(source, swept) && !border.collision_shape_contains(swept))
+            .then(|| border.collision_walls())
     }
 
     /// Vanilla's `BlockView.getDismountHeight()`.
@@ -4913,6 +4921,17 @@ impl World {
             .collect()
     }
 
+    pub(crate) fn get_boats_at_box(&self, area: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
+        let entities = self.entities.load_full();
+        if !self.entity_index.has_boats(&entities) {
+            return Vec::new();
+        }
+        self.entity_index
+            .query_types(entities, *area, |kind| kind.boat.is_some())
+            .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
+            .collect()
+    }
+
     // Gets all Player entities at a Box
     pub fn get_players_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<Player>> {
         self.entity_index
@@ -6715,63 +6734,12 @@ impl World {
         players.choose(&mut rng()).cloned()
     }
 
-    pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
-        if let Some(fluid) = Fluid::from_state_id(id) {
-            return fluid.to_flowing();
-        }
-        // These blocks contain source water without a `waterlogged` property.
-        if matches!(
-            id.to_block_id(),
-            pumpkin_data::BlockId::KELP
-                | pumpkin_data::BlockId::KELP_PLANT
-                | pumpkin_data::BlockId::SEAGRASS
-                | pumpkin_data::BlockId::TALL_SEAGRASS
-                | pumpkin_data::BlockId::BUBBLE_COLUMN
-        ) || id.is_waterlogged()
-        {
-            &Fluid::FLOWING_WATER
-        } else {
-            &Fluid::EMPTY
-        }
+    pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static Fluid {
+        pumpkin_world::world::fluid_from_block_state(id)
     }
 
     fn fluid_state_from_block_state(id: BlockStateId) -> (&'static Fluid, FluidState) {
-        let fluid = Self::get_fluid_from_state_id(id);
-        let source = if fluid.matches_type(&Fluid::WATER) {
-            &Fluid::WATER
-        } else if fluid.matches_type(&Fluid::LAVA) {
-            &Fluid::LAVA
-        } else {
-            &Fluid::EMPTY
-        };
-        let mut state = source.states[source.default_state_index as usize].clone();
-
-        if matches!(
-            id.to_block_id(),
-            pumpkin_data::BlockId::WATER | pumpkin_data::BlockId::LAVA
-        ) {
-            // LiquidBlock#getFluidState: source, amounts 7..1, then falling amount 8.
-            // The fluid family's first state is not the state of the actual block.
-            let level =
-                pumpkin_data::block_properties::WaterLikeProperties::from_state_id(id).level;
-            let amount = if level == 0 || level >= 8 {
-                8
-            } else {
-                8 - level
-            };
-            state.height = f32::from(amount) / 9.0;
-            state.level = i16::from(amount);
-            state.is_source = level == 0;
-            state.is_still = state.is_source;
-            state.falling = level >= 8;
-            state.block_state_id = pumpkin_data::block_properties::WaterLikeProperties {
-                level: level.min(8),
-            }
-            .to_state_id(id.to_block());
-        }
-
-        // Keep the normalized family used by fluid callbacks, independently of source state.
-        (fluid, state)
+        pumpkin_world::world::fluid_state_from_block_state(id)
     }
 
     pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {

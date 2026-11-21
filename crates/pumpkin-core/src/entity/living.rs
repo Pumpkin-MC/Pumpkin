@@ -201,7 +201,7 @@ impl EffectParticle {
     }
 }
 
-fn is_allowed_by_team_rules(
+pub(super) fn is_allowed_by_team_rules(
     own_team: Option<&crate::world::scoreboard::Team>,
     their_team: Option<&crate::world::scoreboard::Team>,
 ) -> bool {
@@ -2384,7 +2384,7 @@ impl LivingEntity {
             }
             // Vanilla `restituteMovementAfterCollisions`: a wall stops or bounces that axis
             let moved = if velo.horizontal_length_squared() > 0.0 {
-                self.entity.collide(velo, caller).movement
+                self.entity.collide(velo, caller, &[]).movement
             } else {
                 velo
             };
