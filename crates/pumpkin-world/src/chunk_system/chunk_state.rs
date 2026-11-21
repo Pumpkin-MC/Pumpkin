@@ -128,9 +128,11 @@ impl StagedChunkEnum {
         Self::Lighting,
         Self::Features,
         Self::Carvers,
+        Self::Surface,
+        Self::Noise,
         Self::Biomes,
     ];
-    pub const FULL_RADIUS: i32 = 5;
+    pub const FULL_RADIUS: i32 = 7;
     #[must_use]
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
@@ -355,5 +357,49 @@ mod tests {
             StagedChunkEnum::Surface.get_direct_dependencies(),
             &[StagedChunkEnum::Noise, StagedChunkEnum::Biomes]
         );
+    }
+
+    #[test]
+    fn full_dependencies_matches_full_radius() {
+        // 1. Length must be exactly FULL_RADIUS + 1 so schedule.rs never panics on dst <= FULL_RADIUS
+        assert_eq!(
+            StagedChunkEnum::FULL_DEPENDENCIES.len(),
+            (StagedChunkEnum::FULL_RADIUS as usize) + 1,
+            "FULL_DEPENDENCIES length must match FULL_RADIUS + 1 to prevent schedule panics"
+        );
+
+        // 2. Exact pipeline ordering must include Surface and Noise between Carvers and Biomes
+        assert_eq!(
+            StagedChunkEnum::FULL_DEPENDENCIES,
+            &[
+                StagedChunkEnum::Full,     // dst 0
+                StagedChunkEnum::Spawn,    // dst 1
+                StagedChunkEnum::Lighting, // dst 2
+                StagedChunkEnum::Features, // dst 3
+                StagedChunkEnum::Carvers,  // dst 4
+                StagedChunkEnum::Surface,  // dst 5
+                StagedChunkEnum::Noise,    // dst 6
+                StagedChunkEnum::Biomes,   // dst 7
+            ]
+        );
+    }
+
+    #[test]
+    fn features_has_complete_terrain_neighbors() {
+        // When center chunk generates Features (dst 3),
+        // neighbor chunks (dst 4) must be at least Carvers (which
+        // guarantees Surface and Noise are done).
+        let features_dst = 3;
+        let neighbor_dst = features_dst + 1;
+
+        assert_eq!(
+            StagedChunkEnum::FULL_DEPENDENCIES[features_dst],
+            StagedChunkEnum::Features
+        );
+        assert_eq!(
+            StagedChunkEnum::FULL_DEPENDENCIES[neighbor_dst],
+            StagedChunkEnum::Carvers
+        );
+        assert!(StagedChunkEnum::FULL_DEPENDENCIES[neighbor_dst] > StagedChunkEnum::Biomes);
     }
 }
