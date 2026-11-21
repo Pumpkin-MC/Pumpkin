@@ -53,31 +53,26 @@ impl CommandExecutor for FunctionExecutor {
                 .create_without_context(TextComponent::text(name_str.to_string())));
         };
 
-        if name_str.starts_with('#') {
-            context.source.send_feedback(
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_FUNCTION_SUCCESS_MULTIPLE,
-                    translation::java::COMMANDS_FUNCTION_SUCCESS_MULTIPLE,
-                    [
-                        TextComponent::text(executed_count.to_string()),
-                        TextComponent::text(name_str.to_string()),
-                    ],
-                ),
-                true,
-            );
+        // Like vanilla 26.3, report which functions ran; the client dropped the
+        // `commands.function.success.*` keys.
+        let functions = server
+            .datapack_manager
+            .function_tag_members(name_str)
+            .unwrap_or_else(|| vec![name_str.to_string()]);
+        let msg = if let [single] = functions.as_slice() {
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_FUNCTION_SCHEDULED_SINGLE,
+                translation::java::COMMANDS_FUNCTION_SCHEDULED_SINGLE,
+                [TextComponent::text(single.clone())],
+            )
         } else {
-            context.source.send_feedback(
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_FUNCTION_SUCCESS_SINGLE,
-                    translation::java::COMMANDS_FUNCTION_SUCCESS_SINGLE,
-                    [
-                        TextComponent::text(executed_count.to_string()),
-                        TextComponent::text(name_str.to_string()),
-                    ],
-                ),
-                true,
-            );
-        }
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_FUNCTION_SCHEDULED_MULTIPLE,
+                translation::java::COMMANDS_FUNCTION_SCHEDULED_MULTIPLE,
+                [TextComponent::text(functions.join(", "))],
+            )
+        };
+        context.source.send_feedback(msg, true);
 
         Ok(executed_count as i32)
     }
