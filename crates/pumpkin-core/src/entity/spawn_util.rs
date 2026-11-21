@@ -19,14 +19,18 @@ use crate::world::World;
 #[derive(Clone, Copy)]
 pub enum SpawnStrategy {
     OnTopOfCollider,
+    OnTopOfColliderNoLeaves,
     LegacyIronGolem,
 }
 
 impl SpawnStrategy {
     fn can_spawn_on(self, state: &BlockState, above_state: &BlockState) -> bool {
         match self {
-            Self::OnTopOfCollider => {
-                above_state.get_block_collision_shapes().next().is_none() && is_face_full_up(state)
+            Self::OnTopOfCollider | Self::OnTopOfColliderNoLeaves => {
+                above_state.get_block_collision_shapes().next().is_none()
+                    && (!matches!(self, Self::OnTopOfColliderNoLeaves)
+                        || !state.id.to_block().has_tag(&BlockTag::MINECRAFT_LEAVES))
+                    && is_face_full_up(state)
             }
             Self::LegacyIronGolem => {
                 let block = Block::from_state_id(state.id);
@@ -123,11 +127,17 @@ pub fn try_spawn_mob<T: Mob + 'static>(
             position,
             entity_type,
         ));
+        if check_collisions
+            && !world.no_entity_collision(mob.as_ref(), mob.get_entity().bounding_box.load())
+        {
+            continue;
+        }
         if !mob.check_spawn_obstruction(world) {
             continue;
         }
-        world.spawn_entity(mob.clone() as Arc<dyn EntityBase>);
-        return Some(mob);
+        return world
+            .spawn_entity(mob.clone() as Arc<dyn EntityBase>)
+            .then_some(mob);
     }
 
     None

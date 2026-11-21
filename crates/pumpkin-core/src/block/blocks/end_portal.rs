@@ -30,7 +30,7 @@ impl BlockBehaviour for EndPortalBlock {
         }
         args.entity
             .get_entity()
-            .try_use_portal(target_world, *args.position);
+            .try_use_portal(args.entity, target_world, *args.position);
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {

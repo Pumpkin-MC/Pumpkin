@@ -139,7 +139,7 @@ impl BlockBehaviour for NetherPortalBlock {
         );
         args.entity
             .get_entity()
-            .try_use_portal(target_world, *args.position);
+            .try_use_portal(args.entity, target_world, *args.position);
     }
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {

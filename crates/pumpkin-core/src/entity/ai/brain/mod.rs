@@ -11,7 +11,7 @@ use crate::entity::mob::Mob;
 use crate::world::World;
 
 use activity::{ActivityData, ActivitySet, activity_slot};
-use behavior::{ActivityBehaviors, Status};
+use behavior::{ActivityBehaviors, Status, melee_attack::PendingMeleeAttack};
 use memory::{
     MemoryModuleId, MemoryModuleType, MemoryStatus, MemoryStore, MemoryValue, PackedMemories,
 };
@@ -62,6 +62,7 @@ pub struct Brain {
     state: BrainState,
     sensors: Vec<SensorEntry>,
     behaviors: BTreeMap<i32, Vec<ActivityBehaviors>>,
+    next_behavior_to_start: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,6 +73,7 @@ pub enum Schedule {
 
 pub struct BrainState {
     memories: MemoryStore,
+    pending_melee_attack: Option<PendingMeleeAttack>,
     activity_requirements: Vec<Option<ActivityConditions>>,
     activity_memories_to_erase: Vec<Option<Box<[MemoryModuleId]>>>,
     core_activities: ActivitySet,
@@ -85,6 +87,7 @@ impl Default for BrainState {
     fn default() -> Self {
         let mut state = Self {
             memories: MemoryStore::default(),
+            pending_melee_attack: None,
             activity_requirements: Vec::new(),
             activity_memories_to_erase: Vec::new(),
             core_activities: ActivitySet::single(Activity::Core),
@@ -327,7 +330,22 @@ impl Brain {
         }
     }
 
+    /// Ticks a directly owned brain. A mob's stored brain must use `MobEntity::tick_brain`.
     pub fn tick(&mut self, world: &Arc<World>, mob: &dyn Mob, time: i64) {
+        let mut attack = self.begin_tick(world, mob, time);
+        while let Some(pending) = attack {
+            let cooldown = pending.perform(world, mob);
+            attack = self.resume_tick(world, mob, time, cooldown);
+        }
+    }
+
+    pub(crate) fn begin_tick(
+        &mut self,
+        world: &Arc<World>,
+        mob: &dyn Mob,
+        time: i64,
+    ) -> Option<PendingMeleeAttack> {
+        self.next_behavior_to_start = None;
         Self::apply_pending_memory_clear(&mut self.state, mob);
         self.state.memories.tick();
 
@@ -340,12 +358,41 @@ impl Brain {
             });
             Self::apply_pending_memory_clear(&mut self.state, mob);
         }
+        self.start_behaviors_and_tick(world, mob, time, 0)
+    }
 
+    /// Continues the same tick after an attack invoked plugin callbacks outside the Brain lock.
+    pub(crate) fn resume_tick(
+        &mut self,
+        world: &Arc<World>,
+        mob: &dyn Mob,
+        time: i64,
+        cooldown: i64,
+    ) -> Option<PendingMeleeAttack> {
+        // A callback may have rebuilt the brain while it was unlocked.
+        let next = self.next_behavior_to_start.take()?;
+        self.state
+            .set_with_expiry(memory::types::ATTACK_COOLING_DOWN, true, cooldown);
+        Self::apply_pending_memory_clear(&mut self.state, mob);
+        self.start_behaviors_and_tick(world, mob, time, next)
+    }
+
+    fn start_behaviors_and_tick(
+        &mut self,
+        world: &Arc<World>,
+        mob: &dyn Mob,
+        time: i64,
+        first: usize,
+    ) -> Option<PendingMeleeAttack> {
+        let mut offset = 0;
         for group in self.behaviors.values_mut().flatten() {
+            let start = offset;
+            offset += group.behaviors.len();
             if !self.state.is_active(group.activity) {
                 continue;
             }
-            for behavior in &mut group.behaviors {
+            let skip = first.saturating_sub(start);
+            for (index, behavior) in group.behaviors.iter_mut().enumerate().skip(skip) {
                 if behavior.status() != Status::Stopped {
                     continue;
                 }
@@ -355,6 +402,10 @@ impl Brain {
                     mob,
                     time,
                 });
+                if let Some(attack) = self.state.pending_melee_attack.take() {
+                    self.next_behavior_to_start = Some(start + index + 1);
+                    return Some(attack);
+                }
                 Self::apply_pending_memory_clear(&mut self.state, mob);
             }
         }
@@ -374,6 +425,7 @@ impl Brain {
                 Self::apply_pending_memory_clear(&mut self.state, mob);
             }
         }
+        None
     }
 
     pub fn stop_all(&mut self, world: &Arc<World>, mob: &dyn Mob, time: i64) {
@@ -496,6 +548,7 @@ impl BrainProvider {
             },
             sensors: Vec::new(),
             behaviors: BTreeMap::new(),
+            next_behavior_to_start: None,
         }
     }
 }

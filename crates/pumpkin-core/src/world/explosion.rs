@@ -581,9 +581,10 @@ impl<'a> Explosion<'a> {
                 (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
             let knockback = direction * knockback_power;
             // Vanilla `ServerExplosion.hurtEntities`: creative flyers get no knockback packet.
-            if !entity_base
-                .get_player()
-                .is_some_and(|player| player.is_creative() && player.is_flying())
+            if entity_base.accepts_push_impulses()
+                && !entity_base
+                    .get_player()
+                    .is_some_and(|player| player.is_creative() && player.is_flying())
             {
                 // A living entity's goes through `EntityKnockbackEvent`
                 let knockback = if entity_base.get_living_entity().is_some() {
@@ -591,10 +592,12 @@ impl<'a> Explosion<'a> {
                 } else {
                     Some(knockback)
                 };
-                if let Some(knockback) = knockback {
+                if let Some(knockback) = knockback
+                    && entity_base.apply_push_impulse(knockback)
+                {
                     // TODO vanilla sends a player's knockback in `ClientboundExplodePacket`, added to the client's
                     // motion. Setting the motion here starts from the server's stale copy of a player's velocity.
-                    entity.add_velocity(knockback);
+                    entity.send_velocity();
                 }
             }
 
@@ -746,6 +749,12 @@ impl<'a> Explosion<'a> {
                         continue;
                     }
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
+
+                    if block == &Block::CREAKING_HEART {
+                        crate::block::blocks::creaking_heart::CreakingHeartBlock::will_explode(
+                            world, pos, state.id, self,
+                        );
+                    }
 
                     // TODO vanilla `onExplosionHit`: blocks drop XP (`spawnAfterBreak`) when the indirect source is a player.
                     if pumpkin_block.is_none_or(|s| s.should_drop_items_on_explosion()) {

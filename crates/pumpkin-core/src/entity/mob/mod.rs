@@ -4,8 +4,8 @@ use super::{
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::behavior::temperament::Temperament;
 use crate::entity::ai::brain::Brain;
-use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag};
+use crate::entity::ai::brain::memory::{PackedMemories, types};
 use crate::entity::ai::control::body_rotation_control::BodyRotationControl;
 use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
@@ -514,13 +514,13 @@ impl MobEntity {
 
         mob.custom_server_ai_step(caller);
 
-        {
+        if mob.ticks_move_control() {
             let mut move_control = self
                 .move_control
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             move_control.tick(mob);
-        };
+        }
 
         if mob.ticks_look_control() {
             let mut look_control = self
@@ -530,10 +530,14 @@ impl MobEntity {
             look_control.tick(mob);
         }
 
-        self.jump_control
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .tick(mob);
+        if mob.ticks_jump_control() {
+            self.jump_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .tick(mob);
+        } else {
+            mob.tick_jump_control(false);
+        }
     }
 
     fn update_control_flags(&self, mob: &dyn Mob) {
@@ -774,10 +778,82 @@ impl MobEntity {
     pub fn tick_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
         let time = world.get_world_age();
-        self.with_brain(mob, |brain| brain.tick(&world, mob, time));
+        let mut attack = self.with_brain(mob, |brain| brain.begin_tick(&world, mob, time));
+        while let Some(pending) = attack {
+            let cooldown = pending.perform(&world, mob);
+            if mob.get_entity().is_removed() || !Arc::ptr_eq(&mob.get_entity().world.load(), &world)
+            {
+                return;
+            }
+            attack = self.with_brain(mob, |brain| brain.resume_tick(&world, mob, time, cooldown));
+        }
         if self.brain_refresh_requested.swap(false, Ordering::AcqRel) {
             self.refresh_brain(mob);
         }
+    }
+
+    /// Ticks a brain that reconciles its attack target with the plugin-visible target.
+    pub(crate) fn tick_brain_with_target_events(&self, mob: &dyn Mob, start_reason: TargetReason) {
+        let id = |entity: &dyn EntityBase| entity.get_entity().entity_id;
+        let previous = self.stored_target();
+        let previous_id = previous.as_deref().map(id);
+        let unreachable_since = self.with_brain(mob, |brain| {
+            // Plugin setters can update the stored target without re-locking the brain.
+            if brain
+                .get(types::ATTACK_TARGET)
+                .map(|target| id(target.as_ref()))
+                != previous_id
+            {
+                brain.set_optional(types::ATTACK_TARGET, previous.clone());
+                brain.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+            }
+            brain.get(types::CANT_REACH_WALK_TARGET_SINCE).copied()
+        });
+        self.tick_brain(mob);
+        if mob.get_entity().is_removed() {
+            return;
+        }
+
+        let stored = self.stored_target();
+        let proposed = self.with_brain(mob, |brain| {
+            if stored.as_deref().map(id) != previous_id {
+                brain.set_optional(types::ATTACK_TARGET, stored);
+                brain.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+                return None;
+            }
+            let candidate = brain.get(types::ATTACK_TARGET).cloned();
+            if candidate.as_deref().map(id) == previous_id {
+                return None;
+            }
+            brain.set_optional(types::ATTACK_TARGET, previous);
+            Some(candidate)
+        });
+        let Some(candidate) = proposed else {
+            return;
+        };
+
+        // Let the synchronous event observe the previous target, outside the brain lock.
+        let installing_target = candidate.is_some();
+        let reason = if installing_target {
+            start_reason
+        } else {
+            TargetReason::ForgotTarget
+        };
+        mob.set_mob_target(candidate, reason);
+        if mob.get_entity().is_removed() {
+            return;
+        }
+        let approved = self.stored_target();
+        self.with_brain(mob, |brain| {
+            let changed = approved.as_deref().map(id) != previous_id;
+            brain.set_optional(types::ATTACK_TARGET, approved);
+            if changed {
+                brain.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+            } else if installing_target {
+                // The proposal may have cleared this before a plugin kept the old target.
+                brain.set_optional(types::CANT_REACH_WALK_TARGET_SINCE, unreachable_since);
+            }
+        });
     }
 
     pub fn write_mob_nbt(&self, mob: &dyn Mob, nbt: &mut NbtCompound) {
@@ -869,15 +945,18 @@ impl MobEntity {
 
     /// The target, checked again on every read so a player who turns creative is dropped.
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
-        let target = self
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-            .and_then(Weak::upgrade)?;
+        let target = self.stored_target()?;
         (EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity())
             && self.living_entity.can_attack(target.as_ref()))
         .then_some(target)
+    }
+
+    pub(crate) fn stored_target(&self) -> Option<Arc<dyn EntityBase>> {
+        self.target
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(Weak::upgrade)
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -1981,9 +2060,30 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn before_mob_ai_step(&self) {}
 
+    /// Returns false while an entity's required world data is still loading.
+    fn prepare_mob_tick(&self) -> bool {
+        true
+    }
+
     fn mob_ai_step(&self) {}
 
     fn ticks_navigation(&self) -> bool {
+        true
+    }
+
+    fn ticks_move_control(&self) -> bool {
+        true
+    }
+
+    fn ticks_jump_control(&self) -> bool {
+        true
+    }
+
+    fn mob_can_use_portal(&self) -> bool {
+        true
+    }
+
+    fn mob_accepts_push_impulses(&self) -> bool {
         true
     }
 
@@ -2193,6 +2293,21 @@ pub trait Mob: EntityBase + Send + Sync {
         _cause: Option<&dyn EntityBase>,
     ) -> Option<bool> {
         None
+    }
+
+    /// Returns true when the mob handles its own death animation and removal.
+    fn mob_tick_death(&self, _death_time: u8) -> bool {
+        false
+    }
+
+    /// Number of death-animation ticks during which travel continues.
+    fn mob_death_animation_ticks(&self) -> u8 {
+        20
+    }
+
+    /// Emits the death vibration before loot, then broadcasts the death status.
+    fn emits_entity_die_game_event(&self) -> bool {
+        false
     }
 
     /// Lets a mob replace the default knockback; true when it applied its own.
@@ -3015,7 +3130,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         }
 
         mob_entity.check_despawn(self);
-        if mob_entity.living_entity.entity.is_removed() {
+        if mob_entity.living_entity.entity.is_removed() || !self.prepare_mob_tick() {
             return;
         }
 
