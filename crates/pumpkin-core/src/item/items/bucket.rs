@@ -481,14 +481,14 @@ fn finish_empty_filled_bucket(
     player: Option<&Player>,
 ) {
     let item = bucket_stack.item;
+    let evaporated = bucket_evaporates(item, world, &place_pos);
     if item.id == Item::SULFUR_CUBE_BUCKET.id {
         world.play_sound(
             get_empty_sound(item),
             SoundCategory::Neutral,
             &place_pos.to_f64(),
         );
-    } else if item.id != Item::POWDER_SNOW_BUCKET.id && !bucket_evaporates(item, world, &place_pos)
-    {
+    } else if item.id != Item::POWDER_SNOW_BUCKET.id && !evaporated {
         let sound_category = if get_mob_for_bucket(item).is_some() {
             SoundCategory::Neutral
         } else {
@@ -497,7 +497,7 @@ fn finish_empty_filled_bucket(
 
         world.play_sound(get_empty_sound(item), sound_category, &place_pos.to_f64());
         world.emit_game_event(GameEvent::FluidPlace.name(), place_pos.to_f64());
-    } else if get_mob_for_bucket(item).is_some() && bucket_evaporates(item, world, &place_pos) {
+    } else if get_mob_for_bucket(item).is_some() && evaporated {
         world.play_sound(
             get_empty_sound(item),
             SoundCategory::Neutral,

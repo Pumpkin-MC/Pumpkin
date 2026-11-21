@@ -3115,9 +3115,7 @@ impl Entity {
 
                         if surface_y >= bounding_box.min.y {
                             let marginal_height = surface_y - entity_box.min.y;
-                            let i = usize::from(
-                                fluid.id == Fluid::FLOWING_LAVA.id || fluid.id == Fluid::LAVA.id,
-                            );
+                            let i = usize::from(fluid.matches_type(&Fluid::LAVA));
 
                             fluid_height[i] = fluid_height[i].max(marginal_height);
 
@@ -5987,8 +5985,8 @@ impl Entity {
 
             let below_state_id = world.get_block_state_id(&below_pos);
             // Vanilla: isWater checks specifically for water fluid, not any fluid
-            let is_water = Fluid::from_state_id(below_state_id)
-                .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id);
+            let is_water =
+                Fluid::from_state_id(below_state_id).is_some_and(|f| f.matches_type(&Fluid::WATER));
 
             let fallback_pos =
                 Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);

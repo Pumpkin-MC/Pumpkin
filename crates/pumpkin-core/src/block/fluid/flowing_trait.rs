@@ -65,7 +65,7 @@ pub trait FlowingFluid: Send + Sync {
             return Some(props);
         }
         // TODO: vanilla reads `getFluidState()`, so kelp, seagrass and bubble columns are water sources too.
-        if fluid.id == Fluid::FLOWING_WATER.id || fluid.id == Fluid::WATER.id {
+        if fluid.matches_type(&Fluid::WATER) {
             let block = Block::from_state_id(state_id);
             if block.is_waterlogged(state_id) {
                 return Some(self.get_source(false));

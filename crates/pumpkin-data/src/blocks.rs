@@ -332,29 +332,24 @@ impl Block {
         key: &str,
         value: &str,
     ) -> Result<crate::Property, PropertyLookupError> {
-        let default_props = self
-            .properties(self.default_state.id)
-            .ok_or(PropertyLookupError::UnknownProperty)?
-            .to_props();
-        let idx = default_props
+        let slot = self
+            .property_slots
             .iter()
-            .position(|p| p.key().to_str() == key)
+            .find(|slot| slot.key.to_str() == key)
             .ok_or(PropertyLookupError::UnknownProperty)?;
-        self.states
+        slot.values
             .iter()
-            .find_map(|state| {
-                let props = self.properties(state.id)?.to_props();
-                let prop = *props.get(idx)?;
-                (prop.value_str() == value).then_some(prop)
-            })
+            .find(|property| property.value_str() == value)
+            .copied()
             .ok_or(PropertyLookupError::InvalidValue)
     }
 
     /// Returns whether this block defines a state property with `key`.
     #[must_use]
     pub fn has_property(&self, key: &str) -> bool {
-        self.properties(self.default_state.id)
-            .is_some_and(|props| props.to_props().iter().any(|p| p.key().to_str() == key))
+        self.property_slots
+            .iter()
+            .any(|slot| slot.key.to_str() == key)
     }
 
     /// Copies each property in `overrides` onto `base_state_id` when it belongs to this block.
@@ -364,19 +359,10 @@ impl Block {
         base_state_id: BlockStateId,
         overrides: &[crate::Property],
     ) -> BlockStateId {
-        if overrides.is_empty() || Self::from_state_id(base_state_id).id != self.id {
-            return base_state_id;
-        }
-        let Some(state_props) = self.properties(base_state_id) else {
-            return base_state_id;
-        };
-        let mut props = state_props.to_props();
-        for &defined in overrides {
-            if let Some(slot) = props.iter_mut().find(|p| p.key() == defined.key()) {
-                *slot = defined;
-            }
-        }
-        self.from_properties(&props).to_state_id(self)
+        // `with_property` returns `None` for a state of another block
+        overrides.iter().fold(base_state_id, |id, &value| {
+            self.with_property(id, value).unwrap_or(id)
+        })
     }
 
     /// Returns whether this block is solid (based on default state)

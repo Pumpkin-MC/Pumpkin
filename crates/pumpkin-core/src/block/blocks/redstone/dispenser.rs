@@ -524,7 +524,7 @@ impl DispenserBlock {
 
     fn dispense_boat(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
         let target = Self::target_position(ctx);
-        let is_water = |id: u16| id == Fluid::WATER.id || id == Fluid::FLOWING_WATER.id;
+        let is_water = |id: u16| Fluid::same_fluid_type(id, Fluid::WATER.id);
 
         let spawn_pos = if is_water(ctx.world.get_fluid(&target).id) {
             target.to_f64()
@@ -1173,7 +1173,7 @@ impl DispenserBlock {
         }
 
         let fluid = ctx.world.get_fluid(&target);
-        if fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id {
+        if fluid.matches_type(&Fluid::WATER) {
             Self::consume_with_remainder(ctx, dispenser, item, water_bottle());
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
             return true;

@@ -198,8 +198,7 @@ impl crate::world::WorldPortalExt for TestBlockRegistry {
             let is_water = here_id.is_waterlogged()
                 || matches!(
                     pumpkin_data::fluid::Fluid::from_state_id(here_id),
-                    Some(f) if *f == pumpkin_data::fluid::Fluid::WATER
-                        || *f == pumpkin_data::fluid::Fluid::FLOWING_WATER
+                    Some(f) if f.matches_type(&pumpkin_data::fluid::Fluid::WATER)
                 );
             return above_state.is_center_solid(pumpkin_data::BlockDirection::Down) && !is_water;
         }

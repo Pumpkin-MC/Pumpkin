@@ -6126,11 +6126,10 @@ impl World {
         }
 
         flags.insert(BlockFlags::SKIP_DROPS);
-        let new_state_id = if *self.get_fluid(position) == Fluid::WATER {
-            Block::WATER.default_state.id
-        } else {
-            Block::AIR.default_state.id
-        };
+        // Level.destroyBlock: the fluid's legacy block, air when empty
+        let new_state_id = Fluid::fluid_state_of(self.get_block_state_id(position))
+            .1
+            .block_state_id;
 
         let broken_state_id = self.set_block_state(position, new_state_id, flags);
         let broken_block = Block::from_state_id(broken_state_id);
@@ -6723,13 +6722,9 @@ impl World {
         players.choose(&mut rng()).cloned()
     }
 
-    pub(crate) const fn get_fluid_from_state_id(id: BlockStateId) -> &'static Fluid {
-        Fluid::of_block_state(id)
-    }
-
     pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
         let id = self.get_block_state_id(position);
-        Self::get_fluid_from_state_id(id)
+        Fluid::of_block_state(id)
     }
 
     pub fn get_block_and_fluid(
@@ -6740,7 +6735,7 @@ impl World {
         &'static pumpkin_data::fluid::Fluid,
     ) {
         let id = self.get_block_state_id(position);
-        (id.to_block(), Self::get_fluid_from_state_id(id))
+        (id.to_block(), Fluid::of_block_state(id))
     }
 
     pub fn get_fluid_and_fluid_state(&self, position: &BlockPos) -> (&'static Fluid, FluidState) {

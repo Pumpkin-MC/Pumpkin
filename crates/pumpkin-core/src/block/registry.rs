@@ -1634,9 +1634,8 @@ impl BlockRegistry {
     ) -> bool {
         self.get_pumpkin_block(block.id).map_or_else(
             || match computation_type {
-                PathComputationType::Water => {
-                    World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
-                }
+                PathComputationType::Water => pumpkin_data::fluid::Fluid::of_block_state(state.id)
+                    .has_tag(&tag::Fluid::MINECRAFT_WATER),
                 PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
             },
             |pumpkin_block| pumpkin_block.is_pathfindable(state, computation_type),
