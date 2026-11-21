@@ -8,6 +8,7 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::{
+    HeightMap,
     math::{int_provider::IntProvider, vector3::Vector3},
     random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand},
 };
@@ -37,10 +38,7 @@ pub enum StructureProcessor {
     /// Removes specified blocks (such as structure void / structure blocks / air), preserving preexisting world blocks.
     BlockIgnore(Vec<IgnoredBlock>),
     /// Modifies the Y-level of blocks relative to terrain heightmap.
-    Gravity {
-        heightmap: HeightmapType,
-        offset: i32,
-    },
+    Gravity { heightmap: HeightMap, offset: i32 },
     /// Protects specific world blocks from being overridden by the structure.
     ProtectedBlocks(BlockTagFilter),
     /// Replaces stone variants with blackstone variants and iron bars with chains.
@@ -139,17 +137,6 @@ impl IgnoredBlock {
         }
         true
     }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum HeightmapType {
-    #[default]
-    WorldSurfaceWg,
-    WorldSurface,
-    OceanFloorWg,
-    OceanFloor,
-    MotionBlocking,
-    MotionBlockingNoLeaves,
 }
 
 #[derive(Clone, Debug)]
@@ -487,6 +474,7 @@ impl StructureProcessor {
                     Some(state)
                 }
             }
+            // Gravity moves the block instead of changing it, see `place_template_with_options`.
             Self::Gravity { .. } | Self::Nop => Some(state),
             Self::ProtectedBlocks(tag) => {
                 let world_state_id = placer.get_block_state(&world_pos);
@@ -1116,12 +1104,12 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
         }
         RawProcessor::Gravity { heightmap, offset } => {
             let heightmap = match heightmap.as_str() {
-                "WORLD_SURFACE" => HeightmapType::WorldSurface,
-                "OCEAN_FLOOR_WG" => HeightmapType::OceanFloorWg,
-                "OCEAN_FLOOR" => HeightmapType::OceanFloor,
-                "MOTION_BLOCKING" => HeightmapType::MotionBlocking,
-                "MOTION_BLOCKING_NO_LEAVES" => HeightmapType::MotionBlockingNoLeaves,
-                _ => HeightmapType::WorldSurfaceWg,
+                "WORLD_SURFACE" => HeightMap::WorldSurface,
+                "OCEAN_FLOOR_WG" => HeightMap::OceanFloorWg,
+                "OCEAN_FLOOR" => HeightMap::OceanFloor,
+                "MOTION_BLOCKING" => HeightMap::MotionBlocking,
+                "MOTION_BLOCKING_NO_LEAVES" => HeightMap::MotionBlockingNoLeaves,
+                _ => HeightMap::WorldSurfaceWg,
             };
             Some(StructureProcessor::Gravity { heightmap, offset })
         }
@@ -1339,14 +1327,14 @@ impl StructureProcessor {
             ),
             StaticProcessor::Gravity { heightmap, offset } => Self::Gravity {
                 heightmap: match heightmap {
-                    StaticHeightmapType::WorldSurface => HeightmapType::WorldSurface,
-                    StaticHeightmapType::OceanFloorWg => HeightmapType::OceanFloorWg,
-                    StaticHeightmapType::OceanFloor => HeightmapType::OceanFloor,
-                    StaticHeightmapType::MotionBlocking => HeightmapType::MotionBlocking,
+                    StaticHeightmapType::WorldSurface => HeightMap::WorldSurface,
+                    StaticHeightmapType::OceanFloorWg => HeightMap::OceanFloorWg,
+                    StaticHeightmapType::OceanFloor => HeightMap::OceanFloor,
+                    StaticHeightmapType::MotionBlocking => HeightMap::MotionBlocking,
                     StaticHeightmapType::MotionBlockingNoLeaves => {
-                        HeightmapType::MotionBlockingNoLeaves
+                        HeightMap::MotionBlockingNoLeaves
                     }
-                    StaticHeightmapType::WorldSurfaceWg => HeightmapType::WorldSurfaceWg,
+                    StaticHeightmapType::WorldSurfaceWg => HeightMap::WorldSurfaceWg,
                 },
                 offset: *offset,
             },
