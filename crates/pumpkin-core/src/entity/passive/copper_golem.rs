@@ -1,11 +1,12 @@
 use std::sync::{
-    Arc, Mutex, Weak,
+    Arc, Mutex,
     atomic::{AtomicI32, AtomicI64, Ordering},
 };
 
-use pumpkin_data::block_properties::{CopperGolemPose, CopperGolemStatueLikeProperties};
+use pumpkin_data::block_properties::{
+    ChestLikeProperties, ChestType, CopperGolemPose, CopperGolemStatueLikeProperties,
+};
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -13,6 +14,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockState};
+use pumpkin_inventory::Inventory;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
@@ -22,15 +24,16 @@ use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 use uuid::Uuid;
 
+use crate::block::blocks::chests;
 use crate::block::blocks::weathering_copper::WeatherState;
 use crate::block::entities::copper_golem_statue::CopperGolemStatueBlockEntity;
 use crate::entity::{
     Entity, EntityBase,
     ai::{
-        brain::behavior::utils,
-        goal::{
-            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-            wander_around::WanderAroundGoal,
+        brain::{
+            Brain,
+            behavior::utils,
+            memory::{PackedMemories, types},
         },
         pathfinder::node::PathType,
     },
@@ -40,12 +43,17 @@ use crate::entity::{
     shearable::{Shearable, shear_by_player_in_hand},
 };
 
+pub(crate) mod ai;
+
 pub const EQUIPMENT_SLOT_ANTENNA: EquipmentSlot = EquipmentSlot::SADDLE;
 pub const IGNORE_WEATHERING_TICK: i64 = -2;
 pub const UNSET_WEATHERING_TICK: i64 = -1;
 pub const WEATHERING_TICK_FROM: i64 = 504_000;
 pub const WEATHERING_TICK_TO: i64 = 552_000;
 pub const TURN_TO_STATUE_CHANCE: f32 = 0.0058;
+pub const SPAWN_COOLDOWN_MIN: i32 = 60;
+pub const SPAWN_COOLDOWN_MAX: i32 = 100;
+pub const CONTAINER_INTERACTION_RANGE: f64 = 3.0;
 const REQUIRED_PATH_LENGTH: f32 = 48.0;
 const ABSTRACT_GOLEM_AMBIENT_INTERVAL: i32 = 120;
 
@@ -90,7 +98,8 @@ pub struct CopperGolemEntity {
     pub weather_state: AtomicI32,
     pub state: AtomicI32,
     pub next_weathering_tick: AtomicI64,
-    pub opened_chest_pos: Mutex<Option<BlockPos>>,
+    /// The chest this golem holds open, closed again when the golem stops using it or is removed.
+    opened_chest: Mutex<Option<(BlockPos, Arc<dyn Inventory>)>>,
     last_lightning_bolt_uuid: Mutex<Option<Uuid>>,
 }
 
@@ -114,26 +123,16 @@ impl CopperGolemEntity {
             weather_state: AtomicI32::new(WeatherState::Unaffected as i32),
             state: AtomicI32::new(CopperGolemState::Idle.id()),
             next_weathering_tick: AtomicI64::new(UNSET_WEATHERING_TICK),
-            opened_chest_pos: Mutex::new(None),
+            opened_chest: Mutex::new(None),
             last_lightning_bolt_uuid: Mutex::new(None),
         };
         let mob_arc = Arc::new(golem);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                2,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
-        };
+        let initial_cooldown = mob_arc
+            .get_random()
+            .random_range(SPAWN_COOLDOWN_MIN..SPAWN_COOLDOWN_MAX);
+        mob_arc.mob_entity.with_brain(mob_arc.as_ref(), |brain| {
+            brain.set(types::TRANSPORT_ITEMS_COOLDOWN_TICKS, initial_cooldown);
+        });
 
         mob_arc
     }
@@ -178,18 +177,54 @@ impl CopperGolemEntity {
         );
     }
 
-    pub fn set_opened_chest_pos(&self, pos: BlockPos) {
-        *self
-            .opened_chest_pos
+    pub fn open_chest(&self, pos: BlockPos, container: Arc<dyn Inventory>) {
+        container.on_open();
+        let previous = self
+            .opened_chest
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pos);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .replace((pos, container));
+        if let Some((_, previous)) = previous {
+            previous.on_close();
+        }
     }
 
-    pub fn clear_opened_chest_pos(&self) {
-        *self
-            .opened_chest_pos
+    pub fn close_opened_chest(&self) {
+        let opened = self
+            .opened_chest
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some((_, container)) = opened {
+            container.on_close();
+        }
+    }
+
+    #[must_use]
+    pub fn has_container_open(&self, pos: &BlockPos) -> bool {
+        let Some(opened) = self
+            .opened_chest
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .map(|(pos, _)| *pos)
+        else {
+            return false;
+        };
+        if opened == *pos {
+            return true;
+        }
+        let world = self.get_entity().world.load();
+        let (block, state_id) = world.get_block_and_state_id(&opened);
+        if block != &Block::CHEST
+            && block != &Block::TRAPPED_CHEST
+            && !block.has_tag(&tag::Block::MINECRAFT_COPPER_CHESTS)
+        {
+            return false;
+        }
+        let props = ChestLikeProperties::from_state_id(state_id);
+        props.r#type != ChestType::Single
+            && chests::connected_half(&world, block, &opened, props) == Some(*pos)
     }
 
     #[must_use]
@@ -339,6 +374,21 @@ impl CustomSound for CopperGolemEntity {
 }
 
 impl Mob for CopperGolemEntity {
+    fn on_removed(&self) {
+        self.close_opened_chest();
+    }
+
+    fn make_brain(&self, packed: &PackedMemories) -> Brain {
+        ai::make_brain(self, packed)
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        self.mob_entity.tick_brain(self);
+        self.mob_entity.with_brain(self, |brain| {
+            ai::update_activity(brain);
+        });
+    }
+
     fn as_shearable(&self) -> Option<&dyn Shearable> {
         Some(self)
     }

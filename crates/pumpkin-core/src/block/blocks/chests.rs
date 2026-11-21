@@ -152,7 +152,7 @@ const fn connected_direction(props: ChestLikeProperties) -> Option<HorizontalFac
 
 /// Vanilla `DoubleBlockCombiner.combineWithNeigbour`: the other half counts only while it is the
 /// same block, faces the same way and is the opposite half.
-fn connected_half(
+pub(crate) fn connected_half(
     world: &World,
     block: &Block,
     position: &BlockPos,
@@ -892,8 +892,21 @@ fn get_chest_properties_if_can_connect(
     None
 }
 
-fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
+pub(crate) fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
     has_block_on_top(world, block_pos) || is_cat_sitting_on_chest(world, block_pos)
+}
+
+pub(crate) fn is_chest_open(block_entity: &dyn BlockEntity) -> bool {
+    if let Some(chest) = block_entity.as_any().downcast_ref::<ChestBlockEntity>() {
+        return chest.get_viewer_count() > 0;
+    }
+    if let Some(trapped) = block_entity
+        .as_any()
+        .downcast_ref::<crate::block::entities::trapped_chest::TrappedChestBlockEntity>(
+    ) {
+        return trapped.get_viewer_count() > 0;
+    }
+    false
 }
 fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_pos = block_pos.up();
