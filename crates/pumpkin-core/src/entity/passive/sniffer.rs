@@ -6,6 +6,7 @@ use std::sync::{
 use pumpkin_data::BlockState;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::{EntityStatus, EntityType};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -35,6 +36,7 @@ use crate::entity::{
     player::Player,
     r#type::from_type,
 };
+use crate::world::game_event::GameEventContext;
 
 pub(crate) mod ai;
 
@@ -106,8 +108,16 @@ impl SnifferEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             navigator.set_can_float(true);
             navigator.set_pathfinding_malus(PathType::Water, -1.0);
-            navigator.set_pathfinding_malus(PathType::PowderSnow, -1.0);
+            navigator.set_pathfinding_malus(PathType::DangerPowderSnow, -1.0);
             navigator.set_pathfinding_malus(PathType::DamageCautious, -1.0);
+            navigator.set_on_pathfinding_start(Some(|living, nav| {
+                if living.is_in_water() || living.entity.is_on_fire() {
+                    nav.set_pathfinding_malus(PathType::Water, 0.0);
+                }
+            }));
+            navigator.set_on_pathfinding_done(Some(|_living, nav| {
+                nav.set_pathfinding_malus(PathType::Water, -1.0);
+            }));
         };
 
         mob_arc
@@ -197,14 +207,14 @@ impl SnifferEntity {
 
     fn on_digging_start(&self) {
         let entity = self.get_entity();
-        let world = entity.world.load();
-        let current_ticks = world.level_time.try_lock().map_or(0, |t| t.world_age);
-        let drop_tick = current_ticks as i32 + DIGGING_DROP_SEED_OFFSET_TICKS;
+        let current_ticks = entity.tick_count.load(Ordering::Relaxed);
+        let drop_tick = current_ticks + DIGGING_DROP_SEED_OFFSET_TICKS;
         self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
         entity.set_synced_data(
             pumpkin_data::tracked_data::sniffer::DROP_SEED_AT_TICK,
             VarInt(drop_tick),
         );
+        let world = entity.world.load();
         world.send_entity_status(
             entity,
             EntityStatus::SnifferDiggingSound,
@@ -379,11 +389,16 @@ impl SnifferEntity {
 
     pub fn drop_seed(&self) {
         let entity = self.get_entity();
-        let world = entity.world.load();
-        let current_tick = world.get_world_age() as i32;
+        let current_tick = entity.tick_count.load(Ordering::Relaxed);
 
         if self.drop_seed_at_tick.load(Ordering::Relaxed) == current_tick {
-            let head_pos = self.get_head_position();
+            let world = entity.world.load();
+            let head_block = self.get_head_block();
+            let head_pos = Vector3::new(
+                f64::from(head_block.0.x),
+                f64::from(head_block.0.y),
+                f64::from(head_block.0.z),
+            );
             drop_from_gift_loot_table(self, SNIFFER_DIGGING_LOOT_TABLE, |item_stack| {
                 let item_entity = Entity::new(world.clone(), head_pos, &EntityType::ITEM);
                 let item_arc = Arc::new(ItemEntity::new(item_entity, item_stack));
@@ -544,10 +559,16 @@ impl Mob for SnifferEntity {
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(state_id) = nbt.get_int("State") {
-            self.set_state(SnifferState::from_id(state_id));
-        }
-        if let Some(drop_tick) = nbt.get_int("DropSeedAtTick") {
-            self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
+            let state = SnifferState::from_id(state_id);
+            if state == SnifferState::Digging {
+                self.set_state(SnifferState::Idling);
+                self.drop_seed_at_tick.store(0, Ordering::Relaxed);
+            } else {
+                self.set_state(state);
+                if let Some(drop_tick) = nbt.get_int("DropSeedAtTick") {
+                    self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
+                }
+            }
         }
     }
 
@@ -556,31 +577,22 @@ impl Mob for SnifferEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        let in_water_or_fire = self.mob_entity.living_entity.is_in_water()
-            || self.mob_entity.living_entity.entity.is_on_fire();
-        let target_water_malus = if in_water_or_fire { 0.0 } else { -1.0 };
-        if let Ok(mut navigator) = self.mob_entity.navigator.try_lock() {
-            navigator.set_pathfinding_malus(PathType::Water, target_water_malus);
-        }
-
         let state = self.get_state();
-        match state {
-            SnifferState::Searching => {
-                let entity = self.get_entity();
+        if state == SnifferState::Digging {
+            let entity = self.get_entity();
+            if entity.tick_count.load(Ordering::Relaxed) % 10 == 0 {
+                let head_block = self.get_head_block();
                 let world = entity.world.load();
-                let ticks = world.get_world_age();
-                if ticks % 20 == 0 {
-                    world.play_sound(
-                        Sound::EntitySnifferSearching,
-                        SoundCategory::Neutral,
-                        &entity.pos.load(),
-                    );
-                }
+                let source: &dyn EntityBase = self;
+                world.emit_game_event_with_context(
+                    GameEvent::EntityAction.name(),
+                    head_block.to_centered_f64(),
+                    &GameEventContext {
+                        source_entity: Some(source),
+                    },
+                );
             }
-            SnifferState::Digging => {
-                self.drop_seed();
-            }
-            _ => {}
+            self.drop_seed();
         }
     }
 
@@ -739,7 +751,10 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(navigator.get_pathfinding_malus(PathType::Water), -1.0);
-        assert_eq!(navigator.get_pathfinding_malus(PathType::PowderSnow), -1.0);
+        assert_eq!(
+            navigator.get_pathfinding_malus(PathType::DangerPowderSnow),
+            -1.0
+        );
         assert_eq!(
             navigator.get_pathfinding_malus(PathType::DamageCautious),
             -1.0
@@ -860,5 +875,49 @@ mod tests {
             sniffer.get_entity().age.store(-100, Ordering::Relaxed);
             assert!(!sniffer.can_dig_with_brain(brain));
         });
+    }
+
+    #[tokio::test]
+    async fn sniffer_digging_and_searching_step_runs_without_panicking() {
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        // In searching state at tick 20
+        sniffer.set_state(SnifferState::Searching);
+        sniffer.get_entity().tick_count.store(20, Ordering::Relaxed);
+        sniffer.custom_server_ai_step(sniffer.as_ref());
+
+        // In digging state at tick 10
+        sniffer.set_state(SnifferState::Digging);
+        sniffer.get_entity().tick_count.store(10, Ordering::Relaxed);
+        sniffer.custom_server_ai_step(sniffer.as_ref());
+    }
+
+    #[tokio::test]
+    async fn sniffer_mob_read_nbt_resets_digging_state_and_deadline() {
+        use pumpkin_nbt::compound::NbtCompound;
+
+        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let world = world(&folder);
+
+        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
+        let sniffer = SnifferEntity::new(entity);
+
+        let mut nbt = NbtCompound::new();
+        nbt.put_int("State", SnifferState::Digging.id());
+        nbt.put_int("DropSeedAtTick", 120);
+
+        sniffer.mob_read_nbt(&nbt);
+        assert_eq!(sniffer.get_state(), SnifferState::Idling);
+        assert_eq!(sniffer.drop_seed_at_tick.load(Ordering::Relaxed), 0);
+
+        // Non-digging state is preserved
+        let mut nbt_scenting = NbtCompound::new();
+        nbt_scenting.put_int("State", SnifferState::Scenting.id());
+        sniffer.mob_read_nbt(&nbt_scenting);
+        assert_eq!(sniffer.get_state(), SnifferState::Scenting);
     }
 }
