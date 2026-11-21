@@ -393,13 +393,18 @@ impl Mob for HappyGhastEntity {
         true
     }
 
-    fn mob_can_add_passenger(&self, _passenger: &dyn EntityBase) -> bool {
-        self.get_entity()
+    fn mob_can_add_passenger(&self, passenger: &dyn EntityBase) -> bool {
+        let passengers = self
+            .get_entity()
             .passengers
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
-            < Self::MAX_PASSENGERS
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if passengers.len() >= Self::MAX_PASSENGERS {
+            return false;
+        }
+        !passengers
+            .iter()
+            .any(|p| p.get_entity().entity_id == passenger.get_entity().entity_id)
     }
 
     fn mob_notify_leash_holder(&self, leashed: &dyn EntityBase) {
@@ -592,10 +597,10 @@ impl Mob for HappyGhastEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        self.age_boundary_reached();
         if let Some(timeout) = nbt.get_int("still_timeout") {
             self.set_server_still_timeout(timeout);
         }
-        self.age_boundary_reached();
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -907,14 +912,16 @@ impl HappyGhastFloatAroundGoal {
     ) -> Vector3<f64> {
         let center = ghast.get_entity().pos.load();
         let world = ghast.get_entity().world.load();
+        let mut result = None;
         for _ in 0..64 {
-            if let Some(target) = Self::choose_random_position_with_restriction(ghast, center)
+            result = Self::choose_random_position_with_restriction(ghast, center);
+            if let Some(target) = result
                 && Self::is_good_target(&world, target, distance_to_blocks)
             {
                 return target;
             }
         }
-        let mut final_pos = Self::choose_random_position(center);
+        let mut final_pos = result.unwrap_or_else(|| Self::choose_random_position(center));
         let pos = BlockPos::floored_v(final_pos);
         let height_y = f64::from(world.get_top_block(Vector2::new(pos.0.x, pos.0.z)));
         let min_y = f64::from(world.dimension.min_y);
@@ -1224,7 +1231,17 @@ mod tests {
     async fn max_passengers_limit() {
         let folder = tempfile::tempdir().unwrap();
         let ghast = test_happy_ghast(&folder, 0);
-        assert!(ghast.mob_can_add_passenger(ghast.as_ref()));
+        let rider = test_happy_ghast(&folder, 0);
+        assert!(ghast.mob_can_add_passenger(rider.as_ref()));
+
+        // Cannot add duplicate passenger
+        ghast
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap()
+            .push(rider.clone());
+        assert!(!ghast.mob_can_add_passenger(rider.as_ref()));
     }
 
     #[tokio::test]
@@ -1246,11 +1263,13 @@ mod tests {
 
         let mut nbt = NbtCompound::new();
         nbt.put_int("Age", -24000);
+        nbt.put_int("still_timeout", 10);
         ghast.get_entity().age.store(-24000, Ordering::Relaxed);
         ghast.mob_read_nbt(&nbt);
 
         assert!(ghast.is_baby());
         assert!(ghast.mob_entity.goals_selector.is_empty());
+        assert_eq!(ghast.server_still_timeout.load(Ordering::Relaxed), 10);
     }
 
     #[tokio::test]
