@@ -536,6 +536,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
         Ok(ids)
     }
 
+    /// Creates a world for the plugin; a disabled dimension returns an error.
     async fn create_world(
         accessor: &Accessor<PluginHostState, Self>,
         _rep: Resource<Server>,
@@ -549,6 +550,12 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             Dimension::Nether => pumpkin_data::dimension::Dimension::THE_NETHER,
             Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
         };
+        if !server.is_dimension_enabled(&internal_dim) {
+            return Err(wasmtime::Error::msg(format!(
+                "Dimension {} is disabled",
+                internal_dim.minecraft_name
+            )));
+        }
         let world = run_blocking(accessor, move || server.create_world(name, internal_dim)).await?;
 
         accessor
