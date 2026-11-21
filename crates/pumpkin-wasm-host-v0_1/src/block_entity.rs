@@ -930,15 +930,21 @@ impl HostBeaconBlockEntity for PluginHostState {
     }
 
     fn get_primary_effect(&mut self, res: Resource<BeaconBlockEntity>) -> wasmtime::Result<i32> {
-        Ok(self.get(&res)?.primary_effect.load(Ordering::Relaxed))
+        Ok(self
+            .get(&res)?
+            .primary_effect()
+            .map_or(-1, |e| i32::from(e.id)))
     }
 
     fn get_secondary_effect(&mut self, res: Resource<BeaconBlockEntity>) -> wasmtime::Result<i32> {
-        Ok(self.get(&res)?.secondary_effect.load(Ordering::Relaxed))
+        Ok(self
+            .get(&res)?
+            .secondary_effect()
+            .map_or(-1, |e| i32::from(e.id)))
     }
 
     fn get_levels(&mut self, res: Resource<BeaconBlockEntity>) -> wasmtime::Result<i32> {
-        Ok(self.get(&res)?.levels.load(Ordering::Relaxed))
+        Ok(self.get(&res)?.levels())
     }
 
     fn drop(&mut self, rep: Resource<BeaconBlockEntity>) -> wasmtime::Result<()> {
