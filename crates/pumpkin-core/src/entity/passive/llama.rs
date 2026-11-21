@@ -319,8 +319,9 @@ impl Animal for LlamaEntity {
         {
             self.set_offspring_attributes(partner, baby.as_ref());
             let mut rng = self.get_random();
+            // A summoned llama has strength 0, which would make the range empty.
             let mut strength =
-                rng.random_range(0..self.get_strength().max(other.get_strength())) + 1;
+                rng.random_range(0..self.get_strength().max(other.get_strength()).max(1)) + 1;
             if rng.random::<f32>() < 0.03 {
                 strength += 1;
             }

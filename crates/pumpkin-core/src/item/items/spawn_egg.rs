@@ -396,7 +396,15 @@ impl ItemBehaviour for SpawnEggItem {
                 return;
             }
             let pos = entity.get_entity().pos.load();
-            let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
+            // Vanilla `spawnOffspringFromSpawnEgg`: the clicked animal is both parents, so the
+            // baby gets its variant and attributes.
+            let mob = entity
+                .get_mob()
+                .and_then(crate::entity::mob::Mob::as_animal)
+                .map_or_else(
+                    || from_type(entity_type, pos, &world, Uuid::new_v4()),
+                    |animal| animal.get_breed_offspring(entity.as_ref()),
+                );
             // no baby form, no offspring.
             if !mob
                 .get_mob()
