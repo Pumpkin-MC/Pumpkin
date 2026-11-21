@@ -1,6 +1,7 @@
 use crate::entity::player::Player;
 use crate::entity::player::advancement::PlayerAdvancement;
 use crate::entity::player::advancement::predicate::{self, CriterionConditions};
+use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::position::BlockPos;
 
 #[derive(Debug, Clone)]
@@ -8,8 +9,11 @@ pub enum AdvancementTrigger {
     InventoryChanged,
     PlayerKilledEntity {
         entity_type_resource: String,
+        horizontal_distance: f64,
+        absolute_distance: f64,
+        damage_type: DamageType,
+        direct_entity_type: Option<&'static str>,
     },
-    SniperDuel,
     TwoBirdsOneArrow,
     Arbalistic,
     EnterDimension {
@@ -321,21 +325,19 @@ impl Player {
 
             AdvancementTrigger::PlayerKilledEntity {
                 entity_type_resource,
+                horizontal_distance,
+                absolute_distance,
+                damage_type,
+                direct_entity_type,
             } => {
                 self.trigger_criterion_event("minecraft:player_killed_entity", |cond| match cond {
-                    CriterionConditions::PlayerKilledEntity(pred) => {
-                        pred.matches(&entity_type_resource, None, None)
-                    }
-                    CriterionConditions::Custom { .. } => true,
-                    _ => false,
-                });
-            }
-
-            AdvancementTrigger::SniperDuel => {
-                self.trigger_criterion_event("minecraft:player_killed_entity", |cond| match cond {
-                    CriterionConditions::PlayerKilledEntity(pred) => {
-                        pred.matches("minecraft:skeleton", Some(50.0), None)
-                    }
+                    CriterionConditions::PlayerKilledEntity(pred) => pred.matches(
+                        &entity_type_resource,
+                        horizontal_distance,
+                        absolute_distance,
+                        damage_type,
+                        direct_entity_type,
+                    ),
                     CriterionConditions::Custom { .. } => true,
                     _ => false,
                 });

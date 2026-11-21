@@ -104,7 +104,7 @@ fn non_climbable_shape_max_y(world: &World, pos: &BlockPos) -> Option<f64> {
         .reduce(f64::max)
 }
 
-fn is_block_dangerous(entity_type: &'static EntityType, state: &BlockState) -> bool {
+pub(crate) fn is_block_dangerous(entity_type: &'static EntityType, state: &BlockState) -> bool {
     let block = Block::from_state_id(state.id);
     if block.has_tag(entity_type.immune_to) {
         return false;

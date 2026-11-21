@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
-    OnPlaceArgs, PathComputationType,
+    BlockBehaviour, ExplodeArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -17,6 +17,7 @@ use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use rand::random;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 
@@ -123,6 +124,47 @@ impl BlockBehaviour for FenceGateBlock {
 
             BlockActionResult::Success
         }
+    }
+
+    fn explode(&self, args: ExplodeArgs<'_>) {
+        if !args.explosion.can_trigger_blocks(args.world) {
+            return;
+        }
+        let (block, state) = args.world.get_block_and_state_id(args.position);
+        if block != args.block {
+            return;
+        }
+        let mut props = FenceGateProperties::from_state_id(state);
+        if props.powered {
+            return;
+        }
+        props.open = !props.open;
+        if args
+            .world
+            .set_block_state_if(
+                args.position,
+                props.to_state_id(block),
+                BlockFlags::NOTIFY_ALL,
+                |current| current == state,
+            )
+            .is_none()
+        {
+            return;
+        }
+        let position = args.position.to_centered_f64();
+        args.world.play_sound_fine(
+            get_sound(block, props.open),
+            SoundCategory::Blocks,
+            &position,
+            1.0,
+            random::<f32>() * 0.1 + 0.9,
+        );
+        let event = if props.open {
+            pumpkin_data::game_event::GameEvent::BlockOpen
+        } else {
+            pumpkin_data::game_event::GameEvent::BlockClose
+        };
+        args.world.emit_game_event(event.name(), position);
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {

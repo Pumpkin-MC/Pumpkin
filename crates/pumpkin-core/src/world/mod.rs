@@ -1410,6 +1410,27 @@ impl World {
         self.play_sound_raw(sound as u16, category, position, 1.0, 1.0);
     }
 
+    /// Plays an entity-bound sound as a level action, independent of the entity's silent flag.
+    pub(crate) fn play_sound_from_entity(&self, source: &dyn EntityBase, sound: Sound) {
+        let entity = source.get_entity();
+        let packet = pumpkin_protocol::java::client::play::CEntitySoundEffect::new(
+            IdOr::Id(sound as u16),
+            source.sound_source(),
+            VarInt(entity.entity_id),
+            1.0,
+            1.0,
+            rng().random(),
+        );
+        let position = entity.pos.load();
+        let players = self.players.load();
+        Self::broadcast_java_players(
+            &packet,
+            players.iter().filter(|player| {
+                player.position().squared_distance_to_vec(&position) < 16.0 * 16.0
+            }),
+        );
+    }
+
     pub fn play_sound_event(
         &self,
         sound: &pumpkin_data::data_component_impl::IdOr<
@@ -4802,10 +4823,14 @@ impl World {
                                 None => entity.init_data_tracker(),
                             }
 
-                            // Clear velocity so the client does not replay the drop
-                            // animation; residual velocity from the original drop is
-                            // stale data.
-                            entity.get_entity().velocity.store(Vector3::default());
+                            let base = entity.get_entity();
+                            // Wind charges resume flight with their saved velocity.
+                            // Keep clearing stale velocity to avoid replaying drop animations.
+                            if base.entity_type != &EntityType::WIND_CHARGE
+                                && base.entity_type != &EntityType::BREEZE_WIND_CHARGE
+                            {
+                                base.velocity.store(Vector3::default());
+                            }
 
                             // UUID-dedupes if another watcher already loaded this entity.
                             // Tracker owns pairing (spawn packets + vehicle restore).
@@ -5472,6 +5497,14 @@ impl World {
     ///
     /// [`EntitySpawnEvent`]: crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent
     pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) -> bool {
+        self.spawn_entity_if(entity, || true)
+    }
+
+    pub(crate) fn spawn_entity_if(
+        self: &Arc<Self>,
+        entity: Arc<dyn EntityBase>,
+        should_spawn: impl FnOnce() -> bool,
+    ) -> bool {
         let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
             entity.get_entity().entity_id,
             entity.get_entity().entity_type.id.to_string(),
@@ -5481,7 +5514,7 @@ impl World {
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
-        if event.cancelled {
+        if event.cancelled || !should_spawn() {
             return false;
         }
 

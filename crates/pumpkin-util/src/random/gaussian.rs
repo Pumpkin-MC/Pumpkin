@@ -23,17 +23,24 @@ pub trait GaussianGenerator: RandomImpl {
             self.set_stored_next_gaussian(None);
             gaussian
         } else {
-            loop {
-                let d = self.next_f64().mul_add(2.0, -1.0);
-                let e = self.next_f64().mul_add(2.0, -1.0);
-                let f = d * d + e * e;
+            let (first, second) = sample_gaussian_pair(|| self.next_f64());
+            self.set_stored_next_gaussian(Some(second));
+            first
+        }
+    }
+}
 
-                if f < 1f64 && f != 0f64 {
-                    let g = (-2f64 * f.ln() / f).sqrt();
-                    self.set_stored_next_gaussian(Some(e * g));
-                    return d * g;
-                }
-            }
+/// Samples two standard normal values from uniform draws in [0, 1).
+#[must_use]
+pub fn sample_gaussian_pair(mut uniform: impl FnMut() -> f64) -> (f64, f64) {
+    loop {
+        let d = uniform().mul_add(2.0, -1.0);
+        let e = uniform().mul_add(2.0, -1.0);
+        let f = d * d + e * e;
+
+        if f < 1.0 && f != 0.0 {
+            let g = (-2.0 * f.ln() / f).sqrt();
+            return (d * g, e * g);
         }
     }
 }

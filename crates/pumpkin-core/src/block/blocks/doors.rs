@@ -12,11 +12,13 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
+use rand::random;
 use std::sync::Arc;
 
 use crate::block::BlockBehaviour;
 use crate::block::BrokenArgs;
 use crate::block::CanPlaceAtArgs;
+use crate::block::ExplodeArgs;
 use crate::block::GetStateForNeighborUpdateArgs;
 use crate::block::NormalUseArgs;
 use crate::block::OnNeighborUpdateArgs;
@@ -178,6 +180,16 @@ impl DoorBlock {
         if !block.has_tag(&tag::Block::MINECRAFT_DOORS) {
             return;
         }
+        Self::set_open_in_state(world, block_pos, block, block_state, open);
+    }
+
+    fn set_open_in_state(
+        world: &Arc<World>,
+        block_pos: &BlockPos,
+        block: &Block,
+        block_state: BlockStateId,
+        open: bool,
+    ) {
         let mut door_props = DoorProperties::from_state_id(block_state);
         if door_props.open == open {
             return;
@@ -192,30 +204,40 @@ impl DoorBlock {
 
         let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos);
 
-        world.play_block_sound(get_sound(block, open), SoundCategory::Blocks, *block_pos);
+        let flags = BlockFlags::NOTIFY_LISTENERS | BlockFlags::SKIP_DROPS;
+        if world
+            .set_block_state_if(block_pos, door_props.to_state_id(block), flags, |state| {
+                state == block_state
+            })
+            .is_none()
+        {
+            return;
+        }
 
+        if other_block.id == block.id {
+            let mut other_door_props = DoorProperties::from_state_id(other_state_id);
+            other_door_props.open = open;
+            world.set_block_state_if(
+                &other_pos,
+                other_door_props.to_state_id(other_block),
+                flags,
+                |state| state == other_state_id,
+            );
+        }
+
+        world.play_sound_fine(
+            get_sound(block, open),
+            SoundCategory::Blocks,
+            &block_pos.to_centered_f64(),
+            1.0,
+            random::<f32>() * 0.1 + 0.9,
+        );
         let game_event = if open {
             pumpkin_data::game_event::GameEvent::BlockOpen
         } else {
             pumpkin_data::game_event::GameEvent::BlockClose
         };
         world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
-
-        world.set_block_state(
-            block_pos,
-            door_props.to_state_id(block),
-            BlockFlags::NOTIFY_LISTENERS,
-        );
-
-        if other_block.id == block.id {
-            let mut other_door_props = DoorProperties::from_state_id(other_state_id);
-            other_door_props.open = open;
-            world.set_block_state(
-                &other_pos,
-                other_door_props.to_state_id(other_block),
-                BlockFlags::NOTIFY_LISTENERS,
-            );
-        }
     }
 }
 
@@ -263,6 +285,19 @@ impl BlockBehaviour for DoorBlock {
             toggle_door(args.player, args.world, args.position);
 
             BlockActionResult::Success
+        }
+    }
+
+    fn explode(&self, args: ExplodeArgs<'_>) {
+        if !args.explosion.can_trigger_blocks(args.world) || !can_open_door(args.block) {
+            return;
+        }
+        let (block, state) = args.world.get_block_and_state_id(args.position);
+        if block == args.block {
+            let door = DoorProperties::from_state_id(state);
+            if door.half == DoubleBlockHalf::Lower && !door.powered {
+                Self::set_open_in_state(args.world, args.position, block, state, !door.open);
+            }
         }
     }
 

@@ -9,7 +9,7 @@ use crate::{
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     server::Server,
     world::{
-        World,
+        Explosion, World,
         portal::{NetherPortal, PortalProcessor, PortalType, SourcePortalInfo},
     },
 };
@@ -369,6 +369,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .get(&self.get_entity().world.load())
     }
 
+    fn java_spawn_data(&self) -> VarInt {
+        self.get_entity().data.load(Ordering::Relaxed).into()
+    }
+
     fn get_eye_pos(&self) -> Vector3<f64> {
         self.get_entity().get_eye_pos()
     }
@@ -424,6 +428,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     /// Whether the entity is immune from explosion knockback and damage
     fn is_immune_to_explosion(&self) -> bool {
         false
+    }
+
+    /// Whether this explosion skips both damage and knockback for the entity.
+    fn ignore_explosion(&self, _explosion: &Explosion<'_>, _world: &World) -> bool {
+        self.is_immune_to_explosion()
     }
 
     fn get_gravity(&self) -> f64 {
@@ -923,7 +932,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     fn send_java_spawn_packet(&self, client: &JavaClient) {
         let entity = self.get_entity();
         let metadata = self.java_spawn_metadata(CURRENT_MC_VERSION);
-        let spawn_packet = entity.create_spawn_packet();
+        let mut spawn_packet = entity.create_spawn_packet();
+        spawn_packet.data = self.java_spawn_data();
         if let Ok(data) = client.serialize_packet(&spawn_packet) {
             client.try_enqueue_packet(data);
         }
@@ -4583,8 +4593,22 @@ impl Entity {
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
+        self.set_pose_if(pose, || true, || {});
+    }
+
+    /// Commits related state after approval and before sending observable metadata.
+    pub(crate) fn set_pose_if(
+        &self,
+        pose: EntityPose,
+        should_apply: impl FnOnce() -> bool,
+        commit: impl FnOnce(),
+    ) -> bool {
         if self.pose.load() == pose {
-            return;
+            if !should_apply() {
+                return false;
+            }
+            commit();
+            return true;
         }
 
         let mut pose_event =
@@ -4597,17 +4621,22 @@ impl Entity {
                 .plugin_manager
                 .fire_blocking(&server, &mut pose_event);
             if pose_event.cancelled {
-                return;
+                return false;
             }
         }
 
+        if !should_apply() {
+            return false;
+        }
         self.pose.store(pose);
         let pose = pose as i32;
         let mut bedrock_meta = SyncedActorDataList::new();
         bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
         self.refresh_dimensions_into(&mut bedrock_meta);
         self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
+        commit();
         self.send_bedrock_actor_data(&bedrock_meta);
+        true
     }
 
     /// Vanilla `getDefaultDimensions` changed, e.g. a baby growing up.

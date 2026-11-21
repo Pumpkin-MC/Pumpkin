@@ -270,6 +270,14 @@ impl ItemFrameEntity {
 }
 
 impl EntityBase for ItemFrameEntity {
+    fn ignore_explosion(
+        &self,
+        explosion: &crate::world::Explosion<'_>,
+        world: &crate::world::World,
+    ) -> bool {
+        super::attachment_ignores_explosion(explosion, world)
+    }
+
     fn can_hit(&self) -> bool {
         true
     }

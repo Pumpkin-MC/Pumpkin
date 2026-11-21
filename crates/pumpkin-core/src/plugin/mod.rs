@@ -38,7 +38,7 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 6;
+pub const PLUGIN_API_VERSION: u32 = 7;
 
 const PLUGIN_DIR: &str = "./plugins";
 
@@ -1226,6 +1226,14 @@ impl PluginManager {
             .load()
             .get(E::get_name_static())
             .is_some_and(|handlers| !handlers.is_empty())
+    }
+
+    #[must_use]
+    pub(crate) fn has_handlers_for(&self, event_names: &[&'static str]) -> bool {
+        self.handlers
+            .load()
+            .iter()
+            .any(|(name, handlers)| !handlers.is_empty() && event_names.contains(name))
     }
 
     /// Fire an event to all registered handlers

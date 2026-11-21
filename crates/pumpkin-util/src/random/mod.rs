@@ -8,6 +8,7 @@ use worldgen_random::WorldgenRandom;
 use xoroshiro128::{Xoroshiro, XoroshiroSplitter};
 
 mod gaussian;
+pub use gaussian::sample_gaussian_pair;
 pub mod legacy_rand;
 pub mod worldgen_random;
 pub mod xoroshiro128;

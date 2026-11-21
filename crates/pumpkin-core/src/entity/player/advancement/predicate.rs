@@ -1,4 +1,7 @@
-use pumpkin_data::tag::{RegistryKey, get_tag_values};
+use pumpkin_data::{
+    damage::DamageType,
+    tag::{RegistryKey, Taggable, get_tag_values},
+};
 use serde_json::Value;
 
 pub type ItemEnchantment<'a> = (&'a str, u32);
@@ -662,13 +665,23 @@ pub struct EntityPredicate {
 impl EntityPredicate {
     #[must_use]
     pub fn matches(&self, entity_type: &str, distance: Option<f64>, is_baby: Option<bool>) -> bool {
+        self.matches_with_distances(entity_type, distance, distance, is_baby)
+    }
+
+    fn matches_with_distances(
+        &self,
+        entity_type: &str,
+        horizontal: Option<f64>,
+        absolute: Option<f64>,
+        is_baby: Option<bool>,
+    ) -> bool {
         if let Some(types) = &self.entity_type
             && !types.matches(RegistryKey::EntityType, entity_type)
         {
             return false;
         }
         if let Some(dist_bounds) = &self.distance_horizontal {
-            let Some(d) = distance else {
+            let Some(d) = horizontal else {
                 return false;
             };
             if !dist_bounds.matches(d) {
@@ -676,7 +689,7 @@ impl EntityPredicate {
             }
         }
         if let Some(dist_bounds) = &self.distance_absolute {
-            let Some(d) = distance else {
+            let Some(d) = absolute else {
                 return false;
             };
             if !dist_bounds.matches(d) {
@@ -787,6 +800,62 @@ impl EntityPredicate {
             looking_at,
             feet_item,
             safe_armor_disallowed,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct KilledEntityPredicate {
+    entity: EntityPredicate,
+    direct_entity: Option<TagOrIdMatcher>,
+    damage_tags: Vec<(String, bool)>,
+}
+
+impl KilledEntityPredicate {
+    #[must_use]
+    pub fn matches(
+        &self,
+        entity_type: &str,
+        horizontal_distance: f64,
+        absolute_distance: f64,
+        damage_type: DamageType,
+        direct_entity_type: Option<&str>,
+    ) -> bool {
+        self.entity.matches_with_distances(
+            entity_type,
+            Some(horizontal_distance),
+            Some(absolute_distance),
+            None,
+        ) && self.direct_entity.as_ref().is_none_or(|expected| {
+            direct_entity_type
+                .is_some_and(|actual| expected.matches(RegistryKey::EntityType, actual))
+        }) && self
+            .damage_tags
+            .iter()
+            .all(|(tag, expected)| damage_type.is_tagged_with(tag).unwrap_or(false) == *expected)
+    }
+
+    fn from_value(val: &Value) -> Self {
+        let killing_blow = val.get("killing_blow");
+        let direct_entity = killing_blow
+            .and_then(|blow| blow.get("direct_entity"))
+            .and_then(|entity| entity.get("minecraft:entity_type"))
+            .and_then(TagOrIdMatcher::from_value);
+        let damage_tags = killing_blow
+            .and_then(|blow| blow.get("tags"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| {
+                let tag = entry.get("id")?.as_str()?.to_owned();
+                let expected = entry.get("expected")?.as_bool()?;
+                Some((tag, expected))
+            })
+            .collect();
+        Self {
+            entity: parse_entity_pred(val),
+            direct_entity,
+            damage_tags,
         }
     }
 }
@@ -1175,7 +1244,7 @@ impl RecipePredicate {
 pub enum CriterionConditions {
     InventoryChanged(InventoryChangedPredicate),
     Location(LocationPredicate),
-    PlayerKilledEntity(EntityPredicate),
+    PlayerKilledEntity(KilledEntityPredicate),
     KilledByArrow,
     ChangedDimension(DimensionPredicate),
     SleptInBed,
@@ -1371,7 +1440,25 @@ impl From<pumpkin_data::advancement_data::AdvancementCondition> for CriterionCon
             AC::SlideDownBlock(b) => Self::SlideDownBlock(TagOrIdMatcher {
                 patterns: vec![b.to_string()],
             }),
-            AC::PlayerKilledEntity(e) => Self::PlayerKilledEntity(from_entity_condition(&e)),
+            AC::PlayerKilledEntity(e) => Self::PlayerKilledEntity(KilledEntityPredicate {
+                entity: from_entity_condition(&e),
+                direct_entity: None,
+                damage_tags: Vec::new(),
+            }),
+            AC::PlayerKilledEntityWithDamage {
+                entity,
+                killing_blow,
+            } => Self::PlayerKilledEntity(KilledEntityPredicate {
+                entity: from_entity_condition(&entity),
+                direct_entity: killing_blow.direct_entity.map(|pattern| TagOrIdMatcher {
+                    patterns: vec![pattern.to_owned()],
+                }),
+                damage_tags: killing_blow
+                    .tags
+                    .iter()
+                    .map(|&(tag, expected)| (tag.to_owned(), expected))
+                    .collect(),
+            }),
             AC::BredAnimals(b) => Self::BredAnimals(BredAnimalsPredicate {
                 parent: b.parent.as_ref().map(from_entity_condition),
                 partner: b.partner.as_ref().map(from_entity_condition),
@@ -1797,7 +1884,9 @@ impl CriterionConditions {
                 Self::InventoryChanged(InventoryChangedPredicate::from_value(&val))
             }
             "minecraft:location" => Self::Location(LocationPredicate::from_value(&val)),
-            "minecraft:player_killed_entity" => Self::PlayerKilledEntity(parse_entity_pred(&val)),
+            "minecraft:player_killed_entity" => {
+                Self::PlayerKilledEntity(KilledEntityPredicate::from_value(&val))
+            }
             "minecraft:killed_by_arrow" => Self::KilledByArrow,
             "minecraft:changed_dimension" => {
                 Self::ChangedDimension(DimensionPredicate::from_value(&val))
@@ -2204,6 +2293,26 @@ pub fn matches_enter_block_condition(cond: &Value, block_id: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn blowback_requires_the_breeze_wind_charge_and_projectile_damage() -> Result<(), &'static str>
+    {
+        let definition = pumpkin_data::advancement::Advancement::ADVENTURE_BLOWBACK;
+        let conditions = CriterionConditions::from(definition.criteria_definitions[0].conditions);
+        let CriterionConditions::PlayerKilledEntity(predicate) = conditions else {
+            return Err("Blowback must use the player killed entity trigger");
+        };
+
+        let matches = |damage, direct| predicate.matches("breeze", 1.0, 1.0, damage, direct);
+        assert!(!matches(DamageType::PLAYER_ATTACK, Some("player")));
+        assert!(!matches(DamageType::WIND_CHARGE, Some("wind_charge")));
+        assert!(!matches(
+            DamageType::PLAYER_ATTACK,
+            Some("breeze_wind_charge")
+        ));
+        assert!(matches(DamageType::WIND_CHARGE, Some("breeze_wind_charge")));
+        Ok(())
+    }
 
     #[test]
     fn matches_id_works() {
