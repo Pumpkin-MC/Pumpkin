@@ -570,7 +570,7 @@ impl ItemStack {
 
     #[must_use]
     pub fn is_stackable(&self) -> bool {
-        self.get_max_stack_size() > 1 // TODO: && (!this.isDamageable() || !this.isDamaged());
+        self.get_max_stack_size() > 1 && (!self.is_damageable() || self.get_damage() == 0)
     }
 
     #[must_use]
@@ -1129,6 +1129,17 @@ mod tests {
             ItemStack::read_item_stack(&nbt).map(|stack| stack.item_count),
             Some(99)
         );
+    }
+
+    #[test]
+    fn damaged_damageable_item_is_not_stackable() {
+        let mut stack = iron_sword();
+        stack.set_data_component(MaxStackSizeImpl { size: 64 });
+
+        assert!(stack.is_stackable());
+
+        stack.set_damage(1);
+        assert!(!stack.is_stackable());
     }
 
     #[test]
