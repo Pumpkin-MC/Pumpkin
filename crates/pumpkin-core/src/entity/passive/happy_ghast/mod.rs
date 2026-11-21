@@ -158,10 +158,10 @@ impl HappyGhastEntity {
         let entity = self.get_entity();
         let bb = entity.bounding_box.load();
         let detection_box = BoundingBox::new(
-            Vector3::new(bb.min.x - 1.0, bb.max.y - 1.0e-5, bb.min.z - 1.0),
+            Vector3::new(bb.min.x - 1.0, bb.max.y - 0.25, bb.min.z - 1.0),
             Vector3::new(
                 bb.max.x + 1.0,
-                bb.max.y + (bb.max.y - bb.min.y) * 0.5,
+                bb.max.y + (bb.max.y - bb.min.y) * 0.5 + 0.5,
                 bb.max.z + 1.0,
             ),
         );
@@ -172,16 +172,17 @@ impl HappyGhastEntity {
             if player.gamemode.load() == GameMode::Spectator {
                 continue;
             }
-            let (root_pos, is_happy_ghast) = player.get_entity().get_root_vehicle().map_or_else(
-                || (player.get_entity().pos.load(), false),
-                |root| {
-                    (
-                        root.get_entity().pos.load(),
-                        root.get_entity().entity_type == &EntityType::HAPPY_GHAST,
-                    )
-                },
-            );
-            if !is_happy_ghast && detection_box.contains(root_pos) {
+            let root = player
+                .get_entity()
+                .get_root_vehicle()
+                .unwrap_or_else(|| player.clone() as Arc<dyn EntityBase>);
+            if root.get_entity().entity_type == &EntityType::HAPPY_GHAST {
+                continue;
+            }
+            let root_entity = root.get_entity();
+            let root_bb = root_entity.bounding_box.load();
+            let root_pos = root_entity.pos.load();
+            if detection_box.intersects(&root_bb) || detection_box.contains(root_pos) {
                 return true;
             }
         }
@@ -500,6 +501,11 @@ impl Mob for HappyGhastEntity {
 
     fn mob_is_pushable(&self) -> bool {
         !self.is_on_still_timeout()
+    }
+
+    fn can_push_entity(&self, other: &dyn EntityBase) -> bool {
+        !(other.get_player().is_some()
+            && (self.is_on_still_timeout() || self.scan_player_above_ghast()))
     }
 
     fn mob_is_collidable(&self, entity: Option<Box<dyn EntityBase>>) -> bool {
