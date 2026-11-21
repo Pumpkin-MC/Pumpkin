@@ -218,6 +218,7 @@ pub async fn place_structure_with_controller_rotation(
     // states before loading block-entity NBT at the transformed absolute position.
     let place_flags = BlockFlags::NOTIFY_LISTENERS
         | BlockFlags::MOVED
+        | BlockFlags::UPDATE_KNOWN_SHAPE
         | BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT
         | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
 
