@@ -177,7 +177,7 @@ fn armadillo<'a>(tick: &BrainTick<'a>) -> Option<&'a ArmadilloEntity> {
     tick.mob.cast_any().downcast_ref::<ArmadilloEntity>()
 }
 
-/// Vanilla `ARMADILLO_ROLLING_OUT`: unrolls once nothing frightening is around any more.
+/// Vanilla `ARMADILLO_ROLLING_OUT`: unrolls once nothing frightening is around anymore.
 fn armadillo_rolling_out() -> OneShot {
     OneShot::new(
         "ArmadilloRollingOut",
@@ -294,7 +294,8 @@ struct ArmadilloBallUp {
 
 impl ArmadilloBallUp {
     fn pick_next_peek_timer(tick: &BrainTick<'_>) -> i32 {
-        ArmadilloState::Scared.animation_duration() + tick.mob.get_random().random_range(100..=400)
+        i32::from(ArmadilloState::Scared.animation_duration())
+            + tick.mob.get_random().random_range(100..=400)
     }
 }
 
@@ -318,22 +319,9 @@ impl Behavior for ArmadilloBallUp {
         })
     }
 
-    fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        armadillo(tick).is_some_and(|armadillo| armadillo.get_state().is_threatened())
-    }
-
     fn start(&mut self, tick: &mut BrainTick<'_>) {
         if let Some(armadillo) = armadillo(tick) {
             armadillo.roll_up();
-        }
-    }
-
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        let panicking = tick.state.has_memory_value(types::IS_PANICKING.id());
-        if let Some(armadillo) = armadillo(tick)
-            && !armadillo.can_stay_rolled_up_while(panicking)
-        {
-            armadillo.roll_out();
         }
     }
 
@@ -384,6 +372,19 @@ impl Behavior for ArmadilloBallUp {
         } else if state == ArmadilloState::Unrolling && danger_ticks > unrolling_ticks {
             armadillo.switch_to_state(ArmadilloState::Scared);
         }
+    }
+
+    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+        let panicking = tick.state.has_memory_value(types::IS_PANICKING.id());
+        if let Some(armadillo) = armadillo(tick)
+            && !armadillo.can_stay_rolled_up_while(panicking)
+        {
+            armadillo.roll_out();
+        }
+    }
+
+    fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
+        armadillo(tick).is_some_and(|armadillo| armadillo.get_state().is_threatened())
     }
 
     fn debug_name(&self) -> &'static str {

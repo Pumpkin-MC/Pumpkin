@@ -5016,11 +5016,16 @@ impl Entity {
         self.send_leash_attached(holder);
     }
 
+    /// Vanilla `Entity.resetAngularLeashMomentum`.
+    pub(crate) fn reset_angular_leash_momentum(&self) {
+        self.leash_angular_momentum.store(0.0);
+    }
+
     /// Resets the leash motion and tells clients about the new holder. Call it without holding
     /// `leashed_to`: sending the packet runs plugin handlers that may lock it again.
     fn send_leash_attached(&self, holder: &Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
-        self.leash_angular_momentum.store(0.0);
+        self.reset_angular_leash_momentum();
         *self
             .delayed_leash
             .lock()

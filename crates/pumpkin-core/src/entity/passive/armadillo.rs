@@ -1,6 +1,6 @@
 use std::sync::{
     Arc,
-    atomic::{AtomicI32, AtomicI64, Ordering},
+    atomic::{AtomicI32, AtomicU32, Ordering},
 };
 
 use pumpkin_data::BlockState;
@@ -40,7 +40,7 @@ const SCUTE_DROP_TICKS: i32 = 20 * 60 * 5;
 pub const SCARE_CHECK_INTERVAL: i32 = 80;
 const SCARE_DISTANCE_HORIZONTAL: f64 = 7.0;
 const SCARE_DISTANCE_VERTICAL: f64 = 2.0;
-const BRUSH_DURABILITY_COST: i32 = 16;
+pub const BRUSH_DURABILITY_COST: i32 = 16;
 /// Vanilla `getMaxHeadYRot` while it is not rolled up.
 const MAX_HEAD_Y_ROT: f32 = 32.0;
 
@@ -80,7 +80,7 @@ impl ArmadilloState {
     }
 
     #[must_use]
-    pub const fn animation_duration(self) -> i32 {
+    pub const fn animation_duration(self) -> u8 {
         match self {
             Self::Idle => 0,
             Self::Rolling => 10,
@@ -90,7 +90,7 @@ impl ArmadilloState {
     }
 
     #[must_use]
-    pub const fn should_hide_in_shell(self, ticks_in_state: i64) -> bool {
+    pub const fn should_hide_in_shell(self, ticks_in_state: u32) -> bool {
         match self {
             Self::Idle => false,
             Self::Rolling => ticks_in_state > 5,
@@ -127,7 +127,7 @@ pub struct ArmadilloEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
     pub state: AtomicI32,
-    pub in_state_ticks: AtomicI64,
+    pub in_state_ticks: AtomicU32,
     pub scute_time: AtomicI32,
 }
 
@@ -143,7 +143,7 @@ impl ArmadilloEntity {
             mob_entity,
             ageable_data: AgeableData::default(),
             state: AtomicI32::new(ArmadilloState::Idle.id()),
-            in_state_ticks: AtomicI64::new(0),
+            in_state_ticks: AtomicU32::new(0),
             scute_time: AtomicI32::new(pick_next_scute_drop_time()),
         })
     }
@@ -178,7 +178,7 @@ impl ArmadilloEntity {
     pub fn should_switch_to_scared_state(&self) -> bool {
         self.get_state() == ArmadilloState::Rolling
             && self.in_state_ticks.load(Ordering::Relaxed)
-                > i64::from(ArmadilloState::Rolling.animation_duration())
+                > u32::from(ArmadilloState::Rolling.animation_duration())
     }
 
     /// Vanilla `canStayRolledUp`, with `panicking` given by the caller. Inside the brain it comes
@@ -213,7 +213,7 @@ impl ArmadilloEntity {
         if self.is_scared() {
             return;
         }
-        self.mob_entity.steered().navigator().stop();
+        self.mob_entity.stop_in_place();
         self.mob_entity.reset_love_ticks();
         self.emit_game_event(GameEvent::EntityAction);
         self.make_sound(Sound::EntityArmadilloRoll);
@@ -338,13 +338,6 @@ impl Animal for ArmadilloEntity {
     fn can_fall_in_love(&self) -> bool {
         !self.mob_entity.is_in_love() && !self.is_scared()
     }
-
-    /// Vanilla `Animal.canMate`: the brain's `AnimalMakeLove` has no love check of its own.
-    fn can_mate(&self, partner: &dyn EntityBase) -> bool {
-        partner.get_entity().entity_id != self.get_entity().entity_id
-            && self.mob_entity.is_in_love()
-            && partner.is_in_love()
-    }
 }
 
 impl CustomSound for ArmadilloEntity {
@@ -415,23 +408,20 @@ impl Mob for ArmadilloEntity {
         ai::make_brain(self, packed)
     }
 
-    fn modify_incoming_damage(&self, amount: f32, _damage_type: DamageType) -> f32 {
-        if self.is_scared() {
-            (amount - 1.0).max(0.0) / 2.0
-        } else {
-            amount
-        }
-    }
-
     /// Vanilla `actuallyHurt`: a living attacker scares it, burning or freezing unrolls it.
-    fn on_damage_with_context(
+    fn actually_hurt(
         &self,
+        caller: &dyn EntityBase,
         damage_type: DamageType,
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
-    ) -> bool {
+        damage: f32,
+    ) {
+        self.mob_entity
+            .living_entity
+            .actually_hurt(caller, damage_type, source, cause, damage);
         if self.mob_entity.is_no_ai() || self.mob_entity.living_entity.is_dead_or_dying() {
-            return true;
+            return;
         }
         if cause
             .or(source)
@@ -450,7 +440,14 @@ impl Mob for ArmadilloEntity {
         } else if damage_type.has_tag(&tag::DamageType::MINECRAFT_PANIC_ENVIRONMENTAL_CAUSES) {
             self.roll_out();
         }
-        true
+    }
+
+    fn modify_incoming_damage(&self, amount: f32, _damage_type: DamageType) -> f32 {
+        if self.is_scared() {
+            (amount - 1.0).max(0.0) / 2.0
+        } else {
+            amount
+        }
     }
 
     /// Vanilla `Armadillo$1`: a rolled up armadillo does not turn its body.
@@ -499,6 +496,16 @@ impl Mob for ArmadilloEntity {
             return false;
         }
         self.animal_interact(player, item_stack)
+    }
+
+    /// Vanilla returns `InteractionResult.FAIL` while scared, which also skips the ageable feeding.
+    fn mob_interact_with_hand(
+        &self,
+        _player: &Arc<Player>,
+        item_stack: &mut ItemStack,
+        _hand: pumpkin_util::Hand,
+    ) -> Option<bool> {
+        (self.is_scared() && item_stack.item != &Item::BRUSH).then_some(false)
     }
 }
 
@@ -568,27 +575,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_only_mates_with_a_partner_that_is_in_love() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let first = armadillo(&world);
-        let partner = armadillo(&world);
-
-        first.mob_entity.set_love_ticks(600, None);
-        let partner_not_in_love = first.can_mate(partner.as_ref());
-        partner.mob_entity.set_love_ticks(600, None);
-        let both_in_love = first.can_mate(partner.as_ref());
-        let with_itself = first.can_mate(first.as_ref());
-        world.level.shutdown().await;
-
-        assert_eq!(
-            (partner_not_in_love, both_in_love, with_itself),
-            (false, true, false)
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn a_baby_keeps_counting_down_until_it_can_shed() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
@@ -605,6 +591,40 @@ mod tests {
 
         assert_eq!(as_baby, 0);
         assert!(as_adult >= SCUTE_DROP_TICKS);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_hit_by_a_living_attacker_stops_it_and_rolls_it_up_unless_it_dies() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let (killed, hurt) = (armadillo(&world), armadillo(&world));
+        let attacker = zombie(&world, 1.5, 64.0);
+        for armadillo in [&killed, &hurt] {
+            armadillo
+                .get_entity()
+                .velocity
+                .store(Vector3::new(0.3, 0.0, 0.3));
+        }
+
+        for (armadillo, damage) in [(&killed, 100.0), (&hurt, 1.0)] {
+            armadillo.actually_hurt(
+                armadillo.as_ref(),
+                DamageType::MOB_ATTACK,
+                Some(attacker.as_ref()),
+                Some(attacker.as_ref()),
+                damage,
+            );
+        }
+        let after_kill = (killed.get_state(), killed.get_entity().velocity.load());
+        let after_hit = (hurt.get_state(), hurt.get_entity().velocity.load());
+        world.level.shutdown().await;
+
+        assert_eq!(
+            after_kill,
+            (ArmadilloState::Idle, Vector3::new(0.3, 0.0, 0.3))
+        );
+        assert_eq!(after_hit, (ArmadilloState::Rolling, Vector3::default()));
         Ok(())
     }
 
