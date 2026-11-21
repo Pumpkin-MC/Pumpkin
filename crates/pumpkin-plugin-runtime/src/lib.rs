@@ -1805,7 +1805,12 @@ mod tests {
         let handle = store.handle();
         let shutdown_error = store
             .shutdown(|_| {
-                Box::pin(async move { Err::<(), _>(wasmtime::Error::msg("finalizer failed")) })
+                Box::pin(async move {
+                    Err::<(), _>(
+                        wasmtime::Error::msg("underlying finalizer failure")
+                            .context("finalizer failed"),
+                    )
+                })
             })
             .await
             .expect_err("finalizer failure should fail shutdown");
@@ -1816,6 +1821,11 @@ mod tests {
             state => panic!("expected a failed driver, got {state:?}"),
         };
         assert!(retained.to_string().contains("finalizer failed"));
+        assert!(
+            retained
+                .to_string()
+                .contains("underlying finalizer failure")
+        );
 
         let mut join = store.driver_join();
         let joined = join.wait().await.expect_err("driver join should fail");
