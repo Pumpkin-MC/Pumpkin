@@ -18,13 +18,17 @@ use crate::entity::ai::behavior::hunting::{self, Hunt};
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::{
     Entity, EntityBase,
-    ai::goal::{
-        active_target::TargetCondition, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, spider_attack::SpiderAttackGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+    ai::{
+        goal::{
+            active_target::TargetCondition, leap_at_target::LeapAtTargetGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+            revenge::RevengeGoal, spider_attack::SpiderAttackGoal, swim::SwimGoal,
+            wander_around::WanderAroundGoal,
+        },
+        pathfinder::Navigator,
     },
     mob::{
-        Mob, MobEntity,
+        Mob, MobEntity, MobMetadata,
         equipment::RegionalDifficulty,
         spawn::{SpawnGroupData, finalize_spawn},
     },
@@ -72,24 +76,7 @@ impl SpiderEntity {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
-
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-            let target_selector = &mob_arc.mob_entity.target_selector;
-
-            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            fleeing::apply(goal_selector, SPIDER_FLEES);
-            goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
-            goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
-
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            hunting::apply(target_selector, &mob_arc.mob_entity, SPIDER_HUNTS);
-        };
+        init_spider_ai(&mob_arc.mob_entity, mob_weak);
 
         mob_arc
     }
@@ -106,6 +93,38 @@ impl SpiderEntity {
             climbing,
         );
     }
+}
+
+pub(super) fn init_spider_ai(mob_entity: &MobEntity, mob_weak: Weak<dyn Mob>) {
+    *mob_entity
+        .navigator
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Navigator::wall_climber();
+
+    let goal_selector = &mob_entity.goals_selector;
+    let target_selector = &mob_entity.target_selector;
+
+    goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+    fleeing::apply(goal_selector, SPIDER_FLEES);
+    goal_selector.add_goal(3, Box::new(LeapAtTargetGoal::new(0.4)));
+    goal_selector.add_goal(4, SpiderAttackGoal::new(1.0, true));
+    goal_selector.add_goal(5, Box::new(WanderAroundGoal::water_avoiding(0.8)));
+    goal_selector.add_goal(
+        6,
+        LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+    );
+    goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+
+    target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+    hunting::apply(target_selector, mob_entity, SPIDER_HUNTS);
+}
+
+pub(super) fn spider_metadata(mob_entity: &MobEntity, climbing: bool) -> MobMetadata {
+    let mut meta = MobMetadata::new().no_ai(mob_entity.is_no_ai());
+    if climbing {
+        meta = meta.spider_climbing(true);
+    }
+    meta
 }
 
 /// Vanilla `Spider.setClimbing`.
@@ -141,14 +160,14 @@ pub fn tick_wall_climbing(
     }
 }
 
-/// Vanilla `Spider.finalizeSpawn` (also used by the cave spider): a skeleton jockey,
-/// and on hard difficulty a random effect shared by the whole spawn group.
-pub fn finalize_spider_spawn(
+/// A skeleton jockey one time in a hundred, and on hard difficulty a random effect shared by
+/// the whole spawn group.
+fn finalize_spider_spawn(
     mob: &MobEntity,
     world: &Arc<World>,
     reason: crate::entity::mob::spawn::EntitySpawnReason,
     group_data: Option<SpawnGroupData>,
-) -> Option<SpawnGroupData> {
+) -> SpawnGroupData {
     mob.finalize_spawn_base();
     let mut rng = rand::rng();
     let entity = &mob.living_entity.entity;
@@ -185,7 +204,7 @@ pub fn finalize_spider_spawn(
             blend: false,
         });
     }
-    Some(group_data)
+    group_data
 }
 
 pub(super) fn small_vehicle_attachment_point(
@@ -218,7 +237,12 @@ impl Mob for SpiderEntity {
         reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<SpawnGroupData>,
     ) -> Option<SpawnGroupData> {
-        finalize_spider_spawn(&self.mob_entity, world, reason, group_data)
+        Some(finalize_spider_spawn(
+            &self.mob_entity,
+            world,
+            reason,
+            group_data,
+        ))
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -230,12 +254,8 @@ impl Mob for SpiderEntity {
         self.is_climbing()
     }
 
-    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
-        let mut meta = crate::entity::mob::MobMetadata::new();
-        if self.is_climbing() {
-            meta = meta.spider_climbing(true);
-        }
-        Some(meta)
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        Some(spider_metadata(&self.mob_entity, self.is_climbing()))
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
