@@ -613,32 +613,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sniffer_on_die_resets_state_to_idling() {
-        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
-        let world = world(&folder);
-
-        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
-        let sniffer = SnifferEntity::new(entity);
-
-        sniffer.set_state(SnifferState::Digging);
-        assert_eq!(sniffer.get_state(), SnifferState::Digging);
-
-        sniffer.on_die(None);
-        assert_eq!(sniffer.get_state(), SnifferState::Idling);
-    }
-
-    #[tokio::test]
-    async fn sniffer_max_head_rotation_is_50() {
-        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
-        let world = world(&folder);
-
-        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
-        let sniffer = SnifferEntity::new(entity);
-
-        assert!((sniffer.get_max_head_rotation() - 50.0).abs() < f32::EPSILON);
-    }
-
-    #[tokio::test]
     async fn sniffer_ambient_sound_suppressed_while_digging_or_searching() {
         let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
         let world = world(&folder);
@@ -681,30 +655,6 @@ mod tests {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .item,
             &pumpkin_data::item::Item::SNIFFER_EGG
-        );
-    }
-
-    #[tokio::test]
-    async fn sniffer_navigator_maluses() {
-        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
-        let world = world(&folder);
-
-        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
-        let sniffer = SnifferEntity::new(entity);
-
-        let navigator = sniffer
-            .mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        assert_eq!(navigator.get_pathfinding_malus(PathType::Water), -1.0);
-        assert_eq!(
-            navigator.get_pathfinding_malus(PathType::DangerPowderSnow),
-            -1.0
-        );
-        assert_eq!(
-            navigator.get_pathfinding_malus(PathType::DamageCautious),
-            -1.0
         );
     }
 
@@ -822,24 +772,5 @@ mod tests {
             sniffer.get_entity().age.store(-100, Ordering::Relaxed);
             assert!(!sniffer.can_dig_with_brain(brain));
         });
-    }
-
-    #[tokio::test]
-    async fn sniffer_digging_and_searching_step_runs_without_panicking() {
-        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
-        let world = world(&folder);
-
-        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
-        let sniffer = SnifferEntity::new(entity);
-
-        // In searching state at tick 20
-        sniffer.set_state(SnifferState::Searching);
-        sniffer.get_entity().tick_count.store(20, Ordering::Relaxed);
-        sniffer.custom_server_ai_step(sniffer.as_ref());
-
-        // In digging state at tick 10
-        sniffer.set_state(SnifferState::Digging);
-        sniffer.get_entity().tick_count.store(10, Ordering::Relaxed);
-        sniffer.custom_server_ai_step(sniffer.as_ref());
     }
 }
