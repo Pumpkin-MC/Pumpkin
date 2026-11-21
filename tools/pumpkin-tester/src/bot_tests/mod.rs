@@ -3,6 +3,7 @@ mod commands_and_gamemode;
 mod embedded_stop;
 mod login_and_movement;
 mod loot_tables;
+mod peaceful_despawn;
 mod player_actions;
 mod polar_bear;
 mod sheep_shearing;
@@ -26,6 +27,9 @@ pub async fn run_bot_tests(
 
     let (mut bot1, bot2) =
         login_and_movement::run_login_and_movement_tests(server, addr, summary_lines).await?;
+
+    peaceful_despawn::run_peaceful_despawn_test(server, &bot1, summary_lines)?;
+    peaceful_despawn::run_mid_tick_difficulty_test(server, &bot1, summary_lines)?;
 
     commands_and_gamemode::run_commands_and_gamemode_tests(
         server,
