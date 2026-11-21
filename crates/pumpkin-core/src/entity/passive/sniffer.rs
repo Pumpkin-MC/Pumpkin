@@ -430,11 +430,16 @@ impl Animal for SnifferEntity {
                 SnifferState::Idling | SnifferState::Scenting | SnifferState::FeelingHappy
             )
         };
-        is_valid_state(self.get_state())
+        partner.get_entity().entity_id != self.get_entity().entity_id
+            && self.mob_entity.is_in_love()
+            && is_valid_state(self.get_state())
             && partner
                 .cast_any()
                 .downcast_ref::<Self>()
-                .is_some_and(|partner_sniffer| is_valid_state(partner_sniffer.get_state()))
+                .is_some_and(|partner_sniffer| {
+                    partner_sniffer.mob_entity.is_in_love()
+                        && is_valid_state(partner_sniffer.get_state())
+                })
     }
 
     fn spawns_offspring(&self) -> bool {
@@ -616,8 +621,19 @@ mod tests {
         let entity2 = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
         let sniffer2 = SnifferEntity::new(entity2);
 
-        // Both in Idling -> can mate
+        // Neither in love -> cannot mate
+        assert!(!sniffer1.can_mate(sniffer2.as_ref()));
+
+        // Only one in love -> cannot mate
+        sniffer1.mob_entity.set_love_ticks(600, None);
+        assert!(!sniffer1.can_mate(sniffer2.as_ref()));
+
+        // Both in love and Idling -> can mate
+        sniffer2.mob_entity.set_love_ticks(600, None);
         assert!(sniffer1.can_mate(sniffer2.as_ref()));
+
+        // Cannot mate with self
+        assert!(!sniffer1.can_mate(sniffer1.as_ref()));
 
         // When partner is in Scenting or FeelingHappy -> can mate
         sniffer2.set_state(SnifferState::Scenting);
