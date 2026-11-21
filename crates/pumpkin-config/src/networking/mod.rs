@@ -28,6 +28,10 @@ pub mod query;
 pub mod packet_limiter;
 pub use packet_limiter::PacketLimiterConfig;
 
+/// Book size limit configuration.
+pub mod book_size;
+pub use book_size::BookSizeConfig;
+
 /// Configuration for server networking features.
 ///
 /// Covers authentication, query, management protocol, proxying, packet compression,
