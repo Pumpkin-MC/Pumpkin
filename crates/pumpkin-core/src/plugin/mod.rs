@@ -483,8 +483,9 @@ impl PluginManager {
     /// `rustyline` console handle is neither `Send` nor `Sync`. Calling it from a
     /// different thread (e.g. the hot-reload watcher task) will panic.
     ///
-    /// Returns `(allowed, wait_time, cacheable)`. Non-main-thread denials are not
-    /// cacheable so the user gets prompted again on the next cold load.
+    /// Returns `(allowed, wait_time, cacheable)`. Denials without a prompt (non-main
+    /// thread, no interactive console) are not cacheable so the user gets prompted
+    /// again on the next load with a console.
     #[expect(clippy::print_stdout)]
     fn ask_permission_confirmation(
         &self,
@@ -529,7 +530,7 @@ impl PluginManager {
             "Do you want to allow these permissions and load the plugin?".bold()
         );
 
-        let mut rl_taken = if let Some(logger_option) = crate::LOGGER_IMPL.get()
+        let rl_taken = if let Some(logger_option) = crate::LOGGER_IMPL.get()
             && let Some((wrapper, _, _)) = logger_option
             && let Some(rl) = wrapper.take_readline()
         {
@@ -538,24 +539,22 @@ impl PluginManager {
             None
         };
 
-        let result = if let Some((_, ref mut rl)) = rl_taken {
-            rl.readline(&prompt).is_ok_and(|line| {
-                let input = line.trim().to_lowercase();
-                input == "y" || input == "yes"
-            })
-        } else {
+        let Some((wrapper, mut rl)) = rl_taken else {
             warn!(
-                "Console readline is not available; cannot prompt for plugin \"{}\" permissions",
-                metadata.name
+                "No interactive console to confirm permissions for plugin \"{}\"; pre-approve them with `allowed_permissions` in `[plugins.overrides.\"{}\"]`",
+                metadata.name, metadata.name
             );
-            false
+            return (false, start_time.elapsed(), false);
         };
 
-        if let Some((wrapper, rl)) = rl_taken {
-            wrapper.return_readline(rl);
-        }
+        // Only an answer is a decision; EOF or an interrupt leaves nothing to remember
+        let (result, cacheable) = rl.readline(&prompt).map_or((false, false), |line| {
+            let input = line.trim().to_lowercase();
+            (input == "y" || input == "yes", true)
+        });
+        wrapper.return_readline(rl);
 
-        (result, start_time.elapsed(), true)
+        (result, start_time.elapsed(), cacheable)
     }
 
     /// Spawn initialization for a single plugin
