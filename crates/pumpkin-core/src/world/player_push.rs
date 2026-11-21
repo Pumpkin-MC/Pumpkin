@@ -100,7 +100,7 @@ mod tests {
     use pumpkin_protocol::ser::NetworkReadExt;
 
     use crate::test_support::{
-        Client, TestResult, count, id, server, server_without_player_collisions, shutdown,
+        Client, TestResult, id, server, server_without_player_collisions, shutdown,
     };
     use crate::world::scoreboard::{NO_COLLISION_TEAM, NameTagVisibility, Team};
 
@@ -613,6 +613,8 @@ mod tests {
         let players = world.players.load_full();
         world.entity_tracker.update_all(&world);
         watcher.received().await?;
+        let mut pushed: Vec<i32> = pushed.iter().map(Client::entity_id).collect();
+        pushed.sort_unstable();
 
         // In parallel, then for a plugin that wants `PlayerVelocityEvent` in list order.
         for with_plugin in [false, true] {
@@ -625,10 +627,17 @@ mod tests {
             }
             push_entities(&world, &players);
             World::send_velocity_changes(&players, &server);
-            assert_eq!(
-                count::<CEntityVelocity>(&watcher.received().await?),
-                pushed.len()
-            );
+            // Whose velocity each packet carries.
+            let mut told: Vec<i32> = watcher
+                .received()
+                .await?
+                .iter()
+                .filter(|packet| packet.id == id::<CEntityVelocity>())
+                .filter_map(|packet| (&packet.payload[..]).get_var_int().ok())
+                .map(|entity_id| entity_id.0)
+                .collect();
+            told.sort_unstable();
+            assert_eq!(told, pushed);
         }
         shutdown(&server).await;
         Ok(())
