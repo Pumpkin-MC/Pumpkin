@@ -1,5 +1,7 @@
 use std::fs;
 use std::io::{self, Write};
+#[cfg(unix)]
+use std::os::unix::fs::{MetadataExt, fchown};
 use std::path::Path;
 
 use tempfile::NamedTempFile;
@@ -8,15 +10,25 @@ use toml_edit::{DocumentMut, Item, Value};
 /// Sets a boolean `key` in the top-level table of the TOML file at `path`. Comments and the
 /// other keys and tables are kept as they are.
 ///
-/// A missing file is created with only that key. A file that isn't valid TOML, or that is
-/// read-only, is left untouched.
+/// A missing file is created with only that key. A file that isn't valid TOML or is read-only,
+/// and a symlink whose target is missing, are left untouched.
 ///
 /// # Errors
 ///
 /// Returns an error if the file can't be read, parsed or replaced.
 pub fn set_top_level_bool(path: &Path, key: &str, value: bool) -> io::Result<()> {
     // Write through a symlink instead of replacing it.
-    let path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let path = match fs::canonicalize(path) {
+        Ok(path) => path,
+        // Renaming over the link itself would turn it into a regular file.
+        Err(err) if path.is_symlink() => {
+            return Err(io::Error::new(
+                err.kind(),
+                format!("couldn't resolve the symlink: {err}"),
+            ));
+        }
+        Err(_) => path.to_path_buf(),
+    };
     let source = match fs::read_to_string(&path) {
         Ok(source) => source,
         Err(err) if err.kind() == io::ErrorKind::NotFound => String::new(),
@@ -41,12 +53,15 @@ pub fn set_top_level_bool(path: &Path, key: &str, value: bool) -> io::Result<()>
 /// Writes `contents` to a new file next to `path` and renames it over `path`, so a crash leaves
 /// either the old or the new file.
 fn write_file_atomically(path: &Path, contents: &[u8]) -> io::Result<()> {
-    let permissions = match fs::metadata(path) {
-        Ok(metadata) => Some(metadata.permissions()),
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => Some(metadata),
         Err(err) if err.kind() == io::ErrorKind::NotFound => None,
         Err(err) => return Err(err),
     };
-    if permissions.as_ref().is_some_and(fs::Permissions::readonly) {
+    if metadata
+        .as_ref()
+        .is_some_and(|metadata| metadata.permissions().readonly())
+    {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "the file is read-only",
@@ -54,9 +69,13 @@ fn write_file_atomically(path: &Path, contents: &[u8]) -> io::Result<()> {
     }
 
     let mut file = NamedTempFile::new_in(path.parent().unwrap_or_else(|| Path::new(".")))?;
-    // The file can hold secrets, so the new one keeps the permissions of the old one.
-    if let Some(permissions) = permissions {
-        file.as_file().set_permissions(permissions)?;
+    // The file can hold secrets, so the new one keeps the group and permissions of the old one.
+    if let Some(metadata) = metadata {
+        #[cfg(unix)]
+        fchown(file.as_file(), None, Some(metadata.gid())).map_err(|err| {
+            io::Error::new(err.kind(), format!("couldn't keep the file's group: {err}"))
+        })?;
+        file.as_file().set_permissions(metadata.permissions())?;
     }
     file.write_all(contents)?;
     file.as_file().sync_all()?;
@@ -178,5 +197,24 @@ mod tests {
                 .is_symlink()
         );
         assert_eq!(fs::read_to_string(&target).unwrap(), "white_list = true\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn leaves_a_broken_symlink_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("server.toml");
+        let link = dir.path().join("pumpkin.toml");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        assert!(set_top_level_bool(&link, "white_list", true).is_err());
+
+        assert!(
+            fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 }
