@@ -283,7 +283,11 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::BlockDamageEvent(data) => {
             cleanup_player(state, &data.player);
         }
-        Event::BlockIgniteEvent(_) => {}
+        Event::BlockIgniteEvent(data) => {
+            if let Some(res) = &data.player {
+                cleanup_player(state, res);
+            }
+        }
         Event::BlockFromToEvent(_) => {}
         Event::BlockFormEvent(_) => {}
         Event::BlockFadeEvent(_) => {}
