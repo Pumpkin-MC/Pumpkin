@@ -95,6 +95,10 @@ pub struct ChunkEntityData {
     pub live: AtomicBool,
 
     pub dirty: AtomicBool,
+
+    /// Set when the stored chunk could not be read. Its data is left untouched on disk, so it
+    /// must never be written back.
+    pub read_failed: AtomicBool,
 }
 
 /// Represents pure block data for a chunk.
