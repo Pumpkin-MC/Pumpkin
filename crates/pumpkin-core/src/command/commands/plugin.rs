@@ -89,7 +89,7 @@ impl CommandExecutor for LoadExecutor {
                 .await;
 
             match result {
-                Ok(()) => {
+                Ok(_) => {
                     source_clone.send_feedback(
                         TextComponent::text(format!(
                             "Plugin {plugin_name_clone} loaded successfully"
