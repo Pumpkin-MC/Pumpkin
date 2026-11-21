@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 pub mod parser;
 pub use serde_json::Value as LootPredicateValue;
 
@@ -88,7 +89,13 @@ pub enum LootNumberProvider {
     Binomial { n: i32, probability: f32 },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct LootStewEffect {
+    pub effect: Cow<'static, str>,
+    pub duration: LootNumberProvider,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum LootFunctionKind {
     SetCount {
         count: LootNumberProvider,
@@ -105,9 +112,10 @@ pub enum LootFunctionKind {
     ExplosionDecay,
     ApplyBonus(LootBonusFormula),
     FurnaceSmelt,
+    SetStewEffect(Cow<'static, [LootStewEffect]>),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct LootFunction {
     pub kind: LootFunctionKind,
     pub enchantment: Option<&'static str>,
@@ -375,7 +383,7 @@ impl From<LootEntry> for DynamicLootEntry {
             functions: entry
                 .functions
                 .iter()
-                .copied()
+                .cloned()
                 .map(DynamicLootFunction::from)
                 .collect(),
         }
@@ -406,7 +414,7 @@ impl From<LootPool> for DynamicLootPool {
             functions: pool
                 .functions
                 .iter()
-                .copied()
+                .cloned()
                 .map(DynamicLootFunction::from)
                 .collect(),
         }
@@ -431,7 +439,7 @@ impl From<&LootTable> for DynamicLootTable {
             functions: table
                 .functions
                 .iter()
-                .copied()
+                .cloned()
                 .map(DynamicLootFunction::from)
                 .collect(),
         }

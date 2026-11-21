@@ -20,13 +20,7 @@ impl BedrockClient {
                 });
             }
             Action::StopRiding => {
-                let vehicle = player
-                    .get_entity()
-                    .vehicle
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
-                if let Some(vehicle) = vehicle {
+                if let Some(vehicle) = player.get_entity().get_vehicle() {
                     vehicle.get_entity().remove_passenger(player.entity_id());
                 }
             }

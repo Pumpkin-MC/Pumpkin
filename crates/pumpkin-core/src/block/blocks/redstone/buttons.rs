@@ -5,7 +5,6 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::AttachFace;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -24,16 +23,11 @@ use crate::block::{
     GetStateForNeighborUpdateArgs, NormalUseArgs, OnEntityCollisionArgs, OnPlaceArgs,
     OnScheduledTickArgs, OnStateReplacedArgs,
 };
+use crate::entity::projectile::abstract_arrow::is_abstract_arrow;
 use crate::world::World;
 
 fn is_stone_button(block: &Block) -> bool {
     block == &Block::STONE_BUTTON || block == &Block::POLISHED_BLACKSTONE_BUTTON
-}
-
-fn is_abstract_arrow(entity_type: &EntityType) -> bool {
-    entity_type == &EntityType::ARROW
-        || entity_type == &EntityType::SPECTRAL_ARROW
-        || entity_type == &EntityType::TRIDENT
 }
 
 fn get_sound(block: &Block, on: bool) -> Sound {

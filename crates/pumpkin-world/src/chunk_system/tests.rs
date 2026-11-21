@@ -40,8 +40,7 @@ fn ensure_dependency_chain_builds_multistage_chain() {
     let end = StagedChunkEnum::Surface as u8 as usize;
 
     // Ensure tasks were created, present in the DAG, and correctly chained
-    for idx in start..=end {
-        let key = holder.tasks[idx];
+    for (idx, &key) in holder.tasks[..=end].iter().enumerate().skip(start) {
         assert!(!key.is_null(), "task {idx} was not created");
 
         let node = graph.nodes.get(key).expect("graph missing node");
@@ -249,8 +248,12 @@ fn completed_proto_stage_drops_all_satisfied_tasks() {
         ..Default::default()
     };
 
-    for stage in StagedChunkEnum::Empty as usize..=StagedChunkEnum::StructureStart as usize {
-        holder.tasks[stage] = graph.nodes.insert(Node::new(
+    for (stage, task) in holder.tasks[..=StagedChunkEnum::StructureStart as usize]
+        .iter_mut()
+        .enumerate()
+        .skip(StagedChunkEnum::Empty as usize)
+    {
+        *task = graph.nodes.insert(Node::new(
             ChunkPos::new(0, 0),
             StagedChunkEnum::from(stage as u8),
         ));

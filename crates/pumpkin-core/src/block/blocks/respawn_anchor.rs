@@ -1,4 +1,6 @@
+use crate::world::{Explosion, ExplosionInteraction};
 use pumpkin_data::block_properties::RespawnAnchorLikeProperties;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{BlockState, translation};
@@ -9,7 +11,6 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, PathComputationType, UseWithItemArgs,
 };
-use crate::entity::EntityBase;
 
 /// Vanilla `RespawnAnchorBlock.MAX_CHARGES`.
 const MAX_CHARGES: u8 = 4;
@@ -19,14 +20,16 @@ pub struct RespawnAnchorBlock;
 
 impl BlockBehaviour for RespawnAnchorBlock {
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        if args.item_stack.item.id != Item::GLOWSTONE.id {
-            return BlockActionResult::PassToDefaultBlockAction;
-        }
-
         let state_id = args.world.get_block_state_id(args.position);
         let mut props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
-        if props.charges >= MAX_CHARGES {
+        if args.item_stack.item.id != Item::GLOWSTONE.id || props.charges >= MAX_CHARGES {
+            if *args.equipment_slot == pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND
+                && args.player.inventory().off_hand_item().item.id == Item::GLOWSTONE.id
+                && props.charges < MAX_CHARGES
+            {
+                return BlockActionResult::Pass;
+            }
             return BlockActionResult::PassToDefaultBlockAction;
         }
 
@@ -65,21 +68,21 @@ impl BlockBehaviour for RespawnAnchorBlock {
             args.world
                 .break_block(args.position, None, BlockFlags::SKIP_DROPS);
             let center_pos = args.position.to_centered_f64();
-            args.world
-                .explode(center_pos, 5.0, crate::world::ExplosionInteraction::Block);
+            let explosion = Explosion::new(
+                5.0,
+                center_pos,
+                args.world
+                    .get_block_interaction(ExplosionInteraction::Block),
+            )
+            .with_damage_type(DamageType::BAD_RESPAWN_POINT);
+            args.world.run_explosion(&explosion);
             return BlockActionResult::SuccessServer;
         }
 
         let player = args.player;
         let world = args.world;
         let pos = *args.position;
-        if player.set_respawn_point(
-            world.dimension.clone(),
-            pos,
-            player.get_entity().yaw.load(),
-            player.get_entity().pitch.load(),
-            false,
-        ) {
+        if player.set_respawn_point(world.dimension.clone(), pos, 0.0, 0.0, false) {
             world.play_sound(
                 Sound::BlockRespawnAnchorSetSpawn,
                 SoundCategory::Blocks,

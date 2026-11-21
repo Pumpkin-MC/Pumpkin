@@ -231,10 +231,13 @@ impl BedrockClient {
                 player.drop_held_item(false);
             }
             PlayerAction::StartGliding => {
-                player.try_start_fall_flying(server);
+                Self::start_gliding(player, server);
             }
             PlayerAction::StopGliding => {
-                player.stop_fall_flying(server);
+                Self::stop_gliding(
+                    player,
+                    player.get_entity().on_ground.load(Ordering::Relaxed),
+                );
             }
             PlayerAction::StartSwimming => {
                 player.get_entity().set_swimming(true);
@@ -253,18 +256,10 @@ impl BedrockClient {
                 player.update_player_pose();
             }
             PlayerAction::StartSprinting => {
-                player.set_sprinting(true);
+                player.apply_sprint_input(server, true);
             }
             PlayerAction::StopSprinting => {
-                player.set_sprinting(false);
-            }
-            PlayerAction::StartSneaking => {
-                player.get_entity().set_sneaking(true);
-                player.update_bedrock_shield_sneaking();
-            }
-            PlayerAction::StopSneaking => {
-                player.get_entity().set_sneaking(false);
-                player.update_bedrock_shield_sneaking();
+                player.apply_sprint_input(server, false);
             }
             PlayerAction::StartCrawling => {
                 player

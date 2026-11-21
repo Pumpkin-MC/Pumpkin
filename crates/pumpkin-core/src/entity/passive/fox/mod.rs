@@ -7,7 +7,6 @@ use std::sync::{
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
@@ -28,7 +27,7 @@ use crate::entity::mob::spawn::SpawnGroupData;
 use crate::entity::passive::tamable::is_untamed;
 use crate::entity::{
     Entity, EntityBase,
-    ageable::{AgeableData, AgeableMob},
+    ageable::{AgeableData, AgeableMob, BABY_START_AGE},
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -41,8 +40,6 @@ use crate::world::World;
 use goals::{
     DefendTrustedTargetGoal, FaceplantGoal, FoxGoal, PounceGoal, StalkPreyGoal, melee_attack,
 };
-
-pub const FOX_FOOD: &[&Item] = &[&Item::SWEET_BERRIES, &Item::GLOW_BERRIES];
 
 const FOX_FLEES: &[Flee] = &[
     Flee::new(4, TargetMatch::Type(&EntityType::PLAYER), 16.0, 1.6, 1.4)
@@ -397,7 +394,6 @@ impl Animal for FoxEntity {
 
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_FOX_FOOD)
-            || FOX_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 
     /// Vanilla `Fox.getBreedOffspring`: the cub takes either parent's variant.
@@ -473,7 +469,7 @@ impl Mob for FoxEntity {
         };
         self.set_variant(variant);
         if size >= 2 {
-            self.get_entity().set_age(-24000);
+            self.set_age(BABY_START_AGE);
         }
         self.set_target_goals();
         self.mob_entity.finalize_spawn_base();

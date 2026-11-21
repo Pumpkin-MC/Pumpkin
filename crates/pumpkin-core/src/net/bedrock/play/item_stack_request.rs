@@ -37,11 +37,23 @@ impl BedrockClient {
 
             let mut responses = Vec::with_capacity(packet.requests.len());
 
-            for request in packet.requests {
+            for mut request in packet.requests {
                 let mut created_item: Option<ItemStack> = None;
                 let mut crafting_inputs_consumed = false;
                 let mut updates = Vec::new();
                 let mut result = 0u8; // 0 = Success, 1 = Error
+
+                if request
+                    .actions
+                    .iter()
+                    .any(|action| touches_unroutable_slot(&*screen_handler, action))
+                {
+                    tracing::debug!(
+                        "Item stack request targets armor/offhand outside the player screen"
+                    );
+                    result = 1;
+                    request.actions.clear();
+                }
 
                 for action in request.actions {
                     match action {
@@ -464,36 +476,29 @@ impl BedrockClient {
                                     break;
                                 }
                                 let available = handler.get_available_recipes(&input_stack);
-                                let recipe_idx = crate::net::bedrock::recipe::static_recipes()
-                                    .iter()
-                                    .find_map(|r| match r {
-                                        pumpkin_protocol::bedrock::client::BedrockRecipe::Shapeless(s)
-                                            if s.block == "stonecutter"
-                                                && s.recipe_network_id == recipe_id =>
-                                        {
-                                            s.output.first().and_then(|out| {
-                                                let out_id = out.id.0;
-                                                available.iter().position(|r| {
-                                                    let item_id = r
-                                                        .result_id
-                                                        .strip_prefix("minecraft:")
-                                                        .unwrap_or(&r.result_id);
-                                                    pumpkin_data::item::Item::from_registry_key(
-                                                        item_id,
+                                let server = player.world().server.upgrade();
+                                let recipe_idx =
+                                    crate::net::bedrock::recipe::stonecutter_output_for_recipe_id(
+                                        server.as_deref().map(|s| s.recipe_manager.as_ref()),
+                                        recipe_id.0,
+                                    )
+                                    .and_then(|(out_id, out_aux)| {
+                                        available.iter().position(|r| {
+                                            let item_id = r
+                                                .result_id
+                                                .strip_prefix("minecraft:")
+                                                .unwrap_or(&r.result_id);
+                                            pumpkin_data::item::Item::from_registry_key(item_id)
+                                                .and_then(|item| {
+                                                    pumpkin_data::item::JavaToBedrockItemMapping::from_java_item_id(
+                                                        item.id,
                                                     )
-                                                    .and_then(|item| {
-                                                        pumpkin_data::item::JavaToBedrockItemMapping::from_java_item_id(
-                                                            item.id,
-                                                        )
-                                                    })
-                                                    .is_some_and(|m| {
-                                                        (m.bedrock_item.id as i32) == out_id
-                                                    })
                                                 })
-                                            })
-                                        }
-                                        pumpkin_protocol::bedrock::client::BedrockRecipe::Shapeless(_)
-                                        | pumpkin_protocol::bedrock::client::BedrockRecipe::Shaped(_) => None,
+                                                .is_some_and(|m| {
+                                                    m.bedrock_item.id == out_id
+                                                        && m.bedrock_data == out_aux
+                                                })
+                                        })
                                     })
                                     .or_else(|| {
                                         ((recipe_id.0 as usize) < available.len())
@@ -901,6 +906,37 @@ impl BedrockClient {
     }
 }
 
+/// Whether `action` touches an armor or offhand slot that doesn't resolve on the open screen.
+/// Such requests are rejected whole, before any stack changes.
+fn touches_unroutable_slot(
+    screen_handler: &dyn ScreenHandler,
+    action: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction,
+) -> bool {
+    use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction as A;
+    let slots = match action {
+        A::Take {
+            source,
+            destination,
+            ..
+        }
+        | A::Place {
+            source,
+            destination,
+            ..
+        } => [Some(source), Some(destination)],
+        A::Swap { slot1, slot2 } => [Some(slot1), Some(slot2)],
+        A::Drop { source, .. } | A::Destroy { source, .. } | A::Consume { source, .. } => {
+            [Some(source), None]
+        }
+        _ => [None, None],
+    };
+    slots.into_iter().flatten().any(|slot| {
+        let name = slot.container_name.container_name;
+        matches!(name, ContainerName::Armor | ContainerName::Offhand)
+            && map_bedrock_container_slot(screen_handler, name, slot.slot_id).is_none()
+    })
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn map_bedrock_container_slot(
     screen_handler: &dyn ScreenHandler,
@@ -956,8 +992,11 @@ pub(crate) fn map_bedrock_container_slot(
                 None
             }
         }
-        ContainerName::Armor => (slot_id < 4).then(|| 5 + slot_id as usize),
-        ContainerName::Offhand => (slot_id == 0).then_some(45),
+        // Armor and offhand live only on the player's own screen.
+        ContainerName::Armor => (is_player_screen && slot_id < 4).then(|| 5 + slot_id as usize),
+        ContainerName::Offhand => {
+            (is_player_screen && u32::from(slot_id) <= super::OFF_HAND_BEDROCK_SLOT).then_some(45)
+        }
         ContainerName::Cursor => None,
         ContainerName::CraftingInput => {
             if is_player_screen {
@@ -1267,26 +1306,7 @@ fn update_slot_stack(
             let current_stack =
                 screen_handler.get_behaviour().slots[screen_slot].get_cloned_stack();
             if !current_stack.are_items_and_components_equal(&new_stack) {
-                if (5..9).contains(&screen_slot) {
-                    player.enqueue_equipment_change(
-                        &match screen_slot {
-                            5 => EquipmentSlot::HEAD,
-                            6 => EquipmentSlot::CHEST,
-                            7 => EquipmentSlot::LEGS,
-                            8 => EquipmentSlot::FEET,
-                            _ => unreachable!(),
-                        },
-                        &new_stack,
-                    );
-                } else if (36..45).contains(&screen_slot) {
-                    let hotbar_slot = screen_slot - 36;
-                    if player.inventory().get_selected_slot() == hotbar_slot as u8 {
-                        let equipment = &[(EquipmentSlot::MAIN_HAND, new_stack.clone())];
-                        player.living_entity.send_equipment_changes(equipment);
-                    }
-                } else if screen_slot == 45 {
-                    player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &new_stack);
-                }
+                player.sync_screen_slot_equipment(screen_slot, &new_stack);
             }
         }
 

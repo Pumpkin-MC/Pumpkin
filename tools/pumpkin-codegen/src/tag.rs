@@ -354,34 +354,10 @@ pub(crate) fn build() -> TokenStream {
         potion_id_map.insert(format!("minecraft:{name}"), u16::from(potion.id));
     }
 
-    const POI_TYPES: &[&str] = &[
-        "armorer",
-        "butcher",
-        "cartographer",
-        "cleric",
-        "farmer",
-        "fisherman",
-        "fletcher",
-        "leatherworker",
-        "librarian",
-        "mason",
-        "shepherd",
-        "toolsmith",
-        "weaponsmith",
-        "home",
-        "meeting",
-        "beehive",
-        "bee_nest",
-        "nether_portal",
-        "lodestone",
-        "lightning_rod",
-        "trial_spawner",
-        "vault",
-    ];
     let mut poi_id_map: BTreeMap<String, u16> = BTreeMap::new();
-    for (i, &name) in POI_TYPES.iter().enumerate() {
-        poi_id_map.insert(name.to_string(), i as u16);
-        poi_id_map.insert(format!("minecraft:{name}"), i as u16);
+    for (name, definition) in crate::poi_type::read_poi_types() {
+        poi_id_map.insert(name.clone(), u16::from(definition.id()));
+        poi_id_map.insert(format!("minecraft:{name}"), u16::from(definition.id()));
     }
 
     let mut datapack_id_maps: BTreeMap<String, BTreeMap<String, u16>> = BTreeMap::new();

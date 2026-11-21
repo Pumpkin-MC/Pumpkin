@@ -62,6 +62,17 @@ impl<'a> EnvironmentAttributes<'a> {
                     0.0
                 }
             }
+            EnvironmentAttribute::GameplayCatWakingUpGiftChance => {
+                if self.world.dimension.has_skylight && !self.world.dimension.has_fixed_time {
+                    sample_step_float_track(
+                        DayTimeline::CAT_WAKING_UP_GIFT_CHANCE_KEYFRAMES,
+                        DayTimeline::PERIOD_TICKS,
+                        self.world.get_time_of_day(),
+                    )
+                } else {
+                    0.0
+                }
+            }
             EnvironmentAttribute::VisualSunAngle => {
                 super::calculate_celestial_angle(self.world.get_time_of_day()) * 360.0
             }
@@ -207,8 +218,13 @@ impl<'a> EnvironmentAttributes<'a> {
 
     /// Evaluates a boolean environment attribute at a position.
     #[must_use]
-    pub fn get_value_bool(&self, attribute: EnvironmentAttribute, _pos: &BlockPos) -> bool {
-        self.get_dimension_value_bool(attribute)
+    pub fn get_value_bool(&self, attribute: EnvironmentAttribute, pos: &BlockPos) -> bool {
+        self.world
+            .get_biome(pos)
+            .boolean_attributes
+            .iter()
+            .find_map(|(key, value)| (*key == attribute).then_some(*value))
+            .unwrap_or_else(|| self.get_dimension_value_bool(attribute))
     }
 
     /// Evaluates a float environment attribute at a position.

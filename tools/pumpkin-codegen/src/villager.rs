@@ -16,6 +16,9 @@ struct VillagerDataJson {
 struct ProfessionJson {
     name: NameJson,
     requested_items: Vec<String>,
+    secondary_poi: Vec<String>,
+    held_job_site: Vec<String>,
+    acquirable_job_site: Vec<String>,
     work_sound: Option<String>,
     #[serde(default)]
     trade_sets: IndexMap<String, String>,
@@ -176,6 +179,10 @@ pub fn build() -> TokenStream {
 
     let mut work_sounds = Vec::new();
     let mut requested_items = Vec::new();
+    let mut secondary_pois = Vec::new();
+    let mut held_job_sites = Vec::new();
+    let mut acquirable_job_sites = Vec::new();
+    let mut held_job_site_lookups = Vec::new();
     let mut profession_names = Vec::new();
 
     let mut profession_from_i32 = Vec::new();
@@ -246,7 +253,19 @@ pub fn build() -> TokenStream {
                     }
                     "minecraft:set_random_dyes" => quote! { VillagerTradeModifier::RandomDyes },
                     "minecraft:set_random_potion" => quote! { VillagerTradeModifier::RandomPotion },
-                    "minecraft:set_stew_effect" => quote! { VillagerTradeModifier::SuspiciousStew },
+                    "minecraft:set_stew_effect" => {
+                        let effects = modifier
+                            .get("effects")?
+                            .as_array()?
+                            .iter()
+                            .map(|effect| {
+                                let id = effect.get("type")?.as_str()?;
+                                let duration = i32::try_from(effect.get("duration")?.as_i64()?).ok()?;
+                                Some(quote! { (#id, #duration) })
+                            })
+                            .collect::<Option<Vec<_>>>()?;
+                        quote! { VillagerTradeModifier::SuspiciousStew(&[#(#effects),*]) }
+                    }
                     "minecraft:set_potion" => {
                         let potion = modifier.get("id")?.as_str()?;
                         quote! { VillagerTradeModifier::Potion(#potion) }
@@ -370,6 +389,41 @@ pub fn build() -> TokenStream {
             .collect();
         requested_items.push(quote! { Self::#ident => &[#(#items),*] });
 
+        let pois: Vec<_> = prof_data
+            .secondary_poi
+            .iter()
+            .map(|block| {
+                let block_ident = format_ident!(
+                    "{}",
+                    block
+                        .strip_prefix("minecraft:")
+                        .unwrap_or(block)
+                        .to_shouty_snake_case()
+                );
+                quote! { &crate::Block::#block_ident }
+            })
+            .collect();
+        secondary_pois.push(quote! { Self::#ident => &[#(#pois),*] });
+
+        let poi_idents = |names: &[String]| -> Vec<TokenStream> {
+            names
+                .iter()
+                .map(|name| {
+                    let poi_ident = format_ident!("{}", name.to_pascal_case());
+                    quote! { crate::poi_type::PoiType::#poi_ident }
+                })
+                .collect()
+        };
+        let held = poi_idents(&prof_data.held_job_site);
+        let acquirable = poi_idents(&prof_data.acquirable_job_site);
+        held_job_sites.push(quote! { Self::#ident => &[#(#held),*] });
+        acquirable_job_sites.push(quote! { Self::#ident => &[#(#acquirable),*] });
+        if !held.is_empty() {
+            held_job_site_lookups.push(quote! {
+                Self::#ident,
+            });
+        }
+
         let translate = &prof_data.name.translate;
         profession_names.push(quote! { Self::#ident => #translate });
 
@@ -443,7 +497,7 @@ pub fn build() -> TokenStream {
             ExplorationMap { destination: &'static str },
             RandomDyes,
             RandomPotion,
-            SuspiciousStew,
+            SuspiciousStew(&'static [(&'static str, i32)]),
             Potion(&'static str),
         }
 
@@ -484,6 +538,37 @@ pub fn build() -> TokenStream {
                 match self {
                     #(#requested_items),*
                 }
+            }
+
+            #[must_use]
+            #[allow(clippy::match_same_arms)]
+            pub const fn secondary_poi(&self) -> &'static [&'static crate::Block] {
+                match self {
+                    #(#secondary_pois),*
+                }
+            }
+
+            #[must_use]
+            #[allow(clippy::match_same_arms)]
+            pub const fn held_job_site(&self) -> &'static [crate::poi_type::PoiType] {
+                match self {
+                    #(#held_job_sites),*
+                }
+            }
+
+            #[must_use]
+            #[allow(clippy::match_same_arms)]
+            pub const fn acquirable_job_site(&self) -> &'static [crate::poi_type::PoiType] {
+                match self {
+                    #(#acquirable_job_sites),*
+                }
+            }
+
+            #[must_use]
+            pub fn from_held_job_site(poi_type: crate::poi_type::PoiType) -> Option<Self> {
+                [#(#held_job_site_lookups)*]
+                    .into_iter()
+                    .find(|profession| profession.held_job_site().contains(&poi_type))
             }
 
             #[must_use]

@@ -214,10 +214,8 @@ pub trait AbstractHorse: Animal + AgeableMob {
 
     fn randomize_attributes(&self) {}
 
-    fn refresh_age_dimensions(&self) {
-        let entity = self.get_entity();
-        entity.set_default_dimensions(Entity::age_dimensions(entity.entity_type, self.is_baby()));
-    }
+    /// Re-pins a size override after growing up; the age size itself comes from data.
+    fn refresh_age_dimensions(&self) {}
 
     fn finalize_horse_spawn(
         &self,
@@ -1295,6 +1293,10 @@ macro_rules! abstract_horse_mob_hooks {
             &self.mob_entity
         }
 
+        fn on_climbable(&self) -> bool {
+            false
+        }
+
         fn as_ageable(&self) -> Option<&dyn $crate::entity::ageable::AgeableMob> {
             Some(self)
         }
@@ -1429,4 +1431,27 @@ macro_rules! abstract_horse_mob_hooks {
             Some(data)
         }
     };
+}
+
+pub(crate) fn try_equip_dispenser_chest(entity: &dyn EntityBase) -> bool {
+    fn equip_if_eligible<H: AbstractHorse>(horse: &H) -> bool {
+        if !horse.get_entity().is_alive()
+            || !horse.is_tamed()
+            || !horse.can_carry_chest()
+            || horse.has_chest()
+        {
+            return false;
+        }
+        horse.set_chest(true);
+        horse.create_inventory();
+        true
+    }
+
+    let any = entity.cast_any();
+    any.downcast_ref::<crate::entity::passive::donkey::DonkeyEntity>()
+        .is_some_and(equip_if_eligible)
+        || any
+            .downcast_ref::<crate::entity::passive::mule::MuleEntity>()
+            .is_some_and(equip_if_eligible)
+        || crate::entity::passive::llama::as_llama(entity).is_some_and(equip_if_eligible)
 }

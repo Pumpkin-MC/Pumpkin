@@ -118,4 +118,12 @@ impl MoveControlTrait for FlyingMoveControl {
     fn has_wanted(&self) -> bool {
         self.operation == Operation::MoveTo
     }
+
+    fn get_speed_modifier(&self) -> f64 {
+        self.speed_modifier
+    }
+
+    fn get_wanted_position(&self) -> Vector3<f64> {
+        Vector3::new(self.wanted_x, self.wanted_y, self.wanted_z)
+    }
 }

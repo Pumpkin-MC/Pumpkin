@@ -143,14 +143,6 @@ impl DolphinEntity {
         self.get_entity()
             .set_synced_data(tracked_data::dolphin::MOISTNESS_LEVEL, VarInt(level));
     }
-
-    fn update_dimensions(&self) {
-        let entity = self.get_entity();
-        entity.set_default_dimensions(Entity::age_dimensions(
-            entity.entity_type,
-            AgeableMob::is_baby(self),
-        ));
-    }
 }
 
 impl AgeableMob for DolphinEntity {
@@ -160,10 +152,6 @@ impl AgeableMob for DolphinEntity {
 
     fn default_baby_spawn_chance(&self) -> f32 {
         0.1
-    }
-
-    fn age_boundary_reached(&self) {
-        self.update_dimensions();
     }
 }
 
@@ -184,13 +172,7 @@ impl CustomSound for DolphinEntity {
 impl Mob for DolphinEntity {
     fn has_global_tick_reach(&self) -> bool {
         let entity = self.get_entity();
-        entity.has_vehicle()
-            || entity.has_passengers()
-            || entity
-                .leashed_to
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_some()
+        entity.has_vehicle() || entity.has_passengers() || entity.is_leashed()
     }
 
     fn additional_tick_movement(&self) -> f64 {
@@ -265,20 +247,12 @@ impl Mob for DolphinEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .item_count;
-        if !living.pickup(item.get_entity(), u32::from(count)) {
+        // The count the pickup event approved. an item merged in meanwhile stays on the ground.
+        let Some(taken) = living.pick_up_from(item, count, |ground| ground.split(count)) else {
             return;
-        }
-        living.on_item_pickup(item);
-        let taken = std::mem::replace(
-            &mut *item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            ItemStack::EMPTY.clone(),
-        );
+        };
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::MAIN_HAND, taken);
-        item.get_entity().remove();
     }
 
     fn on_attack(&self, _target: &dyn EntityBase) {
@@ -355,7 +329,6 @@ impl Mob for DolphinEntity {
             tracked_data::dolphin::MOISTNESS_LEVEL,
             VarInt(self.moistness_level.load(Ordering::Relaxed)),
         );
-        self.update_dimensions();
     }
 
     fn mob_max_air_supply(&self) -> i32 {
@@ -408,13 +381,7 @@ impl Mob for DolphinEntity {
         );
         living.make_move(caller);
         let mut velocity = entity.velocity.load() * 0.9;
-        if self
-            .mob_entity
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_none()
-        {
+        if self.mob_entity.get_target().is_none() {
             velocity.y -= 0.005;
         }
         entity.velocity.store(velocity);

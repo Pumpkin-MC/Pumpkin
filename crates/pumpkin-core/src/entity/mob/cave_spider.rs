@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::BlockState;
@@ -23,12 +24,16 @@ const VEHICLE_SEAT_HEIGHT: f64 = 0.218_75;
 
 pub struct CaveSpiderEntity {
     pub mob_entity: MobEntity,
+    pub is_climbing: AtomicBool,
 }
 
 impl CaveSpiderEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let cave_spider = Self { mob_entity };
+        let cave_spider = Self {
+            mob_entity,
+            is_climbing: AtomicBool::new(false),
+        };
         let mob_arc = Arc::new(cave_spider);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -81,6 +86,26 @@ impl Mob for CaveSpiderEntity {
 
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn on_climbable(&self) -> bool {
+        self.is_climbing.load(Ordering::Relaxed)
+    }
+
+    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
+        let mut meta = crate::entity::mob::MobMetadata::new().no_ai(self.mob_entity.is_no_ai());
+        if self.is_climbing.load(Ordering::Relaxed) {
+            meta = meta.spider_climbing(true);
+        }
+        Some(meta)
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        super::spider::tick_wall_climbing(
+            self,
+            &self.is_climbing,
+            pumpkin_data::tracked_data::cave_spider::DATA_FLAGS_ID,
+        );
     }
 
     fn on_attack(&self, target: &dyn EntityBase) {
