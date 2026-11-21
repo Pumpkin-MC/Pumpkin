@@ -731,6 +731,17 @@ impl MobEntity {
             .unwrap_or(false)
     }
 
+    /// An occupied Brain lock cannot rule out a dependency when planning entity ticks.
+    pub(crate) fn brain_may_have_memory_value(
+        &self,
+        id: crate::entity::ai::brain::memory::MemoryModuleId,
+    ) -> bool {
+        self.brain.try_lock().map_or(true, |slot| {
+            slot.as_ref()
+                .is_some_and(|brain| brain.has_memory_value(id))
+        })
+    }
+
     pub fn with_brain<R>(&self, mob: &dyn Mob, callback: impl FnOnce(&mut Brain) -> R) -> R {
         let result = {
             let mut slot = self

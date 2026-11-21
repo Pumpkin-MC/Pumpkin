@@ -435,6 +435,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         self.is_immune_to_explosion()
     }
 
+    fn push_from_explosion(&self, knockback: Vector3<f64>) {
+        self.get_entity().add_velocity(knockback);
+    }
+
+    /// Prevents stale motion from being shown after a chunk's saved entity becomes live.
+    fn clear_motion_on_chunk_load(&self) {
+        self.get_entity().velocity.store(Vector3::default());
+    }
+
     fn get_gravity(&self) -> f64 {
         0.0
     }

@@ -608,11 +608,9 @@ impl<'a> Explosion<'a> {
                 (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
             let knockback = direction * knockback_power;
             // Vanilla `ServerExplosion.hurtEntities`: creative flyers get no knockback packet.
-            // AbstractWindCharge ignores the push but still takes part in owner redirection.
-            if !is_wind_charge(entity.entity_type)
-                && !entity_base
-                    .get_player()
-                    .is_some_and(|player| player.is_creative() && player.is_flying())
+            if !entity_base
+                .get_player()
+                .is_some_and(|player| player.is_creative() && player.is_flying())
             {
                 // A living entity's goes through `EntityKnockbackEvent`
                 let knockback = if entity_base.get_living_entity().is_some() {
@@ -623,7 +621,7 @@ impl<'a> Explosion<'a> {
                 if let Some(knockback) = knockback {
                     // TODO vanilla sends a player's knockback in `ClientboundExplodePacket`, added to the client's
                     // motion. Setting the motion here starts from the server's stale copy of a player's velocity.
-                    entity.add_velocity(knockback);
+                    entity_base.push_from_explosion(knockback);
                 }
             }
 

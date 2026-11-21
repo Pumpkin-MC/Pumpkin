@@ -45,6 +45,7 @@ pub(super) fn shoot_when_stuck() -> Box<dyn BehaviorControl> {
 enum ChargePose {
     Pending,
     Accepted,
+    Rejected,
     Stopped,
 }
 
@@ -99,43 +100,53 @@ impl Behavior for Shoot {
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        self.charge_pose
-            .as_ref()
-            .is_some_and(|pose| match pose.load() {
-                ChargePose::Pending => tick.pending_pose() == Some(EntityPose::Shooting),
-                ChargePose::Accepted => true,
-                ChargePose::Stopped => false,
-            })
-            && tick.state.has_memory_value(types::ATTACK_TARGET.id())
+        // A plugin can reject the deferred start. Once accepted, the two vanilla memories
+        // govern continuation even if the entity changes pose.
+        tick.state.has_memory_value(types::ATTACK_TARGET.id())
             && tick.state.has_memory_value(types::BREEZE_SHOOT.id())
+            && self.charge_pose.as_ref().is_some_and(|pose| {
+                matches!(pose.load(), ChargePose::Pending | ChargePose::Accepted)
+            })
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
         let charge_pose = Arc::new(AtomicCell::new(ChargePose::Pending));
         self.charge_pose = Some(charge_pose.clone());
-        let accepted = charge_pose.clone();
-        tick.set_pose_then_if(
-            EntityPose::Shooting,
-            move |_| charge_pose.load() != ChargePose::Stopped,
-            move |breeze| {
-                breeze.get_mob_entity().with_brain(breeze, |brain| {
-                    if accepted
+        tick.defer_pose_change(EntityPose::Shooting, move |mob| {
+            let body = mob.get_mob_entity();
+            let entity = mob.get_entity();
+            let can_start =
+                || body.living_entity.is_alive() && charge_pose.load() == ChargePose::Pending;
+            if !can_start() {
+                return;
+            }
+            let accepted = entity.set_pose_if(EntityPose::Shooting, can_start, || {
+                body.with_brain(mob, |brain| {
+                    if charge_pose
                         .compare_exchange(ChargePose::Pending, ChargePose::Accepted)
-                        .is_ok()
+                        .is_err()
                     {
-                        brain.set_with_expiry(
-                            types::BREEZE_SHOOT_CHARGING,
-                            (),
-                            i64::from(SHOOT_INITIAL_DELAY_TICKS),
-                        );
-                        if let Some(breeze) = breeze.cast_any().downcast_ref::<BreezeEntity>() {
-                            breeze.pose_cleanup.store(None);
-                        }
+                        return;
+                    }
+                    brain.set_with_expiry(
+                        types::BREEZE_SHOOT_CHARGING,
+                        (),
+                        i64::from(SHOOT_INITIAL_DELAY_TICKS),
+                    );
+                    if let Some(breeze) = mob.cast_any().downcast_ref::<BreezeEntity>() {
+                        breeze.pose_cleanup.store(None);
                     }
                 });
-            },
-            |breeze, _| breeze.play_entity_sound(Sound::EntityBreezeInhale, 1.0, 1.0),
-        );
+            });
+            if !accepted {
+                let _ = charge_pose.compare_exchange(ChargePose::Pending, ChargePose::Rejected);
+            } else if body.living_entity.is_alive()
+                && charge_pose.load() == ChargePose::Accepted
+                && entity.pose.load() == EntityPose::Shooting
+            {
+                mob.play_entity_sound(Sound::EntityBreezeInhale, 1.0, 1.0);
+            }
+        });
     }
 
     fn tick(&mut self, tick: &mut BrainTick<'_>) {
@@ -230,6 +241,9 @@ fn fire_wind_charge(tick: &mut BrainTick<'_>, target: Arc<dyn EntityBase>, aim_a
                     .get_living_entity()
                     .is_some_and(crate::entity::living::LivingEntity::is_alive)
                 && Arc::ptr_eq(&target_entity.world.load(), &world)
+                && body
+                    .stored_target()
+                    .is_some_and(|current| Arc::ptr_eq(&current, &target))
                 && body.with_brain(shooter, |brain| {
                     brain.has_memory_value(types::BREEZE_SHOOT.id())
                         && brain
@@ -284,24 +298,151 @@ impl Behavior for ShootWhenStuck {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::Ordering;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+    use futures::future::BoxFuture;
+    use pumpkin_data::dimension::Dimension;
     use pumpkin_data::environment_attribute::Activity;
 
     use super::*;
     use crate::entity::{
         ai::{
             brain::{Brain, activity::ActivityData},
-            test_support::world,
+            test_support::server,
         },
         passive::iron_golem::IronGolemEntity,
     };
+    use crate::plugin::api::events::entity::{
+        entity_pose_change::EntityPoseChangeEvent, entity_spawn::EntitySpawnEvent,
+    };
+    use crate::plugin::{EventHandler, EventPriority};
+    use crate::server::Server;
 
-    #[tokio::test]
-    async fn a_stuck_breeze_fires_one_owned_projectile_unless_its_brain_is_rebuilt()
+    struct RetargetOnChargeSpawn {
+        breeze: Arc<BreezeEntity>,
+        replacement: Arc<dyn EntityBase>,
+        attempts: AtomicUsize,
+    }
+
+    impl EventHandler<EntitySpawnEvent> for RetargetOnChargeSpawn {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntitySpawnEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async {
+                if event.entity_type.parse() != Ok(EntityType::BREEZE_WIND_CHARGE.id) {
+                    return;
+                }
+                match self.attempts.fetch_add(1, Ordering::Relaxed) {
+                    1 => self.breeze.mob_entity.set_target(None),
+                    2 => self
+                        .breeze
+                        .mob_entity
+                        .set_target(Some(self.replacement.clone())),
+                    _ => {}
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn shot_is_discarded_if_the_spawn_callback_changes_the_mob_target()
     -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
-        let world = world(&folder);
+        let server = server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let position = Vector3::new(0.5, 220.0, 0.5);
+        let aim_at = position.add_raw(8.0, 0.0, 0.0);
+        let breeze = BreezeEntity::new(Entity::new(world.clone(), position, &EntityType::BREEZE));
+        let target: Arc<dyn EntityBase> =
+            IronGolemEntity::new(Entity::new(world.clone(), aim_at, &EntityType::IRON_GOLEM));
+        let observer = Arc::new(RetargetOnChargeSpawn {
+            breeze: breeze.clone(),
+            replacement: IronGolemEntity::new(Entity::new(
+                world.clone(),
+                aim_at.add_raw(0.0, 0.0, 4.0),
+                &EntityType::IRON_GOLEM,
+            )),
+            attempts: AtomicUsize::new(0),
+        });
+        server.plugin_manager.register::<EntitySpawnEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        let body = &breeze.mob_entity;
+        for attempts in 1..=3 {
+            body.set_target(Some(target.clone()));
+            let effects = body.with_brain(breeze.as_ref(), |brain| {
+                brain.set(types::ATTACK_TARGET, target.clone());
+                brain.set(types::BREEZE_SHOOT, ());
+                fire_wind_charge(
+                    &mut BrainTick {
+                        mob: breeze.as_ref(),
+                        world: &world,
+                        state: brain,
+                        time: 0,
+                    },
+                    target.clone(),
+                    aim_at,
+                );
+                brain.take_effects()
+            });
+            for effect in effects {
+                effect(breeze.as_ref());
+            }
+
+            assert_eq!(observer.attempts.load(Ordering::Relaxed), attempts);
+            assert_eq!(
+                world
+                    .entities
+                    .load()
+                    .iter()
+                    .filter(
+                        |entity| entity.get_entity().entity_type == &EntityType::BREEZE_WIND_CHARGE
+                    )
+                    .count(),
+                1,
+                "spawn attempts: {attempts}"
+            );
+        }
+        server.stop();
+        server.shutdown().await;
+        Ok(())
+    }
+
+    struct VetoShooting {
+        entity_id: i32,
+        veto: AtomicBool,
+    }
+
+    impl EventHandler<EntityPoseChangeEvent> for VetoShooting {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntityPoseChangeEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async {
+                if event.entity_id == self.entity_id
+                    && event.pose.parse() == Ok(EntityPose::Shooting as u8)
+                {
+                    event.cancelled = self.veto.load(Ordering::Relaxed);
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Checks an accepted start, a Brain rebuild and a pose veto with the same combat fixture"
+    )]
+    async fn a_stuck_breeze_fires_once_after_an_accepted_start_unless_its_brain_is_rebuilt()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
         let breeze = BreezeEntity::new(Entity::new(
             world.clone(),
             Vector3::new(0.5, 64.0, 0.5),
@@ -312,6 +453,15 @@ mod tests {
             Vector3::new(8.5, 64.0, 0.5),
             &EntityType::IRON_GOLEM,
         ));
+        let observer = Arc::new(VetoShooting {
+            entity_id: breeze.get_entity().entity_id,
+            veto: AtomicBool::new(false),
+        });
+        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
         breeze
             .get_entity()
             .touching_water
@@ -325,6 +475,7 @@ mod tests {
             brain.set_default_activity(Activity::Fight);
             brain.use_default_activity();
             brain.set(types::ATTACK_TARGET, target.clone());
+            breeze.mob_entity.set_target(Some(target.clone()));
             breeze.mob_entity.set_brain(brain);
         };
         let tick = |time, refresh| {
@@ -355,6 +506,8 @@ mod tests {
         }
         let during_charge = (breeze.get_entity().pose.load(), count_charges());
 
+        // An accepted attempt continues on the two memories even if a plugin changes the pose.
+        breeze.get_entity().set_pose(EntityPose::Standing);
         tick(17, false);
         let after_shot = count_charges();
         let owner = world
@@ -387,7 +540,28 @@ mod tests {
         tick(17, true);
         assert_eq!(breeze.get_entity().pose.load(), EntityPose::Standing);
         assert_eq!(count_charges(), 1);
-        world.level.shutdown().await;
+
+        observer.veto.store(true, Ordering::Relaxed);
+        start_attack();
+        tick(0, false);
+        tick(1, false);
+        assert_eq!(breeze.get_entity().pose.load(), EntityPose::Standing);
+        assert!(
+            !breeze
+                .mob_entity
+                .brain_has_memory_value(types::BREEZE_SHOOT_CHARGING.id())
+        );
+        tick(2, false);
+        breeze.mob_entity.with_brain(breeze.as_ref(), |brain| {
+            assert!(!brain.has_memory_value(types::BREEZE_SHOOT.id()));
+            assert_eq!(
+                brain.time_until_expiry(types::BREEZE_SHOOT_COOLDOWN.id()),
+                Some(10)
+            );
+        });
+        assert_eq!(count_charges(), 1);
+        server.stop();
+        server.shutdown().await;
         Ok(())
     }
 }

@@ -140,6 +140,14 @@ impl WindChargeEntity {
 }
 
 impl EntityBase for WindChargeEntity {
+    fn push_from_explosion(&self, _knockback: Vector3<f64>) {
+        // AbstractWindCharge ignores the push but still takes part in owner redirection.
+    }
+
+    fn clear_motion_on_chunk_load(&self) {
+        // Charges resume flight with their saved motion.
+    }
+
     fn can_hit(&self) -> bool {
         super::is_redirectable(self.get_entity())
     }

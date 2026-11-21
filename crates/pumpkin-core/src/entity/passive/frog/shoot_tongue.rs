@@ -40,6 +40,34 @@ pub struct ShootTongue {
     state: State,
 }
 
+#[cfg(test)]
+pub fn prepare_test_tongue_bite(frog: &FrogEntity, prey: Arc<dyn EntityBase>) {
+    use crate::entity::ai::brain::{Brain, activity::ActivityData, behavior::Timed};
+    use pumpkin_data::environment_attribute::Activity;
+
+    let mut tongue = Timed::new(ShootTongue {
+        state: State::CatchAnimation,
+        eat_animation_timer: CATCH_ANIMATION_DURATION,
+        ..ShootTongue::new(Sound::EntityFrogTongue, Sound::EntityFrogEat)
+    });
+    tongue.start_at(
+        frog.get_entity().world.load().get_world_age(),
+        TIME_OUT_DURATION,
+    );
+
+    let mut brain = Brain::default();
+    brain.add_activity(ActivityData::with_priority_start(
+        Activity::Tongue,
+        0,
+        vec![Box::new(tongue)],
+    ));
+    brain.set_default_activity(Activity::Tongue);
+    brain.use_default_activity();
+    frog.set_tongue_target(prey.as_ref());
+    brain.set(types::ATTACK_TARGET, prey);
+    frog.mob_entity.set_brain(brain);
+}
+
 impl ShootTongue {
     pub const fn new(tongue_sound: Sound, eat_sound: Sound) -> Self {
         Self {

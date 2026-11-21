@@ -3,10 +3,17 @@
 
 use std::collections::VecDeque;
 
-#[cfg(debug_assertions)]
 use std::sync::Arc;
 
-use pumpkin_data::{Block, attributes::Attributes, entity::EntityType, tag, tag::Taggable};
+use pumpkin_data::{
+    Block,
+    attributes::Attributes,
+    data_component_impl::{ConsumeEffect, DeathProtectionImpl},
+    entity::EntityType,
+    tag,
+    tag::Taggable,
+};
+use pumpkin_util::Hand;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, get_section_cord, position::BlockPos, vector2::Vector2,
     vector3::Vector3,
@@ -18,9 +25,10 @@ use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
 use crate::entity::{
-    DelayedLeash, EntityBase, PUSH_STRENGTH, projectile::wind_charge::WindChargeEntity,
-    tnt::TNTEntity,
+    DelayedLeash, EntityBase, PUSH_STRENGTH, passive::frog::FrogEntity,
+    projectile::wind_charge::WindChargeEntity, tnt::TNTEntity,
 };
+use crate::net::ClientPlatform;
 use crate::plugin::api::events::{
     Payload,
     block::{
@@ -36,21 +44,22 @@ use crate::plugin::api::events::{
         EntityPotionEffectEvent, EntityResurrectEvent, EntitySpawnEvent, EntityTargetEvent,
         EntityTeleportEvent, EntityToggleSitEvent, EntityUnleashEvent, ExplosionPrimeEvent,
         ItemSpawnEvent, PigZombieAngerEvent, PlayerDeathEvent,
+        entity_regain_health::EntityRegainHealthEvent,
     },
     player::{
         PlayerAdvancementDoneEvent, PlayerExpChangeEvent, PlayerItemBreakEvent,
         PlayerItemDamageEvent, PlayerLevelChangeEvent, PlayerStatisticIncrementEvent,
-        PlayerUnleashEntityEvent, PlayerVelocityEvent,
+        PlayerUnleashEntityEvent, PlayerVelocityEvent, player_teleport::PlayerTeleportEvent,
     },
     vehicle::{VehicleDamageEvent, VehicleDestroyEvent, VehicleEnterEvent, VehicleExitEvent},
-    world::GenericGameEvent,
+    world::{GenericGameEvent, loot_generate::LootGenerateEvent},
 };
 use crate::plugin::{
     PluginManager, api::events::vehicle::vehicle_update::VehicleUpdateEvent,
     server::packet::PacketSentEvent,
 };
 use crate::server::Server;
-use crate::world::World;
+use crate::world::{World, chunker::is_within_chebyshev_distance};
 
 /// Reach of same-tick neighbour updates: a full wire line, the powered block and one component.
 const BLOCK_UPDATE_REACH: f64 = SIGNAL_MAX as f64 + 2.0;
@@ -169,18 +178,92 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<EntityBlockFormEvent>()
 }
 
+fn plugins_observe_shared_brain_tick(entity: &dyn EntityBase, movement: f64) -> bool {
+    let base = entity.get_entity();
+    let entity_type = base.entity_type;
+    let camel = entity_type == &EntityType::CAMEL || entity_type == &EntityType::CAMEL_HUSK;
+    let frog = entity_type == &EntityType::FROG;
+    if !camel && !frog && entity_type != &EntityType::VILLAGER {
+        return false;
+    }
+    let world = base.world.load();
+    let Some(server) = world.server.upgrade() else {
+        return false;
+    };
+    let plugins = &server.plugin_manager;
+    if plugins.has_handlers::<EntityPoseChangeEvent>()
+        || camel && plugins.has_handlers::<GenericGameEvent>()
+    {
+        return true;
+    }
+    let observes_packets = plugins.has_handlers::<PacketSentEvent>();
+    // A bite can produce damage, drops and death effects such as a wind burst. A viewer
+    // of the retained prey or a player credited for the kill can also receive packets.
+    if frog
+        && (plugins_observe_combat_or_explosion(plugins)
+            || observes_packets && server.has_n_players(1))
+        && entity
+            .cast_any()
+            .downcast_ref::<FrogEntity>()
+            .is_some_and(FrogEntity::may_bite_with_tongue)
+    {
+        return true;
+    }
+    if !observes_packets {
+        return false;
+    }
+    if world
+        .entity_tracker
+        .get_tracked_entity(base.entity_id)
+        .is_some_and(|tracked| tracked.has_viewers())
+    {
+        return true;
+    }
+
+    let unbounded = !movement.is_finite() || base.has_vehicle();
+    // Include movement and the nearby bed blocks changed during a Villager pose transition.
+    let area = base
+        .bounding_box
+        .load()
+        .expand(movement + 3.0, 0.0, movement + 3.0);
+    let min_chunk = area.min_block_pos().chunk_position();
+    let max_chunk = area.max_block_pos().chunk_position();
+    world.players.load().iter().any(|player| {
+        if unbounded {
+            return true;
+        }
+        let nearest_chunk = |chunk: Vector2<i32>| {
+            Vector2::new(
+                chunk.x.clamp(min_chunk.x, max_chunk.x),
+                chunk.y.clamp(min_chunk.y, max_chunk.y),
+            )
+        };
+        let watch = player.watched_section.load();
+        let nearest_watched = nearest_chunk(watch.center);
+        let chunk = player.get_entity().chunk_pos.load();
+        watch.is_within_distance(nearest_watched.x, nearest_watched.y)
+            || (camel || frog)
+                && matches!(player.client.as_ref(), ClientPlatform::Java(_))
+                && is_within_chebyshev_distance(nearest_chunk(chunk), chunk, 2)
+    })
+}
+
 fn plugins_observe_wind_charge_tick(
     plugins: &PluginManager,
     world: &World,
     charge: &WindChargeEntity,
     movement: f64,
 ) -> bool {
-    if plugins.has_handlers::<PacketSentEvent>()
-        && wind_charge_has_packet_recipients(world, charge, movement)
-    {
-        return true;
-    }
+    (plugins.has_handlers::<PacketSentEvent>()
+        // Breeze charge flight and bursts both send to live audiences.
+        && (charge.get_entity().entity_type == &EntityType::BREEZE_WIND_CHARGE
+            || wind_charge_has_packet_recipients(world, charge, movement)))
+        // A translated legacy client can arrive after the player snapshot and take damage immediately.
+        || plugins.has_handlers::<PlayerTeleportEvent>()
+        || plugins_observe_combat_or_explosion(plugins)
+}
 
+fn plugins_observe_combat_or_explosion(plugins: &PluginManager) -> bool {
     plugins.has_handlers_for(&[
         // Projectile travel, impact and explosion.
         EntityCombustEvent::get_name_static(),
@@ -196,6 +279,7 @@ fn plugins_observe_wind_charge_tick(
         PlayerItemDamageEvent::get_name_static(),
         PlayerItemBreakEvent::get_name_static(),
         EntityResurrectEvent::get_name_static(),
+        EntityRegainHealthEvent::get_name_static(),
         EntityPotionEffectEvent::get_name_static(),
         EntityPoseChangeEvent::get_name_static(),
         EntityTeleportEvent::get_name_static(),
@@ -224,6 +308,7 @@ fn plugins_observe_wind_charge_tick(
         BlockExpEvent::get_name_static(),
         BlockPhysicsEvent::get_name_static(),
         BlockRedstoneEvent::get_name_static(),
+        LootGenerateEvent::get_name_static(),
         BlockFormEvent::get_name_static(),
         SpongeAbsorbEvent::get_name_static(),
         CauldronLevelChangeEvent::get_name_static(),
@@ -293,12 +378,17 @@ fn wind_charge_has_packet_recipients(
         return true;
     }
 
-    // A hit can reach distant viewers and players credited for a kill, or broadcast a block sound.
+    let has_java_player = players
+        .iter()
+        .any(|player| matches!(player.client.as_ref(), ClientPlatform::Java(_)));
+    // A hit can reach distant viewers or kill credit. Squid ink is sent to all Java players.
     world.get_entities_at_box(&area).iter().any(|other| {
+        let kind = other.get_entity().entity_type;
         other.get_entity().entity_id != entity.entity_id
-            && (tracker
-                .get_tracked_entity(other.get_entity().entity_id)
-                .is_some_and(|tracked| tracked.has_viewers())
+            && (has_java_player && (kind == &EntityType::SQUID || kind == &EntityType::GLOW_SQUID)
+                || tracker
+                    .get_tracked_entity(other.get_entity().entity_id)
+                    .is_some_and(|tracked| tracked.has_viewers())
                 || other.get_living_entity().is_some_and(|living| {
                     living.is_blocking() || living.player_kill_credit_id().is_some()
                 }))
@@ -553,6 +643,7 @@ impl EntityReach {
         reach.global = entity
             .get_mob()
             .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
+            || plugins_observe_shared_brain_tick(entity, movement)
             || wind_charge.is_some_and(|charge| {
                 let world = base.world.load();
                 // Block contact precedes impact, so a gateway can move the burst to its exit.
@@ -584,7 +675,91 @@ impl EntityReach {
                 .cast_any()
                 .downcast_ref::<TNTEntity>()
                 .is_some_and(TNTEntity::is_about_to_explode);
+        if !reach.global && (wind_charge.is_some() || base.entity_type == &EntityType::FROG) {
+            include_death_teleports(&mut reach, entity, wind_charge.is_some());
+        }
         Self::Conservative(reach)
+    }
+}
+
+fn include_death_teleports(reach: &mut TickReach, source: &dyn EntityBase, wind_charge: bool) {
+    let world = source.get_entity().world.load();
+    if wind_charge {
+        let entities = world.get_entities_at_box(&reach.entities);
+        let players = world.players.load();
+        for victim in entities.iter().map(Arc::as_ref).chain(
+            players
+                .iter()
+                .map(|player| player.as_ref() as &dyn EntityBase),
+        ) {
+            include_death_teleport(reach, &world, victim);
+            if reach.global {
+                return;
+            }
+        }
+    } else if let Some(prey) = source
+        .cast_any()
+        .downcast_ref::<FrogEntity>()
+        .and_then(FrogEntity::get_tongue_target)
+    {
+        include_death_teleport(reach, &world, prey.as_ref());
+    }
+}
+
+fn include_death_teleport(reach: &mut TickReach, world: &World, victim: &dyn EntityBase) {
+    let Some(living) = victim.get_living_entity() else {
+        return;
+    };
+    let mut radius = None;
+    for hand in Hand::all() {
+        let held = living.get_stack_in_hand(victim, hand);
+        if let Some(protection) = held.get_data_component::<DeathProtectionImpl>() {
+            for effect in &*protection.death_effects {
+                if let ConsumeEffect::TeleportRandomly(diameter) = effect {
+                    radius = Some(radius.unwrap_or(0.0) + f64::from(diameter.abs()) * 0.5);
+                }
+            }
+        }
+    }
+    let Some(radius) = radius else {
+        return;
+    };
+
+    let victim_entity = victim.get_entity();
+    let movement = victim_entity.velocity.load().length()
+        + victim
+            .get_mob()
+            .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement);
+    let radius = radius + movement;
+    let destination = victim_entity
+        .bounding_box
+        .load()
+        .expand(radius, 0.0, radius);
+    if !radius.is_finite()
+        || destination.min.x < reach.body.min.x
+        || destination.max.x > reach.body.max.x
+        || destination.min.z < reach.body.min.z
+        || destination.max.z > reach.body.max.z
+    {
+        reach.global = true;
+        return;
+    }
+
+    // The search can follow a destination column down to the world's bottom.
+    let min_y = f64::from(world.get_bottom_y()) - BLOCK_UPDATE_REACH;
+    let max_y =
+        f64::from(world.get_top_y()) + f64::from(victim_entity.height()) + BLOCK_UPDATE_REACH;
+    for area in [
+        &mut reach.body,
+        &mut reach.entities,
+        &mut reach.players,
+        &mut reach.block_reads,
+    ]
+    .into_iter()
+    .chain(reach.block_writes.as_mut())
+    {
+        area.min.y = area.min.y.min(min_y);
+        area.max.y = area.max.y.max(max_y);
     }
 }
 
@@ -1322,11 +1497,1039 @@ impl DisjointSets {
 mod tests {
     use super::*;
     use crate::{
-        entity::{ai::test_support, r#type::from_type},
+        entity::{
+            Entity,
+            ai::test_support,
+            mob::{Mob, slime::SlimeEntity},
+            passive::frog::{FrogEntity, prepare_test_tongue_bite},
+            r#type::from_type,
+        },
         plugin::{EventHandler, EventPriority, player::PlayerChatEvent},
     };
+    use futures::future::BoxFuture;
+    use pumpkin_data::dimension::Dimension;
     use pumpkin_util::math::vector3::Vector3;
-    use std::sync::Arc;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering::Relaxed},
+    };
+
+    struct ObserveBite {
+        prey: i32,
+        fired: AtomicBool,
+    }
+
+    impl EventHandler<EntityDamageEvent> for ObserveBite {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntityDamageEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.entity_id == self.prey
+                    && event.damage_type == pumpkin_data::damage::DamageType::MOB_ATTACK
+                {
+                    self.fired.store(true, Relaxed);
+                    event.cancelled = true;
+                }
+            })
+        }
+    }
+
+    struct IgnoreEvent;
+    impl<E: Payload> EventHandler<E> for IgnoreEvent {}
+
+    fn force_separated_chunk(world: &World, index: usize) -> Vector2<i32> {
+        let chunk = Vector2::new(index as i32 * 32, 0);
+        world.level.loaded_chunks.insert(
+            chunk,
+            pumpkin_world::chunk::ChunkData::empty_sync(chunk.x, chunk.y),
+        );
+        world
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(chunk);
+        chunk
+    }
+
+    fn prepare_separated_islands(world: &Arc<World>) {
+        for index in 0..MIN_PARALLEL_ENTITIES {
+            let chunk = force_separated_chunk(world, index);
+            if index > 0 {
+                world.add_entity_silent(from_type(
+                    &EntityType::ARMOR_STAND,
+                    Vector3::new(f64::from(chunk.x * 16) + 0.5, 100.0, 0.5),
+                    world,
+                    uuid::Uuid::new_v4(),
+                ));
+            }
+        }
+    }
+
+    fn separated_frog_and_slime(world: &Arc<World>) -> (Arc<FrogEntity>, Arc<SlimeEntity>) {
+        prepare_separated_islands(world);
+        let frog = FrogEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(2.5, 100.0, 2.5),
+            &EntityType::FROG,
+        ));
+        let slime = SlimeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(3.5, 100.0, 2.5),
+            &EntityType::SLIME,
+        ));
+        slime.set_size(1, true);
+        slime.get_mob_entity().set_no_ai(true);
+        world.add_entity_silent(frog.clone());
+        world.add_entity_silent(slime.clone());
+        (frog, slime)
+    }
+
+    fn entity_schedule(world: &World) -> (usize, bool) {
+        let schedule = world
+            .island_schedule
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (schedule.entity_count, schedule.ticks_until_probe > 0)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_frog_bites_in_serial_if_a_plugin_observes_damage()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for observe_damage in [false, true] {
+            let folder = tempfile::tempdir()?;
+            let server = test_support::server(&folder).await?;
+            let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+            let (frog, prey) = separated_frog_and_slime(&world);
+
+            let observer = Arc::new(ObserveBite {
+                prey: prey.get_entity().entity_id,
+                fired: AtomicBool::new(false),
+            });
+            if observe_damage {
+                server.plugin_manager.register::<EntityDamageEvent, _>(
+                    observer.clone(),
+                    EventPriority::Normal,
+                    true,
+                );
+            } else {
+                server.plugin_manager.register::<PlayerChatEvent, _>(
+                    Arc::new(IgnoreEvent),
+                    EventPriority::Normal,
+                    true,
+                );
+            }
+            world.tick(&server);
+            let ticking_entities = MIN_PARALLEL_ENTITIES + 1;
+            assert_eq!(
+                entity_schedule(&world),
+                (ticking_entities, false),
+                "idle frog"
+            );
+            prepare_test_tongue_bite(&frog, prey);
+            world.tick(&server);
+
+            assert_eq!(
+                observer.fired.load(Relaxed),
+                observe_damage,
+                "bite dispatcher"
+            );
+            assert_eq!(
+                world.get_entity_by_id(observer.prey).is_some(),
+                observe_damage,
+                "the prey should survive only when the handler cancels the bite"
+            );
+            assert_eq!(
+                entity_schedule(&world),
+                (ticking_entities, observe_damage),
+                "planner mode on the bite tick"
+            );
+            server.stop();
+            server.shutdown().await;
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_frog_and_its_distant_tongue_target_share_an_island()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = test_support::world(&folder);
+        let frog = FrogEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(2.5, 100.0, 2.5),
+            &EntityType::FROG,
+        ));
+        let prey = from_type(
+            &EntityType::SLIME,
+            Vector3::new(512.5, 100.0, 2.5),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        let separate = from_type(
+            &EntityType::ARMOR_STAND,
+            Vector3::new(1024.5, 100.0, 2.5),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        frog.set_tongue_target(prey.as_ref());
+        assert!(frog.get_mob_entity().stored_target().is_none());
+        world.add_entity_silent(frog.clone());
+        world.add_entity_silent(prey.clone());
+
+        let actors = [frog as Arc<dyn EntityBase>, prey, separate];
+        let config = EntityIslandsConfig::default();
+        let reports = actors
+            .iter()
+            .map(|actor| EntityReach::of(actor.as_ref(), &config))
+            .collect();
+        let reaches =
+            resolve(reports, &config).ok_or("the reach reports should permit parallel islands")?;
+        let nodes: Vec<_> = actors
+            .iter()
+            .map(|actor| actor.get_entity().entity_id)
+            .zip(reaches)
+            .collect();
+        let islands = partition(&nodes, &[], &[]).ok_or("the planner should return islands")?;
+        assert_eq!(islands.islands, vec![vec![0, 1], vec![2]]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    const CHEST_LOOT: &str = "minecraft:chests/simple_dungeon";
+
+    struct ObserveChestLoot(AtomicBool);
+
+    impl EventHandler<LootGenerateEvent> for ObserveChestLoot {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut LootGenerateEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.loot_table == CHEST_LOOT {
+                    self.0.store(true, Relaxed);
+                    event.cancelled = true;
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_frog_bite_serializes_a_wind_burst_that_unpacks_chest_loot()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::block::entities::{
+            BlockEntity, chest::ChestBlockEntity, comparator::ComparatorBlockEntity,
+        };
+        use crate::world::BlockFlags;
+        use pumpkin_data::{
+            block_properties::{
+                AttachFace, ComparatorLikeProperties, HorizontalFacing, LeverLikeProperties,
+            },
+            potion::Potion,
+        };
+        use pumpkin_nbt::compound::NbtCompound;
+
+        let folder = tempfile::tempdir()?;
+        let server = test_support::server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let (frog, prey) = separated_frog_and_slime(&world);
+        world.tick(&server);
+        assert_eq!(entity_schedule(&world), (MIN_PARALLEL_ENTITIES + 1, false));
+
+        // Suppress neighbour updates during setup so the comparator reads the chest on the bite tick.
+        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+        let lever = BlockPos::new(3, 100, 2);
+        let comparator = BlockPos::new(4, 100, 2);
+        let chest_pos = BlockPos::new(5, 100, 2);
+        for pos in [lever, comparator, chest_pos] {
+            world.set_block_state(&pos.down(), Block::STONE.default_state.id, flags);
+        }
+        let mut lever_props = LeverLikeProperties::default(&Block::LEVER);
+        lever_props.face = AttachFace::Floor;
+        lever_props.powered = false;
+        world.set_block_state(&lever, lever_props.to_state_id(&Block::LEVER), flags);
+        let mut comparator_props = ComparatorLikeProperties::default(&Block::COMPARATOR);
+        comparator_props.facing = HorizontalFacing::East;
+        world.set_block_state(
+            &comparator,
+            comparator_props.to_state_id(&Block::COMPARATOR),
+            flags,
+        );
+        world.add_block_entity(Arc::new(ComparatorBlockEntity::new(comparator)));
+        world.set_block_state(&chest_pos, Block::CHEST.default_state.id, flags);
+        let mut chest_nbt = NbtCompound::new();
+        chest_nbt.put_string("LootTable", CHEST_LOOT.to_owned());
+        let chest = Arc::new(ChestBlockEntity::from_nbt(&chest_nbt, chest_pos));
+        world.add_block_entity(chest.clone());
+        assert!(!world.is_block_tick_scheduled(&comparator, &Block::COMPARATOR));
+        assert_eq!(chest.loot_table_key().as_deref(), Some(CHEST_LOOT));
+
+        for effect in Potion::WIND_CHARGED.effects {
+            prey.get_mob_entity()
+                .living_entity
+                .add_effect(effect.clone());
+        }
+        let observer = Arc::new(ObserveChestLoot(AtomicBool::new(false)));
+        server.plugin_manager.register::<LootGenerateEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        prepare_test_tongue_bite(&frog, prey);
+        world.tick(&server);
+
+        let lever_state = world.get_block_state(&lever);
+        assert!(LeverLikeProperties::from_state_id(lever_state.id).powered);
+        assert!(
+            observer.0.load(Relaxed),
+            "the comparator must unpack loot during the bite tick"
+        );
+        assert!(chest.loot_table_key().is_none());
+        assert_eq!(entity_schedule(&world), (MIN_PARALLEL_ENTITIES + 1, true));
+        server.stop();
+        server.shutdown().await;
+        Ok(())
+    }
+
+    impl EventHandler<EntityRegainHealthEvent> for ObserveBite {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntityRegainHealthEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.entity_id == self.prey && event.amount > 0.0 {
+                    self.fired.store(true, Relaxed);
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_frog_bite_serializes_healing_from_death_protection()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::borrow::Cow;
+
+        use pumpkin_data::{
+            data_component_impl::{
+                ConsumeEffect, DeathProtectionImpl, EquipmentSlot, StatusEffectInstance,
+            },
+            item::Item,
+            item_stack::ItemStack,
+        };
+
+        let folder = tempfile::tempdir()?;
+        let server = test_support::server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let (frog, prey) = separated_frog_and_slime(&world);
+        let living = &prey.get_mob_entity().living_entity;
+        let effect = StatusEffectInstance {
+            effect_id: Cow::Borrowed("minecraft:instant_health"),
+            amplifier: 0,
+            duration: 1,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+        };
+        let mut protection = ItemStack::new(1, &Item::TOTEM_OF_UNDYING);
+        protection.set_data_component(DeathProtectionImpl {
+            death_effects: Cow::Owned(vec![ConsumeEffect::ApplyEffects((
+                Cow::Owned(vec![effect]),
+                1.0,
+            ))]),
+        });
+        living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .insert(EquipmentSlot::MAIN_HAND, protection);
+        let observer = Arc::new(ObserveBite {
+            prey: prey.get_entity().entity_id,
+            fired: AtomicBool::new(false),
+        });
+        server
+            .plugin_manager
+            .register::<EntityRegainHealthEvent, _>(observer.clone(), EventPriority::Normal, true);
+
+        world.tick(&server);
+        assert_eq!(entity_schedule(&world), (MIN_PARALLEL_ENTITIES + 1, false));
+        assert!(!living.held_item_from_equipment().is_empty());
+        assert!(!observer.fired.load(Relaxed));
+
+        prepare_test_tongue_bite(&frog, prey.clone());
+        world.tick(&server);
+
+        assert!(
+            living.held_item_from_equipment().is_empty(),
+            "the bite must consume death protection"
+        );
+        assert!(prey.get_entity().is_alive());
+        assert!(
+            observer.fired.load(Relaxed),
+            "Instant Health must dispatch the callback"
+        );
+        assert_eq!(entity_schedule(&world), (MIN_PARALLEL_ENTITIES + 1, true));
+        server.stop();
+        server.shutdown().await;
+        Ok(())
+    }
+
+    fn spawn_teleport_test_player(
+        world: &Arc<World>,
+        server: &Arc<Server>,
+        arrives_after_planning: bool,
+    ) -> Result<Arc<crate::entity::player::Player>, Box<dyn std::error::Error>> {
+        use crate::entity::player::Player;
+        use crate::net::{
+            GameProfile, PacketRateLimiter, PlayerConfig,
+            java::{JavaClient, pending::PendingConnection},
+        };
+        use pumpkin_util::GameMode;
+
+        let profile = GameProfile {
+            id: uuid::Uuid::new_v4(),
+            name: "Notch".to_owned(),
+            properties: arc_swap::ArcSwap::from_pointee(Vec::new()),
+            profile_actions: None,
+        };
+        let config = PlayerConfig::default();
+        let (read, write) = tokio::io::split(tokio::io::duplex(1024).0);
+        let pending = PendingConnection::from_transport(
+            Box::new(read),
+            Box::new(write),
+            "127.0.0.1:0".parse()?,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(server),
+        );
+        if arrives_after_planning {
+            pending
+                .version
+                .store(pumpkin_util::version::JavaMinecraftVersion::V_1_21_2);
+        }
+        let client = Arc::new(ClientPlatform::Java(JavaClient::from_pending(
+            pending,
+            profile.clone(),
+            config.clone(),
+        )));
+        let player = Arc::new(Player::new(
+            client,
+            profile,
+            config,
+            world,
+            GameMode::Survival,
+        ));
+        player.get_entity().set_pos(Vector3::new(4.5, 100.25, 2.5));
+        player.set_client_loaded(!arrives_after_planning);
+        Ok(player)
+    }
+
+    struct InsertPlayerDuringTick {
+        entity: Entity,
+        player: Arc<crate::entity::player::Player>,
+    }
+
+    impl EntityBase for InsertPlayerDuringTick {
+        fn get_entity(&self) -> &Entity {
+            &self.entity
+        }
+
+        fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
+            None
+        }
+
+        fn cast_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
+            assert!(self.entity.world.load().add_player(&self.player).is_ok());
+        }
+    }
+
+    struct ObserveDeathProtectionTeleport(AtomicBool);
+
+    impl EventHandler<PlayerTeleportEvent> for ObserveDeathProtectionTeleport {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PlayerTeleportEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                self.0.store(true, Relaxed);
+                event.cancelled = true;
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_wind_charge_serializes_death_protection_that_teleports_a_player()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::borrow::Cow;
+
+        use crate::world::BlockFlags;
+        use pumpkin_data::{
+            data_component_impl::{ConsumeEffect, DeathProtectionImpl},
+            item::Item,
+            item_stack::ItemStack,
+        };
+        use pumpkin_util::Hand;
+
+        for (observe_teleport, arrives_after_planning) in
+            [(false, false), (true, false), (true, true)]
+        {
+            let folder = tempfile::tempdir()?;
+            let server = test_support::server(&folder).await?;
+            let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+            prepare_separated_islands(&world);
+            for x in 3..=5 {
+                for z in 1..=3 {
+                    world.set_block_state(
+                        &BlockPos::new(x, 99, z),
+                        Block::STONE.default_state.id,
+                        BlockFlags::UPDATE_KNOWN_SHAPE,
+                    );
+                }
+            }
+            let player = spawn_teleport_test_player(&world, &server, arrives_after_planning)?;
+            if arrives_after_planning {
+                assert!(world.players.load().is_empty());
+                assert!(
+                    player.has_client_loaded(),
+                    "the legacy version ignores the transfer loading flag"
+                );
+                world.add_entity_silent(Arc::new(InsertPlayerDuringTick {
+                    entity: Entity::new(
+                        world.clone(),
+                        Vector3::new(5.5, 100.0, 4.5),
+                        &EntityType::ARMOR_STAND,
+                    ),
+                    player: player.clone(),
+                }));
+            } else {
+                world.add_player(&player)?;
+            }
+            player.set_health(1.0);
+            let mut protection = ItemStack::new(1, &Item::TOTEM_OF_UNDYING);
+            protection.set_data_component(DeathProtectionImpl {
+                death_effects: Cow::Borrowed(&[ConsumeEffect::TeleportRandomly(0.25)]),
+            });
+            player.inventory.set_stack_in_hand(Hand::Right, protection);
+            let observer = Arc::new(ObserveDeathProtectionTeleport(AtomicBool::new(false)));
+            if observe_teleport {
+                server.plugin_manager.register::<PlayerTeleportEvent, _>(
+                    observer.clone(),
+                    EventPriority::Normal,
+                    true,
+                );
+            } else {
+                server.plugin_manager.register::<PlayerChatEvent, _>(
+                    Arc::new(IgnoreEvent),
+                    EventPriority::Normal,
+                    true,
+                );
+            }
+            let charge = from_type(
+                &EntityType::WIND_CHARGE,
+                Vector3::new(2.5, 100.75, 2.5),
+                &world,
+                uuid::Uuid::new_v4(),
+            );
+            charge
+                .get_entity()
+                .set_velocity(Vector3::new(3.0, 0.0, 0.0));
+            world.add_entity_silent(charge.clone());
+
+            world.tick(&server);
+
+            assert!(charge.get_entity().is_removed(), "the charge must hit");
+            assert!(player.inventory.get_stack_in_hand(Hand::Right).is_empty());
+            assert_eq!(
+                observer.0.load(Relaxed),
+                observe_teleport,
+                "death protection must reach the teleport dispatcher"
+            );
+            assert_eq!(
+                entity_schedule(&world),
+                (
+                    MIN_PARALLEL_ENTITIES + usize::from(arrives_after_planning),
+                    observe_teleport
+                )
+            );
+            server.stop();
+            server.shutdown().await;
+        }
+        Ok(())
+    }
+
+    struct ObserveSquidInk(AtomicBool);
+
+    impl EventHandler<PacketSentEvent> for ObserveSquidInk {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            use pumpkin_data::{packet::CURRENT_MC_VERSION, particle::Particle};
+            use pumpkin_protocol::{
+                MultiVersionJavaPacket, java::client::play::CParticle, ser::NetworkReadExt,
+            };
+
+            Box::pin(async move {
+                if event.packet_id == CParticle::to_id(CURRENT_MC_VERSION)
+                    // Java 26.3 prefixes the particle ID before the coordinates.
+                    && event.payload.as_ref().get_var_int()
+                        .is_ok_and(|id| id.0 == Particle::SquidInk as i32)
+                {
+                    self.0.store(true, Relaxed);
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn breeze_charge_ink_serializes_for_distant_java_packet_observers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert!(check_breeze_charge_ink(false).await?);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn breeze_charge_ink_serializes_before_a_java_player_arrives()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert!(
+            check_breeze_charge_ink(true).await?,
+            "the particle callback for the late arrival ran in parallel"
+        );
+        Ok(())
+    }
+
+    async fn check_breeze_charge_ink(
+        arrives_after_planning: bool,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        use pumpkin_protocol::ConnectionState;
+        use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+        use std::num::NonZero;
+
+        let folder = tempfile::tempdir()?;
+        let server = test_support::server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        prepare_separated_islands(&world);
+
+        let player = spawn_teleport_test_player(&world, &server, false)?;
+        player
+            .get_entity()
+            .set_pos(Vector3::new(16384.5, 100.0, 2.5));
+        player
+            .watched_section
+            .store(Cylindrical::new(Vector2::new(1024, 0), NonZero::<u8>::MIN));
+        let ClientPlatform::Java(client) = player.client.as_ref() else {
+            return Err("expected a Java client".into());
+        };
+        client.connection_state.store(ConnectionState::Play);
+        client.set_player(player.clone());
+        if arrives_after_planning {
+            assert!(world.players.load().is_empty());
+            player.set_client_loaded(false);
+            assert!(!player.has_client_loaded());
+            world.add_entity_silent(Arc::new(InsertPlayerDuringTick {
+                entity: Entity::new(
+                    world.clone(),
+                    Vector3::new(5.5, 100.0, 4.5),
+                    &EntityType::ARMOR_STAND,
+                ),
+                player: player.clone(),
+            }));
+        } else {
+            world.add_player(&player)?;
+        }
+
+        let observer = Arc::new(ObserveSquidInk(AtomicBool::new(false)));
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        let prey = from_type(
+            &EntityType::SQUID,
+            Vector3::new(4.5, 100.0, 2.5),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        let charge = from_type(
+            &EntityType::BREEZE_WIND_CHARGE,
+            Vector3::new(2.5, 100.6, 2.5),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        world.add_entity_silent(charge.clone());
+        let owner = from_type(
+            &EntityType::BREEZE,
+            // Keep the owner resolvable for ink, but outside every ticking chunk.
+            Vector3::new(-1023.5, 100.0, 0.5),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        charge
+            .get_projectile_owner()
+            .ok_or("expected a charge owner record")?
+            .set_uuid(Some(owner.get_entity().entity_uuid));
+        world.add_entity_silent(owner.clone());
+        charge
+            .get_entity()
+            .set_velocity(Vector3::new(3.0, 0.0, 0.0));
+        world.add_entity_silent(prey);
+
+        world.tick(&server);
+
+        client.clear_player();
+        let (ticking, serial) = entity_schedule(&world);
+        let saw_ink = observer.0.load(Relaxed);
+        server.stop();
+        server.shutdown().await;
+        assert_eq!(owner.get_entity().tick_count.load(Relaxed), 0);
+        assert!(charge.get_entity().is_removed(), "the charge must hit");
+        assert!(
+            saw_ink,
+            "the distant Java player must receive the squid ink"
+        );
+        assert_eq!(
+            ticking,
+            MIN_PARALLEL_ENTITIES + 1 + usize::from(arrives_after_planning),
+        );
+        Ok(serial)
+    }
+
+    #[derive(Clone, Copy)]
+    enum BreezePacket {
+        Burst,
+        Flight,
+        ChargeSound,
+    }
+
+    struct ObserveBreezePacket {
+        kind: BreezePacket,
+        sent: AtomicBool,
+    }
+
+    impl EventHandler<PacketSentEvent> for ObserveBreezePacket {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            use pumpkin_data::{packet::CURRENT_MC_VERSION, sound::Sound};
+            use pumpkin_protocol::{
+                MultiVersionJavaPacket,
+                java::client::play::{CEntitySoundEffect, CEntityVelocity, CExplosion},
+                ser::NetworkReadExt,
+            };
+
+            Box::pin(async move {
+                let expected = match self.kind {
+                    BreezePacket::Burst => CExplosion::to_id(CURRENT_MC_VERSION),
+                    BreezePacket::Flight => CEntityVelocity::to_id(CURRENT_MC_VERSION),
+                    BreezePacket::ChargeSound => CEntitySoundEffect::to_id(CURRENT_MC_VERSION),
+                };
+                if event.packet_id == expected
+                    && (!matches!(self.kind, BreezePacket::ChargeSound)
+                        || event
+                            .payload
+                            .as_ref()
+                            .get_var_int()
+                            .is_ok_and(|id| id.0 == Sound::EntityBreezeCharge as i32 + 1))
+                {
+                    self.sent.store(true, Relaxed);
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn breeze_burst_serializes_before_a_nearby_java_player_arrives()
+    -> Result<(), Box<dyn std::error::Error>> {
+        check_breeze_packets_for_a_late_player(BreezePacket::Burst).await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn breeze_flight_serializes_before_a_nearby_java_player_arrives()
+    -> Result<(), Box<dyn std::error::Error>> {
+        check_breeze_packets_for_a_late_player(BreezePacket::Flight).await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn breeze_charge_sound_serializes_before_a_nearby_java_player_arrives()
+    -> Result<(), Box<dyn std::error::Error>> {
+        check_breeze_packets_for_a_late_player(BreezePacket::ChargeSound).await
+    }
+
+    fn prepare_breeze_long_jump(
+        world: &Arc<World>,
+        breeze: &dyn EntityBase,
+    ) -> Result<(), &'static str> {
+        use crate::entity::ai::brain::memory::types;
+        use pumpkin_data::entity::EntityPose;
+        use pumpkin_data::environment_attribute::Activity;
+
+        let target = from_type(
+            &EntityType::IRON_GOLEM,
+            Vector3::new(9.5, 100.0, 0.5),
+            world,
+            uuid::Uuid::new_v4(),
+        );
+        let mob = breeze.get_mob().ok_or("expected a Breeze mob")?;
+        mob.get_mob_entity().set_target(Some(target.clone()));
+        mob.get_mob_entity().with_brain(mob, |brain| {
+            brain.set(types::ATTACK_TARGET, target.clone());
+            brain.set(types::BREEZE_JUMP_TARGET, BlockPos::new(8, 100, 0));
+            brain.set_active_activity_if_possible(Activity::Fight);
+        });
+        breeze.get_entity().on_ground.store(true, Relaxed);
+        assert_eq!(breeze.get_entity().pose.load(), EntityPose::Standing);
+        world.add_entity_silent(target);
+        Ok(())
+    }
+
+    async fn check_breeze_packets_for_a_late_player(
+        kind: BreezePacket,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::world::BlockFlags;
+        use pumpkin_data::entity::EntityPose;
+        use pumpkin_protocol::ConnectionState;
+        use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+        use std::num::NonZero;
+
+        let folder = tempfile::tempdir()?;
+        let server = test_support::server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        prepare_separated_islands(&world);
+        if matches!(kind, BreezePacket::Burst) {
+            world.set_block_state(
+                &BlockPos::new(5, 100, 2),
+                Block::STONE.default_state.id,
+                BlockFlags::UPDATE_KNOWN_SHAPE,
+            );
+        }
+
+        let player = spawn_teleport_test_player(&world, &server, false)?;
+        player.get_entity().set_pos(Vector3::new(5.5, 100.0, 12.5));
+        // A changing-dimension client can still track the same chunk coordinates.
+        let watched = Cylindrical::new(
+            Vector2::new(0, 0),
+            NonZero::<u8>::new(2).ok_or("expected a nonzero view distance")?,
+        );
+        assert!(watched.is_within_distance(0, 0));
+        player.watched_section.store(watched);
+        let ClientPlatform::Java(client) = player.client.as_ref() else {
+            return Err("expected a Java client".into());
+        };
+        client.connection_state.store(ConnectionState::Play);
+        client.set_player(player.clone());
+        player.set_client_loaded(false);
+        assert!(world.players.load().is_empty());
+        assert!(!player.has_client_loaded());
+        world.add_entity_silent(Arc::new(InsertPlayerDuringTick {
+            entity: Entity::new(
+                world.clone(),
+                Vector3::new(5.5, 100.0, 4.5),
+                &EntityType::ARMOR_STAND,
+            ),
+            player: player.clone(),
+        }));
+
+        let observer = Arc::new(ObserveBreezePacket {
+            kind,
+            sent: AtomicBool::new(false),
+        });
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        let breeze = from_type(
+            &EntityType::BREEZE,
+            Vector3::new(0.5, 100.0, 0.5),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        world.add_entity_silent(breeze.clone());
+        let charge = if matches!(kind, BreezePacket::ChargeSound) {
+            prepare_breeze_long_jump(&world, breeze.as_ref())?;
+            None
+        } else {
+            let charge = from_type(
+                &EntityType::BREEZE_WIND_CHARGE,
+                Vector3::new(2.5, 100.6, 2.5),
+                &world,
+                uuid::Uuid::new_v4(),
+            );
+            charge
+                .get_projectile_owner()
+                .ok_or("expected a charge owner record")?
+                .set_uuid(Some(breeze.get_entity().entity_uuid));
+            charge
+                .get_entity()
+                .set_velocity(Vector3::new(3.0, 0.0, 0.0));
+            world.add_entity_silent(charge.clone());
+            // The projectile guard must work after its owner has been removed.
+            breeze.get_entity().remove();
+            assert!(charge.get_owner_entity().is_none());
+            Some(charge)
+        };
+
+        world.tick(&server);
+
+        client.clear_player();
+        let schedule = entity_schedule(&world);
+        server.stop();
+        server.shutdown().await;
+        let expected_ticking = MIN_PARALLEL_ENTITIES + 1 + usize::from(charge.is_none());
+        if let Some(charge) = charge {
+            assert_eq!(
+                charge.get_entity().is_removed(),
+                matches!(kind, BreezePacket::Burst)
+            );
+        } else {
+            assert_eq!(breeze.get_entity().pose.load(), EntityPose::Inhaling);
+        }
+        assert!(
+            observer.sent.load(Relaxed),
+            "the late player must receive the expected packet"
+        );
+        assert_eq!(schedule, (expected_ticking, true));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn death_protection_reserves_the_destination_for_a_bite_or_impact()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::borrow::Cow;
+
+        use pumpkin_data::{
+            data_component_impl::{ConsumeEffect, DeathProtectionImpl, EquipmentSlot},
+            item::Item,
+            item_stack::ItemStack,
+        };
+
+        let folder = tempfile::tempdir()?;
+        let world = test_support::world(&folder);
+        let frog = FrogEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(2.5, 100.0, 2.5),
+            &EntityType::FROG,
+        ));
+        let prey = SlimeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(4.5, 100.0, 2.5),
+            &EntityType::SLIME,
+        ));
+        let charge = from_type(
+            &EntityType::WIND_CHARGE,
+            Vector3::new(2.5, 100.0, 2.5),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        frog.set_tongue_target(prey.as_ref());
+        world.add_entity_silent(prey.clone());
+        let config = EntityIslandsConfig::default();
+        let actors = [frog as Arc<dyn EntityBase>, charge];
+
+        for (diameter, expect_serial) in [(1024.0, true), (0.25, false)] {
+            let mut protection = ItemStack::new(1, &Item::TOTEM_OF_UNDYING);
+            protection.set_data_component(DeathProtectionImpl {
+                death_effects: Cow::Owned(vec![ConsumeEffect::TeleportRandomly(diameter)]),
+            });
+            prey.get_mob_entity()
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .equipment
+                .insert(EquipmentSlot::MAIN_HAND, protection);
+            for actor in &actors {
+                let reports = vec![EntityReach::of(actor.as_ref(), &config)];
+                let reaches = resolve(reports, &config);
+                assert_eq!(reaches.is_none(), expect_serial, "{diameter}");
+                if let Some(reaches) = reaches {
+                    let reach = &reaches[0];
+                    let floor = f64::from(world.get_bottom_y());
+                    assert!(reach.body.min.y <= floor && reach.block_reads.min.y <= floor);
+                }
+            }
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn shared_brain_pose_handlers_force_serial_ticks_for_separated_mobs()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let pose_mobs = [
+            &EntityType::FROG,
+            &EntityType::CAMEL,
+            &EntityType::CAMEL_HUSK,
+            &EntityType::VILLAGER,
+        ];
+        for observe_pose in [false, true] {
+            let folder = tempfile::tempdir()?;
+            let server = test_support::server(&folder).await?;
+            let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+            let plugins = &server.plugin_manager;
+            if observe_pose {
+                plugins.register::<EntityPoseChangeEvent, _>(
+                    Arc::new(IgnoreEvent),
+                    EventPriority::Normal,
+                    true,
+                );
+            } else {
+                plugins.register::<PlayerChatEvent, _>(
+                    Arc::new(IgnoreEvent),
+                    EventPriority::Normal,
+                    true,
+                );
+            }
+
+            for index in 0..MIN_PARALLEL_ENTITIES {
+                let chunk = force_separated_chunk(&world, index);
+                let entity = from_type(
+                    pose_mobs
+                        .get(index)
+                        .copied()
+                        .unwrap_or(&EntityType::ARMOR_STAND),
+                    Vector3::new(f64::from(chunk.x * 16) + 0.5, 100.0, 0.5),
+                    &world,
+                    uuid::Uuid::new_v4(),
+                );
+                if index < pose_mobs.len() {
+                    let config = &server.advanced_config.world.entity_islands;
+                    assert_eq!(
+                        resolve(vec![EntityReach::of(entity.as_ref(), config)], config).is_none(),
+                        observe_pose,
+                        "{:?}",
+                        entity.get_entity().entity_type.resource_name
+                    );
+                }
+                world.add_entity_silent(entity);
+            }
+
+            world.tick(&server);
+            let (ticking_entities, serial) = {
+                let schedule = world
+                    .island_schedule
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                (schedule.entity_count, schedule.ticks_until_probe > 0)
+            };
+            assert_eq!(ticking_entities, MIN_PARALLEL_ENTITIES);
+            assert_eq!(serial, observe_pose);
+            server.stop();
+            server.shutdown().await;
+        }
+        Ok(())
+    }
 
     #[tokio::test]
     async fn only_reachable_plugin_handlers_make_a_wind_charge_tick_global()
@@ -1336,32 +2539,38 @@ mod tests {
 
         let folder = tempfile::tempdir()?;
         let world = test_support::world(&folder);
-        let entity = from_type(
-            &EntityType::WIND_CHARGE,
-            Vector3::new(0.0, 64.0, 0.0),
-            &world,
-            uuid::Uuid::new_v4(),
-        );
-        let charge = entity
-            .cast_any()
-            .downcast_ref::<WindChargeEntity>()
-            .ok_or("expected a wind charge")?;
+        let make_charge = |kind| {
+            from_type(
+                kind,
+                Vector3::new(0.0, 64.0, 0.0),
+                &world,
+                uuid::Uuid::new_v4(),
+            )
+        };
+        let ordinary = make_charge(&EntityType::WIND_CHARGE);
+        let breeze = make_charge(&EntityType::BREEZE_WIND_CHARGE);
+        let observe = |plugins: &PluginManager, entity: &dyn EntityBase| {
+            entity
+                .cast_any()
+                .downcast_ref::<WindChargeEntity>()
+                .map(|charge| plugins_observe_wind_charge_tick(plugins, &world, charge, 0.0))
+                .ok_or("expected a wind charge")
+        };
         let plugins = PluginManager::new(Vec::new());
 
         plugins.register::<PlayerChatEvent, _>(Arc::new(IgnoreEvent), EventPriority::Normal, true);
+        assert!(!observe(&plugins, breeze.as_ref())?);
+
         plugins.register::<PacketSentEvent, _>(Arc::new(IgnoreEvent), EventPriority::Normal, true);
-        assert!(!plugins_observe_wind_charge_tick(
-            &plugins, &world, charge, 0.0
-        ));
+        assert!(!observe(&plugins, ordinary.as_ref())?);
+        assert!(observe(&plugins, breeze.as_ref())?);
 
         plugins.register::<EntityExplodeEvent, _>(
             Arc::new(IgnoreEvent),
             EventPriority::Normal,
             true,
         );
-        assert!(plugins_observe_wind_charge_tick(
-            &plugins, &world, charge, 0.0
-        ));
+        assert!(observe(&plugins, ordinary.as_ref())?);
 
         let plugins = PluginManager::new(Vec::new());
         plugins.register::<EntityPoseChangeEvent, _>(
@@ -1369,9 +2578,7 @@ mod tests {
             EventPriority::Normal,
             true,
         );
-        assert!(plugins_observe_wind_charge_tick(
-            &plugins, &world, charge, 0.0
-        ));
+        assert!(observe(&plugins, ordinary.as_ref())?);
 
         world.level.shutdown().await;
         Ok(())

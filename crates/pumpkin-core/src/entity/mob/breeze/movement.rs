@@ -8,10 +8,9 @@ use pumpkin_data::{
 };
 use pumpkin_util::{
     math::{cos, lerp, position::BlockPos, sin, vector3::Vector3},
-    random::sample_gaussian_pair,
+    random::RandomImpl,
 };
 use pumpkin_world::clip::{ClipBlock, ClipContext, ClipFluid};
-use rand::{RngExt, seq::SliceRandom};
 
 use super::{BreezeEntity, look_from_eyes};
 use crate::{
@@ -78,11 +77,11 @@ pub(super) fn block_read_radius(living: &LivingEntity) -> f64 {
     MAX_LINE_OF_SIGHT_TEST_RANGE.max(follow_range + f64::from(JUMP_CIRCLE_MIDDLE_RADIUS) + 1.0)
 }
 
-fn random_point_behind_target(target: &Entity, random: &mut impl RngExt) -> Vector3<f64> {
-    let (spread, _) = sample_gaussian_pair(|| random.random());
+fn random_point_behind_target(target: &Entity, random: &mut impl RandomImpl) -> Vector3<f64> {
+    let spread = random.next_gaussian();
     let view_angle = target.head_yaw.load() + 180.0 + spread as f32 * 90.0 / 2.0;
     let distance = lerp(
-        random.random(),
+        random.next_f32(),
         JUMP_CIRCLE_INNER_RADIUS,
         JUMP_CIRCLE_MIDDLE_RADIUS,
     );
@@ -178,10 +177,16 @@ impl LongJump {
     }
 
     fn calculate_jump_velocity(tick: &BrainTick<'_>, target: BlockPos) -> Option<Vector3<f64>> {
+        let breeze = tick.mob.cast_any().downcast_ref::<BreezeEntity>()?;
         let living = &tick.mob.get_mob_entity().living_entity;
         let max_jump_velocity = MAX_JUMP_VELOCITY_MULTIPLIER * follow_range(tick) as f32;
         let mut angles = ALLOWED_ANGLES;
-        angles.shuffle(&mut tick.mob.get_random());
+        breeze.with_movement_random(|random| {
+            for count in (2..=angles.len()).rev() {
+                let other = random.next_bounded_i32(count as i32) as usize;
+                angles.swap(count - 1, other);
+            }
+        });
         angles.into_iter().find_map(|angle| {
             let velocity = calculate_jump_vector_for_angle(
                 tick.mob,
@@ -253,7 +258,11 @@ impl Behavior for LongJump {
             return false;
         }
 
-        let candidate = random_point_behind_target(target, &mut tick.mob.get_random());
+        let Some(breeze) = tick.mob.cast_any().downcast_ref::<BreezeEntity>() else {
+            return false;
+        };
+        let candidate =
+            breeze.with_movement_random(|random| random_point_behind_target(target, random));
         let Some(landing) = snap_to_surface(tick.world, candidate) else {
             return false;
         };
@@ -381,12 +390,14 @@ impl Behavior for LongJump {
             .living_entity
             .discard_friction
             .store(false, Relaxed);
-        if matches!(
-            tick.mob.get_entity().pose.load(),
-            EntityPose::LongJumping | EntityPose::Inhaling
-        ) || matches!(tick.pose(), EntityPose::LongJumping | EntityPose::Inhaling)
-        {
-            tick.set_pose(EntityPose::Standing);
+        let actual_pose = tick.mob.get_entity().pose.load();
+        let pose = if matches!(actual_pose, EntityPose::LongJumping | EntityPose::Inhaling) {
+            actual_pose
+        } else {
+            tick.pose()
+        };
+        if matches!(pose, EntityPose::LongJumping | EntityPose::Inhaling) {
+            BreezeEntity::finish_pose(tick, pose, None);
         }
         Self::clear_jump_memories(tick.state);
     }
@@ -417,6 +428,9 @@ impl Behavior for Slide {
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
+        let Some(breeze) = tick.mob.cast_any().downcast_ref::<BreezeEntity>() else {
+            return;
+        };
         let Some(target) = tick.state.get(types::ATTACK_TARGET) else {
             return;
         };
@@ -438,18 +452,19 @@ impl Behavior for Slide {
             None
         };
         let destination = route.unwrap_or_else(|| {
-            let mut random = tick.mob.get_random();
-            if random.random() {
-                return random_point_behind_target(target, &mut random);
-            }
-            let direction = target_pos - pos;
-            let distance = direction.length()
-                - lerp(
-                    random.random::<f64>(),
-                    f64::from(JUMP_CIRCLE_MIDDLE_RADIUS),
-                    inner_radius,
-                );
-            pos + normalize_direction(direction) * distance
+            breeze.with_movement_random(|random| {
+                if random.next_bool() {
+                    return random_point_behind_target(target, random);
+                }
+                let direction = target_pos - pos;
+                let distance = direction.length()
+                    - lerp(
+                        random.next_f64(),
+                        f64::from(JUMP_CIRCLE_MIDDLE_RADIUS),
+                        inner_radius,
+                    );
+                pos + normalize_direction(direction) * distance
+            })
         });
         tick.state.set(
             types::WALK_TARGET,
@@ -524,6 +539,10 @@ impl Behavior for SlideToTargetSink {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicUsize;
+
+    use futures::future::BoxFuture;
+    use pumpkin_data::dimension::Dimension;
     use pumpkin_data::entity::EntityType;
     use pumpkin_data::environment_attribute::Activity;
 
@@ -533,12 +552,71 @@ mod tests {
         test_support,
     };
     use crate::entity::{EntityBase, r#type::from_type};
+    use crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent;
+    use crate::plugin::{EventHandler, EventPriority};
+    use crate::server::Server;
+
+    struct VetoStandingOnce {
+        entity_id: i32,
+        attempts: AtomicUsize,
+    }
+
+    impl EventHandler<EntityPoseChangeEvent> for VetoStandingOnce {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntityPoseChangeEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async {
+                if event.entity_id == self.entity_id
+                    && event.pose.parse() == Ok(EntityPose::Standing as u8)
+                {
+                    event.cancelled = self.attempts.fetch_add(1, Relaxed) == 0;
+                }
+            })
+        }
+    }
 
     #[tokio::test]
-    async fn slide_stop_only_prepares_a_shot_for_the_original_target()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn a_breeze_reuses_its_second_gaussian_sample() -> Result<(), Box<dyn std::error::Error>>
+    {
         let folder = tempfile::tempdir()?;
         let world = test_support::world(&folder);
+        let position = Vector3::new(0.0, 64.0, 0.0);
+        let breeze = BreezeEntity::new(Entity::new(world.clone(), position, &EntityType::BREEZE));
+        let other = BreezeEntity::new(Entity::new(world.clone(), position, &EntityType::BREEZE));
+        let target = Entity::new(world.clone(), position, &EntityType::IRON_GOLEM);
+        target.head_yaw.store(0.0);
+        breeze.with_movement_random(|random| {
+            *random = pumpkin_util::random::legacy_rand::LegacyRand::from_seed(26);
+        });
+        other.with_movement_random(|random| {
+            *random = pumpkin_util::random::legacy_rand::LegacyRand::from_seed(93);
+        });
+
+        // Java 26.3's BreezeUtil calculation with the two legacy random sources interleaved.
+        for (breeze, x, z) in [
+            (&breeze, 7.524_081_344_914_464, -1.805_914_356_706_594_5),
+            (&other, 5.433_498_017_023_055, -1.729_926_241_146_770_8),
+            (&breeze, 1.065_079_664_289_896_8, -4.009_766_138_940_904),
+        ] {
+            let point =
+                breeze.with_movement_random(|random| random_point_behind_target(&target, random));
+            assert!(
+                point.squared_distance_to_vec(&Vector3::new(x, 64.0, z)) < 1e-10,
+                "{point:?}"
+            );
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn slide_stop_retries_a_veto_without_arming_a_shot_for_a_replacement_target()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let server = test_support::server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
         let position = Vector3::new(0.0, 64.0, 0.0);
         let breeze = BreezeEntity::new(Entity::new(world.clone(), position, &EntityType::BREEZE));
         let target = from_type(
@@ -554,13 +632,27 @@ mod tests {
             uuid::Uuid::new_v4(),
         );
         let body = breeze.get_mob_entity();
+        let mut brain = Brain::default();
+        brain.register_memory(types::ATTACK_TARGET.id());
+        brain.register_memory(types::BREEZE_SHOOT.id());
+        body.set_brain(brain);
+        let observer = Arc::new(VetoStandingOnce {
+            entity_id: breeze.get_entity().entity_id,
+            attempts: AtomicUsize::new(0),
+        });
+        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
         for (current, can_shoot) in [
             (Some(target.clone()), true),
             (Some(replacement.clone()), false),
             (None, false),
         ] {
+            observer.attempts.store(0, Relaxed);
             breeze.get_entity().set_pose(EntityPose::Sliding);
-            body.set_target(current.clone());
+            body.set_target(Some(target.clone()));
             let effects = body.with_brain(breeze.as_ref(), |brain| {
                 brain.erase(types::BREEZE_SHOOT.id());
                 brain.set(types::ATTACK_TARGET, target.clone());
@@ -570,51 +662,83 @@ mod tests {
                     state: brain,
                     time: 0,
                 });
-                brain.set_optional(types::ATTACK_TARGET, current);
                 brain.take_effects()
             });
             for effect in effects {
                 effect(breeze.as_ref());
             }
+            assert_eq!(observer.attempts.load(Relaxed), 1);
+            assert_eq!(breeze.get_entity().pose.load(), EntityPose::Sliding);
+            assert!(!body.brain_has_memory_value(types::BREEZE_SHOOT.id()));
+
+            body.set_target(current.clone());
+            body.with_brain(breeze.as_ref(), |brain| {
+                brain.set_optional(types::ATTACK_TARGET, current);
+            });
+            breeze.custom_server_ai_step(breeze.as_ref());
+            assert_eq!(observer.attempts.load(Relaxed), 2);
             assert_eq!(breeze.get_entity().pose.load(), EntityPose::Standing);
             assert_eq!(
                 body.brain_has_memory_value(types::BREEZE_SHOOT.id()),
                 can_shoot
             );
         }
-        world.level.shutdown().await;
+        server.stop();
+        server.shutdown().await;
         Ok(())
     }
 
-    #[tokio::test]
-    async fn expired_long_jump_restores_friction_before_committing_the_pose()
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn expired_long_jump_restores_friction_even_when_standing_is_vetoed()
     -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
-        let world = test_support::world(&folder);
+        let server = test_support::server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
         let breeze = BreezeEntity::new(Entity::new(
             world.clone(),
             Vector3::new(0.0, 64.0, 0.0),
             &EntityType::BREEZE,
         ));
+        let observer = Arc::new(VetoStandingOnce {
+            entity_id: breeze.get_entity().entity_id,
+            attempts: AtomicUsize::new(0),
+        });
+        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        let body = breeze.get_mob_entity();
         let living = &breeze.mob_entity.living_entity;
-        living.entity.pose.store(EntityPose::LongJumping);
+        living.entity.set_pose(EntityPose::LongJumping);
         living.discard_friction.store(true, Relaxed);
+        assert!(!living.entity.on_ground.load(Relaxed));
 
-        let mut state = BrainState::default();
         let mut jump = Timed::new(LongJump::default());
         let duration = jump.inner().max_duration();
         jump.start_at(0, duration);
-        jump.tick_or_stop(&mut BrainTick {
-            mob: breeze.as_ref(),
-            world: &world,
-            state: &mut state,
-            time: i64::from(duration) + 1,
+        let effects = body.with_brain(breeze.as_ref(), |brain| {
+            jump.tick_or_stop(&mut BrainTick {
+                mob: breeze.as_ref(),
+                world: &world,
+                state: brain,
+                time: i64::from(duration) + 1,
+            });
+            brain.take_effects()
         });
-        world.level.shutdown().await;
-
         assert_eq!(jump.status(), Status::Stopped);
-        assert_eq!(living.entity.pose.load(), EntityPose::LongJumping);
         assert!(!living.discard_friction.load(Relaxed));
+        for effect in effects {
+            effect(breeze.as_ref());
+        }
+        assert_eq!(observer.attempts.load(Relaxed), 1);
+        assert_eq!(living.entity.pose.load(), EntityPose::LongJumping);
+        breeze.custom_server_ai_step(breeze.as_ref());
+        assert_eq!(observer.attempts.load(Relaxed), 2);
+        assert_eq!(living.entity.pose.load(), EntityPose::Standing);
+        assert!(!body.brain_has_memory_value(types::BREEZE_SHOOT.id()));
+        server.stop();
+        server.shutdown().await;
         Ok(())
     }
 

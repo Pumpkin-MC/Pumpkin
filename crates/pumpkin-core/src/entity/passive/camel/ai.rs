@@ -128,6 +128,7 @@ fn when_able_to_move(behavior: OneShot) -> OneShot {
         "TriggerIf",
         |tick| {
             camel(tick).is_some_and(|camel| match tick.pending_pose() {
+                // An instant stand can't backdate its transition before world tick zero.
                 Some(EntityPose::Standing) => tick.time >= STANDUP_DURATION_TICKS,
                 Some(EntityPose::Sitting) => false,
                 _ => !camel.refuse_to_move(),

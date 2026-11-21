@@ -2,7 +2,7 @@ mod ai;
 mod movement;
 mod shoot;
 
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
 
 use arc_swap::ArcSwapOption;
 use pumpkin_data::{
@@ -11,6 +11,7 @@ use pumpkin_data::{
     sound::Sound,
 };
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::{get_seed, legacy_rand::LegacyRand};
 
 use crate::entity::{
     Entity, EntityBase,
@@ -24,14 +25,12 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     projectile_deflection::{ProjectileDeflection, default_deflection},
 };
-use crate::net::ClientPlatform;
 use crate::plugin::api::events::entity::{
     entity_pose_change::EntityPoseChangeEvent, entity_spawn::EntitySpawnEvent,
     entity_target::TargetReason,
 };
 use crate::plugin::api::events::world::GenericGameEvent;
 use crate::plugin::server::packet::PacketSentEvent;
-use crate::world::chunker::{get_view_distance, is_within_chebyshev_distance};
 
 const MAX_HEAD_Y_ROT: f32 = 30.0;
 const HEAD_ROT_SPEED: f32 = 25.0;
@@ -47,6 +46,7 @@ fn look_from_eyes(entity: &Entity, target: Vector3<f64>) {
 pub struct BreezeEntity {
     pub mob_entity: MobEntity,
     pose_cleanup: ArcSwapOption<PoseCleanup>,
+    movement_random: Mutex<LegacyRand>,
 }
 
 struct PoseCleanup {
@@ -66,7 +66,16 @@ impl BreezeEntity {
         Arc::new(Self {
             mob_entity,
             pose_cleanup: ArcSwapOption::empty(),
+            movement_random: Mutex::new(LegacyRand::from_seed(get_seed())),
         })
+    }
+
+    fn with_movement_random<T>(&self, sample: impl FnOnce(&mut LegacyRand) -> T) -> T {
+        let mut random = self
+            .movement_random
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        sample(&mut random)
     }
 
     fn finish_pose(
@@ -214,57 +223,11 @@ impl Mob for BreezeEntity {
             return false;
         };
         let plugins = &server.plugin_manager;
-        if plugins.has_handlers::<EntitySpawnEvent>()
+        plugins.has_handlers::<EntitySpawnEvent>()
             || plugins.has_handlers::<EntityPoseChangeEvent>()
             || plugins.has_handlers::<GenericGameEvent>()
-        {
-            return true;
-        }
-        if !plugins.has_handlers::<PacketSentEvent>() {
-            return false;
-        }
-
-        let tracked = world.entity_tracker.get_tracked_entity(entity.entity_id);
-        if tracked.as_ref().is_some_and(|body| body.has_viewers()) {
-            return true;
-        }
-        let chunk = entity.chunk_pos.load();
-        // A charge can pair with clients farther away than those hearing the Brain's sounds.
-        let range = (EntityType::BREEZE_WIND_CHARGE.client_tracking_range as i32)
-            .max(shoot::SHOOT_VOLUME.ceil() as i32);
-        let can_land =
-            self.mob_entity.living_entity.fall_distance.load() > LAND_SOUND_FALL_DISTANCE;
-        let is_passenger = self.is_passenger();
-        let tracking_range = tracked
-            .as_ref()
-            .map_or(EntityType::BREEZE.client_tracking_range, |body| {
-                body.get_effective_range()
-            });
-        world.players.load().iter().any(|player| {
-            // A vehicle may move the Breeze before its turn. Fall sounds follow travel.
-            let player_chunk = player.get_entity().chunk_pos.load();
-            is_passenger
-                || is_within_chebyshev_distance(chunk, player_chunk, range)
-                || match player.client.as_ref() {
-                    ClientPlatform::Java(_) => {
-                        // Chunk delivery can pair this player before the Breeze ticks.
-                        let view_range = u32::from(get_view_distance(player).get());
-                        can_land
-                            || is_within_chebyshev_distance(
-                                chunk,
-                                player_chunk,
-                                tracking_range.min(view_range) as i32,
-                            )
-                    }
-                    ClientPlatform::Bedrock(_) => {
-                        tracked.is_none()
-                            && player
-                                .watched_section
-                                .load()
-                                .is_within_distance(chunk.x, chunk.y)
-                    }
-                }
-        })
+            // Brain sounds use a live audience: a viewer can arrive after tick planning.
+            || plugins.has_handlers::<PacketSentEvent>()
     }
 
     fn can_attack(&self, target: &dyn EntityBase) -> bool {
