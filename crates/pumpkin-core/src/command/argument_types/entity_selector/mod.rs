@@ -568,8 +568,8 @@ impl EntitySelectorPredicate {
                 true
             }
             Self::Nbt(expected_nbt, invert) => {
-                let mut actual_nbt = NbtCompound::default();
-                entity.write_nbt(&mut actual_nbt);
+                let actual_nbt =
+                    crate::command::commands::data::entity_nbt_with_selected_item(entity);
                 matches_nbt_compound(expected_nbt, &actual_nbt) ^ invert
             }
             Self::Predicate(predicate_id, invert) => {
