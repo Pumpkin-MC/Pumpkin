@@ -305,6 +305,10 @@ impl ShulkerEntity {
 }
 
 impl Mob for ShulkerEntity {
+    fn on_start_riding(&self) {
+        self.set_attach_face(BlockDirection::Down);
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
         nbt.put_byte("PeekAmount", self.peek_amount.load(Ordering::Relaxed) as i8);
@@ -344,7 +348,7 @@ impl Mob for ShulkerEntity {
 
         let pos = entity.block_pos.load();
         let face = self.get_attach_face();
-        if !self.can_stay_at(&pos, face) {
+        if !entity.has_vehicle() && !self.can_stay_at(&pos, face) {
             self.find_new_attachment();
         }
     }

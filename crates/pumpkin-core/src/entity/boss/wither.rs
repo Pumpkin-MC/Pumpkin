@@ -600,6 +600,10 @@ impl WitherEntity {
 }
 
 impl Mob for WitherEntity {
+    fn mob_can_ride(&self, _vehicle: &dyn EntityBase) -> bool {
+        false
+    }
+
     fn on_removed(&self) {
         self.remove_all_bossbar(&self.get_entity().world.load());
     }

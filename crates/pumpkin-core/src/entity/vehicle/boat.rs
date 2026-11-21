@@ -5,16 +5,20 @@ use crossbeam::atomic::AtomicCell;
 
 use crate::entity::player::Player;
 use crate::entity::vehicle::minecart::container::{self, MinecartInventory};
-use crate::entity::{Entity, EntityBase, living::LivingEntity};
+use crate::entity::{
+    Entity, EntityBase,
+    living::{LivingEntity, is_allowed_by_team_rules},
+};
 use crate::server::Server;
 use crate::world::game_event::GameEventContext;
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::CustomNameImpl;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::translation;
 use pumpkin_inventory::Inventory;
 use pumpkin_nbt::compound::NbtCompound;
@@ -24,6 +28,9 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
+
+pub(crate) const PICKUP_RANGE: f64 = 0.2f32 as f64;
+const PICKUP_Y_INSET: f64 = 0.01f32 as f64;
 
 const FRONT_SEAT_OFFSET: f32 = 0.2;
 const BACK_SEAT_OFFSET: f32 = -0.6;
@@ -70,6 +77,10 @@ impl BoatEntity {
 
     const fn max_passengers(&self) -> usize {
         if self.inventory.is_some() { 1 } else { 2 }
+    }
+
+    pub(crate) fn has_enough_space_for(&self, passenger: &Entity) -> bool {
+        passenger.width() < self.vehicle.entity.width()
     }
 
     pub fn open_custom_inventory_screen(&self, player: &Arc<Player>) -> bool {
@@ -209,6 +220,85 @@ impl EntityBase for BoatEntity {
             self.ticks_underwater.store((underwater + 1.0).min(60.0));
         } else if underwater > 0.0 {
             self.ticks_underwater.store((underwater - 1.0).max(0.0));
+        }
+
+        // Vanilla AbstractBoat.tick: boarding is checked even for stationary, empty boats.
+        let entity = &self.vehicle.entity;
+        let world = entity.world.load();
+        let bounds = entity
+            .bounding_box
+            .load()
+            .expand(PICKUP_RANGE, -PICKUP_Y_INSET, PICKUP_RANGE);
+        let add_new_passengers = self
+            .get_controlling_passenger()
+            .is_none_or(|passenger| passenger.get_player().is_none());
+        let own_team = self.get_team();
+        for other in world.get_all_at_box(&bounds) {
+            let passenger = other.get_entity();
+            if passenger.entity_id == entity.entity_id
+                || other.is_spectator()
+                || !other.is_pushable()
+                || !is_allowed_by_team_rules(own_team.as_ref(), other.get_team().as_ref())
+                || other.has_passenger(self)
+            {
+                continue;
+            }
+
+            let has_room = entity
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .len()
+                < self.max_passengers();
+            if add_new_passengers
+                && has_room
+                && !other.is_passenger()
+                && self.has_enough_space_for(passenger)
+                && other.get_living_entity().is_some()
+                && !passenger
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_CANNOT_BE_PUSHED_ONTO_BOATS)
+            {
+                // The remaining Entity.startRiding checks may reject boarding without a push.
+                if !other.can_ride(self)
+                    || entity.is_submerged_in_water()
+                    || self.is_passenger_of_same_vehicle(other.as_ref())
+                {
+                    // Shulker.startRiding resets its attachment even when vanilla checks fail.
+                    if let Some(mob) = other.get_mob() {
+                        mob.on_start_riding();
+                    }
+                    continue;
+                }
+                let Some(vehicle) = world.get_entity_by_id(entity.entity_id) else {
+                    continue;
+                };
+                entity.add_passenger(vehicle, other.clone());
+                if entity.has_passenger(passenger.entity_id) {
+                    passenger.set_pose(EntityPose::Standing);
+                    world.emit_game_event_with_context(
+                        GameEvent::EntityMount.name(),
+                        entity.pos.load(),
+                        &GameEventContext {
+                            source_entity: Some(other.as_ref()),
+                        },
+                    );
+                    if other.get_mob().is_some() && passenger.is_leashed() {
+                        passenger.drop_leash();
+                    }
+                }
+            } else {
+                let other_bounds = passenger.bounding_box.load();
+                let boat_bounds = entity.bounding_box.load();
+                let can_push = if passenger.entity_type.boat.is_some() {
+                    other_bounds.min.y < boat_bounds.max.y
+                } else {
+                    other_bounds.min.y <= boat_bounds.min.y
+                };
+                if can_push {
+                    self.push(other.as_ref());
+                }
+            }
         }
     }
 

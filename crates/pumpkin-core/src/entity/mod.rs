@@ -1024,6 +1024,13 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         self.get_entity().has_vehicle()
     }
 
+    fn can_ride(&self, vehicle: &dyn EntityBase) -> bool {
+        let entity = self.get_entity();
+        !entity.is_sneaking()
+            && entity.riding_cooldown.load(Ordering::Relaxed) <= 0
+            && self.get_mob().is_none_or(|mob| mob.mob_can_ride(vehicle))
+    }
+
     fn is_vehicle(&self) -> bool {
         self.get_entity().has_passengers()
     }
@@ -4125,13 +4132,25 @@ impl Entity {
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
         let eye_y = pos.y + self.get_eye_height();
-        let eye_pos = BlockPos::floored(pos.x, eye_y, pos.z);
+        let fluid_box = self.bounding_box.load().contract_all(0.001);
+        // Include the block below an exact eye boundary, within vanilla's fluid scan box.
+        let min_y = (eye_y - 1.0).ceil().max(fluid_box.min.y.floor()) as i32;
+        let max_y = eye_y.floor().min(fluid_box.max.y.ceil() - 1.0) as i32;
         let world = self.world.load();
-        let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
-        fluid.matches_type(&Fluid::WATER)
-            && eye_y
-                <= f64::from(eye_pos.0.y)
-                    + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
+        for y in min_y..=max_y {
+            let eye_pos = BlockPos::floored(pos.x, f64::from(y), pos.z);
+            let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
+            if fluid.matches_type(&Fluid::WATER)
+                && f64::from(y) + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
+                    >= fluid_box.min.y
+                && eye_y
+                    <= f64::from(y)
+                        + f64::from(world.get_fluid_height_for_camera(&eye_pos, fluid, &state))
+            {
+                return true;
+            }
+        }
+        false
     }
 
     #[must_use]
@@ -5014,6 +5033,9 @@ impl Entity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(holder));
         self.send_leash_attached(holder);
+        if let Some(vehicle) = self.get_vehicle() {
+            vehicle.get_entity().remove_passenger(self.entity_id);
+        }
     }
 
     /// Resets the leash motion and tells clients about the new holder. Call it without holding
@@ -5584,6 +5606,16 @@ impl Entity {
             .is_some_and(|h| h.strong_count() > 0)
     }
 
+    /// Whether a leash is attached or awaiting restoration from saved data.
+    pub(crate) fn has_leash_data(&self) -> bool {
+        self.is_leashed()
+            || self
+                .delayed_leash
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+    }
+
     pub fn get_leash_holder(&self) -> Option<Arc<dyn EntityBase>> {
         self.leashed_to
             .lock()
@@ -5617,6 +5649,10 @@ impl Entity {
         }
         if mount_event.cancelled || vehicle_enter.cancelled {
             return;
+        }
+
+        if let Some(mob) = passenger.get_mob() {
+            mob.on_start_riding();
         }
 
         let passenger_entity = passenger.get_entity();
@@ -5708,6 +5744,9 @@ impl Entity {
         vehicle: Arc<dyn EntityBase>,
         passenger: Arc<dyn EntityBase>,
     ) {
+        if let Some(mob) = passenger.get_mob() {
+            mob.on_start_riding();
+        }
         *passenger
             .get_entity()
             .vehicle
