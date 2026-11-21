@@ -86,27 +86,7 @@ impl ItemBehaviour for FireworkRocketItem {
             }
 
             let world = player.world();
-            let search_box = player
-                .get_entity()
-                .bounding_box
-                .load()
-                .expand(32.0, 32.0, 32.0);
-            let player_id = player.entity_id();
-            let mut dropped_leash = false;
-            for entity_base in world.get_entities_at_box(&search_box) {
-                let ent = entity_base.get_entity();
-                let is_leashed_to_player = ent.leashed_to.try_lock().is_ok_and(|guard| {
-                    guard
-                        .as_ref()
-                        .and_then(std::sync::Weak::upgrade)
-                        .is_some_and(|holder| holder.get_entity().entity_id == player_id)
-                });
-                if is_leashed_to_player && ent.unleash() {
-                    world.drop_stack(&ent.block_pos.load(), ItemStack::new(1, &Item::LEAD));
-                    dropped_leash = true;
-                }
-            }
-            if dropped_leash {
+            if player.get_entity().drop_all_leash_connections() {
                 world.play_sound_fine(
                     Sound::ItemLeadBreak,
                     SoundCategory::Neutral,
