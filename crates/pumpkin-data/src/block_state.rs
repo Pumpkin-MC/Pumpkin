@@ -232,6 +232,63 @@ impl BlockState {
         &SOUND_TYPES[self.sound_type as usize]
     }
 
+    /// Whether the collision shape covers a complete block face, vanilla `Block.isFaceFull`.
+    pub fn is_collision_face_full(&self, face: BlockDirection) -> bool {
+        self.is_full_cube()
+            || Self::collision_shape_is_face_full(self.get_block_collision_shapes(), face)
+    }
+
+    /// Checks a collision shape's face, including entity-dependent shapes.
+    pub fn collision_shape_is_face_full(
+        shapes: impl Iterator<Item = BoundingBox>,
+        face: BlockDirection,
+    ) -> bool {
+        use pumpkin_util::math::vector3::Axis;
+        let axis: Axis = face.to_axis().into();
+        let [first, second] = Axis::excluding(axis);
+        let positive = face.to_offset().get_axis(axis) > 0;
+        let mut boxes = Vec::new();
+        let mut xs = vec![0.0, 1.0];
+        let mut zs = vec![0.0, 1.0];
+        for shape in shapes {
+            if (positive && (shape.min.get_axis(axis) >= 1.0 || shape.max.get_axis(axis) < 1.0))
+                || (!positive
+                    && (shape.max.get_axis(axis) <= 0.0 || shape.min.get_axis(axis) > 0.0))
+            {
+                continue;
+            }
+            let (x0, x1) = (
+                shape.min.get_axis(first).max(0.0),
+                shape.max.get_axis(first).min(1.0),
+            );
+            let (z0, z1) = (
+                shape.min.get_axis(second).max(0.0),
+                shape.max.get_axis(second).min(1.0),
+            );
+            if x0 < x1 && z0 < z1 {
+                xs.push(x0);
+                xs.push(x1);
+                zs.push(z0);
+                zs.push(z1);
+                boxes.push((x0, x1, z0, z1));
+            }
+        }
+        if boxes.is_empty() {
+            return false;
+        }
+        xs.sort_by(f64::total_cmp);
+        zs.sort_by(f64::total_cmp);
+        xs.dedup();
+        zs.dedup();
+        xs.windows(2).all(|xw| {
+            zs.windows(2).all(|zw| {
+                boxes.iter().any(|&(x0, x1, z0, z1)| {
+                    x0 <= xw[0] && xw[1] <= x1 && z0 <= zw[0] && zw[1] <= z1
+                })
+            })
+        })
+    }
+
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
         self.collision_shapes
             .iter()
@@ -441,6 +498,36 @@ mod tests {
     use super::{BlockState, BlockStateId};
     use crate::{Block, BlockId};
     use pumpkin_util::math::position::BlockPos;
+
+    #[test]
+    fn collision_faces_require_inside_coverage_including_multipart_shapes() {
+        use crate::BlockDirection;
+        use pumpkin_util::math::boundingbox::BoundingBox;
+
+        let floating = BoundingBox::new_array([0.0, 1.125, 0.0], [1.0, 1.25, 1.0]);
+        let outside = BoundingBox::new_array([0.0, 1.0, 0.0], [1.0, 1.25, 1.0]);
+        assert!(!BlockState::collision_shape_is_face_full(
+            [floating, outside].into_iter(),
+            BlockDirection::Up,
+        ));
+        let below = BoundingBox::new_array([0.0, -0.25, 0.0], [1.0, 0.0, 1.0]);
+        assert!(!BlockState::collision_shape_is_face_full(
+            std::iter::once(below),
+            BlockDirection::Down,
+        ));
+        let left = BoundingBox::new_array([0.0, 0.0, 0.0], [0.5, 1.0, 1.0]);
+        let right = BoundingBox::new_array([0.5, 0.0, 0.0], [1.0, 1.0, 1.0]);
+        for face in [BlockDirection::Up, BlockDirection::Down] {
+            assert!(!BlockState::collision_shape_is_face_full(
+                std::iter::once(left),
+                face,
+            ));
+            assert!(BlockState::collision_shape_is_face_full(
+                [left, right].into_iter(),
+                face,
+            ));
+        }
+    }
 
     fn assert_close(actual: f64, expected: f64) {
         assert!((actual - expected).abs() < 1.0e-6, "{actual} != {expected}");

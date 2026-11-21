@@ -55,6 +55,7 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:pressure_plate_entity_activation",
     "pumpkin:target_block_projectile_hit",
     "pumpkin:arrow_falls_onto_block_below",
+    "pumpkin:shulker_bullet_damage_and_levitation",
     "pumpkin:copper_bulb_toggles_and_comparator",
     "pumpkin:redstone_lamp_delayed_off",
     "pumpkin:piston_and_sticky_piston",
@@ -338,6 +339,13 @@ pub fn ensure_builtin_game_tests_registered() {
             40,
             0,
             redstone_inputs::test_pressure_plate_entity_activation,
+        );
+        register_function_test(
+            "pumpkin:shulker_bullet_damage_and_levitation",
+            "pumpkin:empty_5x5x5",
+            40,
+            0,
+            target_and_projectiles::test_shulker_bullet_damage_and_levitation,
         );
         register_function_test(
             "pumpkin:target_block_projectile_hit",

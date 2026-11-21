@@ -840,8 +840,31 @@ impl EntityBase for MinecartEntity {
     }
 
     fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
+        self.move_and_push_entities(caller, motion, false);
+    }
+
+    fn move_by_shulker(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
+        self.move_and_push_entities(caller, motion, true);
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl MinecartEntity {
+    fn move_and_push_entities(
+        &self,
+        caller: &dyn EntityBase,
+        motion: Vector3<f64>,
+        preserve_velocity: bool,
+    ) {
         let to_position = self.vehicle.entity.pos.load().add(&motion);
-        self.vehicle.entity.move_entity(caller, motion);
+        if preserve_velocity {
+            self.vehicle.entity.move_by_shulker(caller, motion);
+        } else {
+            self.vehicle.entity.move_entity(caller, motion);
+        }
         let entity_id = self.vehicle.entity.entity_id;
         let world = self.vehicle.entity.world.load().clone();
         if let Some(dyn_self) = world.get_entity_by_id(entity_id) {
@@ -849,13 +872,13 @@ impl EntityBase for MinecartEntity {
             if should_continue {
                 let current_pos = dyn_self.get_entity().pos.load();
                 let back_motion = to_position.sub(&current_pos);
-                dyn_self.get_entity().move_entity(caller, back_motion);
+                if preserve_velocity {
+                    dyn_self.get_entity().move_by_shulker(caller, back_motion);
+                } else {
+                    dyn_self.get_entity().move_entity(caller, back_motion);
+                }
             }
         }
-    }
-
-    fn cast_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 

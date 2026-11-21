@@ -2641,6 +2641,24 @@ impl World {
         })
     }
 
+    pub(crate) fn loaded_and_entity_can_stand_on_face(
+        &self,
+        pos: &BlockPos,
+        entity: &dyn EntityBase,
+        face: BlockDirection,
+    ) -> bool {
+        let Some(state) = self.get_block_state_if_loaded(pos) else {
+            return false;
+        };
+        if state.id.to_block() == &Block::POWDER_SNOW {
+            crate::block::blocks::powder_snow::collision_shape_for_entity(entity, pos).is_some_and(
+                |shape| BlockState::collision_shape_is_face_full(std::iter::once(shape), face),
+            )
+        } else {
+            state.is_collision_face_full(face)
+        }
+    }
+
     pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
         self.is_space_empty(bounding_box)
             && self.no_entity_collision(source, bounding_box)
@@ -2648,6 +2666,15 @@ impl World {
     }
 
     pub fn no_entity_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+        self.no_entity_collision_with_vehicle(source, bounding_box, false)
+    }
+
+    pub(crate) fn no_entity_collision_with_vehicle(
+        &self,
+        source: &dyn EntityBase,
+        bounding_box: BoundingBox,
+        include_vehicle: bool,
+    ) -> bool {
         let average_size = ((bounding_box.max.x - bounding_box.min.x)
             + (bounding_box.max.y - bounding_box.min.y)
             + (bounding_box.max.z - bounding_box.min.z))
@@ -2658,13 +2685,42 @@ impl World {
 
         let area = bounding_box.expand_all(1.0E-7);
         !self.get_all_at_box(&area).iter().any(|entity| {
-            let other = entity.get_entity();
-            !entity.is_spectator()
-                && (other.entity_type == &EntityType::SHULKER
-                    || other.entity_type == &EntityType::HAPPY_GHAST
-                    || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
-                && !source.get_entity().is_passenger_of_same_vehicle(other)
+            Self::entity_has_collision(entity.as_ref())
+                && entity.get_entity().entity_id != source.get_entity().entity_id
+                && if include_vehicle {
+                    // The source's own passengers stay linked when it dismounts.
+                    let mut vehicle = entity.get_entity().get_vehicle();
+                    while let Some(current) = vehicle {
+                        if current.get_entity().entity_id == source.get_entity().entity_id {
+                            return false;
+                        }
+                        vehicle = current.get_entity().get_vehicle();
+                    }
+                    true
+                } else {
+                    !source
+                        .get_entity()
+                        .is_passenger_of_same_vehicle(entity.get_entity())
+                }
         })
+    }
+
+    pub(crate) fn entity_blocks_collision(
+        source: &dyn EntityBase,
+        entity: &dyn EntityBase,
+    ) -> bool {
+        Self::entity_has_collision(entity)
+            && !source
+                .get_entity()
+                .is_passenger_of_same_vehicle(entity.get_entity())
+    }
+
+    fn entity_has_collision(entity: &dyn EntityBase) -> bool {
+        let other = entity.get_entity();
+        !entity.is_spectator()
+            && ((other.entity_type == &EntityType::SHULKER && entity.is_collidable(None))
+                || other.entity_type == &EntityType::HAPPY_GHAST
+                || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
     }
 
     pub fn no_border_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
