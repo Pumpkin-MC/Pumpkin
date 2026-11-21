@@ -492,6 +492,9 @@ pub struct PathNavigation {
     path_finder: Option<PathFinder>,
     update_pathfinder_max_visited_nodes: bool,
     pub is_idle: AtomicBool,
+    /// Callbacks invoked during path preparation and completion. Vanilla calls `onPathfindingStart`
+    /// and `onPathfindingDone` directly on `Mob` from node evaluator `prepare`/`done`, but Pumpkin's
+    /// evaluators lack a mob back-reference so hooks are stored on navigation instead.
     pub on_pathfinding_start: Option<fn(&LivingEntity, &mut Self)>,
     pub on_pathfinding_done: Option<fn(&LivingEntity, &mut Self)>,
 }

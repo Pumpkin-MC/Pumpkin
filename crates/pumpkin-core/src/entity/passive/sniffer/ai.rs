@@ -2,7 +2,6 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::environment_attribute::Activity;
 use pumpkin_util::math::position::BlockPos;
-use rand::RngExt;
 
 use super::{SnifferEntity, SnifferState};
 use crate::entity::EntityBase;
@@ -10,10 +9,9 @@ use crate::entity::ai::brain::{
     Brain, BrainProvider, BrainState, BrainTick,
     activity::ActivityData,
     behavior::{
-        AnimalMakeLove, AnimalPanic, Behavior, BehaviorControl, CountDownCooldownTicks, DoNothing,
-        FollowTemptation, LookAtTargetSink, MoveToTargetSink, Status, Swim, Timed,
-        interact::set_entity_look_target, random_stroll, required_memories_of, run_one,
-        set_walk_target_from_look_target,
+        AnimalMakeLove, AnimalPanic, Behavior, CountDownCooldownTicks, DoNothing, FollowTemptation,
+        LookAtTargetSink, MoveToTargetSink, Swim, Timed, interact::set_entity_look_target,
+        random_stroll, run_one, set_walk_target_from_look_target,
     },
     memory::{
         GlobalPos, MemoryModuleId, MemoryStatus, PackedMemories, types, walk_target::WalkTarget,
@@ -61,8 +59,9 @@ pub(super) fn store_explored_position(
     pos: BlockPos,
 ) {
     let world = sniffer.get_entity().world.load();
-    let dimension =
-        Dimension::from_name(world.dimension.minecraft_name).unwrap_or(&Dimension::OVERWORLD);
+    let Some(dimension) = Dimension::from_name(world.dimension.minecraft_name) else {
+        return;
+    };
     let global_pos = GlobalPos::new(dimension, pos);
     let mut updated: Vec<GlobalPos> = state
         .get(types::SNIFFER_EXPLORED_POSITIONS)
@@ -70,7 +69,6 @@ pub(super) fn store_explored_position(
         .unwrap_or_default();
     updated.insert(0, global_pos);
     state.set(types::SNIFFER_EXPLORED_POSITIONS, updated);
-    sniffer.store_explored_position(pos);
 }
 
 fn sniffer<'a>(tick: &BrainTick<'a>) -> Option<&'a SnifferEntity> {
@@ -92,7 +90,7 @@ fn core_activity() -> ActivityData {
         0,
         vec![
             Box::new(Timed::new(Swim::new(0.8))),
-            Box::new(Timed::new(SnifferPanic(AnimalPanic::new(
+            Box::new(Timed::new(ResetSniffingBefore(AnimalPanic::new(
                 SPEED_MULTIPLIER_WHEN_PANICKING,
             )))),
             Box::new(Timed::new(MoveToTargetSink::new(500, 700))),
@@ -109,13 +107,13 @@ fn idle_activity() -> ActivityData {
         vec![
             (
                 0,
-                Box::new(Timed::new(SnifferMakeLove(AnimalMakeLove::new(
+                Box::new(Timed::new(ResetSniffingBefore(AnimalMakeLove::new(
                     &EntityType::SNIFFER,
                 )))),
             ),
             (
                 1,
-                Box::new(Timed::new(SnifferFollowTemptation(FollowTemptation::new(
+                Box::new(Timed::new(ResetSniffingBefore(FollowTemptation::new(
                     |_| SPEED_MULTIPLIER_WHEN_TEMPTED,
                     |mob| {
                         if mob.get_mob_entity().living_entity.is_baby() {
@@ -127,7 +125,7 @@ fn idle_activity() -> ActivityData {
                 )))),
             ),
             (2, Box::new(Timed::new(LookAtTargetSink::new(45, 90)))),
-            (3, Box::new(TimedBehavior::new(FeelingHappy::new(40, 100)))),
+            (3, Box::new(Timed::new(FeelingHappy::new(40, 100)))),
             (
                 4,
                 Box::new(run_one(vec![
@@ -138,8 +136,8 @@ fn idle_activity() -> ActivityData {
                         )),
                         2,
                     ),
-                    (Box::new(TimedBehavior::new(Scenting::new(40, 80))), 1),
-                    (Box::new(TimedBehavior::new(Sniffing::new(40, 80))), 1),
+                    (Box::new(Timed::new(Scenting::new(40, 80))), 1),
+                    (Box::new(Timed::new(Sniffing::new(40, 80))), 1),
                     (
                         Box::new(set_entity_look_target::for_type(
                             &EntityType::PLAYER,
@@ -162,7 +160,7 @@ fn idle_activity() -> ActivityData {
 fn sniff_activity() -> ActivityData {
     ActivityData::with_pairs_and_conditions(
         Activity::Sniff,
-        vec![(0, Box::new(TimedBehavior::new(Searching::new(600))))],
+        vec![(0, Box::new(Timed::new(Searching::new(600))))],
         vec![
             (types::IS_PANICKING.id(), MemoryStatus::ValueAbsent),
             (
@@ -178,8 +176,8 @@ fn dig_activity() -> ActivityData {
     ActivityData::with_pairs_and_conditions(
         Activity::Dig,
         vec![
-            (0, Box::new(TimedBehavior::new(Digging::new(160, 180)))),
-            (0, Box::new(TimedBehavior::new(FinishedDigging::new(40)))),
+            (0, Box::new(Timed::new(Digging::new(160, 180)))),
+            (0, Box::new(Timed::new(FinishedDigging::new(40)))),
         ],
         vec![
             (types::IS_PANICKING.id(), MemoryStatus::ValueAbsent),
@@ -189,91 +187,9 @@ fn dig_activity() -> ActivityData {
     )
 }
 
-pub trait CustomTimedBehavior: Send + Sync {
-    fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)];
-    fn min_duration(&self) -> i32;
-    fn max_duration(&self) -> i32;
-    fn check_extra_start_conditions(&mut self, _tick: &mut BrainTick<'_>) -> bool {
-        true
-    }
-    fn start(&mut self, _tick: &mut BrainTick<'_>) {}
-    fn tick(&mut self, _tick: &mut BrainTick<'_>) {}
-    fn stop(&mut self, _tick: &mut BrainTick<'_>, _timed_out: bool) {}
-    fn can_still_use(&mut self, _tick: &mut BrainTick<'_>) -> bool {
-        false
-    }
-    fn debug_name(&self) -> &'static str;
-}
+struct ResetSniffingBefore<B>(B);
 
-pub struct TimedBehavior<B: CustomTimedBehavior> {
-    inner: B,
-    required: Box<[MemoryModuleId]>,
-    status: Status,
-    end_timestamp: i64,
-}
-
-impl<B: CustomTimedBehavior> TimedBehavior<B> {
-    pub fn new(inner: B) -> Self {
-        let required = required_memories_of(inner.entry_conditions());
-        Self {
-            inner,
-            required,
-            status: Status::Stopped,
-            end_timestamp: 0,
-        }
-    }
-}
-
-impl<B: CustomTimedBehavior> BehaviorControl for TimedBehavior<B> {
-    fn status(&self) -> Status {
-        self.status
-    }
-
-    fn required_memories(&self) -> &[MemoryModuleId] {
-        &self.required
-    }
-
-    fn try_start(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        if !tick.state.check_all(self.inner.entry_conditions())
-            || !self.inner.check_extra_start_conditions(tick)
-        {
-            return false;
-        }
-        let min = self.inner.min_duration();
-        let max = self.inner.max_duration();
-        let duration = if max <= min {
-            min
-        } else {
-            min + tick.mob.get_random().random_range(0..=(max - min))
-        };
-        self.status = Status::Running;
-        self.end_timestamp = tick.time + duration as i64;
-        self.inner.start(tick);
-        true
-    }
-
-    fn tick_or_stop(&mut self, tick: &mut BrainTick<'_>) {
-        if tick.time <= self.end_timestamp && self.inner.can_still_use(tick) {
-            self.inner.tick(tick);
-        } else {
-            self.do_stop(tick);
-        }
-    }
-
-    fn do_stop(&mut self, tick: &mut BrainTick<'_>) {
-        self.status = Status::Stopped;
-        let timed_out = tick.time > self.end_timestamp;
-        self.inner.stop(tick, timed_out);
-    }
-
-    fn debug_string(&self) -> String {
-        self.inner.debug_name().to_string()
-    }
-}
-
-struct SnifferPanic(AnimalPanic);
-
-impl Behavior for SnifferPanic {
+impl<B: Behavior> Behavior for ResetSniffingBefore<B> {
     fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
         self.0.entry_conditions()
     }
@@ -301,94 +217,8 @@ impl Behavior for SnifferPanic {
         self.0.tick(tick);
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        self.0.stop(tick);
-    }
-
-    fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        self.0.can_still_use(tick)
-    }
-
-    fn debug_name(&self) -> &'static str {
-        self.0.debug_name()
-    }
-}
-
-struct SnifferMakeLove(AnimalMakeLove);
-
-impl Behavior for SnifferMakeLove {
-    fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
-        self.0.entry_conditions()
-    }
-
-    fn min_duration(&self) -> i32 {
-        self.0.min_duration()
-    }
-
-    fn max_duration(&self) -> i32 {
-        self.0.max_duration()
-    }
-
-    fn check_extra_start_conditions(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        self.0.check_extra_start_conditions(tick)
-    }
-
-    fn start(&mut self, tick: &mut BrainTick<'_>) {
-        if let Some(sniffer) = sniffer(tick) {
-            reset_sniffing(tick.state, sniffer);
-        }
-        self.0.start(tick);
-    }
-
-    fn tick(&mut self, tick: &mut BrainTick<'_>) {
-        self.0.tick(tick);
-    }
-
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        self.0.stop(tick);
-    }
-
-    fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        self.0.can_still_use(tick)
-    }
-
-    fn debug_name(&self) -> &'static str {
-        self.0.debug_name()
-    }
-}
-
-struct SnifferFollowTemptation(FollowTemptation);
-
-impl Behavior for SnifferFollowTemptation {
-    fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
-        self.0.entry_conditions()
-    }
-
-    fn min_duration(&self) -> i32 {
-        self.0.min_duration()
-    }
-
-    fn max_duration(&self) -> i32 {
-        self.0.max_duration()
-    }
-
-    fn check_extra_start_conditions(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        self.0.check_extra_start_conditions(tick)
-    }
-
-    fn start(&mut self, tick: &mut BrainTick<'_>) {
-        if let Some(sniffer) = sniffer(tick) {
-            reset_sniffing(tick.state, sniffer);
-        }
-        self.0.start(tick);
-    }
-
-    fn tick(&mut self, tick: &mut BrainTick<'_>) {
-        self.0.tick(tick);
-    }
-
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        self.0.stop(tick);
+    fn stop(&mut self, tick: &mut BrainTick<'_>, timed_out: bool) {
+        self.0.stop(tick, timed_out);
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
@@ -423,7 +253,7 @@ impl Sniffing {
     }
 }
 
-impl CustomTimedBehavior for Sniffing {
+impl Behavior for Sniffing {
     fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
         &self.conditions
     }
@@ -490,7 +320,7 @@ impl Searching {
     }
 }
 
-impl CustomTimedBehavior for Searching {
+impl Behavior for Searching {
     fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
         &self.conditions
     }
@@ -571,7 +401,7 @@ impl Digging {
     }
 }
 
-impl CustomTimedBehavior for Digging {
+impl Behavior for Digging {
     fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
         &self.conditions
     }
@@ -636,7 +466,7 @@ impl FinishedDigging {
     }
 }
 
-impl CustomTimedBehavior for FinishedDigging {
+impl Behavior for FinishedDigging {
     fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
         &self.conditions
     }
@@ -694,7 +524,7 @@ impl FeelingHappy {
     }
 }
 
-impl CustomTimedBehavior for FeelingHappy {
+impl Behavior for FeelingHappy {
     fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
         &self.conditions
     }
@@ -754,7 +584,7 @@ impl Scenting {
     }
 }
 
-impl CustomTimedBehavior for Scenting {
+impl Behavior for Scenting {
     fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
         &self.conditions
     }

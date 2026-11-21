@@ -84,7 +84,6 @@ pub struct SnifferEntity {
     pub ageable_data: AgeableData,
     pub state: AtomicI32,
     pub drop_seed_at_tick: AtomicI32,
-    pub explored_positions: std::sync::Mutex<Vec<BlockPos>>,
 }
 
 impl SnifferEntity {
@@ -95,7 +94,6 @@ impl SnifferEntity {
             ageable_data: AgeableData::default(),
             state: AtomicI32::new(SnifferState::Idling.id()),
             drop_seed_at_tick: AtomicI32::new(0),
-            explored_positions: std::sync::Mutex::new(Vec::new()),
         };
         let mob_arc = Arc::new(sniffer);
 
@@ -204,12 +202,6 @@ impl SnifferEntity {
         );
     }
 
-    pub fn on_digging_complete(&self, success: bool) {
-        if success {
-            self.store_explored_position(self.get_entity().get_on_pos());
-        }
-    }
-
     #[must_use]
     pub fn get_head_position(&self) -> Vector3<f64> {
         let entity = self.get_entity();
@@ -235,18 +227,6 @@ impl SnifferEntity {
     }
 
     #[must_use]
-    pub fn can_sniff(&self) -> bool {
-        let entity = self.get_entity();
-        !self.is_tempted()
-            && !self.is_panicking()
-            && !self.mob_entity.living_entity.is_in_water()
-            && !self.mob_entity.is_in_love()
-            && entity.on_ground.load(Ordering::Relaxed)
-            && !entity.is_passenger()
-            && !entity.is_leashed()
-    }
-
-    #[must_use]
     pub fn can_sniff_with_brain(&self, state: &BrainState) -> bool {
         let entity = self.get_entity();
         !state.has_memory_value(types::TEMPTING_PLAYER.id())
@@ -256,18 +236,6 @@ impl SnifferEntity {
             && entity.on_ground.load(Ordering::Relaxed)
             && !entity.is_passenger()
             && !entity.is_leashed()
-    }
-
-    #[must_use]
-    pub fn can_dig(&self) -> bool {
-        let entity = self.get_entity();
-        !self.is_panicking()
-            && !self.is_tempted()
-            && !self.mob_entity.living_entity.is_baby()
-            && !self.mob_entity.living_entity.is_in_water()
-            && entity.on_ground.load(Ordering::Relaxed)
-            && !entity.is_passenger()
-            && self.can_dig_at(self.get_head_block().down())
     }
 
     #[must_use]
@@ -283,33 +251,6 @@ impl SnifferEntity {
     }
 
     #[must_use]
-    pub fn can_dig_at(&self, pos: BlockPos) -> bool {
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        let block_state = world.get_block_state(&pos);
-        let block = pumpkin_data::Block::from_state_id(block_state.id);
-
-        if !block.has_tag(&tag::Block::MINECRAFT_SNIFFER_DIGGABLE_BLOCK) {
-            return false;
-        }
-
-        let explored = self
-            .explored_positions
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if explored.contains(&pos) {
-            return false;
-        }
-
-        let mob_entity = self.get_mob_entity();
-        let steered = mob_entity.steered();
-        steered
-            .navigator()
-            .create_path(&mob_entity.living_entity, pos.0.to_f64(), 1)
-            .is_some_and(|p| p.can_reach())
-    }
-
-    #[must_use]
     pub fn can_dig_at_with_brain(&self, state: &BrainState, pos: BlockPos) -> bool {
         let entity = self.get_entity();
         let world = entity.world.load();
@@ -320,9 +261,9 @@ impl SnifferEntity {
             return false;
         }
 
-        if let Some(explored) = state.get(types::SNIFFER_EXPLORED_POSITIONS) {
-            let dimension = Dimension::from_name(world.dimension.minecraft_name)
-                .unwrap_or(&Dimension::OVERWORLD);
+        if let Some(explored) = state.get(types::SNIFFER_EXPLORED_POSITIONS)
+            && let Some(dimension) = Dimension::from_name(world.dimension.minecraft_name)
+        {
             let global_pos = GlobalPos::new(dimension, pos);
             if explored.contains(&global_pos) {
                 return false;
@@ -356,15 +297,6 @@ impl SnifferEntity {
             }
         }
         None
-    }
-
-    pub fn store_explored_position(&self, pos: BlockPos) {
-        let mut explored = self
-            .explored_positions
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        explored.truncate(20);
-        explored.insert(0, pos);
     }
 
     pub fn drop_seed(&self) {
@@ -447,7 +379,7 @@ impl Animal for SnifferEntity {
         let egg_arc = Arc::new(ItemEntity::new(egg_entity, item_stack));
         world.spawn_entity_non_save(egg_arc as Arc<dyn EntityBase>);
 
-        let mut rng = rand::rng();
+        let mut rng = self.get_random();
         let pitch = 0.2f32.mul_add(rng.random::<f32>() - rng.random::<f32>(), 0.5);
         self.play_entity_sound(Sound::BlockSnifferEggPlop, 1.0, pitch);
     }
@@ -737,13 +669,6 @@ mod tests {
                 .unwrap_or_else(|| panic!("missing explored positions"));
             assert_eq!(positions.len(), 21);
             assert_eq!(positions[0].pos, BlockPos::new(24, 64, 0));
-
-            let local_explored = sniffer
-                .explored_positions
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            assert_eq!(local_explored.len(), 21);
-            assert_eq!(local_explored[0], BlockPos::new(24, 64, 0));
         });
     }
 
