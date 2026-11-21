@@ -377,7 +377,10 @@ impl ShulkerEntity {
             .contract_all(1.0E-6);
             let min = bounds.min_block_pos();
             let max = bounds.max_block_pos();
-            world.has_chunks_at(min.0.x, min.0.z, max.0.x, max.0.z) && self.can_stay_at(pos, *face)
+            world.has_chunks_at(min.0.x, min.0.z, max.0.x, max.0.z)
+                && self.can_stay_at(pos, *face)
+                // Teleport clearance must also hold after the rider is unlinked.
+                && world.no_entity_collision_with_vehicle(self, bounds, true)
         })
     }
 
@@ -1320,6 +1323,56 @@ mod tests {
         );
         assert_eq!(position.y, 65.0);
         assert!(world.is_space_empty(bounds));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn teleport_clearance_checks_the_vehicle_before_unlinking() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+        let shulker = spawn(&world);
+        let candidate = BlockPos::new(2, 64, 2);
+        let clear_candidate = BlockPos::new(5, 64, 2);
+        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
+        for pos in [candidate, clear_candidate] {
+            world.set_block_state(&pos.down(), Block::STONE.default_state.id, flags);
+        }
+        let vehicle = Arc::new(Entity::new(
+            world.clone(),
+            candidate.to_f64().add_raw(0.5, 0.0, 0.5),
+            &EntityType::OAK_BOAT,
+        ));
+        world.spawn_entity(vehicle.clone());
+        vehicle.add_passenger_silently(vehicle.clone(), shulker.clone());
+        assert!(world.no_entity_collision(shulker.as_ref(), BoundingBox::from_block(&candidate)));
+        assert!(shulker.find_teleport_attachment(&candidate).is_none());
+        assert!(shulker.get_entity().has_vehicle());
+        assert!(shulker.find_teleport_attachment(&clear_candidate).is_some());
+        let passenger = Arc::new(Entity::new(
+            world.clone(),
+            clear_candidate.to_f64().add_raw(0.5, 0.0, 0.5),
+            &EntityType::OAK_BOAT,
+        ));
+        world.spawn_entity(passenger.clone());
+        shulker
+            .get_entity()
+            .add_passenger_silently(shulker.clone(), passenger);
+        assert!(shulker.find_teleport_attachment(&clear_candidate).is_some());
+        vehicle.remove_passenger_before_teleport_if(shulker.get_entity().entity_id, &|| {
+            shulker.find_teleport_attachment(&candidate).is_some()
+        });
+        assert!(shulker.get_entity().has_vehicle());
+        vehicle.remove_passenger_before_teleport_if(shulker.get_entity().entity_id, &|| {
+            shulker.find_teleport_attachment(&clear_candidate).is_some()
+        });
+        assert!(!shulker.get_entity().has_vehicle());
+        assert!(shulker.find_teleport_attachment(&candidate).is_none());
+        assert!(shulker.find_teleport_attachment(&clear_candidate).is_some());
         world.level.shutdown().await;
         Ok(())
     }

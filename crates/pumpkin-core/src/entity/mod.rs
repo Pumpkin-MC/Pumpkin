@@ -3491,7 +3491,7 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        if shulker_move && self.entity_type == &EntityType::PLAYER && final_move.y == 0.0 {
+        if shulker_move && self.entity_type == &EntityType::PLAYER {
             self.refresh_support_after_external_move(caller);
         }
 
@@ -6966,7 +6966,7 @@ mod dimension_tests {
     }
 
     #[tokio::test]
-    async fn horizontal_shell_displacement_rechecks_player_support() -> TestResult {
+    async fn shell_displacement_rechecks_player_support() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
         world.level.loaded_chunks.insert(
@@ -6989,6 +6989,15 @@ mod dimension_tests {
             .store(true, std::sync::atomic::Ordering::Relaxed);
         player.move_by_shulker(&player, Vector3::new(0.1, 0.0, 0.0));
         assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        player.move_by_shulker(&player, Vector3::new(0.0, 0.25, 0.0));
+        assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(player.supporting_block_pos.load().is_none());
+        player.move_by_shulker(&player, Vector3::new(0.0, -0.25, 0.0));
+        assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        assert_eq!(
+            player.supporting_block_pos.load(),
+            Some(pumpkin_util::math::position::BlockPos::new(0, 63, 0))
+        );
         player.move_by_shulker(&player, Vector3::new(1.0, 0.0, 0.0));
         assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
         assert!(player.supporting_block_pos.load().is_none());

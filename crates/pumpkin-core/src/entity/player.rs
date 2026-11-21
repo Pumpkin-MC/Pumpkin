@@ -844,6 +844,20 @@ fn reserve_position_correction(
     Some(id)
 }
 
+fn discard_position_correction(
+    pending: &mut Option<(VarInt, Vector3<f64>)>,
+    superseded: &mut VecDeque<VarInt>,
+    id: VarInt,
+) {
+    if pending
+        .as_ref()
+        .is_some_and(|(expected, _)| *expected == id)
+    {
+        *pending = None;
+    }
+    superseded.retain(|previous| *previous != id);
+}
+
 fn replace_pending_position(
     pending: &mut Option<(VarInt, Vector3<f64>)>,
     superseded: Option<&mut VecDeque<VarInt>>,
@@ -5091,8 +5105,16 @@ impl Player {
                     pitch,
                     relatives,
                 );
-                if let Ok(data) = client.serialize_packet(&packet) {
-                    client.try_enqueue_packet(data);
+                if !client.try_send_packet(&packet) {
+                    let mut pending = self
+                        .awaiting_teleport
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let mut superseded = self
+                        .superseded_teleports
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    discard_position_correction(&mut pending, &mut superseded, teleport_id.into());
                 }
             }
             ClientPlatform::Bedrock(client) => {
@@ -9758,6 +9780,51 @@ mod tests {
     use pumpkin_protocol::bedrock::network_item::ContainerName;
     use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
     use uuid::Uuid;
+
+    #[test]
+    fn failed_corrections_release_only_the_undelivered_reservation() {
+        use pumpkin_protocol::codec::var_int::VarInt;
+        let counter = std::sync::atomic::AtomicI32::new(0);
+        let position = Vector3::new(0.5, 64.0, 0.5);
+        let mut pending = None;
+        let mut superseded = std::collections::VecDeque::new();
+        assert_eq!(
+            super::reserve_position_correction(
+                &counter,
+                &mut pending,
+                Some(&mut superseded),
+                position,
+                true
+            ),
+            Some(1)
+        );
+        super::discard_position_correction(&mut pending, &mut superseded, VarInt(1));
+        assert_eq!(
+            super::reserve_position_correction(
+                &counter,
+                &mut pending,
+                Some(&mut superseded),
+                position,
+                true
+            ),
+            Some(2)
+        );
+        // A packet hook can replace the reservation before returning a failed enqueue.
+        super::replace_pending_position(&mut pending, Some(&mut superseded), VarInt(3), position);
+        super::discard_position_correction(&mut pending, &mut superseded, VarInt(2));
+        assert_eq!(pending, Some((VarInt(3), position)));
+        assert!(superseded.is_empty());
+        assert_eq!(
+            super::reserve_position_correction(
+                &counter,
+                &mut pending,
+                Some(&mut superseded),
+                position,
+                true
+            ),
+            None
+        );
+    }
 
     #[test]
     fn explicit_corrections_and_dismount_reservations_keep_only_superseded_ids() {
