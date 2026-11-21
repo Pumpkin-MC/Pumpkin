@@ -57,6 +57,7 @@ mod connection_cache;
 pub(crate) mod debug_profiler;
 pub mod enchantment;
 mod key_store;
+pub mod login_admission;
 pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
@@ -710,7 +711,7 @@ impl Server {
         Some((self.get_world_from_dimension(dimension), Some(data)))
     }
 
-    pub fn add_player(
+    pub async fn add_player(
         self: &Arc<Self>,
         client: Arc<ClientPlatform>,
         profile: GameProfile,
@@ -766,56 +767,89 @@ impl Server {
             advancements.player = Arc::downgrade(&player);
         };
 
-        send_cancellable_blocking! {{
-            self;
-            &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
-            'after: {
-                player.screen_handler_sync_handler.store_player(player.clone());
-                if !self.admit_player(&world, &player) {
-                    player.kick(DisconnectReason::Shutdown, &TextComponent::text("Server stopped"));
-                    player.client.clear_player();
-                    return None;
+        if self.check_login_admission(&player).await.is_none() {
+            player.client.clear_player();
+            return None;
+        }
+        player
+            .screen_handler_sync_handler
+            .store_player(player.clone());
+        if !self.admit_player(&world, &player) {
+            player
+                .client
+                .kick(
+                    DisconnectReason::Shutdown,
+                    TextComponent::text("Server stopped"),
+                )
+                .await;
+            player.client.clear_player();
+            return None;
+        }
+        self.data
+            .user_cache
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .upsert(player.gameprofile.id, player.gameprofile.name.clone());
+
+        if config.is_some_and(|config| config.server_listing) {
+            self.listing
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .add_player(&player);
+        }
+
+        let player_dto = crate::net::management::dto::PlayerDto::new(
+            Some(player.gameprofile.id),
+            Some(player.gameprofile.name.clone()),
+        );
+        self.management_hub.broadcast_player_joined(&player_dto);
+        if self.telemetry_config.enabled {
+            self.telemetry_sessions.record_join(player.gameprofile.id);
+        }
+        Some((player, world))
+    }
+
+    async fn check_login_admission(self: &Arc<Self>, player: &Arc<Player>) -> Option<()> {
+        let admission = player.login_admission.open();
+        let mut event = PlayerLoginEvent::new(
+            Arc::clone(player),
+            TextComponent::text("You have been kicked from the server"),
+        );
+        self.plugin_manager.fire(self, &mut event).await;
+        let deferred = admission.finish();
+        if event.cancelled {
+            drop(deferred);
+            player
+                .client
+                .kick(DisconnectReason::Kicked, event.kick_message)
+                .await;
+            return None;
+        }
+        if let Some(deferred) = deferred {
+            let wait = async {
+                tokio::select! {
+                    biased;
+                    () = self.stop_token.cancelled() => Err((DisconnectReason::Shutdown, TextComponent::text("Server stopped"))),
+                    verdict = deferred.verdict() => verdict.map_err(|message| (DisconnectReason::Kicked, message)),
                 }
-                Some({
-                    {
-                        let mut user_cache = self
-                            .data
-                            .user_cache
-                            .write()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        user_cache.upsert(player.gameprofile.id, player.gameprofile.name.clone());
-                    };
-
-                    // TODO: Config if we want increase online
-                    if let Some(config) = config {
-                        // TODO: Config so we can also just ignore this hehe
-                        if config.server_listing {
-                            self.listing
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                .add_player(&player);
-                        }
-                    }
-
-                    let player_dto = crate::net::management::dto::PlayerDto::new(
-                        Some(player.gameprofile.id),
-                        Some(player.gameprofile.name.clone()),
-                    );
-                    self.management_hub.broadcast_player_joined(&player_dto);
-                    if self.telemetry_config.enabled {
-                        self.telemetry_sessions.record_join(player.gameprofile.id);
-                    }
-
-                    (player, world)
-                })
+            };
+            let verdict = match player.client.as_ref() {
+                ClientPlatform::Java(client) => client.wait_for_login_admission(wait).await,
+                ClientPlatform::Bedrock(client) => tokio::select! {
+                    biased;
+                    () = client.await_close_interrupt() => None,
+                    verdict = wait => Some(verdict),
+                },
+            }?;
+            if let Err((reason, message)) = verdict {
+                player.client.kick(reason, message).await;
+                return None;
             }
-
-            'cancelled: {
-                player.kick(DisconnectReason::Kicked, &event.kick_message);
-                player.client.clear_player();
-                None
-            }
-        }}
+        }
+        if player.client.closed() {
+            return None;
+        }
+        Some(())
     }
 
     pub fn remove_player(&self, player: &Player) {

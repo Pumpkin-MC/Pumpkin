@@ -1,0 +1,21 @@
+interface login-admission {
+    use player.{player};
+    use text.{text-component};
+
+    /// A single-use verdict for one connection attempt. Dropping it denies admission.
+    resource pending-admission {
+        /// Returns false after a disconnect, timeout, or cancellation of the login.
+        is-pending: func() -> bool;
+    }
+
+    /// Defers admission during PlayerLoginEvent. Only one defer succeeds per connection.
+    /// Return from the event promptly, then resolve the verdict from a later callback.
+    /// Cancel the event if a required check cannot be deferred.
+    /// The connection waits for up to five seconds after the event returns.
+    /// Cancelling the event also cancels any deferred admission.
+    defer: func(player: borrow<player>) -> option<pending-admission>;
+
+    /// Allows admission on ok, or denies it with the supplied message on err.
+    /// Returns false if the connection is no longer waiting for this verdict.
+    resolve: func(admission: pending-admission, verdict: result<_, text-component>) -> bool;
+}
