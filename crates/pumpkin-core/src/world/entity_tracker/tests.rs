@@ -961,7 +961,7 @@ async fn a_player_respawning_while_its_spawn_packet_goes_out_stays_drawn() -> Te
         .plugin_manager
         .register(plugin.clone(), EventPriority::Normal, true);
 
-    // Paired by the tracker pass: a join iterates the entity map, which a respawn waits for.
+    // Paired by the tracker pass.
     viewer
         .player
         .get_entity()
@@ -977,6 +977,190 @@ async fn a_player_respawning_while_its_spawn_packet_goes_out_stays_drawn() -> Te
     world.entity_tracker.update_all(&world);
     let drawn = drawn_at(None, walker.entity_id(), &viewer.received().await?)?;
     assert_close(drawn, entity.pos.load());
+    shutdown(&server).await;
+    Ok(())
+}
+
+/// Runs `work` on a thread of its own and waits for it, though not for good: a tracker that
+/// holds on to its entity map while it queues a packet never comes back from a plugin that
+/// changes the map.
+fn in_time(work: impl FnOnce() + Send + 'static) -> Result<(), &'static str> {
+    let (done, waiting) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        work();
+        let _ = done.send(());
+    });
+    waiting
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .map_err(|_| "the plugin waits for the entity map the tracker holds on to")
+}
+
+fn cow_at(world: &Arc<World>, z: f64) -> Arc<dyn EntityBase> {
+    let cow: Arc<dyn EntityBase> = CowEntity::new(Entity::new(
+        world.clone(),
+        Vector3::new(0.5, 100.0, z),
+        &EntityType::COW,
+    ));
+    world.entity_tracker.add_entity(&cow, world);
+    cow
+}
+
+/// Stands in for a plugin that changes what is tracked while a player is paired with it. It
+/// respawns the cow whose spawn packet it sees first and removes the two others. One of
+/// those it tracks again when it sees the player lose it.
+struct RetracksWhilePaired {
+    cows: [Arc<dyn EntityBase>; 3],
+    /// Which of the cows it respawned.
+    respawned: std::sync::OnceLock<usize>,
+    /// Whether the cow it brings back is tracked again.
+    back: AtomicBool,
+}
+impl RetracksWhilePaired {
+    /// The cow that stays removed and the one that comes back.
+    const fn removed(respawned: usize) -> [usize; 2] {
+        [(respawned + 1) % 3, (respawned + 2) % 3]
+    }
+}
+impl EventHandler<PacketSentEvent> for RetracksWhilePaired {
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
+    ) -> BoxFuture<'a, ()> {
+        let world = server.worlds.load()[0].clone();
+        let tracker = &world.entity_tracker;
+        let spawned = self.cows.iter().position(|cow| {
+            spawns_entity(event.packet_id, &event.payload, cow.get_entity().entity_id)
+        });
+        if let Some(spawned) = spawned
+            && self.respawned.set(spawned).is_ok()
+        {
+            tracker.respawn_entity(&self.cows[spawned], &world);
+            for cow in Self::removed(spawned) {
+                tracker.remove_entity(self.cows[cow].as_ref(), &world);
+            }
+        } else if let Some(&respawned) = self.respawned.get() {
+            let returns = &self.cows[Self::removed(respawned)[1]];
+            let packet = RawPacket {
+                id: event.packet_id,
+                payload: event.payload.clone(),
+            };
+            if removals(&[packet], returns.get_entity().entity_id) == 1
+                && !self.back.swap(true, Relaxed)
+            {
+                tracker.add_entity(returns, &world);
+            }
+        }
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_player_is_paired_with_what_is_tracked_once_its_packets_are_out() -> TestResult {
+    // A join, a respawn in another world and a chunk that was just sent.
+    let ways: [fn(&World, &Arc<Player>); 3] = [
+        |world, player| {
+            let tracker = &world.entity_tracker;
+            tracker.pair_new_player_with_tracked_entities(player, world);
+        },
+        |world, player| world.entity_tracker.repair_respawned_player(player, world),
+        |world, player| {
+            let chunks = [player.get_entity().chunk_pos.load()];
+            let tracker = &world.entity_tracker;
+            tracker.update_player_chunks(player, world, &chunks);
+        },
+    ];
+    for pair in ways {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let world = server.worlds.load()[0].clone();
+        let cows = [0.5, 2.5, 4.5].map(|z| cow_at(&world, z));
+        // Out of range, with the chunk of the cows already sent.
+        let mut viewer = Client::join(&server, 1, Vector3::new(1000.5, 100.0, 0.5));
+        send_chunk_of(cows[0].get_entity(), &viewer);
+        viewer.received().await?;
+        let plugin = Arc::new(RetracksWhilePaired {
+            cows: cows.clone(),
+            respawned: std::sync::OnceLock::new(),
+            back: AtomicBool::new(false),
+        });
+        server
+            .plugin_manager
+            .register(plugin.clone(), EventPriority::Normal, true);
+
+        viewer
+            .player
+            .get_entity()
+            .set_pos(Vector3::new(5.5, 100.0, 0.5));
+        let (player, paired) = (viewer.player.clone(), world.clone());
+        in_time(move || pair(&paired, &player))?;
+        let respawned = *plugin.respawned.get().ok_or("a cow was spawned")?;
+        let [gone, returned] = RetracksWhilePaired::removed(respawned);
+
+        // The two removed cows were still on the list the player was paired from, and are
+        // taken from the player again. That also took the cow that was tracked again in
+        // between, so it starts over in the next pass like the respawned one.
+        world.entity_tracker.update_all(&world);
+        let packets = viewer.received().await?;
+        for cow in [respawned, returned] {
+            let cow = cows[cow].get_entity();
+            assert_close(drawn_at(None, cow.entity_id, &packets)?, cow.pos.load());
+        }
+        let gone = cows[gone].get_entity();
+        assert!(drawn_at(None, gone.entity_id, &packets)?.is_none());
+        shutdown(&server).await;
+    }
+    Ok(())
+}
+
+/// Stands in for a plugin that respawns an entity when it sees it being removed for a player.
+struct RespawnsWhenRemoved {
+    cow: Arc<dyn EntityBase>,
+    removed: AtomicBool,
+}
+impl EventHandler<PacketSentEvent> for RespawnsWhenRemoved {
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
+    ) -> BoxFuture<'a, ()> {
+        let packet = RawPacket {
+            id: event.packet_id,
+            payload: event.payload.clone(),
+        };
+        if removals(&[packet], self.cow.get_entity().entity_id) == 1
+            && !self.removed.swap(true, Relaxed)
+        {
+            let world = server.worlds.load()[0].clone();
+            world.entity_tracker.respawn_entity(&self.cow, &world);
+        }
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_leaving_player_is_taken_off_what_is_tracked_with_the_entity_map_free() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let server = server(&folder).await?;
+    let world = server.worlds.load()[0].clone();
+    let cow = cow_at(&world, 0.5);
+    let leaver = Client::join(&server, 1, Vector3::new(5.5, 100.0, 0.5));
+    let plugin = Arc::new(RespawnsWhenRemoved {
+        cow: cow.clone(),
+        removed: AtomicBool::new(false),
+    });
+    server
+        .plugin_manager
+        .register(plugin.clone(), EventPriority::Normal, true);
+
+    let (player, left) = (leaver.player.clone(), world.clone());
+    in_time(move || left.entity_tracker.remove_entity(player.as_ref(), &left))?;
+    assert!(plugin.removed.load(Relaxed));
+    assert!(
+        world
+            .entity_tracker
+            .has_entity_with_id(cow.get_entity().entity_id)
+    );
     shutdown(&server).await;
     Ok(())
 }

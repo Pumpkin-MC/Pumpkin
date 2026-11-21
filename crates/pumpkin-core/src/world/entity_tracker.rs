@@ -1730,6 +1730,36 @@ impl EntityTracker {
         }
     }
 
+    /// The tracked entities `wanted` picks. Who queues packets for them goes over this list
+    /// and not over the map: a plugin watching packets may add or remove an entity, which
+    /// waits for the part of the map that is being read.
+    fn tracked_entities(&self, wanted: impl Fn(&TrackedEntity) -> bool) -> Vec<Arc<TrackedEntity>> {
+        self.entity_map
+            .iter()
+            .filter(|entry| wanted(entry.value()))
+            .map(|entry| entry.value().clone())
+            .collect()
+    }
+
+    /// [`TrackedEntity::update_player`] for an entity out of [`Self::tracked_entities`]. One
+    /// that was removed or respawned since no longer tells its watchers when it goes, so
+    /// the player is taken off it again and whoever tracks the entity now starts over.
+    fn pair(&self, tracked: &Arc<TrackedEntity>, player: &Arc<Player>, world: &World) {
+        tracked.update_player(player, world);
+        let tracks = self
+            .get_tracked_entity(tracked.entity_id)
+            .is_some_and(|current| Arc::ptr_eq(&current, tracked));
+        if !tracks {
+            tracked.remove_player(player);
+            // Asked only now: the removal also took the entity from the player if it was
+            // tracked anew and paired meanwhile.
+            if let Some(current) = self.get_tracked_entity(tracked.entity_id) {
+                current.remove_player(player);
+                current.pos_dirty.store(true, Relaxed);
+            }
+        }
+    }
+
     pub fn add_entity(&self, entity: &Arc<dyn EntityBase>, world: &World) {
         let entity_type = entity.get_entity().entity_type;
         let range = entity_type.client_tracking_range;
@@ -1758,10 +1788,8 @@ impl EntityTracker {
     /// Must only be called after the player's own `CLogin` packet has been sent.
     pub fn pair_new_player_with_tracked_entities(&self, player_arc: &Arc<Player>, world: &World) {
         let entity_id = player_arc.get_entity().entity_id;
-        for entry in &self.entity_map {
-            if *entry.key() != entity_id {
-                entry.value().update_player(player_arc, world);
-            }
+        for tracked in self.tracked_entities(|tracked| tracked.entity_id != entity_id) {
+            self.pair(&tracked, player_arc, world);
         }
     }
 
@@ -1776,11 +1804,9 @@ impl EntityTracker {
     /// Vanilla `PlayerList.respawn` recreates the player -> forget and re-pair it as a viewer.
     pub fn repair_respawned_player(&self, player: &Arc<Player>, world: &World) {
         let entity_id = player.get_entity().entity_id;
-        for entry in &self.entity_map {
-            if *entry.key() != entity_id {
-                entry.value().forget_player(player);
-                entry.value().update_player(player, world);
-            }
+        for tracked in self.tracked_entities(|tracked| tracked.entity_id != entity_id) {
+            tracked.forget_player(player);
+            self.pair(&tracked, player, world);
         }
     }
 
@@ -1796,20 +1822,20 @@ impl EntityTracker {
         }
         let chunks: FxHashSet<_> = chunks.iter().copied().collect();
         let entity_id = player.get_entity().entity_id;
-        for entry in &self.entity_map {
-            if *entry.key() != entity_id
-                && chunks.contains(&entry.value().entity.get_entity().chunk_pos.load())
-            {
-                entry.value().update_player(player, world);
-            }
+        let in_chunks = |tracked: &TrackedEntity| {
+            tracked.entity_id != entity_id
+                && chunks.contains(&tracked.entity.get_entity().chunk_pos.load())
+        };
+        for tracked in self.tracked_entities(in_chunks) {
+            self.pair(&tracked, player, world);
         }
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase, world: &World) {
         let entity_id = entity.get_entity().entity_id;
         if let Some(player) = entity.get_player() {
-            for entry in &self.entity_map {
-                entry.value().remove_player(player);
+            for tracked in self.tracked_entities(|_| true) {
+                tracked.remove_player(player);
             }
         }
 
