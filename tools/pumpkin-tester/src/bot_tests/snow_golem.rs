@@ -235,13 +235,13 @@ fn check_leash_precedes_pumpkin(
             .position()
             .add_raw(Entity::LEASH_SNAP_DISTANCE + 2.0, 0.0, 0.0),
     );
-    let entities_before = world.entities.load().len();
+    let leads_before = lead_drops(&world);
     let retained = (0..3).all(|_| {
-        matches!(
-            entity.tick_leash(golem),
-            pumpkin_core::entity::LeashTick::NotLeashed
-        ) && entity.is_leashed()
-            && world.entities.load().len() == entities_before
+        entity.tick_leash(golem);
+        entity
+            .get_leash_holder()
+            .is_some_and(|holder| holder.get_entity().entity_id == player.get_entity().entity_id)
+            && lead_drops(&world) == leads_before
     });
     entity.set_pos(original_pos);
     if !retained {
@@ -258,6 +258,26 @@ fn check_leash_precedes_pumpkin(
         return Err("Shearing must cut the leash before removing the pumpkin".into());
     }
     Ok(())
+}
+
+fn lead_drops(world: &pumpkin_core::world::World) -> usize {
+    world
+        .entities
+        .load()
+        .iter()
+        .filter_map(|entity| entity.cast_any().downcast_ref::<ItemEntity>())
+        .map(|entity| {
+            let stack = entity
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if stack.item == &Item::LEAD {
+                usize::from(stack.item_count)
+            } else {
+                0
+            }
+        })
+        .sum()
 }
 
 fn check_shearing_drop(golem: &SnowGolemEntity) -> Result<(), String> {
