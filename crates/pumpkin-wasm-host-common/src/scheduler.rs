@@ -151,42 +151,58 @@ impl TaskScheduler {
             .any(|entry| Weak::ptr_eq(entry, &plugin))
     }
 
-    /// Pops the tasks due at `current_tick`, leaving out cancelled ones and those of disabled plugins.
-    pub fn take_due_tasks(&self, current_tick: u64) -> Vec<ScheduledTask> {
-        let mut tasks_to_run = Vec::new();
+    /// The id the next scheduled task will get. Tasks with an id at or above it were scheduled
+    /// after this call.
+    #[must_use]
+    pub fn next_task_id(&self) -> TaskId {
+        self.next_task_id.load(AtomicOrdering::SeqCst)
+    }
 
-        {
-            let mut tasks = self
-                .tasks
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut cancelled = self
-                .cancelled_tasks
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            while let Some(task) = tasks.peek() {
-                if task.next_tick > current_tick {
-                    break;
-                }
-
-                let Some(task) = tasks.pop() else {
-                    break;
-                };
-                if cancelled.remove(&task.id) {
-                    continue;
-                }
-
-                tasks_to_run.push(task);
-            }
-        }
-
+    /// Pops the earliest task due at `current_tick`, skipping cancelled ones and those of disabled
+    /// plugins.
+    ///
+    /// Tasks stay in the queue until they are about to run, so a cancellation or a disabled plugin
+    /// is seen right before each run, also when an earlier task of the same tick caused it.
+    pub fn pop_due_task(&self, current_tick: u64) -> Option<ScheduledTask> {
+        // Same lock order as the other methods: disabled plugins, then tasks.
         let mut disabled_plugins = self
             .disabled_plugins
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        tasks_to_run.retain(|task| !Self::is_plugin_disabled(&mut disabled_plugins, &task.plugin));
-        tasks_to_run
+        let mut tasks = self
+            .tasks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cancelled = self
+            .cancelled_tasks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        while tasks.peek()?.next_tick <= current_tick {
+            let task = tasks.pop()?;
+            if cancelled.remove(&task.id)
+                || Self::is_plugin_disabled(&mut disabled_plugins, &task.plugin)
+            {
+                continue;
+            }
+            return Some(task);
+        }
+        None
+    }
+
+    /// Puts a due task back unchanged, for one the current tick must not run, such as a task
+    /// scheduled during this tick. It keeps its due tick, so the next tick runs it first.
+    pub fn defer(&self, task: ScheduledTask) {
+        let mut disabled_plugins = self
+            .disabled_plugins
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !Self::is_plugin_disabled(&mut disabled_plugins, &task.plugin) {
+            self.tasks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(task);
+        }
     }
 
     /// Queues a repeating task for its next run, unless its plugin has been disabled in the meantime.
