@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "#c:sandstone/uncolored_stairs",
+      "required": false
+    },
+    {
+      "id": "#c:sandstone/red_stairs",
+      "required": false
+    }
+  ]
+}

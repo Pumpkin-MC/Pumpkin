@@ -5,6 +5,7 @@ use pumpkin_macros::packet;
 
 use crate::serial::PacketWrite;
 
+/// Sent by the server to synchronize all available biome definitions and properties with the client.
 #[packet(122)]
 pub struct CBiomeDefinitionList;
 
@@ -28,7 +29,7 @@ mod tests {
             biome_count.0 as usize,
             pumpkin_data::bedrock_biome::BIOME_COUNT
         );
-        assert_eq!(biome_count.0, 88);
+        assert_eq!(biome_count.0, 89);
         assert!(BIOME_DEFINITIONS.len() > 100_000);
     }
 }

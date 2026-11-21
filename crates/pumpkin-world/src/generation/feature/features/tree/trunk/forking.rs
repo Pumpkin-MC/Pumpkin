@@ -23,16 +23,17 @@ impl ForkingTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        TrunkPlacer::set_dirt(
+        let mut nodes = Vec::new();
+        let mut logs = Vec::new();
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &start_pos.down(),
             below_trunk_provider,
-        );
-
-        let mut nodes = Vec::new();
-        let mut logs = Vec::new();
+        ) {
+            logs.push(start_pos.down());
+        }
 
         let lean_direction = BlockDirection::random_horizontal(random);
         let lean_height = height as i32 - random.next_bounded_i32(4) - 1;

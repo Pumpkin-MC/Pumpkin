@@ -1,18 +1,8 @@
 use pumpkin_util::math::vector3::Vector3;
 
-use super::density_function::IndexToNoisePos;
-
 /// Zero-cost static trait for monomorphized density function pipeline evaluation.
 pub trait StaticDensityFunction {
     fn sample(&self, pos: &Vector3<i32>) -> f64;
-
-    #[inline]
-    fn fill(&self, array: &mut [f64], mapper: &impl IndexToNoisePos) {
-        array.iter_mut().enumerate().for_each(|(index, value)| {
-            let pos = mapper.at(index, None);
-            *value = self.sample(&pos);
-        });
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -22,11 +12,6 @@ impl StaticDensityFunction for Constant {
     #[inline]
     fn sample(&self, _pos: &Vector3<i32>) -> f64 {
         self.0
-    }
-
-    #[inline]
-    fn fill(&self, array: &mut [f64], _mapper: &impl IndexToNoisePos) {
-        array.fill(self.0);
     }
 }
 
@@ -121,19 +106,5 @@ impl StaticDensityFunction for ClampedYGradient {
             self.from_value,
             self.to_value,
         )
-    }
-
-    #[inline]
-    fn fill(&self, array: &mut [f64], mapper: &impl IndexToNoisePos) {
-        array.iter_mut().enumerate().for_each(|(index, value)| {
-            let pos = mapper.at(index, None);
-            *value = pumpkin_util::math::clamped_map(
-                pos.y as f64,
-                self.from_y,
-                self.to_y,
-                self.from_value,
-                self.to_value,
-            );
-        });
     }
 }

@@ -8,13 +8,17 @@ use crate::{
     serial::PacketWrite,
 };
 
+/// Sent by the server to update the center anchor position and radius around which chunks remain loaded on the client.
 #[packet(121)]
 pub struct CNetworkChunkPublisherUpdate {
     // https://mojang.github.io/bedrock-protocol-docs/html/NetworkChunkPublisherUpdatePacket.html
+    /// Center block position of the loaded area.
     pub pos_for_view: BlockPos,
     // Is in blocks, not chunks!
+    /// Radius around the view position (measured in blocks, typically chunk radius * 16).
     pub new_radius: VarUInt,
     // TODO
+    /// List of chunk coordinates saved in the client's cache.
     pub server_build_chunk_list: Vec<Vector2<i32>>,
 }
 

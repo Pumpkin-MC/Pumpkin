@@ -1,6 +1,0 @@
-{
-  "effects": "drowning",
-  "exhaustion": 0.0,
-  "message_id": "drown",
-  "scaling": "when_caused_by_living_non_player"
-}

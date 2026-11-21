@@ -45,9 +45,10 @@ pub const FOSSILS: [&str; 14] = [
 
 /// Vanilla height provider bounds for nether fossils.
 /// From `nether_fossil.json`: uniform(absolute=32, `below_top=2`).
-/// Vanilla `BelowTop`: height - 1 + `min_y` - offset = 256 - 1 + 0 - 2 = 253.
+/// In vanilla Nether, generator gen depth is 128:
+/// `below_top=2`: height - 1 + `min_y` - offset = 128 - 1 + 0 - 2 = 125.
 const HEIGHT_MIN: i32 = 32;
-const HEIGHT_MAX: i32 = 253;
+const HEIGHT_MAX: i32 = 125;
 
 pub struct NetherFossilGenerator;
 
@@ -56,11 +57,12 @@ impl StructureGenerator for NetherFossilGenerator {
         &self,
         mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
-        // Vanilla random call order:
+        // Vanilla random call order (NetherFossilStructure.java):
         // 1. nextInt(16) for X offset within chunk
         // 2. nextInt(16) for Z offset within chunk
-        // 3. height.get(random) for initial Y (uniform 32..254)
-        // 4. Column scan (no random calls)
+        // 3. height.sample(random, generationContext) for initial Y (uniform 32..125)
+        // 4. Column scan downward to seaLevel (no random calls)
+        //    If y <= seaLevel: return empty
         // 5. Rotation.getRandom(random) - nextInt(4)
         // 6. Util.getRandom(FOSSILS, random) - nextInt(14)
 
@@ -72,11 +74,36 @@ impl StructureGenerator for NetherFossilGenerator {
             .map(|key| pumpkin_data::structures::Structure::get(&key));
 
         let initial_y = if let Some(hp) = structure.and_then(|s| s.start_height) {
-            hp.get(&mut context.random, context.min_y as i8, 256)
+            hp.get(&mut context.random, context.min_y as i8, context.height)
         } else {
             let height_range = HEIGHT_MAX - HEIGHT_MIN + 1;
             HEIGHT_MIN + context.random.next_bounded_i32(height_range)
         };
+
+        let mut y = initial_y;
+        if let Some(sampler) = context.height_sampler.as_deref_mut() {
+            let mut checked_column = false;
+            while y > context.sea_level {
+                let Some(current) = sampler.sample_column_block(x, z, y) else {
+                    break;
+                };
+                checked_column = true;
+                y -= 1;
+                let below = sampler
+                    .sample_column_block(x, z, y)
+                    .unwrap_or(Block::AIR.default_state);
+                if current.is_air()
+                    && (Block::from_state_id(below.id) == &Block::SOUL_SAND
+                        || below.is_side_solid(BlockDirection::Up))
+                {
+                    break;
+                }
+            }
+
+            if checked_column && y <= context.sea_level {
+                return None;
+            }
+        }
 
         let rotation_index = context.random.next_bounded_i32(4) as u8;
         let rotation = Rotation::from_index(rotation_index);
@@ -85,23 +112,16 @@ impl StructureGenerator for NetherFossilGenerator {
         let template_name = FOSSILS[template_index];
 
         let template = get_template(template_name)?;
-        let position = Vector3::new(x, initial_y, z);
+        let position = Vector3::new(x, y, z);
 
         let mut collector = StructurePiecesCollector::default();
 
-        let piece = NetherFossilPiece::new(
-            template,
-            template_name.to_string(),
-            position,
-            rotation,
-            initial_y,
-            context.sea_level,
-        );
+        let piece = NetherFossilPiece::new(template, template_name.to_string(), position, rotation);
 
         collector.add_piece(Box::new(piece));
 
         Some(StructurePosition {
-            start_pos: BlockPos::new(x, initial_y, z),
+            start_pos: BlockPos::new(x, y, z),
             collector: Arc::new(collector.into()),
         })
     }
@@ -113,8 +133,6 @@ pub struct NetherFossilPiece {
     pub template_name: String,
     pub place_settings: StructurePlaceSettings,
     pub template_position: Vector3<i32>,
-    pub initial_y: i32,
-    pub sea_level: i32,
 }
 
 impl NetherFossilPiece {
@@ -124,8 +142,6 @@ impl NetherFossilPiece {
         template_name: String,
         template_position: Vector3<i32>,
         rotation: Rotation,
-        initial_y: i32,
-        sea_level: i32,
     ) -> Self {
         let place_settings = make_settings(rotation);
         let bounding_box = template.get_bounding_box(&place_settings, template_position);
@@ -136,34 +152,7 @@ impl NetherFossilPiece {
             template_name,
             place_settings,
             template_position,
-            initial_y,
-            sea_level,
         }
-    }
-
-    /// Vanilla column scan: search downward from `initial_y` for air above (soul sand OR solid block).
-    /// Returns the Y of the support block, or None if no valid position found above sea level.
-    fn find_placement_y(&self, chunk: &ProtoChunk) -> Option<i32> {
-        let origin = self.template_position;
-        let mut y = self.initial_y;
-
-        while y > self.sea_level {
-            let upper = chunk.get_block_state(&Vector3::new(origin.x, y, origin.z));
-            y -= 1;
-            let lower = chunk.get_block_state(&Vector3::new(origin.x, y, origin.z));
-
-            let upper_state = BlockState::from_id(upper);
-            let lower_state = BlockState::from_id(lower);
-
-            if upper_state.is_air()
-                && (Block::from_state_id(lower) == &Block::SOUL_SAND
-                    || lower_state.is_side_solid(BlockDirection::Up))
-            {
-                break;
-            }
-        }
-
-        if y <= self.sea_level { None } else { Some(y) }
     }
 
     fn place_blocks(&self, chunk: &mut ProtoChunk, chunk_box: &BlockBox) {
@@ -278,15 +267,6 @@ impl StructurePieceBase for NetherFossilPiece {
         seed: i64,
         chunk_box: &BlockBox,
     ) {
-        let Some(placement_y) = self.find_placement_y(chunk) else {
-            return;
-        };
-
-        self.template_position.y = placement_y;
-        self.piece.bounding_box = self
-            .template
-            .get_bounding_box(&self.place_settings, self.template_position);
-
         let fossil_bb = self.piece.bounding_box;
         let mut enlarged_box = *chunk_box;
         enlarged_box.encompass(&fossil_bb);
@@ -310,4 +290,85 @@ fn make_settings(rotation: Rotation) -> StructurePlaceSettings {
                 properties: None,
             },
         ]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generation::structure::structures::HeightSampler;
+    use pumpkin_data::Block;
+
+    struct MockColumnSampler {
+        ground_y: i32,
+    }
+
+    impl HeightSampler for MockColumnSampler {
+        fn estimate_height(&mut self, _block_x: i32, _block_z: i32) -> i32 {
+            self.ground_y
+        }
+
+        fn sample_column_block(
+            &mut self,
+            _block_x: i32,
+            _block_z: i32,
+            y: i32,
+        ) -> Option<&'static BlockState> {
+            if y > self.ground_y {
+                Some(Block::AIR.default_state)
+            } else {
+                Some(Block::NETHERRACK.default_state)
+            }
+        }
+    }
+
+    #[test]
+    fn nether_fossil_never_places_on_roof() {
+        for seed in 0..100 {
+            let mut sampler = MockColumnSampler { ground_y: 60 };
+            let context = StructureGeneratorContext {
+                seed,
+                chunk_x: 0,
+                chunk_z: 0,
+                random: crate::generation::structure::structures::create_chunk_random(seed, 0, 0),
+                sea_level: 32,
+                min_y: 0,
+                height: 128,
+                height_sampler: Some(&mut sampler),
+                structure_key: Some(pumpkin_data::structures::StructureKeys::NetherFossil),
+            };
+            if let Some(pos) = NetherFossilGenerator.get_structure_position(context) {
+                assert!(
+                    pos.start_pos.0.y <= 125,
+                    "Fossil placed at {}, above logical nether height!",
+                    pos.start_pos.0.y
+                );
+                assert!(
+                    pos.start_pos.0.y >= 32,
+                    "Fossil placed at {}, below sea level!",
+                    pos.start_pos.0.y
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn nether_fossil_rejects_when_no_ground_above_sea_level() {
+        let mut sampler = MockColumnSampler { ground_y: 20 }; // below sea_level (32)
+        let context = StructureGeneratorContext {
+            seed: 42,
+            chunk_x: 0,
+            chunk_z: 0,
+            random: crate::generation::structure::structures::create_chunk_random(42, 0, 0),
+            sea_level: 32,
+            min_y: 0,
+            height: 128,
+            height_sampler: Some(&mut sampler),
+            structure_key: Some(pumpkin_data::structures::StructureKeys::NetherFossil),
+        };
+        assert!(
+            NetherFossilGenerator
+                .get_structure_position(context)
+                .is_none()
+        );
+    }
 }

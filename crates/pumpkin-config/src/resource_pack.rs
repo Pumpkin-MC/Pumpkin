@@ -50,6 +50,9 @@ pub struct BedrockPack {
     pub size: u64,
     /// Download URL for remote Bedrock packs.
     pub download_url: String,
+    /// Optional filesystem path to the pack file on the server.
+    #[serde(default)]
+    pub path: Option<std::path::PathBuf>,
     /// Optional encryption content key for encrypted packs.
     #[serde(default)]
     pub content_key: String,

@@ -1,0 +1,319 @@
+use pumpkin_data::data_component_impl::{WritableBookContentImpl, WrittenBookContentImpl};
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
+use pumpkin_util::math::position::BlockPos;
+use std::{
+    any::Any,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
+};
+
+use crate::block::entities::BlockEntity;
+use crate::world::World;
+use pumpkin_inventory::{Clearable, Inventory};
+
+pub struct LecternBlockEntity {
+    pub position: BlockPos,
+    pub book: Arc<Mutex<ItemStack>>,
+    pub page: AtomicUsize,
+    pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
+}
+
+impl BlockEntity for LecternBlockEntity {
+    fn resource_location(&self) -> &'static str {
+        Self::ID
+    }
+
+    fn get_position(&self) -> BlockPos {
+        self.position
+    }
+
+    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
+    where
+        Self: Sized,
+    {
+        let book_stack = nbt
+            .get_compound("Book")
+            .and_then(ItemStack::read_item_stack)
+            .unwrap_or_else(|| ItemStack::EMPTY.clone());
+
+        let page_count = Self::page_count_of(&book_stack);
+        let page = nbt
+            .get_int("Page")
+            .unwrap_or(0)
+            .clamp(0, page_count.saturating_sub(1).max(0)) as usize;
+        let book = Arc::new(Mutex::new(book_stack));
+
+        Self {
+            position,
+            book,
+            page: AtomicUsize::new(page),
+            dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
+        }
+    }
+
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        let book = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(book_nbt) = book.to_nbt() {
+            nbt.put_compound("Book", book_nbt);
+        }
+        nbt.put_int("Page", self.page.load(Ordering::Relaxed) as i32);
+    }
+
+    fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        let inventory: Arc<dyn Inventory> = self;
+        world.scatter_inventory(position, &inventory);
+    }
+
+    /// Vanilla `LecternBlockEntity` is no `Container`: hoppers, droppers and crafters skip it.
+    fn get_container(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        None
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_dirty(&self) {
+        self.dirty.store(false, Ordering::Relaxed);
+    }
+
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(book) = self.book.try_lock()
+            && let Some(book_nbt) = book.to_nbt()
+        {
+            nbt.put("Book", NbtTag::Compound(book_nbt));
+        }
+        nbt.put_int("Page", self.page.load(Ordering::Relaxed) as i32);
+        Some(nbt)
+    }
+
+    fn bedrock_block_actor_data(
+        &self,
+        _state_id: pumpkin_data::BlockStateId,
+    ) -> Option<NbtCompound> {
+        let book_guard = self.book.lock().ok();
+        let book = book_guard.as_deref();
+        let total_pages = book.map_or(0, Self::page_count_of);
+        Some(build_lectern_actor(
+            self.position,
+            book,
+            self.page.load(Ordering::Relaxed) as i32,
+            total_pages,
+        ))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl LecternBlockEntity {
+    pub const ID: &'static str = "minecraft:lectern";
+
+    #[must_use]
+    pub fn new(position: BlockPos) -> Self {
+        Self {
+            position,
+            book: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
+            page: AtomicUsize::new(0),
+            dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
+        }
+    }
+
+    #[must_use]
+    pub fn book_inventory(self: Arc<Self>) -> Arc<dyn Inventory> {
+        self
+    }
+
+    /// Number of pages in a writable or written book, `0` for anything else.
+    #[must_use]
+    pub fn page_count_of(stack: &ItemStack) -> i32 {
+        stack
+            .get_data_component::<WrittenBookContentImpl>()
+            .map(|content| content.pages.len())
+            .or_else(|| {
+                stack
+                    .get_data_component::<WritableBookContentImpl>()
+                    .map(|content| content.pages.len())
+            })
+            .map_or(0, |pages| pages as i32)
+    }
+
+    pub fn page_count(&self) -> i32 {
+        Self::page_count_of(
+            &self
+                .book
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    }
+
+    /// Vanilla `LecternBlockEntity.getRedstoneSignal`: `floor(progress * 14) + 1`,
+    /// or `0` without a book. A single-page book counts as fully read and emits 15.
+    pub fn comparator_output(&self) -> u8 {
+        let book = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if book.is_empty() {
+            return 0;
+        }
+
+        let page_count = Self::page_count_of(&book);
+        let progress = if page_count > 1 {
+            self.page.load(Ordering::Relaxed) as f32 / (page_count - 1) as f32
+        } else {
+            1.0
+        };
+        (progress * 14.0).floor() as u8 + 1
+    }
+}
+
+impl Inventory for LecternBlockEntity {
+    fn size(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        self.book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty()
+    }
+
+    fn get_stack(&self, _slot: usize) -> ItemStack {
+        self.book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    fn remove_stack(&self, _slot: usize) -> ItemStack {
+        let mut removed = ItemStack::EMPTY.clone();
+        let mut guard = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        std::mem::swap(&mut removed, &mut *guard);
+        self.mark_dirty();
+        removed
+    }
+
+    fn remove_stack_specific(&self, _slot: usize, amount: u8) -> ItemStack {
+        let mut stack = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if stack.is_empty() {
+            return ItemStack::EMPTY.clone();
+        }
+        let res = stack.split(amount);
+        self.mark_dirty();
+        res
+    }
+
+    fn set_stack(&self, _slot: usize, stack: ItemStack) {
+        *self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+        // A freshly placed book always opens on its first page.
+        self.page.store(0, Ordering::Relaxed);
+        self.mark_dirty();
+    }
+
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot != 0 {
+            return false;
+        }
+        // One lock for read and write, a parallel write would be lost otherwise.
+        let mut book = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !update(&mut book) {
+            return false;
+        }
+        drop(book);
+        self.page.store(0, Ordering::Relaxed);
+        self.mark_dirty();
+        true
+    }
+
+    fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Clearable for LecternBlockEntity {
+    fn clear(&self) {
+        *self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = ItemStack::EMPTY.clone();
+        self.mark_dirty();
+    }
+}
+
+/// Builds the Bedrock block-actor NBT for lecterns.
+#[must_use]
+pub fn build_lectern_actor(
+    position: BlockPos,
+    book: Option<&ItemStack>,
+    page: i32,
+    total_pages: i32,
+) -> NbtCompound {
+    let has_book = book.is_some_and(|b| !b.is_empty());
+    let mut builder = super::bedrock::BedrockBlockActorBuilder::new("Lectern", position)
+        .put_bool("hasBook", has_book)
+        .put_int("page", page)
+        .put_int("totalPages", total_pages);
+
+    if has_book && let Some(book_nbt) = book.and_then(ItemStack::to_nbt) {
+        builder = builder.put_compound("book", book_nbt);
+    }
+
+    builder.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::item::Item;
+
+    #[test]
+    fn lectern_actor_builder() {
+        let pos = BlockPos::new(10, 64, 10);
+        let book = ItemStack::new(1, &Item::WRITTEN_BOOK);
+        let nbt = build_lectern_actor(pos, Some(&book), 2, 5);
+        assert_eq!(nbt.get_string("id"), Some("Lectern"));
+        assert_eq!(nbt.get_bool("hasBook"), Some(true));
+        assert_eq!(nbt.get_int("page"), Some(2));
+        assert_eq!(nbt.get_int("totalPages"), Some(5));
+        assert!(nbt.get_compound("book").is_some());
+    }
+}

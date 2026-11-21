@@ -4,10 +4,14 @@ use std::io::{Error, Write};
 
 use crate::serial::PacketWrite;
 
+/// Instructs the client to disconnect and reconnect to another server address and port.
 #[packet(85)]
 pub struct CTransfer {
+    /// Destination server hostname or IP address.
     pub server_address: String,
+    /// Destination server UDP port.
     pub server_port: u16,
+    /// Whether the client should reload its local world context upon transferring.
     pub reload_world: bool,
 }
 
@@ -22,6 +26,7 @@ impl PacketWrite for CTransfer {
 }
 
 impl CTransfer {
+    /// Constructs a transfer packet with target server connection parameters.
     #[must_use]
     pub const fn new(server_address: String, server_port: u16, reload_world: bool) -> Self {
         Self {

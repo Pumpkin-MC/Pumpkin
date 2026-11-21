@@ -54,12 +54,15 @@ impl VarULong {
         Ok(())
     }
 
-    // TODO: Validate that the first byte will not overflow a i64
     #[inline]
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
+            // Reject encodings that set payload bits beyond bit 63 in the final byte.
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0x7E != 0 {
+                return Err(ReadingError::TooLarge("VarULong".to_string()));
+            }
             val |= (u64::from(byte) & 0b0111_1111) << (i * 7);
             if byte & 0b1000_0000 == 0 {
                 return Ok(Self(val));
@@ -140,11 +143,44 @@ impl PacketRead for VarULong {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = u8::read(reader)?;
+            // Reject encodings that set payload bits beyond bit 63 in the final byte.
+            if i == Self::MAX_SIZE.get() - 1 && byte & 0x7E != 0 {
+                return Err(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "VarULong is too big (overflow)",
+                ));
+            }
             val |= (u64::from(byte) & 0b0111_1111) << (i * 7);
             if byte & 0b1000_0000 == 0 {
                 return Ok(Self(val));
             }
         }
-        Err(Error::other("Invalid VarUInt"))
+        Err(Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid VarULong",
+        ))
+    }
+}
+
+#[cfg(test)]
+mod overflow_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_overflowing_final_byte() {
+        let mut too_big = vec![0x80; 9];
+        too_big.push(0x02);
+        assert!(VarULong::decode(&mut &too_big[..]).is_err());
+        let mut max_ok = vec![0xFF; 9];
+        max_ok.push(0x01);
+        assert_eq!(VarULong::decode(&mut &max_ok[..]).unwrap().0, u64::MAX);
+    }
+
+    #[test]
+    fn packet_read_rejects_overflowing_final_byte() {
+        let mut too_big = vec![0x80; 9];
+        too_big.push(0x02);
+        let err = VarULong::read(&mut &too_big[..]).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 }

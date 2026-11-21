@@ -1,0 +1,27 @@
+{
+  "values": [
+    "minecraft:mace",
+    "minecraft:trident",
+    "minecraft:wooden_sword",
+    "minecraft:stone_sword",
+    "minecraft:copper_sword",
+    "minecraft:golden_sword",
+    "minecraft:iron_sword",
+    "minecraft:diamond_sword",
+    "minecraft:netherite_sword",
+    "minecraft:wooden_axe",
+    "minecraft:stone_axe",
+    "minecraft:copper_axe",
+    "minecraft:golden_axe",
+    "minecraft:iron_axe",
+    "minecraft:diamond_axe",
+    "minecraft:netherite_axe",
+    "minecraft:wooden_spear",
+    "minecraft:stone_spear",
+    "minecraft:copper_spear",
+    "minecraft:iron_spear",
+    "minecraft:golden_spear",
+    "minecraft:diamond_spear",
+    "minecraft:netherite_spear"
+  ]
+}

@@ -1,9 +1,5 @@
 use pumpkin_data::{Block, block_properties::OakFenceLikeProperties};
-use pumpkin_util::{
-    BlockDirection,
-    math::block_box::BlockBox,
-    random::{RandomGenerator, RandomImpl},
-};
+use pumpkin_util::{BlockDirection, math::block_box::BlockBox, random::RandomGenerator};
 
 use crate::{
     ProtoChunk,
@@ -11,7 +7,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector, WorldPortalExt,
-            nether_fortress::{NetherFortressPiece, NetherFortressPieceType, PieceWeight},
+            nether_fortress::NetherFortressPiece,
         },
     },
 };
@@ -56,52 +52,6 @@ impl StructurePieceBase for CorridorBalconyPiece {
 
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece.piece
-    }
-
-    fn fill_openings_nether(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        bridge_pieces: &mut Vec<PieceWeight>,
-        corridor_pieces: &mut Vec<PieceWeight>,
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        let mut last: Option<NetherFortressPieceType> = None;
-
-        // In Java: `i` is 1 for EAST/SOUTH facing, 5 for WEST/NORTH.
-        let i = match self.piece.piece.facing {
-            Some(BlockDirection::West | BlockDirection::North) => 5,
-            _ => 1,
-        };
-
-        let nw_blocked = random.next_bounded_i32(8) > 0;
-        let se_blocked = random.next_bounded_i32(8) > 0;
-
-        self.piece.fill_nw_opening(
-            start,
-            collector,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            &mut last,
-            0,
-            i,
-            nw_blocked,
-            pieces_to_process,
-        );
-        self.piece.fill_se_opening(
-            start,
-            collector,
-            random,
-            bridge_pieces,
-            corridor_pieces,
-            &mut last,
-            0,
-            i,
-            se_blocked,
-            pieces_to_process,
-        );
     }
 
     fn place(

@@ -1,0 +1,37 @@
+[package]
+name = "pumpkin-wasm-host-common"
+version.workspace = true
+description = "Shared plumbing of the Pumpkin WebAssembly plugin host."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+pumpkin-core.workspace = true
+pumpkin-auth.workspace = true
+pumpkin-data = { workspace = true, features = ["default"] }
+pumpkin-inventory.workspace = true
+pumpkin-plugin-runtime.workspace = true
+pumpkin-util.workspace = true
+pumpkin-world.workspace = true
+ed25519-dalek.workspace = true
+hex.workspace = true
+hyper = { workspace = true }
+postcard = { workspace = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing.workspace = true
+tracing-serde-structured = { workspace = true }
+wasm-encoder.workspace = true
+wasmparser.workspace = true
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+wasmtime-wasi-http = { workspace = true }
+
+[lints]
+workspace = true

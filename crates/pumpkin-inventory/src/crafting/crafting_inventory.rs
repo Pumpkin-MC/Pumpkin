@@ -12,8 +12,8 @@
 use std::any::Any;
 use std::sync::RwLock;
 
+use crate::inventory::{Clearable, Inventory};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_world::inventory::{Clearable, Inventory};
 
 use super::recipes::RecipeInputInventory;
 
@@ -121,6 +121,10 @@ impl Inventory for CraftingInventory {
         if slot < items.len() {
             items[slot] = stack;
         }
+    }
+
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        crate::update_locked_stack(&self.items, slot, update)
     }
 
     fn as_any(&self) -> &dyn Any {

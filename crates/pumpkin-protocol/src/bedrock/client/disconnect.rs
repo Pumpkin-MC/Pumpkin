@@ -5,11 +5,16 @@ use std::io::{Error, Write};
 
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 
+/// Sent by the server to cleanly disconnect a client with an optional error code and kick message.
 #[packet(5)]
 pub struct CDisconnect {
+    /// Disconnect reason code determining the message shown on the client disconnect screen.
     pub reason: VarInt,
+    /// Whether to skip showing the disconnect message dialog and return directly to the main menu.
     pub skip_message: bool,
+    /// Disconnect explanation message displayed to the user.
     pub message: String,
+    /// Profanity-filtered variant of the disconnect message.
     pub filtered_message: String,
 }
 

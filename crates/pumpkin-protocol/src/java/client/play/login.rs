@@ -5,7 +5,7 @@ use pumpkin_macros::java_packet;
 
 use crate::{
     ClientPacket, VarInt,
-    java::client::play::player_spawn_data::PlayerSpawnData,
+    java::client::play::player_spawn_data::{PlayerSpawnData, write_game_modes},
     ser::{NetworkWriteExt, WritingError},
 };
 
@@ -316,8 +316,12 @@ impl ClientPacket for CLogin<'_> {
                 }
                 write.write_string(self.spawn_data.dimension.minecraft_name)?;
                 write.write_i64_be(self.spawn_data.hashed_seed)?;
-                write.write_u8(self.spawn_data.game_mode)?;
-                write.write_i8(self.spawn_data.previous_gamemode)?;
+                write_game_modes(
+                    &mut write,
+                    self.spawn_data.game_mode,
+                    self.spawn_data.previous_gamemode,
+                    *version,
+                )?;
             }
             write.write_bool(self.spawn_data.debug)?;
             write.write_bool(self.spawn_data.is_flat)?;
@@ -422,7 +426,10 @@ mod tests {
 
         let mut slice = &serialized[..];
         let packet_id = slice.get_var_int().expect("packet_id").0;
-        assert_eq!(packet_id, 0x28, "1.20 login packet ID must be 0x28");
+        assert_eq!(
+            packet_id, 0x32,
+            "Login packet ID must match native 26.3 packet ID"
+        );
 
         let entity_id = slice.get_i32_be().expect("entity_id");
         assert_eq!(entity_id, 42);

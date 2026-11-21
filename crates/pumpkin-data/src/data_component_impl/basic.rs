@@ -1,4 +1,7 @@
-use crate::data_component_impl::{DataComponentImpl, get_i32_hash, get_str_hash};
+use crate::data_component_impl::{
+    DataComponentImpl, IdOr, get_i32_hash, get_idor_hash, get_str_hash,
+};
+use crate::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
@@ -351,13 +354,60 @@ impl DataComponentImpl for CustomModelDataImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TooltipDisplayImpl;
+pub struct TooltipDisplayImpl {
+    pub hide_tooltip: bool,
+    pub hidden_components: Cow<'static, [crate::data_component::DataComponent]>,
+}
+impl Default for TooltipDisplayImpl {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
 impl TooltipDisplayImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const DEFAULT: Self = Self {
+        hide_tooltip: false,
+        hidden_components: Cow::Borrowed(&[]),
+    };
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let Some(compound) = data.extract_compound() else {
+            return Some(Self::DEFAULT);
+        };
+        let hide_tooltip = compound.get_bool("hide_tooltip").unwrap_or(false);
+        let hidden_components = compound
+            .get_list("hidden_components")
+            .map(|list| {
+                list.iter()
+                    .filter_map(|t| {
+                        t.extract_string()
+                            .and_then(crate::data_component::DataComponent::try_from_name)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .map_or(Cow::Borrowed(&[][..]), Cow::Owned);
+        Some(Self {
+            hide_tooltip,
+            hidden_components,
+        })
     }
 }
 impl DataComponentImpl for TooltipDisplayImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        if self.hide_tooltip {
+            compound.put_bool("hide_tooltip", true);
+        }
+        if !self.hidden_components.is_empty() {
+            compound.put_list(
+                "hidden_components",
+                self.hidden_components
+                    .iter()
+                    .map(|c| NbtTag::String(c.to_name().into()))
+                    .collect(),
+            );
+        }
+        NbtTag::Compound(compound)
+    }
     default_impl!(TooltipDisplay);
 }
 
@@ -372,14 +422,21 @@ impl DataComponentImpl for CreativeSlotLockImpl {
     default_impl!(CreativeSlotLock);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct EnchantmentGlintOverrideImpl;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct EnchantmentGlintOverrideImpl {
+    pub glint: bool,
+}
 impl EnchantmentGlintOverrideImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            glint: data.extract_bool().unwrap_or(true),
+        })
     }
 }
 impl DataComponentImpl for EnchantmentGlintOverrideImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Byte(self.glint as i8)
+    }
     default_impl!(EnchantmentGlintOverride);
 }
 
@@ -445,36 +502,118 @@ impl DataComponentImpl for BaseColorImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct InstrumentImpl;
+pub struct InstrumentImpl {
+    pub instrument: Cow<'static, str>,
+}
 impl InstrumentImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let instrument = match data {
+            NbtTag::String(s) => s.to_string(),
+            NbtTag::Compound(c) => c.get_string("instrument")?.to_string(),
+            _ => return None,
+        };
+        Some(Self {
+            instrument: Cow::Owned(instrument),
+        })
     }
 }
 impl DataComponentImpl for InstrumentImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.instrument.to_string().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.instrument) as i32
+    }
     default_impl!(Instrument);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ProvidesTrimMaterialImpl;
+pub struct ProvidesTrimMaterialImpl {
+    pub material: Cow<'static, str>,
+}
 impl ProvidesTrimMaterialImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|material| Self {
+            material: Cow::Owned(material.to_string()),
+        })
     }
 }
 impl DataComponentImpl for ProvidesTrimMaterialImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.material.to_string().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.material) as i32
+    }
     default_impl!(ProvidesTrimMaterial);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ProvidesBannerPatternsImpl;
+pub struct ProvidesBannerPatternsImpl {
+    pub key: Cow<'static, str>,
+}
 impl ProvidesBannerPatternsImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|key| Self {
+            key: Cow::Owned(key.to_string()),
+        })
     }
 }
 impl DataComponentImpl for ProvidesBannerPatternsImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.key.to_string().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.key) as i32
+    }
     default_impl!(ProvidesBannerPatterns);
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct ProvidesPotteryPatternImpl {
+    pub pattern: Cow<'static, str>,
+}
+impl ProvidesPotteryPatternImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|pattern| Self {
+            pattern: Cow::Owned(pattern.to_string()),
+        })
+    }
+}
+impl DataComponentImpl for ProvidesPotteryPatternImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.pattern.to_string().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.pattern) as i32
+    }
+    default_impl!(ProvidesPotteryPattern);
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct CushionColorImpl {
+    pub color: crate::dye_color::DyeColor,
+}
+impl CushionColorImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let color = if let Some(s) = data.extract_string() {
+            crate::dye_color::DyeColor::by_name(s)?
+        } else if let Some(id) = data.extract_int() {
+            crate::dye_color::DyeColor::by_id(id as u8)?
+        } else {
+            return None;
+        };
+        Some(Self { color })
+    }
+}
+impl DataComponentImpl for CushionColorImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.color.name().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.color.name()) as i32
+    }
+    default_impl!(CushionColor);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -523,29 +662,194 @@ impl DataComponentImpl for BannerPatternsImpl {
     default_impl!(BannerPatterns);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct PotDecorationsImpl;
+#[derive(Clone, Default)]
+pub struct PotDecorationsImpl {
+    pub back: Option<crate::item_stack::ItemStack>,
+    pub left: Option<crate::item_stack::ItemStack>,
+    pub right: Option<crate::item_stack::ItemStack>,
+    pub front: Option<crate::item_stack::ItemStack>,
+}
+#[allow(non_upper_case_globals)]
+pub const PotDecorationsImpl: PotDecorationsImpl = PotDecorationsImpl::EMPTY;
+
+impl std::fmt::Debug for PotDecorationsImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PotDecorationsImpl")
+            .field("back", &self.back.as_ref().map(|s| s.item.registry_key))
+            .field("left", &self.left.as_ref().map(|s| s.item.registry_key))
+            .field("right", &self.right.as_ref().map(|s| s.item.registry_key))
+            .field("front", &self.front.as_ref().map(|s| s.item.registry_key))
+            .finish()
+    }
+}
+
+impl PartialEq for PotDecorationsImpl {
+    fn eq(&self, other: &Self) -> bool {
+        fn side_eq(
+            a: &Option<crate::item_stack::ItemStack>,
+            b: &Option<crate::item_stack::ItemStack>,
+        ) -> bool {
+            match (a, b) {
+                (None, None) => true,
+                (Some(sa), Some(sb)) => {
+                    sa.item_count == sb.item_count && sa.are_items_and_components_equal(sb)
+                }
+                _ => false,
+            }
+        }
+        side_eq(&self.back, &other.back)
+            && side_eq(&self.left, &other.left)
+            && side_eq(&self.right, &other.right)
+            && side_eq(&self.front, &other.front)
+    }
+}
+impl Eq for PotDecorationsImpl {}
+
 impl PotDecorationsImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const EMPTY: Self = Self {
+        back: None,
+        left: None,
+        right: None,
+        front: None,
+    };
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.back.is_none() && self.left.is_none() && self.right.is_none() && self.front.is_none()
+    }
+
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        match data {
+            NbtTag::Compound(compound) => Some(Self {
+                back: compound
+                    .get("back")
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                left: compound
+                    .get("left")
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                right: compound
+                    .get("right")
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                front: compound
+                    .get("front")
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+            }),
+            // Legacy 4-element `[back, left, right, front]` list fallback.
+            NbtTag::List(list) => Some(Self {
+                back: list
+                    .first()
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                left: list
+                    .get(1)
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                right: list
+                    .get(2)
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+                front: list
+                    .get(3)
+                    .and_then(crate::item_stack::ItemStack::read_item_stack_template),
+            }),
+            _ => None,
+        }
     }
 }
 impl DataComponentImpl for PotDecorationsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        if let Some(back) = &self.back {
+            compound.put("back", back.write_item_stack_template());
+        }
+        if let Some(left) = &self.left {
+            compound.put("left", left.write_item_stack_template());
+        }
+        if let Some(right) = &self.right {
+            compound.put("right", right.write_item_stack_template());
+        }
+        if let Some(front) = &self.front {
+            compound.put("front", front.write_item_stack_template());
+        }
+        NbtTag::Compound(compound)
+    }
     default_impl!(PotDecorations);
 }
 
-/// The lock's item predicate, kept as its raw NBT compound since Pumpkin does
-/// not yet model item predicates.
-// TODO: replace `predicate` with a typed item predicate once item predicates are modelled.
+/// Container/beacon lock predicate (`LockCode` / `ItemPredicate` in `26.3`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct LockImpl {
     pub predicate: NbtCompound,
 }
 impl LockImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        data.extract_compound().map(|predicate| Self {
-            predicate: predicate.clone(),
-        })
+        if let Some(predicate) = data.extract_compound() {
+            Some(Self {
+                predicate: predicate.clone(),
+            })
+        } else if let Some(legacy_key) = data.extract_string() {
+            if legacy_key.is_empty() {
+                return None;
+            }
+            let mut components = NbtCompound::new();
+            components.put_string("minecraft:custom_name", legacy_key.to_string());
+            let mut predicate = NbtCompound::new();
+            predicate.put_compound("components", components);
+            Some(Self { predicate })
+        } else {
+            None
+        }
+    }
+
+    /// Vanilla `LockCode.unlocksWith(ItemStack)` -> `ItemPredicate.test(ItemInstance)`.
+    #[must_use]
+    pub fn unlocks_with(&self, stack: &crate::item_stack::ItemStack) -> bool {
+        if let Some(items_tag) = self.predicate.get("items") {
+            let Some(item_set) = super::IDSet::<crate::item::Item>::read(items_tag) else {
+                return false;
+            };
+            if stack.is_empty() || !item_set.contains(stack.item) {
+                return false;
+            }
+        }
+        let count = if stack.is_empty() {
+            0
+        } else {
+            i32::from(stack.item_count)
+        };
+        if let Some(count_tag) = self.predicate.get("count") {
+            match count_tag {
+                NbtTag::Int(exact) => {
+                    if count != *exact {
+                        return false;
+                    }
+                }
+                NbtTag::Compound(bounds) => {
+                    if bounds.get_int("min").is_some_and(|min| count < min)
+                        || bounds.get_int("max").is_some_and(|max| count > max)
+                    {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+        if let Some(components) = self.predicate.get_compound("components") {
+            for (comp_key, expected_tag) in &components.child_tags {
+                let Some(dc) = crate::data_component::DataComponent::try_from_name(comp_key) else {
+                    return false;
+                };
+                let Some(expected) = super::read_data(dc, expected_tag) else {
+                    return false;
+                };
+                if stack.is_empty()
+                    || !stack
+                        .get_data_component_by_id(dc)
+                        .is_some_and(|actual| actual.equal(expected.as_ref()))
+                {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
 impl DataComponentImpl for LockImpl {
@@ -555,14 +859,49 @@ impl DataComponentImpl for LockImpl {
     default_impl!(Lock);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BreakSoundImpl;
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct BreakSoundImpl {
+    pub sound: IdOr<SoundEvent>,
+}
 impl BreakSoundImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let sound = if let Some(s) = data.extract_string() {
+            let name = s.strip_prefix("minecraft:").unwrap_or(s);
+            if let Some(sound) = Sound::from_name(name) {
+                IdOr::Id(sound)
+            } else {
+                IdOr::Value(SoundEvent {
+                    sound_name: s.to_string(),
+                    range: None,
+                })
+            }
+        } else if let Some(c) = data.extract_compound() {
+            let sound_name = c.get_string("sound_id")?.to_string();
+            let range = c.get_float("range");
+            IdOr::Value(SoundEvent { sound_name, range })
+        } else {
+            return None;
+        };
+        Some(Self { sound })
     }
 }
 impl DataComponentImpl for BreakSoundImpl {
+    fn write_data(&self) -> NbtTag {
+        match &self.sound {
+            IdOr::Id(sound) => NbtTag::String(format!("minecraft:{}", sound.to_name()).into()),
+            IdOr::Value(event) => {
+                let mut compound = NbtCompound::new();
+                compound.put_string("sound_id", event.sound_name.clone());
+                if let Some(range) = event.range {
+                    compound.put_float("range", range);
+                }
+                NbtTag::Compound(compound)
+            }
+        }
+    }
+    fn get_hash(&self) -> i32 {
+        get_idor_hash(&self.sound) as i32
+    }
     default_impl!(BreakSound);
 }
 

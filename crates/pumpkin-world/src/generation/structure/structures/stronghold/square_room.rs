@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{HorizontalFacing, LadderLikeProperties},
+    block_properties::{HorizontalFacing, LadderLikeProperties, WallTorchLikeProperties},
 };
 use pumpkin_util::{
     BlockDirection,
@@ -14,10 +14,7 @@ use crate::{
         piece::StructurePieceType,
         structures::{
             StructurePiece, StructurePieceBase, StructurePiecesCollector,
-            stronghold::{
-                EntranceType, PieceWeight, StoneBrickRandomizer, StrongholdPiece,
-                StrongholdPieceType,
-            },
+            stronghold::{EntranceType, StoneBrickRandomizer, StrongholdPiece},
         },
     },
 };
@@ -79,58 +76,7 @@ impl StructurePieceBase for SquareRoomPiece {
         &mut self.piece.piece
     }
 
-    fn fill_openings(
-        &self,
-        start: &StructurePiece,
-        random: &mut RandomGenerator,
-        weights: &mut Vec<PieceWeight>,
-        last_piece_type: &mut Option<StrongholdPieceType>,
-        _has_portal_room: &mut bool,
-
-        collector: &mut StructurePiecesCollector,
-        pieces_to_process: &mut Vec<Box<dyn StructurePieceBase>>,
-    ) {
-        // 1. Forward Opening
-        // Java: this.fillForwardOpening((Start)start, holder, random, 4, 1);
-        self.piece.fill_forward_opening(
-            start,
-            collector,
-            random,
-            weights,
-            last_piece_type,
-            4, // left_right_offset
-            1, // height_offset
-            pieces_to_process,
-            None,
-        );
-
-        // 2. Left Opening (NW)
-        // Java: this.fillNWOpening((Start)start, holder, random, 1, 4);
-        self.piece.fill_nw_opening(
-            start,
-            collector,
-            random,
-            weights,
-            last_piece_type,
-            1, // height_offset
-            4, // left_right_offset
-            pieces_to_process,
-        );
-
-        // 3. Right Opening (SE)
-        // Java: this.fillSEOpening((Start)start, holder, random, 1, 4);
-        self.piece.fill_se_opening(
-            start,
-            collector,
-            random,
-            weights,
-            last_piece_type,
-            1, // height_offset
-            4, // left_right_offset
-            pieces_to_process,
-        );
-    }
-
+    #[expect(clippy::too_many_lines)]
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
@@ -185,11 +131,44 @@ impl StructurePieceBase for SquareRoomPiece {
                 inner.add_block(chunk, stone_brick, 5, 2, 5, &box_limit);
                 inner.add_block(chunk, stone_brick, 5, 3, 5, &box_limit);
 
-                // // Torches
-                // inner.add_block(chunk, &Block::WALL_TORCH.default_state.with("facing", "west"), 4, 3, 5, &box_limit);
-                // inner.add_block(chunk, &Block::WALL_TORCH.default_state.with("facing", "east"), 6, 3, 5, &box_limit);
-                // inner.add_block(chunk, &Block::WALL_TORCH.default_state.with("facing", "south"), 5, 3, 4, &box_limit);
-                // inner.add_block(chunk, &Block::WALL_TORCH.default_state.with("facing", "north"), 5, 3, 6, &box_limit);
+                // Torches
+                let mut torch_props = WallTorchLikeProperties::default(&Block::WALL_TORCH);
+                torch_props.facing = HorizontalFacing::West;
+                inner.add_block(
+                    chunk,
+                    BlockState::from_id(torch_props.to_state_id(&Block::WALL_TORCH)),
+                    4,
+                    3,
+                    5,
+                    &box_limit,
+                );
+                torch_props.facing = HorizontalFacing::East;
+                inner.add_block(
+                    chunk,
+                    BlockState::from_id(torch_props.to_state_id(&Block::WALL_TORCH)),
+                    6,
+                    3,
+                    5,
+                    &box_limit,
+                );
+                torch_props.facing = HorizontalFacing::South;
+                inner.add_block(
+                    chunk,
+                    BlockState::from_id(torch_props.to_state_id(&Block::WALL_TORCH)),
+                    5,
+                    3,
+                    4,
+                    &box_limit,
+                );
+                torch_props.facing = HorizontalFacing::North;
+                inner.add_block(
+                    chunk,
+                    BlockState::from_id(torch_props.to_state_id(&Block::WALL_TORCH)),
+                    5,
+                    3,
+                    6,
+                    &box_limit,
+                );
 
                 // Floor Pattern (Slabs)
                 inner.add_block(chunk, smooth_slab, 4, 1, 4, &box_limit);

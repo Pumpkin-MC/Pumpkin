@@ -1,3 +1,4 @@
+use super::Digest;
 use crate::Block;
 use crate::Enchantment;
 use crate::attributes::Attributes;
@@ -12,8 +13,6 @@ use crate::item::Item;
 use crate::item_stack::ItemStack;
 use crate::sound::Sound;
 use crate::tag::Taggable;
-use crc_fast::CrcAlgorithm::Crc32Iscsi;
-use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use std::borrow::Cow;
@@ -21,27 +20,151 @@ use std::hash::Hash;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Operation {
-    AddValue,
-    AddMultipliedBase,
-    AddMultipliedTotal,
+    AddValue = 0,
+    AddMultipliedBase = 1,
+    AddMultipliedTotal = 2,
+}
+
+impl Operation {
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "add_value" => Some(Self::AddValue),
+            "add_multiplied_base" => Some(Self::AddMultipliedBase),
+            "add_multiplied_total" => Some(Self::AddMultipliedTotal),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn to_name(self) -> &'static str {
+        match self {
+            Self::AddValue => "add_value",
+            Self::AddMultipliedBase => "add_multiplied_base",
+            Self::AddMultipliedTotal => "add_multiplied_total",
+        }
+    }
+
+    #[must_use]
+    pub const fn from_id(id: i32) -> Option<Self> {
+        match id {
+            0 => Some(Self::AddValue),
+            1 => Some(Self::AddMultipliedBase),
+            2 => Some(Self::AddMultipliedTotal),
+            _ => None,
+        }
+    }
+}
+
+#[must_use]
+pub fn slot_from_name(name: &str) -> Option<crate::AttributeModifierSlot> {
+    match name {
+        "any" => Some(crate::AttributeModifierSlot::Any),
+        "mainhand" => Some(crate::AttributeModifierSlot::MainHand),
+        "offhand" => Some(crate::AttributeModifierSlot::OffHand),
+        "hand" => Some(crate::AttributeModifierSlot::Hand),
+        "feet" => Some(crate::AttributeModifierSlot::Feet),
+        "legs" => Some(crate::AttributeModifierSlot::Legs),
+        "chest" => Some(crate::AttributeModifierSlot::Chest),
+        "head" => Some(crate::AttributeModifierSlot::Head),
+        "armor" => Some(crate::AttributeModifierSlot::Armor),
+        "body" => Some(crate::AttributeModifierSlot::Body),
+        "saddle" => Some(crate::AttributeModifierSlot::Saddle),
+        _ => None,
+    }
+}
+
+#[must_use]
+pub const fn slot_to_name(slot: &crate::AttributeModifierSlot) -> &'static str {
+    match slot {
+        crate::AttributeModifierSlot::Any => "any",
+        crate::AttributeModifierSlot::MainHand => "mainhand",
+        crate::AttributeModifierSlot::OffHand => "offhand",
+        crate::AttributeModifierSlot::Hand => "hand",
+        crate::AttributeModifierSlot::Feet => "feet",
+        crate::AttributeModifierSlot::Legs => "legs",
+        crate::AttributeModifierSlot::Chest => "chest",
+        crate::AttributeModifierSlot::Head => "head",
+        crate::AttributeModifierSlot::Armor => "armor",
+        crate::AttributeModifierSlot::Body => "body",
+        crate::AttributeModifierSlot::Saddle => "saddle",
+    }
+}
+
+#[must_use]
+pub const fn slot_from_id(id: i32) -> Option<crate::AttributeModifierSlot> {
+    match id {
+        0 => Some(crate::AttributeModifierSlot::Any),
+        1 => Some(crate::AttributeModifierSlot::MainHand),
+        2 => Some(crate::AttributeModifierSlot::OffHand),
+        3 => Some(crate::AttributeModifierSlot::Hand),
+        4 => Some(crate::AttributeModifierSlot::Feet),
+        5 => Some(crate::AttributeModifierSlot::Legs),
+        6 => Some(crate::AttributeModifierSlot::Chest),
+        7 => Some(crate::AttributeModifierSlot::Head),
+        8 => Some(crate::AttributeModifierSlot::Armor),
+        9 => Some(crate::AttributeModifierSlot::Body),
+        10 => Some(crate::AttributeModifierSlot::Saddle),
+        _ => None,
+    }
+}
+
+#[must_use]
+pub const fn slot_to_id(slot: &crate::AttributeModifierSlot) -> i32 {
+    match slot {
+        crate::AttributeModifierSlot::Any => 0,
+        crate::AttributeModifierSlot::MainHand => 1,
+        crate::AttributeModifierSlot::OffHand => 2,
+        crate::AttributeModifierSlot::Hand => 3,
+        crate::AttributeModifierSlot::Feet => 4,
+        crate::AttributeModifierSlot::Legs => 5,
+        crate::AttributeModifierSlot::Chest => 6,
+        crate::AttributeModifierSlot::Head => 7,
+        crate::AttributeModifierSlot::Armor => 8,
+        crate::AttributeModifierSlot::Body => 9,
+        crate::AttributeModifierSlot::Saddle => 10,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub enum ModifierDisplay {
+    #[default]
+    Default,
+    Hidden,
+    Override(pumpkin_util::text::TextComponent),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Modifier {
     pub r#type: &'static Attributes,
-    pub id: &'static str,
+    pub id: Cow<'static, str>,
     pub amount: f64,
     pub operation: Operation,
     pub slot: crate::AttributeModifierSlot,
+    pub display: ModifierDisplay,
 }
 impl Hash for Modifier {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.r#type.hash(state);
         self.id.hash(state);
-        unsafe { (*(&raw const self.amount).cast::<u64>()).hash(state) };
+        self.amount.to_bits().hash(state);
         self.operation.hash(state);
         self.slot.hash(state);
+        self.display.hash(state);
     }
+}
+
+#[must_use]
+pub fn attribute_from_name(name: &str) -> Option<&'static Attributes> {
+    let stripped = name.strip_prefix("minecraft:").unwrap_or(name);
+    Attributes::ALL
+        .iter()
+        .find(|attr| attr.name == name || attr.name.strip_prefix("minecraft:") == Some(stripped))
+}
+
+#[must_use]
+pub fn attribute_from_id(id: u8) -> Option<&'static Attributes> {
+    Attributes::ALL.iter().find(|attr| attr.id == id)
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
@@ -49,14 +172,113 @@ pub struct AttributeModifiersImpl {
     pub attribute_modifiers: Cow<'static, [Modifier]>,
 }
 impl AttributeModifiersImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let list = match data {
+            NbtTag::List(list) => list.as_slice(),
+            NbtTag::Compound(c) => c.get_list("modifiers")?,
+            _ => return None,
+        };
+        let mut modifiers = Vec::with_capacity(list.len());
+        for entry in list {
+            let comp = entry.extract_compound()?;
+            let type_name = comp.get_string("type")?;
+            let r#type = attribute_from_name(type_name)?;
+            let id = Cow::Owned(comp.get_string("id")?.to_string());
+            let amount = comp
+                .get_double("amount")
+                .or_else(|| comp.get_float("amount").map(f64::from))?;
+            let operation = Operation::from_name(comp.get_string("operation")?)?;
+            let slot = comp
+                .get_string("slot")
+                .and_then(slot_from_name)
+                .unwrap_or(crate::AttributeModifierSlot::Any);
+            let display = if let Some(disp_comp) = comp.get_compound("display") {
+                match disp_comp.get_string("type") {
+                    Some("hidden") => ModifierDisplay::Hidden,
+                    Some("override") => {
+                        disp_comp
+                            .get("value")
+                            .map_or(ModifierDisplay::Default, |v| {
+                                ModifierDisplay::Override(
+                                    pumpkin_util::text::TextComponent::from_nbt(v),
+                                )
+                            })
+                    }
+                    _ => ModifierDisplay::Default,
+                }
+            } else {
+                ModifierDisplay::Default
+            };
+            modifiers.push(Modifier {
+                r#type,
+                id,
+                amount,
+                operation,
+                slot,
+                display,
+            });
+        }
         Some(Self {
-            attribute_modifiers: Cow::Borrowed(&[]),
+            attribute_modifiers: Cow::Owned(modifiers),
         })
     }
 }
 impl DataComponentImpl for AttributeModifiersImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut list = Vec::with_capacity(self.attribute_modifiers.len());
+        for m in self.attribute_modifiers.iter() {
+            let mut comp = NbtCompound::new();
+            comp.put_string("type", m.r#type.name.to_string());
+            comp.put_string("id", m.id.to_string());
+            comp.put_double("amount", m.amount);
+            comp.put_string("operation", m.operation.to_name().to_string());
+            if !matches!(m.slot, crate::AttributeModifierSlot::Any) {
+                comp.put_string("slot", slot_to_name(&m.slot).to_string());
+            }
+            match &m.display {
+                ModifierDisplay::Default => {}
+                ModifierDisplay::Hidden => {
+                    let mut disp = NbtCompound::new();
+                    disp.put_string("type", "hidden".to_string());
+                    comp.put_compound("display", disp);
+                }
+                ModifierDisplay::Override(text) => {
+                    let mut disp = NbtCompound::new();
+                    disp.put_string("type", "override".to_string());
+                    disp.put_string("value", text.clone().get_text());
+                    comp.put_compound("display", disp);
+                }
+            }
+            list.push(NbtTag::Compound(comp));
+        }
+        NbtTag::List(list)
+    }
     default_impl!(AttributeModifiers);
+}
+
+/// Vanilla `ItemEnchantments.LEVEL_CODEC` bounds encoded levels to 1..=255.
+pub const MAX_ENCHANTMENT_LEVEL: i32 = 255;
+
+/// Reads the `ItemEnchantments` map shared by `enchantments` and
+/// `stored_enchantments`, rejecting levels the client refuses to decode.
+fn read_enchantment_levels(data: &NbtTag) -> Option<Vec<(&'static Enchantment, i32)>> {
+    let compound = data.extract_compound()?;
+    let levels = if let Some(NbtTag::Compound(levels)) = compound.child_tags.get("levels") {
+        &levels.child_tags
+    } else {
+        &compound.child_tags
+    };
+    let mut enchantments = Vec::with_capacity(levels.len());
+    for (name, level) in levels {
+        let enchantment = Enchantment::from_name(name.as_ref())
+            .or_else(|| Enchantment::from_name(&format!("minecraft:{name}")))?;
+        let level = level.extract_int()?;
+        if !(1..=MAX_ENCHANTMENT_LEVEL).contains(&level) {
+            return None;
+        }
+        enchantments.push((enchantment, level));
+    }
+    Some(enchantments)
 }
 
 #[derive(Clone, Hash, PartialEq, Eq, Default)]
@@ -65,20 +287,8 @@ pub struct EnchantmentsImpl {
 }
 impl EnchantmentsImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let compound = data.extract_compound()?;
-        let data = if let Some(NbtTag::Compound(levels)) = compound.child_tags.get("levels") {
-            &levels.child_tags
-        } else {
-            &compound.child_tags
-        };
-        let mut enc = Vec::with_capacity(data.len());
-        for (name, level) in data {
-            let enchantment = Enchantment::from_name(name.as_ref())
-                .or_else(|| Enchantment::from_name(&format!("minecraft:{name}")))?;
-            enc.push((enchantment, level.extract_int()?));
-        }
         Some(Self {
-            enchantment: Cow::from(enc),
+            enchantment: Cow::from(read_enchantment_levels(data)?),
         })
     }
 }
@@ -91,7 +301,7 @@ impl DataComponentImpl for EnchantmentsImpl {
         NbtTag::Compound(data)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         for (enc, level) in self.enchantment.iter() {
             digest.update(&get_str_hash(enc.name).to_le_bytes());
@@ -101,6 +311,26 @@ impl DataComponentImpl for EnchantmentsImpl {
         digest.finalize() as i32
     }
     default_impl!(Enchantments);
+}
+
+fn block_predicate_matches(predicate: &NbtTag, block: &Block) -> bool {
+    match predicate {
+        NbtTag::Compound(c) => {
+            if let Some(list) = c.get_list("predicates") {
+                return list.iter().any(|p| block_predicate_matches(p, block));
+            }
+            if let Some(blocks_tag) = c.get("blocks") {
+                IDSet::<Block>::read(blocks_tag).is_some_and(|idset| match &idset {
+                    IDSet::Tag(tag) => block.is_tagged_with(tag).unwrap_or(false),
+                    IDSet::IDs(blocks) => blocks.iter().any(|b| b.id == block.id),
+                })
+            } else {
+                true
+            }
+        }
+        NbtTag::List(list) => list.iter().any(|p| block_predicate_matches(p, block)),
+        _ => false,
+    }
 }
 
 /// An adventure-mode block predicate, kept as its raw NBT (a compound or list)
@@ -115,6 +345,11 @@ impl CanPlaceOnImpl {
         Some(Self {
             predicate: data.clone(),
         })
+    }
+
+    #[must_use]
+    pub fn matches_block(&self, block: &Block) -> bool {
+        block_predicate_matches(&self.predicate, block)
     }
 }
 impl DataComponentImpl for CanPlaceOnImpl {
@@ -136,6 +371,11 @@ impl CanBreakImpl {
         Some(Self {
             predicate: data.clone(),
         })
+    }
+
+    #[must_use]
+    pub fn matches_block(&self, block: &Block) -> bool {
+        block_predicate_matches(&self.predicate, block)
     }
 }
 impl DataComponentImpl for CanBreakImpl {
@@ -179,209 +419,30 @@ impl DataComponentImpl for IntangibleProjectileImpl {
     default_impl!(IntangibleProjectile);
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub enum DamageResistantType {
-    AlwaysHurtsEnderDragons,
-    AlwaysKillsArmorStands,
-    AlwaysMostSignificantFall,
-    AlwaysTriggersSilverfish,
-    AvoidsGuardianThorns,
-    BurnsArmorStands,
-    BurnFromStepping,
-    BypassesArmor,
-    BypassesCooldown,
-    BypassesEffects,
-    BypassesEnchantments,
-    BypassesInvulnerability,
-    BypassesResistance,
-    BypassesShield,
-    BypassesWolfArmor,
-    CanBreakArmorStands,
-    DamagesHelmet,
-    IgnitesArmorStands,
-    Drowning,
-    Explosion,
-    Fall,
-    Fire,
-    Freezing,
-    Lightning,
-    PlayerAttack,
-    Projectile,
-    MaceSmash,
-    NoAnger,
-    NoImpact,
-    NoKnockback,
-    PanicCauses,
-    PanicEnvironmentalCauses,
-    WitchResistantTo,
-    WitherImmuneTo,
-    Generic,
-}
-
-impl DamageResistantType {
-    pub fn from_tag(s: &str) -> Self {
-        match s {
-            "#minecraft:always_hurts_ender_dragons"
-            | "minecraft:always_hurts_ender_dragons"
-            | "always_hurts_ender_dragons" => Self::AlwaysHurtsEnderDragons,
-            "#minecraft:always_kills_armor_stands"
-            | "minecraft:always_kills_armor_stands"
-            | "always_kills_armor_stands" => Self::AlwaysKillsArmorStands,
-            "#minecraft:always_most_significant_fall"
-            | "minecraft:always_most_significant_fall"
-            | "always_most_significant_fall" => Self::AlwaysMostSignificantFall,
-            "#minecraft:always_triggers_silverfish"
-            | "minecraft:always_triggers_silverfish"
-            | "always_triggers_silverfish" => Self::AlwaysTriggersSilverfish,
-            "#minecraft:avoids_guardian_thorns"
-            | "minecraft:avoids_guardian_thorns"
-            | "avoids_guardian_thorns" => Self::AvoidsGuardianThorns,
-            "#minecraft:burns_armor_stands"
-            | "minecraft:burns_armor_stands"
-            | "burns_armor_stands" => Self::BurnsArmorStands,
-            "#minecraft:burn_from_stepping"
-            | "minecraft:burn_from_stepping"
-            | "burn_from_stepping" => Self::BurnFromStepping,
-            "#minecraft:bypasses_armor" | "minecraft:bypasses_armor" | "bypasses_armor" => {
-                Self::BypassesArmor
-            }
-            "#minecraft:bypasses_cooldown"
-            | "minecraft:bypasses_cooldown"
-            | "bypasses_cooldown" => Self::BypassesCooldown,
-            "#minecraft:bypasses_effects" | "minecraft:bypasses_effects" | "bypasses_effects" => {
-                Self::BypassesEffects
-            }
-            "#minecraft:bypasses_enchantments"
-            | "minecraft:bypasses_enchantments"
-            | "bypasses_enchantments" => Self::BypassesEnchantments,
-            "#minecraft:bypasses_invulnerability"
-            | "minecraft:bypasses_invulnerability"
-            | "bypasses_invulnerability" => Self::BypassesInvulnerability,
-            "#minecraft:bypasses_resistance"
-            | "minecraft:bypasses_resistance"
-            | "bypasses_resistance" => Self::BypassesResistance,
-            "#minecraft:bypasses_shield" | "minecraft:bypasses_shield" | "bypasses_shield" => {
-                Self::BypassesShield
-            }
-            "#minecraft:bypasses_wolf_armor"
-            | "minecraft:bypasses_wolf_armor"
-            | "bypasses_wolf_armor" => Self::BypassesWolfArmor,
-            "#minecraft:can_break_armor_stand"
-            | "minecraft:can_break_armor_stand"
-            | "can_break_armor_stand" => Self::CanBreakArmorStands,
-            "#minecraft:damages_helmet" | "minecraft:damages_helmet" | "damages_helmet" => {
-                Self::DamagesHelmet
-            }
-            "#minecraft:ignites_armor_stands"
-            | "minecraft:ignites_armor_stands"
-            | "ignites_armor_stands" => Self::IgnitesArmorStands,
-            "#minecraft:is_drowning" | "minecraft:is_drowning" | "is_drowning" => Self::Drowning,
-            "#minecraft:is_explosion" | "minecraft:is_explosion" | "is_explosion" | "explosion" => {
-                Self::Explosion
-            }
-            "#minecraft:is_fall" | "minecraft:is_fall" | "is_fall" | "fall" => Self::Fall,
-            "#minecraft:is_fire" | "minecraft:is_fire" | "is_fire" | "fire" | "in_fire"
-            | "minecraft:in_fire" => Self::Fire,
-            "#minecraft:is_freezing" | "minecraft:is_freezing" | "is_freezing" => Self::Freezing,
-            "#minecraft:is_lightning" | "minecraft:is_lightning" | "is_lightning" => {
-                Self::Lightning
-            }
-            "#minecraft:is_player_attack" | "minecraft:is_player_attack" | "is_player_attack" => {
-                Self::PlayerAttack
-            }
-            "#minecraft:is_projectile" | "minecraft:is_projectile" | "is_projectile" => {
-                Self::Projectile
-            }
-            "#minecraft:mace_smash" | "minecraft:mace_smash" | "mace_smash" => Self::MaceSmash,
-            "#minecraft:no_anger" | "minecraft:no_anger" | "no_anger" => Self::NoAnger,
-            "#minecraft:no_impact" | "minecraft:no_impact" | "no_impact" => Self::NoImpact,
-            "#minecraft:no_knockback" | "minecraft:no_knockback" | "no_knockback" => {
-                Self::NoKnockback
-            }
-            "#minecraft:panic_causes" | "minecraft:panic_causes" | "panic_causes" => {
-                Self::PanicCauses
-            }
-            "#minecraft:panic_environmental_causes"
-            | "minecraft:panic_environmental_causes"
-            | "panic_environmental_causes" => Self::PanicEnvironmentalCauses,
-            "#minecraft:witch_resistant_to"
-            | "minecraft:witch_resistant_to"
-            | "witch_resistant_to" => Self::WitchResistantTo,
-            "#minecraft:wither_immune_to" | "minecraft:wither_immune_to" | "wither_immune_to" => {
-                Self::WitherImmuneTo
-            }
-            _ => Self::Generic,
-        }
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::AlwaysHurtsEnderDragons => "#minecraft:always_hurts_ender_dragons",
-            Self::AlwaysKillsArmorStands => "#minecraft:always_kills_armor_stands",
-            Self::AlwaysMostSignificantFall => "#minecraft:always_most_significant_fall",
-            Self::AlwaysTriggersSilverfish => "#minecraft:always_triggers_silverfish",
-            Self::AvoidsGuardianThorns => "#minecraft:avoids_guardian_thorns",
-            Self::BurnsArmorStands => "#minecraft:burns_armor_stands",
-            Self::BurnFromStepping => "#minecraft:burn_from_stepping",
-            Self::BypassesArmor => "#minecraft:bypasses_armor",
-            Self::BypassesCooldown => "#minecraft:bypasses_cooldown",
-            Self::BypassesEffects => "#minecraft:bypasses_effects",
-            Self::BypassesEnchantments => "#minecraft:bypasses_enchantments",
-            Self::BypassesInvulnerability => "#minecraft:bypasses_invulnerability",
-            Self::BypassesResistance => "#minecraft:bypasses_resistance",
-            Self::BypassesShield => "#minecraft:bypasses_shield",
-            Self::BypassesWolfArmor => "#minecraft:bypasses_wolf_armor",
-            Self::CanBreakArmorStands => "#minecraft:can_break_armor_stand",
-            Self::DamagesHelmet => "#minecraft:damages_helmet",
-            Self::IgnitesArmorStands => "#minecraft:ignites_armor_stands",
-            Self::Drowning => "#minecraft:is_drowning",
-            Self::Explosion => "#minecraft:is_explosion",
-            Self::Fall => "#minecraft:is_fall",
-            Self::Fire => "#minecraft:is_fire",
-            Self::Freezing => "#minecraft:is_freezing",
-            Self::Lightning => "#minecraft:is_lightning",
-            Self::PlayerAttack => "#minecraft:is_player_attack",
-            Self::Projectile => "#minecraft:is_projectile",
-            Self::MaceSmash => "#minecraft:mace_smash",
-            Self::NoAnger => "#minecraft:no_anger",
-            Self::NoImpact => "#minecraft:no_impact",
-            Self::NoKnockback => "#minecraft:no_knockback",
-            Self::PanicCauses => "#minecraft:panic_causes",
-            Self::PanicEnvironmentalCauses => "#minecraft:panic_environmental_causes",
-            Self::WitchResistantTo => "#minecraft:witch_resistant_to",
-            Self::WitherImmuneTo => "#minecraft:wither_immune_to",
-            Self::Generic => "minecraft:generic",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DamageResistantImpl {
-    pub res_type: DamageResistantType,
+    pub types: IDSet<DamageType>,
+}
+impl Hash for DamageResistantImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        get_idset_hash(&self.types).hash(state);
+    }
 }
 impl DamageResistantImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
-        let type_str = compound.get_string("types")?;
-        Some(Self {
-            res_type: DamageResistantType::from_tag(type_str),
-        })
-    }
-}
-impl std::str::FromStr for DamageResistantType {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(DamageResistantType::from_tag(s))
+        let types = IDSet::<DamageType>::read(compound.get("types")?)?;
+        Some(Self { types })
     }
 }
 impl DataComponentImpl for DamageResistantImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
-        compound.put_string("types", self.res_type.as_str().to_string());
+        self.types.write(&mut compound, "types");
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        get_str_hash(self.res_type.as_str()) as i32
+        get_idset_hash(&self.types) as i32
     }
     default_impl!(DamageResistant);
 }
@@ -478,9 +539,16 @@ impl Hash for ToolImpl {
     }
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeaponImpl {
     pub item_damage_per_attack: u32,
+    pub disable_blocking_for_seconds: f32,
+}
+impl Hash for WeaponImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.item_damage_per_attack.hash(state);
+        self.disable_blocking_for_seconds.to_bits().hash(state);
+    }
 }
 impl WeaponImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
@@ -489,8 +557,12 @@ impl WeaponImpl {
             .get_int("item_damage_per_attack")
             .unwrap_or(1)
             .max(0) as u32;
+        let disable_blocking_for_seconds = compound
+            .get_float("disable_blocking_for_seconds")
+            .unwrap_or(0.0);
         Some(Self {
             item_damage_per_attack,
+            disable_blocking_for_seconds,
         })
     }
 }
@@ -498,10 +570,17 @@ impl DataComponentImpl for WeaponImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
         compound.put_int("item_damage_per_attack", self.item_damage_per_attack as i32);
+        compound.put_float(
+            "disable_blocking_for_seconds",
+            self.disable_blocking_for_seconds,
+        );
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        self.item_damage_per_attack as i32
+        let mut digest = Digest::new();
+        digest.update(&get_i32_hash(self.item_damage_per_attack as i32).to_le_bytes());
+        digest.update(&get_f32_hash(self.disable_blocking_for_seconds).to_le_bytes());
+        digest.finalize() as i32
     }
     default_impl!(Weapon);
 }
@@ -550,7 +629,7 @@ impl DataComponentImpl for AttackRangeImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         for value in self.values() {
             digest.update(&get_f32_hash(value).to_le_bytes());
         }
@@ -616,7 +695,7 @@ impl EquippableImpl {
         let equip_on_interact = compound.get_bool("equip_on_interact").unwrap_or(false);
         let can_be_sheared = compound.get_bool("can_be_sheared").unwrap_or(false);
         let equip_sound = get_idor(compound, "equip_sound", Sound::ItemArmorEquipGeneric);
-        let shearing_sound = get_idor(compound, "shearing_sound_sound", Sound::ItemShearsSnip);
+        let shearing_sound = get_idor(compound, "shearing_sound", Sound::ItemShearsSnip);
         let allowed_entities = if let Some(nbt) = compound.get("allowed_entities") {
             IDSet::<EntityType>::read(nbt)
         } else {
@@ -639,7 +718,7 @@ impl EquippableImpl {
 }
 impl DataComponentImpl for EquippableImpl {
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[16u8]);
         digest.update(&get_i32_hash(self.slot.get_slot_index()).to_le_bytes());
         digest.update(&get_idor_hash(&self.equip_sound).to_le_bytes());
@@ -747,25 +826,300 @@ impl DataComponentImpl for GliderImpl {
     default_impl!(Glider);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DeathProtectionImpl;
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct DeathProtectionImpl {
+    pub death_effects: Cow<'static, [crate::data_component_impl::food::ConsumeEffect]>,
+}
 impl DeathProtectionImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const EMPTY: Self = Self {
+        death_effects: Cow::Borrowed(&[]),
+    };
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let Some(compound) = data.extract_compound() else {
+            return Some(Self::EMPTY);
+        };
+        let death_effects = compound
+            .get_list("death_effects")
+            .map(|list| {
+                list.iter()
+                    .filter_map(crate::data_component_impl::food::ConsumeEffect::read_data)
+                    .collect::<Vec<_>>()
+            })
+            .map_or(Cow::Borrowed(&[][..]), Cow::Owned);
+        Some(Self { death_effects })
     }
 }
 impl DataComponentImpl for DeathProtectionImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        if !self.death_effects.is_empty() {
+            compound.put_list(
+                "death_effects",
+                self.death_effects.iter().map(|e| e.as_nbt()).collect(),
+            );
+        }
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        for effect in self.death_effects.iter() {
+            digest.update(&effect.get_hash().to_le_bytes());
+        }
+        digest.finalize() as i32
+    }
     default_impl!(DeathProtection);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BlocksAttacksImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct DamageReduction {
+    pub horizontal_blocking_angle: f32,
+    pub damage_type: Option<IDSet<DamageType>>,
+    pub base: f32,
+    pub factor: f32,
+}
+impl Hash for DamageReduction {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.horizontal_blocking_angle.to_bits().hash(state);
+        self.damage_type.as_ref().map(get_idset_hash).hash(state);
+        self.base.to_bits().hash(state);
+        self.factor.to_bits().hash(state);
+    }
+}
+impl DamageReduction {
+    pub const DEFAULT: Self = Self {
+        horizontal_blocking_angle: 90.0,
+        damage_type: None,
+        base: 0.0,
+        factor: 1.0,
+    };
+
+    #[must_use]
+    pub fn resolve(&self, damage_type: &DamageType, dealt_damage: f32, angle_rad: f64) -> f32 {
+        let max_rad = f64::from((std::f32::consts::PI / 180.0) * self.horizontal_blocking_angle);
+        if angle_rad > max_rad {
+            return 0.0;
+        }
+        if let Some(types) = &self.damage_type
+            && !types.contains(damage_type)
+        {
+            return 0.0;
+        }
+        (self.base + self.factor * dealt_damage).clamp(0.0, dealt_damage)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ItemDamageFunction {
+    pub threshold: f32,
+    pub base: f32,
+    pub factor: f32,
+}
+impl Hash for ItemDamageFunction {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.threshold.to_bits().hash(state);
+        self.base.to_bits().hash(state);
+        self.factor.to_bits().hash(state);
+    }
+}
+impl ItemDamageFunction {
+    pub const DEFAULT: Self = Self {
+        threshold: 1.0,
+        base: 0.0,
+        factor: 1.0,
+    };
+
+    #[must_use]
+    pub fn apply(&self, dealt_damage: f32) -> i32 {
+        if dealt_damage < self.threshold {
+            0
+        } else {
+            (self.base + self.factor * dealt_damage).floor() as i32
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlocksAttacksImpl {
+    pub block_delay_seconds: f32,
+    pub disable_cooldown_scale: f32,
+    pub damage_reductions: Cow<'static, [DamageReduction]>,
+    pub item_damage: ItemDamageFunction,
+    pub bypassed_by: Option<IDSet<DamageType>>,
+    pub block_sound: Option<IdOr<SoundEvent>>,
+    pub disabled_sound: Option<IdOr<SoundEvent>>,
+}
+impl Hash for BlocksAttacksImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.block_delay_seconds.to_bits().hash(state);
+        self.disable_cooldown_scale.to_bits().hash(state);
+        self.damage_reductions.hash(state);
+        self.item_damage.hash(state);
+        self.bypassed_by.as_ref().map(get_idset_hash).hash(state);
+        self.block_sound.hash(state);
+        self.disabled_sound.hash(state);
+    }
+}
 impl BlocksAttacksImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const DEFAULT_DAMAGE_REDUCTIONS: [DamageReduction; 1] = [DamageReduction::DEFAULT];
+
+    pub const DEFAULT: Self = Self {
+        block_delay_seconds: 0.0,
+        disable_cooldown_scale: 1.0,
+        damage_reductions: Cow::Borrowed(&Self::DEFAULT_DAMAGE_REDUCTIONS),
+        item_damage: ItemDamageFunction::DEFAULT,
+        bypassed_by: None,
+        block_sound: None,
+        disabled_sound: None,
+    };
+
+    #[must_use]
+    pub fn block_delay_ticks(&self) -> i32 {
+        (self.block_delay_seconds * 20.0).round() as i32
+    }
+
+    #[must_use]
+    pub fn disable_blocking_for_ticks(&self, base_seconds: f32) -> i32 {
+        let seconds = base_seconds * self.disable_cooldown_scale;
+        if seconds > 0.0 {
+            (seconds * 20.0).round() as i32
+        } else {
+            0
+        }
+    }
+
+    #[must_use]
+    pub fn resolve_blocked_damage(
+        &self,
+        damage_type: &DamageType,
+        dealt_damage: f32,
+        angle_rad: f64,
+    ) -> f32 {
+        let mut blocked = 0.0f32;
+        for reduction in self.damage_reductions.iter() {
+            blocked += reduction.resolve(damage_type, dealt_damage, angle_rad);
+        }
+        blocked.clamp(0.0, dealt_damage)
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let Some(compound) = data.extract_compound() else {
+            return Some(Self::DEFAULT);
+        };
+        let block_delay_seconds = compound
+            .get_float("block_delay_seconds")
+            .unwrap_or(0.0)
+            .max(0.0);
+        let disable_cooldown_scale = compound
+            .get_float("disable_cooldown_scale")
+            .unwrap_or(1.0)
+            .max(0.0);
+        let damage_reductions = if let Some(list) = compound.get_list("damage_reductions") {
+            let mut reductions = Vec::with_capacity(list.len());
+            for item in list {
+                let c = item.extract_compound()?;
+                reductions.push(DamageReduction {
+                    horizontal_blocking_angle: c
+                        .get_float("horizontal_blocking_angle")
+                        .unwrap_or(90.0),
+                    damage_type: c.get("type").and_then(IDSet::<DamageType>::read),
+                    base: c.get_float("base")?,
+                    factor: c.get_float("factor")?,
+                });
+            }
+            Cow::Owned(reductions)
+        } else {
+            Cow::Borrowed(&Self::DEFAULT_DAMAGE_REDUCTIONS[..])
+        };
+        let item_damage = if let Some(c) = compound.get_compound("item_damage") {
+            ItemDamageFunction {
+                threshold: c.get_float("threshold")?.max(0.0),
+                base: c.get_float("base")?,
+                factor: c.get_float("factor")?,
+            }
+        } else {
+            ItemDamageFunction::DEFAULT
+        };
+        let bypassed_by = compound
+            .get("bypassed_by")
+            .and_then(IDSet::<DamageType>::read);
+        let block_sound = get_optional_idor(compound, "block_sound");
+        let disabled_sound = get_optional_idor(compound, "disabled_sound");
+        Some(Self {
+            block_delay_seconds,
+            disable_cooldown_scale,
+            damage_reductions,
+            item_damage,
+            bypassed_by,
+            block_sound,
+            disabled_sound,
+        })
     }
 }
 impl DataComponentImpl for BlocksAttacksImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_float("block_delay_seconds", self.block_delay_seconds);
+        compound.put_float("disable_cooldown_scale", self.disable_cooldown_scale);
+        let reductions = self
+            .damage_reductions
+            .iter()
+            .map(|r| {
+                let mut rc = NbtCompound::new();
+                rc.put_float("horizontal_blocking_angle", r.horizontal_blocking_angle);
+                if let Some(dt) = &r.damage_type {
+                    dt.write(&mut rc, "type");
+                }
+                rc.put_float("base", r.base);
+                rc.put_float("factor", r.factor);
+                NbtTag::Compound(rc)
+            })
+            .collect();
+        compound.put_list("damage_reductions", reductions);
+        let mut id_comp = NbtCompound::new();
+        id_comp.put_float("threshold", self.item_damage.threshold);
+        id_comp.put_float("base", self.item_damage.base);
+        id_comp.put_float("factor", self.item_damage.factor);
+        compound.put_compound("item_damage", id_comp);
+        if let Some(bypassed) = &self.bypassed_by {
+            bypassed.write(&mut compound, "bypassed_by");
+        }
+        put_optional_idor(&mut compound, "block_sound", self.block_sound.as_ref());
+        put_optional_idor(
+            &mut compound,
+            "disabled_sound",
+            self.disabled_sound.as_ref(),
+        );
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        digest.update(&get_f32_hash(self.block_delay_seconds).to_le_bytes());
+        digest.update(&get_f32_hash(self.disable_cooldown_scale).to_le_bytes());
+        for r in self.damage_reductions.iter() {
+            digest.update(&get_f32_hash(r.horizontal_blocking_angle).to_le_bytes());
+            if let Some(dt) = &r.damage_type {
+                digest.update(&[1u8]);
+                digest.update(&get_idset_hash(dt).to_le_bytes());
+            } else {
+                digest.update(&[0u8]);
+            }
+            digest.update(&get_f32_hash(r.base).to_le_bytes());
+            digest.update(&get_f32_hash(r.factor).to_le_bytes());
+        }
+        digest.update(&get_f32_hash(self.item_damage.threshold).to_le_bytes());
+        digest.update(&get_f32_hash(self.item_damage.base).to_le_bytes());
+        digest.update(&get_f32_hash(self.item_damage.factor).to_le_bytes());
+        if let Some(bypassed) = &self.bypassed_by {
+            digest.update(&[1u8]);
+            digest.update(&get_idset_hash(bypassed).to_le_bytes());
+        } else {
+            digest.update(&[0u8]);
+        }
+        update_optional_idor(&mut digest, self.block_sound.as_ref());
+        update_optional_idor(&mut digest, self.disabled_sound.as_ref());
+        digest.finalize() as i32
+    }
     default_impl!(BlocksAttacks);
 }
 
@@ -818,7 +1172,7 @@ impl DataComponentImpl for PiercingWeaponImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[self.deals_knockback as u8, self.dismounts as u8]);
         update_optional_idor(&mut digest, self.sound.as_ref());
         update_optional_idor(&mut digest, self.hit_sound.as_ref());
@@ -834,10 +1188,17 @@ pub struct KineticConditionImpl {
     pub min_relative_speed: f32,
 }
 impl KineticConditionImpl {
-    pub fn test(&self, ticks_used: i32, attacker_speed: f64, relative_speed: f64) -> bool {
+    /// `entity_factor` scales both speed thresholds: 1 for players, 0.2 for mobs.
+    pub fn test(
+        &self,
+        ticks_used: i32,
+        attacker_speed: f64,
+        relative_speed: f64,
+        entity_factor: f64,
+    ) -> bool {
         ticks_used <= self.max_duration_ticks
-            && attacker_speed >= f64::from(self.min_speed)
-            && relative_speed >= f64::from(self.min_relative_speed)
+            && attacker_speed >= f64::from(self.min_speed) * entity_factor
+            && relative_speed >= f64::from(self.min_relative_speed) * entity_factor
     }
     fn read(compound: &NbtCompound, key: &str) -> Option<Self> {
         let condition = compound.get_compound(key)?;
@@ -920,7 +1281,7 @@ impl DataComponentImpl for KineticWeaponImpl {
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&get_i32_hash(self.contact_cooldown_ticks).to_le_bytes());
         digest.update(&get_i32_hash(self.delay_ticks).to_le_bytes());
         for (_, condition) in self.conditions() {
@@ -1049,18 +1410,115 @@ impl DataComponentImpl for SwingAnimationImpl {
         NbtTag::Compound(compound)
     }
 
-    default_impl!(SwingAnimation);
+    default_impl!(AttackAnimation);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct AdditionalTradeCostImpl;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct InteractAnimationImpl {
+    pub animation_type: SwingAnimationType,
+    pub duration: i32,
+}
+
+impl Default for InteractAnimationImpl {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl InteractAnimationImpl {
+    pub const DEFAULT: Self = Self {
+        animation_type: SwingAnimationType::Whack,
+        duration: 6,
+    };
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let swing = SwingAnimationImpl::read_data(data)?;
+        Some(Self {
+            animation_type: swing.animation_type,
+            duration: swing.duration,
+        })
+    }
+}
+
+impl DataComponentImpl for InteractAnimationImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("type", self.animation_type.to_name().to_string());
+        compound.put_int("duration", self.duration);
+        NbtTag::Compound(compound)
+    }
+
+    default_impl!(InteractAnimation);
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
+pub struct AdditionalTradeCostImpl {
+    pub cost: i32,
+}
 impl AdditionalTradeCostImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            cost: data.extract_int().unwrap_or(0),
+        })
     }
 }
 impl DataComponentImpl for AdditionalTradeCostImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.cost)
+    }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.cost) as i32
+    }
     default_impl!(AdditionalTradeCost);
+}
+
+/// Scales how far the listed mobs notice the wearer, vanilla `MobVisibility`. Mob heads.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MobVisibilityImpl {
+    pub targeting_entity_types: IDSet<EntityType>,
+    pub visibility: f32,
+}
+impl Hash for MobVisibilityImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        get_idset_hash(&self.targeting_entity_types).hash(state);
+        self.visibility.to_bits().hash(state);
+    }
+}
+impl MobVisibilityImpl {
+    pub const MAX_VISIBILITY: f32 = 10.0;
+
+    /// Vanilla `floatRange(0, MAX_VISIBILITY)`, which also rejects NaN.
+    #[must_use]
+    pub fn is_valid_visibility(visibility: f32) -> bool {
+        (0.0..=Self::MAX_VISIBILITY).contains(&visibility)
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let targeting_entity_types =
+            IDSet::<EntityType>::read(compound.get("targeting_entity_types")?)?;
+        let visibility = compound.get_float("visibility")?;
+        Self::is_valid_visibility(visibility).then_some(Self {
+            targeting_entity_types,
+            visibility,
+        })
+    }
+}
+impl DataComponentImpl for MobVisibilityImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        self.targeting_entity_types
+            .write(&mut compound, "targeting_entity_types");
+        compound.put_float("visibility", self.visibility);
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new();
+        digest.update(&get_idset_hash(&self.targeting_entity_types).to_le_bytes());
+        digest.update(&get_f32_hash(self.visibility).to_le_bytes());
+        digest.finalize() as i32
+    }
+    default_impl!(MobVisibility);
 }
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -1069,20 +1527,8 @@ pub struct StoredEnchantmentsImpl {
 }
 impl StoredEnchantmentsImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let compound = data.extract_compound()?;
-        let data = if let Some(NbtTag::Compound(levels)) = compound.child_tags.get("levels") {
-            &levels.child_tags
-        } else {
-            &compound.child_tags
-        };
-        let mut enc = Vec::with_capacity(data.len());
-        for (name, level) in data {
-            let enchantment = Enchantment::from_name(name.as_ref())
-                .or_else(|| Enchantment::from_name(&format!("minecraft:{name}")))?;
-            enc.push((enchantment, level.extract_int()?));
-        }
         Some(Self {
-            enchantment: Cow::from(enc),
+            enchantment: Cow::from(read_enchantment_levels(data)?),
         })
     }
 }
@@ -1095,7 +1541,7 @@ impl DataComponentImpl for StoredEnchantmentsImpl {
         NbtTag::Compound(data)
     }
     fn get_hash(&self) -> i32 {
-        let mut digest = Digest::new(Crc32Iscsi);
+        let mut digest = Digest::new();
         digest.update(&[2u8]);
         for (enc, level) in self.enchantment.iter() {
             digest.update(&get_str_hash(enc.name).to_le_bytes());
@@ -1141,6 +1587,31 @@ impl TrimImpl {
             material: compound.get("material")?.clone(),
             pattern: compound.get("pattern")?.clone(),
         })
+    }
+
+    #[must_use]
+    pub fn new(
+        material: crate::trim_material::TrimMaterial,
+        pattern: crate::trim_pattern::TrimPattern,
+    ) -> Self {
+        Self {
+            material: NbtTag::String(material.asset_id().into()),
+            pattern: NbtTag::String(pattern.asset_id().into()),
+        }
+    }
+
+    #[must_use]
+    pub fn material_enum(&self) -> Option<crate::trim_material::TrimMaterial> {
+        self.material
+            .extract_string()
+            .and_then(crate::trim_material::TrimMaterial::from_name)
+    }
+
+    #[must_use]
+    pub fn pattern_enum(&self) -> Option<crate::trim_pattern::TrimPattern> {
+        self.pattern
+            .extract_string()
+            .and_then(crate::trim_pattern::TrimPattern::from_name)
     }
 }
 impl DataComponentImpl for TrimImpl {

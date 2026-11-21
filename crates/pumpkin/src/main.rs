@@ -16,24 +16,29 @@ use std::{
     sync::{OnceLock, atomic::Ordering},
     thread::{self, ThreadId},
 };
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
-use tokio::signal::unix::{SignalKind, signal};
+use tokio::signal::unix::{Signal, SignalKind, signal};
+#[cfg(windows)]
+use tokio::signal::windows;
 
-use pumpkin::{
-    CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
+use pumpkin_core::{
+    CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING, SHOULD_STOP,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
     stop_or_exit_server,
 };
-use pumpkin::{PumpkinServer, stop_server};
+use pumpkin_core::{PumpkinServer, stop_server};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
+use pumpkin_core::plugin::loader::PluginLoader;
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
 };
+use pumpkin_wasm_host::WasmPluginLoader;
+use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -48,6 +53,10 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 #[tokio::main]
 async fn main() {
     let _ = MAIN_THREAD.set(thread::current().id());
+
+    // reqwest is built with `rustls-no-provider`, so pick the ring provider (the one
+    // wasmtime-wasi-http/rtc already force) before any client can be constructed.
+    let _ = rustls::crypto::ring::default_provider().install_default();
 
     // Initialize global Rayon thread pool with named worker threads
     let _ = rayon::ThreadPoolBuilder::new()
@@ -65,9 +74,52 @@ async fn main() {
 
     let config = PumpkinConfig::load(&exec_dir);
 
+    if has_init_settings_arg(std::env::args().skip(1)) {
+        exit(0);
+    }
+
     let vanilla_data = VanillaData::load();
 
-    pumpkin::init_logger(&config.advanced);
+    pumpkin_core::init_logger(&config.advanced);
+
+    if let Some(target_arg) = parse_convert_world_arg(std::env::args().skip(1)) {
+        let anvil_default = match &config.advanced.world.chunk {
+            pumpkin_config::chunk::ChunkConfig::Anvil(cfg) => cfg.clone(),
+            _ => pumpkin_config::chunk::AnvilChunkConfig::default(),
+        };
+        let Some(target_config) =
+            pumpkin_world::chunk::io::converter::parse_chunk_config(&target_arg, anvil_default)
+        else {
+            tracing::error!(
+                "Unknown chunk format '{target_arg}'. Expected 'pump', 'anvil', or 'linear'."
+            );
+            exit(1);
+        };
+        let target_format =
+            pumpkin_world::chunk::io::converter::RegionFormat::from_config(&target_config);
+        let world_dir = exec_dir.join(config.basic.get_world_path());
+        info!(
+            "Converting world at {} to {} format...",
+            world_dir.display(),
+            target_format.name()
+        );
+        match pumpkin_world::chunk::io::converter::convert_world(&world_dir, &target_config, true) {
+            Ok(stats) => {
+                info!(
+                    "Converted {} region(s) ({} chunk(s)) to {} format in {}ms",
+                    stats.regions_converted,
+                    stats.chunks_converted,
+                    target_format.name(),
+                    time.elapsed().as_millis()
+                );
+                exit(0);
+            }
+            Err(err) => {
+                tracing::error!("World conversion failed: {err}");
+                exit(1);
+            }
+        }
+    }
 
     info!(
         "{}",
@@ -110,13 +162,29 @@ async fn main() {
     }
     print_support_links_and_warning();
 
-    tokio::spawn(async {
-        if let Err(err) = setup_sighandler().await {
-            tracing::error!("Unable to setup signal handlers: {err}");
-        }
-    });
+    // Register OS signal handlers synchronously before starting the console so rustyline saves
+    // Tokio's SIGINT disposition rather than SIG_DFL.
+    if let Err(err) = setup_sighandler() {
+        tracing::error!("Unable to setup signal handlers: {err}");
+    }
 
-    let pumpkin_server = PumpkinServer::new(config.basic, config.advanced, vanilla_data).await;
+    let plugin_loaders: Vec<Arc<dyn PluginLoader>> = vec![Arc::new(WasmPluginLoader::new(
+        config.advanced.plugins.verify_signatures,
+    ))];
+
+    let pumpkin_server = PumpkinServer::new(
+        config.basic,
+        config.advanced,
+        config.telemetry,
+        vanilla_data,
+        plugin_loaders,
+        true,
+    )
+    .await
+    .unwrap_or_else(|error| {
+        tracing::error!("{error}");
+        exit(1);
+    });
     let plugin_wait_time = pumpkin_server.init_plugins().await;
 
     let time_elapsed = time.elapsed().saturating_sub(plugin_wait_time);
@@ -210,14 +278,46 @@ fn print_support_links_and_warning() {
     );
 }
 
-fn handle_interrupt() {
-    warn!(
-        "{}",
-        TextComponent::text("Received interrupt signal; stopping server...")
-            .color_named(NamedColor::Red)
-            .to_pretty_console()
-    );
-    stop_or_exit_server();
+#[derive(Clone, Copy)]
+enum SignalAction {
+    Interrupt,
+    #[cfg(any(unix, windows))]
+    Shutdown,
+}
+
+fn handle_signal(action: SignalAction) {
+    let already_stopping =
+        SHOULD_STOP.load(Ordering::Acquire) || SERVER_IS_STOPPING.load(Ordering::Acquire);
+
+    match action {
+        SignalAction::Interrupt => {
+            let message = if already_stopping {
+                "Received interrupt signal while already stopping; forcing exit..."
+            } else {
+                "Received interrupt signal; stopping server..."
+            };
+            warn!(
+                "{}",
+                TextComponent::text(message)
+                    .color_named(NamedColor::Red)
+                    .to_pretty_console()
+            );
+            stop_or_exit_server();
+        }
+        #[cfg(any(unix, windows))]
+        SignalAction::Shutdown => {
+            if already_stopping {
+                return;
+            }
+            warn!(
+                "{}",
+                TextComponent::text("Received termination signal; stopping server...")
+                    .color_named(NamedColor::Red)
+                    .to_pretty_console()
+            );
+            stop_server();
+        }
+    }
 }
 
 fn handle_panic(panic_info: &PanicHookInfo<'_>) {
@@ -310,30 +410,94 @@ fn try_set_crash_report(crash_report: CrashReport) -> Option<&'static CrashRepor
     }
 }
 
-// Non-UNIX Ctrl-C handling
-#[cfg(not(unix))]
-async fn setup_sighandler() -> io::Result<()> {
-    if ctrl_c().await.is_ok() {
-        handle_interrupt();
-    }
+// CTRL_LOGOFF_EVENT is intentionally omitted: Windows sends it to background console services
+// whenever any interactive/RDP user logs off.
+#[cfg(windows)]
+fn setup_sighandler() -> io::Result<()> {
+    let mut ctrl_c = windows::ctrl_c()?;
+    let mut ctrl_break = windows::ctrl_break()?;
+    let mut ctrl_close = windows::ctrl_close()?;
+    let mut ctrl_shutdown = windows::ctrl_shutdown()?;
+
+    tokio::spawn(async move {
+        loop {
+            let action = tokio::select! {
+                Some(()) = ctrl_c.recv() => SignalAction::Interrupt,
+                Some(()) = ctrl_break.recv() => SignalAction::Interrupt,
+                Some(()) = ctrl_close.recv() => SignalAction::Shutdown,
+                Some(()) = ctrl_shutdown.recv() => SignalAction::Shutdown,
+                else => break,
+            };
+            handle_signal(action);
+        }
+    });
 
     Ok(())
 }
 
-// Unix signal handling
-#[cfg(unix)]
-async fn setup_sighandler() -> io::Result<()> {
-    if signal(SignalKind::interrupt())?.recv().await.is_some() {
-        handle_interrupt();
-    }
-
-    if signal(SignalKind::hangup())?.recv().await.is_some() {
-        handle_interrupt();
-    }
-
-    if signal(SignalKind::terminate())?.recv().await.is_some() {
-        handle_interrupt();
-    }
+#[cfg(not(any(unix, windows)))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "matches unix and windows setup_sighandler signature"
+)]
+fn setup_sighandler() -> io::Result<()> {
+    tokio::spawn(async {
+        while ctrl_c().await.is_ok() {
+            handle_signal(SignalAction::Interrupt);
+        }
+    });
 
     Ok(())
+}
+
+#[cfg(unix)]
+async fn recv_optional_signal(signal: Option<&mut Signal>) -> Option<()> {
+    if let Some(sig) = signal {
+        sig.recv().await
+    } else {
+        std::future::pending().await
+    }
+}
+
+#[cfg(unix)]
+fn setup_sighandler() -> io::Result<()> {
+    let mut interrupt = signal(SignalKind::interrupt())?;
+    let mut hangup = signal(SignalKind::hangup())?;
+    let mut terminate = signal(SignalKind::terminate())?;
+    // LXC/Proxmox (`pct stop` / `lxc-stop`) and UPS daemons send SIGPWR for graceful shutdown.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    let mut power = Some(signal(SignalKind::from_raw(libc::SIGPWR))?);
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    let mut power: Option<Signal> = None;
+
+    tokio::spawn(async move {
+        loop {
+            let action = tokio::select! {
+                Some(()) = interrupt.recv() => SignalAction::Interrupt,
+                Some(()) = hangup.recv() => SignalAction::Shutdown,
+                Some(()) = terminate.recv() => SignalAction::Shutdown,
+                Some(()) = recv_optional_signal(power.as_mut()) => SignalAction::Shutdown,
+                else => break,
+            };
+            handle_signal(action);
+        }
+    });
+
+    Ok(())
+}
+
+fn has_init_settings_arg(mut args: impl Iterator<Item = String>) -> bool {
+    args.any(|arg| arg == "--init-settings" || arg == "--initSettings")
+}
+
+fn parse_convert_world_arg(mut args: impl Iterator<Item = String>) -> Option<String> {
+    while let Some(arg) = args.next() {
+        if arg == "--convert-world" {
+            return Some(args.next().unwrap_or_default());
+        }
+        if let Some(value) = arg.strip_prefix("--convert-world=") {
+            return Some(value.to_string());
+        }
+    }
+    None
 }

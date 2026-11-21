@@ -57,9 +57,3 @@ test = false
 doc = false
 bench = false
 
-[[bin]]
-name = "rcon_decoder"
-path = "fuzz_targets/rcon_decoder.rs"
-test = false
-doc = false
-bench = false

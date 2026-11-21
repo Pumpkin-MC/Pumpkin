@@ -2,13 +2,13 @@ use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use crate::inventory::Inventory;
+use crate::window_property::PropertyDelegate;
+use pumpkin_data::data_component_impl::BrewingFuelImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::potion_brewing::{ITEM_RECIPES, POTION_RECIPES};
+use pumpkin_data::potion_brewing::BREWING_RECIPES;
 use pumpkin_data::screen::WindowType;
-use pumpkin_data::tag::{self, Taggable};
-use pumpkin_world::block::entities::PropertyDelegate;
-use pumpkin_world::inventory::Inventory;
 
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{
@@ -17,18 +17,13 @@ use crate::screen_handler::{
 use crate::slot::Slot;
 
 #[must_use]
-pub fn is_fuel(item: &Item) -> bool {
-    item.id == Item::BLAZE_POWDER.id || item.has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
+pub fn is_fuel(stack: &ItemStack) -> bool {
+    stack.get_data_component::<BrewingFuelImpl>().is_some()
 }
 
 #[must_use]
 pub fn is_ingredient(item: &Item) -> bool {
-    ITEM_RECIPES
-        .iter()
-        .any(|r| r.ingredient().iter().any(|i| i.id == item.id))
-        || POTION_RECIPES
-            .iter()
-            .any(|r| r.ingredient().iter().any(|i| i.id == item.id))
+    BREWING_RECIPES.iter().any(|r| r.ingredient().id == item.id)
 }
 
 #[must_use]
@@ -51,7 +46,7 @@ impl BrewingScreenHandler {
     pub const INGREDIENT_SLOT: usize = 3;
     pub const FUEL_SLOT: usize = 4;
     pub const SLOT_COUNT: usize = 5;
-    pub const DATA_COUNT: usize = 2;
+    pub const DATA_COUNT: usize = 4;
     pub const INV_SLOT_START: usize = 5;
     pub const INV_SLOT_END: usize = 32;
     pub const USE_ROW_SLOT_START: usize = 32;
@@ -85,6 +80,8 @@ impl BrewingScreenHandler {
 
         handler.add_property(ScreenProperty::new(property_delegate.clone(), 0));
         handler.add_property(ScreenProperty::new(property_delegate.clone(), 1));
+        handler.add_property(ScreenProperty::new(property_delegate.clone(), 2));
+        handler.add_property(ScreenProperty::new(property_delegate.clone(), 3));
 
         handler.add_listener(Arc::new(BrewingScreenListener));
 
@@ -145,11 +142,18 @@ impl ScreenHandler for BrewingScreenHandler {
             clicked = stack.clone();
 
             if slot_index >= 5 {
-                if is_fuel(clicked.item) {
+                if is_fuel(&clicked) {
                     if self.insert_item(&mut stack, 4, 5, false)
                         || (is_ingredient(clicked.item)
                             && !self.insert_item(&mut stack, 3, 4, false))
                     {
+                        // Unlike the arms below this one returns after a successful
+                        // move, so the source slot has to be written back here.
+                        if stack.is_empty() {
+                            slot.set_stack(ItemStack::EMPTY.clone());
+                        } else {
+                            slot.set_stack(stack.clone());
+                        }
                         return ItemStack::EMPTY.clone();
                     }
                 } else if is_ingredient(clicked.item) {
@@ -257,6 +261,12 @@ impl Slot for BrewingPotionSlot {
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
     }
+
+    fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
+        if is_potion_item(stack.item) && stack.item.id != Item::GLASS_BOTTLE.id {
+            player.on_brewed_potion();
+        }
+    }
 }
 
 pub struct BrewingIngredientSlot {
@@ -347,7 +357,7 @@ impl Slot for BrewingFuelSlot {
     }
 
     fn can_insert(&self, stack: &ItemStack) -> bool {
-        is_fuel(stack.item)
+        is_fuel(stack)
     }
 
     fn get_stack(&self) -> ItemStack {

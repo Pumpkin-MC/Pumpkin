@@ -3,6 +3,7 @@
 use compound::NbtCompound;
 use deserializer::NbtReadHelper;
 use serializer::NbtWriteHelper;
+use uuid::Uuid;
 
 use crate::{
     BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, DOUBLE_ID, END_ID, Error, FLOAT_ID, INT_ARRAY_ID, INT_ID,
@@ -396,12 +397,7 @@ impl NbtTag {
                     return Err(Error::LargeLength(len));
                 }
 
-                let mut int_array = Vec::with_capacity(len.min(4096));
-                for _ in 0..len {
-                    let int = reader.get_i32()?;
-                    int_array.push(int);
-                }
-                Ok(Self::IntArray(int_array))
+                Ok(Self::IntArray(reader.get_i32_array(len)?))
             }
             LONG_ARRAY_ID => {
                 let len = reader.get_i32()?;
@@ -414,12 +410,7 @@ impl NbtTag {
                     return Err(Error::LargeLength(len));
                 }
 
-                let mut long_array = Vec::with_capacity(len.min(4096));
-                for _ in 0..len {
-                    let long = reader.get_i64()?;
-                    long_array.push(long);
-                }
-                Ok(Self::LongArray(long_array))
+                Ok(Self::LongArray(reader.get_i64_array(len)?))
             }
             _ => Err(Error::UnknownTagId(tag_id)),
         }
@@ -479,6 +470,51 @@ impl NbtTag {
         }
     }
 
+    /// Converts any numeric tag to a short, `NumericTag.shortValue`.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
+    pub fn as_numeric_short(&self) -> Option<i16> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short),
+            Self::Int(int) => Some(int as i16),
+            Self::Long(long) => Some(long as i16),
+            Self::Float(float) => Some(float.floor() as i32 as i16),
+            Self::Double(double) => Some(double.floor() as i32 as i16),
+            _ => None,
+        }
+    }
+
+    /// Converts any numeric tag to an int, `NumericTag.intValue`.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
+    pub fn as_numeric_int(&self) -> Option<i32> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short.into()),
+            Self::Int(int) => Some(int),
+            Self::Long(long) => Some(long as i32),
+            Self::Float(float) => Some(float.floor() as i32),
+            Self::Double(double) => Some(double.floor() as i32),
+            _ => None,
+        }
+    }
+
+    /// Converts any numeric tag to a float, `NumericTag.floatValue`.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn as_numeric_float(&self) -> Option<f32> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short.into()),
+            Self::Int(int) => Some(int as f32),
+            Self::Long(long) => Some(long as f32),
+            Self::Float(float) => Some(float),
+            Self::Double(double) => Some(double as f32),
+            _ => None,
+        }
+    }
+
     /// Returns the contained byte as a boolean, where zero is `false`.
     #[must_use]
     pub fn extract_bool(&self) -> Option<bool> {
@@ -531,6 +567,32 @@ impl NbtTag {
             Self::IntArray(int_array) => Some(int_array),
             _ => None,
         }
+    }
+
+    /// A UUID as a 4-element int array, most significant bits first (the vanilla `UUID` layout).
+    #[must_use]
+    pub fn uuid(value: Uuid) -> Self {
+        let value = value.as_u128();
+        Self::IntArray(vec![
+            (value >> 96) as i32,
+            ((value >> 64) & 0xFFFF_FFFF) as i32,
+            ((value >> 32) & 0xFFFF_FFFF) as i32,
+            (value & 0xFFFF_FFFF) as i32,
+        ])
+    }
+
+    /// Reads a UUID written by [`Self::uuid`].
+    #[must_use]
+    pub fn extract_uuid(&self) -> Option<Uuid> {
+        let &[a, b, c, d] = self.extract_int_array()? else {
+            return None;
+        };
+        Some(Uuid::from_u128(
+            ((a as u32 as u128) << 96)
+                | ((b as u32 as u128) << 64)
+                | ((c as u32 as u128) << 32)
+                | (d as u32 as u128),
+        ))
     }
 
     /// Returns the contained long array, if this is a long-array tag.

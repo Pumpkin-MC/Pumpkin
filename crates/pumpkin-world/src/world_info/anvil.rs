@@ -1,5 +1,5 @@
 use std::{
-    fs::File,
+    fs::{self, File},
     io::ErrorKind,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -285,6 +285,12 @@ fn level_data_from_nbt(data: &NbtCompound, seed: i64) -> LevelData {
     if let Some(clear_weather_time) = data.get_int("clearWeatherTime") {
         level_data.clear_weather_time = clear_weather_time;
     }
+    if let Some(spawn_delay) = data.get_int("WanderingTraderSpawnDelay") {
+        level_data.wandering_trader_spawn_delay = spawn_delay;
+    }
+    if let Some(spawn_chance) = data.get_int("WanderingTraderSpawnChance") {
+        level_data.wandering_trader_spawn_chance = spawn_chance;
+    }
 
     level_data
 }
@@ -362,7 +368,14 @@ impl WorldInfoReader for AnvilLevelInfo {
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError> {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
 
-        let root = read_gzip_compound_tag(File::open(path)?)
+        let file = match File::open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                return Err(WorldInfoError::InfoNotFound);
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let root = read_gzip_compound_tag(file)
             .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
         let Some(data) = root.get_compound(LEVEL_DATA_TAG) else {
             error!("The level.dat file has no {LEVEL_DATA_TAG} compound and is therefore corrupt");
@@ -409,6 +422,15 @@ impl WorldInfoReader for AnvilLevelInfo {
             level_data.clear_weather_time = weather.clear_weather_time;
         }
 
+        if minecraft_data_dir(level_folder)
+            .join("wandering_trader.dat")
+            .exists()
+        {
+            let wandering_trader = read_wandering_trader(level_folder);
+            level_data.wandering_trader_spawn_delay = wandering_trader.spawn_delay;
+            level_data.wandering_trader_spawn_chance = wandering_trader.spawn_chance;
+        }
+
         Ok(level_data)
     }
 }
@@ -419,6 +441,8 @@ impl WorldInfoWriter for AnvilLevelInfo {
         info: &LevelData,
         level_folder: &Path,
     ) -> Result<(), WorldInfoError> {
+        fs::create_dir_all(level_folder)?;
+
         let start = SystemTime::now();
         let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap_or_default();
         let mut level_data = info.clone();
@@ -442,9 +466,9 @@ impl WorldInfoWriter for AnvilLevelInfo {
             .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
 
         if path.exists() {
-            let _ = std::fs::copy(&path, &path_old);
+            fs::copy(&path, &path_old)?;
         }
-        let _ = std::fs::rename(&path_new, &path);
+        fs::rename(&path_new, &path)?;
 
         let data_version = level_data.data_version;
 
@@ -485,8 +509,10 @@ impl WorldInfoWriter for AnvilLevelInfo {
             error!("Failed to write weather.dat: {e}");
         }
 
-        // wandering_trader.dat (stub / load-save)
+        // wandering_trader.dat
         let mut wandering_trader = read_wandering_trader(level_folder);
+        wandering_trader.spawn_delay = info.wandering_trader_spawn_delay;
+        wandering_trader.spawn_chance = info.wandering_trader_spawn_chance;
         wandering_trader.data_version = data_version;
         if let Err(e) = write_wandering_trader(level_folder, &wandering_trader) {
             error!("Failed to write wandering_trader.dat: {e}");
@@ -540,6 +566,7 @@ mod test {
     use pumpkin_util::{Difficulty, world_seed::Seed};
     use std::{
         fs::{self, File},
+        io::ErrorKind,
         path::Path,
         sync::LazyLock,
     };
@@ -621,6 +648,44 @@ mod test {
     }
 
     #[test]
+    fn creates_missing_world_directory_when_writing() {
+        let temp_dir = TempDir::new().unwrap();
+        let level_folder = temp_dir.path().join("world");
+
+        AnvilLevelInfo
+            .write_world_info(&LevelData::default(Seed(42)), &level_folder)
+            .unwrap();
+
+        assert!(level_folder.join(LEVEL_DAT_FILE_NAME).is_file());
+        assert!(!level_folder.join("level.dat_new").exists());
+    }
+
+    #[test]
+    fn reports_missing_level_dat_as_info_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let error = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap_err();
+
+        assert!(matches!(error, WorldInfoError::InfoNotFound));
+    }
+
+    #[test]
+    fn reports_writer_io_errors_as_io_errors() {
+        let temp_dir = TempDir::new().unwrap();
+        let level_folder = temp_dir.path().join("world");
+        File::create(&level_folder).unwrap();
+
+        let error = AnvilLevelInfo
+            .write_world_info(&LevelData::default(Seed(42)), &level_folder)
+            .unwrap_err();
+
+        let WorldInfoError::IoError(error) = error else {
+            panic!("expected writer I/O error");
+        };
+        assert_eq!(error.kind(), ErrorKind::AlreadyExists);
+    }
+
+    #[test]
     fn read_level_dat_without_series() {
         let temp_dir = TempDir::new().unwrap();
         write_level_dat(temp_dir.path(), converted_level_dat(Some(987_654_321)));
@@ -654,6 +719,41 @@ mod test {
         let error = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap_err();
 
         assert!(matches!(error, WorldInfoError::MissingWorldSeed));
+    }
+
+    #[test]
+    fn read_26_x_world_gen_settings_layout() {
+        let temp_dir = TempDir::new().unwrap();
+        write_level_dat(temp_dir.path(), converted_level_dat(None));
+
+        let data_dir = temp_dir
+            .path()
+            .join("dimensions")
+            .join("minecraft")
+            .join("overworld")
+            .join("data")
+            .join("minecraft");
+        fs::create_dir_all(&data_dir).unwrap();
+
+        let mut settings = NbtCompound::new();
+        settings.put_long("seed", -2_016_744_919_588_476_706);
+        let mut data = NbtCompound::new();
+        data.put_compound("data", settings);
+        let mut root = NbtCompound::new();
+        root.put_compound("Data", data);
+
+        write_gzip_compound_tag(
+            root,
+            File::create(data_dir.join("world_gen_settings.dat")).unwrap(),
+        )
+        .unwrap();
+
+        let level_data = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
+
+        assert_eq!(
+            level_data.world_gen_settings.seed,
+            -2_016_744_919_588_476_706
+        );
     }
 
     #[test]
@@ -813,6 +913,8 @@ mod test {
             border_warning_blocks: 5.0,
             border_warning_time: 15.0,
             clear_weather_time: 0,
+            wandering_trader_spawn_delay: 24_000,
+            wandering_trader_spawn_chance: 25,
             data_packs: DataPacks {
                 disabled: vec![
                     "minecart_improvements".to_string(),
@@ -901,11 +1003,11 @@ mod test {
     }
 
     #[test]
-    fn spawn_and_difficulty_format_26_2() {
+    fn spawn_and_difficulty_format_26_3() {
         let temp_dir = TempDir::new().unwrap();
 
         let mut data_comp = NbtCompound::new();
-        data_comp.put_int("DataVersion", 4903);
+        data_comp.put_int("DataVersion", 5023);
         data_comp.put_int("version", 19133);
         data_comp.put_string("LevelName", "26.2 Test".to_string());
         data_comp.put_long("LastPlayed", 123456789);
@@ -950,7 +1052,7 @@ mod test {
                 dimension_type: "minecraft:overworld".to_string(),
             },
         );
-        write_world_gen_settings(temp_dir.path(), &wgs, 4903).unwrap();
+        write_world_gen_settings(temp_dir.path(), &wgs, 5023).unwrap();
 
         let loaded = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
         assert_eq!(loaded.spawn_x, 42);
@@ -975,10 +1077,10 @@ mod test {
     }
 
     #[test]
-    fn all_26_2_minecraft_data_files_written_and_read() {
+    fn all_26_3_minecraft_data_files_written_and_read() {
         let temp_dir = TempDir::new().unwrap();
         let mut level_data = LEVEL_DAT.data.clone();
-        level_data.data_version = 4903;
+        level_data.data_version = 5023;
         level_data.day_time = 24000;
         level_data.clear_weather_time = 100;
         level_data.world_gen_settings = WorldGenSettings::new(Seed(9999));

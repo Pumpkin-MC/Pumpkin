@@ -3,13 +3,13 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 
+use crate::inventory::Inventory;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{EnchantmentsImpl, StoredEnchantmentsImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,
@@ -162,6 +162,12 @@ pub fn get_enchantments_for_crafting(stack: &ItemStack) -> Vec<(&'static Enchant
 
 pub fn set_enchantments(result: &mut ItemStack, enchantments: Vec<(&'static Enchantment, i32)>) {
     if result.is_empty() {
+        return;
+    }
+    if enchantments.is_empty() {
+        result.patch.retain(|(id, _)| {
+            *id != DataComponent::Enchantments && *id != DataComponent::StoredEnchantments
+        });
         return;
     }
     if result.item == &Item::ENCHANTED_BOOK
@@ -548,10 +554,8 @@ impl ScreenHandler for AnvilScreenHandler {
         player: &dyn InventoryPlayer,
     ) {
         self.internal_on_slot_click(slot_index, button, action_type, player);
-        if slot_index == 0 || slot_index == 1 || slot_index == 2 {
-            self.create_result(player.has_infinite_materials());
-            self.send_content_updates();
-        }
+        self.create_result(player.has_infinite_materials());
+        self.send_content_updates();
     }
 }
 
@@ -559,11 +563,11 @@ impl ScreenHandler for AnvilScreenHandler {
 mod tests {
     use super::*;
     use crate::entity_equipment::EntityEquipment;
+    use crate::inventory::SimpleInventory;
     use pumpkin_protocol::java::client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
         CSetPlayerInventory, CSetSelectedSlot,
     };
-    use pumpkin_world::inventory::SimpleInventory;
     use std::sync::Mutex;
     use std::sync::atomic::AtomicI32;
 
@@ -636,7 +640,12 @@ mod tests {
 
         fn enqueue_cursor_packet(&self, _packet: &CSetCursorItem) {}
 
-        fn enqueue_property_packet(&self, _packet: &CSetContainerProperty) {}
+        fn enqueue_property_packet(
+            &self,
+            _packet: &CSetContainerProperty,
+            _window_type: Option<WindowType>,
+        ) {
+        }
 
         fn enqueue_slot_set_packet(&self, _packet: &CSetPlayerInventory) {}
 
@@ -658,6 +667,8 @@ mod tests {
             _amount: i32,
         ) {
         }
+
+        fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
     }
 
     #[test]

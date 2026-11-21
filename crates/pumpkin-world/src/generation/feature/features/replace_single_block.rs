@@ -19,7 +19,7 @@ impl ReplaceSingleBlockFeature {
     ) -> bool {
         let block_state = GenerationCache::get_block_state(chunk, &pos.0);
         for target in &self.targets {
-            if target.target.test(block_state, random) {
+            if target.target.test(block_state, pos.0.y, random) {
                 chunk.set_block_state(&pos.0, target.state);
                 break;
             }

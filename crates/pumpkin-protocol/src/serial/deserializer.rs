@@ -454,3 +454,27 @@ impl<'a> PacketReadSlice<'a> for Cow<'a, str> {
         Ok(Self::Borrowed(read_str_slice(buf)?))
     }
 }
+
+impl PacketRead for pumpkin_nbt::compound::NbtCompound {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes)?;
+        let cursor = std::io::Cursor::new(bytes.as_slice());
+        let mut helper = pumpkin_nbt::deserializer::NbtReadHelperBedrock::new(cursor);
+        let nbt = pumpkin_nbt::Nbt::read(&mut helper)
+            .map_err(|e| Error::new(ErrorKind::InvalidData, e.to_string()))?;
+        Ok(nbt.root_tag)
+    }
+}
+
+impl<'a> PacketReadSlice<'a> for pumpkin_nbt::compound::NbtCompound {
+    fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
+        let mut cursor = std::io::Cursor::new(*buf);
+        let mut helper = pumpkin_nbt::deserializer::NbtReadHelperBedrock::new(&mut cursor);
+        let nbt = pumpkin_nbt::Nbt::read(&mut helper)
+            .map_err(|e| Error::new(ErrorKind::InvalidData, e.to_string()))?;
+        let pos = cursor.position() as usize;
+        *buf = &buf[pos..];
+        Ok(nbt.root_tag)
+    }
+}

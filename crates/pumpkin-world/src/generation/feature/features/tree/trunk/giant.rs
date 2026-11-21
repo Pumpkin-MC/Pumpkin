@@ -25,30 +25,37 @@ impl GiantTrunkPlacer {
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         let below = start_pos.down();
-        TrunkPlacer::set_dirt(block_registry, chunk, random, &below, below_trunk_provider);
-        TrunkPlacer::set_dirt(
+        let mut trunk_poses = Vec::new();
+        if TrunkPlacer::set_dirt(block_registry, chunk, random, &below, below_trunk_provider) {
+            trunk_poses.push(below);
+        }
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &below.east(),
             below_trunk_provider,
-        );
-        TrunkPlacer::set_dirt(
+        ) {
+            trunk_poses.push(below.east());
+        }
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &below.south(),
             below_trunk_provider,
-        );
-        TrunkPlacer::set_dirt(
+        ) {
+            trunk_poses.push(below.south());
+        }
+        if TrunkPlacer::set_dirt(
             block_registry,
             chunk,
             random,
             &below.south().east(),
             below_trunk_provider,
-        );
-
-        let mut trunk_poses = Vec::new();
+        ) {
+            trunk_poses.push(below.south().east());
+        }
         for y in 0..height {
             let log_pos = start_pos.up_height(y as i32);
             if TrunkPlacer::try_place(chunk, &log_pos, trunk_block) {

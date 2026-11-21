@@ -1,0 +1,171 @@
+interface display {
+    use %world.{entity};
+    use text.{text-component};
+    use item-stack.{item-stack};
+    use uuid.{uuid};
+
+    /// Billboard rendering constraints for display entities.
+    enum billboard-mode {
+        fixed,
+        vertical,
+        horizontal,
+        center,
+    }
+
+    /// Item display transformation modes for item display entities.
+    enum item-display-mode {
+        none,
+        thirdperson-lefthand,
+        thirdperson-righthand,
+        firstperson-lefthand,
+        firstperson-righthand,
+        head,
+        gui,
+        ground,
+        fixed,
+    }
+
+    /// Text alignment options for text display entities.
+    enum text-alignment {
+        center,
+        left,
+        right,
+    }
+
+    /// 3D single-precision vector.
+    record vector3f {
+        x: f32,
+        y: f32,
+        z: f32,
+    }
+
+    /// Single-precision quaternion representing a 3D rotation.
+    record quaternionf {
+        x: f32,
+        y: f32,
+        z: f32,
+        w: f32,
+    }
+
+    /// Transformation (translation, scale, left and right rotations) for display entities.
+    record display-transformation {
+        translation: vector3f,
+        scale: vector3f,
+        left-rotation: quaternionf,
+        right-rotation: quaternionf,
+    }
+
+    /// Common base resource for all display entities.
+    resource display-entity {
+        from-entity: static func(entity: borrow<entity>) -> option<display-entity>;
+        get-entity: func() -> entity;
+
+        get-transformation: func() -> display-transformation;
+        set-transformation: func(transformation: display-transformation);
+
+        get-interpolation-duration: func() -> s32;
+        set-interpolation-duration: func(duration: s32);
+
+        get-interpolation-start: func() -> s32;
+        set-interpolation-start: func(delta-ticks: s32);
+
+        get-teleport-duration: func() -> s32;
+        set-teleport-duration: func(duration: s32);
+
+        get-billboard: func() -> billboard-mode;
+        set-billboard: func(mode: billboard-mode);
+
+        get-view-range: func() -> f32;
+        set-view-range: func(range: f32);
+
+        get-shadow-radius: func() -> f32;
+        set-shadow-radius: func(radius: f32);
+
+        get-shadow-strength: func() -> f32;
+        set-shadow-strength: func(strength: f32);
+
+        get-display-width: func() -> f32;
+        set-display-width: func(width: f32);
+
+        get-display-height: func() -> f32;
+        set-display-height: func(height: f32);
+
+        get-glow-color-override: func() -> s32;
+        set-glow-color-override: func(color: s32);
+
+        get-brightness: func() -> s32;
+        set-brightness: func(brightness: s32);
+    }
+
+    /// Resource specifically for Block Display entities.
+    resource block-display-entity {
+        from-entity: static func(entity: borrow<entity>) -> option<block-display-entity>;
+        get-display: func() -> display-entity;
+        get-entity: func() -> entity;
+
+        get-block-state-id: func() -> u16;
+        set-block-state-id: func(state-id: u16);
+    }
+
+    /// Resource specifically for Item Display entities.
+    resource item-display-entity {
+        from-entity: static func(entity: borrow<entity>) -> option<item-display-entity>;
+        get-display: func() -> display-entity;
+        get-entity: func() -> entity;
+
+        get-item: func() -> option<item-stack>;
+        set-item: func(item: option<item-stack>);
+
+        get-item-display-mode: func() -> item-display-mode;
+        set-item-display-mode: func(mode: item-display-mode);
+    }
+
+    /// Resource specifically for Text Display entities.
+    resource text-display-entity {
+        from-entity: static func(entity: borrow<entity>) -> option<text-display-entity>;
+        get-display: func() -> display-entity;
+        get-entity: func() -> entity;
+
+        get-text: func() -> text-component;
+        set-text: func(text: text-component);
+
+        get-line-width: func() -> s32;
+        set-line-width: func(width: s32);
+
+        get-background: func() -> s32;
+        set-background: func(color: s32);
+
+        get-text-opacity: func() -> s8;
+        set-text-opacity: func(opacity: s8);
+
+        get-shadow: func() -> bool;
+        set-shadow: func(shadow: bool);
+
+        get-see-through: func() -> bool;
+        set-see-through: func(see-through: bool);
+
+        get-default-background: func() -> bool;
+        set-default-background: func(default-background: bool);
+
+        get-alignment: func() -> text-alignment;
+        set-alignment: func(alignment: text-alignment);
+    }
+
+    /// Resource specifically for Interaction entities.
+    resource interaction-entity {
+        from-entity: static func(entity: borrow<entity>) -> option<interaction-entity>;
+        get-entity: func() -> entity;
+
+        get-width: func() -> f32;
+        set-width: func(width: f32);
+
+        get-height: func() -> f32;
+        set-height: func(height: f32);
+
+        get-response: func() -> bool;
+        set-response: func(response: bool);
+
+        get-last-attacker: func() -> option<uuid>;
+        get-last-interaction: func() -> option<uuid>;
+    }
+}

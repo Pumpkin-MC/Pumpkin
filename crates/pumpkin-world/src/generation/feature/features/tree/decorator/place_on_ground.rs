@@ -1,8 +1,9 @@
 use super::TreeDecorator;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{generation::block_state_provider::BlockStateProvider, world::WorldPortalExt};
-use pumpkin_data::{Block, tag::Block::MINECRAFT_LEAVES};
+use pumpkin_data::Block;
 use pumpkin_util::{
+    HeightMap,
     math::{block_box::BlockBox, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
 };
@@ -22,6 +23,7 @@ impl PlaceOnGroundTreeDecorator {
         random: &mut RandomGenerator,
         root_positions: &[BlockPos],
         log_positions: &[BlockPos],
+        decorations: &mut Vec<BlockPos>,
     ) {
         let list = TreeDecorator::get_leaf_litter_positions(root_positions, log_positions);
 
@@ -54,7 +56,7 @@ impl PlaceOnGroundTreeDecorator {
                 random.next_inbetween_i32(block_box.min.y, block_box.max.y),
                 random.next_inbetween_i32(block_box.min.z, block_box.max.z),
             );
-            self.generate_decoration(chunk, block_registry, pos, random);
+            self.generate_decoration(chunk, block_registry, pos, random, decorations);
         }
     }
 
@@ -64,19 +66,22 @@ impl PlaceOnGroundTreeDecorator {
         block_registry: &dyn WorldPortalExt,
         pos: BlockPos,
         random: &mut RandomGenerator,
+        decorations: &mut Vec<BlockPos>,
     ) {
-        let state = GenerationCache::get_block_state(chunk, &pos.0);
-        let ground_pos = pos.down();
-        let ground_state = GenerationCache::get_block_state(chunk, &ground_pos.0);
-        if (state.to_state().is_air() || state.to_block_id() == Block::VINE)
-            && ground_state.to_state().is_full_cube()
-            && !ground_state.to_block_id().has_tag(MINECRAFT_LEAVES)
+        let above_pos = pos.up();
+        let above_state = GenerationCache::get_block_state(chunk, &above_pos.0);
+        let ground_state = GenerationCache::get_block_state(chunk, &pos.0);
+        if (above_state.to_state().is_air() || above_state.to_block_id() == Block::VINE)
+            && ground_state.to_state().is_solid_render()
+            && chunk.get_top_y(&HeightMap::MotionBlockingNoLeaves, pos.0.x, pos.0.z)
+                <= above_pos.0.y
         {
             chunk.set_block_state(
-                &pos.0,
+                &above_pos.0,
                 self.block_state_provider
-                    .get(random, pos, chunk, block_registry),
+                    .get(random, above_pos, chunk, block_registry),
             );
+            decorations.push(above_pos);
         }
     }
 }

@@ -1,6 +1,0 @@
-{
-  "type": "minecraft:igloo",
-  "biomes": "#minecraft:has_structure/igloo",
-  "spawn_overrides": {},
-  "step": "surface_structures"
-}

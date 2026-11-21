@@ -22,16 +22,6 @@ impl<'a> CUpdateTags<'a> {
     }
 }
 
-fn remap_tag_entry_id(key: RegistryKey, id: u16, version: JavaMinecraftVersion) -> u16 {
-    match key {
-        RegistryKey::Item => pumpkin_data::item_id_remap::remap_item_id_for_version(id, version),
-        RegistryKey::EntityType => {
-            pumpkin_data::entity_id_remap::remap_entity_id_for_version(id, version)
-        }
-        _ => id,
-    }
-}
-
 impl ClientPacket for CUpdateTags<'_> {
     fn write_packet_data(
         &self,
@@ -61,12 +51,7 @@ impl ClientPacket for CUpdateTags<'_> {
             for (key, values) in values.entries() {
                 // This is technically a `ResourceLocation` but same thing
                 p.write_string_bounded(key, u16::MAX as usize)?;
-                let remapped_ids: Vec<u16> = values
-                    .1
-                    .iter()
-                    .map(|&id| remap_tag_entry_id(registry_key, id, *version))
-                    .collect();
-                p.write_list(&remapped_ids, |p, id| p.write_var_int(&VarInt::from(*id)))?;
+                p.write_list(values.1, |p, &id| p.write_var_int(&VarInt::from(id)))?;
             }
 
             Ok(())

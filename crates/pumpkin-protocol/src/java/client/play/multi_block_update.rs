@@ -1,5 +1,5 @@
+use pumpkin_data::BlockStateId;
 use pumpkin_data::packet::clientbound::play::SECTION_BLOCKS_UPDATE;
-use pumpkin_data::{BlockStateId, block_state_remap::remap_block_state_for_version};
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::{BlockPos, chunk_section_from_pos, pack_local_chunk_section};
 use pumpkin_util::math::vector3::{self, Vector3};
@@ -74,8 +74,8 @@ impl ClientPacket for CMultiBlockUpdate {
 
             for (pos, state_id) in &self.updates {
                 let local_pos = pack_local_chunk_section(pos) as u64;
-                let remapped_state_id = remap_block_state_for_version(state_id.as_u16(), *version);
-                let packed = (u64::from(remapped_state_id) << 12) | (local_pos & 0xFFF);
+                let raw_state_id = state_id.as_u16();
+                let packed = (u64::from(raw_state_id) << 12) | (local_pos & 0xFFF);
                 write.write_var_long(&VarLong(packed as i64))?;
             }
         } else if *version <= JavaMinecraftVersion::V_1_7_6 {
@@ -91,8 +91,8 @@ impl ClientPacket for CMultiBlockUpdate {
                 let packed_pos = (rel_x << 12) | (rel_z << 8) | rel_y;
                 write.write_i16_be(packed_pos as i16)?;
 
-                let remapped_state_id = remap_block_state_for_version(state_id.as_u16(), *version);
-                write.write_i16_be(remapped_state_id as i16)?;
+                let raw_state_id = state_id.as_u16();
+                write.write_i16_be(raw_state_id as i16)?;
             }
         } else {
             write.write_i32_be(self.chunk_section.x)?;
@@ -106,8 +106,8 @@ impl ClientPacket for CMultiBlockUpdate {
                 let packed_pos = (rel_x << 12) | (rel_z << 8) | rel_y;
                 write.write_i16_be(packed_pos as i16)?;
 
-                let remapped_state_id = remap_block_state_for_version(state_id.as_u16(), *version);
-                write.write_var_int(&VarInt(i32::from(remapped_state_id)))?;
+                let raw_state_id = state_id.as_u16();
+                write.write_var_int(&VarInt(i32::from(raw_state_id)))?;
             }
         }
 

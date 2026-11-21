@@ -1,0 +1,11 @@
+name: Test `wit-bindgen` against the WIT
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  test-bindgen:
+    name: Test with `wit-bindgen`
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: bytecodealliance/actions/wit-bindgen/setup@v1
+      - run: wit-bindgen rust v0.1

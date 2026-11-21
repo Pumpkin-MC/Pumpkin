@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering};
 
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{
@@ -8,17 +8,19 @@ use crate::screen_handler::{
 };
 use crate::slot::Slot;
 
-use pumpkin_data::data_component_impl::{BannerPatternLayer, BannerPatternsImpl};
+use crate::inventory::Inventory;
+use crate::inventory::SimpleInventory;
+use crate::window_property::PropertyDelegate;
+use pumpkin_data::data_component_impl::{
+    BannerPatternLayer, BannerPatternsImpl, DyeImpl, ProvidesBannerPatternsImpl,
+};
 use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
-use pumpkin_data::statistic::StatisticCategory;
-use pumpkin_data::tag::{BannerPattern, RegistryKey, get_tag_values};
+use pumpkin_data::sound::Sound;
+use pumpkin_data::tag::{self, BannerPattern, RegistryKey, Taggable, get_tag_values};
 use pumpkin_protocol::java::server::play::SlotActionType;
-use pumpkin_world::block::entities::PropertyDelegate;
-use pumpkin_world::inventory::Inventory;
-use pumpkin_world::inventory::SimpleInventory;
 
 pub const NO_ITEM_REQUIRED_PATTERNS: &[&str] = BannerPattern::MINECRAFT_NO_ITEM_REQUIRED.0;
 
@@ -28,22 +30,22 @@ pub fn is_banner_item(item: &Item) -> bool {
 }
 
 #[must_use]
-pub fn is_dye_item(item: &Item) -> bool {
-    item.registry_key.ends_with("_dye")
+pub fn is_dye_item(stack: &ItemStack) -> bool {
+    stack.item.has_tag(&tag::Item::MINECRAFT_LOOM_DYES)
+        && stack.get_data_component::<DyeImpl>().is_some()
 }
 
 #[must_use]
-pub fn is_pattern_item(item: &Item) -> bool {
-    item.registry_key.ends_with("_banner_pattern")
+pub fn is_pattern_item(stack: &ItemStack) -> bool {
+    stack.item.has_tag(&tag::Item::MINECRAFT_LOOM_PATTERNS)
+        && stack
+            .get_data_component::<ProvidesBannerPatternsImpl>()
+            .is_some()
 }
 
 #[must_use]
 pub fn get_dye_color(stack: &ItemStack) -> Option<DyeColor> {
-    stack
-        .item
-        .registry_key
-        .strip_suffix("_dye")
-        .and_then(DyeColor::by_name)
+    stack.get_data_component::<DyeImpl>().map(|d| d.color)
 }
 
 #[must_use]
@@ -62,13 +64,11 @@ pub fn get_selectable_patterns(pattern_stack: &ItemStack) -> Vec<String> {
             .collect();
     }
 
-    let item_key = pattern_stack
-        .item
-        .registry_key
-        .strip_suffix("_banner_pattern")
-        .unwrap_or(pattern_stack.item.registry_key);
-    let tag_name = format!("minecraft:pattern_item/{item_key}");
-    get_tag_values(RegistryKey::BannerPattern, &tag_name).map_or_else(Vec::new, |values| {
+    let Some(provides) = pattern_stack.get_data_component::<ProvidesBannerPatternsImpl>() else {
+        return Vec::new();
+    };
+    let tag_name = provides.key.strip_prefix('#').unwrap_or(&provides.key);
+    get_tag_values(RegistryKey::BannerPattern, tag_name).map_or_else(Vec::new, |values| {
         values
             .iter()
             .map(|s| {
@@ -222,6 +222,11 @@ impl LoomScreenHandler {
         }
     }
 
+    pub fn select_pattern(&mut self, pattern: &str) {
+        let clean_pattern = pattern.strip_prefix("minecraft:").unwrap_or(pattern);
+        self.setup_result_slot(clean_pattern);
+    }
+
     fn setup_result_slot(&self, pattern: &str) {
         let mut banner_stack = self.input_inventory.get_stack(0);
         let dye_stack = self.input_inventory.get_stack(1);
@@ -278,9 +283,7 @@ impl ScreenHandler for LoomScreenHandler {
         player: &dyn InventoryPlayer,
     ) {
         self.internal_on_slot_click(slot_index, button, action_type, player);
-        if (0..=3).contains(&slot_index) {
-            self.slots_changed();
-        }
+        self.slots_changed();
     }
 
     fn on_button_click(&mut self, _player: &dyn InventoryPlayer, button_id: i32) -> bool {
@@ -296,62 +299,67 @@ impl ScreenHandler for LoomScreenHandler {
     }
 
     fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        let mut stack = ItemStack::EMPTY.clone();
-        let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
+        let Some(slot) = self.get_behaviour().slots.get(slot_index as usize).cloned() else {
+            return ItemStack::EMPTY.clone();
+        };
+        if !slot.has_stack() {
+            return ItemStack::EMPTY.clone();
+        }
 
-        if let Some(slot) = slot {
-            let mut slot_stack = slot.get_cloned_stack();
-            if !slot_stack.is_empty() {
-                stack = slot_stack.clone();
-                match slot_index.cmp(&3) {
-                    std::cmp::Ordering::Equal => {
-                        if !self.insert_item(&mut slot_stack, 4, 40, true) {
-                            return ItemStack::EMPTY.clone();
-                        }
-                        slot.on_quick_move_crafted(slot_stack.clone(), stack.clone());
-                        let mut taken_stack = stack.clone();
-                        taken_stack.set_count(stack.item_count - slot_stack.item_count);
-                        slot.on_take_item(player, &taken_stack);
-                    }
-                    std::cmp::Ordering::Less => {
-                        if !self.insert_item(&mut slot_stack, 4, 40, false) {
-                            return ItemStack::EMPTY.clone();
-                        }
-                    }
-                    std::cmp::Ordering::Greater => {
-                        if is_banner_item(slot_stack.item) {
-                            if !self.insert_item(&mut slot_stack, 0, 1, false) {
-                                return ItemStack::EMPTY.clone();
-                            }
-                        } else if is_dye_item(slot_stack.item) {
-                            if !self.insert_item(&mut slot_stack, 1, 2, false) {
-                                return ItemStack::EMPTY.clone();
-                            }
-                        } else if is_pattern_item(slot_stack.item) {
-                            if !self.insert_item(&mut slot_stack, 2, 3, false) {
-                                return ItemStack::EMPTY.clone();
-                            }
-                        } else if (4..31).contains(&slot_index) {
-                            if !self.insert_item(&mut slot_stack, 31, 40, false) {
-                                return ItemStack::EMPTY.clone();
-                            }
-                        } else if (31..40).contains(&slot_index)
-                            && !self.insert_item(&mut slot_stack, 4, 31, false)
-                        {
-                            return ItemStack::EMPTY.clone();
-                        }
-                    }
+        let mut stack = slot.get_cloned_stack();
+        let clicked = stack.clone();
+        match slot_index.cmp(&3) {
+            std::cmp::Ordering::Equal => {
+                if !self.insert_item(&mut stack, 4, 40, true) {
+                    return ItemStack::EMPTY.clone();
                 }
-                self.slots_changed();
-
-                if slot_stack.is_empty() {
-                    slot.set_stack(ItemStack::EMPTY.clone());
-                } else {
-                    slot.set_stack(slot_stack);
+                slot.on_quick_move_crafted(stack.clone(), clicked.clone());
+            }
+            std::cmp::Ordering::Less => {
+                if !self.insert_item(&mut stack, 4, 40, false) {
+                    return ItemStack::EMPTY.clone();
+                }
+            }
+            std::cmp::Ordering::Greater => {
+                if is_banner_item(stack.item) {
+                    if !self.insert_item(&mut stack, 0, 1, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if is_dye_item(&stack) {
+                    if !self.insert_item(&mut stack, 1, 2, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if is_pattern_item(&stack) {
+                    if !self.insert_item(&mut stack, 2, 3, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if (4..31).contains(&slot_index) {
+                    if !self.insert_item(&mut stack, 31, 40, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if (31..40).contains(&slot_index)
+                    && !self.insert_item(&mut stack, 4, 31, false)
+                {
+                    return ItemStack::EMPTY.clone();
                 }
             }
         }
-        stack
+
+        slot.set_stack(if stack.is_empty() {
+            ItemStack::EMPTY.clone()
+        } else {
+            stack.clone()
+        });
+        slot.mark_dirty();
+        self.slots_changed();
+
+        if stack.item_count == clicked.item_count {
+            return ItemStack::EMPTY.clone();
+        }
+
+        slot.on_take_item(player, &stack);
+        self.slots_changed();
+        clicked
     }
 
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
@@ -401,8 +409,8 @@ impl Slot for LoomSlot {
     fn can_insert(&self, stack: &ItemStack) -> bool {
         match self.slot_type {
             LoomSlotType::Banner => is_banner_item(stack.item),
-            LoomSlotType::Dye => is_dye_item(stack.item),
-            LoomSlotType::Pattern => is_pattern_item(stack.item),
+            LoomSlotType::Dye => is_dye_item(stack),
+            LoomSlotType::Pattern => is_pattern_item(stack),
         }
     }
 
@@ -433,6 +441,7 @@ pub struct LoomResultSlot {
     inventory: Arc<dyn Inventory>,
     input_inventory: Arc<dyn Inventory>,
     selected_pattern_index: Arc<AtomicI32>,
+    last_sound_time: AtomicI64,
     index: usize,
     id: AtomicU8,
 }
@@ -448,6 +457,7 @@ impl LoomResultSlot {
             inventory,
             input_inventory,
             selected_pattern_index,
+            last_sound_time: AtomicI64::new(0),
             index,
             id: AtomicU8::new(0),
         }
@@ -471,12 +481,7 @@ impl Slot for LoomResultSlot {
         false
     }
 
-    fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
-        player.increment_stat(
-            StatisticCategory::Crafted,
-            stack.item.id as i32,
-            stack.item_count as i32,
-        );
+    fn on_take_item(&self, player: &dyn InventoryPlayer, _stack: &ItemStack) {
         self.input_inventory.remove_stack_specific(0, 1);
         self.input_inventory.remove_stack_specific(1, 1);
         if self.input_inventory.get_stack(0).is_empty()
@@ -484,6 +489,10 @@ impl Slot for LoomResultSlot {
         {
             self.selected_pattern_index
                 .store(LoomScreenHandler::PATTERN_NOT_SET, Ordering::Relaxed);
+        }
+        let game_time = player.game_time();
+        if self.last_sound_time.swap(game_time, Ordering::Relaxed) != game_time {
+            player.play_block_sound(Sound::UiLoomTakeResult, 1.0);
         }
         self.mark_dirty();
     }

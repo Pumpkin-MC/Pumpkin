@@ -31,11 +31,16 @@ use crate::{
     slot::{NormalSlot, Slot},
     sync_handler::{SyncHandler, TrackedStack},
 };
+use crate::{
+    inventory::{ComparableInventory, Inventory},
+    window_property::PropertyDelegate,
+};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     Enchantment,
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
+    sound::Sound,
     statistic::StatisticCategory,
 };
 use pumpkin_protocol::{
@@ -49,11 +54,22 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{
-    block::entities::PropertyDelegate,
-    inventory::{ComparableInventory, Inventory},
-};
-use std::cmp::max;
+
+/// Offhand slot of the player screen handler
+pub const OFF_HAND_SCREEN_SLOT: i32 = 45;
+
+/// Equipment slot behind a player screen handler slot (armor 5-8, offhand 45)
+#[must_use]
+pub const fn player_screen_equipment_slot(screen_slot: usize) -> Option<EquipmentSlot> {
+    match screen_slot {
+        5 => Some(EquipmentSlot::HEAD),
+        6 => Some(EquipmentSlot::CHEST),
+        7 => Some(EquipmentSlot::LEGS),
+        8 => Some(EquipmentSlot::FEET),
+        45 => Some(EquipmentSlot::OFF_HAND),
+        _ => None,
+    }
+}
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
@@ -171,7 +187,11 @@ pub trait InventoryPlayer: Send + Sync {
     fn enqueue_cursor_packet(&self, packet: &CSetCursorItem);
 
     /// Sends a property update packet.
-    fn enqueue_property_packet(&self, packet: &CSetContainerProperty);
+    fn enqueue_property_packet(
+        &self,
+        packet: &CSetContainerProperty,
+        window_type: Option<WindowType>,
+    );
 
     /// Sends a player inventory slot update.
     fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory);
@@ -187,6 +207,9 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Increments a statistic for the player.
     fn increment_stat(&self, category: StatisticCategory, stat_id: i32, amount: i32);
+
+    /// Plays a block sound at the open container position.
+    fn play_block_sound(&self, sound: Sound, pitch: f32);
 
     /// Fires a prepare item enchant event. Returns true if cancelled.
     fn fire_prepare_item_enchant_event(
@@ -219,6 +242,27 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Performs grindstone experience drop and plays grindstone sound events.
     fn use_grindstone(&self, _xp_amount: i32) {}
+
+    /// Called when the player successfully enchants an item in an enchanting table.
+    fn on_enchanted_item(&self, _levels: i32) {}
+
+    /// Called when the player takes a crafted item from a crafting result slot.
+    fn on_recipe_crafted(&self, _item: &ItemStack) {}
+
+    /// Called when the player takes a brewed potion from a brewing stand potion slot.
+    fn on_brewed_potion(&self) {}
+
+    fn game_time(&self) -> i64 {
+        0
+    }
+
+    fn sync_container_world_event(&self, _event: pumpkin_data::world::WorldEvent) {}
+
+    fn on_crafted_post_process(&self, _stack: &mut ItemStack) {}
+
+    fn map_state(&self, _map_id: i32) -> Option<(bool, i8)> {
+        None
+    }
 }
 
 /// Gives a stack to the player or drops it if inventory is full.
@@ -394,8 +438,7 @@ pub trait ScreenHandler: Send + Sync {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let other_behaviour = other_binding.get_behaviour();
 
-        for i in 0..other_behaviour.slots.len() {
-            let other_slot = other_behaviour.slots[i].clone();
+        for (i, other_slot) in other_behaviour.slots.iter().enumerate() {
             let mut hash_map = HashMap::new();
             hash_map.insert(other_slot.get_index(), i);
             table.insert(
@@ -671,7 +714,10 @@ pub trait ScreenHandler: Send + Sync {
                 let slot = self.get_behaviour().slots[current_index as usize].clone();
                 let mut slot_stack = slot.get_stack();
 
-                if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(stack) {
+                if self.get_behaviour().can_put_in_slot(current_index as usize)
+                    && !slot_stack.is_empty()
+                    && slot_stack.are_items_and_components_equal(stack)
+                {
                     let combined_count = slot_stack.item_count + stack.item_count;
                     let max_slot_count = slot.get_max_item_count_for_stack(&slot_stack);
                     if combined_count <= max_slot_count {
@@ -710,7 +756,10 @@ pub trait ScreenHandler: Send + Sync {
                 let slot = self.get_behaviour().slots[current_index as usize].clone();
                 let slot_stack = slot.get_stack();
 
-                if slot_stack.is_empty() && slot.can_insert(stack) {
+                if self.get_behaviour().can_put_in_slot(current_index as usize)
+                    && slot_stack.is_empty()
+                    && slot.can_insert(stack)
+                {
                     let max_count = slot.get_max_item_count_for_stack(stack);
                     slot.set_stack(stack.split(max_count.min(stack.item_count)));
                     slot.mark_dirty();
@@ -727,6 +776,31 @@ pub trait ScreenHandler: Send + Sync {
         }
 
         success
+    }
+
+    /// Toggles the selected item index on a bundle in `slot_index` (`AbstractContainerMenu.setSelectedBundleItemIndex`).
+    fn set_selected_bundle_item_index(&mut self, slot_index: i32, selected_item_index: i32) {
+        let Ok(slot_index) = usize::try_from(slot_index) else {
+            return;
+        };
+        let slots = &self.get_behaviour().slots;
+        if slot_index >= slots.len() {
+            return;
+        }
+        let slot = slots[slot_index].clone();
+        let mut stack = slot.get_stack();
+        if stack
+            .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+            .is_none()
+        {
+            return;
+        }
+        if let Some(bundle) =
+            stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+        {
+            bundle.toggle_selected_item(selected_item_index);
+            slot.get_inventory().set_stack(slot.get_index(), stack);
+        }
     }
 
     /// Handles a slot click event.
@@ -779,7 +853,7 @@ pub trait ScreenHandler: Send + Sync {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut to_pick_up = cursor_stack.get_max_stack_size() - cursor_stack.item_count;
 
-            for slot in &behavior.slots {
+            for (index, slot) in behavior.slots.iter().enumerate() {
                 if to_pick_up == 0 {
                     break;
                 }
@@ -789,7 +863,7 @@ pub trait ScreenHandler: Send + Sync {
                     continue;
                 }
 
-                if !slot.allow_modification(player) {
+                if !behavior.can_grab_from_slot(index) || !slot.allow_modification(player) {
                     continue;
                 }
 
@@ -819,10 +893,11 @@ pub trait ScreenHandler: Send + Sync {
 
                 let slot = &behaviour.slots[slot_index as usize];
                 let stack = slot.get_stack();
-                if !cursor_stack.is_empty()
+                if behaviour.can_put_in_slot(slot_index as usize)
+                    && !cursor_stack.is_empty()
                     && slot.can_insert(&cursor_stack)
                     && (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
-                    && slot.get_max_item_count_for_stack(&stack) > stack.item_count
+                    && slot.get_max_item_count_for_stack(&cursor_stack) > stack.item_count
                 {
                     behaviour.drag_slots.push(slot_index as u32);
                 }
@@ -851,7 +926,8 @@ pub trait ScreenHandler: Send + Sync {
                     };
                     let stack = slot.get_stack();
 
-                    if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
+                    if behaviour.can_put_in_slot(*slot_index as usize)
+                        && (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
                         && slot.can_insert(&cursor_stack)
                     {
                         let mut inserting_count = match drag_button {
@@ -866,13 +942,13 @@ pub trait ScreenHandler: Send + Sync {
                             _ => 0,
                         };
                         inserting_count = inserting_count
-                            .min(max(
-                                0,
-                                slot.get_max_item_count_for_stack(&stack) - stack.item_count,
-                            ))
+                            .min(
+                                slot.get_max_item_count_for_stack(&cursor_stack)
+                                    .saturating_sub(stack.item_count),
+                            )
                             .min(cursor_stack.item_count);
                         if inserting_count > 0 {
-                            let mut new_stack = stack.clone();
+                            let mut new_stack = stack;
                             if new_stack.is_empty() {
                                 new_stack = cursor_stack.copy_with_count(0);
                             }
@@ -896,6 +972,7 @@ pub trait ScreenHandler: Send + Sync {
             }
         } else if action_type == SlotActionType::Throw {
             if slot_index >= 0
+                && self.get_behaviour().can_grab_from_slot(slot_index as usize)
                 && self
                     .get_behaviour()
                     .cursor_stack
@@ -913,14 +990,35 @@ pub trait ScreenHandler: Send + Sync {
                             .are_items_and_components_equal(&prev_stack)
                         {
                             let drop_stack = slot.safe_take(prev_stack.item_count, u8::MAX, player);
+                            if drop_stack.is_empty() {
+                                break;
+                            }
+                            slot.on_take_item(player, &drop_stack);
                             player.drop_item(drop_stack, true);
-                            // player.handleCreativeModeItemDrop(itemStack);
                         }
                     } else {
                         let drop_stack = slot.safe_take(1, u8::MAX, player);
                         if !drop_stack.is_empty() {
                             slot.on_take_item(player, &drop_stack);
                             player.drop_item(drop_stack, true);
+                        }
+                    }
+                    if self.window_type().is_none() {
+                        let remaining = slot.get_cloned_stack();
+                        if (5..9).contains(&slot_index) && remaining.is_empty() {
+                            let eq_slot = prev_stack
+                                .get_data_component::<EquippableImpl>()
+                                .map_or(&EquipmentSlot::MAIN_HAND, |e| e.slot);
+                            player.enqueue_equipment_change(eq_slot, ItemStack::EMPTY);
+                        } else if slot_index == OFF_HAND_SCREEN_SLOT {
+                            player.enqueue_equipment_change(
+                                &EquipmentSlot::OFF_HAND,
+                                if remaining.is_empty() {
+                                    ItemStack::EMPTY
+                                } else {
+                                    &remaining
+                                },
+                            );
                         }
                     }
                 }
@@ -971,7 +1069,9 @@ pub trait ScreenHandler: Send + Sync {
 
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
-                if !slot.can_take_items(player) {
+                if !self.get_behaviour().can_grab_from_slot(slot_index as usize)
+                    || !slot.can_take_items(player)
+                {
                     return;
                 }
 
@@ -998,59 +1098,125 @@ pub trait ScreenHandler: Send + Sync {
                 }
 
                 let slot_stack = slot.get_cloned_stack();
+                let can_put = self.get_behaviour().can_put_in_slot(slot_index as usize);
+                let can_grab = self.get_behaviour().can_grab_from_slot(slot_index as usize);
                 let mut cursor_stack = self
                     .get_behaviour()
                     .cursor_stack
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-                if click_type == MouseClick::Right {
-                    let mut intercepted = false;
-
-                    if !cursor_stack.is_empty() {
-                        let mut inner_slot_stack = slot.get_stack();
-                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                            && bundle.try_insert(&mut cursor_stack) {
-                                slot.set_stack(inner_slot_stack);
-                                intercepted = true;
-                            }
-                    }
-
-                    if !intercepted && !slot_stack.is_empty()
-                        && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
-                            let mut inner_slot_stack = slot.get_stack();
-                            if bundle.try_insert(&mut inner_slot_stack) {
-                                if inner_slot_stack.item_count == 0 {
-                                    inner_slot_stack = ItemStack::EMPTY.clone();
+                // 26.3 Bundle click overrides (`AbstractContainerMenu.tryItemClickBehaviourOverride`):
+                // 1. `BundleItem.overrideStackedOnOther` (bundle on cursor)
+                if cursor_stack
+                    .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                    .is_some()
+                {
+                    if click_type == MouseClick::Left && !slot_stack.is_empty() {
+                        if can_grab
+                            && slot.can_take_items(player)
+                            && pumpkin_data::data_component_impl::BundleContentsImpl::can_item_be_in_bundle(&slot_stack)
+                        {
+                            let max_to_add = cursor_stack
+                                .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                .map_or(0, |b| b.max_amount_to_add(&slot_stack));
+                            if max_to_add > 0 {
+                                let mut taken =
+                                    slot.safe_take(slot_stack.item_count, max_to_add, player);
+                                if !taken.is_empty()
+                                    && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                {
+                                    bundle.try_insert(&mut taken);
                                 }
-                                slot.set_stack(inner_slot_stack);
-                                intercepted = true;
                             }
-                        }
-
-                    if !intercepted && cursor_stack.is_empty() {
-                        let mut inner_slot_stack = slot.get_stack();
-                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                            && let Some(extracted) = bundle.try_extract() {
-                                *cursor_stack = extracted;
-                                slot.set_stack(inner_slot_stack);
-                                intercepted = true;
-                            }
-                    }
-
-                    if !intercepted && slot_stack.is_empty()
-                        && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                        && let Some(extracted) = bundle.try_extract() {
-                            slot.set_stack(extracted);
-                            intercepted = true;
-                        }
-
-                    if intercepted {
-                        if cursor_stack.item_count == 0 {
-                            *cursor_stack = ItemStack::EMPTY.clone();
                         }
                         slot.mark_dirty();
                         return;
+                    } else if click_type == MouseClick::Right && slot_stack.is_empty() {
+                        if can_put
+                            && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                            && let Some(extracted) = bundle.try_extract()
+                        {
+                            let mut remainder = if slot.can_insert(&extracted) {
+                                slot.insert_stack(extracted)
+                            } else {
+                                extracted
+                            };
+                            if !remainder.is_empty() {
+                                bundle.try_insert(&mut remainder);
+                            }
+                        }
+                        slot.mark_dirty();
+                        return;
+                    }
+                }
+
+                // 2. `BundleItem.overrideOtherStackedOnMe` (bundle in slot)
+                if slot_stack
+                    .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                    .is_some()
+                {
+                    if click_type == MouseClick::Left && cursor_stack.is_empty() {
+                        if slot_stack
+                            .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                            .is_some_and(|b| {
+                                b.selected_item
+                                    != pumpkin_data::data_component_impl::BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+                            })
+                        {
+                            let mut inner_slot_stack = slot.get_stack();
+                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
+                                bundle.toggle_selected_item(
+                                    pumpkin_data::data_component_impl::BundleContentsImpl::NO_SELECTED_ITEM_INDEX,
+                                );
+                                slot.get_inventory()
+                                    .set_stack(slot.get_index(), inner_slot_stack);
+                            }
+                        }
+                    } else if click_type == MouseClick::Left && !cursor_stack.is_empty() {
+                        if can_put
+                            && slot.allow_modification(player)
+                            && slot.can_insert(&cursor_stack)
+                        {
+                            let mut inner_slot_stack = slot.get_stack();
+                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                && bundle.try_insert(&mut cursor_stack)
+                            {
+                                if cursor_stack.item_count == 0 {
+                                    *cursor_stack = ItemStack::EMPTY.clone();
+                                }
+                                slot.set_stack(inner_slot_stack);
+                            }
+                        }
+                        slot.mark_dirty();
+                        return;
+                    } else if click_type == MouseClick::Right && cursor_stack.is_empty() {
+                        if can_grab && slot.allow_modification(player) {
+                            let mut inner_slot_stack = slot.get_stack();
+                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                && let Some(extracted) = bundle.try_extract()
+                            {
+                                *cursor_stack = extracted;
+                                slot.set_stack(inner_slot_stack);
+                            }
+                        }
+                        slot.mark_dirty();
+                        return;
+                    } else if slot_stack
+                        .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                        .is_some_and(|b| {
+                            b.selected_item
+                                != pumpkin_data::data_component_impl::BundleContentsImpl::NO_SELECTED_ITEM_INDEX
+                        })
+                    {
+                        let mut inner_slot_stack = slot.get_stack();
+                        if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
+                            bundle.toggle_selected_item(
+                                pumpkin_data::data_component_impl::BundleContentsImpl::NO_SELECTED_ITEM_INDEX,
+                            );
+                            slot.get_inventory()
+                                .set_stack(slot.get_index(), inner_slot_stack);
+                        }
                     }
                 }
 
@@ -1069,11 +1235,23 @@ pub trait ScreenHandler: Send + Sync {
                 }
 
                 if slot_stack.is_empty() {
-                    if !cursor_stack.is_empty() {
-                        if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+                    if can_put && !cursor_stack.is_empty() {
+                        if self.window_type().is_none()
+                            && equipment_slot.slot_type() == EquipmentType::HumanoidArmor
                             && (5..9).contains(&slot_index)
+                            && slot.can_insert(&cursor_stack)
                         {
-                            player.enqueue_equipment_change(equipment_slot, &cursor_stack);
+                            let equipped = cursor_stack.copy_with_count(1);
+                            player.enqueue_equipment_change(equipment_slot, &equipped);
+                        } else if self.window_type().is_none() && slot_index == OFF_HAND_SCREEN_SLOT
+                        {
+                            let transfer_count = if click_type == MouseClick::Left {
+                                cursor_stack.item_count
+                            } else {
+                                1
+                            };
+                            let equipped = cursor_stack.copy_with_count(transfer_count);
+                            player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &equipped);
                         }
 
                         let transfer_count = if click_type == MouseClick::Left {
@@ -1085,7 +1263,7 @@ pub trait ScreenHandler: Send + Sync {
                             slot.insert_stack_count(cursor_stack.clone(), transfer_count);
                     }
                 } else if slot.can_take_items(player) {
-                    if cursor_stack.is_empty() {
+                    if cursor_stack.is_empty() && can_grab {
                         let take_count = if click_type == MouseClick::Left {
                             slot_stack.item_count
                         } else {
@@ -1097,23 +1275,46 @@ pub trait ScreenHandler: Send + Sync {
                             *cursor_stack = taken.clone();
                             slot.on_take_item(player, &taken);
 
-                            if (5..9).contains(&slot_index) {
+                            if self.window_type().is_none() && (5..9).contains(&slot_index) {
                                 let equipment_slot = cursor_stack
                                     .get_data_component::<EquippableImpl>()
                                     .map_or(&EquipmentSlot::MAIN_HAND, |equippable| {
                                         equippable.slot
                                     });
                                 player.enqueue_equipment_change(equipment_slot, ItemStack::EMPTY);
+                            } else if self.window_type().is_none()
+                                && slot_index == OFF_HAND_SCREEN_SLOT
+                            {
+                                // A right click leaves half the stack in the offhand
+                                let remaining = slot.get_cloned_stack();
+                                player.enqueue_equipment_change(
+                                    &EquipmentSlot::OFF_HAND,
+                                    if remaining.is_empty() {
+                                        ItemStack::EMPTY
+                                    } else {
+                                        &remaining
+                                    },
+                                );
                             }
                         }
-                    } else if slot.can_insert(&cursor_stack) {
-                        if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+                    } else if can_put && slot.can_insert(&cursor_stack) {
+                        let matching_stack =
+                            ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack);
+                        if !matching_stack && !can_grab {
+                            return;
+                        }
+                        if self.window_type().is_none()
+                            && equipment_slot.slot_type() == EquipmentType::HumanoidArmor
                             && (5..9).contains(&slot_index)
                         {
                             player.enqueue_equipment_change(equipment_slot, &cursor_stack);
+                        } else if self.window_type().is_none() && slot_index == OFF_HAND_SCREEN_SLOT
+                        {
+                            player
+                                .enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &cursor_stack);
                         }
 
-                        if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack) {
+                        if matching_stack {
                             let insert_count = if click_type == MouseClick::Left {
                                 cursor_stack.item_count
                             } else {
@@ -1128,7 +1329,8 @@ pub trait ScreenHandler: Send + Sync {
                             *cursor_stack = slot_stack;
                             slot.set_stack(old_cursor_stack);
                         }
-                    } else if ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack)
+                    } else if can_grab
+                        && ItemStack::are_items_and_components_equal(&slot_stack, &cursor_stack)
                     {
                         let taken = slot.try_take_stack_range(
                             slot_stack.item_count,
@@ -1147,33 +1349,57 @@ pub trait ScreenHandler: Send + Sync {
 
                 slot.mark_dirty();
             }
-        } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
+        } else if action_type == SlotActionType::Swap && ((0..9).contains(&button) || button == 40)
+        {
             if slot_index < 0 {
                 return;
             }
-            let mut button_stack = player.get_inventory().get_stack(button as usize);
+            let player_inventory = player.get_inventory();
+            let mut button_stack = player_inventory.get_stack(button as usize);
             let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
             let source_stack = source_slot.get_cloned_stack();
+            let can_put = self.get_behaviour().can_put_in_slot(slot_index as usize);
+            let can_grab = self.get_behaviour().can_grab_from_slot(slot_index as usize);
 
             if !button_stack.is_empty() || !source_stack.is_empty() {
                 if button_stack.is_empty() {
-                    if source_slot.can_take_items(player) {
-                        player
-                            .get_inventory()
-                            .set_stack(button as usize, source_stack.clone());
+                    if can_grab && source_slot.can_take_items(player) {
+                        player_inventory.set_stack(button as usize, source_stack.clone());
                         source_slot.set_stack(ItemStack::EMPTY.clone());
                         source_slot.on_take_item(player, &source_stack);
                     }
-                } else if source_stack.is_empty() && source_slot.can_insert(&button_stack) {
+                } else if can_put
+                    && source_stack.is_empty()
+                    && source_slot.can_insert(&button_stack)
+                {
                     let max_count = source_slot.get_max_item_count_for_stack(&button_stack);
                     if button_stack.item_count > max_count {
-                        // button_stack might need to be a ref instead of a clone
                         source_slot.set_stack(button_stack.split(max_count));
+                        player_inventory.set_stack(button as usize, button_stack);
                     } else {
-                        player
-                            .get_inventory()
-                            .set_stack(button as usize, ItemStack::EMPTY.clone());
+                        player_inventory.set_stack(button as usize, ItemStack::EMPTY.clone());
                         source_slot.set_stack(button_stack);
+                    }
+                } else if can_grab
+                    && can_put
+                    && source_slot.can_take_items(player)
+                    && source_slot.can_insert(&button_stack)
+                {
+                    let max_count = source_slot.get_max_item_count_for_stack(&button_stack);
+                    if button_stack.item_count > max_count {
+                        source_slot.set_stack(button_stack.split(max_count));
+                        player_inventory.set_stack(button as usize, button_stack);
+                        source_slot.on_take_item(player, &source_stack);
+
+                        let mut displaced_stack = source_stack;
+                        player_inventory.insert_stack_anywhere(&mut displaced_stack);
+                        if !displaced_stack.is_empty() {
+                            player.drop_item(displaced_stack, true);
+                        }
+                    } else {
+                        player_inventory.set_stack(button as usize, source_stack.clone());
+                        source_slot.set_stack(button_stack);
+                        source_slot.on_take_item(player, &source_stack);
                     }
                 }
             }
@@ -1284,6 +1510,14 @@ impl ScreenHandlerBehaviour {
             allow_put_items: true,
             container_slots: 0,
         }
+    }
+
+    const fn can_put_in_slot(&self, index: usize) -> bool {
+        index >= self.container_slots || self.allow_put_items
+    }
+
+    const fn can_grab_from_slot(&self, index: usize) -> bool {
+        index >= self.container_slots || self.allow_grab_items
     }
 
     pub fn next_revision(&self) -> u32 {

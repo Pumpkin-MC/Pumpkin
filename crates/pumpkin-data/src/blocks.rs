@@ -32,6 +32,10 @@ pub struct Block {
     pub velocity_multiplier: f32,
     /// How much this block affects an entity's jump height (e.g., Honey Blocks).
     pub jump_velocity_multiplier: f32,
+    /// Vertical bounce restitution (`Block.getBounceRestitution`).
+    pub bounce_restitution: f32,
+    /// Fraction of fall distance reduced on landing (`Block.getFallDistanceReduction`).
+    pub fall_distance_reduction: f32,
     /// The ID of the item form of this block, used for inventory and drops.
     pub item_id: u16,
     /// The initial state of the block when placed without extra data.
@@ -42,6 +46,25 @@ pub struct Block {
     pub flammable: Option<Flammable>,
     /// Defines the amount of XP dropped when the block is mined (e.g., Coal or Diamond).
     pub experience: Option<Experience>,
+    /// Loot table identifier, `None` when the block has no loot table.
+    pub loot_table: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpawnFloorPredicate {
+    Default,
+    Never,
+    Always,
+    OcelotOrParrot,
+    PolarBear,
+    FireImmune,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SuffocationPredicate {
+    Default,
+    Never,
+    Always,
 }
 
 /// Helper struct to ensure the validity of BlockIds parsed from external sources.
@@ -161,19 +184,18 @@ impl Block {
     }
 
     #[must_use]
-    pub fn is_waterlogged(&self, id: BlockStateId) -> bool {
-        self.properties(id).is_some_and(|properties| {
-            properties
-                .to_props()
-                .into_iter()
-                .any(|(key, value)| key == "waterlogged" && value == "true")
-        })
+    pub const fn is_waterlogged(&self, id: BlockStateId) -> bool {
+        id.is_waterlogged()
     }
 
     #[must_use]
     pub fn is_waterloggable(&self) -> bool {
-        self.properties(self.default_state.id)
-            .is_some_and(|props| props.to_props().iter().any(|p| p.0 == "waterlogged"))
+        self.properties(self.default_state.id).is_some_and(|props| {
+            props
+                .to_props()
+                .iter()
+                .any(|p| p.key() == crate::PropertyKey::Waterlogged)
+        })
     }
 
     /// Returns a new [`BlockStateId`] for the given [`BlockStateId`] with the
@@ -184,15 +206,90 @@ impl Block {
     pub fn set_waterlogged(&self, id: BlockStateId, value: bool) -> Option<BlockStateId> {
         self.properties(id).and_then(|props| {
             let mut props = props.to_props();
-            let waterlogged = &mut props.iter_mut().find(|p| p.0 == "waterlogged")?.1;
-            let new_waterlogged = value.to_string();
-            if new_waterlogged.as_str() == *waterlogged {
+            let waterlogged = props.iter_mut().find_map(|p| match p {
+                crate::Property::Waterlogged(w) => Some(w),
+                _ => None,
+            })?;
+            if value == *waterlogged {
                 return None;
             }
 
-            *waterlogged = &new_waterlogged;
+            *waterlogged = value;
             Some(self.from_properties(&props).to_state_id(self))
         })
+    }
+
+    #[must_use]
+    pub fn state_from_properties(
+        &'static self,
+        properties: &[crate::Property],
+    ) -> Option<&'static BlockState> {
+        self.states.iter().find(|state| {
+            let Some(state_properties) = self.properties(state.id) else {
+                return properties.is_empty();
+            };
+            let state_properties = state_properties.to_props();
+
+            state_properties.len() == properties.len()
+                && properties.iter().all(|prop| {
+                    state_properties
+                        .iter()
+                        .any(|state_prop| state_prop.matches_property(*prop))
+                })
+        })
+    }
+
+    /// Parses a single `(key, value)` state property pair against this block's valid states.
+    pub fn parse_property(
+        &self,
+        key: &str,
+        value: &str,
+    ) -> Result<crate::Property, PropertyLookupError> {
+        let default_props = self
+            .properties(self.default_state.id)
+            .ok_or(PropertyLookupError::UnknownProperty)?
+            .to_props();
+        let idx = default_props
+            .iter()
+            .position(|p| p.key().to_str() == key)
+            .ok_or(PropertyLookupError::UnknownProperty)?;
+        self.states
+            .iter()
+            .find_map(|state| {
+                let props = self.properties(state.id)?.to_props();
+                let prop = *props.get(idx)?;
+                (prop.value_str() == value).then_some(prop)
+            })
+            .ok_or(PropertyLookupError::InvalidValue)
+    }
+
+    /// Returns whether this block defines a state property with `key`.
+    #[must_use]
+    pub fn has_property(&self, key: &str) -> bool {
+        self.properties(self.default_state.id)
+            .is_some_and(|props| props.to_props().iter().any(|p| p.key().to_str() == key))
+    }
+
+    /// Copies each property in `overrides` onto `base_state_id` when it belongs to this block.
+    #[must_use]
+    pub fn apply_properties(
+        &self,
+        base_state_id: BlockStateId,
+        overrides: &[crate::Property],
+    ) -> BlockStateId {
+        if overrides.is_empty() || Self::from_state_id(base_state_id).id != self.id {
+            return base_state_id;
+        }
+        let Some(state_props) = self.properties(base_state_id) else {
+            return base_state_id;
+        };
+        let mut props = state_props.to_props();
+        for &defined in overrides {
+            if let Some(slot) = props.iter_mut().find(|p| p.key() == defined.key()) {
+                *slot = defined;
+            }
+        }
+        self.from_properties(&props).to_state_id(self)
     }
 
     /// Returns whether this block is solid (based on default state)
@@ -208,22 +305,60 @@ impl Block {
     }
 
     #[must_use]
-    pub const fn mirror(
+    pub fn mirror(
         &self,
         id: BlockStateId,
-        _mirror: crate::block_rotation::Mirror,
+        mirror: crate::block_rotation::Mirror,
     ) -> &'static BlockState {
-        BlockState::from_id(id)
+        if mirror == crate::block_rotation::Mirror::None || self.states.len() <= 1 {
+            return BlockState::from_id(id);
+        }
+        if let Some(props) = self.properties(id) {
+            let props_vec = props.to_props();
+            let transformed = crate::block_rotation::transform_block_properties(
+                self.name,
+                &props_vec,
+                crate::block_rotation::Rotation::None,
+                mirror,
+            );
+            let new_props = self.from_properties(&transformed);
+            let new_state_id = new_props.to_state_id(self);
+            BlockState::from_id(new_state_id)
+        } else {
+            BlockState::from_id(id)
+        }
     }
 
     #[must_use]
-    pub const fn rotate(
+    pub fn rotate(
         &self,
         id: BlockStateId,
-        _rotation: crate::block_rotation::Rotation,
+        rotation: crate::block_rotation::Rotation,
     ) -> &'static BlockState {
-        BlockState::from_id(id)
+        if rotation == crate::block_rotation::Rotation::None || self.states.len() <= 1 {
+            return BlockState::from_id(id);
+        }
+        if let Some(props) = self.properties(id) {
+            let props_vec = props.to_props();
+            let transformed = crate::block_rotation::transform_block_properties(
+                self.name,
+                &props_vec,
+                rotation,
+                crate::block_rotation::Mirror::None,
+            );
+            let new_props = self.from_properties(&transformed);
+            let new_state_id = new_props.to_state_id(self);
+            BlockState::from_id(new_state_id)
+        } else {
+            BlockState::from_id(id)
+        }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PropertyLookupError {
+    UnknownProperty,
+    InvalidValue,
 }
 
 #[derive(Clone, Copy)]
@@ -298,6 +433,20 @@ impl From<BlockId> for u16 {
     #[inline]
     fn from(value: BlockId) -> Self {
         value.as_u16()
+    }
+}
+
+impl From<Block> for BlockId {
+    #[inline]
+    fn from(value: Block) -> Self {
+        value.id
+    }
+}
+
+impl From<&Block> for BlockId {
+    #[inline]
+    fn from(value: &Block) -> Self {
+        value.id
     }
 }
 

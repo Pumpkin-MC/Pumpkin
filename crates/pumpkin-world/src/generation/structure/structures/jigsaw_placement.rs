@@ -392,7 +392,7 @@ impl Placer {
                                 pool_alias_lookup.lookup(&target_jigsaw_x.pool, random);
                             let child_pool = TemplatePool::discover(child_pool_name);
                             let child_pool_size =
-                                child_pool.as_ref().map_or(0, TemplatePool::get_max_size);
+                                child_pool.as_ref().map_or(0, |p| p.get_max_size());
                             let child_fallback_size = child_pool
                                 .as_ref()
                                 .and_then(|p| {
@@ -467,7 +467,7 @@ impl Placer {
                                         target_bb,
                                         depth as u32 + 1,
                                     ),
-                                    element: target_element.clone(),
+                                    element: target_element,
                                     pos: target_box_position,
                                     rotation: target_rotation,
                                     mirror: Mirror::None,
@@ -522,7 +522,7 @@ impl Placer {
                                     self.placing.add(
                                         PieceState {
                                             piece_idx: target_piece_idx,
-                                            free: children_free.clone(),
+                                            free: children_free,
                                             depth: depth + 1,
                                         },
                                         placement_priority,
@@ -541,7 +541,6 @@ impl Placer {
 
 impl JigsawPlacement {
     #[expect(clippy::too_many_arguments)]
-    #[expect(clippy::too_many_lines)]
     pub fn add_pieces(
         context: &mut StructureGeneratorContext,
         start_pool_id: &str,
@@ -555,6 +554,38 @@ impl JigsawPlacement {
         liquid_settings: LiquidSettings,
         pool_alias_lookup: &PoolAliasLookup,
     ) -> Option<StructurePosition> {
+        Self::add_pieces_checked(
+            context,
+            start_pool_id,
+            start_jigsaw,
+            max_depth,
+            position,
+            do_expansion_hack,
+            project_start_to_heightmap,
+            max_distance_from_center,
+            dimension_padding,
+            liquid_settings,
+            pool_alias_lookup,
+            |_| true,
+        )
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
+    pub fn add_pieces_checked(
+        context: &mut StructureGeneratorContext,
+        start_pool_id: &str,
+        start_jigsaw: Option<&str>,
+        max_depth: i32,
+        position: BlockPos,
+        do_expansion_hack: bool,
+        project_start_to_heightmap: bool,
+        max_distance_from_center: &MaxDistance,
+        dimension_padding: DimensionPadding,
+        liquid_settings: LiquidSettings,
+        pool_alias_lookup: &PoolAliasLookup,
+        is_valid_biome: impl FnOnce(BlockPos) -> bool,
+    ) -> Option<StructurePosition> {
         if max_distance_from_center.horizontal > MAX_TOTAL_STRUCTURE_RANGE {
             return None;
         }
@@ -564,7 +595,7 @@ impl JigsawPlacement {
         let actual_start_pool_id = pool_alias_lookup.lookup(start_pool_id, &mut context.random);
         let pool = TemplatePool::discover(actual_start_pool_id)?;
         let center_rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
-        let center_element = pool.get_random_element(&mut context.random).clone();
+        let center_element = pool.get_random_element(&mut context.random);
         if center_element.is_empty() {
             return None;
         }
@@ -619,7 +650,7 @@ impl JigsawPlacement {
         box_.move_pos(0, y_offset, 0);
         let piece_pos = adjusted_position.add(0, y_offset, 0);
 
-        let max_y = context.min_y + 384 - 1;
+        let max_y = context.min_y + context.height as i32 - 1;
         if is_start_too_close_to_world_height_limits(context.min_y, max_y, dimension_padding, &box_)
         {
             tracing::debug!(
@@ -631,6 +662,10 @@ impl JigsawPlacement {
         }
 
         let center_y = bottom_y + local_anchor_position.y;
+        let start_pos = BlockPos::new(center_x, center_y, center_z);
+        if !is_valid_biome(start_pos) {
+            return None;
+        }
 
         let global_bounding_box = BlockBox::new(
             center_x - max_distance_from_center.horizontal,

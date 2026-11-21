@@ -10,12 +10,8 @@ pub enum ChunkStatus {
     StructureReferences,
     #[serde(rename = "minecraft:biomes")]
     Biomes,
-    #[serde(rename = "minecraft:noise")]
-    Noise,
-    #[serde(rename = "minecraft:surface")]
-    Surface,
-    #[serde(rename = "minecraft:carvers")]
-    Carvers,
+    #[serde(rename = "minecraft:terrain")]
+    Terrain,
     #[serde(rename = "minecraft:features")]
     Features,
     #[serde(rename = "minecraft:initialize_light")]

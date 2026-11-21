@@ -10,15 +10,21 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 
+/// Transmits actor-specific animations, sounds, and state changes (such as hurt, taming, or eating).
 #[derive(Debug, PacketRead, PacketWrite)]
 #[packet(27)]
 pub struct SActorEvent {
+    /// Runtime entity ID of the actor experiencing the event.
     pub target_runtime_id: VarULong,
+    /// Identifier of the specific actor event.
     pub event_id: ActorEventID,
+    /// Event-specific integer payload data (e.g. particle color or sound data).
     pub data: VarInt,
+    /// Optional position where the event should be centered.
     pub fire_at_position: Option<Vector3<f32>>,
 }
 
+/// Specific entity event action or visual effect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ActorEventID {

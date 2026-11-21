@@ -1,13 +1,11 @@
-use std::{
-    collections::{BTreeMap, HashSet},
-    fs,
-    path::Path,
-};
+use std::{collections::HashSet, fs, path::Path};
 
 use heck::{ToPascalCase, ToShoutySnakeCase};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
+
+use crate::block::BlockAssets;
 
 #[derive(Deserialize, Debug)]
 struct TransformerEntryJson {
@@ -75,12 +73,26 @@ struct PredicateJson {
 
 #[derive(Deserialize, Debug)]
 struct StateProviderJson {
-    #[serde(rename = "type")]
-    provider_type: String,
+    #[serde(rename = "type", default)]
+    provider_type: Option<String>,
     #[serde(default)]
     state: Option<String>,
     #[serde(default)]
     source: Option<Box<StateProviderJson>>,
+    #[serde(default)]
+    id: Option<String>,
+}
+
+impl StateProviderJson {
+    fn provider_type(&self) -> &str {
+        self.provider_type
+            .as_deref()
+            .unwrap_or("minecraft:simple_state_provider")
+    }
+
+    fn state_name(&self) -> Option<&str> {
+        self.state.as_deref().or(self.id.as_deref())
+    }
 }
 
 fn clean_name(name: &str) -> &str {
@@ -127,15 +139,14 @@ fn is_predicate_valid(pred: &PredicateJson, valid_blocks: &HashSet<String>) -> b
 }
 
 fn is_provider_valid(provider: &StateProviderJson, valid_blocks: &HashSet<String>) -> bool {
-    match provider.provider_type.as_str() {
+    match provider.provider_type() {
         "minecraft:simple_state_provider" => provider
-            .state
-            .as_deref()
+            .state_name()
             .is_some_and(|s| valid_blocks.contains(clean_name(s))),
-        "minecraft:copy_properties_provider" => provider
+        "minecraft:copy_properties_provider" | "minecraft:copy_properties" => provider
             .source
             .as_ref()
-            .and_then(|s| s.state.as_deref())
+            .and_then(|s| s.state_name())
             .is_some_and(|s| valid_blocks.contains(clean_name(s))),
         _ => false,
     }
@@ -193,42 +204,36 @@ fn predicate_to_tokens(pred: &PredicateJson, valid_blocks: &HashSet<String>) -> 
 }
 
 fn state_provider_to_tokens(provider: &StateProviderJson) -> TokenStream {
-    match provider.provider_type.as_str() {
+    match provider.provider_type() {
         "minecraft:simple_state_provider" => {
-            let state_name = provider
-                .state
-                .as_deref()
-                .expect("simple_state missing state");
+            let state_name = provider.state_name().expect("simple_state missing state");
             let id = block_ident(state_name);
             quote! {
                 BlockTransformerStateProvider::SimpleState(BlockId::#id)
             }
         }
-        "minecraft:copy_properties_provider" => {
+        "minecraft:copy_properties_provider" | "minecraft:copy_properties" => {
             let src = provider
                 .source
                 .as_ref()
                 .expect("copy_properties missing source");
-            let state_name = src.state.as_deref().expect("copy_properties missing state");
+            let state_name = src.state_name().expect("copy_properties missing state");
             let id = block_ident(state_name);
             quote! {
                 BlockTransformerStateProvider::CopyProperties(BlockId::#id)
             }
         }
-        _ => panic!(
-            "Unsupported state provider type: {}",
-            provider.provider_type
-        ),
+        other => panic!("Unsupported state provider type: {other}"),
     }
 }
 
 pub fn build() -> TokenStream {
-    let blocks_file: BTreeMap<String, serde_json::Value> =
+    let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
-    let valid_blocks: HashSet<String> = blocks_file.into_keys().collect();
+    let valid_blocks: HashSet<String> = blocks_assets.blocks.into_iter().map(|b| b.name).collect();
 
-    let dir = Path::new("../../assets/datapacks/26_2/data/minecraft/block_transformer");
+    let dir = Path::new("../../assets/datapack/data/minecraft/block_transformer");
     let mut files: Vec<(String, Vec<TransformerEntryJson>)> = Vec::new();
 
     if dir.is_dir() {
@@ -250,12 +255,53 @@ pub fn build() -> TokenStream {
 
     let mut generated_transformers = Vec::new();
     let mut lookup_arms = Vec::new();
+    let mut scrape_prev_arms = Vec::new();
+    let mut scrape_next_arms = Vec::new();
+    let mut wax_off_arms = Vec::new();
+    let mut wax_on_arms = Vec::new();
 
     for (stem, entries) in &files {
         let const_ident = format_ident!("{}", stem.to_shouty_snake_case());
         let mut entry_tokens = Vec::new();
 
         for entry in entries {
+            if stem == "axe" {
+                let is_scrape = entry.particle.as_deref() == Some("scrape");
+                let is_wax_off = entry.particle.as_deref() == Some("wax_off");
+                if is_scrape || is_wax_off {
+                    for rule in &entry.block_state_provider.rules {
+                        if !is_predicate_valid(&rule.if_true, &valid_blocks)
+                            || !is_provider_valid(&rule.then, &valid_blocks)
+                        {
+                            continue;
+                        }
+                        if rule.if_true.predicate_type == "minecraft:matching_blocks"
+                            && let Some(BlocksValue::Single(from_str)) = &rule.if_true.blocks
+                            && let Some(src) = &rule.then.source
+                            && let Some(to_str) = src.state_name()
+                        {
+                            let from_id = block_ident(from_str);
+                            let to_id = block_ident(to_str);
+                            if is_scrape {
+                                scrape_prev_arms.push(quote! {
+                                    BlockId::#from_id => Some(BlockId::#to_id),
+                                });
+                                scrape_next_arms.push(quote! {
+                                    BlockId::#to_id => Some(BlockId::#from_id),
+                                });
+                            } else {
+                                wax_off_arms.push(quote! {
+                                    BlockId::#from_id => Some(BlockId::#to_id),
+                                });
+                                wax_on_arms.push(quote! {
+                                    BlockId::#to_id => Some(BlockId::#from_id),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
             let disallowed: Vec<_> = entry
                 .disallowed_faces
                 .iter()
@@ -461,14 +507,8 @@ pub fn build() -> TokenStream {
                                 }
                                 BlockTransformerStateProvider::CopyProperties(target_id) => {
                                     let target_block = target_id.to_block();
-                                    let new_state_id = if target_block.states.len() <= 1 {
-                                        target_block.default_state.id
-                                    } else if let Some(source_props) = current_block.properties(current_state_id) {
-                                        let props = source_props.to_props();
-                                        target_block.from_properties(&props).to_state_id(target_block)
-                                    } else {
-                                        target_block.default_state.id
-                                    };
+                                    let new_state_id =
+                                        target_block.with_properties_of(current_block, current_state_id);
                                     (new_state_id, target_block)
                                 }
                             };
@@ -490,6 +530,38 @@ pub fn build() -> TokenStream {
         pub fn get_block_transformer(key: &str) -> Option<&'static BlockTransformer> {
             match key {
                 #(#lookup_arms)*
+                _ => None,
+            }
+        }
+
+        #[must_use]
+        pub const fn get_previous_weathering(id: BlockId) -> Option<BlockId> {
+            match id {
+                #(#scrape_prev_arms)*
+                _ => None,
+            }
+        }
+
+        #[must_use]
+        pub const fn get_next_weathering(id: BlockId) -> Option<BlockId> {
+            match id {
+                #(#scrape_next_arms)*
+                _ => None,
+            }
+        }
+
+        #[must_use]
+        pub const fn get_unwaxed(id: BlockId) -> Option<BlockId> {
+            match id {
+                #(#wax_off_arms)*
+                _ => None,
+            }
+        }
+
+        #[must_use]
+        pub const fn get_waxed(id: BlockId) -> Option<BlockId> {
+            match id {
+                #(#wax_on_arms)*
                 _ => None,
             }
         }

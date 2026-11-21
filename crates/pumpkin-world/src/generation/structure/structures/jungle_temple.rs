@@ -4,9 +4,9 @@ use pumpkin_data::{
     Block, BlockState,
     block_properties::{
         AttachFace, EastRedstone, Facing, HorizontalFacing, LeverLikeProperties, NorthRedstone,
-        OakStairsLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties, SouthRedstone,
+        RedstoneWireLikeProperties, RepeaterLikeProperties, SouthRedstone,
         StickyPistonLikeProperties, TripwireHookLikeProperties, TripwireLikeProperties,
-        VineLikeProperties, WestRedstone,
+        VineLikeProperties, WestRedstone, WhiteWoolStairsLikeProperties,
     },
 };
 use pumpkin_util::{
@@ -795,7 +795,7 @@ impl JungleTemplePiece {
     // This allows you to call MossStoneSelector::next(random) SS is stoneselector
     const SS: MossStoneSelector = MossStoneSelector;
     fn cobblestone_stairs(facing: HorizontalFacing) -> &'static BlockState {
-        let mut props = OakStairsLikeProperties::default(&Block::COBBLESTONE_STAIRS);
+        let mut props = WhiteWoolStairsLikeProperties::default(&Block::COBBLESTONE_STAIRS);
         props.facing = facing;
         BlockState::from_id(props.to_state_id(&Block::COBBLESTONE_STAIRS))
     }

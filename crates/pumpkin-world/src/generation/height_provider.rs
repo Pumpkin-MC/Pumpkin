@@ -56,7 +56,7 @@ impl UniformHeightProvider {
         let max = self.max_inclusive.get_y(min_y as i16, height);
 
         if min > max {
-            warn!("Empty height range: min={min}, max={max}");
+            // TODO: investigate why min > max occurs (e.g. min=136, max=127)
             return min;
         }
 

@@ -122,9 +122,10 @@ impl HugeFungusFeature {
         let hat_start_y = total_height - hat_height;
 
         for dy in hat_start_y..=total_height {
+            let rnd = random.next_bounded_i32(3);
             let mut radius = if hat_height > 8 && dy < hat_start_y + 4 {
                 3
-            } else if dy < total_height - random.next_bounded_i32(3) {
+            } else if dy < total_height - rnd {
                 2
             } else {
                 1

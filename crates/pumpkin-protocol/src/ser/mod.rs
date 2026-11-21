@@ -99,8 +99,7 @@ impl<'a, R: NetworkReadExt + ?Sized> pumpkin_nbt::deserializer::NbtDataSource<'a
                 e.to_string(),
             ))
         })?;
-        let string =
-            cesu8::from_java_cesu8(&buf).map_err(|_| pumpkin_nbt::Error::Cesu8DecodingError)?;
+        let string = pumpkin_nbt::cesu8::from_java_cesu8(&buf)?;
         Ok(Cow::Owned(string.into_owned()))
     }
 
@@ -1072,13 +1071,13 @@ pub trait NetworkWriteExt {
         data: Option<&NbtCompound>,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let tag = data.map(|c| NbtTag::Compound(c.clone()));
+        let tag = data.cloned().map(NbtTag::Compound);
         self.write_nbt_with_version(tag.as_ref(), version)
     }
 
     #[inline]
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
-        self.write_nbt_with_version(Some(&data), &JavaMinecraftVersion::V_26_2)
+        self.write_nbt_with_version(Some(&data), &JavaMinecraftVersion::V_26_3)
     }
 }
 

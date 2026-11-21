@@ -1,0 +1,680 @@
+use std::{any::Any, sync::Arc};
+
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::position::BlockPos;
+
+use crate::world::World;
+use pumpkin_data::BlockStateId;
+use pumpkin_inventory::Inventory;
+
+pub mod barrel;
+pub mod beacon;
+pub mod bed;
+pub mod bedrock;
+pub mod bell;
+pub mod blasting_furnace;
+pub mod brewing_stand;
+pub mod chest;
+pub mod chest_like_block_entity;
+pub mod chiseled_bookshelf;
+pub mod command_block;
+pub mod comparator;
+pub mod daylight_detector;
+pub mod dropper;
+pub mod end_portal;
+pub mod ender_chest;
+pub mod furnace;
+pub mod furnace_like_block_entity;
+pub mod hopper;
+pub mod jigsaw_block;
+pub mod jukebox;
+pub mod lectern;
+pub mod map;
+pub mod mob_spawner;
+pub mod piston;
+pub mod shulker_box;
+pub mod sign;
+pub mod smoker;
+pub mod trapped_chest;
+
+pub mod banner;
+pub mod beehive;
+pub mod brushable_block;
+pub mod calibrated_sculk_sensor;
+pub mod campfire;
+pub mod conduit;
+pub mod copper_golem_statue;
+pub mod crafter;
+pub mod creaking_heart;
+pub mod decorated_pot;
+pub mod dispenser;
+pub mod enchanting_table;
+pub mod end_gateway;
+pub mod hanging_sign;
+pub mod potent_sulfur;
+pub mod sculk_catalyst;
+pub mod sculk_sensor;
+pub mod sculk_shrieker;
+pub mod shelf;
+pub mod skull;
+pub mod structure_block;
+pub mod test_block;
+pub mod test_instance_block;
+pub mod trial_spawner;
+pub mod vault;
+
+pub use furnace_like_block_entity::ExperienceContainer;
+pub use pumpkin_inventory::PropertyDelegate;
+
+//TODO: We need a mark_dirty for chests
+pub trait BlockEntity: Any + Send + Sync {
+    fn write_nbt(&self, nbt: &mut NbtCompound);
+    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
+    where
+        Self: Sized;
+    fn tick(&self, _world: &Arc<World>) {}
+    fn resource_location(&self) -> &'static str;
+    fn get_position(&self) -> BlockPos;
+
+    /// Clears the pending loot-table key and runs `generate` with it and the seed.
+    /// Implementations reserve the one-time unpack under the loot lock, release both chest locks
+    /// before generation, then place into still-empty slots.
+    // TODO vanilla `RandomizableContainerBlockEntity`: barrels, shulker boxes, dispensers, droppers, hoppers,
+    // crafters and decorated pots hold loot tables too. Only chests implement this.
+    fn unpack_loot_table_with(&self, _generate: &mut dyn FnMut(String, i64) -> Vec<ItemStack>) {}
+
+    /// Returns `true` if this block entity has a pending deferred loot table that has
+    /// not yet been unpacked. Does not consume the loot table.
+    fn has_loot_table(&self) -> bool {
+        false
+    }
+
+    /// Vanilla `getLootTable`: the pending loot table key, without consuming it.
+    fn loot_table_key(&self) -> Option<String> {
+        None
+    }
+
+    fn write_internal(&self, nbt: &mut NbtCompound) {
+        nbt.put_string("id", self.resource_location().to_string());
+        let position = self.get_position();
+        nbt.put_int("x", position.0.x);
+        nbt.put_int("y", position.0.y);
+        nbt.put_int("z", position.0.z);
+        self.write_nbt(nbt);
+    }
+    fn get_id(&self) -> u32 {
+        let name = self
+            .resource_location()
+            .split(':')
+            .next_back()
+            .unwrap_or("");
+        pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
+            .iter()
+            .position(|block_entity_name| *block_entity_name == name)
+            .unwrap_or(0) as u32
+    }
+
+    /// Obtain NBT data for sending to the client in `ChunkData`
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        None
+    }
+
+    /// Obtain block actor NBT for fields Bedrock does not include in its block state.
+    fn bedrock_block_actor_data(&self, _state_id: BlockStateId) -> Option<NbtCompound> {
+        None
+    }
+
+    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        None
+    }
+
+    /// Vanilla `Container`: the inventory hoppers, droppers and crafters move items through.
+    ///
+    /// Hoppers on parallel threads write through `Inventory::update_stack`, so the returned
+    /// inventory must override it with one lock for read and write (`update_locked_stack`).
+    fn get_container(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        self.get_inventory()
+    }
+
+    /// Copies the block entity's state on the item stack dropped for it.
+    fn collect_item_components(&self, _stack: &mut ItemStack) {}
+
+    /// Copies all implicit components onto a Creative Ctrl+Pick Block item stack (`BlockEntity.collectComponents`).
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.collect_item_components(stack);
+    }
+
+    /// Restores the state from the item stack the block was placed from.
+    fn apply_item_components(&self, _stack: &ItemStack) {}
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        None
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        None
+    }
+
+    fn drops_for_creative_player(&self) -> bool {
+        false
+    }
+
+    fn set_block_state(&mut self, _block_state: BlockStateId) {}
+
+    fn set_world(&self, _world: std::sync::Weak<World>) {}
+
+    /// Runs post-load side effects matching vanilla `BlockEntity.loadAdditional` when NBT is
+    /// applied to a live block entity in a world.
+    fn on_nbt_loaded(&self, _world: &Arc<World>, _previous: Option<&dyn BlockEntity>) {}
+
+    fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        if let Some(inventory) = self.get_inventory() {
+            world.scatter_inventory(position, &inventory);
+        }
+    }
+
+    fn on_player_destroyed(
+        &self,
+        _world: &Arc<World>,
+        _state: BlockStateId,
+        _player: &Arc<crate::entity::player::Player>,
+        _tool: &ItemStack,
+    ) {
+    }
+    fn is_dirty(&self) -> bool {
+        false
+    }
+
+    fn clear_dirty(&self) {
+        // Default implementation does nothing
+        // Override in implementations that have a dirty flag
+    }
+
+    /// Same idea as [`Self::is_dirty`]/[`Self::clear_dirty`], tracked separately.
+    fn is_comparator_dirty(&self) -> bool {
+        false
+    }
+
+    fn clear_comparator_dirty(&self) {}
+
+    fn as_any(&self) -> &dyn Any;
+    fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
+        None
+    }
+    fn to_experience_container(self: Arc<Self>) -> Option<Arc<dyn ExperienceContainer>> {
+        None
+    }
+}
+
+/// Shared `BaseContainerBlockEntity` / `BeaconBlockEntity` `CustomName` + `lock` state (`26.3`).
+#[derive(Default)]
+pub struct ContainerMetadata {
+    pub custom_name: std::sync::Mutex<Option<pumpkin_util::text::TextComponent>>,
+    pub lock: std::sync::Mutex<Option<pumpkin_data::data_component_impl::LockImpl>>,
+}
+
+impl ContainerMetadata {
+    #[must_use]
+    pub fn from_nbt(nbt: &NbtCompound) -> Self {
+        let custom_name = nbt
+            .get("CustomName")
+            .or_else(|| nbt.get("custom_name"))
+            .and_then(pumpkin_data::data_component_impl::CustomNameImpl::read_data)
+            .map(|c| c.name);
+        let lock = nbt
+            .get("lock")
+            .or_else(|| nbt.get("Lock"))
+            .and_then(pumpkin_data::data_component_impl::LockImpl::read_data);
+        Self {
+            custom_name: std::sync::Mutex::new(custom_name),
+            lock: std::sync::Mutex::new(lock),
+        }
+    }
+
+    pub fn write_nbt(&self, nbt: &mut NbtCompound) {
+        use pumpkin_data::data_component_impl::{CustomNameImpl, DataComponentImpl};
+        if let Some(name) = self
+            .custom_name
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            nbt.put("CustomName", CustomNameImpl { name }.write_data());
+        }
+        if let Some(lock) = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            nbt.put("lock", lock.write_data());
+        }
+    }
+
+    pub fn apply_item_components(&self, stack: &ItemStack) {
+        if let Some(name) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
+        {
+            *self
+                .custom_name
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(name.name.clone());
+        }
+        if let Some(lock) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::LockImpl>()
+        {
+            *self
+                .lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(lock.clone());
+        }
+    }
+
+    pub fn collect_name_only(&self, stack: &mut ItemStack) {
+        if let Some(name) = self
+            .custom_name
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            stack.set_data_component(pumpkin_data::data_component_impl::CustomNameImpl { name });
+        }
+    }
+
+    pub fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.collect_name_only(stack);
+        if let Some(lock) = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            stack.set_data_component(lock);
+        }
+    }
+
+    #[must_use]
+    pub fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    #[must_use]
+    pub fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.custom_name
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+}
+
+pub fn apply_container_items_to_slice(stack: &ItemStack, items: &mut [ItemStack]) -> bool {
+    let Some(container) =
+        stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
+    else {
+        return false;
+    };
+    for (slot, item) in &container.items {
+        if let Some(target) = items.get_mut(*slot as usize) {
+            *target = item.clone();
+        }
+    }
+    true
+}
+
+pub fn collect_container_items_from_slice(items: &[ItemStack], stack: &mut ItemStack) {
+    let contents: Vec<(u8, ItemStack)> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| !item.is_empty())
+        .map(|(slot, item)| (slot as u8, item.clone()))
+        .collect();
+    if !contents.is_empty() {
+        stack.set_data_component(pumpkin_data::data_component_impl::ContainerImpl {
+            items: contents,
+        });
+    }
+}
+
+#[must_use]
+pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
+    let x = nbt.get_int("x").unwrap_or(0);
+    let y = nbt.get_int("y").unwrap_or(0);
+    let z = nbt.get_int("z").unwrap_or(0);
+    T::from_nbt(nbt, BlockPos::new(x, y, z))
+}
+
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> {
+    let id = nbt.get_string("id")?;
+    let x = nbt.get_int("x")?;
+    let y = nbt.get_int("y")?;
+    let z = nbt.get_int("z")?;
+    let pos = BlockPos::new(x, y, z);
+    match id {
+        barrel::BarrelBlockEntity::ID => {
+            Some(Arc::new(barrel::BarrelBlockEntity::from_nbt(nbt, pos)))
+        }
+        chest::ChestBlockEntity::ID => Some(Arc::new(chest::ChestBlockEntity::from_nbt(nbt, pos))),
+        trapped_chest::TrappedChestBlockEntity::ID => Some(Arc::new(
+            trapped_chest::TrappedChestBlockEntity::from_nbt(nbt, pos),
+        )),
+        ender_chest::EnderChestBlockEntity::ID => Some(Arc::new(
+            ender_chest::EnderChestBlockEntity::from_nbt(nbt, pos),
+        )),
+        furnace::FurnaceBlockEntity::ID => {
+            Some(Arc::new(furnace::FurnaceBlockEntity::from_nbt(nbt, pos)))
+        }
+        blasting_furnace::BlastingFurnaceBlockEntity::ID => Some(Arc::new(
+            blasting_furnace::BlastingFurnaceBlockEntity::from_nbt(nbt, pos),
+        )),
+        smoker::SmokerBlockEntity::ID => {
+            Some(Arc::new(smoker::SmokerBlockEntity::from_nbt(nbt, pos)))
+        }
+        brewing_stand::BrewingStandBlockEntity::ID => Some(Arc::new(
+            brewing_stand::BrewingStandBlockEntity::from_nbt(nbt, pos),
+        )),
+        hopper::HopperBlockEntity::ID => {
+            Some(Arc::new(hopper::HopperBlockEntity::from_nbt(nbt, pos)))
+        }
+        jukebox::JukeboxBlockEntity::ID => {
+            Some(Arc::new(jukebox::JukeboxBlockEntity::from_nbt(nbt, pos)))
+        }
+        mob_spawner::MobSpawnerBlockEntity::ID => Some(Arc::new(
+            mob_spawner::MobSpawnerBlockEntity::from_nbt(nbt, pos),
+        )),
+        sign::SignBlockEntity::ID => Some(Arc::new(sign::SignBlockEntity::from_nbt(nbt, pos))),
+        piston::PistonBlockEntity::ID => {
+            Some(Arc::new(piston::PistonBlockEntity::from_nbt(nbt, pos)))
+        }
+        chiseled_bookshelf::ChiseledBookshelfBlockEntity::ID => Some(Arc::new(
+            chiseled_bookshelf::ChiseledBookshelfBlockEntity::from_nbt(nbt, pos),
+        )),
+        dropper::DropperBlockEntity::ID => {
+            Some(Arc::new(dropper::DropperBlockEntity::from_nbt(nbt, pos)))
+        }
+        command_block::CommandBlockEntity::ID => Some(Arc::new(
+            command_block::CommandBlockEntity::from_nbt(nbt, pos),
+        )),
+        jigsaw_block::JigsawBlockEntity::ID => Some(Arc::new(
+            jigsaw_block::JigsawBlockEntity::from_nbt(nbt, pos),
+        )),
+        comparator::ComparatorBlockEntity::ID => Some(Arc::new(
+            comparator::ComparatorBlockEntity::from_nbt(nbt, pos),
+        )),
+        daylight_detector::DaylightDetectorBlockEntity::ID => Some(Arc::new(
+            daylight_detector::DaylightDetectorBlockEntity::from_nbt(nbt, pos),
+        )),
+        end_portal::EndPortalBlockEntity::ID => Some(Arc::new(
+            end_portal::EndPortalBlockEntity::from_nbt(nbt, pos),
+        )),
+        beacon::BeaconBlockEntity::ID => {
+            Some(Arc::new(beacon::BeaconBlockEntity::from_nbt(nbt, pos)))
+        }
+        bed::BedBlockEntity::ID => Some(Arc::new(bed::BedBlockEntity::from_nbt(nbt, pos))),
+        bell::BellBlockEntity::ID => Some(Arc::new(bell::BellBlockEntity::from_nbt(nbt, pos))),
+        shulker_box::ShulkerBoxBlockEntity::ID => Some(Arc::new(
+            shulker_box::ShulkerBoxBlockEntity::from_nbt(nbt, pos),
+        )),
+        lectern::LecternBlockEntity::ID => {
+            Some(Arc::new(lectern::LecternBlockEntity::from_nbt(nbt, pos)))
+        }
+        dispenser::DispenserBlockEntity::ID => Some(Arc::new(
+            dispenser::DispenserBlockEntity::from_nbt(nbt, pos),
+        )),
+        hanging_sign::HangingSignBlockEntity::ID => Some(Arc::new(
+            hanging_sign::HangingSignBlockEntity::from_nbt(nbt, pos),
+        )),
+        creaking_heart::CreakingHeartBlockEntity::ID => Some(Arc::new(
+            creaking_heart::CreakingHeartBlockEntity::from_nbt(nbt, pos),
+        )),
+        enchanting_table::EnchantingTableBlockEntity::ID => Some(Arc::new(
+            enchanting_table::EnchantingTableBlockEntity::from_nbt(nbt, pos),
+        )),
+        skull::SkullBlockEntity::ID => Some(Arc::new(skull::SkullBlockEntity::from_nbt(nbt, pos))),
+        banner::BannerBlockEntity::ID => {
+            Some(Arc::new(banner::BannerBlockEntity::from_nbt(nbt, pos)))
+        }
+        structure_block::StructureBlockBlockEntity::ID => Some(Arc::new(
+            structure_block::StructureBlockBlockEntity::from_nbt(nbt, pos),
+        )),
+        end_gateway::EndGatewayBlockEntity::ID => Some(Arc::new(
+            end_gateway::EndGatewayBlockEntity::from_nbt(nbt, pos),
+        )),
+        conduit::ConduitBlockEntity::ID => {
+            Some(Arc::new(conduit::ConduitBlockEntity::from_nbt(nbt, pos)))
+        }
+        map::MAP_BLOCK_ENTITY_ID => Some(Arc::new(map::MapBlockEntity::from_nbt(nbt, pos))),
+        campfire::CampfireBlockEntity::ID => {
+            Some(Arc::new(campfire::CampfireBlockEntity::from_nbt(nbt, pos)))
+        }
+        beehive::BeehiveBlockEntity::ID => {
+            Some(Arc::new(beehive::BeehiveBlockEntity::from_nbt(nbt, pos)))
+        }
+        sculk_sensor::SculkSensorBlockEntity::ID => Some(Arc::new(
+            sculk_sensor::SculkSensorBlockEntity::from_nbt(nbt, pos),
+        )),
+        calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity::ID => Some(Arc::new(
+            calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity::from_nbt(nbt, pos),
+        )),
+        sculk_catalyst::SculkCatalystBlockEntity::ID => Some(Arc::new(
+            sculk_catalyst::SculkCatalystBlockEntity::from_nbt(nbt, pos),
+        )),
+        sculk_shrieker::SculkShriekerBlockEntity::ID => Some(Arc::new(
+            sculk_shrieker::SculkShriekerBlockEntity::from_nbt(nbt, pos),
+        )),
+        shelf::ShelfBlockEntity::ID => Some(Arc::new(shelf::ShelfBlockEntity::from_nbt(nbt, pos))),
+        brushable_block::BrushableBlockBlockEntity::ID => Some(Arc::new(
+            brushable_block::BrushableBlockBlockEntity::from_nbt(nbt, pos),
+        )),
+        decorated_pot::DecoratedPotBlockEntity::ID => Some(Arc::new(
+            decorated_pot::DecoratedPotBlockEntity::from_nbt(nbt, pos),
+        )),
+        crafter::CrafterBlockEntity::ID => {
+            Some(Arc::new(crafter::CrafterBlockEntity::from_nbt(nbt, pos)))
+        }
+        trial_spawner::TrialSpawnerBlockEntity::ID => Some(Arc::new(
+            trial_spawner::TrialSpawnerBlockEntity::from_nbt(nbt, pos),
+        )),
+        vault::VaultBlockEntity::ID => Some(Arc::new(vault::VaultBlockEntity::from_nbt(nbt, pos))),
+        test_block::TestBlockBlockEntity::ID => Some(Arc::new(
+            test_block::TestBlockBlockEntity::from_nbt(nbt, pos),
+        )),
+        test_instance_block::TestInstanceBlockBlockEntity::ID => Some(Arc::new(
+            test_instance_block::TestInstanceBlockBlockEntity::from_nbt(nbt, pos),
+        )),
+        copper_golem_statue::CopperGolemStatueBlockEntity::ID => Some(Arc::new(
+            copper_golem_statue::CopperGolemStatueBlockEntity::from_nbt(nbt, pos),
+        )),
+        potent_sulfur::PotentSulfurBlockEntity::ID => Some(Arc::new(
+            potent_sulfur::PotentSulfurBlockEntity::from_nbt(nbt, pos),
+        )),
+        _ => None,
+    }
+}
+
+#[must_use]
+pub fn has_block_block_entity(block: &Block) -> bool {
+    BLOCK_ENTITY_TYPES.contains(&block.name)
+}
+
+#[must_use]
+pub fn create_block_entity_for_state(
+    state_id: BlockStateId,
+    position: BlockPos,
+) -> Option<Arc<dyn BlockEntity>> {
+    use pumpkin_data::BlockState;
+    use pumpkin_data::block_properties::StructureblockMode;
+
+    let state = BlockState::from_id(state_id);
+    if state.block_entity_type == u16::MAX {
+        return None;
+    }
+    let block = Block::from_state_id(state_id);
+    let name = BLOCK_ENTITY_TYPES.get(state.block_entity_type as usize)?;
+    match *name {
+        "structure_block" => {
+            let mode = structure_block::StructureBlockBlockEntity::mode_from_block_state(state_id)
+                .unwrap_or(StructureblockMode::Load);
+            Some(Arc::new(
+                structure_block::StructureBlockBlockEntity::new_with_mode(position, mode),
+            ))
+        }
+        "command_block" => Some(Arc::new(command_block::CommandBlockEntity::new(
+            position,
+            true,
+            block == &Block::CHAIN_COMMAND_BLOCK,
+        ))),
+        _ => create_block_entity(state.block_entity_type, position),
+    }
+}
+
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub fn create_block_entity(
+    block_entity_type_id: u16,
+    position: BlockPos,
+) -> Option<Arc<dyn BlockEntity>> {
+    if block_entity_type_id == u16::MAX {
+        return None;
+    }
+    let name = BLOCK_ENTITY_TYPES.get(block_entity_type_id as usize)?;
+    match *name {
+        "furnace" => Some(Arc::new(furnace::FurnaceBlockEntity::new(position))),
+        "chest" => Some(Arc::new(chest::ChestBlockEntity::new(position))),
+        "trapped_chest" => Some(Arc::new(trapped_chest::TrappedChestBlockEntity::new(
+            position,
+        ))),
+        "ender_chest" => Some(Arc::new(ender_chest::EnderChestBlockEntity::new(position))),
+        "jukebox" => Some(Arc::new(jukebox::JukeboxBlockEntity::new(position))),
+        "dispenser" => Some(Arc::new(dispenser::DispenserBlockEntity::new(position))),
+        "dropper" => Some(Arc::new(dropper::DropperBlockEntity::new(position))),
+        "sign" => Some(Arc::new(sign::SignBlockEntity::empty(position))),
+        "hanging_sign" => Some(Arc::new(hanging_sign::HangingSignBlockEntity::empty(
+            position,
+        ))),
+        "mob_spawner" => Some(Arc::new(mob_spawner::MobSpawnerBlockEntity::new(
+            position, None,
+        ))),
+        "creaking_heart" => Some(Arc::new(creaking_heart::CreakingHeartBlockEntity::new(
+            position,
+        ))),
+        "piston" => Some(Arc::new(piston::PistonBlockEntity::from_nbt(
+            &pumpkin_nbt::compound::NbtCompound::new(),
+            position,
+        ))),
+        "brewing_stand" => Some(Arc::new(brewing_stand::BrewingStandBlockEntity::new(
+            position,
+        ))),
+        "enchanting_table" => Some(Arc::new(enchanting_table::EnchantingTableBlockEntity::new(
+            position,
+        ))),
+        "end_portal" => Some(Arc::new(end_portal::EndPortalBlockEntity::new(position))),
+        "beacon" => Some(Arc::new(beacon::BeaconBlockEntity::new(position))),
+        "skull" => Some(Arc::new(skull::SkullBlockEntity::new(position))),
+        "daylight_detector" => Some(Arc::new(
+            daylight_detector::DaylightDetectorBlockEntity::new(position),
+        )),
+        "hopper" => Some(Arc::new(hopper::HopperBlockEntity::new(position))),
+        "comparator" => Some(Arc::new(comparator::ComparatorBlockEntity::new(position))),
+        "banner" => Some(Arc::new(banner::BannerBlockEntity::new(position))),
+        "structure_block" => Some(Arc::new(structure_block::StructureBlockBlockEntity::new(
+            position,
+        ))),
+        "end_gateway" => Some(Arc::new(end_gateway::EndGatewayBlockEntity::new(position))),
+        "command_block" => Some(Arc::new(command_block::CommandBlockEntity::new(
+            position, true, false,
+        ))),
+        "shulker_box" => Some(Arc::new(shulker_box::ShulkerBoxBlockEntity::new(position))),
+        "conduit" => Some(Arc::new(conduit::ConduitBlockEntity::new(position))),
+        "barrel" => Some(Arc::new(barrel::BarrelBlockEntity::new(position))),
+        "smoker" => Some(Arc::new(smoker::SmokerBlockEntity::new(position))),
+        "blast_furnace" => Some(Arc::new(blasting_furnace::BlastingFurnaceBlockEntity::new(
+            position,
+        ))),
+        "lectern" => Some(Arc::new(lectern::LecternBlockEntity::new(position))),
+        "bell" => Some(Arc::new(bell::BellBlockEntity::new(position))),
+        "jigsaw" => Some(Arc::new(jigsaw_block::JigsawBlockEntity::new(position))),
+        "campfire" => Some(Arc::new(campfire::CampfireBlockEntity::new(position))),
+        "beehive" => Some(Arc::new(beehive::BeehiveBlockEntity::new(position))),
+        "sculk_sensor" => Some(Arc::new(sculk_sensor::SculkSensorBlockEntity::new(
+            position,
+        ))),
+        "calibrated_sculk_sensor" => Some(Arc::new(
+            calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity::new(position),
+        )),
+        "sculk_catalyst" => Some(Arc::new(sculk_catalyst::SculkCatalystBlockEntity::new(
+            position,
+        ))),
+        "sculk_shrieker" => Some(Arc::new(sculk_shrieker::SculkShriekerBlockEntity::new(
+            position,
+        ))),
+        "chiseled_bookshelf" => Some(Arc::new(
+            chiseled_bookshelf::ChiseledBookshelfBlockEntity::new(position),
+        )),
+        "shelf" => Some(Arc::new(shelf::ShelfBlockEntity::new(position))),
+        "brushable_block" => Some(Arc::new(brushable_block::BrushableBlockBlockEntity::new(
+            position,
+        ))),
+        "decorated_pot" => Some(Arc::new(decorated_pot::DecoratedPotBlockEntity::new(
+            position,
+        ))),
+        "crafter" => Some(Arc::new(crafter::CrafterBlockEntity::new(position))),
+        "trial_spawner" => Some(Arc::new(trial_spawner::TrialSpawnerBlockEntity::new(
+            position,
+        ))),
+        "vault" => Some(Arc::new(vault::VaultBlockEntity::new(position))),
+        "test_block" => Some(Arc::new(test_block::TestBlockBlockEntity::new(position))),
+        "test_instance_block" => Some(Arc::new(
+            test_instance_block::TestInstanceBlockBlockEntity::new(position),
+        )),
+        "copper_golem_statue" => Some(Arc::new(
+            copper_golem_statue::CopperGolemStatueBlockEntity::new(position),
+        )),
+        "potent_sulfur" => Some(Arc::new(potent_sulfur::PotentSulfurBlockEntity::new(
+            position,
+        ))),
+        "map" => Some(Arc::new(map::MapBlockEntity::new(position, 0))),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity};
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::Inventory;
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_util::math::position::BlockPos;
+    use std::sync::Arc;
+
+    /// A loaded block entity is serialized back into its chunk with
+    /// `write_internal`, so whatever it holds has to survive that round trip or
+    /// it is gone the next time the chunk is read.
+    #[tokio::test]
+    async fn furnace_contents_survive_a_chunk_round_trip() {
+        let position = BlockPos::new(0, 100, 0);
+        let furnace = Arc::new(FurnaceBlockEntity::new(position));
+        furnace.set_stack(0, ItemStack::new(5, &Item::DIAMOND));
+
+        let mut nbt = NbtCompound::new();
+        furnace.write_internal(&mut nbt);
+
+        let inventory = block_entity_from_nbt(&nbt).and_then(BlockEntity::get_inventory);
+        assert!(
+            inventory.is_some(),
+            "furnace should be readable back from its own NBT"
+        );
+
+        if let Some(inventory) = inventory {
+            let stack = inventory.get_stack(0);
+            assert_eq!(stack.get_item().id, Item::DIAMOND.id);
+            assert_eq!(stack.item_count, 5);
+        }
+    }
+}

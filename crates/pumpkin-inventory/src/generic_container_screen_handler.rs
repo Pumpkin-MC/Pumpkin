@@ -11,8 +11,8 @@
 
 use std::{any::Any, sync::Arc};
 
+use crate::inventory::Inventory;
 use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,
@@ -71,24 +71,6 @@ pub fn create_generic_3x3(
 ) -> GenericContainerScreenHandler {
     GenericContainerScreenHandler::new(
         WindowType::Generic3x3,
-        sync_id,
-        player_inventory,
-        inventory,
-        3,
-        3,
-        player.is_spectator(),
-    )
-}
-
-/// Creates a crafter container (9 slots, 3x3 layout).
-pub fn create_crafter_3x3(
-    sync_id: u8,
-    player_inventory: &Arc<PlayerInventory>,
-    inventory: Arc<dyn Inventory>,
-    player: &dyn InventoryPlayer,
-) -> GenericContainerScreenHandler {
-    GenericContainerScreenHandler::new(
-        WindowType::Crafter3x3,
         sync_id,
         player_inventory,
         inventory,

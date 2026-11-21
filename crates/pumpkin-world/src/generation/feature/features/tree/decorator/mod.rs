@@ -39,6 +39,7 @@ pub enum TreeDecorator {
 }
 
 impl TreeDecorator {
+    #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -47,35 +48,58 @@ impl TreeDecorator {
         root_positions: &[BlockPos],
         log_positions: &[BlockPos],
         foliage_positions: &[BlockPos],
+        decorations: &mut Vec<BlockPos>,
     ) {
         match self {
             Self::TrunkVine(_decorator) => {
-                TrunkVineTreeDecorator::generate(chunk, random, log_positions);
+                TrunkVineTreeDecorator::generate(chunk, random, log_positions, decorations);
             }
-            Self::LeaveVine(decorator) => decorator.generate(chunk, random, foliage_positions),
+            Self::LeaveVine(decorator) => {
+                decorator.generate(chunk, random, foliage_positions, decorations);
+            }
             Self::PaleMoss(decorator) => {
-                decorator.generate(chunk, random, log_positions, foliage_positions);
+                decorator.generate(chunk, random, log_positions, foliage_positions, decorations);
             }
             Self::CreakingHeart(decorator) => {
-                decorator.generate(chunk, random, log_positions);
+                decorator.generate(chunk, random, log_positions, decorations);
             }
             Self::Cocoa(decorator) => {
-                decorator.generate(chunk, random, log_positions);
+                decorator.generate(chunk, random, log_positions, decorations);
             }
             Self::Beehive(decorator) => {
-                decorator.generate(chunk, random, log_positions, foliage_positions);
+                decorator.generate(chunk, random, log_positions, foliage_positions, decorations);
             }
             Self::AlterGround(decorator) => {
-                decorator.generate(chunk, block_registry, random, root_positions, log_positions);
+                decorator.generate(
+                    chunk,
+                    block_registry,
+                    random,
+                    root_positions,
+                    log_positions,
+                    decorations,
+                );
             }
             Self::PlaceOnGround(decorator) => {
-                decorator.generate(chunk, block_registry, random, root_positions, log_positions);
+                decorator.generate(
+                    chunk,
+                    block_registry,
+                    random,
+                    root_positions,
+                    log_positions,
+                    decorations,
+                );
             }
             Self::AttachedToLeaves(decorator) => {
-                decorator.generate(chunk, block_registry, random, foliage_positions);
+                decorator.generate(
+                    chunk,
+                    block_registry,
+                    random,
+                    foliage_positions,
+                    decorations,
+                );
             }
             Self::AttachedToLogs(decorator) => {
-                decorator.generate(chunk, block_registry, random, log_positions);
+                decorator.generate(chunk, block_registry, random, log_positions, decorations);
             }
         }
     }

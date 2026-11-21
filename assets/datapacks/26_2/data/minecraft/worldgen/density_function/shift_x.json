@@ -1,7 +1,0 @@
-{
-  "type": "minecraft:cache",
-  "input": {
-    "type": "minecraft:shift_a",
-    "noise": "minecraft:offset"
-  }
-}
