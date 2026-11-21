@@ -389,14 +389,23 @@ impl HostEntity for PluginHostState {
             Vector3::new(pos.x + x, pos.y + y, pos.z + z),
         );
         let world = entity.get_entity().world.load_full();
-        let entities = world.get_entities_at_box(&box_range);
+        // Players are kept in their own list, outside the entity query.
+        let mut added = std::collections::HashSet::from([entity.get_entity().entity_id]);
 
         let mut result = Vec::new();
-        for e in entities {
-            // Don't include the entity itself
-            if e.get_entity().entity_id != entity.get_entity().entity_id {
+        for e in world.get_entities_at_box(&box_range) {
+            if added.insert(e.get_entity().entity_id) {
                 result.push(
                     self.add(e)
+                        .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
+                );
+            }
+        }
+        for player in world.get_players_at_box(&box_range) {
+            let player: Arc<dyn pumpkin_core::entity::EntityBase> = player;
+            if added.insert(player.get_entity().entity_id) {
+                result.push(
+                    self.add(player)
                         .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
                 );
             }
