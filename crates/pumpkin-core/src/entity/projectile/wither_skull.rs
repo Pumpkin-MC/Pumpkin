@@ -182,10 +182,11 @@ impl EntityBase for WitherSkullEntity {
                     show_icon: true,
                     blend: true,
                 };
+                let effect_source: &dyn EntityBase = owner.as_deref().unwrap_or(self);
                 if let Some(player) = entity.get_player() {
-                    player.add_effect(effect);
+                    player.add_effect_with_source(effect, effect_source);
                 } else {
-                    living.add_effect(effect);
+                    living.add_effect_with_source(effect, Some(effect_source));
                 }
             }
         }

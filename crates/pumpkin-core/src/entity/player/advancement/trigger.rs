@@ -158,7 +158,6 @@ pub enum AdvancementTrigger {
     CrafterRecipeCrafted {
         recipe_id: String,
     },
-    EffectsChanged,
     SpearMobs {
         count: i32,
     },
@@ -216,6 +215,43 @@ impl Player {
         for (player, advancement, award) in to_finish {
             PlayerAdvancement::finish_award(&player, advancement, award);
         }
+    }
+
+    /// Evaluates `minecraft:effects_changed` against the player's current effects and source.
+    pub fn trigger_effects_changed(&self, source: Option<&dyn crate::entity::EntityBase>) {
+        let effects = self.get_active_effects();
+        let source = source.map(|source| {
+            let entity = source.get_entity();
+            let distance = entity
+                .pos
+                .load()
+                .squared_distance_to_vec(&self.position())
+                .sqrt();
+            (
+                entity.entity_type.resource_name,
+                distance,
+                source
+                    .get_living_entity()
+                    .map(crate::entity::living::LivingEntity::is_baby),
+            )
+        });
+
+        self.trigger_criterion_event("minecraft:effects_changed", |cond| match cond {
+            CriterionConditions::EffectsChanged {
+                effects: expected,
+                source: expected_source,
+            } => {
+                expected.matches(&effects)
+                    && expected_source.as_ref().is_none_or(|expected_source| {
+                        let Some((entity_type, distance, is_baby)) = source else {
+                            return false;
+                        };
+                        expected_source.matches(entity_type, Some(distance), is_baby)
+                    })
+            }
+            CriterionConditions::Custom { .. } => true,
+            _ => false,
+        });
     }
 
     /// Evaluates data-driven advancement triggers for the player.
@@ -988,10 +1024,6 @@ impl Player {
                         _ => false,
                     },
                 );
-            }
-
-            AdvancementTrigger::EffectsChanged => {
-                self.trigger_criterion_event("minecraft:effects_changed", |_cond| true);
             }
 
             AdvancementTrigger::SpearMobs { count } => {

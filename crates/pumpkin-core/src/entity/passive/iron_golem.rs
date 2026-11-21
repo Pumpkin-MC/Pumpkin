@@ -273,8 +273,9 @@ impl Mob for IronGolemEntity {
             ));
             EnchantmentHelper::on_post_attack(
                 self,
-                target.get_entity(),
+                target,
                 &self.mob_entity.living_entity.held_item(self),
+                DamageType::MOB_ATTACK,
             );
         }
         self.play_entity_sound(Sound::EntityIronGolemAttack, 1.0, 1.0);

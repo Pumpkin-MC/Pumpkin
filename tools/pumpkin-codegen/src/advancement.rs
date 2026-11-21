@@ -1073,6 +1073,48 @@ fn generate_entity_condition_tokens(val: &serde_json::Value) -> TokenStream {
     }
 }
 
+fn parse_int_bounds(val: Option<&serde_json::Value>) -> (Option<i32>, Option<i32>) {
+    match val {
+        Some(serde_json::Value::Number(number)) => number.as_i64().map_or((None, None), |value| {
+            let value = value as i32;
+            (Some(value), Some(value))
+        }),
+        Some(serde_json::Value::Object(map)) => (
+            map.get("min")
+                .and_then(serde_json::Value::as_i64)
+                .map(|v| v as i32),
+            map.get("max")
+                .and_then(serde_json::Value::as_i64)
+                .map(|v| v as i32),
+        ),
+        _ => (None, None),
+    }
+}
+
+fn generate_mob_effect_condition_tokens(effect: &str, val: &serde_json::Value) -> TokenStream {
+    let (amplifier_min, amplifier_max) = parse_int_bounds(val.get("amplifier"));
+    let (duration_min, duration_max) = parse_int_bounds(val.get("duration"));
+    let ambient = val.get("ambient").and_then(serde_json::Value::as_bool);
+    let visible = val.get("visible").and_then(serde_json::Value::as_bool);
+    let amin_tok = opt_i32_tokens(amplifier_min);
+    let amax_tok = opt_i32_tokens(amplifier_max);
+    let dmin_tok = opt_i32_tokens(duration_min);
+    let dmax_tok = opt_i32_tokens(duration_max);
+    let ambient_tok = opt_bool_tokens(ambient);
+    let visible_tok = opt_bool_tokens(visible);
+    quote! {
+        MobEffectCondition {
+            effect: #effect,
+            amplifier_min: #amin_tok,
+            amplifier_max: #amax_tok,
+            duration_min: #dmin_tok,
+            duration_max: #dmax_tok,
+            ambient: #ambient_tok,
+            visible: #visible_tok,
+        }
+    }
+}
+
 fn generate_location_condition_tokens(val: &serde_json::Value) -> TokenStream {
     let loc_val = val
         .get("player")
@@ -1317,7 +1359,12 @@ fn generate_condition_tokens(trigger: &str, val: &serde_json::Value) -> TokenStr
             }
             "minecraft:hero_of_the_village" => quote! { AdvancementCondition::HeroOfTheVillage },
             "minecraft:started_riding" => quote! { AdvancementCondition::StartedRiding },
-            "minecraft:effects_changed" => quote! { AdvancementCondition::EffectsChanged },
+            "minecraft:effects_changed" => quote! {
+                AdvancementCondition::EffectsChanged {
+                    effects: &[],
+                    source: None,
+                }
+            },
             "minecraft:impossible" => quote! { AdvancementCondition::Impossible },
             _ => quote! { AdvancementCondition::Empty },
         };
@@ -1814,7 +1861,29 @@ fn generate_condition_tokens(trigger: &str, val: &serde_json::Value) -> TokenStr
                 .unwrap_or("");
             quote! { AdvancementCondition::CrafterRecipeCrafted(#r) }
         }
-        "minecraft:effects_changed" => quote! { AdvancementCondition::EffectsChanged },
+        "minecraft:effects_changed" => {
+            let effects: Vec<_> = val
+                .get("effects")
+                .and_then(|effects| effects.as_object())
+                .map_or_else(Vec::new, |effects| {
+                    effects
+                        .iter()
+                        .map(|(effect, predicate)| {
+                            generate_mob_effect_condition_tokens(effect, predicate)
+                        })
+                        .collect()
+                });
+            let source_tok = val
+                .get("source")
+                .map(generate_entity_condition_tokens)
+                .map_or_else(|| quote! { None }, |source| quote! { Some(#source) });
+            quote! {
+                AdvancementCondition::EffectsChanged {
+                    effects: &[#(#effects),*],
+                    source: #source_tok,
+                }
+            }
+        }
         "minecraft:spear_mobs" => {
             let cnt = val.get("count").and_then(|v| v.as_i64()).map(|v| v as i32);
             let c_tok = opt_i32_tokens(cnt);
