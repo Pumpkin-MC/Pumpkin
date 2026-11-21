@@ -302,11 +302,18 @@ impl HappyGhastEntity {
             Box::new(FlyingMoveControl::new(180, true));
     }
 
-    pub fn do_player_ride(&self, player: &Arc<Player>) {
+    pub fn do_player_ride(&self, player: &Arc<Player>) -> bool {
         let entity = self.get_entity();
         if let Some(vehicle) = entity.world.load().get_entity_by_id(entity.entity_id) {
             entity.add_passenger(vehicle, player.clone());
+            return entity
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .iter()
+                .any(|p| p.get_entity().entity_id == player.entity_id());
         }
+        false
     }
 
     fn update_dimensions(&self) {
@@ -713,8 +720,7 @@ impl Mob for HappyGhastEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .len();
-            if passenger_count < Self::MAX_PASSENGERS {
-                self.do_player_ride(player);
+            if passenger_count < Self::MAX_PASSENGERS && self.do_player_ride(player) {
                 return true;
             }
         }
