@@ -148,7 +148,7 @@ pub struct BedrockConfig {
 impl Default for BedrockConfig {
     fn default() -> Self {
         let view_distance = NonZero::new(16).unwrap_or(NonZero::<u8>::MIN);
-        let simulation_distance = NonZero::new(10).unwrap_or(NonZero::<u8>::MIN);
+        let simulation_distance = NonZero::new(16).unwrap_or(NonZero::<u8>::MIN);
         Self {
             enabled: true,
             online_mode: true,

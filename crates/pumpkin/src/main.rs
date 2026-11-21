@@ -16,13 +16,15 @@ use std::{
     sync::{OnceLock, atomic::Ordering},
     thread::{self, ThreadId},
 };
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 use tokio::signal::ctrl_c;
 #[cfg(unix)]
-use tokio::signal::unix::{SignalKind, signal};
+use tokio::signal::unix::{Signal, SignalKind, signal};
+#[cfg(windows)]
+use tokio::signal::windows;
 
 use pumpkin_core::{
-    CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
+    CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING, SHOULD_STOP,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
     stop_or_exit_server,
@@ -160,11 +162,11 @@ async fn main() {
     }
     print_support_links_and_warning();
 
-    tokio::spawn(async {
-        if let Err(err) = setup_sighandler().await {
-            tracing::error!("Unable to setup signal handlers: {err}");
-        }
-    });
+    // Register OS signal handlers synchronously before starting the console so rustyline saves
+    // Tokio's SIGINT disposition rather than SIG_DFL.
+    if let Err(err) = setup_sighandler() {
+        tracing::error!("Unable to setup signal handlers: {err}");
+    }
 
     let plugin_loaders: Vec<Arc<dyn PluginLoader>> = vec![Arc::new(WasmPluginLoader::new(
         config.advanced.plugins.verify_signatures,
@@ -276,14 +278,46 @@ fn print_support_links_and_warning() {
     );
 }
 
-fn handle_interrupt() {
-    warn!(
-        "{}",
-        TextComponent::text("Received interrupt signal; stopping server...")
-            .color_named(NamedColor::Red)
-            .to_pretty_console()
-    );
-    stop_or_exit_server();
+#[derive(Clone, Copy)]
+enum SignalAction {
+    Interrupt,
+    #[cfg(any(unix, windows))]
+    Shutdown,
+}
+
+fn handle_signal(action: SignalAction) {
+    let already_stopping =
+        SHOULD_STOP.load(Ordering::Acquire) || SERVER_IS_STOPPING.load(Ordering::Acquire);
+
+    match action {
+        SignalAction::Interrupt => {
+            let message = if already_stopping {
+                "Received interrupt signal while already stopping; forcing exit..."
+            } else {
+                "Received interrupt signal; stopping server..."
+            };
+            warn!(
+                "{}",
+                TextComponent::text(message)
+                    .color_named(NamedColor::Red)
+                    .to_pretty_console()
+            );
+            stop_or_exit_server();
+        }
+        #[cfg(any(unix, windows))]
+        SignalAction::Shutdown => {
+            if already_stopping {
+                return;
+            }
+            warn!(
+                "{}",
+                TextComponent::text("Received termination signal; stopping server...")
+                    .color_named(NamedColor::Red)
+                    .to_pretty_console()
+            );
+            stop_server();
+        }
+    }
 }
 
 fn handle_panic(panic_info: &PanicHookInfo<'_>) {
@@ -376,32 +410,78 @@ fn try_set_crash_report(crash_report: CrashReport) -> Option<&'static CrashRepor
     }
 }
 
-// Non-UNIX Ctrl-C handling
-#[cfg(not(unix))]
-async fn setup_sighandler() -> io::Result<()> {
-    if ctrl_c().await.is_ok() {
-        handle_interrupt();
-    }
+// CTRL_LOGOFF_EVENT is intentionally omitted: Windows sends it to background console services
+// whenever any interactive/RDP user logs off.
+#[cfg(windows)]
+fn setup_sighandler() -> io::Result<()> {
+    let mut ctrl_c = windows::ctrl_c()?;
+    let mut ctrl_break = windows::ctrl_break()?;
+    let mut ctrl_close = windows::ctrl_close()?;
+    let mut ctrl_shutdown = windows::ctrl_shutdown()?;
+
+    tokio::spawn(async move {
+        loop {
+            let action = tokio::select! {
+                Some(()) = ctrl_c.recv() => SignalAction::Interrupt,
+                Some(()) = ctrl_break.recv() => SignalAction::Interrupt,
+                Some(()) = ctrl_close.recv() => SignalAction::Shutdown,
+                Some(()) = ctrl_shutdown.recv() => SignalAction::Shutdown,
+                else => break,
+            };
+            handle_signal(action);
+        }
+    });
 
     Ok(())
 }
 
-// Unix signal handling
+#[cfg(not(any(unix, windows)))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "matches unix and windows setup_sighandler signature"
+)]
+fn setup_sighandler() -> io::Result<()> {
+    tokio::spawn(async {
+        while ctrl_c().await.is_ok() {
+            handle_signal(SignalAction::Interrupt);
+        }
+    });
+
+    Ok(())
+}
+
 #[cfg(unix)]
-async fn setup_sighandler() -> io::Result<()> {
+async fn recv_optional_signal(signal: Option<&mut Signal>) -> Option<()> {
+    if let Some(sig) = signal {
+        sig.recv().await
+    } else {
+        std::future::pending().await
+    }
+}
+
+#[cfg(unix)]
+fn setup_sighandler() -> io::Result<()> {
     let mut interrupt = signal(SignalKind::interrupt())?;
     let mut hangup = signal(SignalKind::hangup())?;
     let mut terminate = signal(SignalKind::terminate())?;
+    // LXC/Proxmox (`pct stop` / `lxc-stop`) and UPS daemons send SIGPWR for graceful shutdown.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    let mut power = Some(signal(SignalKind::from_raw(libc::SIGPWR))?);
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    let mut power: Option<Signal> = None;
 
-    let received = tokio::select! {
-        received = interrupt.recv() => received,
-        received = hangup.recv() => received,
-        received = terminate.recv() => received,
-    };
-
-    if received.is_some() {
-        handle_interrupt();
-    }
+    tokio::spawn(async move {
+        loop {
+            let action = tokio::select! {
+                Some(()) = interrupt.recv() => SignalAction::Interrupt,
+                Some(()) = hangup.recv() => SignalAction::Shutdown,
+                Some(()) = terminate.recv() => SignalAction::Shutdown,
+                Some(()) = recv_optional_signal(power.as_mut()) => SignalAction::Shutdown,
+                else => break,
+            };
+            handle_signal(action);
+        }
+    });
 
     Ok(())
 }

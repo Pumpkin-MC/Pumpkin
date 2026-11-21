@@ -44,7 +44,7 @@ impl Default for JavaConfig {
             .parse()
             .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 25565)));
         let view_distance = NonZero::new(16).unwrap_or(NonZero::<u8>::MIN);
-        let simulation_distance = NonZero::new(10).unwrap_or(NonZero::<u8>::MIN);
+        let simulation_distance = NonZero::new(16).unwrap_or(NonZero::<u8>::MIN);
         Self {
             enabled: true,
             address,
