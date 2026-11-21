@@ -8483,7 +8483,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        NaturalSpawnChunkCache, World, bedrock_block_breaking_rate, bedrock_chest_block_actor,
+        NaturalSpawnChunkCache, bedrock_block_breaking_rate, bedrock_chest_block_actor,
         merge_entity_records, natural_spawn_chunk_count, spawn_list_for_tick,
     };
 
