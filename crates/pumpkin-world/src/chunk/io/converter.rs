@@ -330,7 +330,7 @@ pub fn convert_folder(
     })
 }
 
-/// Discovers all dimension folders under `root_folder` (both 26.2 `dimensions/<ns>/<name>` and
+/// Discovers all dimension folders under `root_folder` (both 26.3 `dimensions/<ns>/<name>` and
 /// legacy root/`DIM-1`/`DIM1`) and converts their `region/` and `entities/` directories to
 /// `target`.
 pub fn convert_world(
