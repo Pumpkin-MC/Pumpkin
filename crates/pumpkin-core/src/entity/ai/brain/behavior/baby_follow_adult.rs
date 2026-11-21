@@ -4,6 +4,7 @@ use super::super::memory::position_tracker::{EntityTracker, PositionTracker};
 use super::super::memory::walk_target::WalkTarget;
 use super::super::memory::{MemoryStatus, types};
 use super::OneShot;
+use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
 
 #[must_use]
@@ -53,6 +54,57 @@ pub fn create_with(
                 types::WALK_TARGET,
                 WalkTarget::new(
                     Arc::new(EntityTracker::new(adult, false)),
+                    speed_modifier(tick.mob),
+                    min_range - 1,
+                ),
+            );
+            true
+        },
+    )
+}
+
+#[must_use]
+pub fn create_for_player(
+    min_range: i32,
+    max_range: i32,
+    speed_modifier: impl Fn(&dyn Mob) -> f32 + Send + Sync + 'static,
+) -> OneShot {
+    OneShot::new(
+        "BabyFollowPlayer",
+        vec![
+            (
+                types::NEAREST_VISIBLE_PLAYER.id(),
+                MemoryStatus::ValuePresent,
+            ),
+            (types::LOOK_TARGET.id(), MemoryStatus::Registered),
+            (types::WALK_TARGET.id(), MemoryStatus::ValueAbsent),
+        ],
+        move |tick| {
+            let living = &tick.mob.get_mob_entity().living_entity;
+            if !living.is_baby() {
+                return false;
+            }
+            let Some(player) = tick.state.get(types::NEAREST_VISIBLE_PLAYER).cloned() else {
+                return false;
+            };
+            let distance = living
+                .entity
+                .pos
+                .load()
+                .squared_distance_to_vec(&player.get_entity().pos.load());
+            let max = f64::from(max_range + 1);
+            let min = f64::from(min_range);
+            if distance >= max * max || distance < min * min {
+                return false;
+            }
+            tick.state.set(
+                types::LOOK_TARGET,
+                Arc::new(EntityTracker::new(player.clone(), true)) as Arc<dyn PositionTracker>,
+            );
+            tick.state.set(
+                types::WALK_TARGET,
+                WalkTarget::new(
+                    Arc::new(EntityTracker::new(player, false)),
                     speed_modifier(tick.mob),
                     min_range - 1,
                 ),

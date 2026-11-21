@@ -38,6 +38,8 @@ pub trait MoveControlTrait: Control {
     fn get_wanted_position(&self) -> Vector3<f64> {
         Vector3::default()
     }
+
+    fn set_wait(&mut self) {}
 }
 
 pub trait LookControlTrait: Control {

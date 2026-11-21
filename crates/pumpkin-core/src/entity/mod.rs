@@ -574,6 +574,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Notifies this leash holder that an entity leashed to it experienced an elastic interaction.
+    fn notify_leash_holder(&self, _leashed: &dyn EntityBase) {}
+
+    /// Checks whether this entity can accept the given passenger.
+    fn can_add_passenger(&self, _passenger: &dyn EntityBase) -> bool {
+        true
+    }
+
     fn is_spectator(&self) -> bool {
         false
     }
@@ -5389,6 +5397,7 @@ impl Entity {
         let result = if distance > elastic_threshold
             && self.check_elastic_interactions(caller, holder.as_ref())
         {
+            holder.notify_leash_holder(caller);
             LeashTick::Elastic(holder)
         } else {
             LeashTick::CloseRange(holder)
@@ -5597,6 +5606,9 @@ impl Entity {
         reason = "callers pass owned Arc for vehicle and passenger"
     )]
     pub fn add_passenger(&self, vehicle: Arc<dyn EntityBase>, passenger: Arc<dyn EntityBase>) {
+        if !vehicle.can_add_passenger(passenger.as_ref()) {
+            return;
+        }
         let mut mount_event =
             crate::plugin::api::events::entity::entity_mount::EntityMountEvent::new(
                 passenger.get_entity().entity_id,

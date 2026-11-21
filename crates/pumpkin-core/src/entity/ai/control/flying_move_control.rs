@@ -126,4 +126,8 @@ impl MoveControlTrait for FlyingMoveControl {
     fn get_wanted_position(&self) -> Vector3<f64> {
         Vector3::new(self.wanted_x, self.wanted_y, self.wanted_z)
     }
+
+    fn set_wait(&mut self) {
+        self.operation = Operation::Wait;
+    }
 }
