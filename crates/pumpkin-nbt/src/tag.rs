@@ -485,6 +485,21 @@ impl NbtTag {
         }
     }
 
+    /// Converts any numeric tag to an int, `NumericTag.intValue`.
+    #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
+    pub fn as_numeric_int(&self) -> Option<i32> {
+        match *self {
+            Self::Byte(byte) => Some(byte.into()),
+            Self::Short(short) => Some(short.into()),
+            Self::Int(int) => Some(int),
+            Self::Long(long) => Some(long as i32),
+            Self::Float(float) => Some(float.floor() as i32),
+            Self::Double(double) => Some(double.floor() as i32),
+            _ => None,
+        }
+    }
+
     /// Converts any numeric tag to a float, `NumericTag.floatValue`.
     #[must_use]
     #[expect(clippy::cast_possible_truncation, clippy::cast_precision_loss)]

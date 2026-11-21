@@ -4,15 +4,13 @@ use std::sync::atomic::Ordering;
 use crate::block::entities::lectern::LecternBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
-    GetRedstonePowerArgs, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs,
-    OnScheduledTickArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
+    BlockBehaviour, EmitsRedstonePowerArgs, GetComparatorOutputArgs, GetRedstonePowerArgs,
+    GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs,
+    OnStateReplacedArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
 };
-use crate::entity::Entity;
-use crate::entity::item::ItemEntity;
 use crate::world::World;
 use pumpkin_data::block_properties::LecternLikeProperties;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
@@ -25,7 +23,6 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
@@ -130,7 +127,7 @@ impl LecternBlock {
         world.sync_world_event(WorldEvent::SoundPageTurn, *position, 0);
     }
 
-    /// Sets `has_book`, dropping any pending pulse like vanilla `setHasBook`.
+    /// Sets `has_book`, dropping any pending pulse like vanilla `resetBookState`.
     pub(crate) fn set_has_book(world: &Arc<World>, position: &BlockPos, has_book: bool) {
         let (block, state_id) = world.get_block_and_state_id(position);
         if block != &Block::LECTERN {
@@ -140,6 +137,7 @@ impl LecternBlock {
         props.powered = false;
         props.has_book = has_book;
         world.set_block_state(position, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
+        world.emit_game_event(GameEvent::BlockChange.name(), position.to_centered_f64());
         Self::update_neighbors_below(world, position);
     }
 }
@@ -194,7 +192,8 @@ impl BlockBehaviour for LecternBlock {
         }
 
         let block_entity = args.world.get_block_entity(args.position)?;
-        let inventory = block_entity.get_inventory()?;
+        let lectern = Arc::downcast::<LecternBlockEntity>(block_entity).ok()?;
+        let inventory = lectern.book_inventory();
 
         let controller = Arc::new(LecternPageController {
             world: args.world.clone(),
@@ -273,28 +272,6 @@ impl BlockBehaviour for LecternBlock {
             let props = LecternLikeProperties::from_state_id(args.old_state_id);
             if props.powered {
                 Self::update_neighbors_below(args.world, args.position);
-            }
-        }
-    }
-
-    fn broken(&self, args: BrokenArgs<'_>) {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(lectern_entity) = block_entity.as_any().downcast_ref::<LecternBlockEntity>()
-        {
-            let book = lectern_entity.remove_stack(0);
-            if !book.is_empty() {
-                // Drop the book item
-                let entity = Entity::new(
-                    args.world.clone(),
-                    Vector3::new(
-                        f64::from(args.position.0.x) + 0.5,
-                        f64::from(args.position.0.y) + 0.5,
-                        f64::from(args.position.0.z) + 0.5,
-                    ),
-                    &EntityType::ITEM,
-                );
-                let item_entity = ItemEntity::new(entity, book);
-                args.world.spawn_entity(Arc::new(item_entity));
             }
         }
     }

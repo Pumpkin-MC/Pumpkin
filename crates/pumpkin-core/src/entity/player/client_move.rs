@@ -249,6 +249,7 @@ impl Player {
 
         if let Some(pos) = target
             && pos != last_pos
+            && server.plugin_manager.has_handlers::<PlayerMoveEvent>()
         {
             let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) else {
                 return ClientMoveOutcome::Ignored;

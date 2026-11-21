@@ -298,6 +298,19 @@ pub const fn smallest_encompassing_power_of_two(value: u32) -> u32 {
     value.next_power_of_two()
 }
 
+/// Vanilla `Mth.floor(double)`. Saturates at the `i32` limits like `value.floor() as i32`,
+/// but needs no libm call on targets without SSE4.1.
+#[inline]
+#[must_use]
+pub const fn floor_to_i32(value: f64) -> i32 {
+    let truncated = value as i32;
+    if value < truncated as f64 {
+        truncated.saturating_sub(1)
+    } else {
+        truncated
+    }
+}
+
 #[inline]
 pub fn floor_div<T: PrimInt + Zero + One>(x: T, y: T) -> T {
     let div = x / y;
