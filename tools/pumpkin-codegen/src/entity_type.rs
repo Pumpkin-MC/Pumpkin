@@ -57,6 +57,8 @@ pub struct EntityType {
     pub saveable: bool,
     /// Mob category controlling this entity's spawn cap and persistence.
     pub category: MobCategory,
+    /// Whether this entity type remains present on Peaceful difficulty.
+    pub allowed_in_peaceful: bool,
     /// Whether this entity can spawn far from the player (beyond normal spawn range).
     pub can_spawn_far_from_player: bool,
     /// Client tracking range in chunks.
@@ -333,6 +335,7 @@ impl ToTokens for NamedEntityType<'_> {
         let is_enemy = entity.is_enemy;
         let limit_per_chunk = entity.limit_per_chunk.unwrap_or(0);
         let can_spawn_far_from_player = entity.can_spawn_far_from_player;
+        let allowed_in_peaceful = entity.allowed_in_peaceful;
 
         let dimension0 = entity.dimension[0];
         let dimension1 = entity.dimension[1];
@@ -404,6 +407,7 @@ impl ToTokens for NamedEntityType<'_> {
                 fire_immune: #fire_immune,
                 immune_to: &crate::tag::Block::#immune_to,
                 category: &#spawn_category,
+                allowed_in_peaceful: #allowed_in_peaceful,
                 can_spawn_far_from_player: #can_spawn_far_from_player,
                 client_tracking_range: #client_tracking_range,
                 update_interval: #update_interval,
@@ -514,6 +518,7 @@ pub fn build() -> TokenStream {
             pub fire_immune: bool,
             pub immune_to: &'static crate::tag::Tag,
             pub category: &'static MobCategory,
+            pub allowed_in_peaceful: bool,
             pub can_spawn_far_from_player: bool,
             pub client_tracking_range: u32,
             pub update_interval: u32,

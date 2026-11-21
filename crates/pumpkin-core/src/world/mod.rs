@@ -1720,10 +1720,23 @@ impl World {
             })
             .collect();
 
+        let peaceful = self.level_info.load().difficulty == Difficulty::Peaceful;
+        let despawns_in_peaceful = |entity: &dyn EntityBase| {
+            peaceful
+                && !entity.get_entity().entity_type.allowed_in_peaceful
+                && entity.get_mob().is_some()
+        };
+        // Discarding a mob can dismount riders and release a leash at a saved position.
+        let has_peaceful_despawns = peaceful
+            && tickable
+                .iter()
+                .any(|(entity, _)| despawns_in_peaceful(entity.as_ref()));
+
         // Entities that can affect each other tick in list order; separate islands run in
         // parallel.
         let islands_config = &server.advanced_config.world.entity_islands;
-        let plan_islands = !entity_islands::plugins_observe_entity_ticks(server)
+        let plan_islands = !has_peaceful_despawns
+            && !entity_islands::plugins_observe_entity_ticks(server)
             && self
                 .island_schedule
                 .lock()
@@ -1788,6 +1801,16 @@ impl World {
             order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
 
             let base = entity.get_entity();
+            if despawns_in_peaceful(entity.as_ref()) {
+                if self.discard_entity(entity.as_ref()) {
+                    // Java advances the tick count and handles the leash after discarding the mob.
+                    base.tick_count.fetch_add(1, Relaxed);
+                    base.tick_leash(entity.as_ref());
+                    // Release the holder even when a plugin vetoes the lead drop.
+                    base.remove_leash();
+                }
+                return;
+            }
             base.tick_count.fetch_add(1, Relaxed);
             // Vanilla `rideTick`: a rider starts its tick without motion
             if base.has_vehicle() {
@@ -5549,6 +5572,11 @@ impl World {
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
+        self.discard_entity(entity);
+    }
+
+    /// Returns whether this call claimed the entity's removal.
+    fn discard_entity(&self, entity: &dyn EntityBase) -> bool {
         // Entity::remove passes its base projection; retain the registered living owner.
         let registered = self.get_entity_by_id(entity.get_entity().entity_id);
         let entity = registered.as_deref().unwrap_or(entity);
@@ -5558,7 +5586,7 @@ impl World {
             .compare_exchange(None, Some(RemovalReason::Discarded))
             .is_err()
         {
-            return;
+            return false;
         }
         base_entity.removed.store(true, Ordering::Release);
 
@@ -5586,6 +5614,7 @@ impl World {
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity().finish_removal(mob);
         }
+        true
     }
 
     pub async fn remove_entities_in_chunks(
