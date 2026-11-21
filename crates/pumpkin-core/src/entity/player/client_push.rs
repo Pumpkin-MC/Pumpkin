@@ -5,12 +5,14 @@
 //! `PlayerAuthInput` tick. Rewind history applies that motion at that tick and replays
 //! later inputs, so a jump is not overwritten.
 
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use pumpkin_util::math::vector3::Vector3;
 
 use super::Player;
 use crate::entity::EntityBase;
+use crate::entity::living::PushLookup;
 
 /// Most ticks a Bedrock motion and the answering `PlayerAuthInput` take together.
 const MAX_ROUND_TRIP_TICKS: u32 = 9;
@@ -64,12 +66,40 @@ fn bedrock_round_trip_ticks(ping_ms: u32) -> u32 {
 }
 
 impl Player {
+    /// Whether the player takes its turn in `pushEntities`.
+    fn pushes_entities(&self) -> bool {
+        let living = &self.living_entity;
+        !living.dead.load(Ordering::Relaxed) && living.health.load() > 0.0
+    }
+
     /// Vanilla `LivingEntity.pushEntities` for a player, run after all player ticks.
     pub fn push_entities(&self) {
-        let living = &self.living_entity;
-        if !living.dead.load(Ordering::Relaxed) && living.health.load() > 0.0 {
-            living.push_entities(self);
+        if self.pushes_entities() {
+            self.living_entity.push_entities(self);
         }
+    }
+
+    /// The entities [`Self::push_entities`] would act on now.
+    pub(crate) fn pushable_entities(&self, lookup: &dyn PushLookup) -> Vec<Arc<dyn EntityBase>> {
+        if self.pushes_entities() {
+            self.living_entity.pushable_entities(self, lookup)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// [`Self::push_entities`] with the entities found earlier in the same pass.
+    pub(crate) fn push_entities_among(&self, mut pushable: Vec<Arc<dyn EntityBase>>) {
+        if !self.pushes_entities() {
+            return;
+        }
+        // Cramming may have killed some of them since, and the dead are not pushable.
+        pushable.retain(|entity| {
+            entity
+                .get_living_entity()
+                .is_none_or(|living| living.can_be_pushed(false))
+        });
+        self.living_entity.push_entities_among(self, pushable);
     }
 
     /// Server `travel` friction, which the Bedrock client applies to pushes it carries.

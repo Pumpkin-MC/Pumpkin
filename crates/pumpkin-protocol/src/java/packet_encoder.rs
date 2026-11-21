@@ -164,7 +164,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     }
 
     #[must_use]
-    pub fn is_compressing_packet(&self, packet_data: &Bytes) -> bool {
+    pub fn is_compressing_packet(&self, packet_data: &[u8]) -> bool {
         self.compression
             .is_some_and(|(threshold, _)| packet_data.len() >= threshold)
     }
@@ -172,7 +172,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     #[allow(clippy::too_many_lines)]
     pub fn frame_packet(
         &mut self,
-        packet_data: &Bytes,
+        packet_data: &[u8],
         out: &mut Vec<u8>,
     ) -> Result<(), PacketEncodeError> {
         let data_len = packet_data.len();
@@ -193,7 +193,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             self.compression
         {
             if data_len >= compression_threshold {
-                self.compress_packet_data(packet_data.as_ref(), compression_level)?;
+                self.compress_packet_data(packet_data, compression_level)?;
                 debug_assert!(!self.compression_scratch.is_empty());
 
                 let full_packet_len_var_int: VarInt = (data_len_var_int.written_size()
@@ -242,7 +242,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                     .encode(&mut header_cursor)
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
 
-                packet_data.as_ref()
+                packet_data
             }
         } else {
             let full_packet_len_var_int: VarInt = data_len_var_int;
@@ -257,7 +257,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 .encode(&mut header_cursor)
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
 
-            packet_data.as_ref()
+            packet_data
         };
 
         let header_len = header_cursor.position() as usize;

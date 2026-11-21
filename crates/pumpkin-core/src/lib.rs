@@ -63,6 +63,8 @@ pub mod net;
 pub mod plugin;
 pub mod server;
 pub mod telemetry;
+#[cfg(test)]
+mod test_support;
 pub mod update_checker;
 pub mod world;
 

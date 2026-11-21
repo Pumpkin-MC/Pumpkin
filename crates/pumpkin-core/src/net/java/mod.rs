@@ -1,7 +1,7 @@
 use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CPlayDisconnect};
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::{io::Write, sync::Arc};
 
@@ -65,10 +65,12 @@ pub mod pending;
 pub mod play;
 pub mod recipe_helper;
 pub mod status;
+mod tick_runs;
 pub mod versions;
 
 pub use chunk_data::{CChunkData, ChunkLightExt};
-use outgoing::{DISCONNECT_FLUSH_TIMEOUT, OutgoingPacket, run_outgoing_packet_writer};
+use outgoing::{BatchItem, DISCONNECT_FLUSH_TIMEOUT, OutgoingPacket, run_outgoing_packet_writer};
+pub use tick_runs::{PacketRuns, PacketSink};
 pub use versions::JavaVersions;
 
 use arc_swap::ArcSwap;
@@ -78,7 +80,7 @@ use crate::entity::player::Player;
 use crate::net::chunk_sender::{ChunkSendOutcome, DeliveryFailure};
 use crate::net::{
     ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketRateLimiter, PlayerConfig,
-    decrement_pending_bytes,
+    decrement_pending_bytes, lock_briefly,
 };
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
@@ -91,6 +93,61 @@ fn frame_packet(packet_id: i32, payload: &[u8]) -> Option<Bytes> {
     framed.write_var_int(&VarInt(packet_id)).ok()?;
     framed.extend_from_slice(payload);
     Some(framed.into())
+}
+
+/// Packets for one client written back to back, to queue them in one go.
+#[derive(Default)]
+pub struct PacketRun {
+    bytes: Vec<u8>,
+    /// Where each packet ends in `bytes`.
+    ends: Vec<usize>,
+}
+
+impl PacketRun {
+    /// Adds a serialized packet: its id followed by its payload.
+    pub fn push(&mut self, packet: &[u8]) {
+        self.bytes.extend_from_slice(packet);
+        self.ends.push(self.bytes.len());
+    }
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.ends.is_empty()
+    }
+
+    /// The packets of `runs` in one run, in order.
+    fn merged<'a>(runs: impl Iterator<Item = &'a Self> + Clone) -> Self {
+        let mut merged = Self {
+            bytes: Vec::with_capacity(runs.clone().map(|run| run.bytes.len()).sum()),
+            ends: Vec::with_capacity(runs.clone().map(|run| run.ends.len()).sum()),
+        };
+        for run in runs {
+            let start = merged.bytes.len();
+            merged.bytes.extend_from_slice(&run.bytes);
+            merged.ends.extend(run.ends.iter().map(|end| start + end));
+        }
+        merged
+    }
+
+    /// Empties the run and keeps its room for the next packets, up to `keep` bytes.
+    fn reset(&mut self, keep: usize) {
+        if self.bytes.capacity() > keep {
+            *self = Self::default();
+        } else {
+            self.bytes.clear();
+            self.ends.clear();
+        }
+    }
+
+    fn into_packets(self) -> impl Iterator<Item = Bytes> {
+        let bytes = Bytes::from(self.bytes);
+        let mut start = 0;
+        self.ends.into_iter().map(move |end| {
+            let packet = bytes.slice(start..end);
+            start = end;
+            packet
+        })
+    }
 }
 
 #[repr(C)]
@@ -149,8 +206,14 @@ pub struct JavaClient {
     pub packet_sequence: AtomicI32,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
-    /// Vanilla `suspendFlushingOnServerThread`.
+    /// Vanilla `suspendFlushingOnServerThread`. Lifted only while `tick_batch` is locked.
     suspend_flushing: Arc<AtomicBool>,
+    /// Ordinary packets of the running tick. They reach the writer in one go when the tick
+    /// ends or when a packet that cannot wait follows them.
+    tick_batch: std::sync::Mutex<Vec<BatchItem>>,
+    /// The number of the last [`PacketSink`] that holds this client, above the client's
+    /// place in it.
+    sink_place: AtomicU64,
 }
 
 impl JavaClient {
@@ -189,7 +252,20 @@ impl JavaClient {
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
             suspend_flushing: Arc::new(AtomicBool::new(false)),
+            tick_batch: std::sync::Mutex::new(Vec::new()),
+            sink_place: AtomicU64::new(0),
         }
+    }
+
+    fn set_place(&self, phase: u32, place: usize) {
+        self.sink_place
+            .store(u64::from(phase) << 32 | place as u64, Ordering::Relaxed);
+    }
+
+    /// The client's place in the sink numbered `phase`, when it is in that one.
+    fn place_in(&self, phase: u32) -> Option<usize> {
+        let sink_place = self.sink_place.load(Ordering::Relaxed);
+        ((sink_place >> 32) as u32 == phase).then_some(sink_place as u32 as usize)
     }
 
     /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`.
@@ -199,24 +275,63 @@ impl JavaClient {
 
     /// Vanilla `resumeFlushing`: queue `flushChannel` then lift the hold.
     pub fn resume_flushing(&self) {
-        self.flush_channel();
-        self.suspend_flushing.store(false, Ordering::Release);
+        self.flush(true);
     }
 
     /// Flushes Channel even while suspended.
     pub fn flush_channel(&self) {
-        if self
-            .outgoing_packet_queue_send
-            .send(OutgoingPacket::Flush)
-            .is_err()
-            && !self.close_token.is_cancelled()
-        {
+        self.flush(false);
+    }
+
+    fn flush(&self, resume: bool) {
+        self.queue_collected();
+        let queued = {
+            let mut batch = self.lock_tick_batch();
+            let queued = self.send_after_tick_batch(&mut batch, OutgoingPacket::Flush);
+            if resume {
+                // Under the lock, so no packet can still join the batch that was just sent.
+                self.suspend_flushing.store(false, Ordering::Release);
+            }
+            queued
+        };
+        if !queued && !self.close_token.is_cancelled() {
             warn!(
                 "Failed to queue flush for client {}: channel closed",
                 self.id
             );
             self.close();
         }
+    }
+
+    fn lock_tick_batch(&self) -> std::sync::MutexGuard<'_, Vec<BatchItem>> {
+        // In a crowd every tick thread queues to the same clients.
+        lock_briefly(&self.tick_batch)
+    }
+
+    /// Queues what this thread collects for the client in a [`PacketSink`], ahead of a packet
+    /// that is not collected.
+    fn queue_collected(&self) {
+        if let Some(run) = tick_runs::take(self) {
+            self.try_enqueue_run(run);
+        }
+    }
+
+    /// Queues the tick batch to the writer. `false` once the writer is gone.
+    fn send_tick_batch(&self, batch: &mut Vec<BatchItem>) -> bool {
+        if batch.is_empty() {
+            return true;
+        }
+        // The next tick usually holds about as many packets.
+        let packets = std::mem::replace(batch, Vec::with_capacity(batch.len()));
+        self.outgoing_packet_queue_send
+            .send(OutgoingPacket::Batch(packets))
+            .is_ok()
+    }
+
+    /// Queues `packet` to the writer behind the tick batch, which was queued first.
+    /// `false` once the writer is gone.
+    fn send_after_tick_batch(&self, batch: &mut Vec<BatchItem>, packet: OutgoingPacket) -> bool {
+        self.send_tick_batch(batch) && self.outgoing_packet_queue_send.send(packet).is_ok()
     }
 
     /// Drops the player again when joining failed.
@@ -494,6 +609,14 @@ impl JavaClient {
         }
     }
 
+    /// Whether a packet skips `PacketSentEvent`: nothing translates or observes it.
+    fn goes_out_unchanged(&self, observe: bool) -> bool {
+        self.version.load() == CURRENT_MC_VERSION
+            && (!observe
+                || !matches!(self.connection_state.load(), ConnectionState::Play)
+                || !crate::plugin::packet_sent_observed())
+    }
+
     /// `PacketSentEvent` for clients the multiversion plugin admitted below
     /// `CURRENT_MC_VERSION`: it gets the 26.3 id + payload and rewrites both.
     /// The packet is `None` when cancelled; the extra packets are sent either way.
@@ -503,10 +626,7 @@ impl JavaClient {
     /// plugins (anti-cheats, protocol libraries) see every outbound packet. `observe` is
     /// `false` for packets a plugin injected itself, to avoid echoing them back.
     fn translate_outgoing(&self, packet_data: Bytes, observe: bool) -> (Option<Bytes>, Vec<Bytes>) {
-        let current_version = self.version.load() == CURRENT_MC_VERSION;
-        if current_version
-            && (!observe || !matches!(self.connection_state.load(), ConnectionState::Play))
-        {
+        if self.goes_out_unchanged(observe) {
             return (Some(packet_data), Vec::new());
         }
         let player = self.player.load_full();
@@ -536,7 +656,7 @@ impl JavaClient {
         if event.cancelled {
             return (None, extras);
         }
-        if current_version {
+        if self.version.load() == CURRENT_MC_VERSION {
             return (Some(packet_data), extras);
         }
         (frame_packet(event.packet_id, &event.payload), extras)
@@ -546,8 +666,13 @@ impl JavaClient {
         self.try_enqueue_packet_data(packet_data);
     }
 
-    /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
+    /// `false` when the packet was dropped instead (cancelled, closed, buffer full). A short
+    /// packet collected in a [`PacketSink`] counts as queued: a connection that is closed
+    /// before the sink hands it over drops it there.
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
+        if self.goes_out_unchanged(true) && tick_runs::push(self, &packet_data) {
+            return true;
+        }
         let Some((packet_data, packet_len, extras)) = self.reserve_pending_bytes(packet_data, true)
         else {
             return false;
@@ -589,11 +714,71 @@ impl JavaClient {
         self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len)
     }
 
+    /// Queues the packets of `run` in order, like [`Self::try_enqueue_packet`] for each of
+    /// them, but with one queue operation for all.
+    pub fn try_enqueue_run(&self, run: PacketRun) {
+        if !self.goes_out_unchanged(true) {
+            // Each packet has its own `PacketSentEvent`.
+            for packet in run.into_packets() {
+                self.try_enqueue_packet(packet);
+            }
+            return;
+        }
+        if run.is_empty() || self.close_token.is_cancelled() {
+            return;
+        }
+        let Some(len) = self.reserve_bytes(run.bytes.len()) else {
+            return;
+        };
+        let queued = {
+            let mut batch = self.lock_tick_batch();
+            if self.suspend_flushing.load(Ordering::Acquire) {
+                batch.push(BatchItem::Run(run));
+                true
+            } else {
+                self.send_after_tick_batch(
+                    &mut batch,
+                    OutgoingPacket::Batch(vec![BatchItem::Run(run)]),
+                )
+            }
+        };
+        if !queued {
+            self.close_after_failed_queue(len);
+        }
+    }
+
+    /// [`Self::try_enqueue_run`] for several runs in order, copied into one for the writer
+    /// task. The runs keep their room, so a tick phase can fill them again.
+    pub fn try_enqueue_runs<'a>(&self, runs: impl Iterator<Item = &'a PacketRun> + Clone) {
+        self.try_enqueue_run(PacketRun::merged(runs));
+    }
+
     /// `false` once the writer is gone. Then the connection is closed.
     fn queue_outgoing(&self, packet: OutgoingPacket, packet_len: usize) -> bool {
-        if self.outgoing_packet_queue_send.send(packet).is_ok() {
-            return true;
+        self.queue_collected();
+        let queued = {
+            let mut batch = self.lock_tick_batch();
+            match packet {
+                // Mid-tick nothing is flushed anyway, so ordinary packets wait here: one
+                // queue operation and one writer wake-up per tick instead of one per packet.
+                OutgoingPacket::Data {
+                    data,
+                    completion: None,
+                } if self.suspend_flushing.load(Ordering::Acquire) => {
+                    batch.push(BatchItem::Packet(data));
+                    true
+                }
+                packet => self.send_after_tick_batch(&mut batch, packet),
+            }
+        };
+        if !queued {
+            self.close_after_failed_queue(packet_len);
         }
+        queued
+    }
+
+    /// The writer is gone, so `packet_len` reserved bytes will never be written.
+    fn close_after_failed_queue(&self, packet_len: usize) {
         decrement_pending_bytes(&self.pending_bytes, packet_len);
         // It is expected that the packet will fail if closed
         if !self.close_token.is_cancelled() {
@@ -604,7 +789,6 @@ impl JavaClient {
             // Connection to the client closed since the stream is in an unknown state
             self.close();
         }
-        false
     }
 
     pub async fn await_close_interrupt(&self) {
@@ -666,12 +850,11 @@ impl JavaClient {
         {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
+            self.queue_collected();
             // The writer drains and flushes it after `close()`
-            if self
-                .outgoing_packet_queue_send
-                .send(OutgoingPacket::normal(data))
-                .is_err()
-            {
+            let queued = self
+                .send_after_tick_batch(&mut self.lock_tick_batch(), OutgoingPacket::normal(data));
+            if !queued {
                 decrement_pending_bytes(&self.pending_bytes, packet_len);
                 // Expected: the writer task is already gone.
                 debug!(
@@ -833,6 +1016,8 @@ impl JavaClient {
     /// This function does not attempt to send any disconnect packets to the client.
     /// Packets already queued are still written and flushed, bounded by `DISCONNECT_FLUSH_TIMEOUT`.
     pub fn close(&self) {
+        self.queue_collected();
+        self.send_tick_batch(&mut self.lock_tick_batch());
         self.close_token.cancel();
     }
 

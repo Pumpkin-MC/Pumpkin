@@ -33,7 +33,9 @@ use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::neutral::find_by_uuid;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
+use crate::world::World;
 use crate::world::loot::LootContextParameters;
+use crate::world::scoreboard::CollisionRule;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
@@ -201,22 +203,46 @@ impl EffectParticle {
     }
 }
 
+/// What `pushEntities` reads of an entity it meets. Asks the entity each time; a pass over
+/// many entities can remember the answers.
+pub(crate) trait PushLookup: Sync {
+    /// Vanilla `EntitySelector.NO_SPECTATORS` and `Entity.isPushable`.
+    fn is_pushable(&self, entity: &dyn EntityBase) -> bool {
+        !entity.is_spectator() && entity.is_pushable()
+    }
+
+    /// See [`EntityBase::get_team_collision`].
+    fn team_collision(&self, entity: &dyn EntityBase) -> Option<(String, CollisionRule)> {
+        entity.get_team_collision()
+    }
+}
+
+/// The lookup of one entity pushing on its own.
+pub(crate) struct AskEntity;
+
+impl PushLookup for AskEntity {}
+
+/// Vanilla `EntitySelector.pushableBy`, for the name and collision rule of both teams.
+/// The other team is only read when the own one can collide at all.
 fn is_allowed_by_team_rules(
-    own_team: Option<&crate::world::scoreboard::Team>,
-    their_team: Option<&crate::world::scoreboard::Team>,
+    own_team: Option<&(String, CollisionRule)>,
+    their_team: impl FnOnce() -> Option<(String, CollisionRule)>,
 ) -> bool {
-    use crate::world::scoreboard::CollisionRule;
-
-    let own_rule = own_team.map_or(CollisionRule::Always, |team| team.collision_rule);
-    let their_rule = their_team.map_or(CollisionRule::Always, |team| team.collision_rule);
-
-    if own_rule == CollisionRule::Never || their_rule == CollisionRule::Never {
+    let own_rule = own_team.map_or(CollisionRule::Always, |(_, rule)| *rule);
+    if own_rule == CollisionRule::Never {
+        return false;
+    }
+    let their_team = their_team();
+    let their_rule = their_team
+        .as_ref()
+        .map_or(CollisionRule::Always, |(_, rule)| *rule);
+    if their_rule == CollisionRule::Never {
         return false;
     }
 
     let same_team = own_team
-        .zip(their_team)
-        .is_some_and(|(own, their)| own.name == their.name);
+        .zip(their_team.as_ref())
+        .is_some_and(|((own, _), (their, _))| own == their);
 
     if (own_rule == CollisionRule::PushOwnTeam || their_rule == CollisionRule::PushOwnTeam)
         && same_team
@@ -2053,36 +2079,57 @@ impl LivingEntity {
         }
     }
 
+    /// Vanilla `LivingEntity.pushEntities`.
     pub(crate) fn push_entities(&self, dyn_self: &dyn EntityBase) {
+        let pushable = self.pushable_entities(dyn_self, &AskEntity);
+        self.push_entities_among(dyn_self, pushable);
+    }
+
+    /// Vanilla `Level.getPushableEntities` for the entity's own box.
+    pub(crate) fn pushable_entities(
+        &self,
+        dyn_self: &dyn EntityBase,
+        lookup: &dyn PushLookup,
+    ) -> Vec<Arc<dyn EntityBase>> {
         if dyn_self.get_mob().is_some_and(|mob| !mob.pushes_entities()) {
-            return;
+            return Vec::new();
         }
 
         let world = self.entity.world.load();
         let entity_bb = self.entity.bounding_box.load();
-        let mut own_team: Option<Option<crate::world::scoreboard::Team>> = None;
+        let mut own_team: Option<Option<(String, CollisionRule)>> = None;
+        // Not vanilla: with player collisions off no player pushes another,
+        // whatever their teams say.
+        let skips_players = !world.player_collisions && dyn_self.get_player().is_some();
 
-        let pushable: Vec<Arc<dyn EntityBase>> = world
+        world
             .get_all_at_box(&entity_bb)
             .into_iter()
             .filter(|entity| {
-                let entity_ref = entity.get_entity();
-                if entity_ref.entity_id == self.entity.entity_id
-                    || entity.is_spectator()
-                    || !entity.is_pushable()
+                if entity.get_entity().entity_id == self.entity.entity_id
+                    || (skips_players && entity.get_player().is_some())
+                    || !lookup.is_pushable(entity.as_ref())
                 {
                     return false;
                 }
-                let own = own_team.get_or_insert_with(|| dyn_self.get_team());
-                is_allowed_by_team_rules(own.as_ref(), entity.get_team().as_ref())
+                let own = own_team.get_or_insert_with(|| lookup.team_collision(dyn_self));
+                is_allowed_by_team_rules(own.as_ref(), || lookup.team_collision(entity.as_ref()))
             })
-            .collect();
+            .collect()
+    }
 
+    /// The rest of vanilla `LivingEntity.pushEntities`, once the pushable entities are known.
+    pub(crate) fn push_entities_among(
+        &self,
+        dyn_self: &dyn EntityBase,
+        pushable: Vec<Arc<dyn EntityBase>>,
+    ) {
         if pushable.is_empty() {
             return;
         }
 
         // Entity cramming check
+        let world = self.entity.world.load();
         let max_cramming = match world.get_game_rule(&GameRule::MaxEntityCramming) {
             GameRuleValue::Int(value) => value,
             GameRuleValue::Bool(_) => 0,
@@ -3042,9 +3089,7 @@ impl LivingEntity {
             }
 
             if show_death_messages && let Some(server) = world.server.upgrade() {
-                for player in server.get_all_players() {
-                    player.send_system_message(&final_death_message);
-                }
+                World::send_system_message_to(&server.get_all_players(), &final_death_message);
             }
         } else if self.entity.custom_name.load().is_some() {
             let death_message = Self::get_death_message(dyn_self, damage_type, source, cause);
@@ -5539,6 +5584,32 @@ mod tests {
             .unwrap();
 
         assert_eq!(bytes, [10, 17, 1, 28, 0xff, 0xcd, 0x5c, 0xab]);
+    }
+
+    #[tokio::test]
+    async fn every_player_reads_of_a_death_and_of_a_player_leaving_once()
+    -> crate::test_support::TestResult {
+        use crate::test_support::{Client, count, server, shutdown};
+        use pumpkin_protocol::java::client::play::CSystemChatMessage;
+
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let mut victim = Client::join(&server, 1, Vector3::new(0.5, 100.0, 0.5));
+        let mut watcher = Client::join(&server, 2, Vector3::new(3.5, 100.0, 0.5));
+        victim.received().await?;
+        watcher.received().await?;
+
+        victim.player.kill();
+
+        for client in [&mut victim, &mut watcher] {
+            assert_eq!(count::<CSystemChatMessage>(&client.received().await?), 1);
+        }
+
+        let world = server.worlds.load()[0].clone();
+        world.remove_player(&victim.player, true).await;
+        assert_eq!(count::<CSystemChatMessage>(&watcher.received().await?), 1);
+        shutdown(&server).await;
+        Ok(())
     }
 }
 

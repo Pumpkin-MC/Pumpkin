@@ -18,7 +18,9 @@ use std::time::{Duration, Instant};
 use crate::entity::attributes::{Modifier, ModifierOperation};
 use crate::entity::passive::abstract_horse::player_jump_pending_scale;
 use crate::plugin::api::events::enchantment::{EnchantItemEvent, PrepareItemEnchantEvent};
-use crate::world::scoreboard::{BedrockScoreboard, Scoreboard};
+use crate::world::scoreboard::{
+    BedrockScoreboard, CollisionRule, Scoreboard, broadcast_no_collision_member,
+};
 use advancement::PlayerAdvancement;
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
@@ -280,14 +282,14 @@ use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CBlockUpdate, CChangeDifficulty,
     CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
-    CEntityPositionSync, CEntityVelocity, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData,
-    COpenBook, COpenMountScreen, COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks,
-    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetCamera, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
-    CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags,
-    PlayerSpawnData, PreviousMessage, Statistic,
+    CEntityVelocity, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData, COpenBook,
+    COpenMountScreen, COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks, CPlayerAbilities,
+    CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetCamera,
+    CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
+    CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
+    CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
+    CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
+    PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -4558,16 +4560,24 @@ impl Player {
             }
             _ => {
                 drop(guard);
-                self.world()
-                    .scoreboard
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .send_to_player(self);
+                let world = self.world();
+                let has_team = {
+                    let scoreboard = world
+                        .scoreboard
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    scoreboard.send_to_player(self);
+                    scoreboard.get_entity_team(&self.gameprofile.name).is_some()
+                };
+                if !world.player_collisions && !has_team {
+                    broadcast_no_collision_member(&world, self);
+                }
             }
         }
     }
 
-    pub fn get_team(&self) -> Option<crate::world::scoreboard::Team> {
+    /// Reads the player's team where it stands: a `Team` is expensive to clone.
+    fn read_team<T>(&self, read: impl FnOnce(&crate::world::scoreboard::Team) -> T) -> Option<T> {
         let guard = self
             .custom_scoreboard
             .lock()
@@ -4576,7 +4586,7 @@ impl Player {
             && !sb.get_teams().is_empty()
             && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
         {
-            return Some(team.clone());
+            return Some(read(team));
         }
         drop(guard);
         let world = self.world();
@@ -4587,31 +4597,20 @@ impl Player {
         if sb.get_teams().is_empty() {
             return None;
         }
-        sb.get_entity_team(&self.gameprofile.name).cloned()
+        sb.get_entity_team(&self.gameprofile.name).map(read)
+    }
+
+    pub fn get_team(&self) -> Option<crate::world::scoreboard::Team> {
+        self.read_team(Clone::clone)
     }
 
     pub fn get_team_name(&self) -> Option<String> {
-        let guard = self
-            .custom_scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(CustomScoreboard::Java(sb)) = guard.as_ref()
-            && !sb.get_teams().is_empty()
-            && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
-        {
-            return Some(team.name.clone());
-        }
-        drop(guard);
-        let world = self.world();
-        let sb = world
-            .scoreboard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if sb.get_teams().is_empty() {
-            return None;
-        }
-        sb.get_entity_team(&self.gameprofile.name)
-            .map(|team| team.name.clone())
+        self.read_team(|team| team.name.clone())
+    }
+
+    /// See [`EntityBase::get_team_collision`].
+    pub fn get_team_collision(&self) -> Option<(String, CollisionRule)> {
+        self.read_team(|team| (team.name.clone(), team.collision_rule))
     }
 
     pub fn set_compass_target(&self, pos: pumpkin_util::math::position::BlockPos) {
@@ -5838,6 +5837,11 @@ impl Player {
 
         let gamemode = event.new_gamemode;
         self.gamemode.store(gamemode);
+        // Vanilla pairs a player again with its next move packet, `ChunkMap.move`. Here
+        // only a change of position does that, so a player standing still would stay as
+        // visible as it was.
+        let world = self.world();
+        world.entity_tracker.update_player_position(self, &world);
         // TODO: Fix this when mojang fixes it
         // This is intentional to keep the pure vanilla mojang experience
         // self.previous_gamemode.store(self.previous_gamemode.load());
@@ -8136,21 +8140,8 @@ impl EntityBase for Player {
             // Same world
             let yaw = yaw.unwrap_or_else(|| self.living_entity.entity.yaw.load());
             let pitch = pitch.unwrap_or_else(|| self.living_entity.entity.pitch.load());
+            // Watchers get the new position from the entity tracker, like vanilla.
             self.request_teleport(position, yaw, pitch);
-            let entity = self.get_entity();
-            let chunk_pos = entity.chunk_pos.load();
-            entity.world.load().broadcast_to_chunk_except(
-                chunk_pos,
-                &[self.living_entity.entity.entity_uuid],
-                &CEntityPositionSync::new(
-                    self.living_entity.entity.entity_id.into(),
-                    position,
-                    Vector3::new(0.0, 0.0, 0.0),
-                    yaw,
-                    pitch,
-                    entity.on_ground.load(Ordering::SeqCst),
-                ),
-            );
         } else if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) {
             self.spawn_task(async move {
                 player_arc.teleport_world(world, position, yaw, pitch).await;
