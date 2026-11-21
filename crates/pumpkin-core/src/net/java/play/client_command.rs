@@ -3,6 +3,33 @@ use super::*;
 use pumpkin_data::game_rules::GameRule;
 use pumpkin_protocol::java::client::play::CGameRuleValues;
 
+/// Clears the respawn state when the respawn task ends or is dropped.
+struct RespawnGuard {
+    player: Arc<Player>,
+    armed: bool,
+}
+
+impl RespawnGuard {
+    const fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for RespawnGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let mut state = self
+            .player
+            .respawn_state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.in_progress = false;
+        state.pending = false;
+    }
+}
+
 impl JavaClient {
     pub fn handle_client_status(&self, player: &Arc<Player>, client_status: &SClientCommand) {
         player.update_last_action_time();
@@ -12,17 +39,48 @@ impl JavaClient {
                 if player.living_entity.health.load() > 0.0 {
                     return;
                 }
+                let mut state = player
+                    .respawn_state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if state.in_progress {
+                    state.pending = true;
+                    drop(state);
+                    return;
+                }
+                state.in_progress = true;
+                drop(state);
                 let player_c = player.clone();
+                let mut guard = RespawnGuard {
+                    player: player.clone(),
+                    armed: true,
+                };
                 let Some(server) = player.world().server.upgrade() else {
                     return;
                 };
                 let hardcore = server.basic_config.hardcore;
                 server.spawn_task(async move {
-                    player_c
-                        .world()
-                        .clone()
-                        .respawn_player(&player_c, false)
-                        .await;
+                    loop {
+                        player_c
+                            .world()
+                            .clone()
+                            .respawn_player(&player_c, false)
+                            .await;
+                        let mut state = player_c
+                            .respawn_state
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if state.pending {
+                            state.pending = false;
+                            if player_c.living_entity.health.load() <= 0.0 {
+                                continue;
+                            }
+                        }
+                        state.in_progress = false;
+                        guard.disarm();
+                        break;
+                    }
+                    drop(guard);
                     if hardcore {
                         player_c.set_gamemode(GameMode::Spectator);
                     }

@@ -1503,7 +1503,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let world_res = self.get(&world)?;
         let internal_rule = from_wit_game_rule(rule);
         let internal_value = from_wit_game_rule_value(value);
-        world_res.set_game_rule(&internal_rule, internal_value);
+        world_res.set_game_rule(&internal_rule, &internal_value);
         Ok(())
     }
 
