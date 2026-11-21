@@ -67,7 +67,7 @@ struct OnExecutor;
 impl CommandExecutor for OnExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let server = context.source.server();
-        let previous = server.white_list.swap(true, Ordering::Relaxed);
+        let previous = server.set_using_whitelist(true);
         if previous {
             Err(ERROR_ALREADY_ON.create_without_context())
         } else {
@@ -89,7 +89,7 @@ struct OffExecutor;
 impl CommandExecutor for OffExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let server = context.source.server();
-        let previous = server.white_list.swap(false, Ordering::Relaxed);
+        let previous = server.set_using_whitelist(false);
         if previous {
             context.source.send_feedback(
                 pumpkin_macros::translate_cross!(
