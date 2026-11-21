@@ -250,3 +250,67 @@ impl FlowingFluidProperties {
         fluid.states[self.row()].block_state_id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Fluid;
+    use crate::Block;
+    use crate::block_properties::{BlockProperties, WaterLikeProperties};
+
+    #[test]
+    fn liquid_block_states_preserve_source_flow_and_falling_depths() {
+        // LiquidBlock.getFluidState: source, amounts 7..1, then falling amount 8.
+        let amounts = [8, 7, 6, 5, 4, 3, 2, 1, 8, 8, 8, 8, 8, 8, 8, 8];
+        for (block, source, flowing) in [
+            (&Block::WATER, &Fluid::WATER, &Fluid::FLOWING_WATER),
+            (&Block::LAVA, &Fluid::LAVA, &Fluid::FLOWING_LAVA),
+        ] {
+            for (level, amount) in amounts.into_iter().enumerate() {
+                let id = WaterLikeProperties { level: level as u8 }.to_state_id(block);
+                let (fluid, state) = Fluid::fluid_state_of(id);
+                let expected = if level == 0 { source } else { flowing };
+                assert_eq!(fluid.id, expected.id, "{} level {level}", block.name);
+                assert_eq!(state.level, amount);
+                assert!((state.height - f32::from(amount) / 9.0).abs() < f32::EPSILON);
+                assert_eq!(state.is_source, level == 0);
+                assert_eq!(state.falling, level >= 8);
+                assert!(!state.is_empty);
+                assert_eq!(
+                    state.block_state_id,
+                    WaterLikeProperties {
+                        level: level.min(8) as u8
+                    }
+                    .to_state_id(block)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn aquatic_and_waterlogged_blocks_contain_source_water() {
+        let wet_stairs = Block::OAK_STAIRS
+            .set_waterlogged(Block::OAK_STAIRS.default_state.id, true)
+            .unwrap();
+        for id in [
+            Block::KELP.default_state.id,
+            Block::KELP_PLANT.default_state.id,
+            Block::SEAGRASS.default_state.id,
+            Block::TALL_SEAGRASS.default_state.id,
+            Block::BUBBLE_COLUMN.default_state.id,
+            wet_stairs,
+        ] {
+            let (fluid, state) = Fluid::fluid_state_of(id);
+            assert_eq!(fluid.id, Fluid::WATER.id);
+            assert!(state.is_source && !state.is_empty && !state.falling);
+            assert_eq!(state.level, 8);
+            assert!((state.height - 8.0 / 9.0).abs() < f32::EPSILON);
+        }
+
+        for block in [&Block::AIR, &Block::OAK_STAIRS, &Block::WATER_CAULDRON] {
+            let (fluid, state) = Fluid::fluid_state_of(block.default_state.id);
+            assert_eq!(fluid.id, Fluid::EMPTY.id);
+            assert!(state.is_empty);
+            assert_eq!(state.height, 0.0);
+        }
+    }
+}

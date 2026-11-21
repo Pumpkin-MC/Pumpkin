@@ -53,6 +53,7 @@ impl DatapackManager {
         };
         let empty = NbtCompound::new();
         let attributes = root.get_compound("attributes").unwrap_or(&empty);
+        // TODO: vanilla refuses to start when a datapack fails to load instead of keeping the built-in type.
         match with_attributes(dimension.clone(), attributes) {
             Ok(resolved) => resolved,
             Err(key) => {
