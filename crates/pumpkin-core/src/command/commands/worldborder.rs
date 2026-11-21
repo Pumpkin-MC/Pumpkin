@@ -32,7 +32,9 @@ const ERROR_TOO_SMALL: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_WORLDBORDER_SET_FAILED_SMALL,
     translation::java::COMMANDS_WORLDBORDER_SET_FAILED_SMALL,
 );
-const ERROR_TOO_BIG: CommandErrorType<0> = CommandErrorType::new(
+const MAX_SIZE: f64 = 5.999_997e7;
+
+const ERROR_TOO_BIG: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_WORLDBORDER_SET_FAILED_BIG,
     translation::java::COMMANDS_WORLDBORDER_SET_FAILED_BIG,
 );
@@ -76,8 +78,10 @@ fn set_size(
         if distance < 1.0 {
             return Err(ERROR_TOO_SMALL.create_without_context());
         }
-        if distance > 5.999_997e7 {
-            return Err(ERROR_TOO_BIG.create_without_context());
+        if distance > MAX_SIZE {
+            return Err(
+                ERROR_TOO_BIG.create_without_context(TextComponent::text(format!("{MAX_SIZE:.0}")))
+            );
         }
 
         let speed = (time_in_ticks > 0).then(|| time_in_ticks * 50); // ticks to milliseconds
