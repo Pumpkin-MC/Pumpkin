@@ -447,7 +447,16 @@ pub fn game_rules_from_nbt(root: &NbtCompound) -> GameRuleRegistry {
                 }
             }
             GameRuleValue::Int(i) => {
-                if let Some(v) = inner.get_int(&key) {
+                let Some(v) = inner.get_int(&key) else {
+                    continue;
+                };
+                // Vanilla `Codec.intRange`: an out of range value keeps the default.
+                if rule
+                    .int_bounds()
+                    .is_some_and(|(min, max)| !(min..=max).contains(&v))
+                {
+                    warn!("Game rule {key} value {v} is out of range, using the default");
+                } else {
                     *i = i64::from(v);
                 }
             }

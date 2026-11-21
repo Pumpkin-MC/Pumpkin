@@ -179,4 +179,11 @@ pub trait GameTestWorld: Send + Sync {
             "execute_command is not supported by this GameTestWorld".to_string(),
         ))
     }
+
+    /// Whether the world runs with the feature flag `flag`, e.g. `minecraft:minecart_improvements`.
+    async fn is_feature_enabled(&self, _flag: &str) -> GameTestResult<bool> {
+        Err(GameTestError::World(
+            "is_feature_enabled is not supported by this GameTestWorld".to_string(),
+        ))
+    }
 }

@@ -139,9 +139,7 @@ impl EnchantmentHelper {
                         || attacker
                             .get_player()
                             .is_some_and(crate::entity::player::Player::is_flying);
-                    let fall_distance = attacker
-                        .get_living_entity()
-                        .map_or(0.0, |living| living.fall_distance.load());
+                    let fall_distance = attacker_entity.fall_distance.load();
                     if !is_flying && fall_distance >= 1.5 {
                         targeted_effect.effect.apply(
                             &world,

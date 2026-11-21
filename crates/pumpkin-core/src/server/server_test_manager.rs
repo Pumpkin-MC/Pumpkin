@@ -924,4 +924,13 @@ impl GameTestWorld for ServerGameTestWorld {
                 })?;
         Ok(count.max(0).cast_unsigned())
     }
+
+    async fn is_feature_enabled(&self, flag: &str) -> GameTestResult<bool> {
+        let Some(server) = self.world.server.upgrade() else {
+            return Err(GameTestError::World(
+                "World is not attached to a running server".to_string(),
+            ));
+        };
+        Ok(server.is_feature_enabled(flag))
+    }
 }

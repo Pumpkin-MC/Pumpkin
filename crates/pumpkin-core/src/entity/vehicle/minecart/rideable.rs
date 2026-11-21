@@ -29,3 +29,20 @@ impl RideableMinecart {
         true
     }
 }
+
+impl RideableMinecart {
+    /// Vanilla `ejectPassengers`: last rider first.
+    pub(super) fn eject_passengers(entity: &Entity) {
+        let riders: Vec<i32> = entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .rev()
+            .map(|passenger| passenger.get_entity().entity_id)
+            .collect();
+        for rider in riders {
+            entity.remove_passenger(rider);
+        }
+    }
+}

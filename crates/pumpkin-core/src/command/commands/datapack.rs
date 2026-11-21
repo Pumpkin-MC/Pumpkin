@@ -11,6 +11,7 @@ use crate::command::argument_builder::{ArgumentBuilder, argument, command, liter
 use crate::command::argument_types::component::ComponentArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
@@ -29,6 +30,11 @@ static ERROR_UNKNOWN_DATAPACK: CommandErrorType<1> = CommandErrorType::new(
 static ERROR_ENABLE_FAILED: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_DATAPACK_ENABLE_FAILED,
     translation::java::COMMANDS_DATAPACK_ENABLE_FAILED,
+);
+
+static ERROR_ENABLE_NO_FLAGS: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_DATAPACK_ENABLE_FAILED_NO_FLAGS,
+    translation::java::COMMANDS_DATAPACK_ENABLE_FAILED_NO_FLAGS,
 );
 
 static ERROR_DISABLE_FAILED: CommandErrorType<1> = CommandErrorType::new(
@@ -61,6 +67,24 @@ fn get_available_packs(server: &Server) -> Vec<String> {
 
 fn find_pack_name(server: &Server, input: &str) -> Option<String> {
     crate::data::datapack::DatapackManager::find_pack_name(server, input)
+}
+
+/// Vanilla refuses a pack whose flags this world doesn't have.
+fn check_flags(server: &Server, pack: &str) -> Result<(), CommandSyntaxError> {
+    // Vanilla doesn't know a pack it can't read.
+    let Some(missing) = crate::data::datapack::DatapackManager::missing_features(server, pack)
+    else {
+        return Err(
+            ERROR_UNKNOWN_DATAPACK.create_without_context(TextComponent::text(pack.to_owned()))
+        );
+    };
+    if missing.is_empty() {
+        return Ok(());
+    }
+    Err(ERROR_ENABLE_NO_FLAGS.create_without_context_args_slice(&[
+        TextComponent::text(pack.to_owned()),
+        TextComponent::text(missing.join(", ")),
+    ]))
 }
 
 fn format_pack(name: &str) -> TextComponent {
@@ -232,6 +256,7 @@ impl CommandExecutor for DatapackEnableExecutor {
                 ERROR_ENABLE_FAILED.create_without_context(TextComponent::text(resolved_name))
             );
         }
+        check_flags(server, &resolved_name)?;
 
         let target = resolved_name.clone();
         let pos = self.0;
@@ -299,6 +324,7 @@ impl CommandExecutor for DatapackEnableExistingExecutor {
                 ERROR_ENABLE_FAILED.create_without_context(TextComponent::text(target_pack))
             );
         }
+        check_flags(server, &target_pack)?;
 
         if !enabled.contains(&existing_pack) {
             return Err(

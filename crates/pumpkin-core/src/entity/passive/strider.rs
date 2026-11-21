@@ -107,6 +107,13 @@ impl Animal for StriderEntity {
 }
 
 impl Mob for StriderEntity {
+    fn mob_dismount_location_for_passenger(
+        &self,
+        passenger: &dyn EntityBase,
+    ) -> pumpkin_util::math::vector3::Vector3<f64> {
+        crate::entity::dismount_helper::strider_dismount_location(self.get_entity(), passenger)
+    }
+
     fn can_dispenser_equip_into_slot(&self, slot: &EquipmentSlot) -> bool {
         *slot == EquipmentSlot::SADDLE || self.mob_entity.can_pick_up_loot()
     }

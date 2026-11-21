@@ -113,10 +113,6 @@ impl BoatEntity {
             None,
         );
     }
-
-    fn send_wobble_metadata(&self) {
-        self.vehicle.send_wobble_metadata();
-    }
 }
 
 impl EntityBase for BoatEntity {
@@ -176,6 +172,34 @@ impl EntityBase for BoatEntity {
         }
     }
 
+    fn dismount_location_for_passenger(&self, passenger: &dyn EntityBase) -> Vector3<f64> {
+        crate::entity::dismount_helper::boat_dismount_location(&self.vehicle.entity, passenger)
+    }
+
+    /// Vanilla `AbstractBoat.checkFallDamage`: no `fallOn`, water below stops the fall.
+    fn check_fall_damage(&self, caller: &dyn EntityBase, y_motion: f64, on_ground: bool) {
+        let entity = &self.vehicle.entity;
+        if caller.is_passenger() {
+            return;
+        }
+        if on_ground {
+            entity.fall_distance.store(0.0);
+            return;
+        }
+        let below = entity.block_pos.load().down();
+        let water_below = pumpkin_data::fluid::Fluid::from_state_id(
+            entity.world.load().get_block_state_id(&below),
+        )
+        .is_some_and(|fluid| {
+            pumpkin_data::tag::Taggable::has_tag(fluid, &pumpkin_data::tag::Fluid::MINECRAFT_WATER)
+        });
+        if !water_below && y_motion < 0.0 {
+            entity
+                .fall_distance
+                .store(entity.fall_distance.load() - f64::from(y_motion as f32));
+        }
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.vehicle.entity
     }
@@ -202,6 +226,8 @@ impl EntityBase for BoatEntity {
     }
 
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
+        // Like minecarts: the tracker syncs the velocity, `velocity_dirty` marks pushes.
+        self.vehicle.entity.update_last_pos();
         self.vehicle.tick();
 
         let underwater = self.ticks_underwater.load();
@@ -210,10 +236,6 @@ impl EntityBase for BoatEntity {
         } else if underwater > 0.0 {
             self.ticks_underwater.store((underwater - 1.0).max(0.0));
         }
-    }
-
-    fn init_data_tracker(&self) {
-        self.send_wobble_metadata();
     }
 
     fn can_hit(&self) -> bool {

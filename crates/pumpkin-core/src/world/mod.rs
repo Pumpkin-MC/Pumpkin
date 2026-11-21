@@ -962,6 +962,13 @@ impl World {
         let mut new_info = (**current_info).clone();
         match (new_info.game_rules.get_mut(rule), value) {
             (GameRuleValue::Int(target), GameRuleValue::Int(val)) => {
+                if rule
+                    .int_bounds()
+                    .is_some_and(|(min, max)| !(i64::from(min)..=i64::from(max)).contains(&val))
+                {
+                    warn!("Game rule {rule} value {val} is out of range");
+                    return;
+                }
                 *target = val;
             }
             (GameRuleValue::Bool(target), GameRuleValue::Bool(val)) => {
@@ -2520,8 +2527,12 @@ impl World {
         let min = BlockPos::floored_v(bounding_box.min.add_raw(0.0, -0.50001, 0.0));
         let max = bounding_box.max_block_pos();
         let pos_iter = BlockPos::iterate(min, max);
+        let ignored = entity.ignored_block_collisions();
 
         for pos in pos_iter {
+            if ignored.is_some_and(|(below, slope)| pos == below || slope == Some(pos)) {
+                continue;
+            }
             let state = self.get_block_state(&pos);
 
             if state.is_air() {
