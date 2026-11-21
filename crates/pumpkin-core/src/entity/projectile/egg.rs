@@ -143,7 +143,7 @@ impl EntityBase for EggEntity {
                 to_spawn as u8,
                 hatching_type,
             );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 hatching = false;
             } else {

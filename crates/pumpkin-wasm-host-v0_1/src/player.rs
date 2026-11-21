@@ -3652,7 +3652,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
                         player.clone(),
                         protocol_dialog.clone(),
                     );
-                server.plugin_manager.fire(&server, &mut event).await;
+                event = server.plugin_manager.fire(&server, event).await;
                 if event.cancelled {
                     return Ok(());
                 }
@@ -3709,7 +3709,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
                     pumpkin_core::plugin::api::events::dialog::dialog_clear::DialogClearEvent::new(
                         player.clone(),
                     );
-                server.plugin_manager.fire(&server, &mut event).await;
+                event = server.plugin_manager.fire(&server, event).await;
                 if event.cancelled {
                     return Ok(());
                 }
@@ -3772,7 +3772,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
                         player_arc,
                         reason.clone().to_pretty_console(),
                     );
-                server.plugin_manager.fire(&server, &mut event).await;
+                event = server.plugin_manager.fire(&server, event).await;
                 if event.cancelled {
                     return Ok(());
                 }
@@ -4183,7 +4183,7 @@ impl pumpkin::plugin::player::HostBedrockPlayerWithStore<PluginHostState>
                         player_arc,
                         options.message.clone(),
                     );
-                server.plugin_manager.fire(&server, &mut event).await;
+                event = server.plugin_manager.fire(&server, event).await;
                 if event.cancelled {
                     return Ok(());
                 }

@@ -98,7 +98,7 @@ pub fn bucket_mob_pickup(
                 bucket_item: mob.bucket_item().registry_key.to_string(),
                 cancelled: false,
             };
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
         if event.cancelled {
             return Some(true);
         }

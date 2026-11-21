@@ -48,7 +48,7 @@ impl PendingConnection {
             num_players,
             status_response.favicon.clone(),
         );
-        server.plugin_manager.fire(server, &mut event).await;
+        event = server.plugin_manager.fire(server, event).await;
 
         status_response.description = event.motd;
         status_response.favicon = event.favicon;

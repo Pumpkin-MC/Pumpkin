@@ -346,7 +346,7 @@ impl EntityBase for ExperienceOrbEntity {
             amount,
         );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return false;

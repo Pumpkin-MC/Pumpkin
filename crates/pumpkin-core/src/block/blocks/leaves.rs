@@ -108,7 +108,7 @@ impl BlockBehaviour for LeavesBlock {
                         *args.position,
                         args.world.clone(),
                     );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     return;
                 }

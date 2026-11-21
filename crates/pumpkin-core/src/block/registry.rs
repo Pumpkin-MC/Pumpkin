@@ -573,7 +573,7 @@ impl BlockRegistry {
                         None,
                         vec![],
                     );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     return false;
                 }
@@ -845,9 +845,7 @@ impl BlockRegistry {
             block: clicked_block,
             cancelled: false,
         };
-        server
-            .plugin_manager
-            .fire_blocking(server, &mut can_build_event);
+        can_build_event = server.plugin_manager.fire_blocking(server, can_build_event);
         if can_build_event.cancelled || !can_build_event.buildable {
             return Ok(None);
         }
@@ -859,7 +857,7 @@ impl BlockRegistry {
             final_block_pos,
             true,
         );
-        server.plugin_manager.fire_blocking(server, &mut event);
+        event = server.plugin_manager.fire_blocking(server, event);
         if event.cancelled {
             return Ok(None);
         }

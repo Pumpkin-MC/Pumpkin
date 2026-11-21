@@ -23,9 +23,7 @@ impl JavaClient {
                 item_stack.item_count,
             );
         if let Some(server) = player.world().server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut creative_event);
+            creative_event = server.plugin_manager.fire_blocking(&server, creative_event);
         }
         if creative_event.cancelled {
             return Ok(());

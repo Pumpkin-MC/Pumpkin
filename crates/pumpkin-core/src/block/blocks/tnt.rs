@@ -87,7 +87,7 @@ impl TNTBlock {
             "REDSTONE".to_string(),
         );
         if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return None;
@@ -101,9 +101,7 @@ impl TNTBlock {
                 false,
             );
         if let Some(server) = world.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut prime_event);
+            prime_event = server.plugin_manager.fire_blocking(&server, prime_event);
         }
         if prime_event.cancelled {
             return None;

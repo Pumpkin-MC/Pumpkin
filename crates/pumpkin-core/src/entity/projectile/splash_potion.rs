@@ -331,7 +331,7 @@ impl EntityBase for SplashPotionEntity {
                     stack.item.registry_key.to_string(),
                     affected_ids,
                 );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return;
             }

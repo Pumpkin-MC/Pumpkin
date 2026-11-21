@@ -1333,9 +1333,7 @@ pub(crate) fn drop_from_gift_loot_table(
                 stack.item_count,
             );
         if let Some(server) = world.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut drop_event);
+            drop_event = server.plugin_manager.fire_blocking(&server, drop_event);
         }
         if drop_event.cancelled {
             continue;
@@ -1874,7 +1872,7 @@ pub trait Mob: EntityBase + Send + Sync {
                 hand: hand.packet_id(),
                 cancelled: false,
             };
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return Some(false);
             }
@@ -2583,7 +2581,7 @@ pub trait Mob: EntityBase + Send + Sync {
         if let Some(server) = world.server.upgrade() {
             let mut event =
                 EntityTargetEvent::new(mob.living_entity.entity.entity_id, target_id, reason);
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return false;
             }
@@ -2627,7 +2625,7 @@ pub trait Mob: EntityBase + Send + Sync {
             mob.living_entity.entity.entity_id,
             player.clone(),
         );
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
         !event.cancelled
     }
 
@@ -2647,7 +2645,7 @@ pub trait Mob: EntityBase + Send + Sync {
             child_id,
             experience,
         );
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
         (!event.cancelled).then_some(event.experience)
     }
 
@@ -2657,13 +2655,13 @@ pub trait Mob: EntityBase + Send + Sync {
         player: Option<&Arc<Player>>,
     ) {
         let mob = self.get_mob_entity();
-        let mut event = crate::plugin::api::events::entity::entity_dye::EntityDyeEvent::new(
+        let event = crate::plugin::api::events::entity::entity_dye::EntityDyeEvent::new(
             mob.living_entity.entity.entity_id,
             color,
             player.cloned(),
         );
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
     }
 
@@ -2678,68 +2676,66 @@ pub trait Mob: EntityBase + Send + Sync {
             human_entity_id,
             ticks_in_love,
         );
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
         (!event.cancelled).then_some(event.ticks_in_love)
     }
 
     fn transform(&self, new_entity_id: i32, transform_reason: String) {
         let mob = self.get_mob_entity();
-        let mut event =
-            crate::plugin::api::events::entity::entity_transform::EntityTransformEvent::new(
-                mob.living_entity.entity.entity_id,
-                new_entity_id,
-                transform_reason,
-            );
+        let event = crate::plugin::api::events::entity::entity_transform::EntityTransformEvent::new(
+            mob.living_entity.entity.entity_id,
+            new_entity_id,
+            transform_reason,
+        );
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
     }
 
     fn break_door(&self, block_pos: BlockPos) {
         let mob = self.get_mob_entity();
-        let mut event =
+        let event =
             crate::plugin::api::events::entity::entity_break_door::EntityBreakDoorEvent::new(
                 mob.living_entity.entity.entity_id,
                 block_pos,
             );
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
     }
 
     fn enter_block(&self, block_pos: BlockPos) {
         let mob = self.get_mob_entity();
-        let mut event =
+        let event =
             crate::plugin::api::events::entity::entity_enter_block::EntityEnterBlockEvent::new(
                 mob.living_entity.entity.entity_id,
                 block_pos,
             );
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
     }
 
     fn interact(&self, block_pos: BlockPos) {
         let mob = self.get_mob_entity();
-        let mut event =
-            crate::plugin::api::events::entity::entity_interact::EntityInteractEvent::new(
-                mob.living_entity.entity.entity_id,
-                block_pos,
-            );
+        let event = crate::plugin::api::events::entity::entity_interact::EntityInteractEvent::new(
+            mob.living_entity.entity.entity_id,
+            block_pos,
+        );
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
     }
 
     fn place_block(&self, block_pos: BlockPos, block_name: String) {
         let mob = self.get_mob_entity();
-        let mut event = crate::plugin::api::events::entity::entity_place::EntityPlaceEvent::new(
+        let event = crate::plugin::api::events::entity::entity_place::EntityPlaceEvent::new(
             mob.living_entity.entity.entity_id,
             block_pos,
             block_name,
         );
         if let Some(server) = mob.living_entity.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
     }
 
