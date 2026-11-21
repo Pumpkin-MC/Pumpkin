@@ -76,7 +76,7 @@ impl CommandExecutor for RideMountExecutor {
 
         vehicle
             .get_entity()
-            .add_passenger(vehicle.clone(), target.clone());
+            .add_passenger_forced(vehicle.clone(), target.clone());
 
         let msg = TextComponent::translate_cross(
             translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,

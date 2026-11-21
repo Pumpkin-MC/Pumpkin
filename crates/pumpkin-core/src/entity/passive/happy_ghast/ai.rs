@@ -44,7 +44,7 @@ pub(super) fn make_brain(happy_ghast: &HappyGhastEntity, packed: &PackedMemories
             SensorType::NearestLivingEntities,
             SensorType::HurtBy,
             SensorType::FoodTemptations,
-            SensorType::NearestAdult,
+            SensorType::NearestAdultAnyType,
             SensorType::NearestPlayers,
         ],
         activities,
@@ -92,10 +92,12 @@ fn init_idle_activity() -> ActivityData {
             ),
             (
                 2,
-                Box::new(baby_follow_adult::create_for_player(
+                Box::new(baby_follow_adult::create_with(
                     ADULT_FOLLOW_RANGE.0,
                     ADULT_FOLLOW_RANGE.1,
                     |_| SPEED_MULTIPLIER_WHEN_FOLLOWING_ADULT,
+                    baby_follow_adult::TargetMemory::Player,
+                    true,
                 )),
             ),
             (
@@ -104,6 +106,8 @@ fn init_idle_activity() -> ActivityData {
                     ADULT_FOLLOW_RANGE.0,
                     ADULT_FOLLOW_RANGE.1,
                     |_| SPEED_MULTIPLIER_WHEN_FOLLOWING_ADULT,
+                    baby_follow_adult::TargetMemory::Adult,
+                    true,
                 )),
             ),
             (

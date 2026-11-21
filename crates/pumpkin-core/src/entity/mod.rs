@@ -582,6 +582,12 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         true
     }
 
+    /// Called after a passenger has been added to this entity.
+    fn on_passenger_added(&self, _passenger: &dyn EntityBase) {}
+
+    /// Called after a passenger has been removed from this entity.
+    fn on_passenger_removed(&self, _passenger: &dyn EntityBase) {}
+
     fn is_spectator(&self) -> bool {
         false
     }
@@ -4130,6 +4136,17 @@ impl Entity {
     }
 
     #[must_use]
+    pub fn is_in_clouds(&self) -> bool {
+        let world = self.world.load();
+        world.dimension.cloud_height.is_some_and(|cloud_height| {
+            let y = self.pos.load().y;
+            let height = f64::from(self.height());
+            let cloud_height = f64::from(cloud_height);
+            y + height >= cloud_height && y <= cloud_height + 4.0
+        })
+    }
+
+    #[must_use]
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
         let eye_y = pos.y + self.get_eye_height();
@@ -5382,6 +5399,7 @@ impl Entity {
         }
 
         let distance = self.leash_distance_to(holder_entity);
+        holder.notify_leash_holder(caller);
         if distance > Self::LEASH_SNAP_DISTANCE {
             let holder_pos = holder_entity.pos.load();
             self.world
@@ -5397,7 +5415,6 @@ impl Entity {
         let result = if distance > elastic_threshold
             && self.check_elastic_interactions(caller, holder.as_ref())
         {
-            holder.notify_leash_holder(caller);
             LeashTick::Elastic(holder)
         } else {
             LeashTick::CloseRange(holder)
@@ -5601,13 +5618,34 @@ impl Entity {
             .and_then(Weak::upgrade)
     }
 
+    pub fn add_passenger(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+    ) -> bool {
+        self.add_passenger_with_force(vehicle, passenger, false)
+    }
+
+    pub fn add_passenger_forced(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+    ) -> bool {
+        self.add_passenger_with_force(vehicle, passenger, true)
+    }
+
     #[expect(
         clippy::needless_pass_by_value,
         reason = "callers pass owned Arc for vehicle and passenger"
     )]
-    pub fn add_passenger(&self, vehicle: Arc<dyn EntityBase>, passenger: Arc<dyn EntityBase>) {
-        if !vehicle.can_add_passenger(passenger.as_ref()) {
-            return;
+    pub fn add_passenger_with_force(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+        force: bool,
+    ) -> bool {
+        if !force && !vehicle.can_add_passenger(passenger.as_ref()) {
+            return false;
         }
         let mut mount_event =
             crate::plugin::api::events::entity::entity_mount::EntityMountEvent::new(
@@ -5628,7 +5666,7 @@ impl Entity {
                 .fire_blocking(&server, &mut vehicle_enter);
         }
         if mount_event.cancelled || vehicle_enter.cancelled {
-            return;
+            return false;
         }
 
         let passenger_entity = passenger.get_entity();
@@ -5682,7 +5720,7 @@ impl Entity {
         );
         passenger_entity.send_bedrock_actor_data(&rider_meta);
 
-        passengers.push(passenger);
+        passengers.push(passenger.clone());
         let link_type = if passengers.len() == 1 { 1 } else { 2 };
 
         let passenger_ids: Vec<VarInt> = passengers
@@ -5709,6 +5747,9 @@ impl Entity {
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
             &be_link,
         );
+
+        vehicle.on_passenger_added(passenger.as_ref());
+        true
     }
 
     #[expect(
@@ -5758,17 +5799,18 @@ impl Entity {
             .passengers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(index) = passengers
+        let removed_passenger = passengers
             .iter()
             .position(|passenger| passenger.get_entity().entity_id == passenger_id)
-        {
-            let passenger = passengers.remove(index);
-            *passenger
-                .get_entity()
-                .vehicle
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-        }
+            .map(|index| {
+                let passenger = passengers.remove(index);
+                *passenger
+                    .get_entity()
+                    .vehicle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+                passenger
+            });
 
         let passenger_ids: Vec<VarInt> = passengers
             .iter()
@@ -5792,6 +5834,12 @@ impl Entity {
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
             &be_unlink,
         );
+
+        if let Some(passenger) = removed_passenger
+            && let Some(this) = self.world.load().get_entity_by_id(self.entity_id)
+        {
+            this.on_passenger_removed(passenger.as_ref());
+        }
     }
 
     pub fn remove_passenger_sync(&self, passenger_id: i32) {
@@ -5858,6 +5906,9 @@ impl Entity {
         let chunk_pos = self.chunk_pos.load();
 
         if let Some(passenger) = removed_passenger {
+            if let Some(this) = self.world.load().get_entity_by_id(self.entity_id) {
+                this.on_passenger_removed(passenger.as_ref());
+            }
             let vehicle_box = self.bounding_box.load();
             let passenger_entity = passenger.get_entity();
 

@@ -1,6 +1,6 @@
 pub mod ai;
 
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -40,7 +40,6 @@ pub struct HappyGhastEntity {
     pub is_leash_holder: AtomicBool,
     pub stays_still: AtomicBool,
     pub wanted_fly_target: Mutex<Option<Vector3<f64>>>,
-    pub last_passenger_count: AtomicUsize,
     pub self_weak: Weak<Self>,
 }
 
@@ -69,7 +68,6 @@ impl HappyGhastEntity {
             is_leash_holder: AtomicBool::new(false),
             stays_still: AtomicBool::new(false),
             wanted_fly_target: Mutex::new(None),
-            last_passenger_count: AtomicUsize::new(0),
             self_weak: weak.clone(),
         });
 
@@ -87,13 +85,14 @@ impl HappyGhastEntity {
         let old = self.server_still_timeout.swap(timeout, Ordering::Relaxed);
         if old <= 0 && timeout > 0 {
             let entity = self.get_entity();
-            let chunk_pos = entity.chunk_pos.load();
+            let pos = entity.pos.load();
+            entity.last_sent_pos.store(pos);
             let world = entity.world.load();
-            world.broadcast_to_chunk(
-                chunk_pos,
+            world.send_to_tracking_players(
+                entity,
                 &CEntityPositionSync::new(
                     entity.entity_id.into(),
-                    entity.pos.load(),
+                    pos,
                     Vector3::new(0.0, 0.0, 0.0),
                     entity.yaw.load(),
                     entity.pitch.load(),
@@ -226,13 +225,9 @@ impl HappyGhastEntity {
             let current_health = living.health.load();
             let max_health = living.get_max_health();
             if current_health < max_health {
-                let pos = entity.pos.load();
-                let y = pos.y;
-                let height = f64::from(entity.height());
-                let is_in_clouds = y + height >= 192.0 && y <= 196.0;
                 let world = entity.world.load();
-                let is_raining = world.is_raining_at(&pos.to_block_pos());
-                let is_fast_healing = is_in_clouds || is_raining;
+                let is_fast_healing =
+                    entity.is_in_clouds() || world.has_precipitation_at(&entity.block_pos.load());
                 let interval = if is_fast_healing {
                     Self::FAST_HEALING_TICKS
                 } else {
@@ -303,18 +298,11 @@ impl HappyGhastEntity {
             Box::new(FlyingMoveControl::new(180, true));
     }
 
-    pub fn do_player_ride(&self, player: &Arc<Player>) -> bool {
+    pub fn do_player_ride(&self, player: &Arc<Player>) {
         let entity = self.get_entity();
         if let Some(vehicle) = entity.world.load().get_entity_by_id(entity.entity_id) {
             entity.add_passenger(vehicle, player.clone());
-            return entity
-                .passengers
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .iter()
-                .any(|p| p.get_entity().entity_id == player.entity_id());
         }
-        false
     }
 
     fn update_dimensions(&self) {
@@ -413,6 +401,37 @@ impl Mob for HappyGhastEntity {
         !passengers
             .iter()
             .any(|p| p.get_entity().entity_id == passenger.get_entity().entity_id)
+    }
+
+    fn mob_on_passenger_added(&self, _passenger: &dyn EntityBase) {
+        let count = self
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len();
+        if count == 1 {
+            self.play_entity_sound(Sound::EntityHappyGhastHarnessGogglesDown, 1.0, 1.0);
+        }
+        if !self.scan_player_above_ghast() {
+            self.set_server_still_timeout(0);
+        } else if self.server_still_timeout.load(Ordering::Relaxed) > Self::MAX_STILL_TIMEOUT {
+            self.set_server_still_timeout(Self::MAX_STILL_TIMEOUT);
+        }
+    }
+
+    fn mob_on_passenger_removed(&self, _passenger: &dyn EntityBase) {
+        self.set_server_still_timeout(Self::MAX_STILL_TIMEOUT);
+        let is_empty = self
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty();
+        if is_empty {
+            self.mob_entity.clear_home();
+            self.play_entity_sound(Sound::EntityHappyGhastHarnessGogglesUp, 1.0, 1.0);
+        }
     }
 
     fn mob_notify_leash_holder(&self, leashed: &dyn EntityBase) {
@@ -637,9 +656,10 @@ impl Mob for HappyGhastEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
-        let leash_time = self.leash_holder_time.load(Ordering::Relaxed);
+        let mut leash_time = self.leash_holder_time.load(Ordering::Relaxed);
         if leash_time > 0 {
-            self.leash_holder_time.fetch_sub(1, Ordering::Relaxed);
+            leash_time -= 1;
+            self.leash_holder_time.store(leash_time, Ordering::Relaxed);
         }
         self.set_leash_holder(leash_time > 0);
 
@@ -648,9 +668,8 @@ impl Mob for HappyGhastEntity {
             let entity = self.get_entity();
             if entity.tick_count.load(Ordering::Relaxed) > Self::STILL_TIMEOUT_ON_LOAD_GRACE_PERIOD
             {
-                self.server_still_timeout.fetch_sub(1, Ordering::Relaxed);
+                self.set_server_still_timeout(still_timeout - 1);
             }
-            self.sync_stay_still_flag();
         }
 
         if self.scan_player_above_ghast() {
@@ -664,31 +683,6 @@ impl Mob for HappyGhastEntity {
             entity.yaw.store(snapped_yaw);
             entity.head_yaw.store(snapped_yaw);
             self.stop_in_place();
-        }
-
-        let passenger_count = self
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len();
-        let prev_passenger_count = self
-            .last_passenger_count
-            .swap(passenger_count, Ordering::Relaxed);
-
-        if prev_passenger_count == 0 && passenger_count > 0 {
-            self.play_entity_sound(Sound::EntityHappyGhastHarnessGogglesDown, 1.0, 1.0);
-            if !self.scan_player_above_ghast() {
-                self.set_server_still_timeout(0);
-            } else if self.server_still_timeout.load(Ordering::Relaxed) > Self::MAX_STILL_TIMEOUT {
-                self.set_server_still_timeout(Self::MAX_STILL_TIMEOUT);
-            }
-        } else if prev_passenger_count > 0 && passenger_count == 0 {
-            self.set_server_still_timeout(Self::MAX_STILL_TIMEOUT);
-            self.mob_entity.clear_home();
-            self.play_entity_sound(Sound::EntityHappyGhastHarnessGogglesUp, 1.0, 1.0);
-        } else if passenger_count < prev_passenger_count {
-            self.set_server_still_timeout(Self::MAX_STILL_TIMEOUT);
         }
 
         self.continuous_heal();
@@ -720,15 +714,8 @@ impl Mob for HappyGhastEntity {
         }
 
         if self.is_wearing_body_armor() && !player.get_entity().is_sneaking() {
-            let passenger_count = self
-                .get_entity()
-                .passengers
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .len();
-            if passenger_count < Self::MAX_PASSENGERS && self.do_player_ride(player) {
-                return true;
-            }
+            self.do_player_ride(player);
+            return true;
         }
 
         self.animal_interact(player, item_stack)
@@ -1337,5 +1324,44 @@ mod tests {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn passenger_lifecycle_callbacks_and_leash_time() {
+        let folder = tempfile::tempdir().unwrap();
+        let ghast = test_happy_ghast(&folder, 0);
+        let rider = test_happy_ghast(&folder, 0);
+
+        ghast.on_passenger_added(rider.as_ref());
+        // Since no player is standing above, timeout is reset to 0
+        assert_eq!(ghast.server_still_timeout.load(Ordering::Relaxed), 0);
+
+        ghast.mob_entity.set_home_to(BlockPos::new(0, 64, 0), 16);
+        assert!(ghast.mob_entity.has_position_target());
+
+        ghast.on_passenger_removed(rider.as_ref());
+        // Removing passenger sets still timeout to 10 and clears home when empty
+        assert_eq!(ghast.server_still_timeout.load(Ordering::Relaxed), 10);
+        assert!(!ghast.mob_entity.has_position_target());
+
+        // Leash holder time 1 becomes 0 and sets leash holder flag to false in tick
+        ghast.leash_holder_time.store(1, Ordering::Relaxed);
+        ghast.mob_tick(ghast.as_ref());
+        assert_eq!(ghast.leash_holder_time.load(Ordering::Relaxed), 0);
+        assert!(!ghast.is_leash_holder.load(Ordering::Relaxed));
+    }
+
+    #[tokio::test]
+    async fn is_in_clouds_checks_dimension() {
+        let folder = tempfile::tempdir().unwrap();
+        let ghast = test_happy_ghast(&folder, 0);
+
+        // At y = 64, ghast is not in clouds
+        ghast.get_entity().set_pos(Vector3::new(0.0, 64.0, 0.0));
+        assert!(!ghast.get_entity().is_in_clouds());
+
+        // At cloud height (192.33 in overworld, ghast height is 4.0, 191.0 + 4.0 = 195.0 >= 192.33 and 191 <= 196.33)
+        ghast.get_entity().set_pos(Vector3::new(0.0, 191.0, 0.0));
+        assert!(ghast.get_entity().is_in_clouds());
     }
 }

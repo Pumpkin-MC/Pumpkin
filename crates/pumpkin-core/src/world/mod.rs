@@ -3074,6 +3074,16 @@ impl World {
                 .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
     }
 
+    pub fn has_precipitation_at(&self, pos: &BlockPos) -> bool {
+        if !self.is_raining() {
+            return false;
+        }
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
+            return false;
+        }
+        self.can_see_sky(pos) && self.get_biome(pos).weather.has_precipitation()
+    }
+
     pub fn set_raining(&self, raining: bool) {
         if let Some(server) = self.server.upgrade() {
             let world_arc = server.get_world_from_dimension(&self.dimension);
