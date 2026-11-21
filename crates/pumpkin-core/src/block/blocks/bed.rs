@@ -566,4 +566,123 @@ mod tests {
             ]
         );
     }
+
+    #[tokio::test]
+    async fn bed_break_foot_drops_bed() {
+        use pumpkin_data::block_properties::HorizontalFacing;
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::chunk::ChunkData;
+
+        let folder = tempfile::tempdir().unwrap();
+        let world = crate::entity::ai::test_support::world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+
+        let foot_pos = BlockPos::new(0, 64, 0);
+        let mut foot_props = BedProperties::default(&Block::RED_BED);
+        foot_props.facing = HorizontalFacing::South;
+        foot_props.part = BedPart::Foot;
+        let foot_state = foot_props.to_state_id(&Block::RED_BED);
+        world.set_block_state(&foot_pos, foot_state, BlockFlags::NOTIFY_ALL);
+
+        BedBlock.placed(PlacedArgs {
+            world: &world,
+            block: &Block::RED_BED,
+            state_id: foot_state,
+            old_state_id: Block::AIR.default_state.id,
+            position: &foot_pos,
+            notify: true,
+        });
+
+        assert_eq!(world.entities.load().len(), 0);
+        world.break_block(&foot_pos, None, BlockFlags::NOTIFY_ALL);
+        let entities = world.entities.load();
+        assert_eq!(entities.len(), 1);
+        let item_entity = entities[0].get_item_entity().expect("expected item entity");
+        assert_eq!(
+            item_entity.get_item_stack().lock().unwrap().item,
+            &pumpkin_data::item::Item::RED_BED
+        );
+    }
+
+    #[tokio::test]
+    async fn bed_break_head_drops_bed() {
+        use pumpkin_data::block_properties::HorizontalFacing;
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::chunk::ChunkData;
+
+        let folder = tempfile::tempdir().unwrap();
+        let world = crate::entity::ai::test_support::world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+
+        let foot_pos = BlockPos::new(0, 64, 0);
+        let mut foot_props = BedProperties::default(&Block::RED_BED);
+        foot_props.facing = HorizontalFacing::South;
+        foot_props.part = BedPart::Foot;
+        let foot_state = foot_props.to_state_id(&Block::RED_BED);
+        world.set_block_state(&foot_pos, foot_state, BlockFlags::NOTIFY_ALL);
+
+        BedBlock.placed(PlacedArgs {
+            world: &world,
+            block: &Block::RED_BED,
+            state_id: foot_state,
+            old_state_id: Block::AIR.default_state.id,
+            position: &foot_pos,
+            notify: true,
+        });
+
+        let head_pos = foot_pos.offset(foot_props.facing.to_offset());
+        assert_eq!(world.entities.load().len(), 0);
+        world.break_block(&head_pos, None, BlockFlags::NOTIFY_ALL);
+        let entities = world.entities.load();
+        assert_eq!(entities.len(), 1);
+        let item_entity = entities[0].get_item_entity().expect("expected item entity");
+        assert_eq!(
+            item_entity.get_item_stack().lock().unwrap().item,
+            &pumpkin_data::item::Item::RED_BED
+        );
+    }
+
+    #[tokio::test]
+    async fn bed_break_creative_drops_nothing() {
+        use pumpkin_data::block_properties::HorizontalFacing;
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::chunk::ChunkData;
+
+        let folder = tempfile::tempdir().unwrap();
+        let world = crate::entity::ai::test_support::world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+
+        let foot_pos = BlockPos::new(0, 64, 0);
+        let mut foot_props = BedProperties::default(&Block::RED_BED);
+        foot_props.facing = HorizontalFacing::South;
+        foot_props.part = BedPart::Foot;
+        let foot_state = foot_props.to_state_id(&Block::RED_BED);
+        world.set_block_state(&foot_pos, foot_state, BlockFlags::NOTIFY_ALL);
+
+        BedBlock.placed(PlacedArgs {
+            world: &world,
+            block: &Block::RED_BED,
+            state_id: foot_state,
+            old_state_id: Block::AIR.default_state.id,
+            position: &foot_pos,
+            notify: true,
+        });
+
+        assert_eq!(world.entities.load().len(), 0);
+        world.break_block(
+            &foot_pos,
+            None,
+            BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
+        );
+        assert_eq!(world.entities.load().len(), 0);
+    }
 }

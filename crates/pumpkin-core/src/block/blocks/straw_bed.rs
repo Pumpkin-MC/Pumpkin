@@ -150,7 +150,7 @@ impl BlockBehaviour for StrawBedBlock {
                 args.world.break_block(
                     &other_half_pos,
                     None,
-                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
+                    (args.flags & BlockFlags::SKIP_DROPS) | BlockFlags::NOTIFY_ALL,
                 );
             }
         }
@@ -340,5 +340,50 @@ impl StrawBedBlock {
         crate::block::blocks::bed::BedBlock::set_occupied(true, world, block, position, state_id);
 
         BlockActionResult::SuccessServer
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn straw_bed_break_foot_drops_bed() {
+        use pumpkin_data::block_properties::HorizontalFacing;
+        use pumpkin_util::math::vector2::Vector2;
+        use pumpkin_world::chunk::ChunkData;
+
+        let folder = tempfile::tempdir().unwrap();
+        let world = crate::entity::ai::test_support::world(&folder);
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
+
+        let foot_pos = BlockPos::new(0, 64, 0);
+        let mut foot_props = BedProperties::default(&Block::STRAW_BED);
+        foot_props.facing = HorizontalFacing::South;
+        foot_props.part = BedPart::Foot;
+        let foot_state = foot_props.to_state_id(&Block::STRAW_BED);
+        world.set_block_state(&foot_pos, foot_state, BlockFlags::NOTIFY_ALL);
+
+        StrawBedBlock.placed(PlacedArgs {
+            world: &world,
+            block: &Block::STRAW_BED,
+            state_id: foot_state,
+            old_state_id: Block::AIR.default_state.id,
+            position: &foot_pos,
+            notify: true,
+        });
+
+        assert_eq!(world.entities.load().len(), 0);
+        world.break_block(&foot_pos, None, BlockFlags::NOTIFY_ALL);
+        let entities = world.entities.load();
+        assert_eq!(entities.len(), 1);
+        let item_entity = entities[0].get_item_entity().expect("expected item entity");
+        assert_eq!(
+            item_entity.get_item_stack().lock().unwrap().item,
+            &pumpkin_data::item::Item::STRAW_BED
+        );
     }
 }
