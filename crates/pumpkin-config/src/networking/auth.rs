@@ -4,39 +4,54 @@ use serde::{Deserialize, Serialize};
 /// Configuration for server authentication.
 ///
 /// Handles Mojang authentication, proxy restrictions, player profiles, and textures.
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct AuthenticationConfig {
     /// Whether to use Mojang authentication.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Optional custom authentication URL.
+    #[toml(default = Self::default().url)]
     pub url: Option<String>,
     /// Fallback authentication server URLs to use if the primary/official server is down.
     #[serde(alias = "fallback_urls")]
+    #[toml(default = Self::default().fallbacks, alias = "fallback_urls")]
     pub fallbacks: Vec<String>,
     /// Optional custom profile lookup by username URL (template parameter `{username}`).
+    #[toml(default = Self::default().profile_by_name_url)]
     pub profile_by_name_url: Option<String>,
     /// Optional fallback profile lookup by username URLs.
     #[serde(alias = "profile_by_name_fallback_urls")]
+    #[toml(default = Self::default().profile_by_name_fallbacks, alias = "profile_by_name_fallback_urls")]
     pub profile_by_name_fallbacks: Vec<String>,
     /// Optional custom profile lookup by UUID URL (template parameter `{uuid}`).
+    #[toml(default = Self::default().profile_by_uuid_url)]
     pub profile_by_uuid_url: Option<String>,
     /// Optional fallback profile lookup by UUID URLs.
     #[serde(alias = "profile_by_uuid_fallback_urls")]
+    #[toml(default = Self::default().profile_by_uuid_fallbacks, alias = "profile_by_uuid_fallback_urls")]
     pub profile_by_uuid_fallbacks: Vec<String>,
     /// Connection timeout in milliseconds.
+    #[toml(default = Self::default().connect_timeout)]
     pub connect_timeout: u32,
     /// Read timeout in milliseconds.
+    #[toml(default = Self::default().read_timeout)]
     pub read_timeout: u32,
     /// Whether to prevent connections via proxy.
+    #[toml(default = Self::default().prevent_proxy_connections)]
     pub prevent_proxy_connections: bool,
     /// Optional auth URL used when preventing proxy connections.
+    #[toml(default = Self::default().prevent_proxy_connection_auth_url)]
     pub prevent_proxy_connection_auth_url: Option<String>,
     /// Public services URL (used by Drasl and Mojang).
+    #[toml(default = Self::default().services_url)]
     pub services_url: Option<String>,
     /// Player profile handling.
+    #[toml(default = Self::default().player_profile)]
     pub player_profile: PlayerProfileConfig,
     /// Texture handling configuration.
+    #[toml(default = Self::default().textures)]
     pub textures: TextureConfig,
 }
 
@@ -64,12 +79,15 @@ impl Default for AuthenticationConfig {
 /// Configuration for player profile handling.
 ///
 /// Controls whether banned players are allowed and which profile actions are permitted.
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct PlayerProfileConfig {
     /// Allow players flagged by Mojang (e.g. banned, forced name change).
+    #[toml(default = Self::default().allow_banned_players)]
     pub allow_banned_players: bool,
     /// Depends on [`PlayerProfileConfig::allow_banned_players`].
+    #[toml(default = Self::default().allowed_actions, with = crate::toml_adapters::serde_vec)]
     pub allowed_actions: Vec<ProfileAction>,
 }
 
@@ -88,16 +106,21 @@ impl Default for PlayerProfileConfig {
 /// Configuration for player textures.
 ///
 /// Controls whether textures are applied, allowed URL schemes/domains, and texture types.
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct TextureConfig {
     /// Whether to use player textures.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Allowed URL schemes for texture URLs.
+    #[toml(default = Self::default().allowed_url_schemes)]
     pub allowed_url_schemes: Vec<String>,
     /// Allowed URL domains for texture URLs.
+    #[toml(default = Self::default().allowed_url_domains)]
     pub allowed_url_domains: Vec<String>,
     /// Specific texture types.
+    #[toml(default = Self::default().types)]
     pub types: TextureTypes,
 }
 
@@ -113,14 +136,18 @@ impl Default for TextureConfig {
 }
 
 /// Specifies which player texture types are supported.
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct TextureTypes {
     /// Use player skins.
+    #[toml(default = Self::default().skin)]
     pub skin: bool,
     /// Use player capes.
+    #[toml(default = Self::default().cape)]
     pub cape: bool,
     /// Use player elytras.
+    #[toml(default = Self::default().elytra)]
     pub elytra: bool,
 }
 

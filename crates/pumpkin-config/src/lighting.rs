@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 /// Lighting engine calculation mode.
-#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Default, toml_spanner::Toml)]
 #[serde(rename_all = "lowercase")]
+#[toml(rename_all = "lowercase")]
 pub enum LightingEngineConfig {
     /// Default Vanilla lighting propagation.
     #[default]

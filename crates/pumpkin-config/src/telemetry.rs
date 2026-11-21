@@ -1,18 +1,24 @@
 use serde::{Deserialize, Serialize};
 
 /// Telemetry configuration options.
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct TelemetryConfig {
     /// Whether anonymous telemetry is enabled. Default is true.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Custom telemetry backend ingestion endpoint.
+    #[toml(default = Self::default().endpoint)]
     pub endpoint: String,
     /// Heartbeat interval in seconds (default: 300 seconds / 5 minutes). Minimum 60s.
+    #[toml(default = Self::default().interval_secs)]
     pub interval_secs: u64,
     /// Whether to opt-in to displaying this server in the public community directory.
+    #[toml(default = Self::default().public)]
     pub public: bool,
     /// Public server name displayed on the analytics dashboard if public is true.
+    #[toml(default = Self::default().server_name)]
     pub server_name: Option<String>,
 }
 
