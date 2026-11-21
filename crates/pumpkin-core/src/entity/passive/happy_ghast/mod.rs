@@ -1,7 +1,7 @@
 pub mod ai;
 
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Weak};
 
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
@@ -13,11 +13,13 @@ use pumpkin_protocol::java::client::play::CEntityPositionSync;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use rand::RngExt;
 
 use crate::entity::ai::control::flying_move_control::FlyingMoveControl;
+use crate::entity::ai::control::ghast_move_control::GhastMoveControl;
+use crate::entity::ai::control::happy_ghast_look_control::HappyGhastLookControl;
+use crate::entity::ai::control::look_control::LookControl;
+use crate::entity::ai::goal::random_float_around::RandomFloatAroundGoal;
 use crate::entity::ai::goal::swim::SwimGoal;
 use crate::entity::ai::goal::tempt::TemptGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalReach};
@@ -30,7 +32,6 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
-use crate::world::World;
 
 pub struct HappyGhastEntity {
     pub mob_entity: MobEntity,
@@ -39,7 +40,6 @@ pub struct HappyGhastEntity {
     pub leash_holder_time: AtomicI32,
     pub is_leash_holder: AtomicBool,
     pub stays_still: AtomicBool,
-    pub wanted_fly_target: Mutex<Option<Vector3<f64>>>,
     pub self_weak: Weak<Self>,
 }
 
@@ -67,7 +67,6 @@ impl HappyGhastEntity {
             leash_holder_time: AtomicI32::new(0),
             is_leash_holder: AtomicBool::new(false),
             stays_still: AtomicBool::new(false),
-            wanted_fly_target: Mutex::new(None),
             self_weak: weak.clone(),
         });
 
@@ -122,10 +121,6 @@ impl HappyGhastEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .set_wait();
-        *self
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
     pub fn is_wearing_body_armor(&self) -> bool {
@@ -251,23 +246,34 @@ impl HappyGhastEntity {
             .mob_entity
             .move_control
             .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(GhastMoveControl::new(
+            true,
+            Some(|mob| {
+                mob.cast_any()
+                    .downcast_ref::<Self>()
+                    .is_some_and(Self::is_on_still_timeout)
+            }),
+        ));
+        *self
+            .mob_entity
+            .look_control
+            .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Box::new(FlyingMoveControl::new(180, true));
+            Box::new(HappyGhastLookControl::new());
 
         let weak = self.self_weak.clone();
         let goal_selector = &self.mob_entity.goals_selector;
-        goal_selector.add_goal(3, Box::new(HappyGhastFloatGoal::new(weak.clone())));
+        goal_selector.add_goal(3, Box::new(HappyGhastFloatGoal::new(weak)));
         goal_selector.add_goal(
             4,
-            Box::new(TemptGoal::with_predicate_and_stop_distance(
+            Box::new(TemptGoal::for_non_pathfinders(
                 1.0,
                 is_tempt_item,
                 false,
                 7.0,
             )),
         );
-        goal_selector.add_goal(5, Box::new(HappyGhastFloatAroundGoal::new(weak.clone())));
-        goal_selector.add_goal(7, Box::new(HappyGhastLookGoal::new(weak)));
+        goal_selector.add_goal(5, Box::new(RandomFloatAroundGoal::with_distance(16)));
 
         self.mob_entity.with_brain(self, |brain| {
             let world = self.get_entity().world.load();
@@ -281,14 +287,11 @@ impl HappyGhastEntity {
         self.set_server_still_timeout(0);
         self.mob_entity.goals_selector.clear(self);
 
-        let mut nav = self
+        *self
             .mob_entity
             .navigator
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *nav = Navigator::flying();
-        nav.set_can_float(true);
-        nav.set_can_open_doors(false);
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Navigator::baby_flying();
 
         *self
             .mob_entity
@@ -296,13 +299,21 @@ impl HappyGhastEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             Box::new(FlyingMoveControl::new(180, true));
+
+        *self
+            .mob_entity
+            .look_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(LookControl::default());
     }
 
-    pub fn do_player_ride(&self, player: &Arc<Player>) {
+    pub fn do_player_ride(&self, player: &Arc<Player>) -> bool {
         let entity = self.get_entity();
-        if let Some(vehicle) = entity.world.load().get_entity_by_id(entity.entity_id) {
-            entity.add_passenger(vehicle, player.clone());
-        }
+        entity
+            .world
+            .load()
+            .get_entity_by_id(entity.entity_id)
+            .is_some_and(|vehicle| entity.add_passenger(vehicle, player.clone()))
     }
 
     fn update_dimensions(&self) {
@@ -480,10 +491,6 @@ impl Mob for HappyGhastEntity {
     }
 
     fn on_elastic_leash_pull(&self) {
-        *self
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         self.mob_entity
             .move_control
             .lock()
@@ -518,15 +525,6 @@ impl Mob for HappyGhastEntity {
         Some(0.95)
     }
 
-    fn mob_is_pushable(&self) -> bool {
-        !self.is_on_still_timeout()
-    }
-
-    fn can_push_entity(&self, other: &dyn EntityBase) -> bool {
-        !(other.get_player().is_some()
-            && (self.is_on_still_timeout() || self.scan_player_above_ghast()))
-    }
-
     fn mob_is_collidable(&self, entity: Option<Box<dyn EntityBase>>) -> bool {
         if self.is_baby() || !self.get_entity().is_alive() {
             return false;
@@ -545,28 +543,7 @@ impl Mob for HappyGhastEntity {
         self.is_on_still_timeout()
     }
 
-    fn mob_knockback(
-        &self,
-        _power: f64,
-        _x: f64,
-        _z: f64,
-        _source: Option<&Entity>,
-        _damage: f32,
-        _comes_from_effect: bool,
-    ) -> bool {
-        if !self.is_baby() && (self.is_on_still_timeout() || self.scan_player_above_ghast()) {
-            self.set_server_still_timeout(Self::MAX_STILL_TIMEOUT);
-            self.stop_in_place();
-            return true;
-        }
-        false
-    }
-
     fn travel(&self, caller: &dyn EntityBase) -> bool {
-        if self.is_on_still_timeout() {
-            self.stop_in_place();
-            return true;
-        }
         let speed = (self
             .mob_entity
             .living_entity
@@ -676,15 +653,6 @@ impl Mob for HappyGhastEntity {
             self.set_server_still_timeout(Self::MAX_STILL_TIMEOUT);
         }
 
-        if self.is_on_still_timeout() {
-            let entity = self.get_entity();
-            let current_yaw = entity.yaw.load();
-            let snapped_yaw = (current_yaw / 90.0).round() * 90.0;
-            entity.yaw.store(snapped_yaw);
-            entity.head_yaw.store(snapped_yaw);
-            self.stop_in_place();
-        }
-
         self.continuous_heal();
     }
 
@@ -709,12 +677,10 @@ impl Mob for HappyGhastEntity {
             return self.animal_interact(player, item_stack);
         }
 
-        if !item_stack.is_empty() && self.is_food(item_stack) {
-            return self.animal_interact(player, item_stack);
-        }
-
-        if self.is_wearing_body_armor() && !player.get_entity().is_sneaking() {
-            self.do_player_ride(player);
+        if self.is_wearing_body_armor()
+            && !player.get_entity().is_sneaking()
+            && self.do_player_ride(player)
+        {
             return true;
         }
 
@@ -769,297 +735,6 @@ impl Goal for HappyGhastFloatGoal {
     }
 }
 
-pub struct HappyGhastLookGoal {
-    ghast: Weak<HappyGhastEntity>,
-    goal_control: Controls,
-}
-
-impl HappyGhastLookGoal {
-    #[must_use]
-    pub const fn new(ghast: Weak<HappyGhastEntity>) -> Self {
-        Self {
-            ghast,
-            goal_control: Controls::LOOK,
-        }
-    }
-}
-
-impl Goal for HappyGhastLookGoal {
-    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        true
-    }
-
-    fn should_run_every_tick(&self) -> bool {
-        true
-    }
-
-    fn tick(&mut self, mob: &dyn Mob) {
-        let Some(ghast) = self.ghast.upgrade() else {
-            return;
-        };
-        let entity = ghast.get_entity();
-        if ghast.is_on_still_timeout() {
-            let current_yaw = entity.yaw.load();
-            let snapped_yaw = (current_yaw / 90.0).round() * 90.0;
-            entity.yaw.store(snapped_yaw);
-            entity.head_yaw.store(snapped_yaw);
-            return;
-        }
-
-        let target_opt = mob.get_mob_entity().get_target();
-        if let Some(target) = target_opt {
-            let mob_pos = entity.pos.load();
-            let target_pos = target.get_entity().pos.load();
-            if mob_pos.squared_distance_to_vec(&target_pos) < 4096.0 {
-                let dx = target_pos.x - mob_pos.x;
-                let dz = target_pos.z - mob_pos.z;
-                let yaw = (-f64::atan2(dx, dz).to_degrees()) as f32;
-                entity.yaw.store(yaw);
-                entity.head_yaw.store(yaw);
-                return;
-            }
-        }
-
-        let velocity = entity.velocity.load();
-        if velocity.x != 0.0 || velocity.z != 0.0 {
-            let yaw = (-f64::atan2(velocity.x, velocity.z).to_degrees()) as f32;
-            entity.yaw.store(yaw);
-            entity.head_yaw.store(yaw);
-        }
-    }
-
-    fn controls(&self) -> Controls {
-        self.goal_control
-    }
-}
-
-pub struct HappyGhastFloatAroundGoal {
-    ghast: Weak<HappyGhastEntity>,
-    float_duration: i32,
-    stuck_ticks: i32,
-    last_pos: Vector3<f64>,
-}
-
-impl HappyGhastFloatAroundGoal {
-    #[must_use]
-    pub const fn new(ghast: Weak<HappyGhastEntity>) -> Self {
-        Self {
-            ghast,
-            float_duration: 0,
-            stuck_ticks: 0,
-            last_pos: Vector3::new(0.0, 0.0, 0.0),
-        }
-    }
-
-    fn choose_random_position(center: Vector3<f64>) -> Vector3<f64> {
-        let mut rng = rand::rng();
-        let target_x = center.x + (rng.random::<f64>() * 2.0 - 1.0) * 16.0;
-        let target_y = center.y + (rng.random::<f64>() * 2.0 - 1.0) * 16.0;
-        let target_z = center.z + (rng.random::<f64>() * 2.0 - 1.0) * 16.0;
-        Vector3::new(target_x, target_y, target_z)
-    }
-
-    fn choose_random_position_with_restriction(
-        ghast: &HappyGhastEntity,
-        center: Vector3<f64>,
-    ) -> Option<Vector3<f64>> {
-        let target = Self::choose_random_position(center);
-        let block_pos = BlockPos::floored_v(target);
-        if ghast.mob_entity.has_position_target()
-            && !ghast.mob_entity.is_in_position_target_range_pos(&block_pos)
-        {
-            return None;
-        }
-        Some(target)
-    }
-
-    fn is_good_target(world: &World, target: Vector3<f64>, distance_to_blocks: i32) -> bool {
-        const DIRS: [(i32, i32, i32); 6] = [
-            (0, -1, 0),
-            (0, 1, 0),
-            (0, 0, -1),
-            (0, 0, 1),
-            (-1, 0, 0),
-            (1, 0, 0),
-        ];
-
-        if distance_to_blocks <= 0 {
-            return true;
-        }
-        let pos = BlockPos::floored_v(target);
-        if !world.is_in_build_limit(pos) {
-            return false;
-        }
-        if !world.get_block_state(&pos).is_air() {
-            return false;
-        }
-
-        for (dx, dy, dz) in DIRS {
-            for i in 1..distance_to_blocks {
-                let offset = BlockPos::new(pos.0.x + dx * i, pos.0.y + dy * i, pos.0.z + dz * i);
-                if !world.get_block_state(&offset).is_air() {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    fn get_suitable_fly_to_position(
-        ghast: &HappyGhastEntity,
-        distance_to_blocks: i32,
-    ) -> Vector3<f64> {
-        let center = ghast.get_entity().pos.load();
-        let world = ghast.get_entity().world.load();
-        let mut result = None;
-        for _ in 0..64 {
-            result = Self::choose_random_position_with_restriction(ghast, center);
-            if let Some(target) = result
-                && Self::is_good_target(&world, target, distance_to_blocks)
-            {
-                return target;
-            }
-        }
-        let mut final_pos = result.unwrap_or_else(|| Self::choose_random_position(center));
-        let pos = BlockPos::floored_v(final_pos);
-        let height_y = f64::from(world.get_top_block(Vector2::new(pos.0.x, pos.0.z)));
-        let min_y = f64::from(world.dimension.min_y);
-        if height_y < final_pos.y && height_y > min_y {
-            final_pos.y = center.y - (center.y - final_pos.y).abs();
-        }
-        final_pos
-    }
-}
-
-impl Goal for HappyGhastFloatAroundGoal {
-    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let Some(ghast) = self.ghast.upgrade() else {
-            return false;
-        };
-        if ghast.is_on_still_timeout() {
-            return false;
-        }
-        let wanted = *ghast
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        wanted.is_none_or(|target| {
-            let pos = ghast.mob_entity.living_entity.entity.pos.load();
-            let dist_sq = pos.squared_distance_to_vec(&target);
-            !dist_sq.is_nan() && !(1.0..=3600.0).contains(&dist_sq)
-        })
-    }
-
-    fn start(&mut self, _mob: &dyn Mob) {
-        self.stuck_ticks = 0;
-        let Some(ghast) = self.ghast.upgrade() else {
-            return;
-        };
-        self.last_pos = ghast.mob_entity.living_entity.entity.pos.load();
-        let new_target =
-            Self::get_suitable_fly_to_position(&ghast, HappyGhastEntity::WANDER_GROUND_DISTANCE);
-        *ghast
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(new_target);
-    }
-
-    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
-        if self.stuck_ticks > 40 {
-            return false;
-        }
-        let Some(ghast) = self.ghast.upgrade() else {
-            return false;
-        };
-        if ghast.is_on_still_timeout() {
-            return false;
-        }
-        let wanted = *ghast
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        wanted.is_some_and(|target| {
-            let pos = ghast.mob_entity.living_entity.entity.pos.load();
-            let dist_sq = pos.squared_distance_to_vec(&target);
-            (1.0..=3600.0).contains(&dist_sq)
-        })
-    }
-
-    fn stop(&mut self, _mob: &dyn Mob) {
-        if let Some(ghast) = self.ghast.upgrade() {
-            *ghast
-                .wanted_fly_target
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-        }
-    }
-
-    fn should_run_every_tick(&self) -> bool {
-        true
-    }
-
-    fn tick(&mut self, _mob: &dyn Mob) {
-        let Some(ghast) = self.ghast.upgrade() else {
-            return;
-        };
-        if ghast.is_on_still_timeout() {
-            ghast.stop_in_place();
-            return;
-        }
-
-        let wanted = *ghast
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(target) = wanted else {
-            return;
-        };
-
-        let entity = &ghast.mob_entity.living_entity.entity;
-        let pos = entity.pos.load();
-        self.float_duration -= 1;
-
-        if self.float_duration <= 0 {
-            self.float_duration = rand::random_range(2..=6);
-            let travel = Vector3::new(target.x - pos.x, target.y - pos.y, target.z - pos.z);
-            let dist = travel.length();
-            if dist > 0.001 {
-                let move_scale = HappyGhastEntity::FLYING_SPEED * 5.0 / 3.0;
-                let norm = travel.normalize();
-                let delta = Vector3::new(
-                    norm.x * move_scale,
-                    norm.y * move_scale,
-                    norm.z * move_scale,
-                );
-                let current_vel = entity.velocity.load();
-                entity.velocity.store(Vector3::new(
-                    current_vel.x + delta.x,
-                    current_vel.y + delta.y,
-                    current_vel.z + delta.z,
-                ));
-            }
-        }
-
-        let dist_moved_sq = pos.squared_distance_to_vec(&self.last_pos);
-        if dist_moved_sq < 0.0025 {
-            self.stuck_ticks += 1;
-            if self.stuck_ticks > 40 {
-                *ghast
-                    .wanted_fly_target
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-            }
-        } else {
-            self.stuck_ticks = 0;
-            self.last_pos = pos;
-        }
-    }
-
-    fn controls(&self) -> Controls {
-        Controls::MOVE
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -1067,14 +742,14 @@ mod tests {
 
     use pumpkin_data::data_component_impl::EquipmentSlot;
     use pumpkin_data::entity::EntityType;
-    use pumpkin_data::sound::Sound;
-    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::vector3::Vector3;
 
     use super::*;
     use crate::entity::Entity;
+    use crate::entity::ai::control::LookControlTrait;
+    use crate::entity::ai::control::happy_ghast_look_control::HappyGhastLookControl;
     use crate::entity::ai::test_support::world;
-    use crate::entity::custom_sound::CustomSound;
     use crate::entity::mob::Mob;
 
     fn test_happy_ghast(folder: &tempfile::TempDir, age: i32) -> Arc<HappyGhastEntity> {
@@ -1085,33 +760,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn baby_vs_adult_sounds_and_volumes() {
-        let folder = tempfile::tempdir().unwrap();
-        let baby = test_happy_ghast(&folder, -24000);
-        let adult = test_happy_ghast(&folder, 0);
-
-        assert_eq!(baby.death_sound(), Some(Sound::EntityGhastlingDeath));
-        assert_eq!(adult.death_sound(), Some(Sound::EntityHappyGhastDeath));
-
-        assert_eq!(baby.hurt_sound(), Some(Sound::EntityGhastlingHurt));
-        assert_eq!(adult.hurt_sound(), Some(Sound::EntityHappyGhastHurt));
-
-        assert_eq!(
-            baby.get_ambient_sound(),
-            Some(Sound::EntityGhastlingAmbient)
-        );
-        assert_eq!(
-            adult.get_ambient_sound(),
-            Some(Sound::EntityHappyGhastAmbient)
-        );
-
-        assert_eq!(baby.sound_volume(), 1.0);
-        assert_eq!(adult.sound_volume(), 4.0);
-        assert_eq!(baby.voice_pitch(), 1.0);
-        assert_eq!(adult.voice_pitch(), 1.0);
-    }
-
-    #[tokio::test]
     async fn baby_breathes_underwater_adult_does_not() {
         let folder = tempfile::tempdir().unwrap();
         let baby = test_happy_ghast(&folder, -24000);
@@ -1119,46 +767,6 @@ mod tests {
 
         assert!(baby.can_breathe_underwater());
         assert!(!adult.can_breathe_underwater());
-    }
-
-    #[tokio::test]
-    async fn fall_damage_is_immune() {
-        let folder = tempfile::tempdir().unwrap();
-        let ghast = test_happy_ghast(&folder, 0);
-        assert!(!ghast.should_check_fall_damage());
-        assert!(!ghast.cause_fall_damage(ghast.as_ref(), 50.0, 1.0));
-    }
-
-    #[tokio::test]
-    async fn ambient_sound_interval_multiplied_when_vehicle() {
-        let folder = tempfile::tempdir().unwrap();
-        let ghast = test_happy_ghast(&folder, 0);
-        let base_interval = ghast.get_ambient_sound_interval();
-        assert_eq!(base_interval, MobEntity::DEFAULT_AMBIENT_SOUND_INTERVAL);
-    }
-
-    #[tokio::test]
-    async fn quad_leash_support() {
-        let folder = tempfile::tempdir().unwrap();
-        let ghast = test_happy_ghast(&folder, 0);
-        assert!(ghast.mob_support_quad_leash_as_holder());
-        assert!(!ghast.should_stay_close_to_leash_holder());
-
-        // Ghast does not support quad leash as leashed entity, so leash_holder_time stays 0
-        assert!(!ghast.support_quad_leash());
-        ghast.mob_notify_leash_holder(ghast.as_ref());
-        assert_eq!(ghast.leash_holder_time.load(Ordering::Relaxed), 0);
-
-        // Sniffer supports quad leash, so leash_holder_time becomes 5
-        let w = world(&folder);
-        let sniffer = crate::entity::passive::sniffer::SnifferEntity::new(Entity::new(
-            w,
-            Vector3::new(0.0, 70.0, 0.0),
-            &EntityType::SNIFFER,
-        ));
-        assert!(sniffer.support_quad_leash());
-        ghast.mob_notify_leash_holder(sniffer.as_ref());
-        assert_eq!(ghast.leash_holder_time.load(Ordering::Relaxed), 5);
     }
 
     #[tokio::test]
@@ -1174,13 +782,13 @@ mod tests {
         // Yaw snapping: e.g. 85.0 should snap to 90.0, 190.0 should snap to 180.0
         let entity = ghast.get_entity();
         entity.yaw.store(85.0);
-        let mut look_goal = HappyGhastLookGoal::new(Arc::downgrade(&ghast));
-        look_goal.tick(ghast.as_ref());
+        let mut look_control = HappyGhastLookControl::new();
+        look_control.tick(ghast.as_ref());
         assert_eq!(entity.yaw.load(), 90.0);
         assert_eq!(entity.head_yaw.load(), 90.0);
 
         entity.yaw.store(190.0);
-        look_goal.tick(ghast.as_ref());
+        look_control.tick(ghast.as_ref());
         assert_eq!(entity.yaw.load(), 180.0);
         assert_eq!(entity.head_yaw.load(), 180.0);
     }
@@ -1244,16 +852,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn walk_target_value_parity() {
-        let folder = tempfile::tempdir().unwrap();
-        let ghast = test_happy_ghast(&folder, 0);
-        let pos = BlockPos::new(0, 70, 0);
-        let value = ghast.get_walk_target_value(&pos);
-        // Air with air below and air below 2 in empty world
-        assert_eq!(value, 5.0);
-    }
-
-    #[tokio::test]
     async fn age_transition_clears_adult_goals_and_updates_data() {
         let folder = tempfile::tempdir().unwrap();
         let ghast = test_happy_ghast(&folder, 0);
@@ -1269,61 +867,6 @@ mod tests {
         assert!(ghast.is_baby());
         assert!(ghast.mob_entity.goals_selector.is_empty());
         assert_eq!(ghast.server_still_timeout.load(Ordering::Relaxed), 10);
-    }
-
-    #[tokio::test]
-    async fn knockback_and_movement_suppressed_when_standing_on_ghast_or_still_timeout() {
-        let folder = tempfile::tempdir().unwrap();
-        let ghast = test_happy_ghast(&folder, 0);
-
-        // When not on still timeout, knockback is not intercepted
-        assert!(!ghast.mob_knockback(1.0, 1.0, 0.0, None, 1.0, false));
-
-        // When on still timeout, knockback is intercepted and velocity is cleared
-        ghast
-            .get_entity()
-            .velocity
-            .store(Vector3::new(1.0, 0.5, 1.0));
-        ghast.set_server_still_timeout(10);
-        assert!(ghast.is_on_still_timeout());
-        assert!(ghast.mob_knockback(1.0, 1.0, 0.0, None, 1.0, false));
-        assert_eq!(ghast.get_entity().velocity.load(), Vector3::default());
-        assert!(!ghast.mob_is_pushable());
-        assert!(ghast.mob_is_collidable(None));
-
-        // travel stops in place when on still timeout
-        ghast
-            .get_entity()
-            .velocity
-            .store(Vector3::new(0.5, 0.0, 0.5));
-        assert!(ghast.travel(ghast.as_ref()));
-        assert_eq!(ghast.get_entity().velocity.load(), Vector3::default());
-
-        // Baby ghast never suppresses knockback even if still timeout was set
-        let baby = test_happy_ghast(&folder, -24000);
-        baby.set_server_still_timeout(10);
-        assert!(!baby.mob_knockback(1.0, 1.0, 0.0, None, 1.0, false));
-        assert!(!baby.mob_is_collidable(None));
-    }
-
-    #[tokio::test]
-    async fn goal_stop_clears_wanted_fly_target() {
-        let folder = tempfile::tempdir().unwrap();
-        let ghast = test_happy_ghast(&folder, 0);
-        *ghast
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Some(Vector3::new(10.0, 70.0, 10.0));
-        let mut goal = HappyGhastFloatAroundGoal::new(Arc::downgrade(&ghast));
-        goal.stop(ghast.as_ref());
-        assert!(
-            ghast
-                .wanted_fly_target
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_none()
-        );
     }
 
     #[tokio::test]

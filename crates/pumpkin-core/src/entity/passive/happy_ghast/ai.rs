@@ -66,8 +66,9 @@ fn init_core_activity() -> ActivityData {
         0,
         vec![
             Box::new(Timed::new(Swim::new(0.8))),
-            Box::new(Timed::new(AnimalPanic::new(
+            Box::new(Timed::new(AnimalPanic::with_fly_height(
                 SPEED_MULTIPLIER_WHEN_PANICKING,
+                0,
             ))),
             Box::new(Timed::new(LookAtTargetSink::new(45, 90))),
             Box::new(Timed::new(MoveToTargetSink::default())),

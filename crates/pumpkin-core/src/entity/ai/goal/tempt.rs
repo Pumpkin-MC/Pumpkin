@@ -27,6 +27,7 @@ enum TemptItems {
 pub enum TemptNavigation {
     Path,
     CubeMob(Weak<dyn CubeMob>),
+    MoveControl,
 }
 
 pub struct TemptGoal {
@@ -121,6 +122,19 @@ impl TemptGoal {
     }
 
     #[must_use]
+    pub fn for_non_pathfinders(
+        speed: f64,
+        predicate: fn(&dyn Mob, &pumpkin_data::item_stack::ItemStack) -> bool,
+        can_scare: bool,
+        stop_distance: f64,
+    ) -> Self {
+        Self {
+            navigation: TemptNavigation::MoveControl,
+            ..Self::with_predicate_and_stop_distance(speed, predicate, can_scare, stop_distance)
+        }
+    }
+
+    #[must_use]
     pub const fn is_running(&self) -> bool {
         self.running
     }
@@ -185,6 +199,14 @@ impl TemptGoal {
                     cube.cube_data().speed_modifier.store(Some(0.0));
                 }
             }
+            TemptNavigation::MoveControl => {
+                let pos = mob.get_entity().pos.load();
+                mob.get_mob_entity()
+                    .move_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .set_wanted_position(pos.x, pos.y, pos.z, self.speed);
+            }
         }
     }
 
@@ -205,6 +227,14 @@ impl TemptGoal {
                     data.target_yaw.store(cube.get_entity().yaw.load());
                     data.is_aggressive.store(true, Ordering::Relaxed);
                 }
+            }
+            TemptNavigation::MoveControl => {
+                let player_pos = player.get_entity().pos.load();
+                mob.get_mob_entity()
+                    .move_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .set_wanted_position(player_pos.x, player_pos.y, player_pos.z, self.speed);
             }
         }
     }

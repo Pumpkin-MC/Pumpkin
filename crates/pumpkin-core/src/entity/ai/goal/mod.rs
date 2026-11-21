@@ -47,6 +47,7 @@ pub mod pathfind_to_raid;
 pub mod pick_up_block;
 pub mod place_block;
 pub mod polar_bear_attack_players;
+pub mod random_float_around;
 pub mod random_stand;
 pub mod random_swimming;
 pub mod ranged_attack;

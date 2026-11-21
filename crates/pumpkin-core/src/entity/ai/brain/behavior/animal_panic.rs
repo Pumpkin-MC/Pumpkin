@@ -6,7 +6,7 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use super::super::BrainTick;
 use super::super::memory::{MemoryModuleId, MemoryStatus, types, walk_target::WalkTarget};
 use super::timed::Behavior;
-use crate::entity::ai::util::{goal_utils, land_random_pos};
+use crate::entity::ai::util::{air_and_water_random_pos, goal_utils, land_random_pos};
 
 const ENTRY_CONDITIONS: [(MemoryModuleId, MemoryStatus); 2] = [
     (types::IS_PANICKING.id(), MemoryStatus::Registered),
@@ -15,6 +15,7 @@ const ENTRY_CONDITIONS: [(MemoryModuleId, MemoryStatus); 2] = [
 
 pub struct AnimalPanic {
     speed_multiplier: f32,
+    fly_height: Option<i32>,
 }
 
 impl AnimalPanic {
@@ -25,7 +26,18 @@ impl AnimalPanic {
 
     #[must_use]
     pub const fn new(speed_multiplier: f32) -> Self {
-        Self { speed_multiplier }
+        Self {
+            speed_multiplier,
+            fly_height: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_fly_height(speed_multiplier: f32, fly_height: i32) -> Self {
+        Self {
+            speed_multiplier,
+            fly_height: Some(fly_height),
+        }
     }
 
     fn look_for_water(tick: &BrainTick<'_>) -> Option<Vector3<f64>> {
@@ -101,11 +113,28 @@ impl Behavior for AnimalPanic {
             .then(|| Self::look_for_water(tick))
             .flatten()
             .or_else(|| {
-                land_random_pos::get_pos(
-                    tick.mob,
-                    Self::PANIC_DISTANCE_HORIZONTAL,
-                    Self::PANIC_DISTANCE_VERTICAL,
-                )
+                if let Some(fly_height) = self.fly_height {
+                    let entity = tick.mob.get_entity();
+                    let look = pumpkin_util::math::vector3::Vector3::rotation_vector(
+                        f64::from(entity.pitch.load()),
+                        f64::from(entity.yaw.load()),
+                    );
+                    air_and_water_random_pos::get_pos(
+                        tick.mob,
+                        Self::PANIC_DISTANCE_HORIZONTAL,
+                        Self::PANIC_DISTANCE_VERTICAL,
+                        fly_height,
+                        look.x,
+                        look.z,
+                        std::f64::consts::FRAC_PI_2,
+                    )
+                } else {
+                    land_random_pos::get_pos(
+                        tick.mob,
+                        Self::PANIC_DISTANCE_HORIZONTAL,
+                        Self::PANIC_DISTANCE_VERTICAL,
+                    )
+                }
             });
         if let Some(pos) = pos {
             tick.state.set(
