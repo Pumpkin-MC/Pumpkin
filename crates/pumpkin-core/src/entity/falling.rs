@@ -187,6 +187,10 @@ impl EntityBase for FallingEntity {
         // TODO: vanilla treats concrete powder in water as still falling (`isStuckInWater`, plus a source-fluid clip above speed 1).
         entity.move_entity(caller, velo);
         entity.tick_block_collisions(caller);
+
+        // Preserve collision and block-interaction velocity changes (for example,
+        // cobweb slowdown) instead of overwriting them with the pre-move velocity.
+        let velo = entity.velocity.load();
         if entity.on_ground.load(Ordering::Relaxed) {
             entity
                 .velocity
