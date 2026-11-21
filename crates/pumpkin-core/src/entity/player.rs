@@ -3436,6 +3436,8 @@ impl Player {
         }
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
+        // Before the living tick, so its attribute refresh picks the change up this tick
+        self.update_waypoint_crouch_modifier();
         self.living_entity.tick(self, server);
 
         self.breath_manager.tick(self);
@@ -6047,6 +6049,43 @@ impl Player {
             &self.living_entity,
             vec![Attributes::MINING_EFFICIENCY],
         );
+    }
+
+    /// Vanilla `WAYPOINT_TRANSMIT_RANGE_CROUCH_MODIFIER`.
+    const WAYPOINT_TRANSMIT_RANGE_CROUCH_MODIFIER_ID: &'static str =
+        "minecraft:waypoint_transmit_range_crouch";
+
+    /// The locator bar part of vanilla `updatePlayerAttributes`. Crouching zeroes the transmit
+    /// range, which takes your marker off everyone else's locator bar.
+    fn update_waypoint_crouch_modifier(&self) {
+        let crouching = self.living_entity.entity.pose.load() == EntityPose::Crouching;
+        let has_modifier = self
+            .living_entity
+            .attributes
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&Attributes::WAYPOINT_TRANSMIT_RANGE.id)
+            .is_some_and(|instance| {
+                instance
+                    .modifiers
+                    .iter()
+                    .any(|m| m.id == Self::WAYPOINT_TRANSMIT_RANGE_CROUCH_MODIFIER_ID)
+            });
+        if crouching == has_modifier {
+            return;
+        }
+        self.living_entity
+            .update_attribute(&Attributes::WAYPOINT_TRANSMIT_RANGE, |instance| {
+                if crouching {
+                    instance.add_or_replace_modifier(Modifier {
+                        id: Self::WAYPOINT_TRANSMIT_RANGE_CROUCH_MODIFIER_ID.to_string(),
+                        amount: -1.0,
+                        operation: ModifierOperation::MultiplyTotal,
+                    });
+                } else {
+                    instance.remove_modifier(Self::WAYPOINT_TRANSMIT_RANGE_CROUCH_MODIFIER_ID);
+                }
+            });
     }
 
     pub fn get_mining_speed(&self, block: &'static Block) -> f32 {

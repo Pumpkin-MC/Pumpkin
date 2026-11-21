@@ -187,6 +187,7 @@ pub mod natural_spawner;
 mod player_touch;
 pub(crate) use player_touch::pickup_area;
 pub mod scoreboard;
+pub mod waypoint;
 pub mod weather;
 
 pub use environment::EnvironmentAttributes;
@@ -260,6 +261,8 @@ pub struct World {
     pub min_y: i32,
     /// The world's weather, including rain and thunder levels.
     pub weather: std::sync::Mutex<Weather>,
+    /// Locator bar connections between the players in this world.
+    waypoint_manager: std::sync::Mutex<waypoint::ServerWaypointManager>,
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
     pub server: Weak<Server>,
@@ -429,6 +432,7 @@ impl World {
             level_time: std::sync::Mutex::new(LevelTime::new()),
             dimension,
             weather: std::sync::Mutex::new(Weather::new()),
+            waypoint_manager: std::sync::Mutex::default(),
             block_registry,
             sea_level: generation_settings.sea_level,
             min_y: i32::from(generation_settings.shape.min_y),
@@ -957,6 +961,21 @@ impl World {
         }
     }
 
+    /// Runs `f` on the locator bar manager, handing it the current `locator_bar` rule.
+    ///
+    /// Don't call back into the manager from `f`, the lock isn't reentrant.
+    pub(crate) fn with_waypoints<R>(
+        &self,
+        f: impl FnOnce(&mut waypoint::ServerWaypointManager, bool) -> R,
+    ) -> R {
+        let locator_bar = self.level_info.load().game_rules.locator_bar;
+        let mut manager = self
+            .waypoint_manager
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        f(&mut manager, locator_bar)
+    }
+
     pub fn set_game_rule(&self, rule: &GameRule, value: GameRuleValue<i64, bool>) {
         let current_info = self.level_info.load();
         let mut new_info = (**current_info).clone();
@@ -970,6 +989,11 @@ impl World {
             _ => {}
         }
         self.level_info.store(Arc::new(new_info));
+        if *rule == GameRule::LocatorBar
+            && let Some(server) = self.server.upgrade()
+        {
+            waypoint::on_locator_bar_changed(&server);
+        }
         if *rule == GameRule::AdvanceTime {
             let level_time = self
                 .level_time
@@ -3607,6 +3631,9 @@ impl World {
         // Vanilla `level.addNewPlayer`: in-range viewers get the spawn from the tracker.
         self.entity_tracker
             .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
+        self.with_waypoints(|waypoints, locator_bar| {
+            waypoints.on_tracking_start(&player, locator_bar);
+        });
 
         self.send_player_equipment(&player);
         player
@@ -3963,6 +3990,9 @@ impl World {
         // Vanilla `level.addNewPlayer`: in-range viewers get the spawn from the tracker.
         self.entity_tracker
             .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
+        self.with_waypoints(|waypoints, locator_bar| {
+            waypoints.on_tracking_start(player, locator_bar);
+        });
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -5248,6 +5278,9 @@ impl World {
 
         self.entity_tracker
             .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
+        self.with_waypoints(|waypoints, locator_bar| {
+            waypoints.on_tracking_start(player, locator_bar);
+        });
     }
 
     /// Sends the centre chunk ahead of the teleport and records it as held.
@@ -5327,6 +5360,7 @@ impl World {
         if let Some(ref player) = removed_player {
             self.entity_tracker
                 .remove_entity(player.as_ref() as &dyn EntityBase, self);
+            self.with_waypoints(|waypoints, _| waypoints.remove_player(player));
             let uuid = player.gameprofile.id;
             let entity_id = player.entity_id();
 

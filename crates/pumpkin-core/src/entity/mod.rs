@@ -2400,6 +2400,16 @@ impl Entity {
                     ));
                 }
             }
+
+            // Vanilla `setPosRaw`: only players take part in the locator bar here
+            if self.entity_type == &EntityType::PLAYER
+                && !self.first_tick.load(Ordering::Relaxed)
+                && !self.removed.load(Ordering::Relaxed)
+            {
+                self.world.load().with_waypoints(|waypoints, locator_bar| {
+                    waypoints.on_player_moved(&self.entity_uuid, locator_bar);
+                });
+            }
         }
     }
 
