@@ -1617,6 +1617,12 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 
+    fn mob_can_add_passenger(&self, _passenger: &dyn EntityBase) -> bool {
+        true
+    }
+
+    fn mob_notify_leash_holder(&self, _leashed: &dyn EntityBase) {}
+
     fn on_elastic_leash_pull(&self) {}
 
     fn follow_leash_speed(&self) -> f64 {
@@ -2867,6 +2873,10 @@ pub trait Mob: EntityBase + Send + Sync {
             .can_be_pushed(Mob::on_climbable(self))
     }
 
+    fn mob_is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
+        false
+    }
+
     fn can_push_entity(&self, _other: &dyn EntityBase) -> bool {
         true
     }
@@ -2934,6 +2944,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_is_pushable()
     }
 
+    fn is_collidable(&self, entity: Option<Box<dyn EntityBase>>) -> bool {
+        self.mob_is_collidable(entity)
+    }
+
     fn on_climbable(&self) -> bool {
         Mob::on_climbable(self)
     }
@@ -2944,6 +2958,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn support_quad_leash_as_holder(&self) -> bool {
         self.mob_support_quad_leash_as_holder()
+    }
+
+    fn can_add_passenger(&self, passenger: &dyn EntityBase) -> bool {
+        self.mob_can_add_passenger(passenger)
+    }
+
+    fn notify_leash_holder(&self, leashed: &dyn EntityBase) {
+        self.mob_notify_leash_holder(leashed);
     }
 
     fn on_lightning_strike(

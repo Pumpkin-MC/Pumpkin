@@ -108,6 +108,19 @@ impl TemptGoal {
     }
 
     #[must_use]
+    pub fn with_predicate_and_stop_distance(
+        speed: f64,
+        predicate: fn(&dyn Mob, &pumpkin_data::item_stack::ItemStack) -> bool,
+        can_scare: bool,
+        stop_distance: f64,
+    ) -> Self {
+        Self {
+            tempt_items: TemptItems::Predicate(predicate),
+            ..Self::with_stop_distance(speed, &[], can_scare, stop_distance)
+        }
+    }
+
+    #[must_use]
     pub const fn is_running(&self) -> bool {
         self.running
     }
