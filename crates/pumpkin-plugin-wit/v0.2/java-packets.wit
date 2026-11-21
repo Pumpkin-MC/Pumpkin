@@ -351,26 +351,28 @@ interface java-packets {
   }
   record s-set-player-ground {
     on-ground: bool,
+    horizontal-collision: bool,
   }
   record s-player-input {
     input: s8,
   }
   record s-player-position {
     position: tuple<f64, f64, f64>,
-    /// bit 0: [`FLAG_ON_GROUND`], bit 1: [`FLAG_IN_WALL`]
+    /// bit 0: [`FLAG_ON_GROUND`], bit 1: [`FLAG_HORIZONTAL_COLLISION`]
     collision: u8,
   }
   record s-player-position-rotation {
     position: tuple<f64, f64, f64>,
     yaw: f32,
     pitch: f32,
-    /// bit 0: [`FLAG_ON_GROUND`], bit 1: [`FLAG_IN_WALL`]
+    /// bit 0: [`FLAG_ON_GROUND`], bit 1: [`FLAG_HORIZONTAL_COLLISION`]
     collision: u8,
   }
   record s-player-rotation {
     yaw: f32,
     pitch: f32,
     ground: bool,
+    horizontal-collision: bool,
   }
   record s-player-session {
     session-id: uuid,

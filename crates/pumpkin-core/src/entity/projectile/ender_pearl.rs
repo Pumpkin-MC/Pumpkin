@@ -1,5 +1,7 @@
+use crate::block::blocks::bubble_column;
+use crate::entity::mob::spawn::{EntitySpawnReason, finalize_spawn};
 use crate::entity::projectile::owner::ProjectileOwner;
-use std::sync::atomic::AtomicBool;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
@@ -31,8 +33,6 @@ impl EnderPearlEntity {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
         };
 
@@ -47,12 +47,23 @@ impl EnderPearlEntity {
 }
 
 impl EntityBase for EnderPearlEntity {
+    /// Pearls take the regular entity push, not the projectile one.
+    fn on_above_bubble_column(&self, drag_down: bool, pos: &BlockPos) {
+        let entity = self.get_entity();
+        bubble_column::push_entity(entity, drag_down, true);
+        bubble_column::send_bubble_column_particles(&entity.world.load(), pos);
+    }
+
+    fn on_inside_bubble_column(&self, drag_down: bool) {
+        bubble_column::push_entity(self.get_entity(), drag_down, false);
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.thrown.owner)
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -120,15 +131,28 @@ impl EntityBase for EnderPearlEntity {
                 living.health.load() > 0.0 && owner.get_entity().pose.load() != EntityPose::Sleeping
             })
         {
-            let should_spawn_endermite = rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE;
-            if world.should_spawn_monsters() && should_spawn_endermite {
-                let entity = Entity::new(
-                    world.clone(),
-                    owner.get_entity().pos.load(),
-                    &EntityType::ENDERMITE,
-                );
-                let endermite = EndermiteEntity::new(entity);
-                world.spawn_entity(endermite);
+            let is_player = owner.get_player().is_some();
+            if is_player {
+                let should_spawn_endermite = rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE;
+                if world.should_spawn_monsters() && should_spawn_endermite {
+                    let entity = Entity::new(
+                        world.clone(),
+                        owner.get_entity().pos.load(),
+                        &EntityType::ENDERMITE,
+                    );
+                    entity.set_rotation(
+                        owner.get_entity().yaw.load(),
+                        owner.get_entity().pitch.load(),
+                    );
+                    let endermite = EndermiteEntity::new(entity);
+                    finalize_spawn(
+                        &(endermite.clone() as std::sync::Arc<dyn EntityBase>),
+                        &world,
+                        EntitySpawnReason::Triggered,
+                        None,
+                    );
+                    world.spawn_entity(endermite);
+                }
             }
 
             // In vanilla, teleport handles everything including sound
@@ -146,12 +170,17 @@ impl EntityBase for EnderPearlEntity {
                 &teleport_pos,
             );
 
-            // Deal 5 damage to owner
-            owner.damage(
-                owner.as_ref(),
-                5.0,
-                pumpkin_data::damage::DamageType::ENDER_PEARL,
-            );
+            if let Some(living) = owner.get_living_entity() {
+                living.fall_distance.store(0.0);
+                living.reset_current_impulse_context();
+            }
+            if is_player {
+                owner.damage(
+                    owner.as_ref(),
+                    5.0,
+                    pumpkin_data::damage::DamageType::ENDER_PEARL,
+                );
+            }
         }
 
         world.send_entity_status(entity, EntityStatus::Death, ActorEventID::Death);

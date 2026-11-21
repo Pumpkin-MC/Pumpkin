@@ -89,6 +89,15 @@ impl Mob for RavagerEntity {
         &self.mob_entity
     }
 
+    fn get_attack_bounding_box(
+        &self,
+        horizontal_expansion: f64,
+    ) -> pumpkin_util::math::boundingbox::BoundingBox {
+        // Vanilla `Ravager.getAttackBoundingBox`
+        super::attack_bounding_box(&self.mob_entity.living_entity.entity, horizontal_expansion)
+            .expand(-0.05, 0.0, -0.05)
+    }
+
     fn as_patrolling_monster(&self) -> Option<&dyn PatrollingMonster> {
         Some(self)
     }

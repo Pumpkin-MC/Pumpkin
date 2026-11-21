@@ -358,7 +358,12 @@ pub fn traverse_blocks<T>(
     to: Vector3<f64>,
     mut visit: impl FnMut(&BlockPos) -> Option<T>,
 ) -> Option<T> {
-    if from == to {
+    // A non-finite end never advances the traversal and would loop forever.
+    if from == to
+        || ![from.x, from.y, from.z, to.x, to.y, to.z]
+            .iter()
+            .all(|value| value.is_finite())
+    {
         return None;
     }
 

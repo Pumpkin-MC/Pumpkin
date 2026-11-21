@@ -511,7 +511,7 @@ impl NbtPath {
                                 }
                             }
                             if !found {
-                                list.push(pattern_tag.clone());
+                                list.push(pattern_tag);
                                 if let Some(last) = list.last_mut() {
                                     next.push(last as *mut NbtTag);
                                 }

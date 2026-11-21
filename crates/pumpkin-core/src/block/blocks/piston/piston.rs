@@ -483,6 +483,7 @@ fn move_piston(
                 &broken_block_pos,
                 block_state.id, // ?
                 false,
+                BlockFlags::NOTIFY_ALL,
             );
             world.block_registry.prepare(
                 world,

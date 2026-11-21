@@ -78,19 +78,22 @@ pub trait BlockEntity: Any + Send + Sync {
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
 
-    /// Atomically takes the pending loot-table key and seed from this block entity.
-    ///
-    /// Returns `Some((key, seed))` if a deferred loot table was set, clearing it in the
-    /// process. Returns `None` for entities that do not support loot tables, or if the
-    /// loot has already been generated.
-    fn take_loot_table(&self) -> Option<(String, i64)> {
-        None
-    }
+    /// Clears the pending loot-table key and runs `generate` with it and the seed.
+    /// Implementations reserve the one-time unpack under the loot lock, release both chest locks
+    /// before generation, then place into still-empty slots.
+    // TODO vanilla `RandomizableContainerBlockEntity`: barrels, shulker boxes, dispensers, droppers, hoppers,
+    // crafters and decorated pots hold loot tables too. Only chests implement this.
+    fn unpack_loot_table_with(&self, _generate: &mut dyn FnMut(String, i64) -> Vec<ItemStack>) {}
 
     /// Returns `true` if this block entity has a pending deferred loot table that has
     /// not yet been unpacked. Does not consume the loot table.
     fn has_loot_table(&self) -> bool {
         false
+    }
+
+    /// Vanilla `getLootTable`: the pending loot table key, without consuming it.
+    fn loot_table_key(&self) -> Option<String> {
+        None
     }
 
     fn write_internal(&self, nbt: &mut NbtCompound) {
@@ -127,21 +130,58 @@ pub trait BlockEntity: Any + Send + Sync {
         None
     }
 
+    /// Vanilla `Container`: the inventory hoppers, droppers and crafters move items through.
+    ///
+    /// Hoppers on parallel threads write through `Inventory::update_stack`, so the returned
+    /// inventory must override it with one lock for read and write (`update_locked_stack`).
+    fn get_container(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        self.get_inventory()
+    }
+
     /// Copies the block entity's state on the item stack dropped for it.
     fn collect_item_components(&self, _stack: &mut ItemStack) {}
 
+    /// Copies all implicit components onto a Creative Ctrl+Pick Block item stack (`BlockEntity.collectComponents`).
+    fn collect_pick_item_components(&self, stack: &mut ItemStack) {
+        self.collect_item_components(stack);
+    }
+
     /// Restores the state from the item stack the block was placed from.
     fn apply_item_components(&self, _stack: &ItemStack) {}
+
+    fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        None
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        None
+    }
 
     fn drops_for_creative_player(&self) -> bool {
         false
     }
 
     fn set_block_state(&mut self, _block_state: BlockStateId) {}
+
+    fn set_world(&self, _world: std::sync::Weak<World>) {}
+
+    /// Runs post-load side effects matching vanilla `BlockEntity.loadAdditional` when NBT is
+    /// applied to a live block entity in a world.
+    fn on_nbt_loaded(&self, _world: &Arc<World>, _previous: Option<&dyn BlockEntity>) {}
+
     fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
         if let Some(inventory) = self.get_inventory() {
             world.scatter_inventory(position, &inventory);
         }
+    }
+
+    fn on_player_destroyed(
+        &self,
+        _world: &Arc<World>,
+        _state: BlockStateId,
+        _player: &Arc<crate::entity::player::Player>,
+        _tool: &ItemStack,
+    ) {
     }
     fn is_dirty(&self) -> bool {
         false
@@ -165,6 +205,138 @@ pub trait BlockEntity: Any + Send + Sync {
     }
     fn to_experience_container(self: Arc<Self>) -> Option<Arc<dyn ExperienceContainer>> {
         None
+    }
+}
+
+/// Shared `BaseContainerBlockEntity` / `BeaconBlockEntity` `CustomName` + `lock` state (`26.3`).
+#[derive(Default)]
+pub struct ContainerMetadata {
+    pub custom_name: std::sync::Mutex<Option<pumpkin_util::text::TextComponent>>,
+    pub lock: std::sync::Mutex<Option<pumpkin_data::data_component_impl::LockImpl>>,
+}
+
+impl ContainerMetadata {
+    #[must_use]
+    pub fn from_nbt(nbt: &NbtCompound) -> Self {
+        let custom_name = nbt
+            .get("CustomName")
+            .or_else(|| nbt.get("custom_name"))
+            .and_then(pumpkin_data::data_component_impl::CustomNameImpl::read_data)
+            .map(|c| c.name);
+        let lock = nbt
+            .get("lock")
+            .or_else(|| nbt.get("Lock"))
+            .and_then(pumpkin_data::data_component_impl::LockImpl::read_data);
+        Self {
+            custom_name: std::sync::Mutex::new(custom_name),
+            lock: std::sync::Mutex::new(lock),
+        }
+    }
+
+    pub fn write_nbt(&self, nbt: &mut NbtCompound) {
+        use pumpkin_data::data_component_impl::{CustomNameImpl, DataComponentImpl};
+        if let Some(name) = self
+            .custom_name
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            nbt.put("CustomName", CustomNameImpl { name }.write_data());
+        }
+        if let Some(lock) = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            nbt.put("lock", lock.write_data());
+        }
+    }
+
+    pub fn apply_item_components(&self, stack: &ItemStack) {
+        if let Some(name) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
+        {
+            *self
+                .custom_name
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(name.name.clone());
+        }
+        if let Some(lock) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::LockImpl>()
+        {
+            *self
+                .lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(lock.clone());
+        }
+    }
+
+    pub fn collect_name_only(&self, stack: &mut ItemStack) {
+        if let Some(name) = self
+            .custom_name
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            stack.set_data_component(pumpkin_data::data_component_impl::CustomNameImpl { name });
+        }
+    }
+
+    pub fn collect_item_components(&self, stack: &mut ItemStack) {
+        self.collect_name_only(stack);
+        if let Some(lock) = self
+            .lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            stack.set_data_component(lock);
+        }
+    }
+
+    #[must_use]
+    pub fn get_lock(&self) -> Option<pumpkin_data::data_component_impl::LockImpl> {
+        self.lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    #[must_use]
+    pub fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.custom_name
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+}
+
+pub fn apply_container_items_to_slice(stack: &ItemStack, items: &mut [ItemStack]) -> bool {
+    let Some(container) =
+        stack.get_data_component::<pumpkin_data::data_component_impl::ContainerImpl>()
+    else {
+        return false;
+    };
+    for (slot, item) in &container.items {
+        if let Some(target) = items.get_mut(*slot as usize) {
+            *target = item.clone();
+        }
+    }
+    true
+}
+
+pub fn collect_container_items_from_slice(items: &[ItemStack], stack: &mut ItemStack) {
+    let contents: Vec<(u8, ItemStack)> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| !item.is_empty())
+        .map(|(slot, item)| (slot as u8, item.clone()))
+        .collect();
+    if !contents.is_empty() {
+        stack.set_data_component(pumpkin_data::data_component_impl::ContainerImpl {
+            items: contents,
+        });
     }
 }
 
@@ -332,12 +504,42 @@ pub fn has_block_block_entity(block: &Block) -> bool {
 }
 
 #[must_use]
+pub fn create_block_entity_for_state(
+    state_id: BlockStateId,
+    position: BlockPos,
+) -> Option<Arc<dyn BlockEntity>> {
+    use pumpkin_data::BlockState;
+    use pumpkin_data::block_properties::StructureblockMode;
+
+    let state = BlockState::from_id(state_id);
+    if state.block_entity_type == u16::MAX {
+        return None;
+    }
+    let block = Block::from_state_id(state_id);
+    let name = BLOCK_ENTITY_TYPES.get(state.block_entity_type as usize)?;
+    match *name {
+        "structure_block" => {
+            let mode = structure_block::StructureBlockBlockEntity::mode_from_block_state(state_id)
+                .unwrap_or(StructureblockMode::Load);
+            Some(Arc::new(
+                structure_block::StructureBlockBlockEntity::new_with_mode(position, mode),
+            ))
+        }
+        "command_block" => Some(Arc::new(command_block::CommandBlockEntity::new(
+            position,
+            true,
+            block == &Block::CHAIN_COMMAND_BLOCK,
+        ))),
+        _ => create_block_entity(state.block_entity_type, position),
+    }
+}
+
+#[must_use]
 #[allow(clippy::too_many_lines)]
 pub fn create_block_entity(
     block_entity_type_id: u16,
     position: BlockPos,
 ) -> Option<Arc<dyn BlockEntity>> {
-    use pumpkin_data::block_properties::FacingHopper;
     if block_entity_type_id == u16::MAX {
         return None;
     }
@@ -378,10 +580,7 @@ pub fn create_block_entity(
         "daylight_detector" => Some(Arc::new(
             daylight_detector::DaylightDetectorBlockEntity::new(position),
         )),
-        "hopper" => Some(Arc::new(hopper::HopperBlockEntity::new(
-            position,
-            FacingHopper::Down,
-        ))),
+        "hopper" => Some(Arc::new(hopper::HopperBlockEntity::new(position))),
         "comparator" => Some(Arc::new(comparator::ComparatorBlockEntity::new(position))),
         "banner" => Some(Arc::new(banner::BannerBlockEntity::new(position))),
         "structure_block" => Some(Arc::new(structure_block::StructureBlockBlockEntity::new(

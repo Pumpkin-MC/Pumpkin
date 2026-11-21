@@ -9,8 +9,12 @@ pub mod bow_attack;
 pub mod break_door;
 pub mod breath_air;
 pub mod breed;
+pub mod cat_lie_on_block;
+pub mod cat_sit_on_block;
 pub mod chase_player;
+pub mod climb_on_top_of_powder_snow;
 pub mod creeper_ignite;
+pub mod defend_village_target;
 pub mod destroy_egg;
 pub mod door_interact;
 pub mod eat_grass;
@@ -22,12 +26,15 @@ pub mod follow_owner;
 pub mod follow_parent;
 pub mod go_to_wanted_item;
 pub mod goal_selector;
+pub mod golem_random_stroll_in_village;
 pub mod interact;
 pub mod leap_at_target;
 pub mod llama_follow_caravan;
 pub mod look_around;
 pub mod look_at_entity;
 pub mod melee_attack;
+pub mod move_back_to_village;
+pub mod move_through_village;
 pub mod move_to_target_pos;
 pub mod move_towards_restriction;
 pub mod move_towards_target;
@@ -50,6 +57,7 @@ pub mod revenge;
 pub mod run_around_like_crazy;
 pub mod sit_when_ordered_to;
 pub mod skeleton_trap;
+pub mod spear_use;
 pub mod spider_attack;
 pub mod step_and_destroy_block;
 pub mod swim;
@@ -61,7 +69,6 @@ pub mod try_find_water;
 pub mod use_item;
 pub mod wander_around;
 pub mod water_avoiding_random_flying;
-pub mod work_at_job_site;
 pub mod zombie_attack;
 
 #[must_use]
@@ -315,6 +322,16 @@ impl<P> ParentHandle<P> {
     /// assert_eq!(parent.child.value(), 7);
     /// ```
     pub const unsafe fn new(parent: &P) -> Self {
+        Self {
+            ptr: ptr::from_ref(parent),
+        }
+    }
+
+    #[must_use]
+    pub const fn from_static(parent: &'static P) -> Self
+    where
+        P: Sync,
+    {
         Self {
             ptr: ptr::from_ref(parent),
         }
