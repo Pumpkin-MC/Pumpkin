@@ -302,7 +302,11 @@ pub enum AdvancementCondition {
     StartedRiding(Option<EntityCondition>),
     SummonedEntity(EntityCondition),
     CrafterRecipeCrafted(&'static str),
-    EffectsChanged,
+    EffectsChanged {
+        player: Option<EntityCondition>,
+        effects: Option<&'static [MobEffectCondition]>,
+        source: Option<EntityCondition>,
+    },
     SpearMobs {
         count: Option<i32>,
     },
@@ -382,6 +386,18 @@ pub struct EntityCondition {
     pub looking_at: Option<&'static str>,
     pub feet_item: Option<&'static str>,
     pub safe_armor_disallowed: Option<bool>,
+}
+
+/// One entry of vanilla's `MobEffectsPredicate` map with its `MobEffectInstancePredicate`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MobEffectCondition {
+    pub effect: &'static str,
+    pub amplifier_min: Option<i64>,
+    pub amplifier_max: Option<i64>,
+    pub duration_min: Option<i64>,
+    pub duration_max: Option<i64>,
+    pub ambient: Option<bool>,
+    pub visible: Option<bool>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]

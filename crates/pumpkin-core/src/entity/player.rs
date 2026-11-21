@@ -6509,9 +6509,6 @@ impl Player {
 
     pub fn add_effect(&self, effect: Effect) {
         self.living_entity.add_effect(effect);
-        self.trigger_advancement(
-            crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged,
-        );
     }
 
     pub fn has_effect(&self, effect_type: &'static StatusEffect) -> bool {
