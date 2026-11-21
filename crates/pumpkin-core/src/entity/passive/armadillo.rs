@@ -23,12 +23,13 @@ use crate::entity::{
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     item::ItemEntity,
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, drop_from_gift_loot_table},
     passive::animal::Animal,
     player::Player,
 };
 
-pub const ARMADILLO_FOOD: &[&Item] = &[&Item::SPIDER_EYE];
+const ARMADILLO_BRUSH_LOOT_TABLE: &str = "minecraft:brush/armadillo";
+const ARMADILLO_SHED_LOOT_TABLE: &str = "minecraft:gameplay/armadillo_shed";
 pub const ARMADILLO_BABY_START_AGE: i32 = -48000;
 pub const SCARE_CHECK_INTERVAL: i32 = 80;
 pub const SCARE_DISTANCE_HORIZONTAL: f64 = 7.0;
@@ -146,7 +147,14 @@ impl ArmadilloEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, ARMADILLO_FOOD, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.25,
+                    &tag::Item::MINECRAFT_ARMADILLO_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -225,22 +233,40 @@ impl ArmadilloEntity {
         }
     }
 
-    pub fn brush_off_scute(&self, player: &Player, item_stack: &mut ItemStack) -> bool {
+    pub fn brush_off_scute(
+        &self,
+        _interacting_entity: Option<&dyn EntityBase>,
+        tool: &ItemStack,
+    ) -> bool {
         if self.is_baby() || !self.get_entity().is_alive() {
             return false;
         }
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
-        let item_entity = Arc::new(ItemEntity::new(
-            Entity::new(world.clone(), pos, &EntityType::ITEM),
-            ItemStack::new(1, &Item::ARMADILLO_SCUTE),
-        ));
-        world.spawn_entity(item_entity);
-        world.play_sound(Sound::EntityArmadilloBrush, SoundCategory::Neutral, &pos);
-        if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-            let _ = item_stack.damage_item(16);
+        if let Some(table) = world.get_loot_table(ARMADILLO_BRUSH_LOOT_TABLE) {
+            let params = crate::world::loot::LootContextParameters {
+                world: Some(&world),
+                position: Some(pos),
+                this_entity: Some(self),
+                tool: Some(tool.clone()),
+                ..Default::default()
+            };
+            for drop_stack in
+                crate::world::loot::generate_loot_from_handle(&table, rand::random(), &params)
+            {
+                let item_entity = Arc::new(ItemEntity::new(
+                    Entity::new(world.clone(), pos, &EntityType::ITEM),
+                    drop_stack,
+                ));
+                world.spawn_entity(item_entity);
+            }
         }
+        world.play_sound(Sound::EntityArmadilloBrush, SoundCategory::Neutral, &pos);
+        world.emit_game_event(
+            pumpkin_data::game_event::GameEvent::EntityInteract.name(),
+            pos,
+        );
         true
     }
 
@@ -294,7 +320,6 @@ impl Animal for ArmadilloEntity {
         item_stack
             .item
             .has_tag(&tag::Item::MINECRAFT_ARMADILLO_FOOD)
-            || ARMADILLO_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
@@ -371,16 +396,19 @@ impl Mob for ArmadilloEntity {
             let scute_time = self.scute_time.fetch_sub(1, Ordering::Relaxed) - 1;
             if scute_time <= 0 {
                 let pos = entity.pos.load();
-                let item_entity = Arc::new(ItemEntity::new(
-                    Entity::new(world.clone(), pos, &EntityType::ITEM),
-                    ItemStack::new(1, &Item::ARMADILLO_SCUTE),
-                ));
-                world.spawn_entity_non_save(item_entity as Arc<dyn EntityBase>);
-                world.play_sound(
-                    Sound::EntityArmadilloScuteDrop,
-                    SoundCategory::Neutral,
-                    &pos,
-                );
+                if drop_from_gift_loot_table(self, ARMADILLO_SHED_LOOT_TABLE, |drop_stack| {
+                    let item_entity = Arc::new(ItemEntity::new(
+                        Entity::new(world.clone(), pos, &EntityType::ITEM),
+                        drop_stack,
+                    ));
+                    world.spawn_entity_non_save(item_entity as Arc<dyn EntityBase>);
+                }) {
+                    world.play_sound(
+                        Sound::EntityArmadilloScuteDrop,
+                        SoundCategory::Neutral,
+                        &pos,
+                    );
+                }
                 self.scute_time
                     .store(pick_next_scute_drop_time(), Ordering::Relaxed);
             }
@@ -426,7 +454,12 @@ impl Mob for ArmadilloEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        if item_stack.item == &Item::BRUSH && self.brush_off_scute(player, item_stack) {
+        if item_stack.item == &Item::BRUSH
+            && self.brush_off_scute(Some(player.as_ref()), item_stack)
+        {
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                let _ = item_stack.damage_item(16);
+            }
             return true;
         }
         if self.is_scared() {

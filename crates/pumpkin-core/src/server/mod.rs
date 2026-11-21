@@ -41,7 +41,7 @@ use pumpkin_world::world_info::anvil::{
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 use rand::seq::IndexedRandom;
 use rayon::prelude::*;
-use rsa::RsaPublicKey;
+use rsa::PublicKey as RsaPublicKey;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -74,6 +74,8 @@ pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
     pub telemetry_config: TelemetryConfig,
+    /// Tracks active and completed player session durations for anonymous telemetry.
+    pub telemetry_sessions: crate::telemetry::TelemetrySessionTracker,
 
     pub data: VanillaData,
 
@@ -161,6 +163,8 @@ pub struct Server {
     pub stop_token: CancellationToken,
     /// Set once shutdown closes admission, so the shutdown kick pass sees every admitted player.
     admission_closed: std::sync::RwLock<bool>,
+    /// Stores the latest available Pumpkin release if the startup update checker found a newer version.
+    pub available_update: std::sync::OnceLock<crate::update_checker::GitHubRelease>,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -212,8 +216,12 @@ impl Server {
                     basic_config.seed,
                     Dimension::OVERWORLD,
                 );
-                let default_data =
+                let mut default_data =
                     LevelData::from_world_generator(basic_config.seed, &overworld_gen);
+                if basic_config.hardcore {
+                    default_data.difficulty = Difficulty::Hard;
+                    default_data.difficulty_locked = true;
+                }
                 AnvilLevelInfo.write_world_info(&default_data, &world_path)?;
                 default_data
             }
@@ -237,6 +245,15 @@ impl Server {
             }
         };
 
+        let mut level_info = level_info;
+        if basic_config.hardcore {
+            level_info.difficulty = Difficulty::Hard;
+            level_info.difficulty_locked = true;
+            if let Err(err) = AnvilLevelInfo.write_world_info(&level_info, &world_path) {
+                error!("Failed to persist hardcore difficulty fix: {err}");
+            }
+        }
+
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
@@ -256,6 +273,7 @@ impl Server {
         );
         let advancement_manager = Arc::new(AdvancementManager::new(
             players_dir.clone(),
+            advanced_config.advancement.enabled,
             advanced_config.advancement.save_advancements,
         ));
         let white_list = AtomicBool::new(basic_config.white_list);
@@ -310,6 +328,7 @@ impl Server {
             basic_config,
             advanced_config,
             telemetry_config,
+            telemetry_sessions: crate::telemetry::TelemetrySessionTracker::default(),
             data: vanilla_data,
             plugin_manager: Arc::new(PluginManager::new(plugin_loaders)),
             permission_manager,
@@ -356,6 +375,7 @@ impl Server {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
             management_hub,
+            available_update: std::sync::OnceLock::new(),
         };
         let server = Arc::new(server);
 
@@ -679,6 +699,24 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
+    fn load_player_world(
+        &self,
+        id: &uuid::Uuid,
+    ) -> Option<(Arc<World>, Option<pumpkin_nbt::compound::NbtCompound>)> {
+        let first_world = self.worlds.load().first().cloned()?;
+        let Ok(Some(data)) = self.player_data_storage.load_data(id) else {
+            return Some((first_world, None));
+        };
+        let Some(dimension_key) = data.get_string("Dimension") else {
+            return Some((first_world, Some(data)));
+        };
+        let Some(dimension) = Dimension::from_name(dimension_key) else {
+            warn!("Invalid dimension key in player data: {dimension_key}");
+            return Some((first_world, Some(data)));
+        };
+        Some((self.get_world_from_dimension(dimension), Some(data)))
+    }
+
     pub fn add_player(
         self: &Arc<Self>,
         client: Arc<ClientPlatform>,
@@ -691,25 +729,7 @@ impl Server {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .gamemode;
 
-        let first_world = self.worlds.load().first().cloned()?;
-
-        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
-            if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) = Dimension::from_name(dimension_key) {
-                    let world = self.get_world_from_dimension(dimension);
-                    (world, Some(data))
-                } else {
-                    warn!("Invalid dimension key in player data: {dimension_key}");
-                    (first_world, Some(data))
-                }
-            } else {
-                // Player data exists but doesn't have a "Dimension" key.
-                (first_world, Some(data))
-            }
-        } else {
-            // No player data found or an error occurred, default to the Overworld.
-            (first_world, None)
-        };
+        let (world, nbt) = self.load_player_world(&profile.id)?;
 
         let mut player = Player::new(
             client,
@@ -728,6 +748,8 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        // Joining already sends play packets, which must reach `PacketSentEvent` for translation.
+        player.client.set_player(player.clone());
         let player_clone = player.clone();
         self.spawn_task(async move {
             let properties = player_clone.gameprofile.properties.load().clone();
@@ -758,6 +780,7 @@ impl Server {
                 player.screen_handler_sync_handler.store_player(player.clone());
                 if !self.admit_player(&world, &player) {
                     player.kick(DisconnectReason::Shutdown, &TextComponent::text("Server stopped"));
+                    player.client.clear_player();
                     return None;
                 }
                 Some({
@@ -786,6 +809,9 @@ impl Server {
                         Some(player.gameprofile.name.clone()),
                     );
                     self.management_hub.broadcast_player_joined(&player_dto);
+                    if self.telemetry_config.enabled {
+                        self.telemetry_sessions.record_join(player.gameprofile.id);
+                    }
 
                     (player, world)
                 })
@@ -793,12 +819,16 @@ impl Server {
 
             'cancelled: {
                 player.kick(DisconnectReason::Kicked, &event.kick_message);
+                player.client.clear_player();
                 None
             }
         }}
     }
 
     pub fn remove_player(&self, player: &Player) {
+        if self.telemetry_config.enabled {
+            self.telemetry_sessions.record_leave(player);
+        }
         let player_dto = crate::net::management::dto::PlayerDto::new(
             Some(player.gameprofile.id),
             Some(player.gameprofile.name.clone()),
@@ -1129,6 +1159,16 @@ impl Server {
         crate::telemetry::start_telemetry(self.clone());
     }
 
+    /// Starts the background update checker task if enabled in configuration.
+    pub fn start_update_checker(self: &Arc<Self>) {
+        crate::update_checker::start_update_checker(self);
+    }
+
+    /// Notifies a joining player in chat if they are an operator and a Pumpkin update is available.
+    pub fn notify_update_if_op(&self, player: &Player) {
+        crate::update_checker::notify_update_if_op(self, player);
+    }
+
     /// Generates a new container id.
     pub fn new_container_id(&self) -> u32 {
         self.container_id.fetch_add(1, Ordering::SeqCst)
@@ -1251,6 +1291,9 @@ impl Server {
             world.flush_synced_block_events();
 
             let players = world.players.load();
+            players.par_iter().for_each(|player| {
+                player.process_inbound_packets();
+            });
             players.par_iter().for_each(|player| {
                 player.tick(self);
             });

@@ -246,10 +246,9 @@ impl EndCityTemplatePiece {
                 0.0f32.into(),
             ]),
         );
-        let stack = ItemStack::new(1, &Item::ELYTRA);
-        let mut item = NbtCompound::new();
-        stack.write_item_stack(&mut item);
-        nbt.put_compound("Item", item);
+        if let Some(item) = ItemStack::new(1, &Item::ELYTRA).to_nbt() {
+            nbt.put_compound("Item", item);
+        }
         nbt
     }
 }

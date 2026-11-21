@@ -231,7 +231,7 @@ fn is_valid_vibration(event: GameEvent, context: &GameEventContext<'_>) -> bool 
         .0
         .contains(&event.name());
     !source.is_spectator()
-        && (!source.get_entity().is_sneaking() || !ignored_while_sneaking)
+        && (!source.is_stepping_carefully() || !ignored_while_sneaking)
         && !source.dampens_vibrations()
 }
 

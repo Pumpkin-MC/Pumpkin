@@ -13,7 +13,9 @@ use crate::block::{
     BlockBehaviour, BlockMetadata, OnEntityCollisionArgs, OnNeighborUpdateArgs,
     OnScheduledTickArgs, PlacedArgs,
 };
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
+use pumpkin_data::particle::Particle;
 
 const CREATE_DELAY_TICKS: u8 = 20;
 const REMOVE_DELAY_TICKS: u8 = 5;
@@ -160,6 +162,60 @@ fn bubble_column_velocity(
     )
 }
 
+/// Pushes an entity in a bubble column. One at the top of the column gets the stronger push.
+pub fn entity_inside(world: &World, pos: &BlockPos, state: BlockStateId, entity: &dyn EntityBase) {
+    let drag_down = kind_from_state(state) == BubbleColumnKind::Downward;
+    if world.get_block(&pos.up()) == &Block::AIR {
+        entity.on_above_bubble_column(drag_down, pos);
+    } else {
+        entity.on_inside_bubble_column(drag_down);
+    }
+}
+
+/// The regular entity push, capped at a maximum speed.
+pub fn push_entity(entity: &Entity, drag_down: bool, at_surface: bool) {
+    let kind = if drag_down {
+        BubbleColumnKind::Downward
+    } else {
+        BubbleColumnKind::Upward
+    };
+    entity.velocity.store(bubble_column_velocity(
+        entity.velocity.load(),
+        kind,
+        at_surface,
+    ));
+}
+
+/// The push projectiles get: the same acceleration without the speed caps.
+pub fn push_projectile(entity: &Entity, drag_down: bool, at_surface: bool) {
+    let push = if drag_down {
+        DOWNWARD_ACCELERATION
+    } else if at_surface {
+        SURFACE_UPWARD_ACCELERATION
+    } else {
+        UPWARD_ACCELERATION
+    };
+    let mut velocity = entity.velocity.load();
+    velocity.y += push;
+    entity.velocity.store(velocity);
+}
+
+/// Splash and bubble particles at the top of a bubble column.
+pub fn send_bubble_column_particles(world: &World, pos: &BlockPos) {
+    for _ in 0..2 {
+        for (particle, offset_y, speed) in
+            [(Particle::Splash, 0.0, 1.0), (Particle::Bubble, 0.01, 0.2)]
+        {
+            let at = Vector3::new(
+                f64::from(pos.0.x) + rand::random::<f64>(),
+                f64::from(pos.0.y + 1),
+                f64::from(pos.0.z) + rand::random::<f64>(),
+            );
+            world.spawn_particle(at, Vector3::new(0.0, offset_y, 0.0), speed, 1, particle);
+        }
+    }
+}
+
 impl BlockBehaviour for BubbleColumnBlock {
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         {
@@ -167,14 +223,7 @@ impl BlockBehaviour for BubbleColumnBlock {
                 return;
             }
 
-            let kind = kind_from_state(args.state.id);
-            let at_surface = args.world.get_block(&args.position.up()) == &Block::AIR;
-            let entity = args.entity.get_entity();
-            entity.velocity.store(bubble_column_velocity(
-                entity.velocity.load(),
-                kind,
-                at_surface,
-            ));
+            entity_inside(args.world, args.position, args.state.id, args.entity);
 
             if let Some(player) = args.entity.get_player() {
                 player.breath_manager.reset(player);

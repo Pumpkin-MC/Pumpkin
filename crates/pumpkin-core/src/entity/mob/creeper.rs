@@ -71,7 +71,10 @@ impl CreeperEntity {
             let target_selector = &mob_arc.mob_entity.target_selector;
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(
+                2,
+                Box::new(CreeperIgniteGoal::new(Arc::downgrade(&mob_arc))),
+            );
             fleeing::apply(goal_selector, CREEPER_FLEES);
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
@@ -111,7 +114,8 @@ impl CreeperEntity {
             .store(true, Ordering::Relaxed);
         let world = entity.world.load();
         let pos = entity.pos.load();
-        world.explode(
+        world.explode_from(
+            self,
             pos,
             radius * multiplier,
             crate::world::ExplosionInteraction::Mob,

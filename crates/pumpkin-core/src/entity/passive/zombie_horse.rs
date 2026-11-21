@@ -145,6 +145,10 @@ impl Animal for ZombieHorseEntity {
 impl Mob for ZombieHorseEntity {
     crate::abstract_horse_mob_hooks!();
 
+    fn charge_speed_modifier(&self) -> f32 {
+        1.4
+    }
+
     fn mob_play_step_sound(&self, pos: &BlockPos, state: &BlockState) {
         play_horse_step_sound(self, pos, state);
     }

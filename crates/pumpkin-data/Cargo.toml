@@ -52,6 +52,9 @@ default = [
     "slot_ranges",
     "bedrock_creative",
     "bedrock_biome",
+    "bedrock_jigsaw",
+    "bedrock_recipe",
+    "bedrock_voxel_shape",
     "map_color",
     "map_decoration",
     "dye_color",
@@ -66,6 +69,7 @@ default = [
     "wolf_variant",
     "cat_variant",
     "frog_variant",
+    "sulfur_cube_archetype",
     "trim_material",
     "trim_pattern",
     "banner_pattern",
@@ -97,6 +101,7 @@ instrument = ["sound"]
 wolf_variant = []
 cat_variant = []
 frog_variant = []
+sulfur_cube_archetype = ["attributes", "damage", "data_component", "sound", "tag"]
 trim_material = []
 trim_pattern = []
 banner_pattern = []
@@ -115,6 +120,9 @@ entity_variant = ["dye_color"]
 advancement = []
 bedrock_creative = []
 bedrock_biome = []
+bedrock_jigsaw = []
+bedrock_recipe = []
+bedrock_voxel_shape = []
 item = []
 packet = []
 jukebox_song = []
@@ -176,6 +184,7 @@ pumpkin-nbt.workspace = true
 serde = {workspace = true, features = ["rc"]}
 crc32c.workspace = true
 rand.workspace = true
+tracing.workspace = true
 
 [build-dependencies]
 reqwest = { workspace = true, features = ["blocking", "json"] }
@@ -190,9 +199,6 @@ criterion.workspace = true
 [[bench]]
 name = "has_random_ticks"
 harness = false
-
-[package.metadata.cargo-machete]
-ignored = ["phf"]
 
 [lints]
 workspace = true

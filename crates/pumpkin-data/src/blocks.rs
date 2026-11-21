@@ -34,6 +34,10 @@ pub struct Block {
     pub velocity_multiplier: f32,
     /// How much this block affects an entity's jump height (e.g., Honey Blocks).
     pub jump_velocity_multiplier: f32,
+    /// Vertical bounce restitution (`Block.getBounceRestitution`).
+    pub bounce_restitution: f32,
+    /// Fraction of fall distance reduced on landing (`Block.getFallDistanceReduction`).
+    pub fall_distance_reduction: f32,
     /// The ID of the item form of this block, used for inventory and drops.
     pub item_id: u16,
     /// The initial state of the block when placed without extra data.
@@ -284,6 +288,20 @@ impl Block {
         self.with_property_index(id, slot.key, slot.index_of(value)?)
     }
 
+    /// Copies matching block properties from `source_state_id` of `source_block` onto `self`.
+    #[must_use]
+    pub fn with_properties_of(
+        &self,
+        source_block: &Self,
+        source_state_id: BlockStateId,
+    ) -> BlockStateId {
+        source_block
+            .property_values(source_state_id)
+            .fold(self.default_state.id, |id, value| {
+                self.with_property(id, value).unwrap_or(id)
+            })
+    }
+
     /// All property values of `id`, no allocation.
     pub fn property_values(&self, id: BlockStateId) -> impl Iterator<Item = Property> {
         let offset = self.state_offset(id).unwrap_or(0);
@@ -306,6 +324,59 @@ impl Block {
             offset += value * slot.stride;
         }
         self.states.get(offset as usize)
+    }
+
+    /// Parses a single `(key, value)` state property pair against this block's valid states.
+    pub fn parse_property(
+        &self,
+        key: &str,
+        value: &str,
+    ) -> Result<crate::Property, PropertyLookupError> {
+        let default_props = self
+            .properties(self.default_state.id)
+            .ok_or(PropertyLookupError::UnknownProperty)?
+            .to_props();
+        let idx = default_props
+            .iter()
+            .position(|p| p.key().to_str() == key)
+            .ok_or(PropertyLookupError::UnknownProperty)?;
+        self.states
+            .iter()
+            .find_map(|state| {
+                let props = self.properties(state.id)?.to_props();
+                let prop = *props.get(idx)?;
+                (prop.value_str() == value).then_some(prop)
+            })
+            .ok_or(PropertyLookupError::InvalidValue)
+    }
+
+    /// Returns whether this block defines a state property with `key`.
+    #[must_use]
+    pub fn has_property(&self, key: &str) -> bool {
+        self.properties(self.default_state.id)
+            .is_some_and(|props| props.to_props().iter().any(|p| p.key().to_str() == key))
+    }
+
+    /// Copies each property in `overrides` onto `base_state_id` when it belongs to this block.
+    #[must_use]
+    pub fn apply_properties(
+        &self,
+        base_state_id: BlockStateId,
+        overrides: &[crate::Property],
+    ) -> BlockStateId {
+        if overrides.is_empty() || Self::from_state_id(base_state_id).id != self.id {
+            return base_state_id;
+        }
+        let Some(state_props) = self.properties(base_state_id) else {
+            return base_state_id;
+        };
+        let mut props = state_props.to_props();
+        for &defined in overrides {
+            if let Some(slot) = props.iter_mut().find(|p| p.key() == defined.key()) {
+                *slot = defined;
+            }
+        }
+        self.from_properties(&props).to_state_id(self)
     }
 
     /// Returns whether this block is solid (based on default state)
@@ -354,6 +425,12 @@ impl Block {
         }
         BlockState::from_id(new_id)
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PropertyLookupError {
+    UnknownProperty,
+    InvalidValue,
 }
 
 #[derive(Clone, Copy)]

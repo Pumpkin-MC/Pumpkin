@@ -1,5 +1,5 @@
 interface %world {
-    use common.{position, entity-pose, block-pos, nbt-tree};
+    use common.{position, entity-pose, block-pos, nbt-tree, hand};
     use block-entity.{block-entity, command-block-entity, block-entity-type};
     use text.{text-component};
     use scoreboard.{scoreboard};
@@ -490,6 +490,30 @@ interface %world {
 
         is-in-water: func() -> bool;
         is-in-lava: func() -> bool;
+        is-in-water-or-rain: func() -> bool;
+
+        /// Returns whether this entity is still valid (alive and not removed from the world).
+        is-valid: func() -> bool;
+        /// Returns whether this entity has died or been removed from the world.
+        is-dead: func() -> bool;
+
+        /// Returns the number of ticks this entity has been frozen in powder snow (0 to 140).
+        get-freeze-ticks: func() -> s32;
+        /// Sets the number of ticks this entity has been frozen in powder snow (0 to 140).
+        set-freeze-ticks: func(ticks: s32);
+        /// Returns the maximum number of freeze ticks before this entity is fully frozen (140).
+        get-max-freeze-ticks: func() -> s32;
+        /// Returns whether this entity is currently fully frozen (`freeze-ticks >= max-freeze-ticks`).
+        is-frozen: func() -> bool;
+
+        /// Adds a scoreboard tag to this entity (`/tag` parity). Returns false if already present or at capacity.
+        add-scoreboard-tag: func(tag: string) -> bool;
+        /// Removes a scoreboard tag from this entity. Returns false if the tag was not present.
+        remove-scoreboard-tag: func(tag: string) -> bool;
+        /// Returns all scoreboard tags attached to this entity.
+        get-scoreboard-tags: func() -> list<string>;
+        /// Returns whether this entity carries the specified scoreboard tag.
+        has-scoreboard-tag: func(tag: string) -> bool;
 
         remove: func();
 
@@ -552,8 +576,18 @@ interface %world {
         set-health: func(health: f32);
         get-max-health: func() -> f32;
         set-max-health: func(max-health: f32);
+        heal: async func(amount: f32);
         damage: async func(amount: f32, damage-type: damage-type);
         is-dead: func() -> bool;
+
+        /// Gets the remaining hurt invulnerability ticks (`noDamageTicks`) on this living entity.
+        get-no-damage-ticks: func() -> s32;
+        /// Sets the remaining hurt invulnerability ticks (`noDamageTicks`) on this living entity.
+        set-no-damage-ticks: func(ticks: s32);
+        /// Gets the amount of damage last received by this living entity during its current hurt cooldown.
+        get-last-damage: func() -> f32;
+        /// Sets the amount of damage last received by this living entity.
+        set-last-damage: func(damage: f32);
 
         get-absorption: func() -> f32;
         set-absorption: func(amount: f32);
@@ -580,8 +614,25 @@ interface %world {
         remove-effect: func(effect: status-effect-type) -> bool;
         /// Checks if this living entity currently has the specified status effect.
         has-effect: func(effect: status-effect-type) -> bool;
+        /// Gets the active instance of the specified status effect on this living entity, if present.
+        get-effect: func(effect: status-effect-type) -> option<status-effect-instance>;
+        /// Gets all active status effect instances on this living entity.
+        get-active-effects: func() -> list<status-effect-instance>;
         /// Clears all active status effects and resets modified attributes on this living entity.
         clear-effects: async func();
+
+        /// Returns whether this living entity is currently climbing (e.g. on a ladder or vine).
+        is-climbing: func() -> bool;
+        /// Returns whether this living entity is currently gliding (e.g. with an elytra).
+        is-gliding: func() -> bool;
+        /// Returns whether this living entity is currently executing a Riptide spin attack.
+        is-riptiding: func() -> bool;
+        /// Returns whether this living entity is currently sleeping.
+        is-sleeping: func() -> bool;
+        /// Returns whether this living entity is actively blocking with a shield or blocking item.
+        is-blocking: func() -> bool;
+        /// Broadcasts an arm-swing animation for the specified hand.
+        swing-hand: async func(hand: hand);
 
         get-age: func() -> s32;
         set-age: func(age: s32);
@@ -666,6 +717,27 @@ interface %world {
         /// Gets the chunk's Z coordinate.
         get-z: func() -> s32;
 
+        /// Gets the world this chunk belongs to.
+        get-world: func() -> %world;
+
+        /// Returns whether this chunk is currently loaded in memory.
+        is-loaded: func() -> bool;
+
+        /// Returns whether this chunk is marked as force-loaded.
+        is-force-loaded: func() -> bool;
+
+        /// Sets whether this chunk is marked as force-loaded.
+        set-force-loaded: func(forced: bool);
+
+        /// Returns all entities (including players) currently inside this chunk.
+        get-entities: func() -> list<entity>;
+
+        /// Returns the cumulative number of ticks players have inhabited this chunk.
+        get-inhabited-time: func() -> s64;
+
+        /// Sets the cumulative number of ticks players have inhabited this chunk.
+        set-inhabited-time: func(time: s64);
+
         /// Gets the block state ID at the specified position relative to the chunk.
         /// X and Z must be in the range [0, 15].
         get-block-state-id: func(pos: block-pos) -> u16;
@@ -693,6 +765,10 @@ interface %world {
         /// Gets the biome at the specified position relative to the chunk.
         /// X and Z must be in the range [0, 15].
         get-biome: func(pos: block-pos) -> biome;
+
+        /// Sets the 4x4x4 biome cell containing the specified position relative to the chunk.
+        /// X and Z must be in the range [0, 15].
+        set-biome: func(pos: block-pos, biome: biome);
 
         /// Gets the block entity at the specified position relative to the chunk, if any.
         /// X and Z must be in the range [0, 15].
@@ -811,6 +887,12 @@ interface %world {
         /// Returns the unique identifier of this world.
         get-id: func() -> string;
 
+        /// Returns the unique UUID of this world.
+        get-uuid: func() -> uuid;
+
+        /// Returns the world generation seed of this world.
+        get-seed: func() -> s64;
+
         /// Gets the world border associated with this world (alias for get-world-border).
         get-border: func() -> world-border;
 
@@ -820,8 +902,37 @@ interface %world {
         /// Gets the chunk at the specified chunk coordinates.
         get-chunk: func(x: s32, z: s32) -> option<chunk>;
 
+        /// Returns all currently loaded chunks in this world.
+        get-loaded-chunks: func() -> list<chunk>;
+
+        /// Returns the number of currently loaded chunks in this world.
+        get-loaded-chunk-count: func() -> u32;
+
         /// Returns whether the chunk at the specified chunk coordinates is currently loaded.
         is-chunk-loaded: func(x: s32, z: s32) -> bool;
+
+        /// Returns whether the chunk at the specified chunk coordinates has already been generated on disk or in memory.
+        is-chunk-generated: async func(x: s32, z: s32) -> bool;
+
+        /// Asynchronously loads the chunk at the specified coordinates from disk, or generates it if `generate` is true.
+        /// Returns `none` if `generate` is false and the chunk has not been generated yet.
+        load-chunk: async func(x: s32, z: s32, generate: bool) -> option<chunk>;
+
+        /// Asynchronously loads or generates the chunk at the specified chunk coordinates.
+        get-chunk-at-async: async func(x: s32, z: s32) -> chunk;
+
+        /// Deletes an unloaded chunk at the specified chunk coordinates from region storage on disk.
+        /// Returns `false` if the chunk is currently loaded or did not exist on disk.
+        delete-chunk: async func(x: s32, z: s32) -> bool;
+
+        /// Returns whether the chunk at the specified chunk coordinates is marked as force-loaded.
+        is-chunk-force-loaded: func(x: s32, z: s32) -> bool;
+
+        /// Sets whether the chunk at the specified chunk coordinates is force-loaded.
+        set-chunk-force-loaded: func(x: s32, z: s32, forced: bool);
+
+        /// Returns the coordinates `(x, z)` of all force-loaded chunks in this world.
+        get-force-loaded-chunks: func() -> list<tuple<s32, s32>>;
 
         /// Gets the block state ID at the specified position.
         get-block-state-id: func(pos: block-pos) -> u16;
@@ -834,6 +945,22 @@ interface %world {
 
         /// Breaks the block at the specified position, playing break particles/sounds and optionally dropping its loot.
         break-block: async func(pos: block-pos, drop-items: bool, update-flags: block-flags) -> bool;
+
+        /// Breaks the block at the specified position with an optional player/entity cause (`World::break_block`),
+        /// firing `BlockBreakEvent` and dropping vanilla loot using the player's held tool (including Fortune and Silk Touch)
+        /// unless `skip-drops` is set in `update-flags`.
+        break-block-as: async func(pos: block-pos, cause: option<entity>, update-flags: block-flags) -> bool;
+
+        /// Breaks the block at the specified position naturally and drops its vanilla loot as if mined with `tool`
+        /// (respecting `tool-required`, Fortune, and Silk Touch), optionally playing break particles/sounds.
+        break-block-naturally: async func(pos: block-pos, tool: option<item-stack>, trigger-effect: bool, update-flags: block-flags) -> bool;
+
+        /// Calculates and returns the vanilla loot table drops for the block at the specified position as if mined with `tool`,
+        /// without breaking the block or spawning item entities.
+        get-block-drops: async func(pos: block-pos, tool: option<item-stack>, entity: option<entity>) -> list<item-stack>;
+
+        /// Returns whether the given tool (or an empty hand if `none`) is an appropriate tool to harvest drops from the block at `pos`.
+        is-preferred-tool: async func(pos: block-pos, tool: option<item-stack>) -> bool;
 
         /// Gets the block type at the specified position.
         get-block: func(pos: block-pos) -> block;
@@ -887,6 +1014,24 @@ interface %world {
         /// Sets whether there should be a thunderstorm.
         set-thundering: async func(thundering: bool);
 
+        /// Returns the remaining duration of the current rain/weather state in ticks.
+        get-weather-duration: func() -> s32;
+
+        /// Sets the remaining duration of the current rain/weather state in ticks.
+        set-weather-duration: func(duration: s32);
+
+        /// Returns the remaining duration of the current thunder state in ticks.
+        get-thunder-duration: func() -> s32;
+
+        /// Sets the remaining duration of the current thunder state in ticks.
+        set-thunder-duration: func(duration: s32);
+
+        /// Returns the remaining duration of clear weather in ticks.
+        get-clear-weather-duration: func() -> s32;
+
+        /// Sets the remaining duration of clear weather in ticks.
+        set-clear-weather-duration: func(duration: s32);
+
         /// Broadcasts a system message to all players in this world.
         broadcast-system-message: func(message: text-component, overlay: bool);
 
@@ -911,6 +1056,15 @@ interface %world {
         /// Returns the minimum Y coordinate (bottom of the world).
         get-min-y: func() -> s32;
 
+        /// Returns the maximum Y coordinate (exclusive top build limit, `min-y + height`) of this world.
+        get-max-y: func() -> s32;
+
+        /// Returns the total vertical height of this world in blocks.
+        get-height: func() -> u32;
+
+        /// Returns the logical height of this world in blocks (e.g. for chorus fruit and nether portals).
+        get-logical-height: func() -> u32;
+
         /// Returns the sky light level at the specified position.
         get-sky-light: func(pos: block-pos) -> u8;
 
@@ -926,6 +1080,9 @@ interface %world {
         /// Returns the biome at the specified position.
         get-biome: func(pos: block-pos) -> biome;
 
+        /// Sets the 4x4x4 biome cell containing the specified position (if the chunk is loaded).
+        set-biome: func(pos: block-pos, biome: biome);
+
         /// Spawns an entity of the specified type at the given position.
         spawn-entity: async func(entity-type: entity-type, pos: position) -> entity;
 
@@ -934,6 +1091,9 @@ interface %world {
 
         /// Spawns a dropped item entity with natural random block-drop velocity and offset around the given position.
         drop-item-naturally: async func(pos: position, item: item-stack) -> entity;
+
+        /// Drops an item stack at the center of the given block position with natural random offset and velocity (`World::drop_stack`).
+        drop-stack: async func(pos: block-pos, item: item-stack);
 
         /// Spawns one or more experience orbs totaling `amount` XP at the given position.
         spawn-experience-orb: async func(pos: position, amount: u32);
@@ -1094,4 +1254,28 @@ interface %world {
 
     /// Gets the detailed block state for a numerical block state ID.
     get-block-state-by-id: func(state-id: u16) -> option<block-state>;
+
+    /// Returns whether the block with `block-name` (e.g. `"minecraft:diamond_ore"` or `"diamond_ore"`) belongs to `tag` (e.g. `"#c:ores"`, `"c:ores"`, or `"minecraft:mineable/pickaxe"`).
+    is-block-in-tag: func(block-name: string, tag: string) -> bool;
+
+    /// Returns whether the block with numerical `block-id` belongs to `tag`.
+    is-block-id-in-tag: func(block-id: u16, tag: string) -> bool;
+
+    /// Returns the registry keys of all blocks in `tag` (e.g. `"c:ores"` or `"minecraft:mineable/pickaxe"`).
+    get-blocks-in-tag: func(tag: string) -> list<string>;
+
+    /// Returns the numerical block IDs of all blocks in `tag`.
+    get-block-ids-in-tag: func(tag: string) -> list<u16>;
+
+    /// Returns all block tags that the block with `block-name` belongs to.
+    get-block-tags: func(block-name: string) -> list<string>;
+
+    /// Returns whether the entity type with `entity-type-name` (e.g. `"minecraft:skeleton"` or `"skeleton"`) belongs to `tag` (e.g. `"#minecraft:undead"` or `"minecraft:skeletons"`).
+    is-entity-type-in-tag: func(entity-type-name: string, tag: string) -> bool;
+
+    /// Returns the registry keys of all entity types in `tag`.
+    get-entity-types-in-tag: func(tag: string) -> list<string>;
+
+    /// Returns all entity type tags that `entity-type-name` belongs to.
+    get-entity-type-tags: func(entity-type-name: string) -> list<string>;
 }

@@ -38,6 +38,7 @@ pub mod beacon_screen_handler;
 pub mod brewing;
 pub mod cartography_table_screen_handler;
 pub mod container_click;
+pub mod crafter_screen_handler;
 pub mod crafting;
 pub mod double;
 pub mod drag_handler;
@@ -67,7 +68,7 @@ use rustc_hash::FxHashMap;
 pub use error::InventoryError;
 pub use inventory::{
     Clearable, ComparableInventory, Inventory, SimpleInventory, split_stack_slice,
-    sync_read_items_from_nbt, sync_write_items_to_nbt,
+    sync_read_items_from_nbt, sync_write_items_to_nbt, update_locked_stack,
 };
 use pumpkin_data::data_component_impl::EquipmentSlot;
 pub use viewer::ViewerCountTracker;
