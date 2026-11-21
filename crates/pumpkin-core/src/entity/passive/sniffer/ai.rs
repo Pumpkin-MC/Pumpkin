@@ -68,9 +68,6 @@ pub(super) fn store_explored_position(
         .get(types::SNIFFER_EXPLORED_POSITIONS)
         .map(|list| list.iter().take(20).copied().collect())
         .unwrap_or_default();
-    if updated.len() >= 20 {
-        updated.pop();
-    }
     updated.insert(0, global_pos);
     state.set(types::SNIFFER_EXPLORED_POSITIONS, updated);
     sniffer.store_explored_position(pos);

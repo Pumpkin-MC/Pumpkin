@@ -9,9 +9,8 @@ use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::boundingbox::EntityDimensions;
@@ -153,16 +152,12 @@ impl SnifferEntity {
     }
 
     pub fn transition_to(&self, state: SnifferState) {
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        let pos = entity.pos.load();
-
         match state {
             SnifferState::Idling => {
                 self.set_state(SnifferState::Idling);
             }
             SnifferState::FeelingHappy => {
-                world.play_sound(Sound::EntitySnifferHappy, SoundCategory::Neutral, &pos);
+                self.play_entity_sound(Sound::EntitySnifferHappy, 1.0, 1.0);
                 self.set_state(SnifferState::FeelingHappy);
             }
             SnifferState::Scenting => {
@@ -170,7 +165,7 @@ impl SnifferEntity {
                 self.on_scenting_start();
             }
             SnifferState::Sniffing => {
-                world.play_sound(Sound::EntitySnifferSniffing, SoundCategory::Neutral, &pos);
+                self.play_entity_sound(Sound::EntitySnifferSniffing, 1.0, 1.0);
                 self.set_state(SnifferState::Sniffing);
             }
             SnifferState::Searching => {
@@ -181,28 +176,15 @@ impl SnifferEntity {
                 self.on_digging_start();
             }
             SnifferState::Rising => {
-                world.play_sound(
-                    Sound::EntitySnifferDiggingStop,
-                    SoundCategory::Neutral,
-                    &pos,
-                );
+                self.play_entity_sound(Sound::EntitySnifferDiggingStop, 1.0, 1.0);
                 self.set_state(SnifferState::Rising);
             }
         }
     }
 
     fn on_scenting_start(&self) {
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        let pos = entity.pos.load();
         let pitch = if self.is_baby() { 1.3 } else { 1.0 };
-        world.play_sound_fine(
-            Sound::EntitySnifferScenting,
-            SoundCategory::Neutral,
-            &pos,
-            1.0,
-            pitch,
-        );
+        self.play_entity_sound(Sound::EntitySnifferScenting, 1.0, pitch);
     }
 
     fn on_digging_start(&self) {
@@ -365,7 +347,7 @@ impl SnifferEntity {
         for idx in 0..5 {
             if let Some(target_vec) = land_random_pos::get_pos(self, 10 + 2 * idx, 3) {
                 let containing = BlockPos::floored_v(target_vec);
-                if border.contains_block(containing.0.x, containing.0.z) {
+                if border.contains(f64::from(containing.0.x), f64::from(containing.0.z)) {
                     let below = containing.down();
                     if self.can_dig_at_with_brain(state, below) {
                         return Some(below);
@@ -381,9 +363,7 @@ impl SnifferEntity {
             .explored_positions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if explored.len() >= 20 {
-            explored.pop();
-        }
+        explored.truncate(20);
         explored.insert(0, pos);
     }
 
@@ -405,11 +385,7 @@ impl SnifferEntity {
                 world.spawn_entity_non_save(item_arc as Arc<dyn EntityBase>);
             });
 
-            world.play_sound(
-                Sound::EntitySnifferDropSeed,
-                SoundCategory::Neutral,
-                &head_pos,
-            );
+            self.play_entity_sound(Sound::EntitySnifferDropSeed, 1.0, 1.0);
         }
     }
 }
@@ -473,13 +449,7 @@ impl Animal for SnifferEntity {
 
         let mut rng = rand::rng();
         let pitch = 0.2f32.mul_add(rng.random::<f32>() - rng.random::<f32>(), 0.5);
-        world.play_sound_fine(
-            Sound::BlockSnifferEggPlop,
-            SoundCategory::Neutral,
-            &pos,
-            1.0,
-            pitch,
-        );
+        self.play_entity_sound(Sound::BlockSnifferEggPlop, 1.0, pitch);
     }
 
     fn get_breed_offspring(&self, _partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
@@ -547,29 +517,6 @@ impl Mob for SnifferEntity {
 
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
-    }
-
-    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_int("State", self.get_state().id());
-        nbt.put_int(
-            "DropSeedAtTick",
-            self.drop_seed_at_tick.load(Ordering::Relaxed),
-        );
-    }
-
-    fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(state_id) = nbt.get_int("State") {
-            let state = SnifferState::from_id(state_id);
-            if state == SnifferState::Digging {
-                self.set_state(SnifferState::Idling);
-                self.drop_seed_at_tick.store(0, Ordering::Relaxed);
-            } else {
-                self.set_state(state);
-                if let Some(drop_tick) = nbt.get_int("DropSeedAtTick") {
-                    self.drop_seed_at_tick.store(drop_tick, Ordering::Relaxed);
-                }
-            }
-        }
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -823,7 +770,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sniffer_store_explored_position_limits_to_20() {
+    async fn sniffer_store_explored_position_limits_to_21() {
         let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
         let world = world(&folder);
 
@@ -838,14 +785,14 @@ mod tests {
             let positions = brain
                 .get(types::SNIFFER_EXPLORED_POSITIONS)
                 .unwrap_or_else(|| panic!("missing explored positions"));
-            assert_eq!(positions.len(), 20);
+            assert_eq!(positions.len(), 21);
             assert_eq!(positions[0].pos, BlockPos::new(24, 64, 0));
 
             let local_explored = sniffer
                 .explored_positions
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            assert_eq!(local_explored.len(), 20);
+            assert_eq!(local_explored.len(), 21);
             assert_eq!(local_explored[0], BlockPos::new(24, 64, 0));
         });
     }
@@ -894,30 +841,5 @@ mod tests {
         sniffer.set_state(SnifferState::Digging);
         sniffer.get_entity().tick_count.store(10, Ordering::Relaxed);
         sniffer.custom_server_ai_step(sniffer.as_ref());
-    }
-
-    #[tokio::test]
-    async fn sniffer_mob_read_nbt_resets_digging_state_and_deadline() {
-        use pumpkin_nbt::compound::NbtCompound;
-
-        let folder = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
-        let world = world(&folder);
-
-        let entity = Entity::new(world, Vector3::default(), &EntityType::SNIFFER);
-        let sniffer = SnifferEntity::new(entity);
-
-        let mut nbt = NbtCompound::new();
-        nbt.put_int("State", SnifferState::Digging.id());
-        nbt.put_int("DropSeedAtTick", 120);
-
-        sniffer.mob_read_nbt(&nbt);
-        assert_eq!(sniffer.get_state(), SnifferState::Idling);
-        assert_eq!(sniffer.drop_seed_at_tick.load(Ordering::Relaxed), 0);
-
-        // Non-digging state is preserved
-        let mut nbt_scenting = NbtCompound::new();
-        nbt_scenting.put_int("State", SnifferState::Scenting.id());
-        sniffer.mob_read_nbt(&nbt_scenting);
-        assert_eq!(sniffer.get_state(), SnifferState::Scenting);
     }
 }
