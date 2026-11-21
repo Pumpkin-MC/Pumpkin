@@ -116,9 +116,21 @@ pub trait BlockEntity: Any + Send + Sync {
             .unwrap_or(0) as u32
     }
 
-    /// Obtain NBT data for sending to the client in `ChunkData`
+    /// Obtain the block entity's own NBT for persistence.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         None
+    }
+
+    /// Whether the saved tag is also the tag sent to clients.
+    ///
+    /// Container contents only reach the client when a window opens, so
+    /// containers override this with `false`.
+    #[must_use]
+    fn sends_saved_update_tag() -> bool
+    where
+        Self: Sized,
+    {
+        true
     }
 
     /// Obtain block actor NBT for fields Bedrock does not include in its block state.
@@ -503,6 +515,106 @@ pub fn has_block_block_entity(block: &Block) -> bool {
     BLOCK_ENTITY_TYPES.contains(&block.name)
 }
 
+macro_rules! block_entity_types {
+    ($( $name:literal => $ty:ty => $factory:expr ),* $(,)?) => {
+        #[must_use]
+        #[allow(clippy::too_many_lines)]
+        pub fn create_block_entity(
+            block_entity_type_id: u16,
+            position: BlockPos,
+        ) -> Option<Arc<dyn BlockEntity>> {
+            if block_entity_type_id == u16::MAX {
+                return None;
+            }
+            let name = BLOCK_ENTITY_TYPES.get(usize::from(block_entity_type_id))?;
+            match *name {
+                $( $name => Some(Arc::new(($factory)(position))), )*
+                _ => None,
+            }
+        }
+
+        /// Returns whether a block entity type sends its saved tag to clients.
+        ///
+        /// The value comes from [`BlockEntity::sends_saved_update_tag`].
+        #[must_use]
+        pub fn block_entity_sends_saved_update_tag(block_entity_type_id: u16) -> bool {
+            let Some(name) = BLOCK_ENTITY_TYPES.get(usize::from(block_entity_type_id)) else {
+                return true;
+            };
+            match *name {
+                $( $name => <$ty as BlockEntity>::sends_saved_update_tag(), )*
+                _ => true,
+            }
+        }
+    };
+}
+
+block_entity_types! {
+    "furnace" => furnace::FurnaceBlockEntity => furnace::FurnaceBlockEntity::new,
+    "chest" => chest::ChestBlockEntity => chest::ChestBlockEntity::new,
+    "trapped_chest" => trapped_chest::TrappedChestBlockEntity => trapped_chest::TrappedChestBlockEntity::new,
+    "ender_chest" => ender_chest::EnderChestBlockEntity => ender_chest::EnderChestBlockEntity::new,
+    "jukebox" => jukebox::JukeboxBlockEntity => jukebox::JukeboxBlockEntity::new,
+    "dispenser" => dispenser::DispenserBlockEntity => dispenser::DispenserBlockEntity::new,
+    "dropper" => dropper::DropperBlockEntity => dropper::DropperBlockEntity::new,
+    "sign" => sign::SignBlockEntity => sign::SignBlockEntity::empty,
+    "hanging_sign" => hanging_sign::HangingSignBlockEntity => hanging_sign::HangingSignBlockEntity::empty,
+    "mob_spawner" => mob_spawner::MobSpawnerBlockEntity => |position| mob_spawner::MobSpawnerBlockEntity::new(position, None),
+    "creaking_heart" => creaking_heart::CreakingHeartBlockEntity => creaking_heart::CreakingHeartBlockEntity::new,
+    "piston" => piston::PistonBlockEntity => |position| piston::PistonBlockEntity::from_nbt(&pumpkin_nbt::compound::NbtCompound::new(), position),
+    "brewing_stand" => brewing_stand::BrewingStandBlockEntity => brewing_stand::BrewingStandBlockEntity::new,
+    "enchanting_table" => enchanting_table::EnchantingTableBlockEntity => enchanting_table::EnchantingTableBlockEntity::new,
+    "end_portal" => end_portal::EndPortalBlockEntity => end_portal::EndPortalBlockEntity::new,
+    "beacon" => beacon::BeaconBlockEntity => beacon::BeaconBlockEntity::new,
+    "skull" => skull::SkullBlockEntity => skull::SkullBlockEntity::new,
+    "daylight_detector" => daylight_detector::DaylightDetectorBlockEntity => daylight_detector::DaylightDetectorBlockEntity::new,
+    "hopper" => hopper::HopperBlockEntity => hopper::HopperBlockEntity::new,
+    "comparator" => comparator::ComparatorBlockEntity => comparator::ComparatorBlockEntity::new,
+    "banner" => banner::BannerBlockEntity => banner::BannerBlockEntity::new,
+    "structure_block" => structure_block::StructureBlockBlockEntity => structure_block::StructureBlockBlockEntity::new,
+    "end_gateway" => end_gateway::EndGatewayBlockEntity => end_gateway::EndGatewayBlockEntity::new,
+    "command_block" => command_block::CommandBlockEntity => |position| command_block::CommandBlockEntity::new(position, true, false),
+    "shulker_box" => shulker_box::ShulkerBoxBlockEntity => shulker_box::ShulkerBoxBlockEntity::new,
+    "conduit" => conduit::ConduitBlockEntity => conduit::ConduitBlockEntity::new,
+    "barrel" => barrel::BarrelBlockEntity => barrel::BarrelBlockEntity::new,
+    "smoker" => smoker::SmokerBlockEntity => smoker::SmokerBlockEntity::new,
+    "blast_furnace" => blasting_furnace::BlastingFurnaceBlockEntity => blasting_furnace::BlastingFurnaceBlockEntity::new,
+    "lectern" => lectern::LecternBlockEntity => lectern::LecternBlockEntity::new,
+    "bell" => bell::BellBlockEntity => bell::BellBlockEntity::new,
+    "jigsaw" => jigsaw_block::JigsawBlockEntity => jigsaw_block::JigsawBlockEntity::new,
+    "campfire" => campfire::CampfireBlockEntity => campfire::CampfireBlockEntity::new,
+    "beehive" => beehive::BeehiveBlockEntity => beehive::BeehiveBlockEntity::new,
+    "sculk_sensor" => sculk_sensor::SculkSensorBlockEntity => sculk_sensor::SculkSensorBlockEntity::new,
+    "calibrated_sculk_sensor" => calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity => calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity::new,
+    "sculk_catalyst" => sculk_catalyst::SculkCatalystBlockEntity => sculk_catalyst::SculkCatalystBlockEntity::new,
+    "sculk_shrieker" => sculk_shrieker::SculkShriekerBlockEntity => sculk_shrieker::SculkShriekerBlockEntity::new,
+    "chiseled_bookshelf" => chiseled_bookshelf::ChiseledBookshelfBlockEntity => chiseled_bookshelf::ChiseledBookshelfBlockEntity::new,
+    "shelf" => shelf::ShelfBlockEntity => shelf::ShelfBlockEntity::new,
+    "brushable_block" => brushable_block::BrushableBlockBlockEntity => brushable_block::BrushableBlockBlockEntity::new,
+    "decorated_pot" => decorated_pot::DecoratedPotBlockEntity => decorated_pot::DecoratedPotBlockEntity::new,
+    "crafter" => crafter::CrafterBlockEntity => crafter::CrafterBlockEntity::new,
+    "trial_spawner" => trial_spawner::TrialSpawnerBlockEntity => trial_spawner::TrialSpawnerBlockEntity::new,
+    "vault" => vault::VaultBlockEntity => vault::VaultBlockEntity::new,
+    "test_block" => test_block::TestBlockBlockEntity => test_block::TestBlockBlockEntity::new,
+    "test_instance_block" => test_instance_block::TestInstanceBlockBlockEntity => test_instance_block::TestInstanceBlockBlockEntity::new,
+    "copper_golem_statue" => copper_golem_statue::CopperGolemStatueBlockEntity => copper_golem_statue::CopperGolemStatueBlockEntity::new,
+    "potent_sulfur" => potent_sulfur::PotentSulfurBlockEntity => potent_sulfur::PotentSulfurBlockEntity::new,
+    "map" => map::MapBlockEntity => |position| map::MapBlockEntity::new(position, 0),
+}
+
+/// Returns the tag sent to clients for a block entity type, given its saved tag.
+///
+/// This mirrors vanilla's `getUpdateTag`. Containers send an empty tag because
+/// their contents only reach the client when a window opens.
+#[must_use]
+pub fn block_entity_client_update_tag(type_id: u16, saved: NbtCompound) -> NbtCompound {
+    if block_entity_sends_saved_update_tag(type_id) {
+        saved
+    } else {
+        NbtCompound::new()
+    }
+}
+
 #[must_use]
 pub fn create_block_entity_for_state(
     state_id: BlockStateId,
@@ -534,124 +646,84 @@ pub fn create_block_entity_for_state(
     }
 }
 
-#[must_use]
-#[allow(clippy::too_many_lines)]
-pub fn create_block_entity(
-    block_entity_type_id: u16,
-    position: BlockPos,
-) -> Option<Arc<dyn BlockEntity>> {
-    if block_entity_type_id == u16::MAX {
-        return None;
-    }
-    let name = BLOCK_ENTITY_TYPES.get(block_entity_type_id as usize)?;
-    match *name {
-        "furnace" => Some(Arc::new(furnace::FurnaceBlockEntity::new(position))),
-        "chest" => Some(Arc::new(chest::ChestBlockEntity::new(position))),
-        "trapped_chest" => Some(Arc::new(trapped_chest::TrappedChestBlockEntity::new(
-            position,
-        ))),
-        "ender_chest" => Some(Arc::new(ender_chest::EnderChestBlockEntity::new(position))),
-        "jukebox" => Some(Arc::new(jukebox::JukeboxBlockEntity::new(position))),
-        "dispenser" => Some(Arc::new(dispenser::DispenserBlockEntity::new(position))),
-        "dropper" => Some(Arc::new(dropper::DropperBlockEntity::new(position))),
-        "sign" => Some(Arc::new(sign::SignBlockEntity::empty(position))),
-        "hanging_sign" => Some(Arc::new(hanging_sign::HangingSignBlockEntity::empty(
-            position,
-        ))),
-        "mob_spawner" => Some(Arc::new(mob_spawner::MobSpawnerBlockEntity::new(
-            position, None,
-        ))),
-        "creaking_heart" => Some(Arc::new(creaking_heart::CreakingHeartBlockEntity::new(
-            position,
-        ))),
-        "piston" => Some(Arc::new(piston::PistonBlockEntity::from_nbt(
-            &pumpkin_nbt::compound::NbtCompound::new(),
-            position,
-        ))),
-        "brewing_stand" => Some(Arc::new(brewing_stand::BrewingStandBlockEntity::new(
-            position,
-        ))),
-        "enchanting_table" => Some(Arc::new(enchanting_table::EnchantingTableBlockEntity::new(
-            position,
-        ))),
-        "end_portal" => Some(Arc::new(end_portal::EndPortalBlockEntity::new(position))),
-        "beacon" => Some(Arc::new(beacon::BeaconBlockEntity::new(position))),
-        "skull" => Some(Arc::new(skull::SkullBlockEntity::new(position))),
-        "daylight_detector" => Some(Arc::new(
-            daylight_detector::DaylightDetectorBlockEntity::new(position),
-        )),
-        "hopper" => Some(Arc::new(hopper::HopperBlockEntity::new(position))),
-        "comparator" => Some(Arc::new(comparator::ComparatorBlockEntity::new(position))),
-        "banner" => Some(Arc::new(banner::BannerBlockEntity::new(position))),
-        "structure_block" => Some(Arc::new(structure_block::StructureBlockBlockEntity::new(
-            position,
-        ))),
-        "end_gateway" => Some(Arc::new(end_gateway::EndGatewayBlockEntity::new(position))),
-        "command_block" => Some(Arc::new(command_block::CommandBlockEntity::new(
-            position, true, false,
-        ))),
-        "shulker_box" => Some(Arc::new(shulker_box::ShulkerBoxBlockEntity::new(position))),
-        "conduit" => Some(Arc::new(conduit::ConduitBlockEntity::new(position))),
-        "barrel" => Some(Arc::new(barrel::BarrelBlockEntity::new(position))),
-        "smoker" => Some(Arc::new(smoker::SmokerBlockEntity::new(position))),
-        "blast_furnace" => Some(Arc::new(blasting_furnace::BlastingFurnaceBlockEntity::new(
-            position,
-        ))),
-        "lectern" => Some(Arc::new(lectern::LecternBlockEntity::new(position))),
-        "bell" => Some(Arc::new(bell::BellBlockEntity::new(position))),
-        "jigsaw" => Some(Arc::new(jigsaw_block::JigsawBlockEntity::new(position))),
-        "campfire" => Some(Arc::new(campfire::CampfireBlockEntity::new(position))),
-        "beehive" => Some(Arc::new(beehive::BeehiveBlockEntity::new(position))),
-        "sculk_sensor" => Some(Arc::new(sculk_sensor::SculkSensorBlockEntity::new(
-            position,
-        ))),
-        "calibrated_sculk_sensor" => Some(Arc::new(
-            calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity::new(position),
-        )),
-        "sculk_catalyst" => Some(Arc::new(sculk_catalyst::SculkCatalystBlockEntity::new(
-            position,
-        ))),
-        "sculk_shrieker" => Some(Arc::new(sculk_shrieker::SculkShriekerBlockEntity::new(
-            position,
-        ))),
-        "chiseled_bookshelf" => Some(Arc::new(
-            chiseled_bookshelf::ChiseledBookshelfBlockEntity::new(position),
-        )),
-        "shelf" => Some(Arc::new(shelf::ShelfBlockEntity::new(position))),
-        "brushable_block" => Some(Arc::new(brushable_block::BrushableBlockBlockEntity::new(
-            position,
-        ))),
-        "decorated_pot" => Some(Arc::new(decorated_pot::DecoratedPotBlockEntity::new(
-            position,
-        ))),
-        "crafter" => Some(Arc::new(crafter::CrafterBlockEntity::new(position))),
-        "trial_spawner" => Some(Arc::new(trial_spawner::TrialSpawnerBlockEntity::new(
-            position,
-        ))),
-        "vault" => Some(Arc::new(vault::VaultBlockEntity::new(position))),
-        "test_block" => Some(Arc::new(test_block::TestBlockBlockEntity::new(position))),
-        "test_instance_block" => Some(Arc::new(
-            test_instance_block::TestInstanceBlockBlockEntity::new(position),
-        )),
-        "copper_golem_statue" => Some(Arc::new(
-            copper_golem_statue::CopperGolemStatueBlockEntity::new(position),
-        )),
-        "potent_sulfur" => Some(Arc::new(potent_sulfur::PotentSulfurBlockEntity::new(
-            position,
-        ))),
-        "map" => Some(Arc::new(map::MapBlockEntity::new(position, 0))),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use super::{BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity};
+    use super::{
+        BLOCK_ENTITY_TYPES, BlockEntity, barrel::BarrelBlockEntity,
+        blasting_furnace::BlastingFurnaceBlockEntity, block_entity_client_update_tag,
+        block_entity_from_nbt, block_entity_sends_saved_update_tag,
+        brewing_stand::BrewingStandBlockEntity, chest::ChestBlockEntity,
+        crafter::CrafterBlockEntity, create_block_entity, dispenser::DispenserBlockEntity,
+        dropper::DropperBlockEntity, furnace::FurnaceBlockEntity, hopper::HopperBlockEntity,
+        shulker_box::ShulkerBoxBlockEntity, sign::SignBlockEntity, smoker::SmokerBlockEntity,
+        trapped_chest::TrappedChestBlockEntity,
+    };
     use pumpkin_data::{item::Item, item_stack::ItemStack};
     use pumpkin_inventory::Inventory;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
     use std::sync::Arc;
+
+    #[test]
+    fn container_update_tags_are_empty() {
+        let position = BlockPos::new(0, 0, 0);
+        let mut saved = NbtCompound::new();
+        saved.put_string("CustomName", "stored".to_string());
+
+        let containers: [Arc<dyn BlockEntity>; 12] = [
+            Arc::new(ChestBlockEntity::new(position)),
+            Arc::new(TrappedChestBlockEntity::new(position)),
+            Arc::new(BarrelBlockEntity::new(position)),
+            Arc::new(ShulkerBoxBlockEntity::new(position)),
+            Arc::new(DispenserBlockEntity::new(position)),
+            Arc::new(DropperBlockEntity::new(position)),
+            Arc::new(HopperBlockEntity::new(position)),
+            Arc::new(FurnaceBlockEntity::new(position)),
+            Arc::new(BlastingFurnaceBlockEntity::new(position)),
+            Arc::new(SmokerBlockEntity::new(position)),
+            Arc::new(BrewingStandBlockEntity::new(position)),
+            Arc::new(CrafterBlockEntity::new(position)),
+        ];
+        for container in containers {
+            let type_id = u16::try_from(container.get_id()).unwrap_or(u16::MAX);
+            assert!(
+                !block_entity_sends_saved_update_tag(type_id),
+                "{} must not send its saved contents",
+                container.resource_location()
+            );
+            assert!(
+                block_entity_client_update_tag(type_id, saved.clone()).is_empty(),
+                "{} must send an empty client tag",
+                container.resource_location()
+            );
+        }
+
+        let sign = SignBlockEntity::empty(position);
+        let type_id = u16::try_from(sign.get_id()).unwrap_or(u16::MAX);
+        assert!(block_entity_sends_saved_update_tag(type_id));
+        assert_eq!(
+            block_entity_client_update_tag(type_id, saved.clone()),
+            saved
+        );
+    }
+
+    #[test]
+    fn every_block_entity_type_can_be_constructed() {
+        for (type_id, name) in BLOCK_ENTITY_TYPES.iter().enumerate() {
+            let Ok(type_id) = u16::try_from(type_id) else {
+                continue;
+            };
+            let block_entity = create_block_entity(type_id, BlockPos::ZERO);
+            assert!(block_entity.is_some(), "missing constructor for {name}");
+            if let Some(block_entity) = block_entity {
+                assert_eq!(
+                    block_entity.get_id(),
+                    u32::from(type_id),
+                    "type id mismatch for {name}"
+                );
+            }
+        }
+    }
 
     /// A loaded block entity is serialized back into its chunk with
     /// `write_internal`, so whatever it holds has to survive that round trip or

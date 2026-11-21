@@ -729,6 +729,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         Some(nbt)
     }
 
+    fn sends_saved_update_tag() -> bool {
+        false
+    }
+
     fn bedrock_block_actor_data(
         &self,
         _state_id: pumpkin_data::BlockStateId,

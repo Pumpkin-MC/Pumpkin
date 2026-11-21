@@ -763,6 +763,10 @@ macro_rules! impl_block_entity_for_cooking {
                 Some(nbt)
             }
 
+            fn sends_saved_update_tag() -> bool {
+                false
+            }
+
             fn bedrock_block_actor_data(&self, _state_id: pumpkin_data::BlockStateId) -> Option<pumpkin_nbt::compound::NbtCompound> {
                 let bedrock_id = match $recipe_kind {
                     pumpkin_data::recipes::CookingRecipeKind::Smelting => "Furnace",
