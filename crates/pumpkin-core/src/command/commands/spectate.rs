@@ -105,18 +105,24 @@ impl CommandExecutor for SpectateTargetExecutor {
         }
 
         let target_id = target_entity.entity_id;
-        player.camera_target_id.store(Some(target_id));
         let pos = target_entity.pos.load();
+        // TODO: vanilla setCamera keeps the player's own yaw/pitch
         let yaw = target_entity.yaw.load();
         let pitch = target_entity.pitch.load();
-        player.try_send_client_packet(&CSetCamera::new(target_id.into()));
-        player.teleport_with_cause(
-            pos,
-            Some(yaw),
-            Some(pitch),
-            player_world,
-            TeleportCause::Spectate,
-        );
+        // A cancelled teleport leaves the camera on the player.
+        if player
+            .teleport_with_cause(
+                pos,
+                Some(yaw),
+                Some(pitch),
+                player_world,
+                TeleportCause::Spectate,
+            )
+            .is_none()
+        {
+            return Ok(0);
+        }
+        player.set_camera_entity_id(target_id);
 
         let target_name = target.get_display_name();
         context.source.send_feedback(

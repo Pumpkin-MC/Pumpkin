@@ -3028,7 +3028,13 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         plugin
             .store
             .pump_blocking(&mut host, move || {
-                player.teleport(position, yaw, pitch, world);
+                player.teleport_with_cause(
+                    position,
+                    yaw,
+                    pitch,
+                    world,
+                    pumpkin_core::plugin::player::player_teleport::TeleportCause::Plugin,
+                );
             })
             .await
     }
@@ -3051,11 +3057,21 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         };
         let position = from_wasm_position(position);
         let runtime = tokio::runtime::Handle::current();
+        let level_info = world.level_info.load();
+        let yaw = yaw.unwrap_or(level_info.spawn_yaw);
+        let pitch = pitch.unwrap_or(level_info.spawn_pitch);
+        drop(level_info);
 
         plugin
             .store
             .pump_blocking(&mut host, move || {
-                runtime.block_on(player.teleport_world(world, position, yaw, pitch));
+                runtime.block_on(player.teleport_world_with_cause(
+                    world,
+                    position,
+                    Some(yaw),
+                    Some(pitch),
+                    pumpkin_core::plugin::player::player_teleport::TeleportCause::Plugin,
+                ));
             })
             .await
     }

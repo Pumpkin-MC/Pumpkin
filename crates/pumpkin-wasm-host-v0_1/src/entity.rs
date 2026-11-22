@@ -762,7 +762,15 @@ impl crate::pumpkin::plugin::world::HostEntityWithStore<PluginHostState>
         let pos = Vector3::new(pos.0, pos.1, pos.2);
         plugin
             .store
-            .pump_blocking(&mut host, move || entity.teleport(pos, None, None, world))
+            .pump_blocking(&mut host, move || {
+                entity.teleport_with_cause(
+                    pos,
+                    None,
+                    None,
+                    world,
+                    pumpkin_core::plugin::player::player_teleport::TeleportCause::Plugin,
+                );
+            })
             .await
     }
 

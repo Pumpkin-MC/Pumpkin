@@ -14,9 +14,10 @@ impl JavaClient {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             // A newer teleport may have been issued since the id check.
-            if awaiting_teleport
-                .as_ref()
-                .is_some_and(|(id, _)| *id != confirm_teleport.teleport_id)
+            if confirm_teleport.teleport_id.0 != player.teleport_id_count.load(Ordering::Relaxed)
+                || awaiting_teleport
+                    .as_ref()
+                    .is_some_and(|(id, _)| *id != confirm_teleport.teleport_id)
             {
                 return;
             }
@@ -30,6 +31,7 @@ impl JavaClient {
                 {
                     player.get_entity().set_pos(position);
                     player.is_changing_dimension.store(false, Ordering::Relaxed);
+                    // TODO: vanilla then handles the packet's position as a move (`handlePlayerPositionChange`)
                     false
                 }
                 _ => true,

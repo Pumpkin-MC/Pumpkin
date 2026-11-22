@@ -427,26 +427,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     /// alter it.
     fn teleport_with_cause(
         &self,
-        mut position: Vector3<f64>,
+        position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
         _cause: TeleportCause,
     ) -> Option<Vector3<f64>> {
-        let entity = self.get_entity();
-        if let Some(server) = entity.world.load().server.upgrade()
-            && server.plugin_manager.has_handlers::<EntityTeleportEvent>()
-        {
-            let mut event = EntityTeleportEvent::new(entity.entity_id, entity.pos.load(), position);
-            server.plugin_manager.fire_blocking(&server, &mut event);
-            if event.cancelled {
-                return None;
-            }
-            position = event.to_position;
-        }
-        // TODO: a non-player changing world is not moved into the new world's entity list.
-        entity.teleport(position, yaw, pitch, &world);
-        Some(position)
+        self.get_entity()
+            .teleport_with_event(position, yaw, pitch, &world)
     }
 
     fn is_pushed_by_fluids(&self) -> bool {
@@ -4883,6 +4871,30 @@ impl Entity {
                 }
             }
         }
+    }
+
+    /// Fires `EntityTeleportEvent`, then teleports to the position the plugins left.
+    /// Returns that position, or `None` if a plugin cancelled it.
+    pub fn teleport_with_event(
+        &self,
+        mut position: Vector3<f64>,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: &World,
+    ) -> Option<Vector3<f64>> {
+        if let Some(server) = self.world.load().server.upgrade()
+            && server.plugin_manager.has_handlers::<EntityTeleportEvent>()
+        {
+            let mut event = EntityTeleportEvent::new(self.entity_id, self.pos.load(), position);
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return None;
+            }
+            position = event.to_position;
+        }
+        // TODO: a non-player changing world is not moved into the new world's entity list.
+        self.teleport(position, yaw, pitch, world);
+        Some(position)
     }
 
     pub fn teleport(

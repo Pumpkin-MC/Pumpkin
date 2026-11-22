@@ -4936,16 +4936,22 @@ impl Player {
                     return;
                 };
                 // A late confirmation of a teleport sent before the transfer must not end it.
-                if self
-                    .awaiting_teleport
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .take()
-                    .is_some()
+                // Both under the lock, so a racing confirm sees a stale id, not a kick.
                 {
+                    let mut awaiting = self
+                        .awaiting_teleport
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     self.next_teleport_id();
+                    awaiting.take()
+                };
+                // Clients without teleport confirmation would never clear it.
+                if !matches!(
+                    self.client.as_ref(),
+                    ClientPlatform::Java(c) if c.version.load() < JavaMinecraftVersion::V_1_9
+                ) {
+                    self.is_changing_dimension.store(true, Ordering::Relaxed);
                 }
-                self.is_changing_dimension.store(true, Ordering::Relaxed);
                new_world.players.rcu(|current_list| {
                     let mut new_list = (**current_list).clone();
                     new_list.push(player.clone());
@@ -5050,9 +5056,6 @@ impl Player {
         }}
     }
 
-    /// `yaw` and `pitch` are in degrees.
-    /// Rarly used, for example when waking up the player from a bed or their first time spawn. Otherwise, the `teleport` method should be used.
-    /// The player should respond with the `SConfirmTeleport` packet.
     /// The next teleport id, like vanilla it restarts at 0 before `i32::MAX`.
     pub fn next_teleport_id(&self) -> i32 {
         self.teleport_issued_tick
@@ -5113,6 +5116,9 @@ impl Player {
         true
     }
 
+    /// `yaw` and `pitch` are in degrees.
+    /// Rarly used, for example when waking up the player from a bed or their first time spawn. Otherwise, the `teleport` method should be used.
+    /// The player should respond with the `SConfirmTeleport` packet.
     pub fn request_teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
         self.request_teleport_to(position, Some(yaw), Some(pitch), TeleportCause::Unknown);
     }
