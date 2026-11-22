@@ -162,7 +162,7 @@ impl Behavior for GiveGiftToHero {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         self.time_until_next_gift = calculate_time_until_next_gift(tick);
         tick.state.erase(types::INTERACTION_TARGET.id());
         tick.state.erase(types::WALK_TARGET.id());

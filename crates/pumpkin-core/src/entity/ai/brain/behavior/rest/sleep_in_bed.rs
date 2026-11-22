@@ -142,7 +142,7 @@ impl Behavior for SleepInBed {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         if tick.pose() == EntityPose::Sleeping {
             defer_wake_up(tick);
             self.next_ok_start_time = tick.time + 40;

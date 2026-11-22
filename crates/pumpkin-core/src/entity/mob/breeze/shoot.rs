@@ -184,7 +184,7 @@ impl Behavior for Shoot {
         fire_wind_charge(tick, target, aim_at);
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         let charge_pose = self
             .charge_pose
             .take()

@@ -460,7 +460,7 @@ impl World {
     }
 
     pub fn update_active_chunks(&self) {
-        let sim_dist = self.server.upgrade().map_or(10, |s| {
+        let sim_dist = self.server.upgrade().map_or(16, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
         let players = self.players.load();
@@ -3122,6 +3122,15 @@ impl World {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .thundering
+    }
+
+    /// Thunder only counts while it rains, in a dimension that has weather.
+    pub fn is_thunderstorm(&self) -> bool {
+        self.dimension.has_skylight
+            && !self.dimension.has_ceiling
+            && self.dimension != Dimension::THE_END
+            && self.is_raining()
+            && self.is_thundering()
     }
 
     pub fn set_thundering(&self, thundering: bool) {

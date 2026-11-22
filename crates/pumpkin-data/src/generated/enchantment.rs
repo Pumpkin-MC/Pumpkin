@@ -6,10 +6,100 @@ use crate::tag::Enchantment as EnchantmentTag;
 use crate::tag::EntityType as EntityTypeTag;
 use crate::tag::Item as ItemTag;
 use crate::tag::{RegistryKey, Tag, Taggable};
+use pumpkin_util::loot_table::{LootCondition, LootEntityTarget, LootPredicateValue};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
+static LOOT_PREDICATE_0: std::sync::LazyLock<LootPredicateValue> = std::sync::LazyLock::new(|| {
+    LootPredicateValue::Object(
+        [(
+            "minecraft:entity_type".to_owned(),
+            LootPredicateValue::String("#minecraft:sensitive_to_bane_of_arthropods".to_owned()),
+        )]
+        .into_iter()
+        .collect(),
+    )
+});
+static LOOT_PREDICATE_1: std::sync::LazyLock<LootPredicateValue> = std::sync::LazyLock::new(|| {
+    LootPredicateValue::Object(
+        [("is_direct".to_owned(), LootPredicateValue::Bool(true))]
+            .into_iter()
+            .collect(),
+    )
+});
+static LOOT_PREDICATE_2: std::sync::LazyLock<LootPredicateValue> = std::sync::LazyLock::new(|| {
+    LootPredicateValue::Object(
+        [(
+            "minecraft:location".to_owned(),
+            LootPredicateValue::Object(
+                [("can_see_sky".to_owned(), LootPredicateValue::Bool(true))]
+                    .into_iter()
+                    .collect(),
+            ),
+        )]
+        .into_iter()
+        .collect(),
+    )
+});
+static LOOT_PREDICATE_3: std::sync::LazyLock<LootPredicateValue> = std::sync::LazyLock::new(|| {
+    LootPredicateValue::Object(
+        [(
+            "minecraft:entity_type".to_owned(),
+            LootPredicateValue::String("minecraft:trident".to_owned()),
+        )]
+        .into_iter()
+        .collect(),
+    )
+});
+static LOOT_PREDICATE_4: std::sync::LazyLock<LootPredicateValue> = std::sync::LazyLock::new(|| {
+    LootPredicateValue::Object(
+        [("is_direct".to_owned(), LootPredicateValue::Bool(true))]
+            .into_iter()
+            .collect(),
+    )
+});
+static LOOT_PREDICATE_5: std::sync::LazyLock<LootPredicateValue> = std::sync::LazyLock::new(|| {
+    LootPredicateValue::Object(
+        [(
+            "minecraft:entity_type".to_owned(),
+            LootPredicateValue::String("minecraft:player".to_owned()),
+        )]
+        .into_iter()
+        .collect(),
+    )
+});
+static LOOT_PREDICATE_6: std::sync::LazyLock<LootPredicateValue> = std::sync::LazyLock::new(|| {
+    LootPredicateValue::Object(
+        [
+            (
+                "minecraft:flags".to_owned(),
+                LootPredicateValue::Object(
+                    [("is_flying".to_owned(), LootPredicateValue::Bool(false))]
+                        .into_iter()
+                        .collect(),
+                ),
+            ),
+            (
+                "minecraft:movement".to_owned(),
+                LootPredicateValue::Object(
+                    [(
+                        "fall_distance".to_owned(),
+                        LootPredicateValue::Object(
+                            [("min".to_owned(), LootPredicateValue::from(1.5f64))]
+                                .into_iter()
+                                .collect(),
+                        ),
+                    )]
+                    .into_iter()
+                    .collect(),
+                ),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+    )
+});
 #[derive(Clone, Debug, PartialEq)]
 pub enum LevelBasedValue {
     Constant(f32),
@@ -72,11 +162,12 @@ pub enum EnchantmentTarget {
     DamagingEntity,
     Victim,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct TargetedConditionalEffect<T> {
     pub enchanted: Option<EnchantmentTarget>,
     pub affected: Option<EnchantmentTarget>,
     pub effect: T,
+    pub requirements: Option<LootCondition>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConditionalEffect<T> {
@@ -546,6 +637,13 @@ impl Enchantment {
                     min_amplifier: LevelBasedValue::Constant(3f32),
                     max_amplifier: LevelBasedValue::Constant(3f32),
                 },
+                requirements: Some(LootCondition::AllOf(&[
+                    LootCondition::EntityProperties {
+                        target: LootEntityTarget::This,
+                        predicate: &LOOT_PREDICATE_0,
+                    },
+                    LootCondition::DamageSourceProperties(&LOOT_PREDICATE_1),
+                ])),
             }],
             projectile_count: &[],
             projectile_spread: &[],
@@ -765,6 +863,20 @@ impl Enchantment {
                         sound: "minecraft:item.trident.thunder",
                     },
                 ]),
+                requirements: Some(LootCondition::AllOf(&[
+                    LootCondition::WeatherCheck {
+                        raining: None,
+                        thundering: Some(true),
+                    },
+                    LootCondition::EntityProperties {
+                        target: LootEntityTarget::This,
+                        predicate: &LOOT_PREDICATE_2,
+                    },
+                    LootCondition::EntityProperties {
+                        target: LootEntityTarget::DirectAttacker,
+                        predicate: &LOOT_PREDICATE_3,
+                    },
+                ])),
             }],
             projectile_count: &[],
             projectile_spread: &[],
@@ -1034,6 +1146,7 @@ impl Enchantment {
                         per_level_above_first: 4f32,
                     },
                 },
+                requirements: Some(LootCondition::DamageSourceProperties(&LOOT_PREDICATE_4)),
             }],
             projectile_count: &[],
             projectile_spread: &[],
@@ -1488,6 +1601,10 @@ impl Enchantment {
                 effect: EnchantmentValueEffect::Add(LevelBasedValue::Linear {
                     base: 0.01f32,
                     per_level_above_first: 0.01f32,
+                }),
+                requirements: Some(LootCondition::EntityProperties {
+                    target: LootEntityTarget::Attacker,
+                    predicate: &LOOT_PREDICATE_5,
                 }),
             }],
             fishing_time_reduction: &[],
@@ -2586,6 +2703,10 @@ impl Enchantment {
                         amount: LevelBasedValue::Constant(2f32),
                     },
                 ]),
+                requirements: Some(LootCondition::RandomChanceWithEnchantmentLevel {
+                    base: 0.15f32,
+                    per_level_above_first: 0.15f32,
+                }),
             }],
             projectile_count: &[],
             projectile_spread: &[],
@@ -2779,6 +2900,10 @@ impl Enchantment {
                     large_particle: Some(crate::particle::Particle::GustEmitterLarge),
                     sound: Some(crate::sound::Sound::EntityWindChargeWindBurst),
                 },
+                requirements: Some(LootCondition::EntityProperties {
+                    target: LootEntityTarget::DirectAttacker,
+                    predicate: &LOOT_PREDICATE_6,
+                }),
             }],
             projectile_count: &[],
             projectile_spread: &[],

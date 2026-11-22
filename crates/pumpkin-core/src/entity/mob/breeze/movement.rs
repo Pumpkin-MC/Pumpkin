@@ -380,7 +380,7 @@ impl Behavior for LongJump {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         // An interrupted jump may never run the landing callback.
         if let Some(pending) = self.pending_transition.take() {
             pending.store(false, Relaxed);
@@ -526,8 +526,8 @@ impl Behavior for SlideToTargetSink {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        self.0.stop(tick);
+    fn stop(&mut self, tick: &mut BrainTick<'_>, timed_out: bool) {
+        self.0.stop(tick, timed_out);
         let target = tick.state.get(types::ATTACK_TARGET).map(Arc::downgrade);
         BreezeEntity::finish_pose(tick, EntityPose::Sliding, target);
     }
@@ -656,12 +656,15 @@ mod tests {
             let effects = body.with_brain(breeze.as_ref(), |brain| {
                 brain.erase(types::BREEZE_SHOOT.id());
                 brain.set(types::ATTACK_TARGET, target.clone());
-                SlideToTargetSink(MoveToTargetSink::new(20, 40)).stop(&mut BrainTick {
-                    mob: breeze.as_ref(),
-                    world: &world,
-                    state: brain,
-                    time: 0,
-                });
+                SlideToTargetSink(MoveToTargetSink::new(20, 40)).stop(
+                    &mut BrainTick {
+                        mob: breeze.as_ref(),
+                        world: &world,
+                        state: brain,
+                        time: 0,
+                    },
+                    false,
+                );
                 brain.take_effects()
             });
             for effect in effects {
