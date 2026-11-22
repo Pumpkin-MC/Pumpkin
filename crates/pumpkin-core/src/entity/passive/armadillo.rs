@@ -14,6 +14,8 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
+use rand::RngExt;
+use rand::rngs::ThreadRng;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -44,8 +46,8 @@ pub const BRUSH_DURABILITY_COST: i32 = 16;
 /// Vanilla `getMaxHeadYRot` while it is not rolled up.
 const MAX_HEAD_Y_ROT: f32 = 32.0;
 
-fn pick_next_scute_drop_time() -> i32 {
-    rand::random_range(0..SCUTE_DROP_TICKS) + SCUTE_DROP_TICKS
+fn pick_next_scute_drop_time(random: &mut ThreadRng) -> i32 {
+    random.random_range(0..SCUTE_DROP_TICKS) + SCUTE_DROP_TICKS
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -144,7 +146,7 @@ impl ArmadilloEntity {
             ageable_data: AgeableData::default(),
             state: AtomicI32::new(ArmadilloState::Idle.id()),
             in_state_ticks: AtomicU32::new(0),
-            scute_time: AtomicI32::new(pick_next_scute_drop_time()),
+            scute_time: AtomicI32::new(pick_next_scute_drop_time(&mut rand::rng())),
         })
     }
 
@@ -248,9 +250,11 @@ impl ArmadilloEntity {
                 tool: Some(tool.clone()),
                 ..Default::default()
             };
-            for drop_stack in
-                crate::world::loot::generate_loot_from_handle(&table, rand::random(), &params)
-            {
+            for drop_stack in crate::world::loot::generate_loot_from_handle(
+                &table,
+                self.get_random().random(),
+                &params,
+            ) {
                 let item_entity = Arc::new(ItemEntity::new(
                     Entity::new(world.clone(), pos, &EntityType::ITEM),
                     drop_stack,
@@ -316,12 +320,15 @@ impl ArmadilloEntity {
             ));
             world.spawn_entity_non_save(item_entity as Arc<dyn EntityBase>);
         }) {
-            let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0);
+            let mut random = self.get_random();
+            let pitch = (random.random::<f32>() - random.random::<f32>()).mul_add(0.2, 1.0);
             self.play_entity_sound(Sound::EntityArmadilloScuteDrop, 1.0, pitch);
             self.emit_game_event(GameEvent::EntityPlace);
         }
-        self.scute_time
-            .store(pick_next_scute_drop_time(), Ordering::Relaxed);
+        self.scute_time.store(
+            pick_next_scute_drop_time(&mut self.get_random()),
+            Ordering::Relaxed,
+        );
     }
 }
 
