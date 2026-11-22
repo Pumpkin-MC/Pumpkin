@@ -230,8 +230,8 @@ impl Behavior for ArmadilloPanic {
         self.0.tick(tick);
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        self.0.stop(tick);
+    fn stop(&mut self, tick: &mut BrainTick<'_>, timed_out: bool) {
+        self.0.stop(tick, timed_out);
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
@@ -272,8 +272,8 @@ impl Behavior for MoveToTargetSinkUnlessScared {
         self.0.tick(tick);
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        self.0.stop(tick);
+    fn stop(&mut self, tick: &mut BrainTick<'_>, timed_out: bool) {
+        self.0.stop(tick, timed_out);
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
@@ -374,7 +374,7 @@ impl Behavior for ArmadilloBallUp {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         let panicking = tick.state.has_memory_value(types::IS_PANICKING.id());
         if let Some(armadillo) = armadillo(tick)
             && !armadillo.can_stay_rolled_up_while(panicking)

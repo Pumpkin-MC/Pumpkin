@@ -233,7 +233,7 @@ impl ArmadilloEntity {
 
     pub fn brush_off_scute(
         &self,
-        interacting_entity: Option<&dyn EntityBase>,
+        _interacting_entity: Option<&dyn EntityBase>,
         tool: &ItemStack,
     ) -> bool {
         if self.is_baby() || !self.get_entity().is_alive() {
@@ -263,10 +263,7 @@ impl ArmadilloEntity {
             }
         }
         world.play_sound(Sound::EntityArmadilloBrush, SoundCategory::Neutral, &pos);
-        // A player's interaction is already announced by `Mob::interact`; only the dispenser is not.
-        if interacting_entity.is_none() {
-            self.emit_game_event(GameEvent::EntityInteract);
-        }
+        self.emit_game_event(GameEvent::EntityInteract);
         true
     }
 
