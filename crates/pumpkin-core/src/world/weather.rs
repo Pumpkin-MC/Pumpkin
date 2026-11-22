@@ -813,6 +813,11 @@ impl World {
         let (thunder_je, thunder_be) = thunder_level_packets(tick.thunder_level);
         // Bedrock has no begin or end; its level events carry both.
         self.for_each_cycle_world(|world| {
+            // Vanilla's `broadcastAll` also reaches dimensions without weather, whose
+            // clients ignore it. A world with weather turned off would show the rain.
+            if !world.can_have_weather() && can_have_weather(&world.dimension) {
+                return;
+            }
             world.broadcast_packet_all(&begin_or_end);
             world.broadcast_editioned(&rain_je, &rain_be);
             world.broadcast_editioned(&thunder_je, &thunder_be);
