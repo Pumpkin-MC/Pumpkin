@@ -63,6 +63,36 @@ impl BlockEntity for EnchantingTableBlockEntity {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn collect_item_components(&self, stack: &mut pumpkin_data::item_stack::ItemStack) {
+        if let Ok(name) = self.custom_name.lock()
+            && let Some(name) = name.as_ref()
+        {
+            stack.set_data_component(pumpkin_data::data_component_impl::CustomNameImpl {
+                name: pumpkin_util::text::TextComponent::text(name.clone()),
+            });
+        }
+    }
+
+    fn apply_item_components(&self, stack: &pumpkin_data::item_stack::ItemStack) {
+        if let Some(custom_name) =
+            stack.get_data_component::<pumpkin_data::data_component_impl::CustomNameImpl>()
+        {
+            *self
+                .custom_name
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some(custom_name.name.clone().get_text());
+        }
+    }
+
+    fn get_custom_name(&self) -> Option<pumpkin_util::text::TextComponent> {
+        self.custom_name
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .map(pumpkin_util::text::TextComponent::text)
+    }
 }
 
 impl EnchantingTableBlockEntity {

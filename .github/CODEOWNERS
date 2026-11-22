@@ -1,0 +1,90 @@
+# Code owners are requested for review automatically.
+# The last matching pattern takes precedence, so general rules come first and
+# more specific rules (including Bedrock) must stay below the rules they refine.
+# A path-specific rule replaces the owners of earlier rules, it does not add to them.
+
+# --- Networking (Java) ---
+/crates/pumpkin-protocol/                                                   @Snowiiii @xRookieFight
+/crates/pumpkin-core/src/net/                                               @Snowiiii @xRookieFight
+
+# --- Commands ---
+/crates/pumpkin-core/src/command/                                           @aure31
+
+# --- Plugins ---
+/crates/pumpkin-plugin-api/                                                 @yunuservices @Phoenixxo
+/crates/pumpkin-api-macros/                                                 @yunuservices @Phoenixxo
+/crates/pumpkin-plugin-runtime/                                             @Phoenixxo
+/crates/pumpkin-plugin-wit/                                                 @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-core/src/plugin/                                            @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-wasm-host/                                                  @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-wasm-host-common/                                           @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-wasm-host-v0_1/                                             @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-wasm-host-v0_2/                                             @yunuservices @Phoenixxo @QuantumSegfault
+
+# --- Documentation ---
+*.md                                                                        @Q2297045667
+/docs/                                                                      @Q2297045667
+/README.md                                                                  @Snowiiii
+
+# --- Gameplay ---
+/crates/pumpkin-core/src/block/                                             @RoosterBooster007 @MegalithOfficial
+/crates/pumpkin-core/src/item/                                              @RoosterBooster007 @MegalithOfficial
+/crates/pumpkin-core/src/entity/projectile/                                 @RoosterBooster007 @MegalithOfficial
+
+# --- Redstone and block automation (keep below the block/ rule) ---
+/crates/pumpkin-core/src/block/blocks/redstone/                             @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-core/src/block/blocks/piston/                               @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-core/src/block/blocks/hopper.rs                             @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-core/src/block/entities/hopper.rs                           @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-core/src/block/entities/dispenser.rs                        @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-core/src/block/entities/dropper.rs                          @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-core/src/block/entities/crafter.rs                          @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-core/src/block/entities/comparator.rs                       @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-core/src/block/entities/daylight_detector.rs                @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-core/src/block/entities/piston.rs                           @RoosterBooster007 @zinedinp @MegalithOfficial
+/crates/pumpkin-inventory/src/crafter_screen_handler.rs                     @RoosterBooster007 @zinedinp @MegalithOfficial
+
+# --- Mobs ---
+/crates/pumpkin-core/src/entity/mob/                                        @RoosterBooster007 @MegalithOfficial
+/crates/pumpkin-core/src/entity/ai/                                         @RoosterBooster007 @MegalithOfficial
+/crates/pumpkin-core/src/entity/passive/                                    @RoosterBooster007 @MegalithOfficial
+/crates/pumpkin-core/src/entity/boss/                                       @RoosterBooster007 @MegalithOfficial
+/crates/pumpkin-core/src/entity/spawn_util.rs                               @RoosterBooster007 @MegalithOfficial
+/crates/pumpkin-core/src/world/natural_spawner.rs                           @RoosterBooster007 @MegalithOfficial
+
+# --- World generation ---
+/crates/pumpkin-world/src/generation/feature/                               @Snowiiii @RoosterBooster007 @MegalithOfficial
+/crates/pumpkin-world/src/generation/noise/                                 @Snowiiii @RoosterBooster007 @MegalithOfficial
+
+# --- Data and codegen ---
+/crates/pumpkin-data/                                                       @Snowiiii @KairuDeibisu @QuantumSegfault
+/tools/pumpkin-codegen/                                                     @Snowiiii @KairuDeibisu @QuantumSegfault
+
+# --- Scheduler ---
+/crates/pumpkin-scheduler/                                                  @Phoenixxo
+
+# --- Testing ---
+/crates/pumpkin-gametest/                                                   @KairuDeibisu
+/tools/pumpkin-tester/                                                      @KairuDeibisu
+/crates/pumpkin-core/src/server/builtin_game_tests/                         @KairuDeibisu
+/crates/pumpkin-core/src/server/server_test_manager.rs                      @KairuDeibisu
+/crates/*/tests/                                                            @KairuDeibisu
+/assets/tests/                                                              @KairuDeibisu
+
+# --- Infrastructure ---
+/.github/workflows/                                                         @Snowiiii @KairuDeibisu
+/Dockerfile                                                                 @Snowiiii
+/.dockerignore                                                              @Snowiiii
+/docker-compose.yml                                                         @Snowiiii
+/egg-pumpkin.json                                                           @Snowiiii
+
+# --- Bedrock (keep below the Networking and Plugins rules it refines) ---
+/assets/bedrock/                                                            @xRookieFight @QuantumSegfault
+/assets/en_us_bedrock.lang                                                  @QuantumSegfault
+/crates/pumpkin-config/src/networking/bedrock.rs                            @QuantumSegfault
+/crates/pumpkin-protocol/src/bedrock/                                       @xRookieFight @QuantumSegfault
+/crates/pumpkin-core/src/net/bedrock/                                       @xRookieFight @QuantumSegfault
+/crates/pumpkin-protocol/fuzz/fuzz_targets/*_bedrock.rs                     @Snowiiii @xRookieFight @QuantumSegfault
+/crates/pumpkin-nbt/fuzz/fuzz_targets/deserialize_bedrock.rs                @QuantumSegfault
+/crates/pumpkin-core/src/plugin/api/events/player/bedrock_form_response.rs  @yunuservices @Phoenixxo @QuantumSegfault
+/crates/pumpkin-plugin-api/src/events/player/bedrock_form_response.rs       @yunuservices @Phoenixxo @QuantumSegfault

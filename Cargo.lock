@@ -2945,6 +2945,7 @@ name = "pumpkin"
 version = "0.2.2+26.3-26.63"
 dependencies = [
  "console-subscriber",
+ "libc",
  "pumpkin-config",
  "pumpkin-core",
  "pumpkin-data",
@@ -3121,6 +3122,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "tracing",
  "zip",
 ]
 
@@ -3240,7 +3242,6 @@ dependencies = [
  "bytes",
  "cfb8",
  "flate2",
- "hybrid-array",
  "pumpkin-data",
  "pumpkin-macros",
  "pumpkin-nbt",

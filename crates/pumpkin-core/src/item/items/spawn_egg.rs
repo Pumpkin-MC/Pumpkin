@@ -89,21 +89,32 @@ fn can_place_op_nbt(player: &Player) -> bool {
     player.has_permission_at_level(&server, NBT_PLACE_PERMISSION, level)
 }
 
+/// Resolves the `EntityType` of a spawn egg stack from its `minecraft:entity_data` component
+/// (`SpawnEggItem.getType(ItemStack)` in `26.3`), falling back to the base egg mapping if stripped.
+#[must_use]
+pub(crate) fn entity_type_from_spawn_egg_stack(stack: &ItemStack) -> Option<&'static EntityType> {
+    stack
+        .get_data_component::<EntityDataImpl>()
+        .and_then(EntityDataImpl::get_entity_type)
+        .or_else(|| entity_from_egg(stack.item.id))
+}
+
 /// Loads the stack's `entity_data` NBT into the mob. Identity and placement stay as spawned.
 ///
 /// `user` is the player who caused the spawn, matching vanilla's `updateCustomEntityTag` user
 /// argument; it is `None` for non-player sources such as a dispenser.
 fn apply_entity_data(item: &ItemStack, mob: &dyn EntityBase, user: Option<&Player>) {
-    let Some(nbt) = item
-        .get_data_component::<EntityDataImpl>()
-        .and_then(|comp| comp.nbt.as_ref())
-    else {
+    let Some(comp) = item.get_data_component::<EntityDataImpl>() else {
+        return;
+    };
+    let Some(nbt) = comp.nbt.as_ref() else {
         return;
     };
     let entity_type = mob.get_entity().entity_type;
     // Vanilla EntityType.updateCustomEntityTag loads the data only into the type it names.
-    if let Some(id) = nbt.get_string("id")
-        && id.strip_prefix("minecraft:").unwrap_or(id) != entity_type.resource_name
+    if comp
+        .get_entity_type()
+        .is_some_and(|expected| expected.id != entity_type.id)
     {
         return;
     }
@@ -234,7 +245,11 @@ impl ItemBehaviour for SpawnEggItem {
     }
 
     fn normal_use_with_hand(&self, item: &Item, player: &Player, yaw: f32, pitch: f32, hand: Hand) {
-        if let Some(entity_type) = entity_from_egg(item.id) {
+        let mut stack = player.inventory.get_stack_in_hand(hand);
+        if stack.is_empty() || stack.item.id != item.id {
+            return;
+        }
+        if let Some(entity_type) = entity_type_from_spawn_egg_stack(&stack) {
             let world = player.world();
             let (start_pos, end_pos) = self.get_start_and_end_pos_with_rotation(player, yaw, pitch);
             let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
@@ -254,11 +269,6 @@ impl ItemBehaviour for SpawnEggItem {
                 return;
             }
             if is_disallowed_in_peaceful(entity_type, &world) {
-                return;
-            }
-
-            let mut stack = player.inventory.get_stack_in_hand(hand);
-            if stack.is_empty() || stack.item.id != item.id {
                 return;
             }
 
@@ -308,7 +318,7 @@ impl ItemBehaviour for SpawnEggItem {
         _block: &Block,
         _server: &Server,
     ) -> BlockActionResult {
-        if let Some(entity_type) = entity_from_egg(item.item.id) {
+        if let Some(entity_type) = entity_type_from_spawn_egg_stack(item) {
             let world = player.world();
 
             if let Some(block_entity) = player.world().get_block_entity(&location) {
@@ -378,7 +388,7 @@ impl ItemBehaviour for SpawnEggItem {
     }
 
     fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
-        if let Some(entity_type) = entity_from_egg(item.item.id)
+        if let Some(entity_type) = entity_type_from_spawn_egg_stack(item)
             && entity.get_entity().entity_type.id == entity_type.id
         {
             let world = player.world();

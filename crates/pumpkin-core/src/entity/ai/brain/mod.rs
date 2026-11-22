@@ -544,7 +544,7 @@ mod tests {
             true
         }
 
-        fn stop(&mut self, tick: &mut BrainTick<'_>) {
+        fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
             self.0.fetch_add(1, Ordering::Relaxed);
             tick.state.set(types::PACIFIED, true);
         }

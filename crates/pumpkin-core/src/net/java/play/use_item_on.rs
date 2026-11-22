@@ -110,6 +110,12 @@ impl JavaClient {
             EquipmentSlot::OFF_HAND
         };
 
+        let slot_index = if matches!(hand, Hand::Right) {
+            inventory.get_selected_slot() as usize
+        } else {
+            PlayerInventory::OFF_HAND_SLOT
+        };
+
         let sneaking = player.get_entity().is_sneaking();
 
         // Code based on the java class ServerPlayerInteractionManager
@@ -126,44 +132,8 @@ impl JavaClient {
                 server,
             );
             if result.consumes_action() {
-                let state =
-                    pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
-                        block.id,
-                    )
-                    .then(|| {
-                        let props =
-                            pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
-                                world.get_block_state(&position).id,
-                            );
-                        ("lit".to_string(), props.r#lit.to_string())
-                    });
-
-                let mut is_smokey = false;
-                for dy in 1..=5 {
-                    let check_pos = BlockPos::new(position.0.x, position.0.y - dy, position.0.z);
-                    let b = world.get_block(&check_pos);
-                    if b == &pumpkin_data::Block::CAMPFIRE
-                        || b == &pumpkin_data::Block::SOUL_CAMPFIRE
-                    {
-                        is_smokey = true;
-                        break;
-                    }
-                    if !world.get_block_state(&check_pos).is_air() {
-                        break;
-                    }
-                }
-
-                let biome = Some(world.get_biome(&position).registry_id.to_string());
-
-                player.trigger_advancement(
-                    crate::entity::player::advancement::trigger::AdvancementTrigger::ItemUsedOnBlock {
-                        block_id: format!("minecraft:{}", block.name),
-                        item_id: before.item.registry_key.to_string(),
-                        state,
-                        smokey: Some(is_smokey),
-                        biome,
-                    },
-                );
+                trigger_item_used_on_block_advancement(player, &world, &position, block, &before);
+                sync_used_hand_item(player, hand, slot_index, &before, item);
 
                 if matches!(result, BlockActionResult::SuccessServer) {
                     player.swing_hand(hand, true);
@@ -171,12 +141,6 @@ impl JavaClient {
                 return Ok(());
             }
         }
-
-        let slot_index = if matches!(hand, Hand::Right) {
-            inventory.get_selected_slot() as usize
-        } else {
-            PlayerInventory::OFF_HAND_SLOT
-        };
 
         if item.is_empty() {
             // TODO item cool down
@@ -205,71 +169,15 @@ impl JavaClient {
             }
         }
 
-        let after = item.clone();
-
         if item_result.consumes_action() || !item.are_equal(&before) {
-            let state = pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
-                block.id,
-            )
-            .then(|| {
-                let props = pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
-                    world.get_block_state(&position).id,
-                );
-                ("lit".to_string(), props.r#lit.to_string())
-            });
-
-            let mut is_smokey = false;
-            for dy in 1..=5 {
-                let check_pos = BlockPos::new(position.0.x, position.0.y - dy, position.0.z);
-                let b = world.get_block(&check_pos);
-                if b == &pumpkin_data::Block::CAMPFIRE || b == &pumpkin_data::Block::SOUL_CAMPFIRE {
-                    is_smokey = true;
-                    break;
-                }
-                if !world.get_block_state(&check_pos).is_air() {
-                    break;
-                }
-            }
-
-            let biome = Some(world.get_biome(&position).registry_id.to_string());
-
-            player.trigger_advancement(
-                crate::entity::player::advancement::trigger::AdvancementTrigger::ItemUsedOnBlock {
-                    block_id: format!("minecraft:{}", block.name),
-                    item_id: before.item.registry_key.to_string(),
-                    state,
-                    smokey: Some(is_smokey),
-                    biome,
-                },
-            );
+            trigger_item_used_on_block_advancement(player, &world, &position, block, &before);
         }
 
         if matches!(item_result, BlockActionResult::SuccessServer) {
             player.swing_hand(hand, true);
         }
 
-        // Broadcast the break entity status before the slot sync; the client
-        // needs the old item texture in the slot for break particles.
-        if !before.is_empty() && after.is_empty() {
-            let slot = if slot_index == player.inventory.get_selected_slot() as usize {
-                &EquipmentSlot::MAIN_HAND
-            } else {
-                &EquipmentSlot::OFF_HAND
-            };
-            if before.is_damageable() {
-                player.increment_stat(StatisticCategory::Broken, before.item.id as i32, 1);
-            }
-            player.world().send_entity_status(
-                player.get_entity(),
-                equipment_break_status(slot),
-                ActorEventID::None,
-            );
-        }
-
-        if !after.are_equal(&before) {
-            player.sync_hand_slot(slot_index, after.clone());
-            inventory.set_stack_in_hand(hand, after);
-        }
+        sync_used_hand_item(player, hand, slot_index, &before, item);
 
         Ok(())
     }
@@ -301,11 +209,12 @@ impl JavaClient {
         );
 
         if result.consumes_action() {
-            // TODO: Trigger ITEM_USED_ON_BLOCK Criteria
             return result;
         }
 
-        if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+        if matches!(result, BlockActionResult::PassToDefaultBlockAction)
+            && equipment_slot == &EquipmentSlot::MAIN_HAND
+        {
             let result = server.block_registry.on_use(
                 block,
                 player,
@@ -319,7 +228,6 @@ impl JavaClient {
             );
 
             if result.consumes_action() {
-                // TODO: Trigger DEFAULT_BLOCK_USE Criteria
                 return result;
             }
         }
@@ -355,4 +263,65 @@ impl JavaClient {
             }
         }
     }
+}
+
+fn trigger_item_used_on_block_advancement(
+    player: &Player,
+    world: &World,
+    position: &BlockPos,
+    block: &Block,
+    used_item: &ItemStack,
+) {
+    let state = pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
+        block.id,
+    )
+    .then(|| {
+        let props = pumpkin_data::block_properties::CopperBulbLikeProperties::from_state_id(
+            world.get_block_state(position).id,
+        );
+        ("lit".to_string(), props.r#lit.to_string())
+    });
+    let is_smokey = crate::block::blocks::campfire::CampfireBlock::is_smokey_pos(world, position);
+    let biome = Some(world.get_biome(position).registry_id.to_string());
+
+    player.trigger_advancement(
+        crate::entity::player::advancement::trigger::AdvancementTrigger::ItemUsedOnBlock {
+            block_id: format!("minecraft:{}", block.name),
+            item_id: used_item.item.registry_key.to_string(),
+            state,
+            smokey: Some(is_smokey),
+            biome,
+        },
+    );
+}
+
+fn sync_used_hand_item(
+    player: &Player,
+    hand: Hand,
+    slot_index: usize,
+    before: &ItemStack,
+    after: ItemStack,
+) {
+    if after.are_equal(before) {
+        return;
+    }
+
+    // Broadcast the break entity status before the slot sync; the client
+    // needs the old item texture in the slot for break particles.
+    if before.is_damageable() && after.is_empty() {
+        let slot = if slot_index == player.inventory.get_selected_slot() as usize {
+            &EquipmentSlot::MAIN_HAND
+        } else {
+            &EquipmentSlot::OFF_HAND
+        };
+        player.increment_stat(StatisticCategory::Broken, i32::from(before.item.id), 1);
+        player.world().send_entity_status(
+            player.get_entity(),
+            equipment_break_status(slot),
+            ActorEventID::None,
+        );
+    }
+
+    player.inventory().set_stack_in_hand(hand, after.clone());
+    player.sync_hand_slot(slot_index, after);
 }

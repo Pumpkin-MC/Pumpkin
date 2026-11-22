@@ -279,17 +279,21 @@ impl ClientPlatform {
         je_packet: &J,
         be_packet: &B,
     ) {
+        self.try_queue_packet_editioned(je_packet, be_packet);
+    }
+
+    pub(crate) fn try_queue_packet_editioned<J: ClientPacket, B: BClientPacket>(
+        &self,
+        je_packet: &J,
+        be_packet: &B,
+    ) -> bool {
         match self {
-            Self::Java(java) => {
-                if let Ok(data) = java.serialize_packet(je_packet) {
-                    java.try_enqueue_packet(data);
-                }
-            }
-            Self::Bedrock(bedrock) => {
-                if let Ok(data) = bedrock.serialize_packet(be_packet) {
-                    bedrock.try_enqueue_packet(data);
-                }
-            }
+            Self::Java(java) => java
+                .serialize_packet(je_packet)
+                .is_ok_and(|data| java.try_enqueue_packet_data(data)),
+            Self::Bedrock(bedrock) => bedrock
+                .serialize_packet(be_packet)
+                .is_ok_and(|data| bedrock.try_queue_packet_data(data)),
         }
     }
 
@@ -460,6 +464,8 @@ pub enum EncryptionError {
     SharedWrongLength,
     #[error("encryption is already enabled")]
     AlreadyEncrypted,
+    #[error("failed to flush plaintext before enabling encryption: {0}")]
+    UnencryptedFlushFailed(String),
     #[error("no encryption request is pending")]
     NoPendingVerifyToken,
     #[error("verify token does not match")]

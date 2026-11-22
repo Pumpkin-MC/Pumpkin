@@ -108,9 +108,9 @@ impl EntityBase for FireballEntity {
 
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         self.thrown.write_nbt(nbt);
-        let mut item = NbtCompound::new();
-        self.get_item().write_item_stack(&mut item);
-        nbt.put_compound("Item", item);
+        if let Some(item) = self.get_item().to_nbt() {
+            nbt.put_compound("Item", item);
+        }
         nbt.put_byte("ExplosionPower", self.get_explosion_power() as i8);
     }
 
