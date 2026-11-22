@@ -51,7 +51,7 @@ fn register_player_event(
         player_permission_check::PlayerPermissionCheckEvent, player_respawn::PlayerRespawnEvent,
         player_teleport::PlayerTeleportEvent, player_toggle_flight_event::PlayerToggleFlightEvent,
         player_toggle_sneak_event::PlayerToggleSneakEvent,
-        player_toggle_sprint_event::PlayerToggleSprintEvent,
+        player_toggle_sprint_event::PlayerToggleSprintEvent, player_transfer::PlayerTransferEvent,
     };
 
     match event_type {
@@ -75,6 +75,9 @@ fn register_player_event(
         }
         EventType::PlayerMoveEvent => {
             register_typed_event::<PlayerMoveEvent>(ctx, handler, priority, blocking);
+        }
+        EventType::PlayerTransferEvent => {
+            register_typed_event::<PlayerTransferEvent>(ctx, handler, priority, blocking);
         }
         EventType::PlayerTeleportEvent => {
             register_typed_event::<PlayerTeleportEvent>(ctx, handler, priority, blocking);

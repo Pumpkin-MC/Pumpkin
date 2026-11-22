@@ -40,7 +40,7 @@ impl Behavior for LookAtTargetSink {
             .is_some_and(|target| target.is_visible_by(&ctx))
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.state.erase(types::LOOK_TARGET.id());
     }
 

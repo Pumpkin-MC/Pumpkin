@@ -44,6 +44,14 @@ interface event {
         cancelled: bool
     }
 
+    /// A transfer request that a blocking handler can cancel or redirect.
+    record player-transfer-event-data {
+        player: player,
+        host: string,
+        port: u16,
+        cancelled: bool
+    }
+
     record player-login-event-data {
         player: player,
         kick-message: text-component,
@@ -2241,6 +2249,7 @@ interface event {
         raid-stop-event,
         raid-trigger-event,
         lightning-strike-event,
+        player-transfer-event,
     }
 
     variant event {
@@ -2522,5 +2531,6 @@ interface event {
         raid-stop-event(raid-stop-event-data),
         raid-trigger-event(raid-trigger-event-data),
         lightning-strike-event(lightning-strike-event-data),
+        player-transfer-event(player-transfer-event-data),
     }
 }

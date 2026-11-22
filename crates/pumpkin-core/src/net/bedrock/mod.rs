@@ -817,13 +817,13 @@ impl BedrockClient {
 
     /// `false` when the packet was dropped instead of queued.
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
-        self.try_enqueue_packet_data_inner(packet_data, true)
+        self.try_enqueue_packet_data_inner(packet_data, true, false)
     }
 
     /// Like [`Self::try_enqueue_packet_data`] without firing `PacketSentEvent` on current-version
     /// clients, while still running version translation for legacy clients.
     pub fn try_enqueue_packet_data_unobserved(&self, packet_data: Bytes) -> bool {
-        self.try_enqueue_packet_data_inner(packet_data, false)
+        self.try_enqueue_packet_data_inner(packet_data, false, false)
     }
 
     /// Queues an already-formatted raw Bedrock packet (`packet_id` + client-version `payload`)
@@ -838,14 +838,24 @@ impl BedrockClient {
         self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len)
     }
 
-    fn try_enqueue_packet_data_inner(&self, packet_data: Bytes, observe: bool) -> bool {
+    /// Reports whether the primary packet was queued, even if a hook queued extra packets.
+    pub(super) fn try_queue_packet_data(&self, packet_data: Bytes) -> bool {
+        self.try_enqueue_packet_data_inner(packet_data, true, true)
+    }
+
+    fn try_enqueue_packet_data_inner(
+        &self,
+        packet_data: Bytes,
+        observe: bool,
+        require_primary: bool,
+    ) -> bool {
         if self.is_closed() {
             return false;
         }
         let (packet_data, extras) = self.translate_outgoing(packet_data, observe);
         match packet_data {
             Some(packet_data) => self.queue_translated_packet(packet_data, extras),
-            None => self.queue_extra_packets(extras),
+            None => self.queue_extra_packets(extras) && !require_primary,
         }
     }
 

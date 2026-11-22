@@ -225,7 +225,7 @@ impl Behavior for ShootTongue {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.state.erase(types::ATTACK_TARGET.id());
         if let Some(frog) = frog(tick) {
             frog.erase_tongue_target();
