@@ -34,6 +34,7 @@ light_counters! {
     SetBlockLight => "set_block_light",
     BlockState => "block_state",
     ChunkLoaded => "chunk_loaded",
+    ChunkLookup => "chunk_lookup",
     SkyTier1 => "sky_tier1_no_open_sky",
     SkyTier2 => "sky_tier2_open_sky",
     SkyTier3 => "sky_tier3_scan",

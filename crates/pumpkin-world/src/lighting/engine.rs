@@ -4,6 +4,7 @@ use crate::chunk_system::Chunk;
 use crate::chunk_system::generation_cache::Cache;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
+use crate::lighting::chunk_access::{ChunkCursor, VerticalInChunk};
 use crate::lighting::occlusion;
 use crate::lighting::section_flags::{self, SectionMask};
 use crate::lighting::sky_fill::SkyFill;
@@ -302,7 +303,7 @@ impl<P: LightProvider> LightPropagator<P> {
         }
     }
 
-    /// One light lock: `max_possible`, `shapeOccludes`, raise. Lock order: light then section.
+    /// `max_possible`, `shapeOccludes`, raise.
     fn try_raise(
         chunk: &mut Chunk,
         from_id: BlockStateId,
@@ -310,9 +311,9 @@ impl<P: LightProvider> LightPropagator<P> {
         current_light: u8,
         cell: LightCell,
     ) -> Option<u8> {
-        let max_possible = P::max_possible(current_light, dir);
         match chunk {
             Chunk::Proto(c) => {
+                let max_possible = P::max_possible(current_light, dir);
                 let stored = light_in(
                     P::proto_sections(c),
                     cell.section_idx,
@@ -345,47 +346,18 @@ impl<P: LightProvider> LightPropagator<P> {
                 }
                 Some(new_level)
             }
-            Chunk::Level(lvl) => {
-                let mut light = lvl
-                    .light_engine
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let stored = light_in(
-                    P::level_sections_mut(&mut light),
-                    cell.section_idx,
-                    cell.local_x,
-                    cell.local_y,
-                    cell.local_z,
-                    0,
-                );
-                if stored >= max_possible {
-                    return None;
-                }
-                let state_id = lvl
-                    .section
-                    .get_block_absolute_y(cell.local_x, cell.y, cell.local_z)
-                    .unwrap_or(BlockStateId::AIR);
-                if occlusion::shape_occludes(from_id, state_id, dir) {
-                    return None;
-                }
-                let new_level = P::propagate_level(current_light, opacity_of(state_id), dir);
-                if new_level <= stored {
-                    return None;
-                }
-                if !set_light_in(
-                    P::level_sections_mut(&mut light),
-                    cell.section_idx,
-                    cell.local_x,
-                    cell.local_y,
-                    cell.local_z,
-                    new_level,
-                ) {
-                    return None;
-                }
-                drop(light);
-                lvl.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
-                Some(new_level)
-            }
+            Chunk::Level(lvl) => ChunkCursor::raise_light::<P>(
+                lvl,
+                VerticalInChunk::Inside {
+                    section_index: cell.section_idx,
+                    y_in_section: cell.local_y,
+                    local_x: cell.local_x,
+                    local_z: cell.local_z,
+                },
+                from_id,
+                dir,
+                current_light,
+            ),
         }
     }
 
@@ -1042,13 +1014,6 @@ impl LightEngine {
         center.sky_light_height = crate::lighting::SkyLightHeight::compute_from_proto(center).raw();
     }
 
-    /// Whether this state's occlusion shape is empty. Vanilla `LightEngine.isEmptyShape`.
-    #[inline]
-    #[must_use]
-    pub const fn is_empty_shape(state: &BlockState) -> bool {
-        !state.can_occlude()
-    }
-
     /// Whether a block change can move any light. Vanilla
     /// `LightEngine.hasDifferentLightProperties`.
     #[inline]
@@ -1065,33 +1030,23 @@ impl LightEngine {
             || occlusion::uses_shape_for_light_occlusion(new_state)
     }
 
-    /// Light lost crossing one block. Vanilla `LightEngine.getOpacity`.
-    #[inline]
-    #[must_use]
-    pub const fn get_opacity(state: &BlockState) -> u8 {
-        if state.opacity > 1 { state.opacity } else { 1 }
-    }
-
     /// Light lost moving from one block into another. Vanilla
     /// `LightEngine.getLightDampeningInto`, which returns 16 -- fully blocking -- when the
-    /// merged face shapes occlude.
+    /// merged face shapes occlude. Full cubes have an empty shape there, so only shaped blocks
+    /// like slabs, stairs or snow can return 16; a cube is left to `simple_opacity`.
     #[inline]
     #[must_use]
-    pub const fn get_light_dampening_into(
+    pub fn get_light_dampening_into(
         from_state: &BlockState,
         to_state: &BlockState,
-        _direction: BlockDirection,
+        direction: BlockDirection,
         simple_opacity: u8,
     ) -> u8 {
-        let from_empty = Self::is_empty_shape(from_state);
-        let to_empty = Self::is_empty_shape(to_state);
-        if from_empty && to_empty {
-            return simple_opacity;
+        if occlusion::shape_occludes(from_state.id, to_state.id, direction) {
+            16
+        } else {
+            simple_opacity
         }
-        if to_state.can_occlude() && to_state.is_solid_render() {
-            return 16;
-        }
-        simple_opacity
     }
 }
 impl Default for LightEngine {
@@ -1368,5 +1323,41 @@ mod tests {
             !super::section_flags::block_light_seeds(&chunk, false).contains(SECTION),
             "the centre chunk should seed from emitters only"
         );
+    }
+
+    /// Vanilla `getLightDampeningInto`, as `canBeGrass` and `canBeNylium` read it: a covering
+    /// bottom face above shuts the block below off, whatever its opacity.
+    #[test]
+    fn a_covering_bottom_face_shuts_the_top_face_below() {
+        use pumpkin_data::block_properties::SlabType;
+        use pumpkin_data::{BlockDirection, BlockState, Property};
+
+        let grass = Block::GRASS_BLOCK.default_state;
+        let into = |above: &BlockState| {
+            LightEngine::get_light_dampening_into(grass, above, BlockDirection::Up, above.opacity)
+        };
+        let slab = |half| {
+            Block::OAK_SLAB
+                .from_properties(&[Property::SlabType(half), Property::Waterlogged(false)])
+                .to_state_id(&Block::OAK_SLAB)
+                .to_state()
+        };
+
+        assert_eq!(
+            into(slab(SlabType::Bottom)),
+            16,
+            "a bottom slab covers the face"
+        );
+        assert_eq!(
+            into(slab(SlabType::Top)),
+            0,
+            "a top slab leaves the face open"
+        );
+        assert_eq!(
+            into(Block::STONE.default_state),
+            15,
+            "a cube is only its opacity"
+        );
+        assert_eq!(into(Block::AIR.default_state), 0);
     }
 }

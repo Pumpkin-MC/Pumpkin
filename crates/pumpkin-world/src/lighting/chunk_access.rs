@@ -5,6 +5,7 @@ use crate::chunk::ChunkData;
 use crate::chunk::io::Dirtiable;
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
+use crate::lighting::engine::LightProvider;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
@@ -41,11 +42,15 @@ const fn vertical_in(chunk: &ChunkData, relative: &Vector3<i32>) -> VerticalInCh
     }
 }
 
+type ChunkMemo = Option<(Vector2<i32>, Option<Arc<ChunkData>>)>;
+
 /// Holds `Arc<ChunkData>`, not a `DashMap` guard (deadlock vs waiting writers).
 pub(super) struct ChunkCursor<'a> {
     pub(super) level: &'a Level,
     pub(super) counters: &'a LocalCounters<'a>,
-    memo: Option<(Vector2<i32>, Option<Arc<ChunkData>>)>,
+    /// Vanilla `LightEngine.getChunk` keeps the last two chunks: a flood along a border
+    /// alternates between two, and a single slot would miss on every step. Most recent first.
+    memo: [ChunkMemo; 2],
 }
 
 impl<'a> ChunkCursor<'a> {
@@ -53,20 +58,26 @@ impl<'a> ChunkCursor<'a> {
         Self {
             level,
             counters,
-            memo: None,
+            memo: [None, None],
         }
     }
 
     pub(super) fn chunk_at(&mut self, chunk_pos: Vector2<i32>) -> Option<&Arc<ChunkData>> {
-        if !matches!(&self.memo, Some((cached, _)) if *cached == chunk_pos) {
-            let chunk = self
-                .level
-                .loaded_chunks
-                .get(&chunk_pos)
-                .map(|entry| entry.value().clone());
-            self.memo = Some((chunk_pos, chunk));
+        let holds = |memo: &ChunkMemo| matches!(memo, Some((cached, _)) if *cached == chunk_pos);
+        if !holds(&self.memo[0]) {
+            if holds(&self.memo[1]) {
+                self.memo.swap(0, 1);
+            } else {
+                self.counters.bump(Counter::ChunkLookup);
+                let chunk = self
+                    .level
+                    .loaded_chunks
+                    .get(&chunk_pos)
+                    .map(|entry| entry.value().clone());
+                self.memo[1] = self.memo[0].replace((chunk_pos, chunk));
+            }
         }
-        self.memo.as_ref().and_then(|(_, chunk)| chunk.as_ref())
+        self.memo[0].as_ref().and_then(|(_, chunk)| chunk.as_ref())
     }
 
     pub(super) fn chunk_for(&mut self, pos: &BlockPos) -> Option<&Arc<ChunkData>> {
@@ -214,14 +225,65 @@ impl<'a> ChunkCursor<'a> {
         true
     }
 
+    /// One light lock for a decrease step. `decide` gets the stored level and the block,
+    /// and returns the level to write, if any, plus what the caller needs afterwards. The
+    /// `bool` says whether that write landed. `None` when the cell holds no light, which
+    /// skips the block read. Out of the world above, and in a missing section, the level
+    /// reads as `P::PROTO_MISSING` and nothing can be written. Lock order: light then section.
+    pub(super) fn lower_light<P: LightProvider, R>(
+        chunk: &ChunkData,
+        cell: VerticalInChunk,
+        decide: impl FnOnce(u8, BlockStateId) -> (Option<u8>, R),
+    ) -> Option<(R, bool)> {
+        if matches!(cell, VerticalInChunk::Below) {
+            return None;
+        }
+        let mut engine = chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut target = match cell {
+            VerticalInChunk::Inside {
+                section_index,
+                y_in_section,
+                local_x,
+                local_z,
+            } => P::level_sections_mut(&mut engine)
+                .get_mut(section_index)
+                .map(|section| (section, local_x, y_in_section, local_z)),
+            _ => None,
+        };
+        let stored = target
+            .as_ref()
+            .map_or(P::PROTO_MISSING, |(section, x, y, z)| {
+                section.get(*x, *y, *z)
+            });
+        if stored == 0 {
+            return None;
+        }
+
+        let (write, result) = decide(stored, Self::state_id_at(chunk, cell));
+        let written = match (write, target.as_mut()) {
+            (Some(level), Some((section, x, y, z))) => {
+                section.set(*x, *y, *z, level);
+                true
+            }
+            _ => false,
+        };
+        drop(engine);
+        if written && !chunk.is_dirty() {
+            chunk.mark_dirty(true);
+        }
+        Some((result, written))
+    }
+
     /// One light lock: `max_possible` skip, shape occlusion, raise. Lock order: light then section.
-    pub(super) fn raise_light(
+    pub(super) fn raise_light<P: LightProvider>(
         chunk: &ChunkData,
         cell: VerticalInChunk,
         from: BlockStateId,
         dir: BlockDirection,
         incoming: u8,
-        block_light: bool,
     ) -> Option<u8> {
         let VerticalInChunk::Inside {
             section_index,
@@ -237,19 +299,9 @@ impl<'a> ChunkCursor<'a> {
             .light_engine
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let sections = if block_light {
-            &mut engine.block_light
-        } else {
-            &mut engine.sky_light
-        };
-        let section = sections.get_mut(section_index)?;
+        let section = P::level_sections_mut(&mut engine).get_mut(section_index)?;
         let stored = section.get(local_x, y_in_section, local_z);
-        let max_possible = if !block_light && dir == BlockDirection::Down {
-            incoming
-        } else {
-            incoming.saturating_sub(1)
-        };
-        if stored >= max_possible {
+        if stored >= P::max_possible(incoming, dir) {
             return None;
         }
 
@@ -262,12 +314,7 @@ impl<'a> ChunkCursor<'a> {
             return None;
         }
 
-        let opacity = crate::lighting::opacity_of(state_id);
-        let new_level = if !block_light && dir == BlockDirection::Down {
-            crate::lighting::sky_descended(incoming, opacity)
-        } else {
-            crate::lighting::decayed(incoming, opacity)
-        };
+        let new_level = P::propagate_level(incoming, crate::lighting::opacity_of(state_id), dir);
         if new_level <= stored {
             return None;
         }
