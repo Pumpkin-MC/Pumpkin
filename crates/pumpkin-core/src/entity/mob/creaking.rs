@@ -149,15 +149,6 @@ impl CreakingEntity {
     pub fn get_home_pos(&self) -> Option<BlockPos> {
         self.home_pos.load().map(HeartHome::pos)
     }
-
-    fn stop_in_place(&self) {
-        self.mob_entity.steered().navigator().stop();
-        let living = &self.mob_entity.living_entity;
-        living.movement_input.store(Vector3::default());
-        living.set_speed(0.0);
-        living.entity.velocity.store(Vector3::default());
-        living.entity.leash_angular_momentum.store(0.0);
-    }
 }
 
 impl Mob for CreakingEntity {

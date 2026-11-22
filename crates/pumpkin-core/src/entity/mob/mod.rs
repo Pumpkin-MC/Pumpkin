@@ -217,6 +217,16 @@ impl MobEntity {
             .store(Vector3::new(input.x, input.y, f64::from(speed)));
     }
 
+    /// Vanilla `Mob.stopInPlace`.
+    pub fn stop_in_place(&self) {
+        self.steered().navigator().stop();
+        // Sideways and upward input; `set_speed` clears the forward input.
+        self.living_entity.movement_input.store(Vector3::default());
+        self.set_speed(0.0);
+        self.living_entity.entity.velocity.store(Vector3::default());
+        self.living_entity.entity.reset_angular_leash_momentum();
+    }
+
     const CONTROL_FLAGS_UPDATE_INTERVAL: i32 = 5;
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
@@ -2281,6 +2291,29 @@ pub trait Mob: EntityBase + Send + Sync {
     ) -> bool {
         self.on_damage(damage_type, source);
         true
+    }
+
+    /// Vanilla `LivingEntity.actuallyHurt`: armor, absorption and health. A mob that overrides it
+    /// calls `LivingEntity::actually_hurt` first, like `super.actuallyHurt` in vanilla. Animals lose
+    /// their love mode first, as in vanilla `Animal.actuallyHurt`.
+    fn actually_hurt(
+        &self,
+        caller: &dyn EntityBase,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+        damage: f32,
+    ) {
+        if self.as_animal().is_some() {
+            self.get_mob_entity().reset_love_ticks();
+        }
+        self.get_mob_entity().living_entity.actually_hurt(
+            caller,
+            damage_type,
+            source,
+            cause,
+            damage,
+        );
     }
 
     /// Called after the base damage attempt, whether or not it applied damage.

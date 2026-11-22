@@ -122,7 +122,7 @@ impl CreakingEntity {
         if now_can_move {
             self.make_sound(Sound::EntityCreakingUnfreeze);
         } else {
-            self.stop_in_place();
+            self.mob_entity.stop_in_place();
             self.make_sound(Sound::EntityCreakingFreeze);
         }
         self.set_can_move(now_can_move);
