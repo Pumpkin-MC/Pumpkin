@@ -94,7 +94,7 @@ impl CommandExecutor for GiveExecutor {
             if !should_skip {
                 last_target = Some(target);
 
-                target.add_effect(Effect {
+                let new_effect = Effect {
                     effect_type: effect,
                     duration: duration_ticks,
                     amplifier,
@@ -102,7 +102,13 @@ impl CommandExecutor for GiveExecutor {
                     show_particles: !hide_particles,
                     show_icon: true,
                     blend: false,
-                });
+                };
+                if let Some(player) = target.get_player() {
+                    player.add_effect(new_effect);
+                } else {
+                    target.add_effect(new_effect);
+                }
+
                 successes += 1;
             }
         }
