@@ -23,6 +23,14 @@ pub enum LevelEvent {
     // There are hundreds of these, adding only what we need for now
     /// Emits block break particles at the target position.
     ParticlesDestroyBlock = 2001,
+    /// Starts rain; `data` is the intensity from 0 to 65535.
+    StartRaining = 3001,
+    /// Starts a thunderstorm; `data` is the intensity from 0 to 65535.
+    StartThunderstorm = 3002,
+    /// Stops rain.
+    StopRaining = 3003,
+    /// Stops a thunderstorm.
+    StopThunderstorm = 3004,
     /// Initiates a block cracking animation.
     BlockStartBreak = 3600,
     /// Cancels or completes a block cracking animation.

@@ -926,55 +926,71 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(self.get(&world)?.is_thundering())
     }
 
-    fn get_weather_duration(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
-        let world_ref = self.get(&world)?;
-        let weather = world_ref.weather.lock_ignore_poison();
-        Ok(weather.rain_time)
+    fn has_weather(&mut self, world: Resource<World>) -> wasmtime::Result<bool> {
+        Ok(self.get(&world)?.can_have_weather())
     }
 
-    fn set_weather_duration(
+    fn get_weather(
         &mut self,
         world: Resource<World>,
-        duration: i32,
-    ) -> wasmtime::Result<()> {
-        let world_ref = self.get(&world)?;
-        let mut weather = world_ref.weather.lock_ignore_poison();
-        weather.rain_time = duration;
-        Ok(())
-    }
-
-    fn get_thunder_duration(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
-        let world_ref = self.get(&world)?;
-        let weather = world_ref.weather.lock_ignore_poison();
-        Ok(weather.thunder_time)
-    }
-
-    fn set_thunder_duration(
-        &mut self,
-        world: Resource<World>,
-        duration: i32,
-    ) -> wasmtime::Result<()> {
-        let world_ref = self.get(&world)?;
-        let mut weather = world_ref.weather.lock_ignore_poison();
-        weather.thunder_time = duration;
-        Ok(())
-    }
-
-    fn get_clear_weather_duration(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
-        let world_ref = self.get(&world)?;
-        let weather = world_ref.weather.lock_ignore_poison();
-        Ok(weather.clear_weather_time)
+    ) -> wasmtime::Result<pumpkin::plugin::world::WeatherState> {
+        let state = self.get(&world)?.weather_state();
+        Ok(pumpkin::plugin::world::WeatherState {
+            clear_time: state.clear_weather_time,
+            rain_time: state.rain_time,
+            thunder_time: state.thunder_time,
+            raining: state.raining,
+            thundering: state.thundering,
+            rain_level: state.rain_level,
+            thunder_level: state.thunder_level,
+            phases: state
+                .phases
+                .into_iter()
+                .map(|(id, phase)| pumpkin::plugin::world::WeatherPhaseState {
+                    id,
+                    active: phase.active,
+                    ticks_left: phase.time,
+                })
+                .collect(),
+        })
     }
 
     fn set_clear_weather_duration(
         &mut self,
         world: Resource<World>,
-        duration: i32,
+        ticks: i32,
     ) -> wasmtime::Result<()> {
-        let world_ref = self.get(&world)?;
-        let mut weather = world_ref.weather.lock_ignore_poison();
-        weather.clear_weather_time = duration;
+        self.get(&world)?
+            .set_weather_durations(Some(ticks), None, None);
         Ok(())
+    }
+
+    fn set_rain_duration(&mut self, world: Resource<World>, ticks: i32) -> wasmtime::Result<()> {
+        self.get(&world)?
+            .set_weather_durations(None, Some(ticks), None);
+        Ok(())
+    }
+
+    fn set_thunder_duration(&mut self, world: Resource<World>, ticks: i32) -> wasmtime::Result<()> {
+        self.get(&world)?
+            .set_weather_durations(None, None, Some(ticks));
+        Ok(())
+    }
+
+    fn get_weather_duration(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
+        Ok(self.get(&world)?.weather_state().rain_time)
+    }
+
+    fn set_weather_duration(&mut self, world: Resource<World>, ticks: i32) -> wasmtime::Result<()> {
+        self.set_rain_duration(world, ticks)
+    }
+
+    fn get_thunder_duration(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
+        Ok(self.get(&world)?.weather_state().thunder_time)
+    }
+
+    fn get_clear_weather_duration(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
+        Ok(self.get(&world)?.weather_state().clear_weather_time)
     }
 
     fn broadcast_system_message(
@@ -1529,6 +1545,41 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
     ) -> wasmtime::Result<()> {
         let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
         run_blocking(accessor, move || world.set_thundering(thundering)).await
+    }
+
+    async fn set_weather(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        clear_time: i32,
+        rain_time: i32,
+        raining: bool,
+        thundering: bool,
+    ) -> wasmtime::Result<()> {
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        run_blocking(accessor, move || {
+            world.set_weather(
+                pumpkin_core::plugin::api::events::world::weather_change::WeatherCause::Plugin,
+                clear_time.max(0),
+                rain_time.max(0),
+                raining,
+                thundering,
+            );
+        })
+        .await
+    }
+
+    async fn set_weather_phase(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        id: String,
+        active: bool,
+        ticks: Option<i32>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        run_blocking(accessor, move || {
+            world.set_weather_phase(&id, active, ticks)
+        })
+        .await
     }
 
     async fn create_explosion(
