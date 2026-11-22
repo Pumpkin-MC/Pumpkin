@@ -18,7 +18,7 @@ use crate::entity::item::ItemEntity;
 use crate::entity::mob::Mob;
 use crate::entity::mob::sulfur_cube::{SulfurCubeEntity, is_swallowable_item};
 use crate::entity::passive::abstract_horse::try_equip_dispenser_chest;
-use crate::entity::passive::armadillo::ArmadilloEntity;
+use crate::entity::passive::armadillo::{ArmadilloEntity, BRUSH_DURABILITY_COST};
 use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::projectile::egg::EggEntity;
@@ -951,7 +951,7 @@ impl DispenserBlock {
                 continue;
             };
             if armadillo.brush_off_scute(None, item) {
-                let _ = item.damage_item(16);
+                let _ = item.damage_item(BRUSH_DURABILITY_COST);
                 Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
                 return;
             }

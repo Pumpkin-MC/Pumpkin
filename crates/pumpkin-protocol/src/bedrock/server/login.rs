@@ -19,38 +19,74 @@ pub struct SLogin {
     pub raw_token: Vec<u8>,
 }
 
+/// Reads a Bedrock connection request (`VarUInt` length + LE-u32 JWT + LE-u32 raw client token),
+/// shared between `Login` (ID 1) and `SubClientLogin` (ID 94).
+pub(crate) fn read_connection_request<R: Read>(
+    reader: &mut R,
+) -> Result<(Vec<u8>, Vec<u8>), Error> {
+    let connection_request_len = VarUInt::read(reader)?.0 as usize;
+    if connection_request_len > MAX_PACKET_DATA_SIZE {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "Connection request length {connection_request_len} exceeds limit {MAX_PACKET_DATA_SIZE}"
+            ),
+        ));
+    }
+
+    let mut remaining = connection_request_len;
+    if remaining < 4 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("Connection request too short ({remaining} bytes) for JWT length"),
+        ));
+    }
+    let jwt_len = u32::read(reader)? as usize;
+    remaining -= 4;
+    if jwt_len > remaining {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("JWT length {jwt_len} exceeds remaining connection request bytes {remaining}"),
+        ));
+    }
+    let mut jwt = vec![0; jwt_len];
+    reader.read_exact(&mut jwt)?;
+    remaining -= jwt_len;
+
+    if remaining < 4 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("Connection request too short ({remaining} bytes) for raw token length"),
+        ));
+    }
+    let raw_token_len = u32::read(reader)? as usize;
+    remaining -= 4;
+    if raw_token_len > remaining {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "Raw token length {raw_token_len} exceeds remaining connection request bytes {remaining}"
+            ),
+        ));
+    }
+    let mut raw_token = vec![0; raw_token_len];
+    reader.read_exact(&mut raw_token)?;
+    remaining -= raw_token_len;
+
+    if remaining != 0 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("Connection request has {remaining} unexpected trailing bytes"),
+        ));
+    }
+
+    Ok((jwt, raw_token))
+}
+
 impl PacketRead for SLogin {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let protocol_version = i32::read_be(reader)?;
-        let connection_request_len = VarUInt::read(reader)?.0 as usize;
-        if connection_request_len > MAX_PACKET_DATA_SIZE {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "Connection request length {connection_request_len} exceeds limit {MAX_PACKET_DATA_SIZE}"
-                ),
-            ));
-        }
-
-        let jwt_len = u32::read(reader)? as usize;
-        if jwt_len > MAX_PACKET_DATA_SIZE {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("JWT length {jwt_len} exceeds limit {MAX_PACKET_DATA_SIZE}"),
-            ));
-        }
-        let mut jwt = vec![0; jwt_len];
-        reader.read_exact(&mut jwt)?;
-
-        let raw_token_len = u32::read(reader)? as usize;
-        if raw_token_len > MAX_PACKET_DATA_SIZE {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("Raw token length {raw_token_len} exceeds limit {MAX_PACKET_DATA_SIZE}"),
-            ));
-        }
-        let mut raw_token = vec![0; raw_token_len];
-        reader.read_exact(&mut raw_token)?;
+        let (jwt, raw_token) = read_connection_request(reader)?;
 
         Ok(Self {
             protocol_version,
