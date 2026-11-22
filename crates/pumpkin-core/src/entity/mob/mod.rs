@@ -2278,7 +2278,11 @@ pub trait Mob: EntityBase + Send + Sync {
     fn on_attack(&self, _target: &dyn EntityBase) {}
 
     fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
-        self.get_mob_entity().try_attack(self.get_entity(), target)
+        // Damage attribution needs the living attacker, not just its entity data.
+        let attacker = self
+            .get_mob()
+            .map_or(self.get_entity() as &dyn EntityBase, |mob| mob);
+        self.get_mob_entity().try_attack(attacker, target)
     }
 
     fn do_push(&self, _entity: &Arc<dyn EntityBase>) {}

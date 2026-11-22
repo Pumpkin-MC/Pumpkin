@@ -258,8 +258,8 @@ impl Mob for IronGolemEntity {
             damage,
             DamageType::MOB_ATTACK,
             None,
-            Some(entity),
-            Some(entity),
+            Some(self),
+            Some(self),
         );
         if hurt {
             let knockback_resistance = target.get_living_entity().map_or(0.0, |living| {

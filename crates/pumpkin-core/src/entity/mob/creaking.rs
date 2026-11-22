@@ -336,6 +336,10 @@ impl Mob for CreakingEntity {
         self.attack_target(target)
     }
 
+    fn on_attack(&self, _target: &dyn EntityBase) {
+        self.make_sound(Sound::EntityCreakingAttack);
+    }
+
     fn mob_tick_death(&self, death_time: u8) -> bool {
         self.tick_teardown(death_time)
     }

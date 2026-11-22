@@ -30,7 +30,7 @@ impl SpawnStrategy {
                 above_state.get_block_collision_shapes().next().is_none()
                     && (!matches!(self, Self::OnTopOfColliderNoLeaves)
                         || !state.id.to_block().has_tag(&BlockTag::MINECRAFT_LEAVES))
-                    && is_face_full_up(state)
+                    && (state.is_full_cube() || state.has_full_top_collision_face())
             }
             Self::LegacyIronGolem => {
                 let block = Block::from_state_id(state.id);
@@ -55,17 +55,6 @@ impl SpawnStrategy {
             }
         }
     }
-}
-
-fn is_face_full_up(state: &BlockState) -> bool {
-    state.is_full_cube()
-        || state.get_block_collision_shapes().any(|shape| {
-            shape.max.y >= 1.0
-                && shape.min.x <= 0.0
-                && shape.min.z <= 0.0
-                && shape.max.x >= 1.0
-                && shape.max.z >= 1.0
-        })
 }
 
 #[expect(clippy::too_many_arguments)]
@@ -161,4 +150,23 @@ fn move_to_possible_spawn_position(
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::block_properties::{Half, WhiteWoolStairsLikeProperties};
+
+    use super::*;
+
+    #[test]
+    fn creaking_spawn_support_uses_the_whole_top_collision_face() {
+        let block = &Block::OAK_STAIRS;
+        let mut props = WhiteWoolStairsLikeProperties::from_state_id(block.default_state.id);
+        let strategy = SpawnStrategy::OnTopOfColliderNoLeaves;
+        let air = Block::AIR.default_state;
+        props.half = Half::Bottom;
+        assert!(!strategy.can_spawn_on(props.to_state_id(block).to_state(), air));
+        props.half = Half::Top;
+        assert!(strategy.can_spawn_on(props.to_state_id(block).to_state(), air));
+    }
 }

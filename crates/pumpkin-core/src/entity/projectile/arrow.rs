@@ -672,7 +672,7 @@ impl ArrowEntity {
                 if pierce == 0 {
                     living.set_arrow_count(living.get_arrow_count() + 1);
                 }
-                self.do_knockback(living);
+                self.do_knockback(target.as_ref(), living);
                 self.do_post_hurt_effects(living);
                 if let Some(hit_player) = target.get_player()
                     && let Some(shooter) = self.owner.get_player(&world)
@@ -738,7 +738,7 @@ impl ArrowEntity {
     }
 
     /// Punch pushes the target along the arrow's flight, less for knockback resistant mobs.
-    fn do_knockback(&self, living: &LivingEntity) {
+    fn do_knockback(&self, target: &dyn EntityBase, living: &LivingEntity) {
         let punch = self.punch_level.load(Ordering::Relaxed);
         if punch == 0 {
             return;
@@ -750,12 +750,10 @@ impl ArrowEntity {
         let velocity = self.entity.velocity.load();
         let push = Vector3::new(velocity.x, 0.0, velocity.z).normalize()
             * (f64::from(punch) * 0.6 * resistance);
-        if push.length_squared() > 0.0 {
-            let target = &living.entity;
-            target
-                .velocity
-                .store(target.velocity.load() + Vector3::new(push.x, 0.1, push.z));
-            target.velocity_dirty.store(true, Ordering::Relaxed);
+        if push.length_squared() > 0.0
+            && target.apply_push_impulse(Vector3::new(push.x, 0.1, push.z))
+        {
+            living.entity.velocity_dirty.store(true, Ordering::Relaxed);
         }
     }
 }

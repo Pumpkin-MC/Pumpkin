@@ -238,6 +238,42 @@ impl BlockState {
             .map(|&id| COLLISION_SHAPES[id as usize])
     }
 
+    /// Returns whether the combined collision shapes cover the entire top face.
+    #[must_use]
+    pub fn has_full_top_collision_face(&self) -> bool {
+        let mut boxes = Vec::new();
+        let mut xs = vec![0.0, 1.0];
+        let mut zs = vec![0.0, 1.0];
+        for shape in self.get_block_collision_shapes() {
+            if shape.max.y < 1.0 {
+                continue;
+            }
+            let (x0, x1) = (shape.min.x.max(0.0), shape.max.x.min(1.0));
+            let (z0, z1) = (shape.min.z.max(0.0), shape.max.z.min(1.0));
+            if x0 < x1 && z0 < z1 {
+                xs.push(x0);
+                xs.push(x1);
+                zs.push(z0);
+                zs.push(z1);
+                boxes.push((x0, x1, z0, z1));
+            }
+        }
+        if boxes.is_empty() {
+            return false;
+        }
+        xs.sort_by(f64::total_cmp);
+        zs.sort_by(f64::total_cmp);
+        xs.dedup();
+        zs.dedup();
+        xs.windows(2).all(|xw| {
+            zs.windows(2).all(|zw| {
+                boxes.iter().any(|&(x0, x1, z0, z1)| {
+                    x0 <= xw[0] && xw[1] <= x1 && z0 <= zw[0] && zw[1] <= z1
+                })
+            })
+        })
+    }
+
     /// Returns block-local collision shapes with vanilla's coordinate-derived offset applied.
     pub fn get_block_collision_shapes_at(
         &self,

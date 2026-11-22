@@ -116,8 +116,8 @@ pub fn mace_smash_knockback(world: &World, attacker: &dyn EntityBase, victim: &d
             let entity = nearby.get_entity();
             if let Some(player) = nearby.get_player() {
                 player.set_velocity(entity.velocity.load() + velocity);
-            } else {
-                entity.add_velocity(velocity);
+            } else if nearby.apply_push_impulse(velocity) {
+                entity.send_velocity();
             }
         }
     }

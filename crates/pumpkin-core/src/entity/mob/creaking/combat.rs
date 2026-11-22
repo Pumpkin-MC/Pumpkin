@@ -70,7 +70,7 @@ impl CreakingEntity {
         self.attack_animation_remaining_ticks
             .store(ATTACK_ANIMATION_DURATION, Relaxed);
         let entity = self.get_entity();
-        // The vanilla client plays the attack sound when handling this status.
+        // Vanilla sends the attack status even when the damage is rejected.
         entity.world.load().broadcast_entity_event(
             entity,
             EntityStatus::StartAttacking,
@@ -169,6 +169,7 @@ impl CreakingEntity {
             heart.creaking_hurt(world, self);
         }
         if heart.can_notify_protector(world, self) {
+            self.reset_ambient_sound_time();
             self.make_sound(Sound::EntityCreakingSway);
         }
     }
@@ -250,5 +251,208 @@ impl CustomSound for CreakingEntity {
 
     fn hurt_sound(&self) -> Option<Sound> {
         self.is_heart_bound().then_some(Sound::EntityCreakingSway)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+
+    use super::*;
+    use crate::{
+        block::entities::BlockEntity,
+        entity::{
+            Entity,
+            ai::test_support::world,
+            passive::{cow::CowEntity, iron_golem::IronGolemEntity, wolf::WolfEntity},
+            projectile::{ProjectileHit, arrow::ArrowEntity},
+        },
+    };
+
+    fn add_linked_creaking(world: &Arc<World>) -> Arc<CreakingEntity> {
+        let home = BlockPos::new(8, 64, 8);
+        let chunk = home.chunk_position();
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk, ChunkData::empty_sync(chunk.x, chunk.y));
+        world.set_block_state(
+            &home,
+            Block::CREAKING_HEART.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
+        let creaking = CreakingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(10.5, 64.0, 8.5),
+            &EntityType::CREAKING,
+        ));
+        creaking.set_transient(home);
+        let mut nbt = NbtCompound::new();
+        nbt.put_uuid("creaking", creaking.get_entity().entity_uuid);
+        world.add_block_entity(Arc::new(CreakingHeartBlockEntity::from_nbt(&nbt, home)));
+        creaking
+    }
+
+    fn assert_protected_melee(creaking: &CreakingEntity, attacker: &dyn Mob) {
+        let attack = || attacker.do_hurt_target(creaking);
+        let health = &creaking.mob_entity.living_entity.health;
+        let before = health.load();
+        let accepted = attack();
+        let after = health.load();
+        let repeated = attack();
+        assert_eq!(before, 1.0);
+        assert!(accepted, "a living attacker should trigger a protected hit");
+        assert_eq!(after, before);
+        assert!(!repeated, "the accepted hit should start the cooldown");
+    }
+
+    #[tokio::test]
+    async fn creaking_accepts_wolf_melee_as_a_protected_hit()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let creaking = add_linked_creaking(&world);
+        let wolf = WolfEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(11.5, 64.0, 8.5),
+            &EntityType::WOLF,
+        ));
+        assert_protected_melee(creaking.as_ref(), wolf.as_ref());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn creaking_accepts_iron_golem_melee_as_a_protected_hit()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let creaking = add_linked_creaking(&world);
+        let golem = IronGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(11.5, 64.0, 8.5),
+            &EntityType::IRON_GOLEM,
+        ));
+        assert_protected_melee(creaking.as_ref(), golem.as_ref());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn creaking_punch_arrow_preserves_the_protected_hit_but_respects_freeze()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for can_move in [true, false] {
+            let folder = tempfile::tempdir()?;
+            let world = world(&folder);
+            let creaking = add_linked_creaking(&world);
+            creaking.set_can_move(can_move);
+            let arrow = ArrowEntity::new(
+                Entity::new(
+                    world.clone(),
+                    Vector3::new(9.5, 65.0, 8.5),
+                    &EntityType::ARROW,
+                ),
+                None,
+            );
+            arrow.punch_level.store(1, Relaxed);
+            arrow
+                .get_entity()
+                .velocity
+                .store(Vector3::new(1.0, 0.0, 0.0));
+            // New entities start dirty before their first tracker update.
+            creaking.get_entity().velocity_dirty.store(false, Relaxed);
+            assert_eq!(creaking.get_entity().velocity.load(), Vector3::default());
+            assert_eq!(
+                creaking
+                    .invulnerability_animation_remaining_ticks
+                    .load(Relaxed),
+                0
+            );
+
+            arrow.on_hit(ProjectileHit::Entity {
+                entity: creaking.clone(),
+                hit_pos: creaking.get_entity().pos.load(),
+                normal: Vector3::new(-1.0, 0.0, 0.0),
+            });
+
+            assert_eq!(creaking.mob_entity.living_entity.health.load(), 1.0);
+            assert_eq!(
+                creaking
+                    .invulnerability_animation_remaining_ticks
+                    .load(Relaxed),
+                INVULNERABILITY_ANIMATION_DURATION
+            );
+            let motion = creaking.get_entity().velocity.load();
+            let dirty = creaking.get_entity().velocity_dirty.load(Relaxed);
+            world.level.shutdown().await;
+            if can_move {
+                assert!(motion.x > 0.0 && motion.y > 0.0);
+                assert!(dirty);
+            } else {
+                assert_eq!(motion, Vector3::default());
+                assert!(!dirty);
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn creaking_mace_shockwave_respects_freeze() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let creaking = add_linked_creaking(&world);
+        let make_cow = |x| {
+            CowEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(x, 64.0, 8.5),
+                &EntityType::COW,
+            ))
+        };
+        let attacker = make_cow(6.5);
+        let victim = make_cow(9.5);
+        world.add_entity_silent(creaking.clone());
+        let entity = creaking.get_entity();
+        assert_eq!(entity.velocity.load(), Vector3::default());
+        crate::entity::combat::mace_smash_knockback(&world, attacker.as_ref(), victim.as_ref());
+        let moving = entity.velocity.load();
+        entity.velocity.store(Vector3::default());
+        creaking.set_can_move(false);
+        crate::entity::combat::mace_smash_knockback(&world, attacker.as_ref(), victim.as_ref());
+        let frozen = entity.velocity.load();
+        world.level.shutdown().await;
+        assert!(moving.x > 0.0 && moving.y > 0.0);
+        assert_eq!(frozen, Vector3::default());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn creaking_protected_hit_resets_ambient_sound_time()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let creaking = add_linked_creaking(&world);
+        let attacker = WolfEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(11.5, 64.0, 8.5),
+            &EntityType::WOLF,
+        ));
+        let timer = &creaking.mob_entity.ambient_sound_time;
+        timer.store(20, Relaxed);
+        let accepted = creaking.damage_with_context(
+            creaking.as_ref(),
+            1.0,
+            DamageType::MOB_ATTACK,
+            None,
+            Some(attacker.as_ref()),
+            Some(attacker.as_ref()),
+        );
+        let after = timer.load(Relaxed);
+        world.level.shutdown().await;
+
+        assert!(accepted);
+        assert_eq!(after, -creaking.get_ambient_sound_interval());
+        Ok(())
     }
 }
