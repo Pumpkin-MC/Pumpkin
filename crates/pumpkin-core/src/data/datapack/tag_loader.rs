@@ -4,6 +4,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use super::file_loader::{collect_files, load_files_parallel};
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DynamicTagEntry {
     pub id: String,
@@ -52,7 +54,7 @@ pub fn load_tags_from_dir<S1: std::hash::BuildHasher + Default, S2: std::hash::B
                             format!("worldgen/{}", wg_entry.file_name().to_string_lossy());
                         let category_map = tags.entry(sub_cat).or_default();
                         let before = category_map.len();
-                        load_tag_category_recursive(namespace, &wg_path, &wg_path, category_map);
+                        load_tag_category(namespace, &wg_path, category_map);
                         total_loaded += category_map.len() - before;
                     }
                 }
@@ -60,7 +62,7 @@ pub fn load_tags_from_dir<S1: std::hash::BuildHasher + Default, S2: std::hash::B
         } else {
             let category_map = tags.entry(cat_name).or_default();
             let before = category_map.len();
-            load_tag_category_recursive(namespace, &path, &path, category_map);
+            load_tag_category(namespace, &path, category_map);
             total_loaded += category_map.len() - before;
         }
     }
@@ -68,64 +70,49 @@ pub fn load_tags_from_dir<S1: std::hash::BuildHasher + Default, S2: std::hash::B
     total_loaded
 }
 
-fn load_tag_category_recursive<S: std::hash::BuildHasher>(
+fn load_tag_category<S: std::hash::BuildHasher>(
     namespace: &str,
     base_dir: &Path,
-    current_dir: &Path,
     category_map: &mut HashMap<String, DynamicTagEntry, S>,
 ) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            load_tag_category_recursive(namespace, base_dir, &path, category_map);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            && let Ok(rel_path) = path.strip_prefix(base_dir)
-        {
-            let mut stem_path = rel_path.to_string_lossy().to_string();
-            if let Some(stem) = stem_path.strip_suffix(".json") {
-                stem_path = stem.to_string();
-            }
-            let stem_path = stem_path.replace('\\', "/");
-            let tag_id = format!("{namespace}:{stem_path}");
-
-            if let Ok(content) = fs::read_to_string(&path)
-                && let Ok(raw) = serde_json::from_str::<RawTagFile>(&content)
-            {
-                let mut string_values = Vec::with_capacity(raw.values.len());
-                for val in raw.values {
-                    match val {
-                        RawTagValue::String(s) => string_values.push(s),
-                        RawTagValue::Object { id } => string_values.push(id),
-                    }
+    let files = collect_files(base_dir, "json");
+    let parsed = load_files_parallel(
+        namespace,
+        base_dir,
+        &files,
+        "json",
+        |_id, _path, content| {
+            let raw = serde_json::from_str::<RawTagFile>(content).ok()?;
+            let mut string_values = Vec::with_capacity(raw.values.len());
+            for val in raw.values {
+                match val {
+                    RawTagValue::String(s) => string_values.push(s),
+                    RawTagValue::Object { id } => string_values.push(id),
                 }
+            }
+            Some((raw.replace, string_values))
+        },
+    );
 
-                if raw.replace {
-                    category_map.insert(
-                        tag_id.clone(),
-                        DynamicTagEntry {
-                            id: tag_id,
-                            values: string_values,
-                        },
-                    );
-                } else {
-                    let entry =
-                        category_map
-                            .entry(tag_id.clone())
-                            .or_insert_with(|| DynamicTagEntry {
-                                id: tag_id,
-                                values: Vec::new(),
-                            });
-                    for val in string_values {
-                        if !entry.values.contains(&val) {
-                            entry.values.push(val);
-                        }
-                    }
+    for (tag_id, _rel, (replace, string_values)) in parsed {
+        if replace {
+            category_map.insert(
+                tag_id.clone(),
+                DynamicTagEntry {
+                    id: tag_id,
+                    values: string_values,
+                },
+            );
+        } else {
+            let entry = category_map
+                .entry(tag_id.clone())
+                .or_insert_with(|| DynamicTagEntry {
+                    id: tag_id,
+                    values: Vec::new(),
+                });
+            for val in string_values {
+                if !entry.values.contains(&val) {
+                    entry.values.push(val);
                 }
             }
         }

@@ -3,6 +3,7 @@ pub mod context_provider_loader;
 pub mod damage_type_loader;
 pub mod dynamic_registry_loader;
 pub mod dynamic_registry_manager;
+pub mod file_loader;
 pub mod function_loader;
 pub mod item_modifier_loader;
 pub mod loot_table_loader;
@@ -18,6 +19,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+
+use rayon::prelude::*;
 use tracing::{info, warn};
 
 use pumpkin_data::damage::DamageType;
@@ -34,6 +37,7 @@ use crate::world::loot::LootTableHandle;
 
 use self::context_provider_loader::ContextProviderRegistry;
 use self::damage_type_loader::{DamageTypeDefinition, DamageTypeEntry, DamageTypeRegistry};
+use self::file_loader::collect_files;
 use self::test_loader::{
     TestInstance, TestInstanceRegistry, load_test_instances_from_dir, to_registry_entry,
 };
@@ -2071,50 +2075,28 @@ fn read_pack_mcmeta(pack_path: &Path) -> (String, u32, Vec<KnownPackData>) {
     (String::new(), 61, Vec::new())
 }
 
-fn load_recipes_recursive(
-    namespace: &str,
-    base_dir: &Path,
-    current_dir: &Path,
-    all_recipes: &mut Vec<DynamicRecipe>,
-    count: &mut usize,
-) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            load_recipes_recursive(namespace, base_dir, &path, all_recipes, count);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-        {
-            let Ok(relative_path) = path.strip_prefix(base_dir) else {
-                continue;
-            };
-
-            let recipe_name = relative_path
-                .with_extension("")
-                .to_string_lossy()
-                .replace('\\', "/");
-
-            if let Ok(content) = fs::read_to_string(&path)
-                && let Some(recipe) = recipe_loader::parse_recipe(namespace, &recipe_name, &content)
-            {
-                all_recipes.push(recipe);
-                *count += 1;
-            }
-        }
-    }
-}
-
 fn load_recipes_from_dir(
     namespace: &str,
     dir: &Path,
     all_recipes: &mut Vec<DynamicRecipe>,
     count: &mut usize,
 ) {
-    load_recipes_recursive(namespace, dir, dir, all_recipes, count);
+    let files = collect_files(dir, "json");
+    let recipes: Vec<DynamicRecipe> = files
+        .par_iter()
+        .filter_map(|path| {
+            let relative_path = path.strip_prefix(dir).ok()?;
+            let recipe_name = relative_path
+                .with_extension("")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let content = fs::read_to_string(path).ok()?;
+            recipe_loader::parse_recipe(namespace, &recipe_name, &content)
+        })
+        .collect();
+
+    *count += recipes.len();
+    all_recipes.extend(recipes);
 }
 #[cfg(test)]
 mod tests {

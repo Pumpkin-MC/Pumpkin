@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -8,6 +8,9 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use rayon::prelude::*;
 use serde_json::Value;
+use tracing::warn;
+
+use super::file_loader::{collect_files, load_files_parallel};
 
 pub const DYNAMIC_REGISTRIES: &[(&str, &[&str])] = &[
     ("minecraft:wolf_variant", &["wolf_variant", "wolf_variants"]),
@@ -271,68 +274,23 @@ pub fn json_to_registry_nbt_bytes(val: &Value) -> Box<[u8]> {
     }
 }
 
-/// Collects all JSON files recursively before processing them in parallel.
-fn collect_registry_files(current_dir: &Path, files: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-
-        if path.is_dir() {
-            collect_registry_files(&path, files);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-        {
-            files.push(path);
+fn load_registry_dir(namespace: &str, dir: &Path) -> Vec<RegistryEntryData> {
+    let files = collect_files(dir, "json");
+    load_files_parallel(namespace, dir, &files, "json", |_id, path, content| {
+        match serde_json::from_str::<Value>(content) {
+            Ok(val) => Some(json_to_registry_nbt_bytes(&val)),
+            Err(error) => {
+                warn!("Failed to parse registry entry {}: {error}", path.display());
+                None
+            }
         }
-    }
-}
-
-/// Loads a single registry JSON file and converts it into registry data.
-fn load_registry_file(namespace: &str, base_dir: &Path, path: &Path) -> Option<RegistryEntryData> {
-    let rel_path = path.strip_prefix(base_dir).ok()?;
-
-    let mut stem_path = rel_path.to_string_lossy().to_string();
-
-    if let Some(stem) = stem_path.strip_suffix(".json") {
-        stem_path = stem.to_string();
-    }
-
-    let stem_path = stem_path.replace('\\', "/");
-    let entry_id = format!("{namespace}:{stem_path}");
-
-    let content = fs::read_to_string(path).ok()?;
-    let val = serde_json::from_str::<Value>(&content).ok()?;
-    let nbt_bytes = json_to_registry_nbt_bytes(&val);
-
-    Some(RegistryEntryData {
-        entry_id,
-        data: Some(nbt_bytes),
     })
-}
-
-/// Recursively loads JSON files from `current_dir` and inserts them into `registry_map`.
-fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
-    namespace: &str,
-    base_dir: &Path,
-    current_dir: &Path,
-    registry_map: &mut HashMap<String, RegistryEntryData, S>,
-) {
-    let mut files = Vec::new();
-    collect_registry_files(current_dir, &mut files);
-    files.sort_unstable();
-
-    let loaded_entries: Vec<RegistryEntryData> = files
-        .par_iter()
-        .filter_map(|path| load_registry_file(namespace, base_dir, path))
-        .collect();
-
-    for entry in loaded_entries {
-        registry_map.insert(entry.entry_id.clone(), entry);
-    }
+    .into_iter()
+    .map(|(entry_id, _, bytes)| RegistryEntryData {
+        entry_id,
+        data: Some(bytes),
+    })
+    .collect()
 }
 
 const EXCLUDED_REGISTRY_DIRS: &[&str] = &[
@@ -362,6 +320,41 @@ const EXCLUDED_REGISTRY_DIRS: &[&str] = &[
     "datapacks",
 ];
 
+fn registry_directories(namespace: &Path, prefix: &Path, dirs: &mut BTreeSet<PathBuf>) {
+    let dir = namespace.join(prefix);
+    let entries = match fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(error) => {
+            warn!(
+                "Failed to read registry directory {}: {error}",
+                dir.display()
+            );
+            return;
+        }
+    };
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                warn!(
+                    "Failed to read directory entry in {}: {error}",
+                    dir.display()
+                );
+                continue;
+            }
+        };
+        if !entry.path().is_dir() {
+            continue;
+        }
+        let relative = prefix.join(entry.file_name());
+        if relative == Path::new("worldgen") {
+            registry_directories(namespace, &relative, dirs);
+        } else {
+            dirs.insert(relative);
+        }
+    }
+}
+
 /// Scans a namespace directory for any dynamic registry subfolders and loads their JSON definitions.
 pub fn load_dynamic_registries_from_ns<
     S1: std::hash::BuildHasher + Default,
@@ -371,63 +364,72 @@ pub fn load_dynamic_registries_from_ns<
     ns_path: &Path,
     registries: &mut HashMap<String, HashMap<String, RegistryEntryData, S1>, S2>,
 ) -> usize {
+    let mut dirs = BTreeSet::new();
+    registry_directories(ns_path, Path::new(""), &mut dirs);
+    let mut uses = HashMap::new();
+    let mut jobs = Vec::new();
+    for &(registry_id, aliases) in DYNAMIC_REGISTRIES {
+        // Empty known registries are included in the network registry list.
+        registries.entry(registry_id.to_owned()).or_default();
+        let paths: Vec<_> = aliases
+            .iter()
+            .filter_map(|name| dirs.get(Path::new(name)))
+            .collect();
+        if !paths.is_empty() {
+            for &path in &paths {
+                *uses.entry(path).or_insert(0usize) += 1;
+            }
+            jobs.push((registry_id.to_owned(), paths));
+        }
+    }
+    for dir in &dirs {
+        if uses.contains_key(dir)
+            || EXCLUDED_REGISTRY_DIRS
+                .iter()
+                .any(|name| dir == Path::new(name))
+        {
+            continue;
+        }
+        let path = dir
+            .to_string_lossy()
+            .replace(std::path::MAIN_SEPARATOR, "/");
+        uses.insert(dir, 1);
+        jobs.push((format!("{namespace}:{path}"), vec![dir]));
+    }
+
+    // Several registries share directory aliases with different override orders.
+    // Parse each directory once, then apply each registry's ordered list.
+    let mut prepared: HashMap<_, _> = uses
+        .into_par_iter()
+        .map(|(path, uses)| {
+            (
+                path,
+                (uses, load_registry_dir(namespace, &ns_path.join(path))),
+            )
+        })
+        .collect();
     let mut total_loaded = 0;
-    let mut visited_paths = HashSet::new();
-
-    for &(registry_id, dir_names) in DYNAMIC_REGISTRIES {
-        let registry_map = registries.entry(registry_id.to_string()).or_default();
-        for &dir_name in dir_names {
-            let reg_dir = ns_path.join(dir_name);
-            if reg_dir.is_dir() {
-                visited_paths.insert(reg_dir.clone());
-                let before = registry_map.len();
-                load_registry_dir_recursive(namespace, &reg_dir, &reg_dir, registry_map);
-                total_loaded += registry_map.len() - before;
-            }
-        }
-    }
-
-    // Auto-discover any additional registry folders in the namespace (including custom/modded ones)
-    if let Ok(entries) = fs::read_dir(ns_path) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let name = entry.file_name().to_string_lossy().to_string();
-            if !path.is_dir()
-                || EXCLUDED_REGISTRY_DIRS.contains(&name.as_str())
-                || visited_paths.contains(&path)
-            {
+    for (id, paths) in jobs {
+        let registry = registries.entry(id).or_default();
+        let before = registry.len();
+        for path in paths {
+            let Some((remaining, entries)) = prepared.get_mut(path) else {
                 continue;
-            }
-
-            if name == "worldgen" {
-                if let Ok(sub_entries) = fs::read_dir(&path) {
-                    for sub_entry in sub_entries.flatten() {
-                        let sub_path = sub_entry.path();
-                        let sub_name = sub_entry.file_name().to_string_lossy().to_string();
-                        if sub_path.is_dir() && !visited_paths.contains(&sub_path) {
-                            let reg_id = format!("{namespace}:worldgen/{sub_name}");
-                            let registry_map = registries.entry(reg_id).or_default();
-                            let before = registry_map.len();
-                            load_registry_dir_recursive(
-                                namespace,
-                                &sub_path,
-                                &sub_path,
-                                registry_map,
-                            );
-                            total_loaded += registry_map.len() - before;
-                        }
-                    }
-                }
+            };
+            *remaining -= 1;
+            let entries = if *remaining == 0 {
+                std::mem::take(entries)
             } else {
-                let reg_id = format!("{namespace}:{name}");
-                let registry_map = registries.entry(reg_id).or_default();
-                let before = registry_map.len();
-                load_registry_dir_recursive(namespace, &path, &path, registry_map);
-                total_loaded += registry_map.len() - before;
-            }
+                entries.clone()
+            };
+            registry.extend(
+                entries
+                    .into_iter()
+                    .map(|entry| (entry.entry_id.clone(), entry)),
+            );
         }
+        total_loaded += registry.len() - before;
     }
-
     total_loaded
 }
 
@@ -500,6 +502,30 @@ pub fn merge_dynamic_registry_entries<S: std::hash::BuildHasher>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_directory_aliases_keep_registry_override_order() {
+        let dir = tempfile::tempdir().unwrap();
+        for (folder, value) in [("feature", 1), ("configured_feature", 2)] {
+            let path = dir.path().join("worldgen").join(folder);
+            fs::create_dir_all(&path).unwrap();
+            fs::write(path.join("shared.json"), value.to_string()).unwrap();
+        }
+        let mut registries: HashMap<_, HashMap<_, _>> = HashMap::new();
+        assert_eq!(
+            load_dynamic_registries_from_ns("pack", dir.path(), &mut registries),
+            2
+        );
+        for (registry, value) in [
+            ("minecraft:worldgen/feature", 2),
+            ("minecraft:worldgen/configured_feature", 1),
+        ] {
+            assert_eq!(
+                registries[registry]["pack:shared"].data,
+                Some(json_to_registry_nbt_bytes(&Value::from(value)))
+            );
+        }
+    }
 
     #[test]
     fn json_to_nbt_roundtrip() {

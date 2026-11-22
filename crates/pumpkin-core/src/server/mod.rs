@@ -171,6 +171,71 @@ pub struct Server {
     world_info_writer: Arc<dyn WorldInfoWriter>,
 }
 
+fn load_level_info(
+    world_path: &std::path::Path,
+    seed: pumpkin_util::world_seed::Seed,
+    hardcore: bool,
+) -> Result<LevelData, WorldInfoError> {
+    let level_info = match AnvilLevelInfo.read_world_info(world_path) {
+        Ok(level_info) => {
+            let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
+            if dat_path.exists() {
+                let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
+                if let Err(err) = fs::copy(&dat_path, &backup_path) {
+                    warn!("Failed to create backup {LEVEL_DAT_BACKUP_FILE_NAME}: {err}");
+                }
+            }
+            level_info
+        }
+        Err(WorldInfoError::InfoNotFound) => {
+            warn!(
+                "No {LEVEL_DAT_FILE_NAME} in {}, creating a new world with seed {}",
+                world_path.display(),
+                seed.0 as i64
+            );
+            let overworld_gen = pumpkin_world::generation::generator::VanillaGenerator::new(
+                seed,
+                Dimension::OVERWORLD,
+            );
+            let mut default_data = LevelData::from_world_generator(seed, &overworld_gen);
+            if hardcore {
+                default_data.difficulty = Difficulty::Hard;
+                default_data.difficulty_locked = true;
+            }
+            AnvilLevelInfo.write_world_info(&default_data, world_path)?;
+            default_data
+        }
+        Err(
+            error @ (WorldInfoError::UnsupportedDataVersion(_)
+            | WorldInfoError::UnsupportedLevelVersion(_)),
+        ) => {
+            error!("Failed to load world info!");
+            error!("{error}");
+            error!("Unsupported world version! See the logs for more info.");
+            return Err(error);
+        }
+        Err(error) => {
+            error!("Failed to load the world data in {}!", world_path.display());
+            error!("{error}");
+            error!(
+                "Refusing to continue: a default world would generate different terrain on top of the existing region files. Restore {LEVEL_DAT_FILE_NAME} from {LEVEL_DAT_BACKUP_FILE_NAME}, which also holds a copy of the world seed, or move the world folder aside to start a new world."
+            );
+            error!("Failed to load the world data! See the logs for more info.");
+            return Err(error);
+        }
+    };
+
+    let mut level_info = level_info;
+    if hardcore {
+        level_info.difficulty = Difficulty::Hard;
+        level_info.difficulty_locked = true;
+        if let Err(err) = AnvilLevelInfo.write_world_info(&level_info, world_path) {
+            error!("Failed to persist hardcore difficulty fix: {err}");
+        }
+    }
+    Ok(level_info)
+}
+
 impl Server {
     #[expect(clippy::too_many_lines)]
     pub async fn new(
@@ -193,67 +258,23 @@ impl Server {
 
         let world_path = basic_config.get_world_path();
 
-        let block_registry = super::block::registry::default_registry();
-
-        let level_info = match AnvilLevelInfo.read_world_info(&world_path) {
-            Ok(level_info) => {
-                let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
-                if dat_path.exists() {
-                    let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
-                    if let Err(err) = fs::copy(&dat_path, &backup_path) {
-                        warn!("Failed to create backup {LEVEL_DAT_BACKUP_FILE_NAME}: {err}");
-                    }
-                }
-                level_info
-            }
-            Err(WorldInfoError::InfoNotFound) => {
-                warn!(
-                    "No {LEVEL_DAT_FILE_NAME} in {}, creating a new world with seed {}",
-                    world_path.display(),
-                    basic_config.seed.0 as i64
-                );
-                let overworld_gen = pumpkin_world::generation::generator::VanillaGenerator::new(
-                    basic_config.seed,
-                    Dimension::OVERWORLD,
-                );
-                let mut default_data =
-                    LevelData::from_world_generator(basic_config.seed, &overworld_gen);
-                if basic_config.hardcore {
-                    default_data.difficulty = Difficulty::Hard;
-                    default_data.difficulty_locked = true;
-                }
-                AnvilLevelInfo.write_world_info(&default_data, &world_path)?;
-                default_data
-            }
-            Err(
-                error @ (WorldInfoError::UnsupportedDataVersion(_)
-                | WorldInfoError::UnsupportedLevelVersion(_)),
-            ) => {
-                error!("Failed to load world info!");
-                error!("{error}");
-                error!("Unsupported world version! See the logs for more info.");
-                return Err(error);
-            }
-            Err(error) => {
-                error!("Failed to load the world data in {}!", world_path.display());
-                error!("{error}");
-                error!(
-                    "Refusing to continue: a default world would generate different terrain on top of the existing region files. Restore {LEVEL_DAT_FILE_NAME} from {LEVEL_DAT_BACKUP_FILE_NAME}, which also holds a copy of the world seed, or move the world folder aside to start a new world."
-                );
-                error!("Failed to load the world data! See the logs for more info.");
-                return Err(error);
-            }
-        };
-
-        let mut level_info = level_info;
-        if basic_config.hardcore {
-            level_info.difficulty = Difficulty::Hard;
-            level_info.difficulty_locked = true;
-            if let Err(err) = AnvilLevelInfo.write_world_info(&level_info, &world_path) {
-                error!("Failed to persist hardcore difficulty fix: {err}");
-            }
-        }
-
+        let seed = basic_config.seed;
+        let hardcore = basic_config.hardcore;
+        let level_path = world_path.clone();
+        let (level_info, registries) = tokio::join!(
+            tokio::task::spawn_blocking(move || load_level_info(&level_path, seed, hardcore)),
+            tokio::task::spawn_blocking(|| {
+                rayon::join(crate::data::datapack::DatapackManager::new, || {
+                    rayon::join(
+                        super::block::registry::default_registry,
+                        super::item::items::default_registry,
+                    )
+                })
+            }),
+        );
+        let level_info = level_info.map_err(std::io::Error::other)??;
+        let (datapack_manager, (block_registry, item_registry)) =
+            registries.map_err(std::io::Error::other)?;
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
@@ -334,14 +355,14 @@ impl Server {
             permission_manager,
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
-            datapack_manager: Arc::new(crate::data::datapack::DatapackManager::new()),
+            datapack_manager: Arc::new(datapack_manager),
             enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions,
             command_dispatcher,
             block_registry: block_registry.clone(),
-            item_registry: super::item::items::default_registry(),
+            item_registry,
             key_store: OnceCell::new(),
             bedrock_oidc_keys: Arc::new(OnceCell::new()),
             listing,
@@ -382,8 +403,7 @@ impl Server {
         // Fetch / generate keys in background tasks to avoid blocking startup
         let server_clone = server.clone();
         server.spawn_task(async move {
-            let key_store = Arc::new(KeyStore::new());
-            let _ = server_clone.key_store.set(key_store);
+            server_clone.get_or_init_key_store().await;
         });
 
         if server.basic_config.allow_chat_reports {
@@ -438,27 +458,41 @@ impl Server {
             });
         }
 
-        let mut worlds_vec = Vec::new();
-        for dim in &server.dimensions {
-            info!(
-                "Loading {}",
-                TextComponent::text(dim.minecraft_name.to_string())
-                    .color_named(NamedColor::DarkGreen)
-                    .to_pretty_console()
-            );
-            let config = Arc::new(server.advanced_config.world.clone());
-            let level = into_level(dim.clone(), &config, world_path.clone(), seed);
-            let world = Arc::new(World::load(
-                level.clone(),
-                server.level_info.clone(),
-                dim.clone(),
-                block_registry.clone(),
-                Arc::downgrade(&server),
-            ));
-            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
-            level.world_portal.store(Arc::new(Some(portal)));
-            worlds_vec.push(world);
-        }
+        let worlds_vec = {
+            let server = server.clone();
+            let level_path = world_path.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut worlds_vec = Vec::with_capacity(server.dimensions.len());
+                for dim in &server.dimensions {
+                    info!(
+                        "Loading {}",
+                        TextComponent::text(dim.minecraft_name.to_string())
+                            .color_named(NamedColor::DarkGreen)
+                            .to_pretty_console()
+                    );
+                    let level = into_level(
+                        dim.clone(),
+                        &server.advanced_config.world,
+                        level_path.clone(),
+                        seed,
+                    );
+                    let world = Arc::new(World::load(
+                        level.clone(),
+                        server.level_info.clone(),
+                        dim.clone(),
+                        block_registry.clone(),
+                        Arc::downgrade(&server),
+                    ));
+                    let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+                    level.world_portal.store(Arc::new(Some(portal)));
+                    worlds_vec.push(world);
+                }
+
+                worlds_vec
+            })
+            .await
+            .map_err(std::io::Error::other)?
+        };
 
         for world in &worlds_vec {
             let mut world_init_event =
@@ -481,9 +515,13 @@ impl Server {
         info!("All worlds loaded successfully.");
 
         let enabled_packs = server.level_info.load().data_packs.enabled.clone();
-        server
-            .datapack_manager
-            .load_all(&world_path, &enabled_packs, &server.recipe_manager);
+        let datapacks = server.datapack_manager.clone();
+        let recipes = server.recipe_manager.clone();
+        tokio::task::spawn_blocking(move || {
+            datapacks.load_all(&world_path, &enabled_packs, &recipes);
+        })
+        .await
+        .map_err(std::io::Error::other)?;
 
         let source = crate::command::CommandSender::Console.into_source(&server);
         let _ = server

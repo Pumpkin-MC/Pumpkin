@@ -1,11 +1,12 @@
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use serde_json::Value;
 use tracing::warn;
+
+use super::file_loader::{collect_files, load_files_parallel};
 
 pub type ContextProviderRegistry = HashMap<String, NbtTag>;
 
@@ -84,61 +85,28 @@ pub fn load_context_providers_from_dir(
     }
 
     let before = registry.len();
-    load_context_providers_recursive(namespace, provider_dir, provider_dir, registry);
-    registry.len() - before
-}
-
-fn load_context_providers_recursive(
-    namespace: &str,
-    base_dir: &Path,
-    current_dir: &Path,
-    registry: &mut ContextProviderRegistry,
-) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-
-        if path.is_dir() {
-            load_context_providers_recursive(namespace, base_dir, &path, registry);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            && let Ok(rel_path) = path.strip_prefix(base_dir)
-        {
-            let mut stem_path = rel_path.to_string_lossy().to_string();
-
-            if let Some(stem) = stem_path.strip_suffix(".json") {
-                stem_path = stem.to_string();
+    let files = collect_files(provider_dir, "json");
+    let loaded = load_files_parallel(
+        namespace,
+        provider_dir,
+        &files,
+        "json",
+        |entry_id, path, content| match serde_json::from_str::<Value>(content) {
+            Ok(val) => Some(json_value_to_nbt(&val)),
+            Err(e) => {
+                warn!(
+                    "Failed to parse context provider '{entry_id}' from '{}': {e}",
+                    path.display()
+                );
+                None
             }
+        },
+    );
 
-            let stem_path = stem_path.replace('\\', "/");
-            let provider_id = format!("{namespace}:{stem_path}");
-
-            match fs::read_to_string(&path) {
-                Ok(content) => match serde_json::from_str::<Value>(&content) {
-                    Ok(val) => {
-                        let tag = json_value_to_nbt(&val);
-                        registry.insert(provider_id, tag);
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to parse context provider '{provider_id}' from '{}': {e}",
-                            path.display()
-                        );
-                    }
-                },
-                Err(e) => {
-                    warn!(
-                        "Failed to read context provider file '{}': {e}",
-                        path.display()
-                    );
-                }
-            }
-        }
+    for (entry_id, _rel, tag) in loaded {
+        registry.insert(entry_id, tag);
     }
+    registry.len() - before
 }
 
 #[cfg(test)]

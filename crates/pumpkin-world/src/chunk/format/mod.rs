@@ -236,7 +236,7 @@ impl ChunkData {
         }
         .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
-        let root_tag = nbt.root_tag;
+        let mut root_tag = nbt.root_tag;
 
         let x_pos = root_tag.get_int("xPos").ok_or_else(|| {
             ChunkParsingError::ErrorDeserializingChunk("Missing xPos".to_string())
@@ -436,14 +436,16 @@ impl ChunkData {
         }
 
         let mut block_entities = FxHashMap::default();
-        if let Some(list) = root_tag.get_list("block_entities") {
+        if let Some(pumpkin_nbt::tag::NbtTag::List(list)) =
+            root_tag.child_tags.remove("block_entities")
+        {
             for tag in list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(nbt) = tag
                     && let Some(x) = nbt.get_int("x")
                     && let Some(y) = nbt.get_int("y")
                     && let Some(z) = nbt.get_int("z")
                 {
-                    block_entities.insert(BlockPos::new(x, y, z), nbt.clone());
+                    block_entities.insert(BlockPos::new(x, y, z), nbt);
                 }
             }
         }
@@ -1256,10 +1258,8 @@ impl ChunkEntityData {
             && chunk_data[1] == 0x00
             && chunk_data[2] == 0x00;
         let mut cursor = std::io::Cursor::new(chunk_data);
-        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
-            pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
-        );
-        let nbt = if is_named {
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let mut nbt = if is_named {
             pumpkin_nbt::Nbt::read(&mut reader)
         } else {
             pumpkin_nbt::Nbt::read_unnamed(&mut reader)
@@ -1288,11 +1288,11 @@ impl ChunkEntityData {
             )));
         }
 
-        let entities = match nbt.get("Entities") {
+        let entities = match nbt.root_tag.child_tags.remove("Entities") {
             Some(pumpkin_nbt::tag::NbtTag::List(list)) => list
-                .iter()
+                .into_iter()
                 .filter_map(|t| match t {
-                    pumpkin_nbt::tag::NbtTag::Compound(c) => Some(c.clone()),
+                    pumpkin_nbt::tag::NbtTag::Compound(c) => Some(c),
                     _ => None,
                 })
                 .collect(),

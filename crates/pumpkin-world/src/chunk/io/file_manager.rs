@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::future::join_all;
+use futures::{StreamExt, future::join_all, stream};
 use pumpkin_util::math::vector2::Vector2;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
@@ -391,7 +391,7 @@ where
             regions_chunks.entry(region_of(*at)).or_default().push(*at);
         }
 
-        let region_tasks = regions_chunks.into_iter().map(|(region, chunks)| {
+        let read_region = |(region, chunks): (_, Vec<Vector2<i32>>)| {
             let stream = stream.clone();
             async move {
                 let path = D::file_path(folder, &R::file_name(region));
@@ -472,9 +472,12 @@ where
                     }
                 }
             }
-        });
+        };
 
-        join_all(region_tasks).await;
+        // Bound the number of region buffers waiting on the decode pool.
+        stream::iter(regions_chunks)
+            .for_each_concurrent(rayon::current_num_threads(), read_region)
+            .await;
     }
 
     async fn save_chunks<'a>(

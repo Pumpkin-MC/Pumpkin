@@ -141,15 +141,6 @@ fn data_packs_to_nbt(packs: &DataPacks) -> NbtCompound {
     compound
 }
 
-fn stored_world_seed(level_folder: &Path, data: &NbtCompound) -> Option<i64> {
-    read_world_gen_settings(level_folder)
-        .map(|settings| settings.seed)
-        .or_else(|| {
-            data.get_compound(WORLD_GEN_SETTINGS_TAG)
-                .and_then(|settings| settings.get_long("seed"))
-        })
-}
-
 fn put_world_gen_settings_seed(data: &mut NbtCompound, seed: i64) {
     let mut world_gen_settings = data
         .get_compound(WORLD_GEN_SETTINGS_TAG)
@@ -385,13 +376,17 @@ impl WorldInfoReader for AnvilLevelInfo {
         check_data_version(data)?;
         check_level_version(data)?;
 
-        let Some(seed) = stored_world_seed(level_folder, data) else {
+        let settings = read_world_gen_settings(level_folder);
+        let Some(seed) = settings.as_ref().map(|settings| settings.seed).or_else(|| {
+            data.get_compound(WORLD_GEN_SETTINGS_TAG)
+                .and_then(|settings| settings.get_long("seed"))
+        }) else {
             return Err(WorldInfoError::MissingWorldSeed);
         };
 
         let mut level_data = level_data_from_nbt(data, seed);
 
-        if let Some(wgs) = read_world_gen_settings(level_folder) {
+        if let Some(wgs) = settings {
             level_data.world_gen_settings = wgs;
         }
 
