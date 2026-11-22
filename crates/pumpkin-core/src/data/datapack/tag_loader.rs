@@ -32,9 +32,21 @@ pub fn load_tags_from_dir<S1: std::hash::BuildHasher + Default, S2: std::hash::B
     tags_dir: &Path,
     tags: &mut HashMap<String, HashMap<String, DynamicTagEntry, S1>, S2>,
 ) -> usize {
-    let mut total_loaded = 0;
+    let prepared = prepare_tags_from_dir(namespace, tags_dir);
+    apply_tags(prepared, tags)
+}
+
+pub(super) struct PreparedTagCategory {
+    category: String,
+    entries: Vec<(String, bool, Vec<String>)>,
+}
+
+pub(super) type PreparedTags = Vec<PreparedTagCategory>;
+
+pub(super) fn prepare_tags_from_dir(namespace: &str, tags_dir: &Path) -> PreparedTags {
+    let mut prepared = Vec::new();
     let Ok(entries) = fs::read_dir(tags_dir) else {
-        return 0;
+        return prepared;
     };
 
     for entry in entries.flatten() {
@@ -52,28 +64,23 @@ pub fn load_tags_from_dir<S1: std::hash::BuildHasher + Default, S2: std::hash::B
                     if wg_path.is_dir() {
                         let sub_cat =
                             format!("worldgen/{}", wg_entry.file_name().to_string_lossy());
-                        let category_map = tags.entry(sub_cat).or_default();
-                        let before = category_map.len();
-                        load_tag_category(namespace, &wg_path, category_map);
-                        total_loaded += category_map.len() - before;
+                        prepare_tag_category(namespace, &wg_path, &sub_cat, &mut prepared);
                     }
                 }
             }
         } else {
-            let category_map = tags.entry(cat_name).or_default();
-            let before = category_map.len();
-            load_tag_category(namespace, &path, category_map);
-            total_loaded += category_map.len() - before;
+            prepare_tag_category(namespace, &path, &cat_name, &mut prepared);
         }
     }
 
-    total_loaded
+    prepared
 }
 
-fn load_tag_category<S: std::hash::BuildHasher>(
+fn prepare_tag_category(
     namespace: &str,
     base_dir: &Path,
-    category_map: &mut HashMap<String, DynamicTagEntry, S>,
+    category: &str,
+    prepared: &mut PreparedTags,
 ) {
     let files = collect_files(base_dir, "json");
     let parsed = load_files_parallel(
@@ -94,29 +101,48 @@ fn load_tag_category<S: std::hash::BuildHasher>(
         },
     );
 
-    for (tag_id, _rel, (replace, string_values)) in parsed {
-        if replace {
-            category_map.insert(
-                tag_id.clone(),
-                DynamicTagEntry {
-                    id: tag_id,
-                    values: string_values,
-                },
-            );
-        } else {
-            let entry = category_map
-                .entry(tag_id.clone())
-                .or_insert_with(|| DynamicTagEntry {
-                    id: tag_id,
-                    values: Vec::new(),
-                });
-            for val in string_values {
-                if !entry.values.contains(&val) {
-                    entry.values.push(val);
+    prepared.push(PreparedTagCategory {
+        category: category.to_owned(),
+        entries: parsed
+            .into_iter()
+            .map(|(id, _, (replace, values))| (id, replace, values))
+            .collect(),
+    });
+}
+
+pub(super) fn apply_tags<S1: std::hash::BuildHasher + Default, S2: std::hash::BuildHasher>(
+    prepared: PreparedTags,
+    tags: &mut HashMap<String, HashMap<String, DynamicTagEntry, S1>, S2>,
+) -> usize {
+    let mut count = 0;
+    for prepared in prepared {
+        let category_map = tags.entry(prepared.category).or_default();
+        for (tag_id, replace, string_values) in prepared.entries {
+            count += usize::from(!category_map.contains_key(&tag_id));
+            if replace {
+                category_map.insert(
+                    tag_id.clone(),
+                    DynamicTagEntry {
+                        id: tag_id,
+                        values: string_values,
+                    },
+                );
+            } else {
+                let entry = category_map
+                    .entry(tag_id.clone())
+                    .or_insert_with(|| DynamicTagEntry {
+                        id: tag_id,
+                        values: Vec::new(),
+                    });
+                for val in string_values {
+                    if !entry.values.contains(&val) {
+                        entry.values.push(val);
+                    }
                 }
             }
         }
     }
+    count
 }
 
 #[cfg(test)]

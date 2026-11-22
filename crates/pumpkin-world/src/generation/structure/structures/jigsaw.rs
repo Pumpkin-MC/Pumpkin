@@ -38,32 +38,55 @@ pub fn register_dynamic_template_pool_json(
     id: &str,
     json: &str,
 ) -> Result<Arc<TemplatePool>, serde_json::Error> {
-    let raw: RawTemplatePool = serde_json::from_str(json)?;
-    let elements = raw
-        .elements
-        .into_iter()
-        .filter_map(|weighted| {
-            weighted.element.into_element().map(|(kind, projection)| {
-                Arc::new(PoolElement {
-                    weight: weighted.weight,
-                    projection,
-                    kind,
-                })
-            })
-        })
-        .collect();
-    let key = if id.contains(':') {
-        id.to_string()
+    let pool = parse_dynamic_template_pool(id, json)?.resolve();
+    register_dynamic_template_pool(id, Arc::clone(&pool));
+    Ok(pool)
+}
+
+/// A parsed pool whose structure references are resolved when it is published.
+pub struct PreparedTemplatePool {
+    id: String,
+    raw: RawTemplatePool,
+}
+
+/// Parses a runtime template pool without accessing the structure cache.
+pub fn parse_dynamic_template_pool(
+    id: &str,
+    json: &str,
+) -> Result<PreparedTemplatePool, serde_json::Error> {
+    let raw = serde_json::from_str(json)?;
+    let id = if id.contains(':') {
+        id.to_owned()
     } else {
         format!("minecraft:{id}")
     };
-    let pool = Arc::new(TemplatePool {
-        id: key.clone(),
-        fallback: raw.fallback,
-        elements,
-    });
-    DYNAMIC_POOLS.insert(key, Arc::clone(&pool));
-    Ok(pool)
+    Ok(PreparedTemplatePool { id, raw })
+}
+
+impl PreparedTemplatePool {
+    /// Resolves structure references against the currently published templates.
+    #[must_use]
+    pub fn resolve(self) -> Arc<TemplatePool> {
+        let elements = self
+            .raw
+            .elements
+            .into_iter()
+            .filter_map(|weighted| {
+                weighted.element.into_element().map(|(kind, projection)| {
+                    Arc::new(PoolElement {
+                        weight: weighted.weight,
+                        projection,
+                        kind,
+                    })
+                })
+            })
+            .collect();
+        Arc::new(TemplatePool {
+            id: self.id,
+            fallback: self.raw.fallback,
+            elements,
+        })
+    }
 }
 
 /// Clears all dynamically registered template pools (e.g. during datapack reload).

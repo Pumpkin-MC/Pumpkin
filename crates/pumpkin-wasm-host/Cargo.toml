@@ -22,12 +22,12 @@ pumpkin-wasm-host-v0_2 = { workspace = true, optional = true }
 pumpkin-plugin-runtime.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing.workspace = true
+tempfile.workspace = true
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
 
 [dev-dependencies]
-tempfile.workspace = true
 wasm-encoder.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 

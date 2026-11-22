@@ -1188,6 +1188,15 @@ pub fn register_dynamic_processor_list(
     name: &str,
     json: &str,
 ) -> Result<Arc<[StructureProcessor]>, serde_json::Error> {
+    let processors = parse_dynamic_processor_list(json)?;
+    register_prepared_processor_list(name, Arc::clone(&processors));
+    Ok(processors)
+}
+
+/// Parses a runtime processor list without publishing it.
+pub fn parse_dynamic_processor_list(
+    json: &str,
+) -> Result<Arc<[StructureProcessor]>, serde_json::Error> {
     let raw_list: Vec<RawProcessor> = match serde_json::from_str::<RawProcessorListWrapper>(json)? {
         RawProcessorListWrapper::Object { processors }
         | RawProcessorListWrapper::Array(processors) => processors,
@@ -1196,10 +1205,14 @@ pub fn register_dynamic_processor_list(
         .into_iter()
         .filter_map(convert_raw_processor)
         .collect::<Arc<[_]>>();
+    Ok(processors)
+}
+
+/// Publishes a previously parsed runtime processor list.
+pub fn register_prepared_processor_list(name: &str, processors: Arc<[StructureProcessor]>) {
     let name_key = name.strip_prefix("minecraft:").unwrap_or(name);
     DYNAMIC_PROCESSORS.insert(name_key.to_string(), Arc::clone(&processors));
-    DYNAMIC_PROCESSORS.insert(format!("minecraft:{name_key}"), Arc::clone(&processors));
-    Ok(processors)
+    DYNAMIC_PROCESSORS.insert(format!("minecraft:{name_key}"), processors);
 }
 
 /// Clears all dynamically registered processor lists.

@@ -1533,6 +1533,113 @@ struct PackContentAccumulators<'a> {
     tags: &'a mut HashMap<String, HashMap<String, tag_loader::DynamicTagEntry>>,
 }
 
+#[derive(Default)]
+struct PreparedPack {
+    recipes: Vec<DynamicRecipe>,
+    functions: HashMap<String, Vec<String>>,
+    function_tags: HashMap<String, Vec<String>>,
+    test_instances: TestInstanceRegistry,
+    damage_types: HashMap<String, DamageTypeDefinition>,
+    context_int_providers: ContextProviderRegistry,
+    context_float_providers: ContextProviderRegistry,
+    loot_tables: HashMap<String, Arc<DynamicLootTable>>,
+    dynamic_registries: HashMap<String, HashMap<String, RegistryEntryData>>,
+    trade_registry: TradeRegistry,
+    advancements: HashMap<String, advancement_loader::DynamicAdvancementDefinition>,
+    predicates: HashMap<String, serde_json::Value>,
+    item_modifiers: HashMap<String, serde_json::Value>,
+    slot_sources: HashMap<String, serde_json::Value>,
+    tags: HashMap<String, HashMap<String, tag_loader::DynamicTagEntry>>,
+    tag_operations: tag_loader::PreparedTags,
+    structures: Vec<structure_loader::PreparedStructures>,
+    counts: PackContentCounts,
+}
+
+impl PreparedPack {
+    const fn accumulators(&mut self) -> PackContentAccumulators<'_> {
+        PackContentAccumulators {
+            recipes: &mut self.recipes,
+            functions: &mut self.functions,
+            function_tags: &mut self.function_tags,
+            test_instances: &mut self.test_instances,
+            damage_types: &mut self.damage_types,
+            context_int_providers: &mut self.context_int_providers,
+            context_float_providers: &mut self.context_float_providers,
+            loot_tables: &mut self.loot_tables,
+            dynamic_registries: &mut self.dynamic_registries,
+            trade_registry: &mut self.trade_registry,
+            advancements: &mut self.advancements,
+            predicates: &mut self.predicates,
+            item_modifiers: &mut self.item_modifiers,
+            slot_sources: &mut self.slot_sources,
+            tags: &mut self.tags,
+        }
+    }
+
+    fn apply(self, acc: &mut PackContentAccumulators<'_>) -> PackContentCounts {
+        let mut counts = self.counts;
+        counts.recipes = self.recipes.len();
+        acc.recipes.extend(self.recipes);
+        let before = acc.functions.len();
+        acc.functions.extend(self.functions);
+        counts.functions = acc.functions.len() - before;
+        let before = acc.test_instances.len();
+        acc.test_instances.extend(self.test_instances);
+        counts.test_instances = acc.test_instances.len() - before;
+        let before = acc.damage_types.len();
+        acc.damage_types.extend(self.damage_types);
+        counts.damage_types = acc.damage_types.len() - before;
+        let before = acc.context_int_providers.len();
+        acc.context_int_providers.extend(self.context_int_providers);
+        counts.int_providers = acc.context_int_providers.len() - before;
+        let before = acc.context_float_providers.len();
+        acc.context_float_providers
+            .extend(self.context_float_providers);
+        counts.float_providers = acc.context_float_providers.len() - before;
+        let before = acc.loot_tables.len();
+        acc.loot_tables.extend(self.loot_tables);
+        counts.loot_tables = acc.loot_tables.len() - before;
+        let before = acc.advancements.len();
+        acc.advancements.extend(self.advancements);
+        counts.advancements = acc.advancements.len() - before;
+        acc.predicates.extend(self.predicates);
+        acc.item_modifiers.extend(self.item_modifiers);
+        acc.slot_sources.extend(self.slot_sources);
+        for (id, lines) in self.function_tags {
+            acc.function_tags.entry(id).or_default().extend(lines);
+        }
+        counts.dynamic_registries = 0;
+        for (id, entries) in self.dynamic_registries {
+            let registry = acc.dynamic_registries.entry(id).or_default();
+            let before = registry.len();
+            registry.extend(entries);
+            counts.dynamic_registries += registry.len() - before;
+        }
+        let before = acc.trade_registry.trades.len();
+        acc.trade_registry.trades.extend(self.trade_registry.trades);
+        counts.trades = acc.trade_registry.trades.len() - before;
+        let before = acc.trade_registry.trade_sets.len();
+        acc.trade_registry
+            .trade_sets
+            .extend(self.trade_registry.trade_sets);
+        counts.trade_sets = acc.trade_registry.trade_sets.len() - before;
+        let before = acc.trade_registry.trade_tags.len();
+        acc.trade_registry
+            .trade_tags
+            .extend(self.trade_registry.trade_tags);
+        counts.trade_tags = acc.trade_registry.trade_tags.len() - before;
+        counts.tags = tag_loader::apply_tags(self.tag_operations, acc.tags);
+        // Pools resolve templates against the state at their original namespace boundary.
+        for structures in self.structures {
+            counts.structures += structures.templates.len();
+            counts.template_pools += structures.pools.len();
+            counts.processor_lists += structures.processors.len();
+            structures.apply();
+        }
+        counts
+    }
+}
+
 #[derive(Default, Clone, Copy)]
 struct PackContentCounts {
     recipes: usize,
@@ -1592,11 +1699,13 @@ fn load_bundled_datapacks(
     acc: &mut PackContentAccumulators<'_>,
     loaded_packs_vec: &mut Vec<LoadedDatapack>,
 ) {
-    for bundled in [
+    let packs: Vec<_> = [
         "trade_rebalance",
         "minecart_improvements",
         "redstone_experiments",
-    ] {
+    ]
+    .into_iter()
+    .filter_map(|bundled| {
         let is_enabled = enabled_packs.iter().any(|p| {
             p == bundled
                 || p == &format!("minecraft:{bundled}")
@@ -1611,38 +1720,48 @@ fn load_bundled_datapacks(
             && !already_loaded
             && let Some(pack_path) = find_bundled_datapack_dir(bundled)
         {
-            let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
-            let counts = load_pack_contents(&pack_path, acc);
-            info!(
-                "Loaded bundled datapack '{bundled}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s), {} advancement(s), {} predicate(s), {} tag(s)",
-                counts.recipes,
-                counts.functions,
-                counts.test_instances,
-                counts.damage_types,
-                counts.int_providers,
-                counts.float_providers,
-                counts.loot_tables,
-                counts.structures,
-                counts.template_pools,
-                counts.processor_lists,
-                counts.dynamic_registries,
-                counts.trade_sets,
-                counts.trades,
-                counts.advancements,
-                counts.predicates,
-                counts.tags,
-            );
-            loaded_packs_vec.push(LoadedDatapack {
-                id: format!("minecraft:{bundled}"),
-                name: bundled.to_string(),
-                description,
-                pack_format,
-                root_path: pack_path,
-                recipe_count: counts.recipes,
-                function_count: counts.functions,
-                known_packs,
-            });
+            Some((bundled, pack_path))
+        } else {
+            None
         }
+    })
+    .collect();
+    let prepared: Vec<_> = packs
+        .par_iter()
+        .map(|(_, path)| (read_pack_mcmeta(path), prepare_pack_contents(path)))
+        .collect();
+    for ((bundled, pack_path), (metadata, contents)) in packs.into_iter().zip(prepared) {
+        let (description, pack_format, known_packs) = metadata;
+        let counts = contents.apply(acc);
+        info!(
+            "Loaded bundled datapack '{bundled}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s), {} advancement(s), {} predicate(s), {} tag(s)",
+            counts.recipes,
+            counts.functions,
+            counts.test_instances,
+            counts.damage_types,
+            counts.int_providers,
+            counts.float_providers,
+            counts.loot_tables,
+            counts.structures,
+            counts.template_pools,
+            counts.processor_lists,
+            counts.dynamic_registries,
+            counts.trade_sets,
+            counts.trades,
+            counts.advancements,
+            counts.predicates,
+            counts.tags,
+        );
+        loaded_packs_vec.push(LoadedDatapack {
+            id: format!("minecraft:{bundled}"),
+            name: bundled.to_string(),
+            description,
+            pack_format,
+            root_path: pack_path,
+            recipe_count: counts.recipes,
+            function_count: counts.functions,
+            known_packs,
+        });
     }
 }
 
@@ -1666,24 +1785,34 @@ fn scan_datapacks_dir(
         }
     };
 
-    for entry in entries.flatten() {
-        let pack_path = entry.path();
-        let file_name = entry.file_name().to_string_lossy().to_string();
+    let packs: Vec<_> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let pack_path = entry.path();
+            let file_name = entry.file_name().to_string_lossy().to_string();
 
-        if file_name.starts_with('.') || !pack_path.is_dir() {
-            continue;
-        }
+            if file_name.starts_with('.') || !pack_path.is_dir() {
+                return None;
+            }
 
-        let pack_id = format!("file/{file_name}");
-        let is_enabled = enabled_packs
-            .iter()
-            .any(|p| p == &pack_id || p == &file_name);
-        if !is_enabled {
-            continue;
-        }
+            let pack_id = format!("file/{file_name}");
+            let is_enabled = enabled_packs
+                .iter()
+                .any(|p| p == &pack_id || p == &file_name);
+            if !is_enabled {
+                return None;
+            }
 
-        let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
-        let counts = load_pack_contents(&pack_path, acc);
+            Some((pack_path, file_name, pack_id))
+        })
+        .collect();
+    let prepared: Vec<_> = packs
+        .par_iter()
+        .map(|(path, _, _)| (read_pack_mcmeta(path), prepare_pack_contents(path)))
+        .collect();
+    for ((pack_path, file_name, pack_id), (metadata, contents)) in packs.into_iter().zip(prepared) {
+        let (description, pack_format, known_packs) = metadata;
+        let counts = contents.apply(acc);
 
         info!(
             "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s), {} advancement(s), {} predicate(s), {} tag(s)",
@@ -1720,12 +1849,21 @@ fn scan_datapacks_dir(
 
 /// Loads recipes, functions, function tags, test instances, damage types, context number providers,
 /// and loot tables from a single datapack directory, returning per-pack counts as [`PackContentCounts`].
-#[allow(clippy::too_many_lines)]
+#[cfg(test)]
 fn load_pack_contents(
     pack_path: &Path,
     acc: &mut PackContentAccumulators<'_>,
 ) -> PackContentCounts {
+    prepare_pack_contents(pack_path).apply(acc)
+}
+
+#[allow(clippy::too_many_lines)]
+fn prepare_pack_contents(pack_path: &Path) -> PreparedPack {
     let data_dir = pack_path.join("data");
+    let mut prepared = PreparedPack::default();
+    let mut tag_operations = Vec::new();
+    let mut structures = Vec::new();
+    let acc = prepared.accumulators();
     let mut counts = PackContentCounts::default();
 
     if data_dir.is_dir()
@@ -1738,221 +1876,259 @@ fn load_pack_contents(
             }
             let namespace = ns_entry.file_name().to_string_lossy().to_string();
 
-            // Load recipes
-            for recipe_sub in ["recipe", "recipes"] {
-                let recipe_dir = ns_path.join(recipe_sub);
-                if recipe_dir.is_dir() {
-                    load_recipes_from_dir(
-                        &namespace,
-                        &recipe_dir,
-                        acc.recipes,
-                        &mut counts.recipes,
-                    );
-                }
-            }
-
-            // Load functions
-            for fn_sub in ["function", "functions"] {
-                let fn_dir = ns_path.join(fn_sub);
-                if fn_dir.is_dir() {
-                    let before = acc.functions.len();
-                    function_loader::load_functions_from_dir(&namespace, &fn_dir, acc.functions);
-                    counts.functions += acc.functions.len() - before;
-                }
-            }
-
-            // Load tags
-            let tags_dir = ns_path.join("tags");
-            if tags_dir.is_dir() {
-                function_loader::load_function_tags_from_dir(
-                    &namespace,
-                    &tags_dir,
-                    acc.function_tags,
-                );
-                counts.tags += tag_loader::load_tags_from_dir(&namespace, &tags_dir, acc.tags);
-            }
-            // Load game test instances
-            let test_instance_dir = ns_path.join("test_instance");
-            if test_instance_dir.is_dir() {
-                counts.test_instances += load_test_instances_from_dir(
-                    &namespace,
-                    &test_instance_dir,
-                    acc.test_instances,
-                );
-            }
-
-            // Load damage types
-            for dt_sub in ["damage_type", "damage_types"] {
-                let dt_dir = ns_path.join(dt_sub);
-                if dt_dir.is_dir() {
-                    counts.damage_types += damage_type_loader::load_damage_types_from_dir(
-                        &namespace,
-                        &dt_dir,
-                        acc.damage_types,
-                    );
-                }
-            }
-
-            // Load context int providers
-            for int_sub in ["context_int_provider", "context_int_providers"] {
-                let provider_dir = ns_path.join(int_sub);
-                if provider_dir.is_dir() {
-                    counts.int_providers +=
-                        context_provider_loader::load_context_providers_from_dir(
+            let mut namespace_structures = structure_loader::PreparedStructures::default();
+            // Each task exclusively borrows its category; no registry is published here.
+            rayon::scope(|scope| {
+                scope.spawn(|_| {
+                    // Load recipes
+                    for recipe_sub in ["recipe", "recipes"] {
+                        let recipe_dir = ns_path.join(recipe_sub);
+                        if recipe_dir.is_dir() {
+                            load_recipes_from_dir(
+                                &namespace,
+                                &recipe_dir,
+                                acc.recipes,
+                                &mut counts.recipes,
+                            );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load functions
+                    for fn_sub in ["function", "functions"] {
+                        let fn_dir = ns_path.join(fn_sub);
+                        if fn_dir.is_dir() {
+                            let before = acc.functions.len();
+                            function_loader::load_functions_from_dir(
+                                &namespace,
+                                &fn_dir,
+                                acc.functions,
+                            );
+                            counts.functions += acc.functions.len() - before;
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load tags
+                    let tags_dir = ns_path.join("tags");
+                    if tags_dir.is_dir() {
+                        function_loader::load_function_tags_from_dir(
                             &namespace,
-                            &provider_dir,
-                            acc.context_int_providers,
+                            &tags_dir,
+                            acc.function_tags,
                         );
-                }
-            }
-
-            // Load context float providers
-            for float_sub in ["context_float_provider", "context_float_providers"] {
-                let provider_dir = ns_path.join(float_sub);
-                if provider_dir.is_dir() {
-                    counts.float_providers +=
-                        context_provider_loader::load_context_providers_from_dir(
+                        tag_operations
+                            .extend(tag_loader::prepare_tags_from_dir(&namespace, &tags_dir));
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load game test instances
+                    let test_instance_dir = ns_path.join("test_instance");
+                    if test_instance_dir.is_dir() {
+                        counts.test_instances += load_test_instances_from_dir(
                             &namespace,
-                            &provider_dir,
-                            acc.context_float_providers,
-                        );
-                }
-            }
-
-            // Load loot tables
-            for lt_sub in ["loot_table", "loot_tables"] {
-                let lt_dir = ns_path.join(lt_sub);
-                if lt_dir.is_dir() {
-                    counts.loot_tables += loot_table_loader::load_loot_tables_from_dir(
-                        &namespace,
-                        &lt_dir,
-                        acc.loot_tables,
-                    );
-                }
-            }
-
-            // Load advancements
-            for adv_sub in ["advancement", "advancements"] {
-                let adv_dir = ns_path.join(adv_sub);
-                if adv_dir.is_dir() {
-                    counts.advancements += advancement_loader::load_advancements_from_dir(
-                        &namespace,
-                        &adv_dir,
-                        acc.advancements,
-                    );
-                }
-            }
-
-            // Load predicates
-            for pred_sub in ["predicate", "predicates"] {
-                let pred_dir = ns_path.join(pred_sub);
-                if pred_dir.is_dir() {
-                    counts.predicates += predicate_loader::load_predicates_from_dir(
-                        &namespace,
-                        &pred_dir,
-                        acc.predicates,
-                    );
-                }
-            }
-
-            // Load item modifiers
-            for im_sub in ["item_modifier", "item_modifiers"] {
-                let im_dir = ns_path.join(im_sub);
-                if im_dir.is_dir() {
-                    counts.item_modifiers += item_modifier_loader::load_item_modifiers_from_dir(
-                        &namespace,
-                        &im_dir,
-                        acc.item_modifiers,
-                    );
-                }
-            }
-
-            // Load slot sources
-            for ss_sub in ["slot_source", "slot_sources"] {
-                let ss_dir = ns_path.join(ss_sub);
-                if ss_dir.is_dir() {
-                    counts.slot_sources += slot_source_loader::load_slot_sources_from_dir(
-                        &namespace,
-                        &ss_dir,
-                        acc.slot_sources,
-                    );
-                }
-            }
-
-            // Load structure templates
-            for st_sub in ["structure", "structures"] {
-                let st_dir = ns_path.join(st_sub);
-                if st_dir.is_dir() {
-                    counts.structures +=
-                        structure_loader::load_structures_from_dir(&namespace, &st_dir);
-                }
-            }
-
-            // Load worldgen template pools and processor lists
-            let worldgen_dir = ns_path.join("worldgen");
-            if worldgen_dir.is_dir() {
-                let pool_dir = worldgen_dir.join("template_pool");
-                if pool_dir.is_dir() {
-                    counts.template_pools +=
-                        structure_loader::load_template_pools_from_dir(&namespace, &pool_dir);
-                }
-                let proc_dir = worldgen_dir.join("processor_list");
-                if proc_dir.is_dir() {
-                    counts.processor_lists +=
-                        structure_loader::load_processor_lists_from_dir(&namespace, &proc_dir);
-                }
-            }
-
-            // Load dynamic registry entries (wolf_variant, cat_variant, frog_variant, instrument,
-            // trim_material, trim_pattern, banner_pattern, decorated_pot_pattern, chat_type, etc.)
-            counts.dynamic_registries += dynamic_registry_loader::load_dynamic_registries_from_ns(
-                &namespace,
-                &ns_path,
-                acc.dynamic_registries,
-            );
-
-            // Load trade sets
-            for ts_sub in ["trade_set", "trade_sets"] {
-                let ts_dir = ns_path.join(ts_sub);
-                if ts_dir.is_dir() {
-                    counts.trade_sets += trade_loader::load_trade_sets_from_dir(
-                        &namespace,
-                        &ts_dir,
-                        &mut acc.trade_registry.trade_sets,
-                    );
-                }
-            }
-
-            // Load villager trades
-            for vt_sub in ["villager_trade", "villager_trades"] {
-                let vt_dir = ns_path.join(vt_sub);
-                if vt_dir.is_dir() {
-                    counts.trades += trade_loader::load_trades_from_dir(
-                        &namespace,
-                        &vt_dir,
-                        &mut acc.trade_registry.trades,
-                    );
-                }
-            }
-
-            // Load villager trade tags
-            let tags_dir = ns_path.join("tags");
-            if tags_dir.is_dir() {
-                for vt_tag_sub in ["villager_trade", "villager_trades"] {
-                    let vt_tag_dir = tags_dir.join(vt_tag_sub);
-                    if vt_tag_dir.is_dir() {
-                        counts.trade_tags += trade_loader::load_trade_tags_from_dir(
-                            &namespace,
-                            &vt_tag_dir,
-                            &mut acc.trade_registry.trade_tags,
+                            &test_instance_dir,
+                            acc.test_instances,
                         );
                     }
-                }
-            }
+                });
+                scope.spawn(|_| {
+                    // Load damage types
+                    for dt_sub in ["damage_type", "damage_types"] {
+                        let dt_dir = ns_path.join(dt_sub);
+                        if dt_dir.is_dir() {
+                            counts.damage_types += damage_type_loader::load_damage_types_from_dir(
+                                &namespace,
+                                &dt_dir,
+                                acc.damage_types,
+                            );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load context int providers
+                    for int_sub in ["context_int_provider", "context_int_providers"] {
+                        let provider_dir = ns_path.join(int_sub);
+                        if provider_dir.is_dir() {
+                            counts.int_providers +=
+                                context_provider_loader::load_context_providers_from_dir(
+                                    &namespace,
+                                    &provider_dir,
+                                    acc.context_int_providers,
+                                );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load context float providers
+                    for float_sub in ["context_float_provider", "context_float_providers"] {
+                        let provider_dir = ns_path.join(float_sub);
+                        if provider_dir.is_dir() {
+                            counts.float_providers +=
+                                context_provider_loader::load_context_providers_from_dir(
+                                    &namespace,
+                                    &provider_dir,
+                                    acc.context_float_providers,
+                                );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load loot tables
+                    for lt_sub in ["loot_table", "loot_tables"] {
+                        let lt_dir = ns_path.join(lt_sub);
+                        if lt_dir.is_dir() {
+                            counts.loot_tables += loot_table_loader::load_loot_tables_from_dir(
+                                &namespace,
+                                &lt_dir,
+                                acc.loot_tables,
+                            );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load advancements
+                    for adv_sub in ["advancement", "advancements"] {
+                        let adv_dir = ns_path.join(adv_sub);
+                        if adv_dir.is_dir() {
+                            counts.advancements += advancement_loader::load_advancements_from_dir(
+                                &namespace,
+                                &adv_dir,
+                                acc.advancements,
+                            );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load predicates
+                    for pred_sub in ["predicate", "predicates"] {
+                        let pred_dir = ns_path.join(pred_sub);
+                        if pred_dir.is_dir() {
+                            counts.predicates += predicate_loader::load_predicates_from_dir(
+                                &namespace,
+                                &pred_dir,
+                                acc.predicates,
+                            );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load item modifiers
+                    for im_sub in ["item_modifier", "item_modifiers"] {
+                        let im_dir = ns_path.join(im_sub);
+                        if im_dir.is_dir() {
+                            counts.item_modifiers +=
+                                item_modifier_loader::load_item_modifiers_from_dir(
+                                    &namespace,
+                                    &im_dir,
+                                    acc.item_modifiers,
+                                );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load slot sources
+                    for ss_sub in ["slot_source", "slot_sources"] {
+                        let ss_dir = ns_path.join(ss_sub);
+                        if ss_dir.is_dir() {
+                            counts.slot_sources += slot_source_loader::load_slot_sources_from_dir(
+                                &namespace,
+                                &ss_dir,
+                                acc.slot_sources,
+                            );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    for st_sub in ["structure", "structures"] {
+                        let dir = ns_path.join(st_sub);
+                        if dir.is_dir() {
+                            namespace_structures.templates.extend(
+                                structure_loader::prepare_structures_from_dir(&namespace, &dir)
+                                    .templates,
+                            );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    let dir = ns_path.join("worldgen/template_pool");
+                    if dir.is_dir() {
+                        namespace_structures.pools.extend(
+                            structure_loader::prepare_template_pools_from_dir(&namespace, &dir)
+                                .pools,
+                        );
+                    }
+                });
+                scope.spawn(|_| {
+                    let dir = ns_path.join("worldgen/processor_list");
+                    if dir.is_dir() {
+                        namespace_structures.processors.extend(
+                            structure_loader::prepare_processor_lists_from_dir(&namespace, &dir)
+                                .processors,
+                        );
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load dynamic registry entries (wolf_variant, cat_variant, frog_variant, instrument,
+                    // trim_material, trim_pattern, banner_pattern, decorated_pot_pattern, chat_type, etc.)
+                    counts.dynamic_registries +=
+                        dynamic_registry_loader::load_dynamic_registries_from_ns(
+                            &namespace,
+                            &ns_path,
+                            acc.dynamic_registries,
+                        );
+                });
+                scope.spawn(|_| {
+                    // Load trade sets
+                    for ts_sub in ["trade_set", "trade_sets"] {
+                        let ts_dir = ns_path.join(ts_sub);
+                        if ts_dir.is_dir() {
+                            counts.trade_sets += trade_loader::load_trade_sets_from_dir(
+                                &namespace,
+                                &ts_dir,
+                                &mut acc.trade_registry.trade_sets,
+                            );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load villager trades
+                    for vt_sub in ["villager_trade", "villager_trades"] {
+                        let vt_dir = ns_path.join(vt_sub);
+                        if vt_dir.is_dir() {
+                            counts.trades += trade_loader::load_trades_from_dir(
+                                &namespace,
+                                &vt_dir,
+                                &mut acc.trade_registry.trades,
+                            );
+                        }
+                    }
+                });
+                scope.spawn(|_| {
+                    // Load villager trade tags
+                    let tags_dir = ns_path.join("tags");
+                    if tags_dir.is_dir() {
+                        for vt_tag_sub in ["villager_trade", "villager_trades"] {
+                            let vt_tag_dir = tags_dir.join(vt_tag_sub);
+                            if vt_tag_dir.is_dir() {
+                                counts.trade_tags += trade_loader::load_trade_tags_from_dir(
+                                    &namespace,
+                                    &vt_tag_dir,
+                                    &mut acc.trade_registry.trade_tags,
+                                );
+                            }
+                        }
+                    }
+                });
+            });
+            structures.push(namespace_structures);
         }
     }
 
-    counts
+    prepared.tag_operations = tag_operations;
+    prepared.structures = structures;
+    prepared.counts = counts;
+    prepared
 }
 
 #[must_use]
@@ -2101,6 +2277,139 @@ fn load_recipes_from_dir(
 #[cfg(test)]
 mod tests {
     use super::DatapackManager;
+
+    #[test]
+    fn parallel_packs_preserve_overrides_and_tag_operations() {
+        use super::*;
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut paths = Vec::new();
+        for (name, replace) in [("first", false), ("second", true), ("third", false)] {
+            let pack = dir.path().join(name);
+            let ns = pack.join("data/fastlaunch");
+            for category in [
+                "function",
+                "tags/function",
+                "tags/block",
+                "predicate",
+                "predicates",
+                "recipe",
+                "custom_registry",
+            ] {
+                fs::create_dir_all(ns.join(category)).unwrap();
+            }
+            fs::write(ns.join("function/shared.mcfunction"), format!("say {name}")).unwrap();
+            let tag = format!(r#"{{"replace":{replace},"values":["fastlaunch:{name}"]}}"#);
+            fs::write(ns.join("tags/function/shared.json"), &tag).unwrap();
+            fs::write(ns.join("tags/block/shared.json"), tag).unwrap();
+            fs::write(
+                ns.join("predicate/shared.json"),
+                format!(r#"{{"pack":"{name}"}}"#),
+            )
+            .unwrap();
+            fs::write(
+                ns.join("predicates/shared.json"),
+                format!(r#"{{"alias":"{name}"}}"#),
+            )
+            .unwrap();
+            fs::write(ns.join("predicate/broken.json"), "{").unwrap();
+            fs::write(
+                ns.join("recipe/shared.json"),
+                r#"{"type":"minecraft:crafting_special_armordye"}"#,
+            )
+            .unwrap();
+            fs::write(
+                ns.join("custom_registry/shared.json"),
+                format!(r#"{{"pack":"{name}"}}"#),
+            )
+            .unwrap();
+            paths.push(pack);
+        }
+        paths.push(dir.path().join("missing"));
+        let prepared: Vec<_> = paths
+            .par_iter()
+            .map(|path| prepare_pack_contents(path))
+            .collect();
+        let mut merged = PreparedPack::default();
+        let mut counts = Vec::new();
+        for pack in prepared {
+            counts.push(pack.apply(&mut merged.accumulators()));
+        }
+        assert_eq!(merged.functions["fastlaunch:shared"], ["say third"]);
+        assert_eq!(
+            merged.predicates["fastlaunch:shared"],
+            serde_json::json!({"alias":"third"})
+        );
+        assert!(!merged.predicates.contains_key("fastlaunch:broken"));
+        assert_eq!(
+            merged.tags["block"]["fastlaunch:shared"].values,
+            ["fastlaunch:second", "fastlaunch:third"]
+        );
+        assert_eq!(
+            merged.function_tags["fastlaunch:shared"],
+            ["fastlaunch:first", "fastlaunch:second", "fastlaunch:third"]
+        );
+        assert_eq!(
+            counts
+                .iter()
+                .map(|count| count.functions)
+                .collect::<Vec<_>>(),
+            [1, 0, 0, 0]
+        );
+        assert_eq!(
+            counts
+                .iter()
+                .map(|count| count.predicates)
+                .collect::<Vec<_>>(),
+            [2, 2, 2, 0]
+        );
+        assert_eq!(
+            counts
+                .iter()
+                .map(|count| count.dynamic_registries)
+                .collect::<Vec<_>>(),
+            [1, 0, 0, 0]
+        );
+        assert_eq!(merged.recipes.len(), 3);
+        assert!(
+            merged
+                .recipes
+                .iter()
+                .all(|recipe| recipe.recipe_id() == Some("fastlaunch:shared"))
+        );
+    }
+
+    #[test]
+    fn parallel_directory_scan_keeps_discovery_order() {
+        use super::*;
+
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["z_last", "a_first"] {
+            let ns = dir.path().join(name).join("data/custom/function");
+            fs::create_dir_all(&ns).unwrap();
+            fs::write(ns.join("shared.mcfunction"), format!("say {name}")).unwrap();
+        }
+        let expected: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        let mut merged = PreparedPack::default();
+        let mut packs = Vec::new();
+        scan_datapacks_dir(
+            dir.path(),
+            &expected,
+            &mut merged.accumulators(),
+            &mut packs,
+        );
+        assert_eq!(
+            packs.iter().map(|pack| &pack.name).collect::<Vec<_>>(),
+            expected.iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            merged.functions["custom:shared"],
+            [format!("say {}", expected.last().unwrap())]
+        );
+    }
 
     #[test]
     fn function_dispatch_releases_the_functions_lock() {
