@@ -16,6 +16,7 @@ pub mod server;
 pub const BEDROCK_GAME_PACKET: u8 = 0xfe;
 
 /// Sub-client index representing local split-screen players on a client device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u16)]
 pub enum SubClient {
     /// Primary player instance on the client.
@@ -26,4 +27,24 @@ pub enum SubClient {
     SubClient1 = 2,
     /// Third secondary split-screen player.
     SubClient2 = 3,
+}
+
+impl SubClient {
+    /// Converts a 2-bit game-packet header field (`0..=3`) into a [`SubClient`].
+    #[must_use]
+    pub const fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::Main),
+            1 => Some(Self::SubClient0),
+            2 => Some(Self::SubClient1),
+            3 => Some(Self::SubClient2),
+            _ => None,
+        }
+    }
+
+    /// Returns `true` for split-screen sub-client slots (`1..=3`).
+    #[must_use]
+    pub const fn is_sub_client(self) -> bool {
+        !matches!(self, Self::Main)
+    }
 }

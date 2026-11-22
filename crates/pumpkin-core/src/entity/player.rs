@@ -1347,7 +1347,7 @@ impl Player {
                 skin: (**self.bedrock_skin.load()).clone(),
                 is_teacher: false,
                 is_host: false,
-                is_sub_client: false,
+                is_sub_client: self.client.bedrock().is_some_and(|c| c.is_sub_client()),
                 player_color: [0; 4],
             }],
         }

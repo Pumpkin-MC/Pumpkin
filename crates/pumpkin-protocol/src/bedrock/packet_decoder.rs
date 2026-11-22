@@ -2,8 +2,20 @@ use std::io::{Cursor, Read};
 
 use crate::{
     CompressionThreshold, MAX_PACKET_DATA_SIZE, PacketDecodeError, RawPacket,
-    bedrock::BEDROCK_GAME_PACKET, codec::var_uint::VarUInt, ser::ReadingError,
+    bedrock::{BEDROCK_GAME_PACKET, SubClient},
+    codec::var_uint::VarUInt,
+    ser::ReadingError,
 };
+
+/// A decoded Bedrock game packet together with its 2-bit sender and target sub-client routing IDs.
+pub struct BedrockGamePacket {
+    /// Decoded game packet ID and payload bytes.
+    pub packet: RawPacket,
+    /// Sub-client slot that originated this packet (`0` = primary client, `1..=3` = split-screen).
+    pub sender_sub_client: SubClient,
+    /// Sub-client slot this packet is addressed to (`0` = primary client/server, `1..=3` = split-screen).
+    pub target_sub_client: SubClient,
+}
 
 /// Decodes incoming Bedrock game packets and decompresses batched network frames.
 pub struct BedrockBatchDecoder {
@@ -117,11 +129,11 @@ impl BedrockBatchDecoder {
         }
     }
 
-    /// Reads the next game packet header and payload from a decompressed batch frame reader.
-    pub fn get_game_packet(
+    /// Reads the next game packet header (including sub-client IDs) and payload from a decompressed batch frame reader.
+    pub fn get_game_packet_with_subclient(
         &mut self,
         decompressed_reader: &mut Cursor<Vec<u8>>,
-    ) -> Result<RawPacket, PacketDecodeError> {
+    ) -> Result<BedrockGamePacket, PacketDecodeError> {
         let packet_len = VarUInt::decode(decompressed_reader).map_err(|err| match err {
             ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
             err => PacketDecodeError::MalformedLength(err.to_string()),
@@ -139,6 +151,10 @@ impl BedrockBatchDecoder {
         let var_header = VarUInt::decode(decompressed_reader)?;
         let header = var_header.0 & 0x3FFF;
         let gamepacket_id = (header & 0x3FF) as u16;
+        let sender_sub_client =
+            SubClient::from_u8(((header >> 10) & 0x03) as u8).unwrap_or(SubClient::Main);
+        let target_sub_client =
+            SubClient::from_u8(((header >> 12) & 0x03) as u8).unwrap_or(SubClient::Main);
 
         let header_size = var_header.written_size();
         if packet_len < header_size {
@@ -163,10 +179,23 @@ impl BedrockBatchDecoder {
             .read_exact(&mut payload)
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
-        Ok(RawPacket {
-            id: i32::from(gamepacket_id),
-            payload: payload.into(),
+        Ok(BedrockGamePacket {
+            packet: RawPacket {
+                id: i32::from(gamepacket_id),
+                payload: payload.into(),
+            },
+            sender_sub_client,
+            target_sub_client,
         })
+    }
+
+    /// Reads the next game packet header and payload from a decompressed batch frame reader.
+    pub fn get_game_packet(
+        &mut self,
+        decompressed_reader: &mut Cursor<Vec<u8>>,
+    ) -> Result<RawPacket, PacketDecodeError> {
+        self.get_game_packet_with_subclient(decompressed_reader)
+            .map(|decoded| decoded.packet)
     }
 }
 
@@ -177,6 +206,37 @@ mod tests {
     use crate::bedrock::{SubClient, packet_encoder::BedrockBatchEncoder};
 
     use super::*;
+
+    #[test]
+    fn roundtrips_sub_client_header_ids() {
+        let encoder = BedrockBatchEncoder::new();
+        let mut decoder = BedrockBatchDecoder::new();
+        let all = [
+            SubClient::Main,
+            SubClient::SubClient0,
+            SubClient::SubClient1,
+            SubClient::SubClient2,
+        ];
+
+        for sender in all {
+            for target in all {
+                let mut wire_buf = Vec::new();
+                encoder
+                    .write_game_packet(94, sender, target, b"hello", &mut wire_buf)
+                    .expect("encode Bedrock game packet");
+
+                let mut cursor = Cursor::new(wire_buf[1..].to_vec());
+                let decoded = decoder
+                    .get_game_packet_with_subclient(&mut cursor)
+                    .expect("decode Bedrock game packet");
+
+                assert_eq!(decoded.packet.id, 94);
+                assert_eq!(decoded.sender_sub_client, sender);
+                assert_eq!(decoded.target_sub_client, target);
+                assert_eq!(decoded.packet.payload.as_ref(), b"hello");
+            }
+        }
+    }
 
     #[test]
     fn decodes_payload_larger_than_two_mib() {
