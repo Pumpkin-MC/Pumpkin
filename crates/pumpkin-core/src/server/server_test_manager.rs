@@ -218,6 +218,10 @@ pub async fn prepare_test_run_with_reporter(
         }
     };
 
+    let _ = crate::block::entities::structure_block::load_or_cache_structure_template(
+        &request.world,
+        &test_instance.structure,
+    );
     let template = match server
         .datapack_manager
         .load_structure(&test_instance.structure)

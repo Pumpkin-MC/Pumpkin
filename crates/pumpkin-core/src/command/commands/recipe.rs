@@ -151,7 +151,7 @@ impl CommandExecutor for RecipeTakeExecutor {
             .filter(|r| {
                 !matches!(
                     r,
-                    CraftingRecipeTypes::CraftingSpecial
+                    CraftingRecipeTypes::CraftingSpecial(_)
                         | CraftingRecipeTypes::CraftingDecoratedPot { .. }
                 )
             })

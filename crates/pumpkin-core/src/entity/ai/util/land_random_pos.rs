@@ -59,7 +59,8 @@ pub fn get_pos_towards(
 ) -> Option<Vector3<f64>> {
     get_pos_in_direction(
         mob,
-        horizontal_dist,
+        0.0,
+        f64::from(horizontal_dist),
         vertical_dist,
         towards_pos - mob.get_entity().pos.load(),
     )
@@ -72,21 +73,46 @@ pub fn get_pos_away(
     vertical_dist: i32,
     away_from: Vector3<f64>,
 ) -> Option<Vector3<f64>> {
+    get_pos_away_between(
+        mob,
+        0.0,
+        f64::from(horizontal_dist),
+        vertical_dist,
+        away_from,
+    )
+}
+
+/// A position between `min_horizontal_dist` and `max_horizontal_dist` away from `away_from`.
+#[must_use]
+pub fn get_pos_away_between(
+    mob: &dyn Mob,
+    min_horizontal_dist: f64,
+    max_horizontal_dist: f64,
+    vertical_dist: i32,
+    away_from: Vector3<f64>,
+) -> Option<Vector3<f64>> {
     let mut away_direction = mob.get_entity().pos.load() - away_from;
     if away_direction.length() == 0.0 {
         let mut rng = mob.get_random();
         away_direction = Vector3::new(rng.random::<f64>() - 0.5, 0.0, rng.random::<f64>() - 0.5);
     }
-    get_pos_in_direction(mob, horizontal_dist, vertical_dist, away_direction)
+    get_pos_in_direction(
+        mob,
+        min_horizontal_dist,
+        max_horizontal_dist,
+        vertical_dist,
+        away_direction,
+    )
 }
 
 fn get_pos_in_direction(
     mob: &dyn Mob,
-    horizontal_dist: i32,
+    min_horizontal_dist: f64,
+    max_horizontal_dist: f64,
     vertical_dist: i32,
     direction: Vector3<f64>,
 ) -> Option<Vector3<f64>> {
-    let restrict = goal_utils::mob_restricted(mob, f64::from(horizontal_dist));
+    let restrict = goal_utils::mob_restricted(mob, max_horizontal_dist);
     let world = mob.get_entity().world.load_full();
     let block_pos = mob.get_entity().block_pos.load();
     let mut context = PathfindingContext::new(
@@ -99,22 +125,16 @@ fn get_pos_in_direction(
         || {
             let offset = random_pos::generate_random_direction_within_radians(
                 &mut rng,
-                0.0,
-                f64::from(horizontal_dist),
+                min_horizontal_dist,
+                max_horizontal_dist,
                 vertical_dist,
                 0,
                 direction.x,
                 direction.z,
                 std::f64::consts::FRAC_PI_2,
             )?;
-            let pos = toward_direction(
-                mob,
-                &world,
-                f64::from(horizontal_dist),
-                restrict,
-                offset,
-                &mut rng,
-            )?;
+            let pos =
+                toward_direction(mob, &world, max_horizontal_dist, restrict, offset, &mut rng)?;
             move_pos_up_out_of_solid(mob, &world, &mut context, pos)
         },
         |pos| f64::from(mob.get_walk_target_value(pos)),

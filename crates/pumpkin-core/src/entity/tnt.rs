@@ -1,4 +1,4 @@
-use super::{Entity, EntityBase, living::LivingEntity};
+use super::{Entity, EntityBase, living::LivingEntity, projectile::owner::EntityReference};
 use crate::server::Server;
 use crate::world::World;
 use core::f32;
@@ -29,6 +29,8 @@ pub struct TNTEntity {
     entity: Entity,
     power: AtomicCell<f32>,
     fuse: AtomicU32,
+    /// Whoever lit it, credited for the explosion.
+    pub owner: EntityReference,
 }
 
 impl TNTEntity {
@@ -43,6 +45,7 @@ impl TNTEntity {
             entity,
             power: AtomicCell::new(power),
             fuse: AtomicU32::new(fuse),
+            owner: EntityReference::none(),
         }
     }
 
@@ -51,18 +54,26 @@ impl TNTEntity {
     }
 
     /// Vanilla primed-TNT constructor: block centre plus the random launch impulse.
-    pub fn primed(world: &Arc<World>, position: &BlockPos, fuse: u32) -> Arc<Self> {
+    pub fn primed(
+        world: &Arc<World>,
+        position: &BlockPos,
+        fuse: u32,
+        owner: Option<&Entity>,
+    ) -> Arc<Self> {
         let pos = Vector3::new(
             f64::from(position.0.x) + 0.5,
             f64::from(position.0.y),
             f64::from(position.0.z) + 0.5,
         );
         let entity = Entity::new(world.clone(), pos, &EntityType::TNT);
+        // TODO: vanilla rolls from `level.random`; same odds, not seed-reproducible.
         let rot = rand::random::<f64>() * TAU;
         entity
             .velocity
             .store(Vector3::new(-rot.sin() * 0.02, 0.2, -rot.cos() * 0.02));
-        Arc::new(Self::new(entity, Self::DEFAULT_POWER, fuse))
+        let tnt = Self::new(entity, Self::DEFAULT_POWER, fuse);
+        tnt.owner.set_uuid(owner.map(|owner| owner.entity_uuid));
+        Arc::new(tnt)
     }
 
     /// Vanilla `PrimedTnt.getRandomShortFuse`.
@@ -73,6 +84,10 @@ impl TNTEntity {
 }
 
 impl EntityBase for TNTEntity {
+    fn can_hit(&self) -> bool {
+        !self.get_entity().is_removed()
+    }
+
     /// Vanilla `PrimedTnt.addAdditionalSaveData`. Without it a chunk reload resets a
     /// nearly-detonated fuse and the TNT explodes late.
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
@@ -81,6 +96,7 @@ impl EntityBase for TNTEntity {
         if (power - Self::DEFAULT_POWER).abs() > f32::EPSILON {
             nbt.put_float("explosion_power", power);
         }
+        self.owner.write_nbt(nbt, "owner");
     }
 
     /// Vanilla `PrimedTnt.readAdditionalSaveData`.
@@ -94,6 +110,7 @@ impl EntityBase for TNTEntity {
                 .unwrap_or(Self::DEFAULT_POWER)
                 .clamp(0.0, 128.0),
         );
+        self.owner.read_nbt(nbt, "owner");
     }
 
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
@@ -101,6 +118,7 @@ impl EntityBase for TNTEntity {
 
         let mut velo = entity.velocity.load();
         velo.y -= self.get_gravity();
+        entity.velocity.store(velo);
 
         entity.move_entity(caller, velo);
         entity.tick_block_collisions(caller);
@@ -132,7 +150,8 @@ impl EntityBase for TNTEntity {
                 // Vanilla `PrimedTnt.explode`: `getY(0.0625)`.
                 let pos = entity.pos.load();
                 let y = f64::from(entity.entity_type.dimension[1]).mul_add(0.0625, pos.y);
-                world.explode(
+                world.explode_from(
+                    caller,
                     Vector3::new(pos.x, y, pos.z),
                     self.power.load(),
                     crate::world::ExplosionInteraction::Tnt,

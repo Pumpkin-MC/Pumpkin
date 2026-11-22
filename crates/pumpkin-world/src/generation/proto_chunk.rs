@@ -366,21 +366,41 @@ impl ProtoChunk {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
+        let height = i32::from(self.height());
+        let y_offset = section_data.min_y - i32::from(self.bottom_y());
         for (section_idx, block_palette) in block_sections_guard.iter().enumerate() {
             let section_base_y = section_idx as i32 * 16;
 
-            if section_base_y >= self.height() as i32 {
+            if section_base_y >= height {
                 continue;
             }
 
-            for x in 0..16 {
-                for y in 0..16 {
-                    for z in 0..16 {
-                        let block_state_id = block_palette.get(x, y, z);
-                        let block_state = BlockState::from_id(block_state_id);
-                        let absolute_y = section_base_y + y as i32 + section_data.min_y;
-
-                        self.set_block_state(x as i32, absolute_y, z as i32, block_state);
+            // A new proto chunk is all air, so only other blocks need copying. The heightmaps
+            // are restored from the saved ones instead of being updated block by block.
+            if !matches!(block_palette, BlockPalette::Homogeneous(id) if *id == BlockStateId::AIR) {
+                // Writes bypass set_block_state, so mark emitters here. Over-marking only costs
+                // the light pass a scan.
+                let emits = block_palette.max_luminance() > 0;
+                for x in 0..16 {
+                    for y in 0..16 {
+                        let local_y = section_base_y + y as i32 + y_offset;
+                        if !(0..height).contains(&local_y) {
+                            continue;
+                        }
+                        if emits {
+                            self.emitter_sections.set((local_y >> 4) as usize);
+                        }
+                        for z in 0..16 {
+                            let block_state_id = block_palette.get(x, y, z);
+                            if block_state_id != BlockStateId::AIR {
+                                let index =
+                                    Self::local_pos_to_block_index(x as i32, local_y, z as i32);
+                                if index >= self.flat_block_map.len() {
+                                    self.reserve_block_section(local_y);
+                                }
+                                self.flat_block_map[index] = block_state_id;
+                            }
+                        }
                     }
                 }
             }
@@ -410,6 +430,8 @@ impl ProtoChunk {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
+        let populated_height = (self.flat_block_map.len() / CHUNK_AREA) as i32;
+        let bottom_y = i32::from(self.bottom_y());
         for z in 0..16 {
             for x in 0..16 {
                 let index = Self::local_position_to_height_map_index(x, z);
@@ -423,6 +445,21 @@ impl ProtoChunk {
                     heightmap_data.get(ChunkHeightmapType::WorldSurface, x, z, min_y) as i16;
                 self.flat_surface_height_map[index] = surface_height;
                 self.flat_surface_wg_height_map[index] = surface_height;
+
+                // The ocean floor heightmap is not saved, so take the highest block that
+                // blocks movement.
+                let ocean_floor = (0..populated_height).rev().find(|&local_y| {
+                    let state_id =
+                        self.flat_block_map[Self::local_pos_to_block_index(x, local_y, z)];
+                    if state_id == BlockStateId::AIR {
+                        return false;
+                    }
+                    let state = state_id.to_state();
+                    !state.is_air() && blocks_movement(state, BlockId::from_state_id(state_id))
+                });
+                if let Some(local_y) = ocean_floor {
+                    self.flat_ocean_floor_height_map[index] = (bottom_y + local_y) as i16;
+                }
                 self.flat_ocean_floor_wg_height_map[index] =
                     self.flat_ocean_floor_height_map[index];
             }
@@ -767,6 +804,19 @@ impl ProtoChunk {
         self.get_block_state_raw(local_pos.x & 15, local_y, local_pos.z & 15)
     }
 
+    /// Grows `flat_block_map` with air up to the end of the section holding `local_y`. This
+    /// happens once per section, so keep it out of the per-block paths.
+    #[cold]
+    #[inline(never)]
+    fn reserve_block_section(&mut self, local_y: i32) {
+        let section_end = ((local_y as usize >> 4) + 1) * BlockPalette::VOLUME;
+        if section_end > self.flat_block_map.len() {
+            self.flat_block_map
+                .reserve_exact(section_end - self.flat_block_map.len());
+            self.flat_block_map.resize(section_end, BlockStateId::AIR);
+        }
+    }
+
     pub fn set_block_state(&mut self, x: i32, y: i32, z: i32, block_state: &BlockState) {
         let local_x = x & 15;
         let local_y = y - self.bottom_y() as i32;
@@ -785,10 +835,7 @@ impl ProtoChunk {
             if block_state.id == BlockStateId::AIR {
                 return;
             }
-            let section_end = ((local_y as usize >> 4) + 1) * BlockPalette::VOLUME;
-            self.flat_block_map
-                .reserve_exact(section_end - self.flat_block_map.len());
-            self.flat_block_map.resize(section_end, BlockStateId::AIR);
+            self.reserve_block_section(local_y);
         } else if self.flat_block_map[index] == block_state.id {
             return;
         }
@@ -1124,7 +1171,10 @@ impl ProtoChunk {
                             surface_height_estimate_sampler,
                         )
                         .unwrap_or(generator.default_block);
-                    self.set_block_state(block_x, block_y, block_z, block_state);
+                    // Noise is the first stage to place blocks, so air is already there.
+                    if block_state.id != BlockStateId::AIR {
+                        self.set_block_state(block_x, block_y, block_z, block_state);
+                    }
                 }
             }
         }
@@ -1729,18 +1779,25 @@ impl ProtoChunk {
         false
     }
 
-    /// Adds references to nearby structure starts that intersect this chunk.
+    /// Every `wanted` structure start, from this chunk or up to 8 chunks away, that reaches
+    /// into the chunk at `chunk_x`, `chunk_z`.
     #[expect(clippy::too_many_lines)]
-    pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
-        debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
+    pub(crate) fn structure_references_in_chunk(
+        generator: &super::generator::VanillaGenerator,
+        chunk_x: i32,
+        chunk_z: i32,
+        chunk_min_y: i32,
+        chunk_height: u16,
+        wanted: impl Fn(StructureKeys) -> bool,
+    ) -> Vec<(StructureKeys, Arc<Mutex<StructurePiecesCollector>>)> {
         let random_config = &generator.random_config;
         let settings = generator.settings;
         let noise_router = &generator.base_router;
         let global_cache = &generator.global_structure_cache;
         let calculator = &generator.structure_calculator;
 
-        let start_x = chunk_pos::start_block_x(self.x);
-        let start_z = chunk_pos::start_block_z(self.z);
+        let start_x = chunk_pos::start_block_x(chunk_x);
+        let start_z = chunk_pos::start_block_z(chunk_z);
         let end_x = start_x + 15;
         let end_z = start_z + 15;
 
@@ -1754,16 +1811,11 @@ impl ProtoChunk {
 
         let mut references = Vec::new();
         let mut candidate_chunks = Vec::with_capacity(4);
-        // Constant across every chunk in the dimension, so hoist it out of the loop
-        // and out of the (cached) structure-start computation below.
-        // Matches vanilla WorldGenerationContext:
-        // minY = Math.max(heightAccessor.getMinY(), generator.getMinY())
-        // height = Math.min(heightAccessor.getHeight(), generator.getGenDepth())
-        let chunk_min_y = (self.generation_bottom_y() as i32).max(self.bottom_y() as i32);
-        let chunk_height = self.generation_height().min(self.height());
 
         for (set_index, set) in StructureSet::ALL.iter().enumerate() {
-            if !generator.enabled_structure_sets.contains(&set_index) {
+            if !generator.enabled_structure_sets.contains(&set_index)
+                || !set.structures.iter().any(|entry| wanted(entry.structure))
+            {
                 continue;
             }
 
@@ -1771,10 +1823,10 @@ impl ProtoChunk {
 
             match &set.placement.placement_type {
                 StructurePlacementType::RandomSpread(spread) => {
-                    let min_rx = pumpkin_util::math::floor_div(self.x - 8, spread.spacing);
-                    let max_rx = pumpkin_util::math::floor_div(self.x + 8, spread.spacing);
-                    let min_rz = pumpkin_util::math::floor_div(self.z - 8, spread.spacing);
-                    let max_rz = pumpkin_util::math::floor_div(self.z + 8, spread.spacing);
+                    let min_rx = pumpkin_util::math::floor_div(chunk_x - 8, spread.spacing);
+                    let max_rx = pumpkin_util::math::floor_div(chunk_x + 8, spread.spacing);
+                    let min_rz = pumpkin_util::math::floor_div(chunk_z - 8, spread.spacing);
+                    let max_rz = pumpkin_util::math::floor_div(chunk_z + 8, spread.spacing);
 
                     for rx in min_rx..=max_rx {
                         for rz in min_rz..=max_rz {
@@ -1786,7 +1838,7 @@ impl ProtoChunk {
                                     rz,
                                     set.placement.salt,
                                 );
-                            if (cx - self.x).abs() <= 8 && (cz - self.z).abs() <= 8 {
+                            if (cx - chunk_x).abs() <= 8 && (cz - chunk_z).abs() <= 8 {
                                 candidate_chunks.push((cx, cz));
                             }
                         }
@@ -1796,8 +1848,8 @@ impl ProtoChunk {
                     global_cache.collect_strongholds_in_range(
                         seed,
                         placement,
-                        self.x,
-                        self.z,
+                        chunk_x,
+                        chunk_z,
                         8,
                         &mut candidate_chunks,
                     );
@@ -1872,17 +1924,38 @@ impl ProtoChunk {
                     );
 
                     if let Some(start_data) = start_data {
-                        if start_data
-                            .get_adjusted_bounding_box(&entry.structure)
-                            .intersects_raw_xz(start_x, start_z, end_x, end_z)
+                        if wanted(entry.structure)
+                            && start_data
+                                .get_adjusted_bounding_box(&entry.structure)
+                                .intersects_raw_xz(start_x, start_z, end_x, end_z)
                         {
-                            references.push((entry.structure, start_data.collector.clone()));
+                            references.push((entry.structure, start_data.collector));
                         }
                         break;
                     }
                 }
             }
         }
+
+        references
+    }
+
+    /// Adds references to nearby structure starts that intersect this chunk.
+    pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
+        // Matches vanilla WorldGenerationContext:
+        // minY = Math.max(heightAccessor.getMinY(), generator.getMinY())
+        // height = Math.min(heightAccessor.getHeight(), generator.getGenDepth())
+        let chunk_min_y = (self.generation_bottom_y() as i32).max(self.bottom_y() as i32);
+        let chunk_height = self.generation_height().min(self.height());
+        let references = Self::structure_references_in_chunk(
+            generator,
+            self.x,
+            self.z,
+            chunk_min_y,
+            chunk_height,
+            |_| true,
+        );
 
         for (key, pos) in references {
             self.structure_starts

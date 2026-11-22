@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering};
 
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{
@@ -18,7 +18,7 @@ use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
-use pumpkin_data::statistic::StatisticCategory;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, BannerPattern, RegistryKey, Taggable, get_tag_values};
 use pumpkin_protocol::java::server::play::SlotActionType;
 
@@ -283,9 +283,7 @@ impl ScreenHandler for LoomScreenHandler {
         player: &dyn InventoryPlayer,
     ) {
         self.internal_on_slot_click(slot_index, button, action_type, player);
-        if (0..=3).contains(&slot_index) {
-            self.slots_changed();
-        }
+        self.slots_changed();
     }
 
     fn on_button_click(&mut self, _player: &dyn InventoryPlayer, button_id: i32) -> bool {
@@ -301,62 +299,67 @@ impl ScreenHandler for LoomScreenHandler {
     }
 
     fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        let mut stack = ItemStack::EMPTY.clone();
-        let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
+        let Some(slot) = self.get_behaviour().slots.get(slot_index as usize).cloned() else {
+            return ItemStack::EMPTY.clone();
+        };
+        if !slot.has_stack() {
+            return ItemStack::EMPTY.clone();
+        }
 
-        if let Some(slot) = slot {
-            let mut slot_stack = slot.get_cloned_stack();
-            if !slot_stack.is_empty() {
-                stack = slot_stack.clone();
-                match slot_index.cmp(&3) {
-                    std::cmp::Ordering::Equal => {
-                        if !self.insert_item(&mut slot_stack, 4, 40, true) {
-                            return ItemStack::EMPTY.clone();
-                        }
-                        slot.on_quick_move_crafted(slot_stack.clone(), stack.clone());
-                        let mut taken_stack = stack.clone();
-                        taken_stack.set_count(stack.item_count - slot_stack.item_count);
-                        slot.on_take_item(player, &taken_stack);
-                    }
-                    std::cmp::Ordering::Less => {
-                        if !self.insert_item(&mut slot_stack, 4, 40, false) {
-                            return ItemStack::EMPTY.clone();
-                        }
-                    }
-                    std::cmp::Ordering::Greater => {
-                        if is_banner_item(slot_stack.item) {
-                            if !self.insert_item(&mut slot_stack, 0, 1, false) {
-                                return ItemStack::EMPTY.clone();
-                            }
-                        } else if is_dye_item(&slot_stack) {
-                            if !self.insert_item(&mut slot_stack, 1, 2, false) {
-                                return ItemStack::EMPTY.clone();
-                            }
-                        } else if is_pattern_item(&slot_stack) {
-                            if !self.insert_item(&mut slot_stack, 2, 3, false) {
-                                return ItemStack::EMPTY.clone();
-                            }
-                        } else if (4..31).contains(&slot_index) {
-                            if !self.insert_item(&mut slot_stack, 31, 40, false) {
-                                return ItemStack::EMPTY.clone();
-                            }
-                        } else if (31..40).contains(&slot_index)
-                            && !self.insert_item(&mut slot_stack, 4, 31, false)
-                        {
-                            return ItemStack::EMPTY.clone();
-                        }
-                    }
+        let mut stack = slot.get_cloned_stack();
+        let clicked = stack.clone();
+        match slot_index.cmp(&3) {
+            std::cmp::Ordering::Equal => {
+                if !self.insert_item(&mut stack, 4, 40, true) {
+                    return ItemStack::EMPTY.clone();
                 }
-                self.slots_changed();
-
-                if slot_stack.is_empty() {
-                    slot.set_stack(ItemStack::EMPTY.clone());
-                } else {
-                    slot.set_stack(slot_stack);
+                slot.on_quick_move_crafted(stack.clone(), clicked.clone());
+            }
+            std::cmp::Ordering::Less => {
+                if !self.insert_item(&mut stack, 4, 40, false) {
+                    return ItemStack::EMPTY.clone();
+                }
+            }
+            std::cmp::Ordering::Greater => {
+                if is_banner_item(stack.item) {
+                    if !self.insert_item(&mut stack, 0, 1, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if is_dye_item(&stack) {
+                    if !self.insert_item(&mut stack, 1, 2, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if is_pattern_item(&stack) {
+                    if !self.insert_item(&mut stack, 2, 3, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if (4..31).contains(&slot_index) {
+                    if !self.insert_item(&mut stack, 31, 40, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if (31..40).contains(&slot_index)
+                    && !self.insert_item(&mut stack, 4, 31, false)
+                {
+                    return ItemStack::EMPTY.clone();
                 }
             }
         }
-        stack
+
+        slot.set_stack(if stack.is_empty() {
+            ItemStack::EMPTY.clone()
+        } else {
+            stack.clone()
+        });
+        slot.mark_dirty();
+        self.slots_changed();
+
+        if stack.item_count == clicked.item_count {
+            return ItemStack::EMPTY.clone();
+        }
+
+        slot.on_take_item(player, &stack);
+        self.slots_changed();
+        clicked
     }
 
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
@@ -438,6 +441,7 @@ pub struct LoomResultSlot {
     inventory: Arc<dyn Inventory>,
     input_inventory: Arc<dyn Inventory>,
     selected_pattern_index: Arc<AtomicI32>,
+    last_sound_time: AtomicI64,
     index: usize,
     id: AtomicU8,
 }
@@ -453,6 +457,7 @@ impl LoomResultSlot {
             inventory,
             input_inventory,
             selected_pattern_index,
+            last_sound_time: AtomicI64::new(0),
             index,
             id: AtomicU8::new(0),
         }
@@ -476,12 +481,7 @@ impl Slot for LoomResultSlot {
         false
     }
 
-    fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
-        player.increment_stat(
-            StatisticCategory::Crafted,
-            stack.item.id as i32,
-            stack.item_count as i32,
-        );
+    fn on_take_item(&self, player: &dyn InventoryPlayer, _stack: &ItemStack) {
         self.input_inventory.remove_stack_specific(0, 1);
         self.input_inventory.remove_stack_specific(1, 1);
         if self.input_inventory.get_stack(0).is_empty()
@@ -489,6 +489,10 @@ impl Slot for LoomResultSlot {
         {
             self.selected_pattern_index
                 .store(LoomScreenHandler::PATTERN_NOT_SET, Ordering::Relaxed);
+        }
+        let game_time = player.game_time();
+        if self.last_sound_time.swap(game_time, Ordering::Relaxed) != game_time {
+            player.play_block_sound(Sound::UiLoomTakeResult, 1.0);
         }
         self.mark_dirty();
     }

@@ -21,6 +21,7 @@ pub struct TrappedChestBlockEntity {
     pub loot_table: StdMutex<Option<String>>,
     /// Seed used for deterministic loot generation.
     pub loot_table_seed: i64,
+    pub metadata: crate::block::entities::ContainerMetadata,
 }
 
 impl TrappedChestBlockEntity {

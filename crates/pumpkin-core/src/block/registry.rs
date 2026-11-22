@@ -177,7 +177,8 @@ use crate::block::{
     BlockBehaviour, BlockHitResult, BlockMetadata, BonemealArgs, FluidMetadata,
     GetInsideCollisionShapeArgs, GetScreenHandlerFactoryArgs, OnEntityCollisionArgs,
     OnEntityStepArgs, OnLandedUponArgs, OnProjectileHitArgs, PathComputationType,
-    UpdateEntityMovementAfterFallOnArgs, stop_vertical_movement_after_fall,
+    UpdateEntityMovementAfterFallOnArgs, bounce_entity_after_fall,
+    stop_vertical_movement_after_fall,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -873,21 +874,31 @@ impl BlockRegistry {
         );
 
         if let Some(ref stack) = held_stack
-            && placed_block.default_state.block_entity_type != u16::MAX
+            && placed_block.default_state.has_block_entity()
         {
             if let Some(block_entity_data) =
                 stack.get_data_component::<pumpkin_data::data_component_impl::BlockEntityDataImpl>()
                 && let Some(existing_be) = world.get_block_entity(&final_block_pos)
             {
-                let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-                existing_be.write_internal(&mut nbt);
-                for (k, v) in &block_entity_data.nbt.child_tags {
-                    if !matches!(k.as_ref(), "x" | "y" | "z" | "id") {
-                        nbt.child_tags.insert(k.clone(), v.clone());
+                let expected_id = existing_be
+                    .resource_location()
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(existing_be.resource_location());
+                let id_matches = block_entity_data
+                    .nbt
+                    .get_string("id")
+                    .is_none_or(|id| id.strip_prefix("minecraft:").unwrap_or(id) == expected_id);
+                if id_matches {
+                    let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+                    existing_be.write_internal(&mut nbt);
+                    for (k, v) in &block_entity_data.nbt.child_tags {
+                        if !matches!(k.as_ref(), "x" | "y" | "z" | "id") {
+                            nbt.child_tags.insert(k.clone(), v.clone());
+                        }
                     }
-                }
-                if let Some(reloaded) = crate::block::entities::block_entity_from_nbt(&nbt) {
-                    world.add_block_entity(reloaded);
+                    if let Some(reloaded) = crate::block::entities::block_entity_from_nbt(&nbt) {
+                        world.add_block_entity(reloaded);
+                    }
                 }
             }
             if let Some(block_entity) = world.get_block_entity(&final_block_pos) {
@@ -1073,13 +1084,20 @@ impl BlockRegistry {
         None
     }
 
-    pub fn explode(&self, block: &Block, world: &Arc<World>, position: &BlockPos) {
+    pub fn explode(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        position: &BlockPos,
+        explosion: &crate::world::Explosion<'_>,
+    ) {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block.explode(ExplodeArgs {
                 world,
                 block,
                 position,
+                explosion,
             });
         }
     }
@@ -1244,10 +1262,10 @@ impl BlockRegistry {
         notify: bool,
     ) {
         let state = world.get_block_state(position);
-        if state.block_entity_type != u16::MAX
+        if state.has_block_entity()
             && world.get_block_entity(position).is_none()
             && let Some(entity) =
-                crate::block::entities::create_block_entity(state.block_entity_type, *position)
+                crate::block::entities::create_block_entity_for_state(state.id, *position)
         {
             world.add_block_entity(entity);
         }
@@ -1291,17 +1309,23 @@ impl BlockRegistry {
         if let Some(pumpkin_block) = pumpkin_block {
             pumpkin_block.on_landed_upon(OnLandedUponArgs {
                 world,
+                block,
                 fall_distance,
                 entity,
             });
+        } else if let Some(living) = entity.get_living_entity() {
+            let reduced_fall_distance = fall_distance * (1.0 - block.fall_distance_reduction);
+            living.handle_fall_damage(entity, reduced_fall_distance, 1.0);
         }
     }
 
     pub fn update_entity_movement_after_fall_on(&self, block: &Block, entity: &dyn EntityBase) {
         if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
             pumpkin_block.update_entity_movement_after_fall_on(
-                UpdateEntityMovementAfterFallOnArgs { entity },
+                UpdateEntityMovementAfterFallOnArgs { block, entity },
             );
+        } else if block.bounce_restitution > 0.0 {
+            bounce_entity_after_fall(entity, f64::from(block.bounce_restitution));
         } else {
             stop_vertical_movement_after_fall(entity);
         }
@@ -1356,6 +1380,7 @@ impl BlockRegistry {
         position: &BlockPos,
         old_state_id: BlockStateId,
         moved: bool,
+        flags: BlockFlags,
     ) {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
@@ -1365,6 +1390,7 @@ impl BlockRegistry {
                 old_state_id,
                 position,
                 moved,
+                flags,
             });
         }
     }

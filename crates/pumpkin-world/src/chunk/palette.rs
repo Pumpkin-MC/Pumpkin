@@ -247,17 +247,17 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             let mut last_val = second;
             let mut last_idx = 1usize;
 
-            for y in diff_y..DIM {
+            for (y, plane) in cube.iter_mut().enumerate().skip(diff_y) {
                 let z_start = if y == diff_y { diff_z } else { 0 };
-                for z in z_start..DIM {
+                for (z, row) in plane.iter_mut().enumerate().skip(z_start) {
                     let x_start = if y == diff_y && z == diff_z {
                         diff_x + 1
                     } else {
                         0
                     };
-                    for x in x_start..DIM {
+                    for (x, cell) in row.iter_mut().enumerate().skip(x_start) {
                         let value = value_at(x, y, z);
-                        cube[y][z][x] = value;
+                        *cell = value;
                         let index = if value == last_val {
                             last_idx
                         } else if let Some(idx) = palette.iter().position(|&e| e == value) {

@@ -3,6 +3,7 @@ use pumpkin_protocol::java::client::play::{
     CSetBorderWarningDelay, CSetBorderWarningDistance,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::Entity;
 use crate::net::java::JavaClient;
@@ -144,6 +145,22 @@ impl Worldborder {
         from_west.min(from_east).min(from_north).min(from_south)
     }
 
+    /// Pulls `x` and `z` just inside the border.
+    #[must_use]
+    pub fn clamp_to_bounds(&self, position: Vector3<f64>) -> Vector3<f64> {
+        let half = self.new_diameter / 2.0;
+        let inset = f64::from(1.0e-5f32);
+        Vector3::new(
+            position
+                .x
+                .clamp(self.center_x - half, self.center_x + half - inset),
+            position.y,
+            position
+                .z
+                .clamp(self.center_z - half, self.center_z + half - inset),
+        )
+    }
+
     #[must_use]
     pub fn is_within_bounds(&self, x: f64, z: f64, margin: f64) -> bool {
         let half = self.new_diameter / 2.0;
@@ -199,6 +216,19 @@ impl Worldborder {
         let min_z = (self.center_z - half).floor() as i32;
         let max_z = ((self.center_z + half).floor() as i32 - 1).max(min_z);
         (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
+    }
+
+    /// Clamps a position into the border on the horizontal axes.
+    #[must_use]
+    pub fn clamp_to_bound(&self, x: f64, z: f64) -> (f64, f64) {
+        // Unlike `f64::clamp`, an inverted range does not panic.
+        let clamp = |value: f64, min: f64, max: f64| if value < min { min } else { value.min(max) };
+        let half = self.new_diameter / 2.0;
+        let margin = f64::from(1.0E-5f32);
+        (
+            clamp(x, self.center_x - half, self.center_x + half - margin),
+            clamp(z, self.center_z - half, self.center_z + half - margin),
+        )
     }
 }
 

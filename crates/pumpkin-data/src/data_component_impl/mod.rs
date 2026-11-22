@@ -272,6 +272,106 @@ impl IDSetContent for crate::item::Item {
     }
 }
 
+const DAMAGE_TYPES_BY_ID: [(crate::damage::DamageType, &str); 51] = [
+    (crate::damage::DamageType::ARROW, "arrow"),
+    (
+        crate::damage::DamageType::BAD_RESPAWN_POINT,
+        "bad_respawn_point",
+    ),
+    (crate::damage::DamageType::CACTUS, "cactus"),
+    (crate::damage::DamageType::CAMPFIRE, "campfire"),
+    (crate::damage::DamageType::CRAMMING, "cramming"),
+    (crate::damage::DamageType::DRAGON_BREATH, "dragon_breath"),
+    (crate::damage::DamageType::DROWN, "drown"),
+    (crate::damage::DamageType::DRY_OUT, "dry_out"),
+    (crate::damage::DamageType::ENDER_PEARL, "ender_pearl"),
+    (crate::damage::DamageType::EXPLOSION, "explosion"),
+    (crate::damage::DamageType::FALL, "fall"),
+    (crate::damage::DamageType::FALLING_ANVIL, "falling_anvil"),
+    (crate::damage::DamageType::FALLING_BLOCK, "falling_block"),
+    (
+        crate::damage::DamageType::FALLING_STALACTITE,
+        "falling_stalactite",
+    ),
+    (crate::damage::DamageType::FIREBALL, "fireball"),
+    (crate::damage::DamageType::FIREWORKS, "fireworks"),
+    (crate::damage::DamageType::FLY_INTO_WALL, "fly_into_wall"),
+    (crate::damage::DamageType::FREEZE, "freeze"),
+    (crate::damage::DamageType::GENERIC, "generic"),
+    (crate::damage::DamageType::GENERIC_KILL, "generic_kill"),
+    (crate::damage::DamageType::HOT_FLOOR, "hot_floor"),
+    (crate::damage::DamageType::IN_FIRE, "in_fire"),
+    (crate::damage::DamageType::IN_WALL, "in_wall"),
+    (crate::damage::DamageType::INDIRECT_MAGIC, "indirect_magic"),
+    (crate::damage::DamageType::LAVA, "lava"),
+    (crate::damage::DamageType::LIGHTNING_BOLT, "lightning_bolt"),
+    (crate::damage::DamageType::MACE_SMASH, "mace_smash"),
+    (crate::damage::DamageType::MAGIC, "magic"),
+    (crate::damage::DamageType::MOB_ATTACK, "mob_attack"),
+    (
+        crate::damage::DamageType::MOB_ATTACK_NO_AGGRO,
+        "mob_attack_no_aggro",
+    ),
+    (crate::damage::DamageType::MOB_PROJECTILE, "mob_projectile"),
+    (crate::damage::DamageType::ON_FIRE, "on_fire"),
+    (crate::damage::DamageType::OUT_OF_WORLD, "out_of_world"),
+    (crate::damage::DamageType::OUTSIDE_BORDER, "outside_border"),
+    (crate::damage::DamageType::PLAYER_ATTACK, "player_attack"),
+    (
+        crate::damage::DamageType::PLAYER_EXPLOSION,
+        "player_explosion",
+    ),
+    (crate::damage::DamageType::SONIC_BOOM, "sonic_boom"),
+    (crate::damage::DamageType::SPEAR, "spear"),
+    (crate::damage::DamageType::SPIT, "spit"),
+    (crate::damage::DamageType::STALAGMITE, "stalagmite"),
+    (crate::damage::DamageType::STARVE, "starve"),
+    (crate::damage::DamageType::STING, "sting"),
+    (
+        crate::damage::DamageType::SULFUR_CUBE_HOT,
+        "sulfur_cube_hot",
+    ),
+    (
+        crate::damage::DamageType::SWEET_BERRY_BUSH,
+        "sweet_berry_bush",
+    ),
+    (crate::damage::DamageType::THORNS, "thorns"),
+    (crate::damage::DamageType::THROWN, "thrown"),
+    (crate::damage::DamageType::TRIDENT, "trident"),
+    (
+        crate::damage::DamageType::UNATTRIBUTED_FIREBALL,
+        "unattributed_fireball",
+    ),
+    (crate::damage::DamageType::WIND_CHARGE, "wind_charge"),
+    (crate::damage::DamageType::WITHER, "wither"),
+    (crate::damage::DamageType::WITHER_SKULL, "wither_skull"),
+];
+
+impl IDSetContent for crate::damage::DamageType {
+    fn registry_id(&self) -> u16 {
+        u16::from(self.id)
+    }
+
+    fn from_id(id: u16) -> Option<&'static Self> {
+        DAMAGE_TYPES_BY_ID.get(usize::from(id)).map(|(dt, _)| dt)
+    }
+
+    fn from_str(name: &str) -> Option<&'static Self> {
+        let key = name.strip_prefix("minecraft:").unwrap_or(name);
+        DAMAGE_TYPES_BY_ID
+            .iter()
+            .find(|(_, k)| *k == key)
+            .map(|(dt, _)| dt)
+    }
+
+    fn to_string(&self) -> String {
+        DAMAGE_TYPES_BY_ID.get(usize::from(self.id)).map_or_else(
+            || format!("minecraft:{}", self.message_id),
+            |(_, key)| format!("minecraft:{key}"),
+        )
+    }
+}
+
 #[derive(Clone, Hash, PartialEq, Debug)]
 pub enum IDSet<T: IDSetContent + 'static> {
     Tag(Cow<'static, str>),
@@ -328,6 +428,28 @@ impl IDSet<EntityType> {
         match self {
             Self::Tag(tag) => entity_type.is_tagged_with(tag).unwrap_or(false),
             Self::IDs(types) => types.iter().any(|t| t.id == entity_type.id),
+        }
+    }
+}
+
+impl IDSet<crate::damage::DamageType> {
+    /// Membership by id or damage type tag.
+    #[must_use]
+    pub fn contains(&self, damage_type: &crate::damage::DamageType) -> bool {
+        match self {
+            Self::Tag(tag) => damage_type.is_tagged_with(tag).unwrap_or(false),
+            Self::IDs(types) => types.iter().any(|t| t.id == damage_type.id),
+        }
+    }
+}
+
+impl IDSet<crate::item::Item> {
+    /// Membership by id or item tag.
+    #[must_use]
+    pub fn contains(&self, item: &crate::item::Item) -> bool {
+        match self {
+            Self::Tag(tag) => item.is_tagged_with(tag).unwrap_or(false),
+            Self::IDs(items) => items.iter().any(|i| i.id == item.id),
         }
     }
 }
@@ -806,9 +928,21 @@ mod tests {
     #[test]
     fn entity_data_round_trip() {
         let mut nbt = NbtCompound::new();
-        nbt.put_string("id", "minecraft:iron_golem".to_string());
         nbt.put_bool("PlayerCreated", true);
-        assert_round_trip(EntityDataImpl { nbt: Some(nbt) }, EntityDataImpl::read_data);
+        assert_round_trip(
+            EntityDataImpl {
+                entity_type: Some(&EntityType::IRON_GOLEM),
+                nbt: Some(nbt),
+            },
+            EntityDataImpl::read_data,
+        );
+        assert_round_trip(
+            EntityDataImpl {
+                entity_type: Some(&EntityType::CHICKEN),
+                nbt: None,
+            },
+            EntityDataImpl::read_data,
+        );
     }
 
     #[test]
@@ -924,7 +1058,28 @@ mod tests {
             IntangibleProjectileImpl,
             IntangibleProjectileImpl::read_data,
         );
-        assert_round_trip(BrewingFuelImpl, BrewingFuelImpl::read_data);
+        assert_round_trip(BrewingFuelImpl::DEFAULT, BrewingFuelImpl::read_data);
+        assert_round_trip(
+            BrewingFuelImpl {
+                uses: IntProvider::Inline(10),
+                speed_multiplier: FloatProvider::Inline(2.0),
+            },
+            BrewingFuelImpl::read_data,
+        );
+        assert_round_trip(BlocksAttacksImpl::DEFAULT, BlocksAttacksImpl::read_data);
+        assert_round_trip(
+            DeathProtectionImpl {
+                death_effects: Cow::Owned(vec![ConsumeEffect::ClearAllEffects]),
+            },
+            DeathProtectionImpl::read_data,
+        );
+        assert_round_trip(
+            TooltipDisplayImpl {
+                hide_tooltip: true,
+                hidden_components: Cow::Owned(vec![DataComponent::Enchantments]),
+            },
+            TooltipDisplayImpl::read_data,
+        );
         assert_round_trip(WaxedImpl, WaxedImpl::read_data);
         assert_round_trip(
             CookingFuelImpl {
@@ -1004,5 +1159,140 @@ mod tests {
             SwingAnimationImpl::read_data,
         );
         assert_round_trip(SwingAnimationImpl::DEFAULT, SwingAnimationImpl::read_data);
+    }
+
+    #[test]
+    fn generated_item_components_complete_for_26_3() {
+        use crate::item::Item;
+        use crate::item_stack::ItemStack;
+
+        let cushion = ItemStack::new(1, &Item::ORANGE_CUSHION);
+        assert_eq!(
+            cushion
+                .get_data_component::<CushionColorImpl>()
+                .map(|c| c.color),
+            Some(crate::dye_color::DyeColor::Orange)
+        );
+
+        let shield = ItemStack::new(1, &Item::SHIELD);
+        let blocks = shield.get_data_component::<BlocksAttacksImpl>().unwrap();
+        assert_eq!(blocks.block_delay_ticks(), 5);
+        assert_eq!(blocks.item_damage.threshold, 3.0);
+        assert_eq!(blocks.item_damage.apply(2.5), 0);
+        assert_eq!(blocks.item_damage.apply(3.0), 4);
+        assert!(
+            blocks
+                .bypassed_by
+                .as_ref()
+                .is_some_and(|set| set.contains(&crate::damage::DamageType::GENERIC_KILL))
+        );
+
+        let totem = ItemStack::new(1, &Item::TOTEM_OF_UNDYING);
+        let dp = totem.get_data_component::<DeathProtectionImpl>().unwrap();
+        assert_eq!(dp.death_effects.len(), 2);
+
+        let blaze = ItemStack::new(1, &Item::BLAZE_POWDER);
+        let fuel = blaze.get_data_component::<BrewingFuelImpl>().unwrap();
+        assert_eq!(fuel.get_uses(), 20);
+        assert_eq!(fuel.get_speed_multiplier(), 1.0);
+
+        let egg = ItemStack::new(1, &Item::COW_SPAWN_EGG);
+        assert_eq!(
+            egg.get_data_component::<EntityDataImpl>()
+                .and_then(EntityDataImpl::get_entity_type)
+                .map(|e| e.id),
+            Some(crate::entity_type::EntityType::COW.id)
+        );
+
+        let pumpkin = ItemStack::new(1, &Item::CARVED_PUMPKIN);
+        let attrs = pumpkin
+            .get_data_component::<AttributeModifiersImpl>()
+            .unwrap();
+        assert_eq!(attrs.attribute_modifiers.len(), 1);
+        assert_eq!(
+            attrs.attribute_modifiers[0].display,
+            ModifierDisplay::Hidden
+        );
+        assert_round_trip(attrs.clone(), AttributeModifiersImpl::read_data);
+
+        let stew = ItemStack::new(1, &Item::MUSHROOM_STEW);
+        assert_eq!(
+            stew.get_data_component::<UseRemainderImpl>()
+                .and_then(|u| u.remainder.as_ref())
+                .map(|s| s.item),
+            Some(&Item::BOWL)
+        );
+
+        let sword = ItemStack::new(1, &Item::NETHERITE_SWORD);
+        assert!(!sword.can_be_hurt_by(crate::damage::DamageType::LAVA));
+        assert!(sword.can_be_hurt_by(crate::damage::DamageType::CACTUS));
+    }
+
+    #[test]
+    fn lock_predicate_and_written_book_roundtrips() {
+        use crate::item::Item;
+        use crate::item_stack::ItemStack;
+        use pumpkin_util::text::TextComponent;
+
+        let mut comp_pred = NbtCompound::new();
+        comp_pred.put_string("minecraft:custom_name", "Secret Key".to_string());
+        let mut count_bounds = NbtCompound::new();
+        count_bounds.put_int("min", 2);
+        count_bounds.put_int("max", 4);
+        let mut pred = NbtCompound::new();
+        pred.put_string("items", "minecraft:tripwire_hook".to_string());
+        pred.put_compound("count", count_bounds);
+        pred.put_compound("components", comp_pred);
+        let lock = LockImpl { predicate: pred };
+
+        assert!(!lock.unlocks_with(&ItemStack::EMPTY));
+
+        let mut key = ItemStack::new(2, &Item::TRIPWIRE_HOOK);
+        assert!(!lock.unlocks_with(&key));
+        key.set_data_component(CustomNameImpl {
+            name: TextComponent::text("Secret Key"),
+        });
+        assert!(lock.unlocks_with(&key));
+
+        let mut wrong_count = key.clone();
+        wrong_count.item_count = 1;
+        assert!(!lock.unlocks_with(&wrong_count));
+
+        let wrong_item = ItemStack::new_with_component(
+            2,
+            &Item::STICK,
+            vec![(
+                DataComponent::CustomName,
+                Some(Box::new(CustomNameImpl {
+                    name: TextComponent::text("Secret Key"),
+                })),
+            )],
+        );
+        assert!(!lock.unlocks_with(&wrong_item));
+
+        let legacy = LockImpl::read_data(&NbtTag::String("Vault".into())).unwrap();
+        let mut legacy_key = ItemStack::new(1, &Item::STICK);
+        assert!(!legacy.unlocks_with(&legacy_key));
+        legacy_key.set_data_component(CustomNameImpl {
+            name: TextComponent::text("Vault"),
+        });
+        assert!(legacy.unlocks_with(&legacy_key));
+
+        assert_round_trip(
+            WrittenBookContentImpl {
+                title: "Chronicle".to_string(),
+                author: "Alex".to_string(),
+                generation: 2,
+                pages: vec![TextComponent::text("Page 1")],
+                resolved: true,
+            },
+            WrittenBookContentImpl::read_data,
+        );
+        assert_round_trip(
+            JukeboxPlayableImpl {
+                song: "minecraft:precipice",
+            },
+            JukeboxPlayableImpl::read_data,
+        );
     }
 }

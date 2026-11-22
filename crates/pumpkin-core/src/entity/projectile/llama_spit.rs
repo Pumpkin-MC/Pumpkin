@@ -1,5 +1,5 @@
 use crate::entity::projectile::owner::ProjectileOwner;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_util::math::vector3::Vector3;
@@ -25,8 +25,6 @@ impl LlamaSpitEntity {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: LLAMA_SPIT_GRAVITY,
         };
 
@@ -42,13 +40,11 @@ impl LlamaSpitEntity {
         let x = owner_pos.x - offset * body_yaw_rad.sin();
         let y = owner_pos.y + shooter.get_eye_height() - 0.1;
         let z = owner_pos.z + offset * body_yaw_rad.cos();
-        entity.pos.store(Vector3::new(x, y, z));
+        entity.set_pos(Vector3::new(x, y, z));
 
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::new(Some(shooter)),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: LLAMA_SPIT_GRAVITY,
         };
 
@@ -61,12 +57,12 @@ impl EntityBase for LlamaSpitEntity {
         Some(&self.thrown.owner)
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         if self.get_entity().touching_water.load(Ordering::Relaxed) {
             self.get_entity().remove();
             return;
         }
-        self.thrown.process_tick(caller);
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -96,7 +92,7 @@ impl EntityBase for LlamaSpitEntity {
                 1.0,
                 DamageType::SPIT,
                 Some(hit_pos),
-                Some(self.get_entity()),
+                Some(self),
                 owner.as_deref(),
             );
         }

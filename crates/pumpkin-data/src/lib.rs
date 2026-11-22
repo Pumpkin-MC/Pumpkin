@@ -263,6 +263,21 @@ pub mod bedrock_creative;
 #[path = "generated/bedrock_biome.rs"]
 pub mod bedrock_biome;
 
+#[cfg(feature = "bedrock_jigsaw")]
+#[rustfmt::skip]
+#[path = "generated/bedrock_jigsaw.rs"]
+pub mod bedrock_jigsaw;
+
+#[cfg(feature = "bedrock_recipe")]
+#[rustfmt::skip]
+#[path = "generated/bedrock_recipe.rs"]
+pub mod bedrock_recipe;
+
+#[cfg(feature = "bedrock_voxel_shape")]
+#[rustfmt::skip]
+#[path = "generated/bedrock_voxel_shape.rs"]
+pub mod bedrock_voxel_shape;
+
 #[cfg(feature = "tag")]
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]
@@ -358,6 +373,11 @@ pub mod cat_variant;
 #[rustfmt::skip]
 #[path = "generated/frog_variant.rs"]
 pub mod frog_variant;
+
+#[cfg(feature = "sulfur_cube_archetype")]
+#[rustfmt::skip]
+#[path = "generated/sulfur_cube_archetype.rs"]
+pub mod sulfur_cube_archetype;
 
 #[cfg(feature = "cow_variant")]
 #[rustfmt::skip]
@@ -463,7 +483,7 @@ pub use block_rotation::{Mirror, Rotation, transform_block_properties, transform
 #[cfg(feature = "block")]
 pub use block_state::{BlockState, BlockStateId};
 #[cfg(feature = "block")]
-pub use blocks::{Block, BlockId, SpawnFloorPredicate};
+pub use blocks::{Block, BlockId, PropertyLookupError, SpawnFloorPredicate};
 
 #[cfg(feature = "material_rule")]
 #[rustfmt::skip]

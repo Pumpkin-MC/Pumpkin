@@ -58,8 +58,6 @@ impl FireworkRocketEntity {
             entity: ThrownItemEntity {
                 entity,
                 owner: ProjectileOwner::none(),
-                collides_with_projectiles: false,
-                has_hit: AtomicBool::new(false),
                 gravity: GRAVITY,
             },
             life: 0.into(),
@@ -211,6 +209,10 @@ impl FireworkRocketEntity {
 }
 
 impl EntityBase for FireworkRocketEntity {
+    fn hurt_knockback_direction(&self, hurt: &Entity) -> Option<(f64, f64)> {
+        super::knockback_away_from(self.get_entity(), hurt)
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.entity.owner)
     }
@@ -240,8 +242,8 @@ impl EntityBase for FireworkRocketEntity {
         }
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.entity.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.entity.process_tick(caller, server);
 
         let entity = self.get_entity();
         let world = entity.world.load();
@@ -268,7 +270,8 @@ impl EntityBase for FireworkRocketEntity {
                     }
                     if !boost_cancelled {
                         let rotation = shooter.rotation().to_f64();
-                        let shooter_vel = shooter.velocity.load();
+                        // Boost from the client motion, the server doesn't simulate player flight
+                        let shooter_vel = shooter.known_movement();
 
                         let new_shooter_vel =
                             shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);

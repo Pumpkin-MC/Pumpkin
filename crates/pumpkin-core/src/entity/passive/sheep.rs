@@ -20,24 +20,21 @@ use crate::entity::{
     },
     item::ItemEntity,
     mob::{Mob, MobEntity, spawn::SpawnGroupData},
-    passive::animal::{Animal, get_dye_color_from_item},
+    passive::animal::{Animal, get_mixed_color},
     player::Player,
+    shearable::{Shearable, shear_by_player},
 };
 use crate::world::World;
 use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::dye_color::DyeColor;
-use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable, WorldgenBiome};
-use pumpkin_inventory::Inventory;
-use pumpkin_inventory::crafting::crafting_inventory::CraftingInventory;
-use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
-use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 
-const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
+/// The sheared flag in the synced wool byte.
+const SHEARED_BIT: u8 = 0x10;
 
 #[derive(Clone, Copy)]
 enum SheepColorProvider {
@@ -70,37 +67,6 @@ const COLD_SPAWN_CONFIGURATION: SheepColorSpawnConfiguration = [
 ];
 const COMMON_COLOR_WEIGHT: u32 = 499;
 
-fn find_color_mix_in_recipes(
-    world: &World,
-    color1: DyeColor,
-    color2: DyeColor,
-) -> Option<DyeColor> {
-    let dye_items = |color: DyeColor| {
-        tag::Item::C_DYES
-            .1
-            .iter()
-            .filter_map(|id| Item::from_id(*id))
-            .filter(move |item| get_dye_color_from_item(item) == Some(color.id()))
-    };
-    let server = world.server.upgrade();
-    let provider = server
-        .as_ref()
-        .map(|server| server.recipe_manager.as_ref() as &dyn RecipeProvider);
-    for dye1 in dye_items(color1) {
-        for dye2 in dye_items(color2) {
-            let input = CraftingInventory::new(2, 1);
-            input.set_stack(0, ItemStack::new(1, dye1));
-            input.set_stack(1, ItemStack::new(1, dye2));
-            if let Some(result) = match_crafting_recipe(&input, provider)
-                && let Some(item) = Item::from_registry_key(&result.item_id)
-                && let Some(color) = get_dye_color_from_item(item)
-            {
-                return Some(DyeColor::from(color));
-            }
-        }
-    }
-    None
-}
 const PINK_WEIGHT: u32 = 1;
 
 pub struct SheepEntity {
@@ -129,7 +95,14 @@ impl SheepEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(
+                3,
+                Box::new(TemptGoal::with_tag(
+                    1.1,
+                    &tag::Item::MINECRAFT_SHEEP_FOOD,
+                    false,
+                )),
+            );
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(5, Box::new(EatGrassGoal::default()));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::water_avoiding(1.0)));
@@ -152,7 +125,7 @@ impl SheepEntity {
     }
 
     pub fn is_sheared(&self) -> bool {
-        (self.get_packed_byte() & 0x10) != 0
+        (self.get_packed_byte() & SHEARED_BIT) != 0
     }
 
     fn set_packed_and_sync(&self, byte: u8) {
@@ -201,21 +174,27 @@ impl SheepEntity {
         }
     }
 
-    fn get_mixed_color(&self, world: &World, color1: DyeColor, color2: DyeColor) -> DyeColor {
-        find_color_mix_in_recipes(world, color1, color2).unwrap_or_else(|| {
-            if self.get_random().random::<bool>() {
-                color1
-            } else {
-                color2
-            }
-        })
+    pub fn set_sheared(&self, sheared: bool) {
+        let byte = if sheared {
+            self.get_packed_byte() | SHEARED_BIT
+        } else {
+            self.get_packed_byte() & !SHEARED_BIT
+        };
+        self.set_packed_and_sync(byte);
     }
+}
 
-    pub fn ready_for_shearing(&self) -> bool {
-        !self.is_sheared() && !self.is_baby()
-    }
-
-    pub fn shear(&self, category: SoundCategory, tool: &ItemStack) {
+impl Shearable for SheepEntity {
+    fn shear(&self, category: SoundCategory, tool: &ItemStack) -> bool {
+        // Claim the wool first so two shears landing at once drop it only once.
+        if self
+            .color_and_sheared
+            .fetch_or(SHEARED_BIT, Ordering::Relaxed)
+            & SHEARED_BIT
+            != 0
+        {
+            return false;
+        }
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -249,15 +228,11 @@ impl SheepEntity {
             }
         }
         self.set_sheared(true);
+        true
     }
 
-    pub fn set_sheared(&self, sheared: bool) {
-        let byte = if sheared {
-            self.get_packed_byte() | 0x10
-        } else {
-            self.get_packed_byte() & !0x10
-        };
-        self.set_packed_and_sync(byte);
+    fn ready_for_shearing(&self) -> bool {
+        !self.is_sheared() && !self.is_baby()
     }
 }
 
@@ -269,10 +244,7 @@ impl AgeableMob for SheepEntity {
 
 impl Animal for SheepEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        item_stack
-            .item
-            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_SHEEP_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
+        item_stack.item.has_tag(&tag::Item::MINECRAFT_SHEEP_FOOD)
     }
 
     fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
@@ -284,7 +256,7 @@ impl Animal for SheepEntity {
             &EntityType::SHEEP,
         ));
         if let Some(partner) = partner.cast_any().downcast_ref::<Self>() {
-            let color = self.get_mixed_color(
+            let color = get_mixed_color(
                 &world,
                 DyeColor::from(self.get_color()),
                 DyeColor::from(partner.get_color()),
@@ -323,6 +295,10 @@ impl Mob for SheepEntity {
         Some(self)
     }
 
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
@@ -358,7 +334,7 @@ impl Mob for SheepEntity {
             .or_else(|| nbt.get_byte("Sheared").map(|b| b == 1))
             .unwrap_or(false);
         let color = nbt.get_byte("Color").unwrap_or(0) as u8;
-        let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
+        let byte = (color & 0x0F) | if sheared { SHEARED_BIT } else { 0 };
         self.color_and_sheared.store(byte, Ordering::Relaxed);
     }
 
@@ -391,24 +367,7 @@ impl Mob for SheepEntity {
             if !self.ready_for_shearing() {
                 return true;
             }
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            if let Some(server) = world.server.upgrade() {
-                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
-                    player: player.clone(),
-                    entity_id: entity.entity_id,
-                    hand: 0,
-                    cancelled: false,
-                };
-                server.plugin_manager.fire_blocking(&server, &mut event);
-                if event.cancelled {
-                    return false;
-                }
-            }
-            self.shear(SoundCategory::Players, item_stack);
-            world.emit_game_event(GameEvent::Shear.name(), entity.pos.load());
-            let _ = player.damage_item_stack(item_stack, 1);
-            return true;
+            return shear_by_player(self, player, item_stack);
         }
 
         self.animal_interact(player, item_stack)

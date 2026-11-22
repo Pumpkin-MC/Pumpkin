@@ -1089,6 +1089,33 @@ mod tests {
     }
 
     #[test]
+    fn placed_blocks_update_only_their_heightmap_column() {
+        use super::{ChunkData, ChunkHeightmapType};
+
+        let chunk = ChunkData::empty(0, 0);
+        let min_y = chunk.section.min_y;
+        let heightmap_types = [
+            ChunkHeightmapType::WorldSurface,
+            ChunkHeightmapType::MotionBlocking,
+            ChunkHeightmapType::MotionBlockingNoLeaves,
+        ];
+
+        for (block, y, expected_height) in [
+            (&Block::STONE, 64, 64),
+            (&Block::STONE, 200, 200),
+            (&Block::AIR, 200, 64),
+            (&Block::AIR, 64, min_y - 1),
+        ] {
+            chunk.set_block_absolute_y(3, y, 7, block.default_state.id);
+            let heightmap = chunk.heightmap.lock().unwrap();
+            for kind in heightmap_types {
+                assert_eq!(heightmap.get(kind, 3, 7, min_y), expected_height);
+                assert_eq!(heightmap.get(kind, 3, y & 15, min_y), min_y - 1);
+            }
+        }
+    }
+
+    #[test]
     fn heightmap_is_opaque() {
         use crate::chunk::ChunkHeightmapType;
 

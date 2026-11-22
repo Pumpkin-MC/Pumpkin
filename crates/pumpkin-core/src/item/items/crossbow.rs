@@ -50,7 +50,15 @@ impl ItemBehaviour for CrossbowItem {
             .set_active_hand(hand, stack, Self::USE_DURATION);
     }
 
-    fn on_use_tick(&self, _stack: &ItemStack, player: &Player, remaining_use_ticks: i32) {
+    fn on_use_tick(
+        &self,
+        _stack: &ItemStack,
+        user: &dyn crate::entity::EntityBase,
+        remaining_use_ticks: i32,
+    ) {
+        let Some(player) = user.get_player() else {
+            return;
+        };
         let hand = (*player
             .living_entity
             .active_hand
@@ -189,12 +197,7 @@ impl CrossbowItem {
             return false;
         }
 
-        let mut charged_nbts = Vec::with_capacity(drawn.len());
-        for item in drawn {
-            let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
-            item.write_item_stack(&mut arrow_nbt);
-            charged_nbts.push(arrow_nbt);
-        }
+        let charged_nbts: Vec<_> = drawn.iter().filter_map(ItemStack::to_nbt).collect();
 
         stack
             .patch

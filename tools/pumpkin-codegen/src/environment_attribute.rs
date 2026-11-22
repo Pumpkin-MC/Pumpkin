@@ -403,6 +403,8 @@ struct TimelineJson {
     #[serde(default)]
     period_ticks: Option<i32>,
     #[serde(default)]
+    time_markers: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
     tracks: std::collections::BTreeMap<String, TimelineTrackJson>,
 }
 
@@ -418,9 +420,36 @@ struct KeyframeJson {
     value: serde_json::Value,
 }
 
+/// `NAME_TIME_MARKER` constants for each time marker of a timeline. A marker is either its
+/// tick or an object with `ticks`.
+fn time_marker_consts(timeline: &TimelineJson) -> Vec<TokenStream> {
+    timeline
+        .time_markers
+        .iter()
+        .filter_map(|(name, marker)| {
+            let ticks = marker
+                .as_i64()
+                .or_else(|| marker.get("ticks")?.as_i64())
+                .and_then(|ticks| i32::try_from(ticks).ok())?;
+            let ident = format_ident!(
+                "{}_TIME_MARKER",
+                name.strip_prefix("minecraft:")
+                    .unwrap_or(name)
+                    .to_uppercase()
+            );
+            Some(quote! { pub const #ident: i32 = #ticks; })
+        })
+        .collect()
+}
+
 pub fn build() -> TokenStream {
     let timeline_path =
         std::path::Path::new("../../assets/datapack/data/minecraft/timeline/day.json");
+    let day_time_markers = std::fs::read_to_string(timeline_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<TimelineJson>(&content).ok())
+        .map(|timeline| time_marker_consts(&timeline))
+        .unwrap_or_default();
     let (
         period_ticks,
         sky_light_level_keyframes,
@@ -428,6 +457,7 @@ pub fn build() -> TokenStream {
         bees_stay_in_hive_keyframes,
         creaking_active_keyframes,
         eyeblossom_open_keyframes,
+        cat_waking_up_gift_chance_keyframes,
     ) = if let Ok(content) = std::fs::read_to_string(timeline_path) {
         if let Ok(timeline) = serde_json::from_str::<TimelineJson>(&content) {
             let period = timeline.period_ticks.unwrap_or(24000);
@@ -436,6 +466,7 @@ pub fn build() -> TokenStream {
             let mut bees_kfs = Vec::new();
             let mut creaking_kfs = Vec::new();
             let mut eyeblossom_kfs = Vec::new();
+            let mut cat_gift_kfs = Vec::new();
 
             if let Some(track) = timeline.tracks.get("minecraft:gameplay/sky_light_level") {
                 for kf in &track.keyframes {
@@ -472,6 +503,16 @@ pub fn build() -> TokenStream {
                     eyeblossom_kfs.push(quote! { BoolKeyframe::new(#ticks, #val) });
                 }
             }
+            if let Some(track) = timeline
+                .tracks
+                .get("minecraft:gameplay/cat_waking_up_gift_chance")
+            {
+                for kf in &track.keyframes {
+                    let ticks = kf.ticks;
+                    let val = kf.value.as_f64().unwrap_or(0.0) as f32;
+                    cat_gift_kfs.push(quote! { FloatKeyframe::new(#ticks, #val) });
+                }
+            }
             (
                 period,
                 sky_kfs,
@@ -479,10 +520,12 @@ pub fn build() -> TokenStream {
                 bees_kfs,
                 creaking_kfs,
                 eyeblossom_kfs,
+                cat_gift_kfs,
             )
         } else {
             (
                 24000,
+                Vec::new(),
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
@@ -493,6 +536,7 @@ pub fn build() -> TokenStream {
     } else {
         (
             24000,
+            Vec::new(),
             Vec::new(),
             Vec::new(),
             Vec::new(),
@@ -782,6 +826,7 @@ pub fn build() -> TokenStream {
 
         impl DayTimeline {
             pub const PERIOD_TICKS: i32 = #period_ticks;
+            #(#day_time_markers)*
             pub const SKY_LIGHT_LEVEL_KEYFRAMES: &'static [FloatKeyframe] = &[
                 #(#sky_light_level_keyframes),*
             ];
@@ -796,6 +841,9 @@ pub fn build() -> TokenStream {
             ];
             pub const EYEBLOSSOM_OPEN_KEYFRAMES: &'static [BoolKeyframe] = &[
                 #(#eyeblossom_open_keyframes),*
+            ];
+            pub const CAT_WAKING_UP_GIFT_CHANCE_KEYFRAMES: &'static [FloatKeyframe] = &[
+                #(#cat_waking_up_gift_chance_keyframes),*
             ];
         }
 

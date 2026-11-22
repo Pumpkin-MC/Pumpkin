@@ -1,3 +1,4 @@
+mod brewing_stand;
 mod bubble_columns;
 mod buttons_levers_plates_variants;
 mod commands_and_entities_extended;
@@ -53,12 +54,15 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:lever_toggles_power",
     "pumpkin:pressure_plate_entity_activation",
     "pumpkin:target_block_projectile_hit",
+    "pumpkin:arrow_falls_onto_block_below",
     "pumpkin:copper_bulb_toggles_and_comparator",
     "pumpkin:redstone_lamp_delayed_off",
     "pumpkin:piston_and_sticky_piston",
     "pumpkin:dispenser_and_dropper",
     "pumpkin:dispenser_honeycomb_beehive_and_shulker",
     "pumpkin:crafter_crafts_into_chest",
+    "pumpkin:crafter_dispenses_crafting_remainders",
+    "pumpkin:brewing_returns_glass_bottle_from_dragon_breath",
     "pumpkin:doors_trapdoors_fence_gates_redstone",
     "pumpkin:water_lava_interactions",
     "pumpkin:sponge_absorbs_water",
@@ -69,11 +73,13 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:hopper_transfers_to_chest",
     "pumpkin:tnt_redstone_ignites",
     "pumpkin:furnace_ignites_and_smelts",
+    "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
     "pumpkin:powered_rail_propagation",
     "pumpkin:activator_rail_propagation",
     "pumpkin:detector_rail_minecart",
     "pumpkin:tripwire_entity_collision",
     "pumpkin:snow_golem_pattern_spawns",
+    "pumpkin:snow_golem_snow_trail_support",
     "pumpkin:iron_golem_pattern_spawns",
     "pumpkin:wither_pattern_spawns",
     "pumpkin:item_entities_merge",
@@ -341,6 +347,13 @@ pub fn ensure_builtin_game_tests_registered() {
             target_and_projectiles::test_target_block_projectile_hit,
         );
         register_function_test(
+            "pumpkin:arrow_falls_onto_block_below",
+            "pumpkin:empty_5x4x5",
+            100,
+            0,
+            target_and_projectiles::test_arrow_falls_onto_block_below,
+        );
+        register_function_test(
             "pumpkin:copper_bulb_toggles_and_comparator",
             "pumpkin:empty_5x4x5",
             30,
@@ -381,6 +394,20 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             dispensers_and_crafters::test_crafter_crafts_into_chest,
+        );
+        register_function_test(
+            "pumpkin:crafter_dispenses_crafting_remainders",
+            "pumpkin:empty_5x4x5",
+            30,
+            0,
+            dispensers_and_crafters::test_crafter_dispenses_crafting_remainders,
+        );
+        register_function_test(
+            "pumpkin:brewing_returns_glass_bottle_from_dragon_breath",
+            "pumpkin:empty_3x4x3",
+            450,
+            0,
+            brewing_stand::test_brewing_returns_glass_bottle_from_dragon_breath,
         );
         register_function_test(
             "pumpkin:doors_trapdoors_fence_gates_redstone",
@@ -453,6 +480,13 @@ pub fn ensure_builtin_game_tests_registered() {
             furnace_smelting::test_furnace_ignites_and_smelts,
         );
         register_function_test(
+            "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
+            "pumpkin:empty_3x4x3",
+            30,
+            0,
+            furnace_smelting::test_furnace_returns_empty_bucket_from_lava_bucket_fuel,
+        );
+        register_function_test(
             "pumpkin:powered_rail_propagation",
             "pumpkin:empty_3x4x10",
             20,
@@ -479,6 +513,13 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             tripwire::test_tripwire_entity_collision,
+        );
+        register_function_test(
+            "pumpkin:snow_golem_snow_trail_support",
+            "pumpkin:empty_5x5x5",
+            20,
+            0,
+            golems::test_snow_golem_snow_trail_support,
         );
         register_function_test(
             "pumpkin:snow_golem_pattern_spawns",

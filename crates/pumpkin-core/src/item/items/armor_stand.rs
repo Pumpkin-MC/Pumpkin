@@ -89,9 +89,14 @@ impl ItemBehaviour for ArmorStandItem {
                 0.8,
             );
 
-            let armor_stand = ArmorStandEntity::new(entity);
+            let armor_stand = Arc::new(ArmorStandEntity::new(entity));
+            crate::item::items::spawn_egg::apply_entity_variant(
+                item,
+                armor_stand.as_ref(),
+                Some(player),
+            );
 
-            world.spawn_entity(Arc::new(armor_stand));
+            world.spawn_entity(armor_stand);
             world.emit_game_event(GameEvent::EntityPlace.name(), pos);
             item.decrement_unless_creative(player.gamemode.load(), 1);
             BlockActionResult::Success

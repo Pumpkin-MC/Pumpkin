@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use uuid::Uuid;
 
@@ -9,6 +9,7 @@ use rand::RngExt;
 use crate::entity::ai::target_match::{SearchArea, TargetMatch};
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::experience_orb::ExperienceOrbEntity;
+use crate::entity::passive::animal::Animal;
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
 
@@ -19,7 +20,7 @@ const PARTNER_RANGE: f64 = 8.0;
 pub struct BreedGoal {
     speed: f64,
     partners: Option<TargetMatch>,
-    mate: Option<Arc<dyn EntityBase>>,
+    mate: Option<Weak<dyn EntityBase>>,
     timer: i32,
 }
 
@@ -72,21 +73,40 @@ impl BreedGoal {
         })
     }
 
-    pub(crate) fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
+    /// `brain` is the breeding mob's brain while its own behavior runs this.
+    pub(crate) fn breed(
+        mob: &dyn Mob,
+        mate: &dyn EntityBase,
+        brain: Option<&mut crate::entity::ai::brain::BrainState>,
+    ) {
         let mob_entity = mob.get_mob_entity();
         let entity = mob.get_entity();
         let world = entity.world.load();
         let world_full = entity.world.load_full();
         let parent_pos = entity.pos.load();
 
-        let baby = mob.as_animal().map_or_else(
-            || from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()),
-            |animal| animal.get_breed_offspring(mate),
-        );
+        let animal = mob.as_animal();
+        let baby = match animal {
+            Some(animal) if !animal.spawns_offspring() => None,
+            Some(animal) => Some(animal.get_breed_offspring(mate)),
+            None => Some(from_type(
+                entity.entity_type,
+                parent_pos,
+                &world,
+                Uuid::new_v4(),
+            )),
+        };
+        // Vanilla `getBreedOffspring` returns null without a baby form: no offspring.
+        if baby
+            .as_ref()
+            .is_some_and(|baby| !baby.get_mob().is_some_and(Mob::spawn_as_baby))
+        {
+            return;
+        }
         let experience = mob.get_random().random_range(1..8);
         let Some(experience) = mob.approve_breeding(
             mate.get_entity().entity_id,
-            baby.get_entity().entity_id,
+            baby.as_ref().map_or(-1, |baby| baby.get_entity().entity_id),
             experience,
         ) else {
             // Cancelled: end love mode with the usual cooldown, a plugin resets it if wanted.
@@ -106,7 +126,7 @@ impl BreedGoal {
             .get_mob()
             .and_then(|mate| mate.get_mob_entity().breeder.load())
             .filter(|uuid| online(uuid) && first != Some(*uuid));
-        if let Some(baby_mob) = baby.get_mob() {
+        if let Some(baby_mob) = baby.as_ref().and_then(|baby| baby.get_mob()) {
             for breeder in first.into_iter().chain(second) {
                 baby_mob.on_bred_by(breeder);
             }
@@ -133,14 +153,19 @@ impl BreedGoal {
         mate.reset_love();
         mate.set_breeding_cooldown(6000);
 
-        baby.get_entity().set_age(-24000);
-        world_full.spawn_entity(baby);
+        if let Some(baby) = baby {
+            world_full.spawn_entity(baby);
+        } else if let Some(animal) = animal {
+            animal.on_bred_without_offspring(brain);
+        }
 
-        world_full.send_entity_status(
-            entity,
-            EntityStatus::InLoveHearts,
-            ActorEventID::InLoveHearts,
-        );
+        if animal.is_none_or(Animal::shows_breeding_hearts) {
+            world_full.send_entity_status(
+                entity,
+                EntityStatus::InLoveHearts,
+                ActorEventID::InLoveHearts,
+            );
+        }
         if world.level_info.load().game_rules.mob_drops
             && let Ok(experience) = u32::try_from(experience)
             && experience > 0
@@ -156,16 +181,17 @@ impl Goal for BreedGoal {
         let world = mob.get_entity().world.load();
         let mut links: Vec<i32> = self
             .mate
-            .iter()
+            .as_ref()
+            .and_then(Weak::upgrade)
             .map(|mate| mate.get_entity().entity_id)
+            .into_iter()
             .collect();
         if running {
             // Both parents' breeders get trust, stats and the advancement.
-            let mate_breeder = self
-                .mate
-                .as_ref()
-                .and_then(|mate| mate.get_mob())
-                .and_then(|mate| mate.get_mob_entity().breeder.load());
+            let mate_breeder = self.mate.as_ref().and_then(Weak::upgrade).and_then(|mate| {
+                mate.get_mob()
+                    .and_then(|m| m.get_mob_entity().breeder.load())
+            });
             for breeder in [mob_entity.breeder.load(), mate_breeder]
                 .into_iter()
                 .flatten()
@@ -194,12 +220,12 @@ impl Goal for BreedGoal {
             return false;
         }
 
-        self.mate = self.find_mate(mob);
+        self.mate = self.find_mate(mob).as_ref().map(Arc::downgrade);
         self.mate.is_some()
     }
 
     fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
-        let Some(mate) = &self.mate else {
+        let Some(mate) = self.mate.as_ref().and_then(Weak::upgrade) else {
             return false;
         };
 
@@ -220,7 +246,7 @@ impl Goal for BreedGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        let Some(mate) = &self.mate else {
+        let Some(mate) = self.mate.as_ref().and_then(Weak::upgrade) else {
             return;
         };
 
@@ -232,7 +258,7 @@ impl Goal for BreedGoal {
                 .look_control
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            look_control.look_at_entity(mob, mate);
+            look_control.look_at_entity(mob, &mate);
         };
 
         let my_pos = mob.get_entity().pos.load();
@@ -247,7 +273,7 @@ impl Goal for BreedGoal {
         self.timer += 1;
 
         if self.timer >= self.get_tick_count(60) && dist_sq < 9.0 {
-            Self::breed(mob, mate.as_ref());
+            Self::breed(mob, mate.as_ref(), None);
         }
     }
 

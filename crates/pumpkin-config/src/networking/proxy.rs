@@ -2,18 +2,28 @@ use serde::{Deserialize, Serialize};
 
 /// Configuration for proxy support.
 ///
-/// Allows integration with proxy servers like Velocity and `BungeeCord`.
+/// Allows integration with proxy servers like `HAProxy`, Velocity, and `BungeeCord`.
 #[derive(Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct ProxyConfig {
     /// Whether proxy support is enabled.
     pub enabled: bool,
+    /// Configuration for `HAProxy` PROXY protocol integration.
+    pub haproxy: HAProxyConfig,
     /// Configuration for Velocity proxy integration.
     pub velocity: VelocityConfig,
     /// Configuration for `BungeeCord` proxy integration.
     pub bungeecord: BungeeCordConfig,
     /// Configuration for Vine modern proxy integration with Ed25519 authentication.
     pub vine: VineConfig,
+}
+
+/// Configuration for `HAProxy` PROXY protocol integration.
+#[derive(Deserialize, Serialize, Default)]
+#[serde(default)]
+pub struct HAProxyConfig {
+    /// Whether `HAProxy` PROXY protocol (v1 and v2) support is enabled.
+    pub enabled: bool,
 }
 
 /// Configuration for `BungeeCord` proxy integration.
