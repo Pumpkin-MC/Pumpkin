@@ -89,7 +89,7 @@ impl Behavior for AnimalPanic {
         true
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.state.erase(types::IS_PANICKING.id());
     }
 
