@@ -152,10 +152,10 @@ impl HappyGhastEntity {
         let entity = self.get_entity();
         let bb = entity.bounding_box.load();
         let detection_box = BoundingBox::new(
-            Vector3::new(bb.min.x - 1.0, bb.max.y - 0.25, bb.min.z - 1.0),
+            Vector3::new(bb.min.x - 1.0, bb.max.y - 1.0e-5, bb.min.z - 1.0),
             Vector3::new(
                 bb.max.x + 1.0,
-                bb.max.y + (bb.max.y - bb.min.y) * 0.5 + 0.5,
+                bb.max.y + (bb.max.y - bb.min.y) * 0.5,
                 bb.max.z + 1.0,
             ),
         );
@@ -173,10 +173,8 @@ impl HappyGhastEntity {
             if root.get_entity().entity_type == &EntityType::HAPPY_GHAST {
                 continue;
             }
-            let root_entity = root.get_entity();
-            let root_bb = root_entity.bounding_box.load();
-            let root_pos = root_entity.pos.load();
-            if detection_box.intersects(&root_bb) || detection_box.contains(root_pos) {
+            let root_pos = root.get_entity().pos.load();
+            if detection_box.contains(root_pos) {
                 return true;
             }
         }
