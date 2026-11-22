@@ -1020,6 +1020,12 @@ impl PluginManager {
                 .map(|p| p.metadata.name.clone())
         };
 
+        // Its unload takes them along, the new copy's loaders bring them back
+        let children = match &plugin_name {
+            Some(name) => self.loaded_through(name).await,
+            None => Vec::new(),
+        };
+
         let unload_failed = if let Some(name) = plugin_name {
             info!("Hot-reloading plugin: {}", name);
             match self.unload_plugin(&name).await {
@@ -1040,9 +1046,53 @@ impl PluginManager {
         // Skip the reload when unload failed
         // the loader may still hold the old resources, loading would create
         // a duplicate instead of a replacement.
-        if !unload_failed && let Err(e) = self.start_loading_plugin(server, path).await {
-            error!("Failed to hot-reload plugin {:?}: {}", path, e);
+        if unload_failed {
+            return;
         }
+        match self.start_loading_plugin(server, path).await {
+            Err(e) => error!("Failed to hot-reload plugin {:?}: {}", path, e),
+            Ok((_, task)) if !children.is_empty() => {
+                if !matches!(task.await, Ok(Ok(()))) {
+                    return;
+                }
+                for (child, child_path) in children {
+                    if self.is_plugin_loaded(&child) {
+                        continue;
+                    }
+                    if let Err(e) = self.try_load_plugin(server, &child_path).await {
+                        error!("Failed to reload plugin {child} after its loader's owner: {e}");
+                    }
+                }
+            }
+            Ok(_) => {}
+        }
+    }
+
+    /// Active plugins loaded through `owner`'s loaders, or through theirs, owners first.
+    async fn loaded_through(&self, owner: &str) -> Vec<(String, PathBuf)> {
+        let loaders = self.owned_loaders().await;
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut owners = vec![owner.to_string()];
+        let mut found = Vec::new();
+        let mut next = 0;
+        while let Some(current) = owners.get(next).cloned() {
+            next += 1;
+            for (_, loader) in loaders.iter().filter(|(name, _)| *name == current) {
+                for plugin in plugins
+                    .iter()
+                    .filter(|p| p.is_active && Arc::ptr_eq(&p.loader, loader))
+                {
+                    if !owners.contains(&plugin.metadata.name) {
+                        owners.push(plugin.metadata.name.clone());
+                        found.push((plugin.metadata.name.clone(), plugin.path.clone()));
+                    }
+                }
+            }
+        }
+        found
     }
 
     /// Stop watching the plugins directory for changes
@@ -1595,24 +1645,23 @@ impl PluginManager {
                                 plugin_name.clone(),
                                 PluginState::Failed(error_msg.clone()),
                             );
+                            // Keep it listed with its error, so it can be tried again. In this
+                            // section: a load reserving the name next clears the entry after it
+                            self_ref_clone.mark_inactive(
+                                &plugin_path,
+                                Some(&metadata),
+                                PluginStatus::Failed(error_msg.clone()),
+                            );
                         }
                         owned
                     };
+                    state_notify.notify_waiters();
 
                     // Unloaded during on_unload
                     if !owned {
                         error!("Failed to initialize plugin {plugin_name}: {error_msg}");
-                        state_notify.notify_waiters();
                         return Err(e);
                     }
-
-                    // Keep it listed with its error, so it can be tried again
-                    self_ref_clone.mark_inactive(
-                        &plugin_path,
-                        Some(&metadata),
-                        PluginStatus::Failed(error_msg.clone()),
-                    );
-                    state_notify.notify_waiters();
 
                     error!("Failed to initialize plugin {plugin_name}: {error_msg}");
                     Err(e)
@@ -1731,6 +1780,25 @@ impl PluginManager {
             }
         }
 
+        // Files declaring a name another file of this scan declared: released through their
+        // loader, the first one scanned loads
+        let (prepared_plugins, duplicates): (Vec<Prepared>, Vec<Prepared>) = {
+            let mut names = HashSet::new();
+            prepared_plugins
+                .into_iter()
+                .partition(|(_, metadata, _, _)| names.insert(metadata.name.clone()))
+        };
+        if !duplicates.is_empty() {
+            for (_, metadata, _, path) in &duplicates {
+                warn!(
+                    "Skipping plugin {path:?}: another file declares the name \"{}\"",
+                    metadata.name
+                );
+            }
+            self.discard_prepared(duplicates, "another file declares the same name")
+                .await;
+        }
+
         // Resolve dependencies
         let mut metadata_list: Vec<(String, Vec<String>)> = prepared_plugins
             .iter()
@@ -1802,6 +1870,8 @@ impl PluginManager {
                     .iter()
                     .find(|dep| !self.is_plugin_active(dep));
                 if let Some(dep) = missing {
+                    // TODO: retry it once a dependency this pass could not wait on finishes
+                    // initializing
                     let reason = format!("dependency {dep} is not active");
                     warn!("Skipping plugin \"{}\": {reason}", metadata.name);
                     self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason));
@@ -3531,6 +3601,45 @@ mod tests {
             }),
             ok(),
         )
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn hot_reloaded_owner_brings_its_children_back() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        // One child loader per load of the owner
+        let mut child = PathBuf::new();
+        let mut child_loaders = Vec::new();
+        for _ in 0..2 {
+            let child_loader = Arc::new(TestLoader::default());
+            child = child_loader.add("c", ok(), ok());
+            child_loaders.push(child_loader);
+        }
+        let child_loaders = SyncMutex::new(child_loaders);
+        let owner = loader.add(
+            "p",
+            hook(move |context| {
+                let child_loader = child_loaders
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .pop();
+                async move {
+                    if let Some(child_loader) = child_loader {
+                        context.register_plugin_loader(child_loader).await;
+                    }
+                    Ok(())
+                }
+            }),
+            ok(),
+        );
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        assert!(manager.try_load_plugin(&server, &owner).await.is_ok());
+        assert!(manager.try_load_plugin(&server, &child).await.is_ok());
+
+        manager.hot_reload(&server, &owner).await;
+        eventually(|| manager.is_plugin_active("p")).await;
+        assert!(manager.is_plugin_active("c"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
