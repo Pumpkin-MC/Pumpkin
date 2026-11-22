@@ -9771,14 +9771,13 @@ mod tests {
         };
         use arc_swap::ArcSwap;
         use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
-        use pumpkin_data::packet::CURRENT_MC_VERSION;
         use pumpkin_protocol::{
             ConnectionState,
             java::{
                 client::play::{CKeepAlive, CTransfer},
                 packet_decoder::TCPNetworkDecoder,
             },
-            packet::MultiVersionJavaPacket,
+            packet::JavaPacket,
         };
         use pumpkin_util::GameMode;
         use std::time::Duration;
@@ -9846,7 +9845,7 @@ mod tests {
         let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
         let packet =
             tokio::time::timeout(Duration::from_secs(10), decoder.get_raw_packet()).await??;
-        assert_eq!(packet.id, CTransfer::to_id(CURRENT_MC_VERSION));
+        assert_eq!(packet.id, CTransfer::PACKET_ID);
         // Java transfer payload: UTF-8 host preceded by its length, followed by VarInt port.
         assert_eq!(packet.payload.as_ref(), b"\x09localhost\xde\xc7\x01");
         assert_eq!(player.transfer("closed.example", 25565), None);

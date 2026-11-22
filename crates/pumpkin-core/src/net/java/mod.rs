@@ -80,6 +80,7 @@ use crate::net::{
     ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketRateLimiter, PlayerConfig,
     decrement_pending_bytes,
 };
+use crate::plugin::PluginManager;
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::plugin::server::packet::{PacketReceivedEvent, PacketSentEvent};
@@ -153,6 +154,9 @@ pub struct JavaClient {
     suspend_flushing: Arc<AtomicBool>,
     /// Packets waiting for `PacketSentEvent`, see `translation_queue`.
     translations: std::sync::OnceLock<UnboundedSender<PendingTranslation>>,
+    /// Asked on every send whether a plugin listens, without touching the shared
+    /// player, world and server refcounts.
+    plugin_manager: Option<Arc<PluginManager>>,
 }
 
 /// Builds the outgoing packet that completes `done` once written.
@@ -176,6 +180,7 @@ impl JavaClient {
         config: PlayerConfig,
     ) -> Self {
         let (send, recv) = tokio::sync::mpsc::unbounded_channel();
+        let plugin_manager = pending.plugin_manager();
 
         Self {
             id: pending.id,
@@ -205,6 +210,7 @@ impl JavaClient {
             packet_limiter: pending.packet_limiter,
             suspend_flushing: Arc::new(AtomicBool::new(false)),
             translations: std::sync::OnceLock::new(),
+            plugin_manager,
         }
     }
 
@@ -496,15 +502,18 @@ impl JavaClient {
     /// Player and server when packets to this client go through `PacketSentEvent`
     /// and a plugin listens.
     fn translation_target(&self, observe: bool) -> Option<(Arc<Player>, Arc<Server>)> {
-        if self.close_token.is_cancelled() || !self.fires_packet_sent(observe) {
+        if self.close_token.is_cancelled()
+            || !self.fires_packet_sent(observe)
+            || !self
+                .plugin_manager
+                .as_ref()
+                .is_some_and(|manager| manager.has_handlers::<PacketSentEvent>())
+        {
             return None;
         }
         let player = Option::clone(&self.player.load())?;
         let server = player.world().server.upgrade()?;
-        server
-            .plugin_manager
-            .has_handlers::<PacketSentEvent>()
-            .then_some((player, server))
+        Some((player, server))
     }
 
     /// Per-connection FIFO that fires `PacketSentEvent` off the sender's thread.
@@ -590,15 +599,9 @@ impl JavaClient {
     /// Whether the caller runs inside a plugin call. Waiting for a translation
     /// there would wait for the caller's own plugin chain to end.
     fn in_plugin_call(&self) -> bool {
-        let player = self.player.load();
-        let Some(server) = player
+        self.plugin_manager
             .as_ref()
-            .as_ref()
-            .and_then(|p| p.world().server.upgrade())
-        else {
-            return false;
-        };
-        server.plugin_manager.in_plugin_call()
+            .is_some_and(|manager| manager.in_plugin_call())
     }
 
     /// Translated clients: the disconnect goes through the translation queue and the

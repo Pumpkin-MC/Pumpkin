@@ -527,15 +527,12 @@ impl ChunkSender {
                 let chunk = &candidate.chunk;
                 let mut chunk_buf = Vec::with_capacity(32 * 1024);
                 if chunk_buf
-                    .write_var_int(&VarInt(CChunkData::to_id(CURRENT_MC_VERSION)))
+                    .write_var_int(&VarInt(CChunkData::PACKET_ID))
                     .is_err()
                 {
                     return None;
                 }
-                if CChunkData(chunk)
-                    .write_packet_data(&mut chunk_buf, &CURRENT_MC_VERSION)
-                    .is_err()
-                {
+                if CChunkData(chunk).write_packet_data(&mut chunk_buf).is_err() {
                     return None;
                 }
 

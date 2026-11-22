@@ -23,7 +23,7 @@ use pumpkin_protocol::{
         },
     },
     packet::JavaPacket,
-    ser::{NetworkReadExt, ReadingError},
+    ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
 use tokio::{
@@ -39,7 +39,10 @@ use crate::{
         EncryptionError, GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig,
         can_not_join,
     },
-    plugin::server::packet::{JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent},
+    plugin::{
+        PluginManager,
+        server::packet::{JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent},
+    },
     server::Server,
 };
 
@@ -207,6 +210,12 @@ impl PendingConnection {
                 None
             }
         }
+    }
+
+    pub(super) fn plugin_manager(&self) -> Option<Arc<PluginManager>> {
+        self.server
+            .upgrade()
+            .map(|server| server.plugin_manager.clone())
     }
 
     /// Connection packet events for clients below `CURRENT_MC_VERSION`, after handshake.

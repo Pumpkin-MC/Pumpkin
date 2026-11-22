@@ -339,11 +339,7 @@ impl MetadataSerializer for Option<uuid::Uuid> {
 }
 
 impl MetadataSerializer for pumpkin_data::data_component_impl::ProfileImpl {
-    fn write_metadata(
-        &self,
-        writer: &mut impl std::io::Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
+    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
         use crate::codec::data_component::DataComponentCodec;
         self.serialize(writer)
     }

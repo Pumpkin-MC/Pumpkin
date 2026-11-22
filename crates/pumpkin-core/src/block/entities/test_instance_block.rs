@@ -1,7 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation::java as translation;
 use pumpkin_data::{Block, Mirror, Rotation};
 use pumpkin_gametest::{
@@ -183,10 +182,7 @@ impl TestInstanceData {
         nbt.put_bool("ignore_entities", self.ignore_entities);
         nbt.put_string("status", self.status.serialized_name().to_string());
         if let Some(ref error_message) = self.error_message {
-            nbt.put(
-                "error_message",
-                error_message.to_nbt_tag_for_version(&CURRENT_MC_VERSION),
-            );
+            nbt.put("error_message", error_message.to_nbt_tag());
         }
         nbt
     }

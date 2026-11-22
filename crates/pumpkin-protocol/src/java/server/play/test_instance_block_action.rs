@@ -138,7 +138,7 @@ impl<'a> TestInstanceBlockData<'a> {
             2 => TestInstanceBlockStatus::Finished,
             _ => TestInstanceBlockStatus::Cleared,
         };
-        let error_message = bytebuf.get_option(|b| b.get_component_borrowed())?;
+        let error_message = bytebuf.get_option(NetworkReadSliceExt::get_component_borrowed)?;
 
         Ok(Self {
             test,
@@ -172,9 +172,10 @@ impl<'a> TestInstanceBlockData<'a> {
             TestInstanceBlockStatus::Finished => 2,
         };
         write.write_var_int(&VarInt(status_val))?;
-        write.write_option(&self.error_message, |w, msg| {
-            w.write_component(msg)
-        })?;
+        write.write_option(
+            &self.error_message,
+            crate::ser::NetworkWriteExt::write_component,
+        )?;
         Ok(())
     }
 }

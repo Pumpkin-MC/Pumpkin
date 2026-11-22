@@ -12,7 +12,7 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::text::TextComponent;
 
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
 
@@ -237,10 +237,7 @@ impl EntityBase for MannequinEntity {
 
         if let Some(description) = self.get_description() {
             if description != default_description() {
-                nbt.put(
-                    "description",
-                    description.to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_3),
-                );
+                nbt.put("description", description.to_nbt_tag());
             }
         } else {
             nbt.put_bool("hide_description", true);
