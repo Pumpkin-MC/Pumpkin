@@ -17,7 +17,6 @@ use crate::entity::mob::Mob;
 pub const SPEED_MULTIPLIER_WHEN_IDLING: f32 = 1.0;
 pub const SPEED_MULTIPLIER_WHEN_TEMPTED: f32 = 1.25;
 pub const SPEED_MULTIPLIER_WHEN_FOLLOWING_ADULT: f32 = 1.1;
-pub const SPEED_MULTIPLIER_WHEN_PANICKING: f32 = 2.0;
 pub const BABY_GHAST_CLOSE_ENOUGH_DIST: f64 = 3.0;
 pub const ADULT_FOLLOW_RANGE: (i32, i32) = (3, 16);
 
@@ -67,7 +66,7 @@ fn init_core_activity() -> ActivityData {
         vec![
             Box::new(Timed::new(Swim::new(0.8))),
             Box::new(Timed::new(AnimalPanic::with_fly_height(
-                SPEED_MULTIPLIER_WHEN_PANICKING,
+                HappyGhastEntity::SPEED_MULTIPLIER_WHEN_PANICKING,
                 0,
             ))),
             Box::new(Timed::new(LookAtTargetSink::new(45, 90))),

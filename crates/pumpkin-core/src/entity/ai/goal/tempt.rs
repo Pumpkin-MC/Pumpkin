@@ -12,6 +12,8 @@ use pumpkin_data::item::Item;
 use pumpkin_data::tag::{Tag, Taggable};
 use pumpkin_util::math::vector3::Vector3;
 
+use rand::RngExt;
+
 const DEFAULT_STOP_DISTANCE: f64 = 2.5;
 /// Following stops once the player moves further than this while being watched.
 const SCARE_RANGE_SQ: f64 = 36.0;
@@ -200,12 +202,11 @@ impl TemptGoal {
                 }
             }
             TemptNavigation::MoveControl => {
-                let pos = mob.get_entity().pos.load();
                 mob.get_mob_entity()
                     .move_control
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .set_wanted_position(pos.x, pos.y, pos.z, self.speed);
+                    .set_wait();
             }
         }
     }
@@ -229,12 +230,15 @@ impl TemptGoal {
                 }
             }
             TemptNavigation::MoveControl => {
-                let player_pos = player.get_entity().pos.load();
+                let mob_pos = mob.get_entity().pos.load();
+                let player_eye = player.eye_position();
+                let factor = mob.get_random().random::<f64>();
+                let target = mob_pos + (player_eye - mob_pos) * factor;
                 mob.get_mob_entity()
                     .move_control
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .set_wanted_position(player_pos.x, player_pos.y, player_pos.z, self.speed);
+                    .set_wanted_position(target.x, target.y, target.z, self.speed);
             }
         }
     }

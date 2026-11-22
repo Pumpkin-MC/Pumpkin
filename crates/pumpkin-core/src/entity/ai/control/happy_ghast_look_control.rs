@@ -53,6 +53,7 @@ impl LookControlTrait for HappyGhastLookControl {
                 let yaw = (-f64::atan2(dx, dz).to_degrees()) as f32;
                 let entity = mob.get_entity();
                 entity.yaw.store(yaw);
+                entity.body_yaw.store(yaw);
                 entity.head_yaw.store(yaw);
                 return;
             }
@@ -60,11 +61,9 @@ impl LookControlTrait for HappyGhastLookControl {
 
         let entity = mob.get_entity();
         let vel = entity.velocity.load();
-        if vel.x * vel.x + vel.z * vel.z > 0.05 {
-            let yaw = (-f64::atan2(vel.x, vel.z).to_degrees()) as f32;
-            entity.yaw.store(yaw);
-            entity.head_yaw.store(yaw);
-        }
+        let yaw = (-f64::atan2(vel.x, vel.z).to_degrees()) as f32;
+        entity.yaw.store(yaw);
+        entity.body_yaw.store(yaw);
     }
 
     fn look_at_with_range(&mut self, x: f64, y: f64, z: f64, _max_yaw: f32, _max_pitch: f32) {

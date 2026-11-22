@@ -55,8 +55,6 @@ impl HappyGhastEntity {
     pub const STILL_TIMEOUT_ON_LOAD_GRACE_PERIOD: i32 = 60;
     pub const MAX_STILL_TIMEOUT: i32 = 10;
     pub const SPEED_MULTIPLIER_WHEN_PANICKING: f32 = 2.0;
-    pub const FLYING_SPEED: f64 = 0.05;
-    pub const MOVEMENT_SPEED: f64 = 0.05;
 
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
@@ -305,13 +303,11 @@ impl HappyGhastEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(LookControl::default());
     }
 
-    pub fn do_player_ride(&self, player: &Arc<Player>) -> bool {
+    pub fn do_player_ride(&self, player: &Arc<Player>) {
         let entity = self.get_entity();
-        entity
-            .world
-            .load()
-            .get_entity_by_id(entity.entity_id)
-            .is_some_and(|vehicle| entity.add_passenger(vehicle, player.clone()))
+        if let Some(vehicle) = entity.world.load().get_entity_by_id(entity.entity_id) {
+            entity.add_passenger(vehicle, player.clone());
+        }
     }
 
     fn update_dimensions(&self) {
@@ -675,10 +671,26 @@ impl Mob for HappyGhastEntity {
             return self.animal_interact(player, item_stack);
         }
 
-        if self.is_wearing_body_armor()
-            && !player.get_entity().is_sneaking()
-            && self.do_player_ride(player)
-        {
+        if !item_stack.is_empty() {
+            let before = item_stack.clone();
+            if let Some(server) = self.get_entity().world.load().server.upgrade()
+                && let Some(this_entity) = self
+                    .get_entity()
+                    .world
+                    .load()
+                    .get_entity_by_id(self.get_entity().entity_id)
+            {
+                server
+                    .item_registry
+                    .use_on_entity(item_stack, player, this_entity);
+                if !item_stack.are_equal(&before) {
+                    return true;
+                }
+            }
+        }
+
+        if self.is_wearing_body_armor() && !player.get_entity().is_sneaking() {
+            self.do_player_ride(player);
             return true;
         }
 
