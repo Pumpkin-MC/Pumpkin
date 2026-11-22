@@ -9002,6 +9002,99 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dense_legacy_block_entity_chunk_round_trips_in_pump_format()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_nbt::{Nbt, tag::NbtTag};
+        use pumpkin_world::chunk::{
+            ChunkData,
+            format::{
+                anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
+                pump::PumpFile,
+            },
+            io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
+            palette::BlockPalette,
+        };
+        use std::sync::Arc;
+
+        // Sixteen full sections reach the old decoder limit. Recovery must save the next one too.
+        const FULL_SECTIONS: i32 = 17;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk_pos = Vector2::new(0, 0);
+        let mut heart = NbtCompound::new();
+        heart.put_string("Name", "minecraft:creaking_heart".into());
+        let mut block_states = NbtCompound::new();
+        block_states.put_list("palette", vec![NbtTag::Compound(heart)]);
+
+        let sections = (0..FULL_SECTIONS)
+            .map(|y| {
+                let mut section = NbtCompound::new();
+                section.put_int("Y", y);
+                section.put_compound("block_states", block_states.clone());
+                NbtTag::Compound(section)
+            })
+            .collect();
+        let mut legacy = NbtCompound::new();
+        legacy.put_int("DataVersion", WORLD_DATA_VERSION);
+        legacy.put_int("xPos", chunk_pos.x);
+        legacy.put_int("zPos", chunk_pos.y);
+        legacy.put_int("yPos", 0);
+        legacy.put_string("Status", "minecraft:full".into());
+        legacy.put_list("sections", sections);
+        let chunk = Arc::new(ChunkData::from_bytes(
+            &Nbt::from(legacy).write(),
+            chunk_pos,
+        )?);
+        assert!(
+            chunk
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+        );
+        assert!(!chunk.is_dirty());
+
+        world.level.loaded_chunks.insert(chunk_pos, chunk.clone());
+        world.migrate_pending_block_entities(chunk_pos);
+        assert!(chunk.is_dirty());
+
+        let level_folder = &world.level.level_folder;
+        let writer = ChunkFileManager::<PumpFile, ChunkData>::new(());
+        writer
+            .save_chunks(level_folder, vec![(chunk_pos, chunk)])
+            .await?;
+        writer.flush_all().await;
+        drop(writer);
+
+        let reader = ChunkFileManager::<PumpFile, ChunkData>::new(());
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        reader.fetch_chunks(level_folder, &[chunk_pos], tx).await;
+        let reloaded = match rx.recv().await {
+            Some(LoadedData::Loaded(chunk)) => chunk,
+            Some(LoadedData::Error((_, error))) => return Err(error.into()),
+            _ => return Err("recovered Pump chunk is missing".into()),
+        };
+        assert!(reloaded.legacy_block_entity_positions().is_none());
+        let last = BlockPalette::SIZE as i32 - 1;
+        let last_heart = BlockPos::new(last, FULL_SECTIONS * BlockPalette::SIZE as i32 - 1, last);
+        let (record_count, has_last_heart) = {
+            let records = reloaded
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let last_id = records
+                .get(&last_heart)
+                .and_then(|record| record.get_string("id"));
+            (records.len(), last_id == Some("minecraft:creaking_heart"))
+        };
+        assert_eq!(record_count, FULL_SECTIONS as usize * BlockPalette::VOLUME);
+        assert!(has_last_heart, "missing recovered heart at {last_heart:?}");
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn bedrock_incremental_bed_update_preserves_block_actor_color()
     -> Result<(), Box<dyn std::error::Error>> {
         use crate::block::entities::bed::BedBlockEntity;
