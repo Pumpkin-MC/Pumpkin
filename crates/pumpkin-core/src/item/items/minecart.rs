@@ -87,6 +87,11 @@ impl ItemBehaviour for MinecartItem {
             entity_type,
         );
         let minecart_entity = Arc::new(MinecartEntity::new(entity));
+        crate::item::items::spawn_egg::apply_entity_variant(
+            item,
+            minecart_entity.as_ref(),
+            Some(player),
+        );
         world.spawn_entity(minecart_entity);
         world.emit_game_event(GameEvent::EntityPlace.name(), pos);
         item.decrement_unless_creative(player.gamemode.load(), 1);

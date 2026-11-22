@@ -444,18 +444,37 @@ impl DataComponentImpl for UseEffectsImpl {
     default_impl!(UseEffects);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct UseRemainderImpl {
-    pub remainder: Option<Cow<'static, str>>,
+    pub remainder: Option<ItemStack>,
 }
+impl std::fmt::Debug for UseRemainderImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UseRemainderImpl")
+            .field(
+                "remainder",
+                &self.remainder.as_ref().map(|s| s.item.registry_key),
+            )
+            .finish()
+    }
+}
+impl PartialEq for UseRemainderImpl {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.remainder, &other.remainder) {
+            (None, None) => true,
+            (Some(a), Some(b)) => {
+                a.item_count == b.item_count && a.are_items_and_components_equal(b)
+            }
+            _ => false,
+        }
+    }
+}
+impl Eq for UseRemainderImpl {}
 impl UseRemainderImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let remainder = match data {
-            NbtTag::String(s) => Some(Cow::Owned(s.to_string())),
-            NbtTag::Compound(c) => c.get_string("id").map(|s| Cow::Owned(s.to_string())),
-            _ => None,
-        };
-        Some(Self { remainder })
+        Some(Self {
+            remainder: Some(ItemStack::read_item_stack_template(data)?),
+        })
     }
 
     /// Mirrors vanilla's `UseRemainder.convertIntoRemainder`.
@@ -469,14 +488,9 @@ impl UseRemainderImpl {
         if has_infinite_materials || used_stack.item_count >= stack_count_before_using {
             return used_stack;
         }
-        let Some(item) = self
-            .remainder
-            .as_deref()
-            .and_then(|id| Item::from_registry_key(id.strip_prefix("minecraft:").unwrap_or(id)))
-        else {
+        let Some(remainder_stack) = self.remainder.clone() else {
             return used_stack;
         };
-        let remainder_stack = ItemStack::new(1, item);
         if used_stack.is_empty() {
             return remainder_stack;
         }
@@ -486,11 +500,10 @@ impl UseRemainderImpl {
 }
 impl DataComponentImpl for UseRemainderImpl {
     fn write_data(&self) -> NbtTag {
-        let mut compound = NbtCompound::new();
-        if let Some(id) = &self.remainder {
-            compound.put_string("id", id.to_string());
-        }
-        NbtTag::Compound(compound)
+        self.remainder.as_ref().map_or_else(
+            || NbtTag::Compound(NbtCompound::new()),
+            ItemStack::write_item_stack_template,
+        )
     }
     default_impl!(UseRemainder);
 }

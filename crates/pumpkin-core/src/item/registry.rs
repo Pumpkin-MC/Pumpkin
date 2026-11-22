@@ -56,13 +56,31 @@ impl ItemRegistry {
             return;
         }
 
-        let pumpkin_item = self.get_pumpkin_item(item.id);
-        if let Some(pumpkin_item) = pumpkin_item {
+        if let Some(pumpkin_item) = self.get_pumpkin_item(item.id) {
             pumpkin_item.normal_use_with_hand(item, player, yaw, pitch, hand);
+        } else if stack
+            .get_data_component::<pumpkin_data::data_component_impl::KineticWeaponImpl>()
+            .is_some()
+        {
+            crate::item::items::spear::SpearItem
+                .normal_use_with_hand(item, player, yaw, pitch, hand);
+        } else if stack
+            .get_data_component::<pumpkin_data::data_component_impl::InstrumentImpl>()
+            .is_some()
+        {
+            crate::item::items::goat_horn::GoatHornItem
+                .normal_use_with_hand(item, player, yaw, pitch, hand);
+        } else if stack
+            .get_data_component::<pumpkin_data::data_component_impl::RecipesImpl>()
+            .is_some()
+        {
+            crate::item::items::knowledge_book::KnowledgeBookItem
+                .normal_use_with_hand(item, player, yaw, pitch, hand);
         }
 
         if let Some(cooldown) = cooldown
             && self.get_use_duration(item.id).is_none()
+            && stack.get_max_use_time() == 0
         {
             player.start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32);
         }
@@ -77,6 +95,11 @@ impl ItemRegistry {
     pub fn on_spear_jab(&self, stack: &ItemStack, player: &Player) {
         if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
             behaviour.on_spear_jab(stack, player);
+        } else if stack
+            .get_data_component::<pumpkin_data::data_component_impl::PiercingWeaponImpl>()
+            .is_some()
+        {
+            crate::item::items::spear::SpearItem.on_spear_jab(stack, player);
         }
     }
 
@@ -88,6 +111,11 @@ impl ItemRegistry {
     ) {
         if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
             behaviour.on_use_tick(stack, user, remaining_use_ticks);
+        } else if stack
+            .get_data_component::<pumpkin_data::data_component_impl::KineticWeaponImpl>()
+            .is_some()
+        {
+            crate::item::items::spear::SpearItem.on_use_tick(stack, user, remaining_use_ticks);
         }
     }
 
@@ -122,9 +150,24 @@ impl ItemRegistry {
         }
 
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
-        let result = pumpkin_item.map_or(BlockActionResult::Pass, |pumpkin_item| {
+        let result = if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item.use_on_block(stack, player, location, face, cursor_pos, block, server)
-        });
+        } else if let Some(bt) = stack
+            .get_data_component::<pumpkin_data::data_component_impl::BlockTransformerImpl>()
+            .map(|b| b.transformer.clone())
+        {
+            match bt.strip_prefix("minecraft:").unwrap_or(&bt) {
+                "axe" => crate::item::items::axe::AxeItem
+                    .use_on_block(stack, player, location, face, cursor_pos, block, server),
+                "hoe" => crate::item::items::hoe::HoeItem
+                    .use_on_block(stack, player, location, face, cursor_pos, block, server),
+                "shovel" => crate::item::items::shovel::ShovelItem
+                    .use_on_block(stack, player, location, face, cursor_pos, block, server),
+                _ => BlockActionResult::Pass,
+            }
+        } else {
+            BlockActionResult::Pass
+        };
 
         if matches!(
             result,

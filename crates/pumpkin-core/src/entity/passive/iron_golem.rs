@@ -48,7 +48,6 @@ const OFFER_FLOWER_TICKS: i32 = 400;
 const KNOCKBACK_UP_VELOCITY: f32 = 0.4;
 const PUSH_TARGET_CHANCE: u32 = 20;
 const STROLL_SPEED: f64 = 0.6;
-const AMBIENT_SOUND_INTERVAL: i32 = 120;
 
 /// Represents an Iron Golem, a powerful neutral mob that protects villagers and players.
 ///
@@ -205,7 +204,7 @@ impl Mob for IronGolemEntity {
     }
 
     fn get_ambient_sound_interval(&self) -> i32 {
-        AMBIENT_SOUND_INTERVAL
+        super::abstract_golem::AMBIENT_SOUND_INTERVAL
     }
 
     fn mob_decrease_air_supply(&self, current: i32) -> i32 {

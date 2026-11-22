@@ -1057,8 +1057,9 @@ interface player {
         /// Bans the player's IP address with the specified options.
         ban-ip: async func (options: ban-ip-options);
 
-        /// Transfers the player to another server.
-        transfer: async func (host: string, port: u16);
+        /// Requests a server transfer and returns whether the transfer packet was queued.
+        /// The result does not indicate whether the client reached its destination.
+        transfer: async func (host: string, port: u16) -> bool;
 
         // Status Effects
 

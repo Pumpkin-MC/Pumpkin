@@ -233,7 +233,11 @@ impl ArmadilloEntity {
         }
     }
 
-    pub fn brush_off_scute(&self, player: &Player, item_stack: &mut ItemStack) -> bool {
+    pub fn brush_off_scute(
+        &self,
+        _interacting_entity: Option<&dyn EntityBase>,
+        tool: &ItemStack,
+    ) -> bool {
         if self.is_baby() || !self.get_entity().is_alive() {
             return false;
         }
@@ -245,7 +249,7 @@ impl ArmadilloEntity {
                 world: Some(&world),
                 position: Some(pos),
                 this_entity: Some(self),
-                tool: Some(item_stack.clone()),
+                tool: Some(tool.clone()),
                 ..Default::default()
             };
             for drop_stack in
@@ -259,9 +263,10 @@ impl ArmadilloEntity {
             }
         }
         world.play_sound(Sound::EntityArmadilloBrush, SoundCategory::Neutral, &pos);
-        if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-            let _ = item_stack.damage_item(16);
-        }
+        world.emit_game_event(
+            pumpkin_data::game_event::GameEvent::EntityInteract.name(),
+            pos,
+        );
         true
     }
 
@@ -449,7 +454,12 @@ impl Mob for ArmadilloEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        if item_stack.item == &Item::BRUSH && self.brush_off_scute(player, item_stack) {
+        if item_stack.item == &Item::BRUSH
+            && self.brush_off_scute(Some(player.as_ref()), item_stack)
+        {
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                let _ = item_stack.damage_item(16);
+            }
             return true;
         }
         if self.is_scared() {

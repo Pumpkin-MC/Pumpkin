@@ -85,6 +85,12 @@ impl EntityBase for LeashKnotEntity {
         None
     }
 
+    fn notify_leashee_removed(&self) {
+        if self.entity.leashable_leashed_to().is_empty() {
+            self.entity.remove();
+        }
+    }
+
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         let world = self.entity.world.load();
         let block = world.get_block(&self.entity.block_pos.load());
@@ -99,6 +105,7 @@ impl EntityBase for LeashKnotEntity {
             let search_box = BoundingBox::new_from_pos(pos.x, pos.y, pos.z, &search_dim);
             let entities = world.get_entities_at_box(&search_box);
 
+            let mut retained_leash = false;
             for entity_base in entities {
                 let ent = entity_base.get_entity();
                 let is_attached_to_knot = ent
@@ -113,16 +120,21 @@ impl EntityBase for LeashKnotEntity {
                     })
                     .unwrap_or(false);
 
-                if is_attached_to_knot {
-                    ent.unleash();
+                if is_attached_to_knot && ent.unleash() {
                     let lead_item = pumpkin_data::item_stack::ItemStack::new(
                         1,
                         &pumpkin_data::item::Item::LEAD,
                     );
                     world.drop_stack(&ent.block_pos.load(), lead_item);
                 }
+                retained_leash |= ent
+                    .get_leash_holder()
+                    .is_some_and(|holder| holder.get_entity().entity_id == knot_id);
             }
 
+            if retained_leash {
+                return;
+            }
             world.play_sound(Sound::ItemLeadUntied, SoundCategory::Neutral, &pos);
             self.entity.remove();
         }
@@ -164,13 +176,12 @@ impl EntityBase for LeashKnotEntity {
 
         let mut any_dropped = false;
         if !attached_mob {
+            let player_holder = player.clone() as Arc<dyn EntityBase>;
             for entity_base in &entities {
-                let ent = entity_base.get_entity();
-                if let Ok(guard) = ent.leashed_to.try_lock()
-                    && let Some(holder) = guard.as_ref().and_then(std::sync::Weak::upgrade)
-                    && holder.get_entity().entity_id == knot_id
+                if entity_base
+                    .get_entity()
+                    .leash_to_if_held_by(knot_id, &player_holder)
                 {
-                    ent.leash_to(player.clone() as Arc<dyn EntityBase>);
                     any_dropped = true;
                 }
             }

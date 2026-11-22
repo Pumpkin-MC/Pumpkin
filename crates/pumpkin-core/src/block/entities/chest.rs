@@ -22,6 +22,7 @@ pub struct ChestBlockEntity {
     pub loot_table: StdMutex<Option<String>>,
     /// Seed used for deterministic loot generation, paired with `loot_table`.
     pub loot_table_seed: i64,
+    pub metadata: crate::block::entities::ContainerMetadata,
 }
 
 impl ChestBlockEntity {
