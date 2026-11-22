@@ -2177,7 +2177,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     /// Vanilla `LivingEntity.actuallyHurt`: armor, absorption and health. A mob that overrides it
-    /// calls `LivingEntity::actually_hurt` first, like `super.actuallyHurt` in vanilla.
+    /// calls `LivingEntity::actually_hurt` first, like `super.actuallyHurt` in vanilla. Animals lose
+    /// their love mode first, as in vanilla `Animal.actuallyHurt`.
     fn actually_hurt(
         &self,
         caller: &dyn EntityBase,
@@ -2186,6 +2187,9 @@ pub trait Mob: EntityBase + Send + Sync {
         cause: Option<&dyn EntityBase>,
         damage: f32,
     ) {
+        if self.as_animal().is_some() {
+            self.get_mob_entity().reset_love_ticks();
+        }
         self.get_mob_entity().living_entity.actually_hurt(
             caller,
             damage_type,

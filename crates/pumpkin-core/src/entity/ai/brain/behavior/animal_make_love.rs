@@ -182,12 +182,32 @@ impl Behavior for AnimalMakeLove {
 
 #[cfg(test)]
 mod tests {
+    use pumpkin_data::damage::DamageType;
     use pumpkin_util::math::vector3::Vector3;
 
     use super::*;
     use crate::entity::Entity;
     use crate::entity::ai::test_support::world;
     use crate::entity::passive::pig::PigEntity;
+
+    #[tokio::test]
+    async fn a_hurt_animal_loses_its_love() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let pig = PigEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::PIG,
+        ));
+        pig.mob_entity.set_love_ticks(600, None);
+
+        pig.actually_hurt(pig.as_ref(), DamageType::GENERIC, None, None, 1.0);
+        let in_love = pig.mob_entity.is_in_love();
+        world.level.shutdown().await;
+
+        assert!(!in_love);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn it_only_mates_with_another_animal_that_is_in_love()

@@ -417,6 +417,7 @@ impl Mob for ArmadilloEntity {
         cause: Option<&dyn EntityBase>,
         damage: f32,
     ) {
+        self.mob_entity.reset_love_ticks();
         self.mob_entity
             .living_entity
             .actually_hurt(caller, damage_type, source, cause, damage);
@@ -605,6 +606,7 @@ mod tests {
                 .get_entity()
                 .velocity
                 .store(Vector3::new(0.3, 0.0, 0.3));
+            armadillo.mob_entity.set_love_ticks(600, None);
         }
 
         for (armadillo, damage) in [(&killed, 100.0), (&hurt, 1.0)] {
@@ -618,6 +620,7 @@ mod tests {
         }
         let after_kill = (killed.get_state(), killed.get_entity().velocity.load());
         let after_hit = (hurt.get_state(), hurt.get_entity().velocity.load());
+        let still_in_love = (killed.mob_entity.is_in_love(), hurt.mob_entity.is_in_love());
         world.level.shutdown().await;
 
         assert_eq!(
@@ -625,6 +628,7 @@ mod tests {
             (ArmadilloState::Idle, Vector3::new(0.3, 0.0, 0.3))
         );
         assert_eq!(after_hit, (ArmadilloState::Rolling, Vector3::default()));
+        assert_eq!(still_in_love, (false, false));
         Ok(())
     }
 
