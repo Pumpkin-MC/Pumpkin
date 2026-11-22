@@ -444,6 +444,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             }
             position = event.to_position;
         }
+        // TODO: a non-player changing world is not moved into the new world's entity list.
         entity.teleport(position, yaw, pitch, &world);
         Some(position)
     }

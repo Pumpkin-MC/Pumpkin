@@ -13,6 +13,13 @@ impl JavaClient {
                 .awaiting_teleport
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // A newer teleport may have been issued since the id check.
+            if awaiting_teleport
+                .as_ref()
+                .is_some_and(|(id, _)| *id != confirm_teleport.teleport_id)
+            {
+                return;
+            }
             match awaiting_teleport.take() {
                 Some((_, position))
                     if !confirm_teleport.position.x.is_nan()

@@ -4935,6 +4935,16 @@ impl Player {
                 let Some(player) = current_world.remove_player(self, false).await else {
                     return;
                 };
+                // A late confirmation of a teleport sent before the transfer must not end it.
+                if self
+                    .awaiting_teleport
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .take()
+                    .is_some()
+                {
+                    self.next_teleport_id();
+                }
                 self.is_changing_dimension.store(true, Ordering::Relaxed);
                new_world.players.rcu(|current_list| {
                     let mut new_list = (**current_list).clone();

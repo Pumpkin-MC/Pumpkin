@@ -5028,15 +5028,15 @@ impl LivingEntity {
                     };
                     let (yaw, pitch) = (self.entity.yaw.load(), self.entity.pitch.load());
                     let world = self.entity.world.load_full();
-                    caller.teleport_with_cause(
+                    let Some(destination) = caller.teleport_with_cause(
                         pos,
                         Some(yaw),
                         Some(pitch),
                         world.clone(),
                         TeleportCause::ConsumableEffect,
-                    );
-
-                    let destination = self.entity.pos.load();
+                    ) else {
+                        continue;
+                    };
                     if destination != center {
                         self.fall_distance.store(0.0);
                         self.reset_current_impulse_context();
