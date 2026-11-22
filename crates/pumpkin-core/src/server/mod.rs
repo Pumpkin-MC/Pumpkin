@@ -458,41 +458,38 @@ impl Server {
             });
         }
 
-        let worlds_vec = {
+        let world_tasks = server.dimensions.iter().map(|dim| {
             let server = server.clone();
             let level_path = world_path.clone();
+            let dim = dim.clone();
+            let block_registry = block_registry.clone();
             tokio::task::spawn_blocking(move || {
-                let mut worlds_vec = Vec::with_capacity(server.dimensions.len());
-                for dim in &server.dimensions {
-                    info!(
-                        "Loading {}",
-                        TextComponent::text(dim.minecraft_name.to_string())
-                            .color_named(NamedColor::DarkGreen)
-                            .to_pretty_console()
-                    );
-                    let level = into_level(
-                        dim.clone(),
-                        &server.advanced_config.world,
-                        level_path.clone(),
-                        seed,
-                    );
-                    let world = Arc::new(World::load(
-                        level.clone(),
-                        server.level_info.clone(),
-                        dim.clone(),
-                        block_registry.clone(),
-                        Arc::downgrade(&server),
-                    ));
-                    let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
-                    level.world_portal.store(Arc::new(Some(portal)));
-                    worlds_vec.push(world);
-                }
-
-                worlds_vec
+                info!(
+                    "Loading {}",
+                    TextComponent::text(dim.minecraft_name.to_string())
+                        .color_named(NamedColor::DarkGreen)
+                        .to_pretty_console()
+                );
+                let level =
+                    into_level(dim.clone(), &server.advanced_config.world, level_path, seed);
+                let world = Arc::new(World::load(
+                    level.clone(),
+                    server.level_info.clone(),
+                    dim,
+                    block_registry,
+                    Arc::downgrade(&server),
+                ));
+                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+                level.world_portal.store(Arc::new(Some(portal)));
+                world
             })
+        });
+        // Wait for every dimension before firing events, preserving the configured world order.
+        let worlds_vec = futures::future::join_all(world_tasks)
             .await
-            .map_err(std::io::Error::other)?
-        };
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(std::io::Error::other)?;
 
         for world in &worlds_vec {
             let mut world_init_event =
