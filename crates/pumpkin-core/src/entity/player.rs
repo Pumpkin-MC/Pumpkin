@@ -6539,11 +6539,16 @@ impl Player {
         self.set_experience(new_level, progress, points);
     }
 
-    pub fn add_effect(&self, effect: Effect) {
-        self.living_entity.add_effect(effect);
-        self.trigger_advancement(
-            crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged,
-        );
+    pub fn add_effect(&self, effect: Effect) -> bool {
+        let is_added = self.living_entity.add_effect(effect);
+
+        if is_added {
+            self.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged,
+            );
+        }
+
+        is_added
     }
 
     pub fn has_effect(&self, effect_type: &'static StatusEffect) -> bool {

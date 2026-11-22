@@ -103,13 +103,17 @@ impl CommandExecutor for GiveExecutor {
                     show_icon: true,
                     blend: false,
                 };
-                if let Some(player) = target.get_player() {
-                    player.add_effect(new_effect);
-                } else {
-                    target.add_effect(new_effect);
-                }
 
-                successes += 1;
+                let applied = if let Some(player) = target.get_player() {
+                    player.add_effect(new_effect)
+                } else {
+                    target.add_effect(new_effect)
+                };
+
+                if applied {
+                    last_target = Some(target);
+                    successes += 1;
+                }
             }
         }
 

@@ -1560,9 +1560,9 @@ impl LivingEntity {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn add_effect(&self, effect: Effect) {
+    pub fn add_effect(&self, effect: Effect) -> bool {
         if !self.can_be_affected(&effect) {
-            return;
+            return false;
         }
 
         let mut effect_event =
@@ -1578,12 +1578,12 @@ impl LivingEntity {
                 .fire_blocking(&server, &mut effect_event);
         }
         if effect_event.cancelled {
-            return;
+            return false;
         }
 
         // Like vanilla, instant effects are never sent or stored as active effects.
         if self.apply_instant_effect(effect.effect_type, effect.amplifier, None, None) {
-            return;
+            return true;
         }
 
         // Apply non-instant effects
@@ -1697,6 +1697,8 @@ impl LivingEntity {
             }
         }
         self.sync_effect_particles();
+
+        true
     }
 
     fn sync_effect_particles(&self) {
