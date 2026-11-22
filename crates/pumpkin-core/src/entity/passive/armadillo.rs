@@ -231,7 +231,7 @@ impl ArmadilloEntity {
 
     pub fn brush_off_scute(
         &self,
-        _interacting_entity: Option<&dyn EntityBase>,
+        interacting_entity: Option<&dyn EntityBase>,
         tool: &ItemStack,
     ) -> bool {
         if self.is_baby() || !self.get_entity().is_alive() {
@@ -259,7 +259,10 @@ impl ArmadilloEntity {
             }
         }
         world.play_sound(Sound::EntityArmadilloBrush, SoundCategory::Neutral, &pos);
-        self.emit_game_event(GameEvent::EntityInteract);
+        // A player's interaction is already announced by `Mob::interact`; only the dispenser is not.
+        if interacting_entity.is_none() {
+            self.emit_game_event(GameEvent::EntityInteract);
+        }
         true
     }
 
@@ -295,7 +298,11 @@ impl ArmadilloEntity {
         let entity = self.get_entity();
         // The timer keeps running below zero while loot is off or it is a baby.
         if !entity.is_alive()
-            || self.scute_time.fetch_sub(1, Ordering::Relaxed) - 1 > 0
+            || self
+                .scute_time
+                .fetch_sub(1, Ordering::Relaxed)
+                .wrapping_sub(1)
+                > 0
             || !Mob::should_drop_loot(self)
         {
             return;
@@ -592,6 +599,21 @@ mod tests {
 
         assert_eq!(as_baby, 0);
         assert!(as_adult >= SCUTE_DROP_TICKS);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_scute_timer_read_from_nbt_at_the_integer_minimum_does_not_overflow() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let armadillo = armadillo(&world);
+        armadillo.scute_time.store(i32::MIN, Relaxed);
+
+        armadillo.shed_scute();
+        let wrapped = armadillo.scute_time.load(Relaxed);
+        world.level.shutdown().await;
+
+        assert_eq!(wrapped, i32::MAX);
         Ok(())
     }
 
