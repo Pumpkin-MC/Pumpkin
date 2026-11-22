@@ -90,8 +90,6 @@ impl CommandExecutor for GiveExecutor {
                 .is_some_and(|existing| existing.amplifier >= amplifier);
 
             if !should_skip {
-                last_target = Some(target.as_ref());
-
                 let new_effect = Effect {
                     effect_type: effect,
                     duration: duration_ticks,
