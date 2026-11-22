@@ -322,6 +322,7 @@ use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
+use crate::plugin::player::player_transfer::PlayerTransferEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::plugin::world::chunk_send::ChunkSend;
 use crate::server::Server;
@@ -5177,6 +5178,37 @@ impl Player {
         self.abilities.lock().is_ok_and(|a| a.allow_modify_world)
     }
 
+    /// Requests a transfer and returns the destination if the packet was queued.
+    ///
+    /// The result does not indicate whether the client reached its destination.
+    pub fn transfer(self: &Arc<Self>, host: &str, port: u16) -> Option<(String, u16)> {
+        if self.client.closed() {
+            return None;
+        }
+
+        let mut event = PlayerTransferEvent::new(self.clone(), host.to_owned(), port);
+        let server = self.world().server.upgrade()?;
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        if event.cancelled {
+            return None;
+        }
+
+        let PlayerTransferEvent { host, port, .. } = event;
+        self.client
+            .try_queue_packet_editioned(
+                &pumpkin_protocol::java::client::play::CTransfer::new(
+                    &host,
+                    VarInt(i32::from(port)),
+                ),
+                &pumpkin_protocol::bedrock::client::transfer::CTransfer::new(
+                    host.clone(),
+                    port,
+                    false,
+                ),
+            )
+            .then_some((host, port))
+    }
+
     pub fn kick(&self, reason: DisconnectReason, message: &TextComponent) {
         if let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
@@ -9616,6 +9648,12 @@ mod tests {
         bedrock_container_slot, bedrock_container_type, read_last_death_location,
         read_root_vehicle, write_last_death_location, write_root_vehicle,
     };
+    use crate::{
+        plugin::{BoxFuture, EventHandler, player::player_transfer::PlayerTransferEvent},
+        server::Server,
+    };
+    use std::sync::Arc;
+
     use pumpkin_data::{Block, screen::WindowType};
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use pumpkin_protocol::bedrock::network_item::ContainerName;
@@ -9680,6 +9718,126 @@ mod tests {
         nbt.put("RootVehicle", NbtTag::Compound(root_vehicle));
 
         assert_eq!(read_root_vehicle(&nbt), Some(expected));
+    }
+
+    struct TransferHandler;
+
+    impl EventHandler<PlayerTransferEvent> for TransferHandler {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PlayerTransferEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.host == "cancel.example" {
+                    event.cancelled = true;
+                } else if event.host == "closed.example" {
+                    if let Some(client) = event.player.client.java() {
+                        client.close();
+                    }
+                } else {
+                    event.host = "localhost".into();
+                    event.port = 25566;
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn transfer_event_can_cancel_or_redirect_a_packet()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use super::Player;
+        use crate::{
+            data::VanillaData,
+            net::{
+                ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
+                java::{JavaClient, pending::PendingConnection},
+            },
+            plugin::EventPriority,
+        };
+        use arc_swap::ArcSwap;
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use pumpkin_data::packet::CURRENT_MC_VERSION;
+        use pumpkin_protocol::{
+            ConnectionState,
+            java::{
+                client::play::{CKeepAlive, CTransfer},
+                packet_decoder::TCPNetworkDecoder,
+            },
+            packet::MultiVersionJavaPacket,
+        };
+        use pumpkin_util::GameMode;
+        use std::time::Duration;
+
+        let directory = tempfile::tempdir()?;
+        let basic = BasicConfiguration {
+            default_level_name: directory
+                .path()
+                .join("world")
+                .to_string_lossy()
+                .into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..Default::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.bedrock.online_mode = false;
+        let server = Server::new(
+            basic,
+            advanced,
+            TelemetryConfig::default(),
+            VanillaData::default(),
+            vec![],
+        )
+        .await?;
+        let world = server.worlds.load().first().cloned().ok_or("No world")?;
+        let (transport, peer) = tokio::io::duplex(8192);
+        let (read, write) = tokio::io::split(transport);
+        let pending = PendingConnection::from_transport(
+            Box::new(read),
+            Box::new(write),
+            "127.0.0.1:25565".parse()?,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(&server),
+        );
+        let profile = GameProfile {
+            id: Uuid::new_v4(),
+            name: "TransferTest".into(),
+            properties: ArcSwap::from_pointee(vec![]),
+            profile_actions: None,
+        };
+        let mut client =
+            JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+        client.connection_state.store(ConnectionState::Play);
+        client.start_outgoing_packet_task();
+        let player = Arc::new(Player::new(
+            Arc::new(ClientPlatform::Java(client)),
+            profile,
+            PlayerConfig::default(),
+            &world,
+            GameMode::Survival,
+        ));
+        server
+            .plugin_manager
+            .register(Arc::new(TransferHandler), EventPriority::Normal, true);
+
+        assert_eq!(player.transfer("cancel.example", 25565), None);
+        assert_eq!(
+            player.transfer("redirect.example", 25565),
+            Some(("localhost".into(), 25566))
+        );
+        let client = player.client.java().ok_or("No Java client")?;
+        client.try_send_packet(&CKeepAlive::new(1));
+        let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
+        let packet =
+            tokio::time::timeout(Duration::from_secs(10), decoder.get_raw_packet()).await??;
+        assert_eq!(packet.id, CTransfer::to_id(CURRENT_MC_VERSION));
+        // Java transfer payload: UTF-8 host preceded by its length, followed by VarInt port.
+        assert_eq!(packet.payload.as_ref(), b"\x09localhost\xde\xc7\x01");
+        assert_eq!(player.transfer("closed.example", 25565), None);
+        client.await_tasks().await;
+        Ok(())
     }
 
     #[test]
