@@ -125,11 +125,13 @@ impl PressurePlate for WeightedPressurePlateBlock {
         props.to_state_id(block)
     }
 
-    fn click_sounds(&self, _block: &Block) -> (Sound, Sound) {
-        (
-            Sound::BlockMetalPressurePlateClickOn,
-            Sound::BlockMetalPressurePlateClickOff,
-        )
+    fn click_sounds(&self, block: &Block) -> (Option<Sound>, Option<Sound>) {
+        block.block_set_type.map_or((None, None), |set_type| {
+            (
+                Some(set_type.pressure_plate_click_on),
+                Some(set_type.pressure_plate_click_off),
+            )
+        })
     }
 
     fn tick_rate(&self) -> u8 {

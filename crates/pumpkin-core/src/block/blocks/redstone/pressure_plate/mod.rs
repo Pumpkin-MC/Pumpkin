@@ -84,11 +84,15 @@ pub(crate) trait PressurePlate {
             let is_pressed = next_output > 0;
             if !is_pressed && was_pressed {
                 let (_, click_off) = self.click_sounds(block);
-                world.play_block_sound(click_off, SoundCategory::Blocks, *pos);
+                if let Some(sound) = click_off {
+                    world.play_block_sound(sound, SoundCategory::Blocks, *pos);
+                }
                 world.emit_game_event(GameEvent::BlockDeactivate.name(), pos.to_centered_f64());
             } else if is_pressed && !was_pressed {
                 let (click_on, _) = self.click_sounds(block);
-                world.play_block_sound(click_on, SoundCategory::Blocks, *pos);
+                if let Some(sound) = click_on {
+                    world.play_block_sound(sound, SoundCategory::Blocks, *pos);
+                }
                 world.emit_game_event(GameEvent::BlockActivate.name(), pos.to_centered_f64());
             }
         }
@@ -110,7 +114,7 @@ pub(crate) trait PressurePlate {
 
     fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8;
 
-    fn click_sounds(&self, block: &Block) -> (Sound, Sound);
+    fn click_sounds(&self, block: &Block) -> (Option<Sound>, Option<Sound>);
 
     fn tick_rate(&self) -> u8 {
         20
