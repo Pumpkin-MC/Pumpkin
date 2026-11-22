@@ -82,7 +82,7 @@ impl Behavior for LongJumpMidJump {
         tick.mob.get_entity().set_pose(EntityPose::LongJumping);
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         let entity = tick.mob.get_entity();
         if entity.on_ground.load(Relaxed) {
             let velocity = entity.velocity.load();
