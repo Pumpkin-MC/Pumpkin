@@ -1476,9 +1476,10 @@ mod tests {
     async fn queued_event_survives_caller_cancellation() {
         let (submitted, queued) = tokio::sync::oneshot::channel();
         let caller = tokio::spawn(async move {
-            let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(3))));
+            let slot = Arc::new(RwLock::new((Some(ServerTickStartEvent::new(3)), 0u32)));
             let handle = QueuedEvent {
                 storage: slot.clone(),
+                generation: 0,
                 writable: true,
             };
             assert!(submitted.send(handle).is_ok());
@@ -1502,13 +1503,15 @@ mod tests {
 
     #[tokio::test]
     async fn queued_event_shares_edits_and_expires_after_dispatch() {
-        let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(1))));
+        let slot = Arc::new(RwLock::new((Some(ServerTickStartEvent::new(1)), 0u32)));
         let blocking = QueuedEvent {
             storage: slot.clone(),
+            generation: 0,
             writable: true,
         };
         let notification = QueuedEvent {
             storage: slot.clone(),
+            generation: 0,
             writable: false,
         };
         blocking
@@ -1532,16 +1535,16 @@ mod tests {
         );
         {
             let mut guard = blocking.storage.write().await;
-            let event = guard.payload_mut().unwrap();
+            let event = guard.payload_mut(0).unwrap();
             event
                 .as_any_mut()
                 .downcast_mut::<ServerTickStartEvent>()
                 .unwrap()
                 .tick = 3;
-        };
+        }
         {
             let guard = notification.storage.read().await;
-            let event = guard.payload().unwrap();
+            let event = guard.payload(0).unwrap();
             assert_eq!(
                 event
                     .as_any()
@@ -1558,11 +1561,97 @@ mod tests {
                     .tick,
                 3
             );
-        };
-        assert_eq!(slot.write().await.take().unwrap().tick, 3);
+        }
+        assert_eq!(slot.write().await.0.take().unwrap().tick, 3);
         assert!(blocking.read::<ServerTickStartEvent>().unwrap().is_none());
         assert!(blocking.write::<ServerTickStartEvent>().unwrap().is_none());
-        assert!(blocking.storage.read().await.payload().is_none());
+        assert!(blocking.storage.read().await.payload(0).is_none());
+    }
+
+    #[tokio::test]
+    async fn queued_event_invalidates_handles_on_phase_advance() {
+        let slot = Arc::new(RwLock::new((Some(ServerTickStartEvent::new(1)), 0u32)));
+
+        let blocking_gen = slot.read().await.1;
+        assert_eq!(blocking_gen, 0);
+        let blocking = QueuedEvent {
+            storage: slot.clone(),
+            generation: blocking_gen,
+            writable: true,
+        };
+        blocking
+            .write::<ServerTickStartEvent>()
+            .unwrap()
+            .unwrap()
+            .tick = 2;
+
+        slot.write().await.1 += 1;
+
+        assert!(blocking.read::<ServerTickStartEvent>().unwrap().is_none());
+        assert!(blocking.write::<ServerTickStartEvent>().unwrap().is_none());
+
+        let notify_gen = slot.read().await.1;
+        assert_eq!(notify_gen, 1);
+        let notification_a = QueuedEvent {
+            storage: slot.clone(),
+            generation: notify_gen,
+            writable: false,
+        };
+        let notification_b = QueuedEvent {
+            storage: slot.clone(),
+            generation: notify_gen,
+            writable: false,
+        };
+
+        assert!(
+            notification_a
+                .write::<ServerTickStartEvent>()
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            notification_a
+                .read::<ServerTickStartEvent>()
+                .unwrap()
+                .unwrap()
+                .tick,
+            2
+        );
+        assert_eq!(
+            notification_b
+                .read::<ServerTickStartEvent>()
+                .unwrap()
+                .unwrap()
+                .tick,
+            2
+        );
+
+        slot.write().await.1 += 1;
+
+        assert!(
+            notification_a
+                .read::<ServerTickStartEvent>()
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            notification_b
+                .read::<ServerTickStartEvent>()
+                .unwrap()
+                .is_none()
+        );
+        assert!(slot.read().await.payload(notify_gen).is_none());
+        assert_eq!(
+            slot.read()
+                .await
+                .payload(2)
+                .unwrap()
+                .as_any()
+                .downcast_ref::<ServerTickStartEvent>()
+                .unwrap()
+                .tick,
+            2
+        );
     }
 
     #[tokio::test]
