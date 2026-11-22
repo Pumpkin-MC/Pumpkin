@@ -208,7 +208,10 @@ impl JavaClient {
             }
         }
 
-        if still_in_world && (item_result.consumes_action() || !item.are_equal(&before)) {
+        // placement events may also have moved the player
+        if Arc::ptr_eq(&player.world(), &world)
+            && (item_result.consumes_action() || !item.are_equal(&before))
+        {
             // fresh block: advancement reads the result
             let block = world.get_block(&position);
             trigger_item_used_on_block_advancement(player, &world, &position, block, &before);
