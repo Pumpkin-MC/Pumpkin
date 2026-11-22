@@ -168,7 +168,7 @@ impl Behavior for AnimalMakeLove {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.state.erase(types::BREED_TARGET.id());
         tick.state.erase(types::WALK_TARGET.id());
         tick.state.erase(types::LOOK_TARGET.id());

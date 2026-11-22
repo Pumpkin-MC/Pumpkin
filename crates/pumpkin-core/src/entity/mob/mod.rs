@@ -607,6 +607,23 @@ impl MobEntity {
             .insert(slot.clone(), Self::GUARANTEED_DROP_CHANCE);
     }
 
+    pub fn drop_preserved_equipment(&self) {
+        let preserved_slots: Vec<EquipmentSlot> = self
+            .living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|(_, chance)| **chance > 1.0)
+            .map(|(slot, _)| slot.clone())
+            .collect();
+
+        for slot in preserved_slots {
+            let item = self.set_item_slot(&slot, ItemStack::EMPTY.clone());
+            self.living_entity.entity.spawn_at_location(item);
+        }
+    }
+
     /// Equips `stack` and tells tracking clients, returning what was in the slot.
     pub fn set_item_slot(&self, slot: &EquipmentSlot, stack: ItemStack) -> ItemStack {
         let previous = self

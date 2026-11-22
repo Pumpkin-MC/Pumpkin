@@ -59,7 +59,7 @@ impl Behavior for GoToPotentialJobSite {
         );
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         if let Some(global_pos) = tick.state.get(types::POTENTIAL_JOB_SITE).copied()
             && let Some(poi_level) = world_for_dimension(tick.world, global_pos.dimension)
         {

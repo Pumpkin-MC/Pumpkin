@@ -25,7 +25,7 @@ pub trait Behavior: Send + Sync {
 
     fn tick(&mut self, _tick: &mut BrainTick<'_>) {}
 
-    fn stop(&mut self, _tick: &mut BrainTick<'_>) {}
+    fn stop(&mut self, _tick: &mut BrainTick<'_>, _timed_out: bool) {}
 
     fn can_still_use(&mut self, _tick: &mut BrainTick<'_>) -> bool {
         false
@@ -111,7 +111,8 @@ impl<B: Behavior> BehaviorControl for Timed<B> {
 
     fn do_stop(&mut self, tick: &mut BrainTick<'_>) {
         self.status = Status::Stopped;
-        self.inner.stop(tick);
+        let timed_out = self.has_timed_out(tick.time);
+        self.inner.stop(tick, timed_out);
     }
 
     fn debug_string(&self) -> String {
