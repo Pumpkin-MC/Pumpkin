@@ -5915,7 +5915,6 @@ impl World {
         );
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -5959,11 +5958,11 @@ impl World {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         // event handlers may replace the block or move the player
-        let unchanged = || {
-            self.get_block_state_id(position) == broken_block_state.id
+        let unchanged = |expected: BlockStateId| {
+            self.get_block_state_id(position) == expected
                 && cause.is_none_or(|player| Arc::ptr_eq(&player.world(), self))
         };
-        if event.cancelled || !unchanged() {
+        if event.cancelled || !unchanged(broken_block_state.id) {
             return None;
         }
 
@@ -5994,7 +5993,7 @@ impl World {
             };
             crate::block::drop_loot(self, broken_block, position, true, &params);
             // TODO: vanilla removes the block before `playerDestroy` drops its loot
-            if !unchanged() {
+            if !unchanged(broken_block_state.id) {
                 return None;
             }
         }

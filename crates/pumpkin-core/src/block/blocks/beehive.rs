@@ -91,10 +91,12 @@ impl BeehiveBlock {
             harvested_items: drops,
             cancelled: false,
         };
-        if let Some(server) = args.world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
+        // handlers may move the player
+        if !args
+            .world
+            .fire_block_event(args.position, args.block, &mut event)
+            || !Arc::ptr_eq(&args.player.world(), args.world)
+        {
             return false;
         }
         drops = event.harvested_items;
@@ -125,10 +127,12 @@ impl BeehiveBlock {
             harvested_items: vec![ItemStack::new(1, &Item::HONEY_BOTTLE)],
             cancelled: false,
         };
-        if let Some(server) = args.world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
+        // handlers may move the player
+        if !args
+            .world
+            .fire_block_event(args.position, args.block, &mut event)
+            || !Arc::ptr_eq(&args.player.world(), args.world)
+        {
             return false;
         }
 
