@@ -36,6 +36,7 @@ mod bedrock_voxel_shape;
 mod biome;
 mod bitsets;
 mod block;
+mod block_set_type;
 mod block_transformer;
 mod carver;
 mod cat_variant;
@@ -109,6 +110,7 @@ mod version;
 mod villager;
 mod wit;
 mod wolf_variant;
+mod wood_type;
 mod world_event;
 
 /// Output directory where all generated Rust source files are written.
@@ -186,6 +188,7 @@ pub fn main() {
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
         (block::build, "block.rs"),
+        (block_set_type::build, "block_set_type.rs"),
         (item::build, "item.rs"),
         (structures::build, "structures.rs"),
         (template_pool::build, "template_pool.rs"),
@@ -241,6 +244,7 @@ pub fn main() {
         (trim_material::build, "trim_material.rs"),
         (trim_pattern::build, "trim_pattern.rs"),
         (wolf_variant::build, "wolf_variant.rs"),
+        (wood_type::build, "wood_type.rs"),
         (enchantment_provider::build, "enchantment_provider.rs"),
         (mob_variant::build_cow, "cow_variant.rs"),
         (mob_variant::build_cow_sound, "cow_sound_variant.rs"),

@@ -34,6 +34,8 @@ default = [
     "damage",
     "fluid",
     "block",
+    "block_set_type",
+    "wood_type",
     "tag",
     "noise_router",
     "composter",
@@ -174,7 +176,9 @@ world_event = []
 message_type = []
 placed_feature = []
 configured_feature = []
-block = []
+block = ["block_set_type", "wood_type"]
+block_set_type = ["sound"]
+wood_type = ["block_set_type"]
 potion_brewing = []
 
 [dependencies]

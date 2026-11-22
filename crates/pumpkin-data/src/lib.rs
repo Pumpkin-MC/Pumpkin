@@ -251,6 +251,16 @@ pub mod fluid;
 #[path = "generated/block.rs"]
 pub mod block_properties;
 
+#[cfg(feature = "block_set_type")]
+#[rustfmt::skip]
+#[path = "generated/block_set_type.rs"]
+pub mod block_set_type;
+
+#[cfg(feature = "wood_type")]
+#[rustfmt::skip]
+#[path = "generated/wood_type.rs"]
+pub mod wood_type;
+
 #[cfg(feature = "bedrock_creative")]
 #[rustfmt::skip]
 #[path = "generated/bedrock_creative.rs"]
