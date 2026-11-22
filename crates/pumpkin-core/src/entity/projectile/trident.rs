@@ -373,7 +373,6 @@ impl TridentEntity {
         );
 
         let owner = self.owner.get(&world);
-        let owner_player = self.owner.get_player(&world);
         self.dealt_damage.store(true, Ordering::Relaxed);
         let hurt = target.damage_with_context(
             target.as_ref(),
@@ -387,8 +386,8 @@ impl TridentEntity {
             EnchantmentHelper::on_trident_post_attack(
                 &world,
                 &self.entity,
-                owner_player.as_ref(),
-                target.get_entity(),
+                owner.as_deref(),
+                target.as_ref(),
                 &weapon_stack,
             );
         }

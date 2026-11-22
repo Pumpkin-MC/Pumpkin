@@ -137,6 +137,7 @@ impl PotionContents {
         scale: f32,
         source: PotionApplicationSource,
         effect_source: Option<EffectSource<'_>>,
+        entity_source: Option<&dyn crate::entity::EntityBase>,
     ) {
         for (effect_type, duration, amplifier, ambient, show_particles, show_icon) in effects {
             // Like vanilla, instant effects are applied once and never added to the active
@@ -164,7 +165,7 @@ impl PotionContents {
                     show_icon,
                     blend: false,
                 };
-                target.add_effect(eff);
+                target.add_effect_with_source(eff, entity_source);
             }
         }
     }
