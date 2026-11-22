@@ -123,7 +123,7 @@ impl Behavior for SleepInBed {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         if let Some(villager) = tick.mob.cast_any().downcast_ref::<VillagerEntity>()
             && villager.is_sleeping()
         {
