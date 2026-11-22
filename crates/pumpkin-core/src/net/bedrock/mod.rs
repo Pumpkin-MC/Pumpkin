@@ -3,7 +3,7 @@ pub mod play;
 pub(crate) mod recipe;
 use crossbeam::atomic::AtomicCell;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     io::{Cursor, Error, Write},
     net::SocketAddr,
     sync::{
@@ -169,6 +169,8 @@ pub struct BedrockClient {
     parent: Option<std::sync::Weak<Self>>,
     /// Active split-screen sub-clients multiplexed over this connection (main client only).
     sub_clients: std::sync::Mutex<HashMap<SubClient, Arc<Self>>>,
+    /// Sub-client UUIDs currently mid-teardown until their final save completes (main client only).
+    saving_sub_clients: std::sync::Mutex<HashSet<uuid::Uuid>>,
     /// Serializes sub-client admission (`can_complete_login` + `add_player`) on this connection.
     sub_client_login_lock: Mutex<()>,
     session: Arc<NetherNetSession>,
@@ -250,6 +252,7 @@ impl BedrockClient {
             sub_client_id: SubClient::Main,
             parent: None,
             sub_clients: std::sync::Mutex::new(HashMap::new()),
+            saving_sub_clients: std::sync::Mutex::new(HashSet::new()),
             sub_client_login_lock: Mutex::new(()),
             session,
             player: ArcSwap::new(Arc::new(None)),
@@ -312,6 +315,7 @@ impl BedrockClient {
             sub_client_id,
             parent: Some(Arc::downgrade(self)),
             sub_clients: std::sync::Mutex::new(HashMap::new()),
+            saving_sub_clients: std::sync::Mutex::new(HashSet::new()),
             sub_client_login_lock: Mutex::new(()),
             session: self.session.clone(),
             player: ArcSwap::new(Arc::new(None)),
@@ -1107,6 +1111,17 @@ impl BedrockClient {
         }
     }
 
+    pub(super) fn is_sub_client_saving(&self, uuid: uuid::Uuid) -> bool {
+        let Some(parent) = self.parent.as_ref().and_then(std::sync::Weak::upgrade) else {
+            return false;
+        };
+        parent
+            .saving_sub_clients
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&uuid)
+    }
+
     pub async fn close(&self) {
         let already_cancelled = self.close_token.is_cancelled();
         self.close_token.cancel();
@@ -1115,9 +1130,8 @@ impl BedrockClient {
             self.detach_from_parent();
             return;
         }
-        if already_cancelled {
-            return;
-        }
+        // Always drain and cancel active sub-clients even when `try_kick()` already cancelled
+        // the main token, so idle sub-clients do not keep `await_tasks()` blocked.
         let active_subs: Vec<Arc<Self>> = {
             let mut subs = self
                 .sub_clients
@@ -1127,6 +1141,9 @@ impl BedrockClient {
         };
         for sub in active_subs {
             sub.close_token.cancel();
+        }
+        if already_cancelled {
+            return;
         }
         self.session.close().await;
         self.be_clients.lock().await.remove(&self.address);
@@ -1355,6 +1372,15 @@ impl BedrockClient {
             self.await_tasks().await;
             return;
         };
+        if packet.id != SSubClientLogin::PACKET_ID {
+            debug!(
+                "Received unexpected translated game packet {} during sub-client login",
+                packet.id
+            );
+            self.close().await;
+            self.await_tasks().await;
+            return;
+        }
         let login_packet = match SSubClientLogin::read(&mut Cursor::new(&packet.payload)) {
             Ok(p) => p,
             Err(err) => {
@@ -1370,9 +1396,19 @@ impl BedrockClient {
         // same connection so concurrent split-screen logins cannot race duplicate or cap checks.
         let parent = self.parent.as_ref().and_then(std::sync::Weak::upgrade);
         let admission_result = {
-            let _admission_guard = match parent.as_ref() {
-                Some(parent) => Some(parent.sub_client_login_lock.lock().await),
-                None => None,
+            let _admission_guard = if let Some(parent) = parent.as_ref() {
+                let guard = tokio::select! {
+                    () = self.await_close_interrupt() => None,
+                    guard = parent.sub_client_login_lock.lock() => Some(guard),
+                };
+                if guard.is_none() {
+                    self.close().await;
+                    self.await_tasks().await;
+                    return;
+                }
+                guard
+            } else {
+                None
             };
 
             if self.is_closed() || !self.is_registered_in_parent() {
@@ -1409,19 +1445,43 @@ impl BedrockClient {
                     .await;
                 self.progress_player_packets(&player).await;
             }
-            self.close().await;
-            self.await_tasks().await;
-            player.remove().await;
-            server.remove_player(&player);
-            if let Err(error) = server.player_data_storage.handle_player_leave(&player) {
-                error!("Failed to save sub-client player data on disconnect: {error}");
-            }
-            // Break the `Player <-> BedrockClient` Arc cycle unconditionally.
-            self.clear_player();
+            self.teardown_sub_client_player(parent.as_deref(), &server, &player)
+                .await;
         } else {
             self.close().await;
             self.await_tasks().await;
         }
+    }
+
+    async fn teardown_sub_client_player(
+        &self,
+        parent: Option<&Self>,
+        server: &Arc<Server>,
+        player: &Arc<Player>,
+    ) {
+        if let Some(parent) = parent {
+            parent
+                .saving_sub_clients
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(player.gameprofile.id);
+        }
+        self.close().await;
+        self.await_tasks().await;
+        player.remove().await;
+        server.remove_player(player);
+        if let Err(error) = server.player_data_storage.handle_player_leave(player) {
+            error!("Failed to save sub-client player data on disconnect: {error}");
+        }
+        if let Some(parent) = parent {
+            parent
+                .saving_sub_clients
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&player.gameprofile.id);
+        }
+        // Break the `Player <-> BedrockClient` Arc cycle unconditionally.
+        self.clear_player();
     }
 
     async fn handle_game_packet(&self, packet: RawPacket) -> Result<(), Error> {

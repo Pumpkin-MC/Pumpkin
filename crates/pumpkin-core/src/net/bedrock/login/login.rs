@@ -237,6 +237,7 @@ impl BedrockClient {
 
         if server.get_player_by_uuid(profile.id).is_some()
             || server.get_player_by_name(&profile.name).is_some()
+            || self.is_sub_client_saving(profile.id)
         {
             self.kick(
                 DisconnectReason::LoggedInOtherLocation,
