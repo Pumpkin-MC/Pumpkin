@@ -3743,13 +3743,6 @@ impl Entity {
                 Ordering::Relaxed,
             );
 
-            // Get nested passengers before teleporting
-            let nested_passengers = passenger_entity
-                .passengers
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-
             let Some(passenger_position) = passenger.teleport_with_cause(
                 requested_position,
                 passenger_yaw,
@@ -3762,19 +3755,15 @@ impl Entity {
                 continue;
             };
 
-            // Recursively teleport nested passengers
-            for nested in nested_passengers {
-                let nested_entity = nested.get_entity();
-                Self::teleport_passengers_recursive(
-                    nested_entity,
-                    passenger_old_position,
-                    passenger_position,
-                    yaw_delta,
-                    pitch_delta,
-                    dest_world,
-                    cause,
-                );
-            }
+            Self::teleport_passengers_recursive(
+                passenger_entity,
+                passenger_old_position,
+                passenger_position,
+                yaw_delta,
+                pitch_delta,
+                dest_world,
+                cause,
+            );
         }
     }
 

@@ -4808,8 +4808,8 @@ impl Player {
         ));
     }
 
-    /// Teleports the player to a different world or dimension with an optional position, yaw, and pitch.
-    /// Moves the player to another world with an unknown teleport cause.
+    /// Moves the player to another world with an unknown teleport cause. A `None`
+    /// rotation axis takes the new world's spawn angle.
     pub async fn teleport_world(
         self: &Arc<Self>,
         new_world: Arc<World>,
@@ -4817,11 +4817,22 @@ impl Player {
         yaw: Option<f32>,
         pitch: Option<f32>,
     ) {
-        self.teleport_world_with_cause(new_world, position, yaw, pitch, TeleportCause::Unknown)
-            .await;
+        let level_info = new_world.level_info.load();
+        let yaw = yaw.unwrap_or(level_info.spawn_yaw);
+        let pitch = pitch.unwrap_or(level_info.spawn_pitch);
+        drop(level_info);
+        self.teleport_world_with_cause(
+            new_world,
+            position,
+            Some(yaw),
+            Some(pitch),
+            TeleportCause::Unknown,
+        )
+        .await;
     }
 
     /// Moves the player to another world, reporting `cause` to `PlayerTeleportEvent`.
+    /// A `None` rotation axis stays relative, so the client keeps looking where it looks.
     #[expect(clippy::too_many_lines)]
     pub async fn teleport_world_with_cause(
         self: &Arc<Self>,
@@ -4832,8 +4843,13 @@ impl Player {
         cause: TeleportCause,
     ) {
         let current_world = self.living_entity.entity.world.load_full();
-        let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
-        let pitch = pitch.unwrap_or(new_world.level_info.load().spawn_pitch);
+        // `PlayerChangeWorldEvent` needs both angles; an omitted one shows the current
+        // rotation and stays relative unless a plugin changes it.
+        let entity = &self.living_entity.entity;
+        let (current_yaw, current_pitch) = (entity.yaw.load(), entity.pitch.load());
+        let (requested_yaw, requested_pitch) = (yaw, pitch);
+        let yaw = yaw.unwrap_or(current_yaw);
+        let pitch = pitch.unwrap_or(current_pitch);
 
         let Some(server) = new_world.server.upgrade() else {
             return;
@@ -4854,13 +4870,14 @@ impl Player {
             'after: {
                 // TODO: this is duplicate code from world
                 let position = event.position;
-                let yaw = event.yaw;
-                let pitch = event.pitch;
+                let yaw = (requested_yaw.is_some() || event.yaw != current_yaw).then_some(event.yaw);
+                let pitch = (requested_pitch.is_some() || event.pitch != current_pitch)
+                    .then_some(event.pitch);
                 let new_world = event.new_world;
 
                 // Fired before anything moves, so a cancel leaves the player where they are.
                 let Some((position, yaw, pitch)) =
-                    self.fire_teleport_event(position, Some(yaw), Some(pitch), cause)
+                    self.fire_teleport_event(position, yaw, pitch, cause)
                 else {
                     return;
                 };
@@ -8142,11 +8159,8 @@ impl EntityBase for Player {
             Some(entity.pos.load())
         } else if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) {
             self.spawn_task(async move {
-                let entity = player_arc.get_entity();
-                let yaw = yaw.unwrap_or_else(|| entity.yaw.load());
-                let pitch = pitch.unwrap_or_else(|| entity.pitch.load());
                 player_arc
-                    .teleport_world_with_cause(world, position, Some(yaw), Some(pitch), cause)
+                    .teleport_world_with_cause(world, position, yaw, pitch, cause)
                     .await;
             });
             Some(position)
