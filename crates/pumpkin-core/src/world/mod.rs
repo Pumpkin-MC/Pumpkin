@@ -3254,6 +3254,15 @@ impl World {
             .thundering
     }
 
+    /// Thunder only counts while it rains, in a dimension that has weather.
+    pub fn is_thunderstorm(&self) -> bool {
+        self.dimension.has_skylight
+            && !self.dimension.has_ceiling
+            && self.dimension != Dimension::THE_END
+            && self.is_raining()
+            && self.is_thundering()
+    }
+
     pub fn set_thundering(&self, thundering: bool) {
         if let Some(server) = self.server.upgrade() {
             let world_arc = server.get_world_from_dimension(&self.dimension);
