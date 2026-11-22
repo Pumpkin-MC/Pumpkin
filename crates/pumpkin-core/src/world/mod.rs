@@ -460,7 +460,7 @@ impl World {
     }
 
     pub fn update_active_chunks(&self) {
-        let sim_dist = self.server.upgrade().map_or(10, |s| {
+        let sim_dist = self.server.upgrade().map_or(16, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
         let players = self.players.load();
@@ -3103,6 +3103,15 @@ impl World {
             .thundering
     }
 
+    /// Thunder only counts while it rains, in a dimension that has weather.
+    pub fn is_thunderstorm(&self) -> bool {
+        self.dimension.has_skylight
+            && !self.dimension.has_ceiling
+            && self.dimension != Dimension::THE_END
+            && self.is_raining()
+            && self.is_thundering()
+    }
+
     pub fn set_thundering(&self, thundering: bool) {
         if let Some(server) = self.server.upgrade() {
             let world_arc = server.get_world_from_dimension(&self.dimension);
@@ -3570,7 +3579,7 @@ impl World {
                 skin: (**player.bedrock_skin.load()).clone(),
                 is_teacher: false,
                 is_host: false,
-                is_sub_client: false,
+                is_sub_client: player.client.bedrock().is_some_and(|c| c.is_sub_client()),
                 player_color: [0, 0, 0, 0],
             }],
         };
@@ -5342,7 +5351,7 @@ impl World {
                     skin: Skin::steve(),
                     is_teacher: false,
                     is_host: false,
-                    is_sub_client: false,
+                    is_sub_client: player.client.bedrock().is_some_and(|c| c.is_sub_client()),
                     player_color: [0, 0, 0, 0],
                 }],
             };

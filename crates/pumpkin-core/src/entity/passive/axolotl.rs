@@ -160,20 +160,23 @@ fn supporting_regeneration_duration(current: Option<(i32, i32)>) -> Option<i32> 
     renewed.then_some((REGEN_BUFF_BASE_DURATION + left.unwrap_or(0)).min(REGEN_BUFF_MAX_DURATION))
 }
 
-fn apply_supporting_effects(player: &Player) {
+fn apply_supporting_effects(player: &Player, source: &dyn crate::entity::EntityBase) {
     let current = player
         .get_effect(&StatusEffect::REGENERATION)
         .map(|effect| (effect.duration, i32::from(effect.amplifier)));
     if let Some(duration) = supporting_regeneration_duration(current) {
-        player.add_effect(Effect {
-            effect_type: &StatusEffect::REGENERATION,
-            duration,
-            amplifier: 0,
-            ambient: false,
-            show_particles: true,
-            show_icon: true,
-            blend: false,
-        });
+        player.add_effect_with_source(
+            Effect {
+                effect_type: &StatusEffect::REGENERATION,
+                duration,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: false,
+            },
+            source,
+        );
     }
     player.remove_effect(&StatusEffect::MINING_FATIGUE);
 }
@@ -299,7 +302,7 @@ impl AxolotlEntity {
             .into_iter()
             .find(|player| player.get_entity().entity_id == killer)
         {
-            apply_supporting_effects(&player);
+            apply_supporting_effects(&player, tick.mob);
         }
     }
 }

@@ -552,8 +552,9 @@ impl Mob for BeeEntity {
         }
         crate::enchantment::EnchantmentHelper::on_post_attack(
             self,
-            target.get_entity(),
+            target,
             &living.held_item(self),
+            DamageType::STING,
         );
         if let Some(target) = target.get_living_entity() {
             target.set_stinger_count(target.get_stinger_count() + 1);
@@ -563,15 +564,18 @@ impl Mob for BeeEntity {
                 _ => 0,
             };
             if seconds > 0 {
-                target.add_effect(Effect {
-                    effect_type: &StatusEffect::POISON,
-                    duration: seconds * 20,
-                    amplifier: 0,
-                    ambient: false,
-                    show_particles: true,
-                    show_icon: true,
-                    blend: false,
-                });
+                target.add_effect_with_source(
+                    Effect {
+                        effect_type: &StatusEffect::POISON,
+                        duration: seconds * 20,
+                        amplifier: 0,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: false,
+                    },
+                    Some(self),
+                );
             }
         }
         self.set_has_stung(true);

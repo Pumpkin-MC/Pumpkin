@@ -214,16 +214,16 @@ pub static CRASH_REPORT: OnceLock<CrashReport> = OnceLock::new();
 pub static SERVER_EXIT_CODE: AtomicI32 = AtomicI32::new(0);
 
 pub fn stop_server() {
-    SHOULD_STOP.store(true, Ordering::Relaxed);
+    SHOULD_STOP.store(true, Ordering::Release);
     STOP_INTERRUPT.cancel();
 }
 
 pub fn stop_or_exit_server() {
-    if SERVER_IS_STOPPING.load(Ordering::Acquire) {
+    if SHOULD_STOP.swap(true, Ordering::AcqRel) || SERVER_IS_STOPPING.load(Ordering::Acquire) {
         // Server is already stopping, so we forcefully exit.
         exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
     }
-    stop_server();
+    STOP_INTERRUPT.cancel();
 }
 
 /// Runs one Java connection from handshake to disconnect: login, configuration, play, and the
