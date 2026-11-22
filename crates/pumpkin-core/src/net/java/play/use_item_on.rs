@@ -148,9 +148,13 @@ impl JavaClient {
                 server,
             );
             if result.consumes_action() {
-                // advancement reads the result
-                let block = world.get_block(&position);
-                trigger_item_used_on_block_advancement(player, &world, &position, block, &before);
+                // a block event may have moved the player; advancement reads the result
+                if Arc::ptr_eq(&player.world(), &world) {
+                    let block = world.get_block(&position);
+                    trigger_item_used_on_block_advancement(
+                        player, &world, &position, block, &before,
+                    );
+                }
                 sync_used_hand_item(player, hand, slot_index, &before, item);
 
                 if matches!(result, BlockActionResult::SuccessServer) {

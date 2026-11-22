@@ -212,23 +212,45 @@ impl BlockBehaviour for BeehiveBlock {
         if Block::from_state_id(state_id) != args.block {
             return BlockActionResult::Success;
         }
-        let mut props = BeeNestLikeProperties::from_state_id(state_id);
 
-        if !CampfireBlock::is_smokey_pos(args.world, args.position)
+        let release = !CampfireBlock::is_smokey_pos(args.world, args.position);
+        if release
             && let Some(entity) = args.world.get_block_entity(args.position)
-            && let Some(hive) = entity.as_any().downcast_ref::<BeehiveBlockEntity>()
-            && !hive.is_empty()
+            && entity
+                .as_any()
+                .downcast_ref::<BeehiveBlockEntity>()
+                .is_some_and(|hive| !hive.is_empty())
         {
             Self::anger_nearby_bees(args.world, args.position);
-            hive.release_occupants(args.world, state_id, true, Some(args.player));
         }
 
+        // Vanilla `releaseBeesAndResetHoneyLevel` resets before releasing.
+        // A target listener's change to the hive stands.
+        let mut props = BeeNestLikeProperties::from_state_id(state_id);
         props.honey_level = 0;
-        args.world.set_block_state(
-            args.position,
-            props.to_state_id(args.block),
-            BlockFlags::NOTIFY_ALL,
-        );
+        let reset_state = props.to_state_id(args.block);
+        if args
+            .world
+            .set_block_state_if(
+                args.position,
+                reset_state,
+                BlockFlags::NOTIFY_ALL,
+                |current| current == state_id,
+            )
+            .is_none()
+        {
+            return BlockActionResult::Success;
+        }
+
+        if release
+            && let Some(entity) = args.world.get_block_entity(args.position)
+            && let Some(hive) = entity.as_any().downcast_ref::<BeehiveBlockEntity>()
+        {
+            // The honey is already taken, so the hive resets even if a listener moved the
+            // player. Bees only target a player still in this world.
+            let player = Arc::ptr_eq(&args.player.world(), args.world).then_some(args.player);
+            hive.release_occupants(args.world, reset_state, true, player);
+        }
 
         BlockActionResult::Success
     }
