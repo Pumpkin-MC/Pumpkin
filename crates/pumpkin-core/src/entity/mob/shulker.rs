@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
 use crate::entity::ai::control::{Control, LookControlTrait};
 use crate::entity::attributes::{Modifier, ModifierOperation};
@@ -27,7 +27,7 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
-use rand::RngExt;
+use pumpkin_util::random::{RandomImpl, get_seed, legacy_rand::LegacyRand};
 
 use crate::entity::ai::goal::active_target::ActiveTargetGoal;
 use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
@@ -55,6 +55,7 @@ pub struct ShulkerEntity {
     color: AtomicU8,
     current_peek_amount: AtomicCell<f32>,
     prev_peek_amount: AtomicCell<f32>,
+    random: Mutex<LegacyRand>,
 }
 
 impl ShulkerEntity {
@@ -68,6 +69,7 @@ impl ShulkerEntity {
             color: AtomicU8::new(NO_COLOR),
             current_peek_amount: AtomicCell::new(0.0),
             prev_peek_amount: AtomicCell::new(0.0),
+            random: Mutex::new(LegacyRand::from_seed(get_seed())),
         };
         let mob_arc = Arc::new(shulker);
         let _ = mob_arc.get_entity().shulker.set(Arc::downgrade(&mob_arc));
@@ -335,6 +337,12 @@ impl ShulkerEntity {
         }
     }
 
+    fn random(&self) -> MutexGuard<'_, LegacyRand> {
+        self.random
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     fn find_attachable_face(&self, pos: &BlockPos) -> Option<BlockDirection> {
         BlockDirection::all()
             .into_iter()
@@ -357,31 +365,29 @@ impl ShulkerEntity {
         {
             return None;
         }
-        BlockDirection::all().into_iter().find(|face| {
-            let support = pos.offset(face.to_offset());
-            if world
-                .get_block_state(&support)
-                .id
-                .to_block()
-                .has_tag(&tag::Block::MINECRAFT_SHULKER_DOES_NOT_TELEPORT_TO)
-            {
-                return false;
-            }
-            let bounds = Self::progress_aabb(
-                entity.scale.load(),
-                face.opposite(),
-                -1.0,
-                1.0,
-                pos.to_f64().add_raw(0.5, 0.0, 0.5),
-            )
-            .contract_all(1.0E-6);
-            let min = bounds.min_block_pos();
-            let max = bounds.max_block_pos();
-            world.has_chunks_at(min.0.x, min.0.z, max.0.x, max.0.z)
-                && self.can_stay_at(pos, *face)
-                // Teleport clearance must also hold after the rider is unlinked.
-                && world.no_entity_collision_with_vehicle(self, bounds, true)
-        })
+        let face = self.find_attachable_face(pos)?;
+        let support = pos.offset(face.to_offset());
+        if world
+            .get_block_state(&support)
+            .id
+            .to_block()
+            .has_tag(&tag::Block::MINECRAFT_SHULKER_DOES_NOT_TELEPORT_TO)
+        {
+            return None;
+        }
+        let bounds = Self::progress_aabb(
+            entity.scale.load(),
+            face.opposite(),
+            -1.0,
+            1.0,
+            pos.to_f64().add_raw(0.5, 0.0, 0.5),
+        )
+        .contract_all(1.0E-6);
+        let min = bounds.min_block_pos();
+        let max = bounds.max_block_pos();
+        (world.has_chunks_at(min.0.x, min.0.z, max.0.x, max.0.z)
+            && world.no_entity_collision_with_vehicle(self, bounds, true))
+        .then_some(face)
     }
 
     fn no_collision(&self, bounds: BoundingBox) -> bool {
@@ -431,13 +437,15 @@ impl ShulkerEntity {
         }
         let old_pos = entity.block_pos.load();
         let world = entity.world.load();
-        let mut rng = rand::rng();
         for _ in 0..5 {
-            let candidate = old_pos.offset(Vector3::new(
-                rng.random_range(-MAX_TELEPORT_DISTANCE..=MAX_TELEPORT_DISTANCE),
-                rng.random_range(-MAX_TELEPORT_DISTANCE..=MAX_TELEPORT_DISTANCE),
-                rng.random_range(-MAX_TELEPORT_DISTANCE..=MAX_TELEPORT_DISTANCE),
-            ));
+            let candidate = {
+                let mut random = self.random();
+                old_pos.offset(Vector3::new(
+                    random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
+                    random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
+                    random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
+                ))
+            };
             if self.find_teleport_attachment(&candidate).is_none() {
                 continue;
             }
@@ -523,7 +531,13 @@ impl ShulkerEntity {
                     .is_some_and(crate::entity::living::LivingEntity::is_alive)
             })
             .count();
-        if rand::rng().random::<f32>() < (count as f32 - 1.0) / OTHER_SHULKER_LIMIT {
+        if world
+            .random
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .next_f32()
+            < (count as f32 - 1.0) / OTHER_SHULKER_LIMIT
+        {
             return;
         }
         let clone = Self::new(Entity::from_uuid(
@@ -580,7 +594,7 @@ impl Mob for ShulkerEntity {
     fn on_damage(&self, damage_type: DamageType, source: Option<&dyn EntityBase>) {
         let living = &self.mob_entity.living_entity;
         if living.health.load() < living.get_max_health() * 0.5
-            && self.get_random().random_range(0..4) == 0
+            && self.random().next_bounded_i32(4) == 0
         {
             self.teleport_somewhere();
         } else if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE)
@@ -839,7 +853,7 @@ impl Goal for ShulkerAttackGoal {
         }
 
         if self.attack_cooldown <= 0 {
-            let new_cd = 20 + mob.get_random().random_range(0..10) * 10;
+            let new_cd = 20 + shulker.random().next_bounded_i32(10) * 10;
             self.attack_cooldown = new_cd;
 
             let world = entity.world.load();
@@ -862,8 +876,10 @@ impl Goal for ShulkerAttackGoal {
                 world.spawn_entity_non_save(Arc::new(bullet));
             }
 
-            let pitch =
-                1.0 + (mob.get_random().random::<f32>() - mob.get_random().random::<f32>()) * 0.2;
+            let pitch = {
+                let mut random = shulker.random();
+                1.0 + (random.next_f32() - random.next_f32()) * 0.2
+            };
             shulker.play_entity_sound(Sound::EntityShulkerShoot, 2.0, pitch);
         }
     }
@@ -892,7 +908,7 @@ impl Goal for ShulkerPeekGoal {
         if has_target {
             return false;
         }
-        if mob.get_random().random_range(0..to_goal_ticks(40)) != 0 {
+        if shulker.random().next_bounded_i32(to_goal_ticks(40)) != 0 {
             return false;
         }
         let pos = mob.get_mob_entity().living_entity.entity.block_pos.load();
@@ -905,10 +921,9 @@ impl Goal for ShulkerPeekGoal {
         !has_target && self.peek_time > 0
     }
 
-    fn start(&mut self, mob: &dyn Mob) {
-        let duration = self.get_tick_count(20 * (1 + mob.get_random().random_range(0..3)));
-        self.peek_time = duration;
+    fn start(&mut self, _mob: &dyn Mob) {
         if let Some(shulker) = self.shulker.upgrade() {
+            self.peek_time = self.get_tick_count(20 * (1 + shulker.random().next_bounded_i32(3)));
             shulker.set_raw_peek(30);
         }
     }
@@ -1011,6 +1026,67 @@ mod tests {
         ));
         world.spawn_entity(shulker.clone());
         shulker
+    }
+
+    #[tokio::test]
+    async fn bullet_cloning_uses_separate_entity_and_world_random_streams() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        for chunk in [Vector2::new(0, 0), Vector2::new(0, -1)] {
+            world
+                .level
+                .loaded_chunks
+                .insert(chunk, ChunkData::empty_sync(0, 0));
+        }
+        let shulker = spawn(&world);
+        shulker.set_color(Some(11));
+        shulker.set_raw_peek(100);
+        *shulker.random() = LegacyRand::from_seed(42);
+        *world
+            .random
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = LegacyRand::from_seed(99);
+        // java.util.Random(42): the first three nextInt(17) - 8 values are 1, 3, -8.
+        world.set_block_state(
+            &BlockPos::new(1, 66, -8),
+            Block::STONE.default_state.id,
+            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        shulker.hit_by_shulker_bullet();
+        assert_eq!(
+            shulker.get_entity().pos.load(),
+            Vector3::new(1.5, 67.0, -7.5)
+        );
+        assert_eq!(
+            shulker.random().next_f32().to_bits(),
+            0.0479393f32.to_bits()
+        );
+        assert_eq!(
+            world
+                .random
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .next_f32()
+                .to_bits(),
+            0.38950163f32.to_bits(),
+        );
+        let clones = world.get_entities_of_type_at_box(
+            &BoundingBox::from_block(&BlockPos::new(0, 64, 0)),
+            |kind| kind == &EntityType::SHULKER,
+        );
+        assert_eq!(clones.len(), 1);
+        assert_eq!(
+            clones[0].get_entity().pos.load(),
+            Vector3::new(0.5, 64.0, 0.5)
+        );
+        assert_eq!(
+            clones[0]
+                .get_entity()
+                .with_shulker(ShulkerEntity::get_color),
+            Some(Some(11))
+        );
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]
@@ -1255,6 +1331,8 @@ mod tests {
             shulker.find_attachable_face(&candidate),
             Some(BlockDirection::Down)
         );
+        assert_eq!(shulker.find_teleport_attachment(&candidate), None);
+        world.set_block_state(&candidate.down(), Block::AIR.default_state.id, flags);
         assert_eq!(
             shulker.find_teleport_attachment(&candidate),
             Some(BlockDirection::East)

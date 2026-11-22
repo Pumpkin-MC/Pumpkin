@@ -157,7 +157,11 @@ impl Player {
             ClientPlatform::Java(c)
                 if c.version.load() < pumpkin_util::version::JavaMinecraftVersion::V_1_9
         ) {
-            self.set_awaiting_teleport(teleport_id.into(), position);
+            *self
+                .awaiting_teleport
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some((teleport_id.into(), position));
         }
         match self.client.as_ref() {
             ClientPlatform::Java(_) => {

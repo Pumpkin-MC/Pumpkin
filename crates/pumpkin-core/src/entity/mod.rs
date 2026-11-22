@@ -1072,7 +1072,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn move_by_shulker(&self, caller: &dyn EntityBase, motion: Vector3<f64>) {
-        self.get_entity().move_by_shulker(caller, motion);
+        if caller.get_player().is_some() {
+            self.get_entity().move_by_shulker(caller, motion);
+        } else {
+            self.move_entity(caller, motion);
+        }
     }
 
     fn is_pushable(&self) -> bool {
@@ -3531,12 +3535,6 @@ impl Entity {
             return;
         }
         self.emit_movement(caller, final_move, &effect_pos, effect_state);
-        if shulker_move
-            && final_move.length_squared() > 0.0
-            && let Some(player) = caller.get_player()
-        {
-            player.sync_position_after_external_move();
-        }
     }
 
     /// The emission part of vanilla `Entity.move` for movement the client already resolved,
@@ -6025,7 +6023,11 @@ impl Entity {
                 // Use fallback position as placeholder — updated below with real position
                 let placeholder =
                     Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
-                player.set_awaiting_teleport(id.into(), placeholder);
+                *player
+                    .awaiting_teleport
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    Some((id.into(), placeholder));
                 Some(id)
             } else {
                 None
@@ -6244,7 +6246,11 @@ impl Entity {
                 if let Some(id) = teleport_id {
                     player.get_entity().set_pos(dismount_pos);
                     // Update awaiting_teleport with the real dismount position
-                    player.set_awaiting_teleport(id.into(), dismount_pos);
+                    *player
+                        .awaiting_teleport
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                        Some((id.into(), dismount_pos));
                     // Use send_client_packet so the teleport goes through
                     // the same packet queue as CSetPassengers, preserving send order.
                     // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.

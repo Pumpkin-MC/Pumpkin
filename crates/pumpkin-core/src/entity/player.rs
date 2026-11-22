@@ -667,8 +667,6 @@ pub struct Player {
     pub teleport_id_count: AtomicI32,
     /// The pending teleport information, including the teleport ID and target location.
     pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
-    // Retired server-issued IDs, never populated by client input.
-    pub(crate) superseded_teleports: Mutex<VecDeque<VarInt>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
     /// The last time the player performed an action (for idle timeout).
@@ -829,54 +827,6 @@ fn decode_skin_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     Some((width, height, rgba))
 }
 
-fn reserve_position_correction(
-    counter: &AtomicI32,
-    pending: &mut Option<(VarInt, Vector3<f64>)>,
-    superseded: Option<&mut VecDeque<VarInt>>,
-    position: Vector3<f64>,
-    coalesce: bool,
-) -> Option<i32> {
-    if coalesce && pending.is_some() {
-        return None;
-    }
-    let id = counter.fetch_add(1, Ordering::Relaxed) + 1;
-    replace_pending_position(pending, superseded, id.into(), position);
-    Some(id)
-}
-
-fn discard_position_correction(
-    pending: &mut Option<(VarInt, Vector3<f64>)>,
-    superseded: &mut VecDeque<VarInt>,
-    id: VarInt,
-) {
-    if pending
-        .as_ref()
-        .is_some_and(|(expected, _)| *expected == id)
-    {
-        *pending = None;
-    }
-    superseded.retain(|previous| *previous != id);
-}
-
-fn replace_pending_position(
-    pending: &mut Option<(VarInt, Vector3<f64>)>,
-    superseded: Option<&mut VecDeque<VarInt>>,
-    id: VarInt,
-    position: Vector3<f64>,
-) {
-    if let Some(superseded) = superseded {
-        // Dismount finalizes a reserved ID after calculating its destination.
-        superseded.retain(|previous| *previous != id);
-        if let Some((previous, _)) = pending.as_ref()
-            && *previous != id
-            && !superseded.contains(previous)
-        {
-            superseded.push_back(*previous);
-        }
-    }
-    *pending = Some((id, position));
-}
-
 impl Player {
     pub const FULL_SLEEP_TICKS: u8 = 100;
     pub const SLEEP_TIMER_RESET_TICKS: u8 = 110;
@@ -1022,7 +972,6 @@ impl Player {
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
-            superseded_teleports: Mutex::new(VecDeque::new()),
             breath_manager: BreathManager::default(),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
@@ -5038,6 +4987,9 @@ impl Player {
     /// Rarly used, for example when waking up the player from a bed or their first time spawn. Otherwise, the `teleport` method should be used.
     /// The player should respond with the `SConfirmTeleport` packet.
     pub fn request_teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
+        // This is the ultra special magic code used to create the teleport id
+        // This returns the old value
+        // This operation wraps around on overflow.
         let Some(server) = self.world().server.upgrade() else {
             return;
         };
@@ -5054,47 +5006,23 @@ impl Player {
             }
         }
 
+        let i = self.teleport_id_count.fetch_add(1, Ordering::Relaxed);
         self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
+        let teleport_id = i + 1;
         self.living_entity.entity.set_pos(position);
         let entity = &self.living_entity.entity;
         entity.set_rotation(yaw, pitch);
-        self.send_position_correction(yaw, pitch, Vec::new(), false);
-    }
-
-    fn send_position_correction(
-        &self,
-        yaw: f32,
-        pitch: f32,
-        relatives: Vec<pumpkin_protocol::PositionFlag>,
-        coalesce: bool,
-    ) {
-        let position = self.living_entity.entity.pos.load();
         // Moves are ignored until the client confirms (teleport confirmation was added in 1.9).
-        let teleport_id = if matches!(
+        if !matches!(
             self.client.as_ref(),
             ClientPlatform::Java(c) if c.version.load() < JavaMinecraftVersion::V_1_9
         ) {
-            self.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1
-        } else {
-            let mut pending = self
+            *self
                 .awaiting_teleport
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut superseded = self
-                .superseded_teleports
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let Some(id) = reserve_position_correction(
-                &self.teleport_id_count,
-                &mut pending,
-                self.client.java().map(|_| &mut *superseded),
-                position,
-                coalesce && self.client.java().is_some(),
-            ) else {
-                return;
-            };
-            id
-        };
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some((teleport_id.into(), position));
+        }
         match self.client.as_ref() {
             ClientPlatform::Java(client) => {
                 let packet = CPlayerPosition::new(
@@ -5103,73 +5031,17 @@ impl Player {
                     Vector3::new(0.0, 0.0, 0.0),
                     yaw,
                     pitch,
-                    relatives,
+                    // TODO
+                    Vec::new(),
                 );
-                if !client.try_send_packet(&packet) {
-                    let mut pending = self
-                        .awaiting_teleport
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let mut superseded = self
-                        .superseded_teleports
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    discard_position_correction(&mut pending, &mut superseded, teleport_id.into());
+                if let Ok(data) = client.serialize_packet(&packet) {
+                    client.try_enqueue_packet(data);
                 }
             }
             ClientPlatform::Bedrock(client) => {
                 self.send_bedrock_teleport(client);
             }
         }
-    }
-
-    /// Retains superseded Java IDs when replacing a pending correction.
-    pub(crate) fn set_awaiting_teleport(&self, id: VarInt, position: Vector3<f64>) {
-        let mut pending = self
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut superseded = self
-            .superseded_teleports
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        replace_pending_position(
-            &mut pending,
-            self.client.java().map(|_| &mut *superseded),
-            id,
-            position,
-        );
-    }
-
-    /// Corrects external movement while preserving the client's velocity and look.
-    pub(crate) fn sync_position_after_external_move(&self) {
-        let entity = &self.living_entity.entity;
-        let position = entity.pos.load();
-        self.send_position_correction(
-            0.0,
-            0.0,
-            vec![
-                pumpkin_protocol::PositionFlag::DeltaX,
-                pumpkin_protocol::PositionFlag::DeltaY,
-                pumpkin_protocol::PositionFlag::DeltaZ,
-                pumpkin_protocol::PositionFlag::YRot,
-                pumpkin_protocol::PositionFlag::XRot,
-            ],
-            true,
-        );
-        entity.last_sent_pos.store(position);
-        entity.world.load().broadcast_to_chunk_except(
-            entity.chunk_pos.load(),
-            &[entity.entity_uuid],
-            &CEntityPositionSync::new(
-                entity.entity_id.into(),
-                position,
-                entity.velocity.load(),
-                entity.yaw.load(),
-                entity.pitch.load(),
-                entity.on_ground.load(Ordering::Relaxed),
-            ),
-        );
     }
 
     /// `MovePlayer` at the current position and rotation, for the own client and watchers
@@ -9740,37 +9612,6 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn external_corrections_keep_the_outstanding_id_until_acknowledgement() {
-        let counter = std::sync::atomic::AtomicI32::new(0);
-        let first = pumpkin_util::math::vector3::Vector3::new(0.0, 64.0, 0.0);
-        let latest = pumpkin_util::math::vector3::Vector3::new(0.2, 64.0, 0.0);
-        let mut pending = None;
-        assert_eq!(
-            super::reserve_position_correction(&counter, &mut pending, None, first, true),
-            Some(1)
-        );
-        for _ in 0..5 {
-            assert_eq!(
-                super::reserve_position_correction(&counter, &mut pending, None, latest, true),
-                None
-            );
-        }
-        assert_eq!(
-            pending,
-            Some((pumpkin_protocol::codec::var_int::VarInt(1), first))
-        );
-        pending = None;
-        assert_eq!(
-            super::reserve_position_correction(&counter, &mut pending, None, latest, true),
-            Some(2)
-        );
-        assert_eq!(
-            pending,
-            Some((pumpkin_protocol::codec::var_int::VarInt(2), latest))
-        );
-    }
-
     use super::{
         bedrock_container_slot, bedrock_container_type, read_last_death_location,
         read_root_vehicle, write_last_death_location, write_root_vehicle,
@@ -9780,104 +9621,6 @@ mod tests {
     use pumpkin_protocol::bedrock::network_item::ContainerName;
     use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
     use uuid::Uuid;
-
-    #[test]
-    fn failed_corrections_release_only_the_undelivered_reservation() {
-        use pumpkin_protocol::codec::var_int::VarInt;
-        let counter = std::sync::atomic::AtomicI32::new(0);
-        let position = Vector3::new(0.5, 64.0, 0.5);
-        let mut pending = None;
-        let mut superseded = std::collections::VecDeque::new();
-        assert_eq!(
-            super::reserve_position_correction(
-                &counter,
-                &mut pending,
-                Some(&mut superseded),
-                position,
-                true
-            ),
-            Some(1)
-        );
-        super::discard_position_correction(&mut pending, &mut superseded, VarInt(1));
-        assert_eq!(
-            super::reserve_position_correction(
-                &counter,
-                &mut pending,
-                Some(&mut superseded),
-                position,
-                true
-            ),
-            Some(2)
-        );
-        // A packet hook can replace the reservation before returning a failed enqueue.
-        super::replace_pending_position(&mut pending, Some(&mut superseded), VarInt(3), position);
-        super::discard_position_correction(&mut pending, &mut superseded, VarInt(2));
-        assert_eq!(pending, Some((VarInt(3), position)));
-        assert!(superseded.is_empty());
-        assert_eq!(
-            super::reserve_position_correction(
-                &counter,
-                &mut pending,
-                Some(&mut superseded),
-                position,
-                true
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn explicit_corrections_and_dismount_reservations_keep_only_superseded_ids() {
-        use pumpkin_protocol::codec::var_int::VarInt;
-        let counter = std::sync::atomic::AtomicI32::new(0);
-        let mut pending = None;
-        let mut superseded = std::collections::VecDeque::new();
-        let start = Vector3::new(0.5, 64.0, 0.5);
-        let destination = Vector3::new(5.5, 64.0, 0.5);
-        assert_eq!(
-            super::reserve_position_correction(
-                &counter,
-                &mut pending,
-                Some(&mut superseded),
-                start,
-                true
-            ),
-            Some(1)
-        );
-        assert_eq!(
-            super::reserve_position_correction(
-                &counter,
-                &mut pending,
-                Some(&mut superseded),
-                destination,
-                false
-            ),
-            Some(2)
-        );
-        assert_eq!(superseded, [VarInt(1)]);
-        super::replace_pending_position(
-            &mut pending,
-            Some(&mut superseded),
-            VarInt(2),
-            destination,
-        );
-        assert_eq!(superseded, [VarInt(1)]);
-        assert_eq!(
-            super::reserve_position_correction(
-                &counter,
-                &mut pending,
-                Some(&mut superseded),
-                destination,
-                true
-            ),
-            None
-        );
-        assert_eq!(superseded, [VarInt(1)]);
-        // An overlapping explicit teleport can retire a reserved dismount ID before it is finalized.
-        super::replace_pending_position(&mut pending, Some(&mut superseded), VarInt(1), start);
-        assert_eq!(pending, Some((VarInt(1), start)));
-        assert_eq!(superseded, [VarInt(2)]);
-    }
 
     #[test]
     fn bedrock_container_types_and_slots_map_consistently() {

@@ -248,6 +248,7 @@ pub struct World {
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
     pub(crate) entity_index: Arc<EntityIndex>,
     island_schedule: std::sync::Mutex<entity_islands::Schedule>,
+    pub(crate) random: std::sync::Mutex<pumpkin_util::random::legacy_rand::LegacyRand>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: std::sync::Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -417,6 +418,9 @@ impl World {
             entities: ArcSwap::new(Arc::new(Vec::new())),
             entity_index: Arc::default(),
             island_schedule: std::sync::Mutex::default(),
+            random: std::sync::Mutex::new(
+                pumpkin_util::random::legacy_rand::LegacyRand::from_seed(get_seed()),
+            ),
             scoreboard: std::sync::Mutex::new(Scoreboard::default()),
             worldborder: std::sync::Mutex::new(Worldborder::new(
                 0.0,
