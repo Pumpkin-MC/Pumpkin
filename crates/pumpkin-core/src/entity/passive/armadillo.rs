@@ -5,7 +5,6 @@ use std::sync::{
 
 use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -25,7 +24,6 @@ use crate::entity::{
         memory::{PackedMemories, types},
     },
     custom_sound::CustomSound,
-    item::ItemEntity,
     mob::{Mob, MobEntity, drop_from_gift_loot_table},
     passive::animal::Animal,
     player::Player,
@@ -255,11 +253,7 @@ impl ArmadilloEntity {
                 self.get_random().random(),
                 &params,
             ) {
-                let item_entity = Arc::new(ItemEntity::new(
-                    Entity::new(world.clone(), pos, &EntityType::ITEM),
-                    drop_stack,
-                ));
-                world.spawn_entity(item_entity);
+                entity.spawn_at_location(drop_stack);
             }
         }
         world.play_sound(Sound::EntityArmadilloBrush, SoundCategory::Neutral, &pos);
@@ -308,14 +302,8 @@ impl ArmadilloEntity {
         {
             return;
         }
-        let world = entity.world.load();
-        let pos = entity.pos.load();
         if drop_from_gift_loot_table(self, ARMADILLO_SHED_LOOT_TABLE, |drop_stack| {
-            let item_entity = Arc::new(ItemEntity::new(
-                Entity::new(world.clone(), pos, &EntityType::ITEM),
-                drop_stack,
-            ));
-            world.spawn_entity_non_save(item_entity as Arc<dyn EntityBase>);
+            entity.spawn_at_location(drop_stack);
         }) {
             let mut random = self.get_random();
             let pitch = (random.random::<f32>() - random.random::<f32>()).mul_add(0.2, 1.0);
@@ -525,6 +513,7 @@ impl Mob for ArmadilloEntity {
 mod tests {
     use std::sync::atomic::Ordering::Relaxed;
 
+    use pumpkin_data::entity::EntityType;
     use pumpkin_data::environment_attribute::Activity;
     use pumpkin_util::math::vector3::Vector3;
 
