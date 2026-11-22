@@ -23,6 +23,7 @@ use rand::RngExt;
 use crate::entity::EntityBase;
 use crate::entity::custom_sound::CustomSound;
 use crate::entity::item_steerable::{ItemBasedSteering, ItemSteerable};
+use crate::entity::lightning::LightningBoltEntity;
 use crate::entity::{
     Entity,
     ageable::AgeableMob,
@@ -33,13 +34,15 @@ use crate::entity::{
     },
     mob::{
         Mob, MobEntity,
-        equipment::equip_on_target,
+        conversion::{ConversionParams, convert_to},
+        equipment::{RegionalDifficulty, equip_on_target},
         spawn::{EntitySpawnReason, SpawnGroupData},
     },
     passive::animal::Animal,
     player::Player,
 };
 use crate::world::World;
+use pumpkin_util::Difficulty;
 
 /// Represents a Pig, a common passive mob that provides porkchops.
 ///
@@ -330,6 +333,32 @@ impl Mob for PigEntity {
 
     fn get_equip_sound(&self, slot: &EquipmentSlot) -> Option<Sound> {
         (*slot == EquipmentSlot::SADDLE).then_some(Sound::EntityPigSaddle)
+    }
+
+    fn mob_on_lightning_strike(&self, caller: &dyn EntityBase, lightning: &LightningBoltEntity) {
+        let world = self.get_entity().world.load_full();
+        let converted = (world.level_info.load().difficulty != Difficulty::Peaceful)
+            .then(|| {
+                convert_to(
+                    self,
+                    &EntityType::ZOMBIFIED_PIGLIN,
+                    ConversionParams::single(false, true),
+                    |zp| {
+                        let difficulty =
+                            RegionalDifficulty::at(&world, self.get_entity().pos.load());
+                        zp.populate_default_equipment_slots(&world, &difficulty);
+                        zp.get_mob_entity()
+                            .persistence_required
+                            .store(true, Ordering::Relaxed);
+                    },
+                )
+            })
+            .flatten();
+        if converted.is_none() {
+            self.mob_entity
+                .living_entity
+                .on_lightning_strike(caller, lightning);
+        }
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
