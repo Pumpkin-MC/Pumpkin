@@ -265,7 +265,7 @@ impl BedrockClient {
                     if !stack.is_empty() && Arc::ptr_eq(&world, &player.world()) {
                         let item_id = stack.item.id;
                         let before = stack.clone();
-                        let slot_index = player.inventory().get_selected_slot();
+                        let slot_index = player.inventory().get_selected_slot() as usize;
                         // TODO: reject unloaded target (get_block_state_id_if_loaded), teleport may unload it
                         // block handlers may change it
                         let block = world.get_block(&data.block_position);
@@ -309,13 +309,11 @@ impl BedrockClient {
                                 }
                             }
                         }
-                        // vanilla shrinks the stack it started with, a listener's hand change stands
+                        // vanilla shrinks the stack it started with, even if the selection
+                        // changed; a listener's change to that slot stands
                         let inventory = player.inventory();
-                        let hand_unchanged = || {
-                            inventory.get_selected_slot() == slot_index
-                                && inventory.held_item().are_equal(&before)
-                        };
-                        if hand_unchanged() {
+                        let slot_unchanged = || inventory.get_stack(slot_index).are_equal(&before);
+                        if slot_unchanged() {
                             if before.is_damageable() && stack.is_empty() {
                                 player.increment_stat(
                                     pumpkin_data::statistic::StatisticCategory::Broken,
@@ -330,9 +328,9 @@ impl BedrockClient {
                                     ActorEventID::None,
                                 );
                             }
-                            // the Broken statistic event may change the hand
-                            if hand_unchanged() {
-                                inventory.set_held_item(stack);
+                            // the Broken statistic event may change the slot
+                            if slot_unchanged() {
+                                inventory.set_stack(slot_index, stack);
                             }
                         }
                     }

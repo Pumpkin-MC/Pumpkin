@@ -2,6 +2,7 @@
 use super::*;
 use crate::item::registry::should_try_block_placement;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_inventory::Inventory;
 
 impl JavaClient {
     #[allow(clippy::too_many_lines)]
@@ -352,20 +353,18 @@ fn sync_used_hand_item(
         return;
     }
 
-    // vanilla shrinks the stack it started with, a listener's hand change stands
+    // vanilla shrinks the stack it started with, even if the selection changed;
+    // a listener's change to that slot stands
     let inventory = player.inventory();
-    let hand_unchanged = || {
-        (matches!(hand, Hand::Left) || inventory.get_selected_slot() as usize == slot_index)
-            && inventory.get_stack_in_hand(hand).are_equal(before)
-    };
-    if !hand_unchanged() {
+    let slot_unchanged = || inventory.get_stack(slot_index).are_equal(before);
+    if !slot_unchanged() {
         return;
     }
 
     // Broadcast the break entity status before the slot sync; the client
     // needs the old item texture in the slot for break particles.
     if before.is_damageable() && after.is_empty() {
-        let slot = if slot_index == player.inventory.get_selected_slot() as usize {
+        let slot = if matches!(hand, Hand::Right) {
             &EquipmentSlot::MAIN_HAND
         } else {
             &EquipmentSlot::OFF_HAND
@@ -378,10 +377,10 @@ fn sync_used_hand_item(
         );
     }
 
-    // the Broken statistic event may change the hand
-    if !hand_unchanged() {
+    // the Broken statistic event may change the slot
+    if !slot_unchanged() {
         return;
     }
-    inventory.set_stack_in_hand(hand, after.clone());
+    inventory.set_stack(slot_index, after.clone());
     player.sync_hand_slot(slot_index, after);
 }

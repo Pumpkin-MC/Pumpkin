@@ -187,8 +187,7 @@ impl BlockBehaviour for BeehiveBlock {
 
     fn use_with_item(&self, mut args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
-        let mut props = BeeNestLikeProperties::from_state_id(state_id);
-        if props.honey_level < Self::MAX_HONEY_LEVEL {
+        if BeeNestLikeProperties::from_state_id(state_id).honey_level < Self::MAX_HONEY_LEVEL {
             return BlockActionResult::PassToDefaultBlockAction;
         }
 
@@ -207,6 +206,13 @@ impl BlockBehaviour for BeehiveBlock {
 
         args.player
             .increment_stat(StatisticCategory::Used, i32::from(used_item_id), 1);
+
+        // game event and statistic listeners may change the hive
+        let state_id = args.world.get_block_state_id(args.position);
+        if Block::from_state_id(state_id) != args.block {
+            return BlockActionResult::Success;
+        }
+        let mut props = BeeNestLikeProperties::from_state_id(state_id);
 
         if !CampfireBlock::is_smokey_pos(args.world, args.position)
             && let Some(entity) = args.world.get_block_entity(args.position)
