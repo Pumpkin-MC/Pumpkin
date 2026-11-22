@@ -320,9 +320,16 @@ pub(crate) struct Services {
 impl Services {
     pub(crate) fn insert(&mut self, name: String, service: Service) {
         // Only our count left: owner still loaded, safe to drop
+        // TODO: a holder with only a `Weak` can upgrade between this check and the drop
         self.replaced
             .retain(|old| Arc::strong_count(&old.payload) > 1);
-        if let Some(old) = self.active.insert(name, service) {
+        // The same registration again retires nothing, its copy would never be pruned
+        let same = self.active.get(&name).is_some_and(|old| {
+            old.owner == service.owner && Arc::ptr_eq(&old.payload, &service.payload)
+        });
+        if let Some(old) = self.active.insert(name, service)
+            && !same
+        {
             self.replaced.push(old);
         }
     }
@@ -374,6 +381,8 @@ struct Registrations {
 
 impl Registrations {
     /// Any count above ours: a running event, a service holder, or a plugin from that loader.
+    // TODO: a `Weak` upgraded between this check and the drop outlives the library. Requiring
+    // no `Weak` instead would keep every plugin that holds one to its own service resident
     fn in_use(&self) -> bool {
         self.handlers.iter().any(|h| Arc::strong_count(h) > 1)
             || self.services.iter().any(|s| Arc::strong_count(s) > 1)
@@ -495,23 +504,58 @@ async fn discard_loaded(
     loader.unload(loader_data).await.ok();
 }
 
+/// The library of a loaded plugin no record owns yet.
+///
+/// Dropped unclaimed, by a cancelled load, it stays mapped: work the plugin's factory started
+/// may still run its code. The instance is declared after it, so it drops first.
+struct PendingLibrary {
+    loader: Arc<dyn PluginLoader>,
+    data: Option<Box<dyn Any + Send + Sync>>,
+}
+
+impl PendingLibrary {
+    fn new(loader: &Arc<dyn PluginLoader>, data: Box<dyn Any + Send + Sync>) -> Self {
+        Self {
+            loader: Arc::clone(loader),
+            data: Some(data),
+        }
+    }
+
+    /// Hands the library to the plugin's record.
+    fn claim(mut self) -> Option<Box<dyn Any + Send + Sync>> {
+        self.data.take()
+    }
+
+    /// `discard_loaded` for the plugin of this library.
+    async fn discard(mut self, instance: Arc<dyn Plugin>) {
+        match self.data.take() {
+            Some(data) => discard_loaded(instance, &self.loader, data).await,
+            None => drop(instance),
+        }
+    }
+}
+
+impl Drop for PendingLibrary {
+    fn drop(&mut self) {
+        if let Some(data) = self.data.take() {
+            keep_library(&self.loader, data);
+        }
+    }
+}
+
 /// A started load and its initialization task.
 type LoadStart = (PluginId, tokio::task::JoinHandle<Result<(), String>>);
 
-/// A plugin a scan loaded but has not started yet.
-type Prepared = (
-    Arc<dyn Plugin>,
-    PluginMetadata,
-    Box<dyn Any + Send + Sync>,
-    Arc<dyn PluginLoader>,
-    PathBuf,
-);
+/// A plugin a scan loaded but has not started yet. The instance drops before its library.
+type Prepared = (Arc<dyn Plugin>, PluginMetadata, PendingLibrary, PathBuf);
 
 /// One load of a plugin: a later load of the same name is another one.
 #[derive(Debug, Clone)]
 pub struct PluginId {
     pub name: String,
     token: u64,
+    /// Tokens count per manager
+    manager: u64,
 }
 
 /// Core plugin management system
@@ -643,7 +687,7 @@ impl PluginManager {
 
     /// Unload all loaded plugins
     pub async fn unload_all_plugins(self: &Arc<Self>) -> Result<(), ManagerError> {
-        self.unload_active_plugins(false, |_| true).await
+        self.unload_active_plugins(false, |_| true).await.1
     }
 
     /// The active plugins matching `filter` with their files, dependents before what they depend on
@@ -667,6 +711,8 @@ impl PluginManager {
         };
 
         // Dependencies outside the selection stay loaded, so they don't take part
+        // TODO: order plugins from another plugin's loader before that owner, its unload takes
+        // them along even while a dependent of theirs still runs
         let names: HashSet<&String> = selected.iter().map(|(name, _, _)| name).collect();
         let relations: Vec<(String, Vec<String>)> = selected
             .iter()
@@ -697,23 +743,32 @@ impl PluginManager {
         }
     }
 
-    /// Unload the active plugins matching `filter`, reporting the first failure.
+    /// Unload the active plugins matching `filter`, reporting the first failure and the
+    /// plugins whose unload completed.
     /// `keep_resident`: leave one running that became resident since `filter` ran.
     async fn unload_active_plugins(
         self: &Arc<Self>,
         keep_resident: bool,
         filter: impl Fn(&LoadedPlugin) -> bool,
-    ) -> Result<(), ManagerError> {
+    ) -> (HashSet<String>, Result<(), ManagerError>) {
         let plugin_names = self.unload_order(filter).into_iter().map(|(name, _)| name);
 
         // Keep unloading the rest even if one fails, but report the failure so a caller
         // like `reload_all_plugins` does not rescan while a plugin's resources are still resident
+        let mut unloaded = HashSet::new();
         let mut first_error = None;
         for name in plugin_names {
             match self.unload(&name, None, keep_resident).await {
-                Ok(()) => {}
+                Ok(()) => {
+                    unloaded.insert(name);
+                }
                 // Unloaded all the same, its library is only kept
-                Err(e) if e.is_library_in_use() => warn!("Plugin {name}: {e}"),
+                Err(e) if e.is_library_in_use() => {
+                    warn!("Plugin {name}: {e}");
+                    unloaded.insert(name);
+                }
+                // Gone already, e.g. with the owner of its loader
+                Err(ManagerError::PluginNotFound(_)) => {}
                 Err(e) => {
                     error!("Failed to unload plugin {name}: {e}");
                     first_error.get_or_insert(e);
@@ -721,7 +776,25 @@ impl PluginManager {
             }
         }
 
-        first_error.map_or(Ok(()), Err)
+        (unloaded, first_error.map_or(Ok(()), Err))
+    }
+
+    /// Loads the `unloaded` plugins of `order` again, dependencies first. One that is loaded
+    /// already is left alone.
+    async fn restore_plugins(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        order: &[(String, PathBuf)],
+        unloaded: &HashSet<String>,
+    ) {
+        for (name, path) in order.iter().rev() {
+            if !unloaded.contains(name) || self.is_plugin_loaded(name) {
+                continue;
+            }
+            if let Err(err) = self.try_load_plugin(server, path).await {
+                error!("Failed to restore plugin {name}: {err}");
+            }
+        }
     }
 
     /// Unload everything that can be unloaded, then rescan the plugin directory.
@@ -742,16 +815,19 @@ impl PluginManager {
         let resident = self.resident_plugins().await;
         let unloading = self.unload_order(|p| !resident.contains(&p.metadata.name));
         let names: HashSet<&String> = unloading.iter().map(|(name, _)| name).collect();
-        self.unload_active_plugins(true, |p| p.is_active && names.contains(&p.metadata.name))
-            .await?;
+        let (unloaded, result) = self
+            .unload_active_plugins(true, |p| p.is_active && names.contains(&p.metadata.name))
+            .await;
+        if let Err(e) = result {
+            // No rescan over a failed teardown, but the plugins that did go offline come back.
+            // The failed one is not loaded again next to what it left behind
+            self.restore_plugins(server, &unloading, &unloaded).await;
+            return Err(e);
+        }
         self.prune_missing_files().await;
         if let Err(e) = self.load_plugins(server).await {
             // The rescan failed as a whole, so bring back what was running before it
-            for (name, path) in unloading.iter().rev() {
-                if let Err(err) = self.try_load_plugin(server, path).await {
-                    error!("Failed to restore plugin {name}: {err}");
-                }
-            }
+            self.restore_plugins(server, &unloading, &unloaded).await;
             return Err(e);
         }
         Ok(())
@@ -937,6 +1013,7 @@ impl PluginManager {
                 .plugins
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // TODO: compare with `same_file`, the watcher may spell the path differently
             plugins
                 .iter()
                 .find(|p| p.path == path)
@@ -1212,12 +1289,12 @@ impl PluginManager {
         server: Arc<Server>,
         // Before `instance`: a cancelled call drops parameters last to first, the instance's
         // code must still be mapped when it drops
-        loader_data: Box<dyn Any + Send + Sync>,
+        library: PendingLibrary,
         instance: Arc<dyn Plugin>,
         metadata: PluginMetadata,
-        loader: Arc<dyn PluginLoader>,
         path: PathBuf,
     ) -> Result<LoadStart, ManagerError> {
+        let loader = Arc::clone(&library.loader);
         let context = Arc::new(Context::new(
             metadata.clone(),
             server.clone(),
@@ -1239,7 +1316,7 @@ impl PluginManager {
         if let Some(invalid) = invalid {
             let reason = format!("name {} {invalid}", metadata.name);
             self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason.clone()));
-            discard_loaded(instance, &loader, loader_data).await;
+            library.discard(instance).await;
             return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                 format!("Plugin \"{}\": {reason}", metadata.name),
             )));
@@ -1289,16 +1366,16 @@ impl PluginManager {
                     .any(|p| p.token == owner && !p.context.is_closed()),
             };
             if owner_gone {
-                Err((loader_data, true))
+                Err((library, true))
             } else if plugins.iter().any(|p| p.metadata.name == metadata.name) {
-                Err((loader_data, false))
+                Err((library, false))
             } else {
                 plugins.push(LoadedPlugin {
                     token,
                     metadata: metadata.clone(),
                     instance: None, // Will be set after successful initialization
                     loader: loader.clone(),
-                    loader_data: Some(loader_data),
+                    loader_data: library.claim(),
                     is_active: false, // Will be set to true after successful initialization
                     unloading: false,
                     context: context.clone(),
@@ -1310,9 +1387,9 @@ impl PluginManager {
         };
         drop(states);
 
-        if let Err((loader_data, owner_gone)) = reserved {
+        if let Err((library, owner_gone)) = reserved {
             // Nothing owns the runtime the loader built -> release it again
-            discard_loaded(instance, &loader, loader_data).await;
+            library.discard(instance).await;
             let reason = if owner_gone {
                 // Tried again once a loader for it is added. One added before the insert
                 // may have retried already, so it loads again here then, for this caller
@@ -1337,11 +1414,12 @@ impl PluginManager {
         let self_ref_clone = Arc::clone(self);
         let state_notify = Arc::clone(&self.state_notify);
         let plugin_name = metadata.name.clone();
+        let manager_id = self.id;
         let id = PluginId {
             name: plugin_name.clone(),
             token,
+            manager: manager_id,
         };
-        let manager_id = self.id;
         let loader_clone = loader.clone();
 
         let task = server.spawn_task(async move {
@@ -1597,9 +1675,11 @@ impl PluginManager {
                 if loader.can_load(&path) {
                     match loader.load(&path).await {
                         Ok((instance, metadata, loader_data)) => {
+                            let library = PendingLibrary::new(loader, loader_data);
+                            let instance = instance;
                             // A rescan must not register a second copy of something still resident
                             if self.is_plugin_loaded(&metadata.name) {
-                                discard_loaded(instance, loader, loader_data).await;
+                                library.discard(instance).await;
                                 loader_found = true;
                                 break;
                             }
@@ -1613,7 +1693,7 @@ impl PluginManager {
                                     metadata.name
                                 );
                                 self.mark_inactive(&path, Some(&metadata), PluginStatus::Disabled);
-                                discard_loaded(instance, loader, loader_data).await;
+                                library.discard(instance).await;
                                 loader_found = true;
                                 break;
                             }
@@ -1628,18 +1708,12 @@ impl PluginManager {
                                     metadata.name, path
                                 );
                                 self.mark_inactive(&path, Some(&metadata), PluginStatus::Unsigned);
-                                discard_loaded(instance, loader, loader_data).await;
+                                library.discard(instance).await;
                                 loader_found = true;
                                 break;
                             }
 
-                            prepared_plugins.push((
-                                instance,
-                                metadata,
-                                loader_data,
-                                loader.clone(),
-                                path.clone(),
-                            ));
+                            prepared_plugins.push((instance, metadata, library, path.clone()));
                             loader_found = true;
                         }
                         Err(err) => {
@@ -1660,7 +1734,7 @@ impl PluginManager {
         // Resolve dependencies
         let mut metadata_list: Vec<(String, Vec<String>)> = prepared_plugins
             .iter()
-            .map(|(_, m, _, _, _)| (m.name.clone(), m.dependencies.clone()))
+            .map(|(_, m, _, _)| (m.name.clone(), m.dependencies.clone()))
             .collect();
         // A needed dependency that is still loading must finish (or fail) before it counts. The
         // plugin calling this from its own on_load is never waited for, it would wait on itself
@@ -1713,15 +1787,14 @@ impl PluginManager {
         // Map names back to prepared plugins
         let mut plugins_map: HashMap<String, Prepared> = prepared_plugins
             .into_iter()
-            .map(|(i, m, d, l, p)| (m.name.clone(), (i, m, d, l, p)))
+            .map(|(i, m, l, p)| (m.name.clone(), (i, m, l, p)))
             .collect();
 
         let mut total_wait_time = std::time::Duration::ZERO;
 
         for name in sorted_names {
-            if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
-            {
-                // Declared after `loader_data`, so a cancelled load drops it before its library
+            if let Some((instance, metadata, library, path)) = plugins_map.remove(&name) {
+                // Declared after `library`, so a cancelled load drops it before its library
                 let instance = instance;
                 // A dependency that failed or was skipped earlier in this pass is not active
                 let missing = metadata
@@ -1732,7 +1805,7 @@ impl PluginManager {
                     let reason = format!("dependency {dep} is not active");
                     warn!("Skipping plugin \"{}\": {reason}", metadata.name);
                     self.mark_inactive(&path, Some(&metadata), PluginStatus::Failed(reason));
-                    discard_loaded(instance, &loader, loader_data).await;
+                    library.discard(instance).await;
                     continue;
                 }
 
@@ -1749,19 +1822,12 @@ impl PluginManager {
                         metadata.name
                     );
                     self.mark_inactive(&path, Some(&metadata), PluginStatus::PermissionDenied);
-                    discard_loaded(instance, &loader, loader_data).await;
+                    library.discard(instance).await;
                     continue;
                 }
 
                 match self
-                    .spawn_plugin_initialization(
-                        server.clone(),
-                        loader_data,
-                        instance,
-                        metadata,
-                        loader,
-                        path,
-                    )
+                    .spawn_plugin_initialization(server.clone(), library, instance, metadata, path)
                     .await
                 {
                     // Its on_load waiting on this caller is refused instead of deadlocking. It
@@ -1785,13 +1851,13 @@ impl PluginManager {
 
     /// Releases plugins a scan loaded but will not start, listing them with `reason`.
     async fn discard_prepared(&self, prepared: Vec<Prepared>, reason: &str) {
-        for (instance, metadata, loader_data, loader, path) in prepared {
+        for (instance, metadata, library, path) in prepared {
             self.mark_inactive(
                 &path,
                 Some(&metadata),
                 PluginStatus::Failed(reason.to_string()),
             );
-            discard_loaded(instance, &loader, loader_data).await;
+            library.discard(instance).await;
         }
     }
 
@@ -1905,14 +1971,16 @@ impl PluginManager {
                         return Err(err.into());
                     }
                 };
-                // Declared after `loader_data`, so a cancelled load drops it before its library
+                // A cancelled load keeps the library, the waits below can take long
+                let library = PendingLibrary::new(loader, loader_data);
+                // Declared after `library`, so a cancelled load drops it before its library
                 let instance = instance;
 
                 let plugin_override = server.advanced_config.plugins.overrides.get(&metadata.name);
 
                 if plugin_override.is_some_and(|o| !o.enabled) {
                     self.mark_inactive(path, Some(&metadata), PluginStatus::Disabled);
-                    discard_loaded(instance, loader, loader_data).await;
+                    library.discard(instance).await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         format!("Plugin \"{}\" is disabled in configuration", metadata.name),
                     )));
@@ -1924,7 +1992,7 @@ impl PluginManager {
 
                 if !allow_unsigned && !loader.is_signed(path) {
                     self.mark_inactive(path, Some(&metadata), PluginStatus::Unsigned);
-                    discard_loaded(instance, loader, loader_data).await;
+                    library.discard(instance).await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         format!(
                             "Plugin \"{}\" is unsigned or invalid and allow_unsigned is disabled",
@@ -1947,7 +2015,7 @@ impl PluginManager {
                 if let Some(dep) = missing {
                     let reason = format!("dependency {dep} is not active");
                     self.mark_inactive(path, Some(&metadata), PluginStatus::Failed(reason.clone()));
-                    discard_loaded(instance, loader, loader_data).await;
+                    library.discard(instance).await;
                     // Tried again when a loader is added: the dependency may come with it
                     self.unloaded_files.write().await.insert(path.to_path_buf());
                     return Err(ManagerError::DependencyError(format!(
@@ -1969,7 +2037,7 @@ impl PluginManager {
                         metadata.name
                     );
                     self.mark_inactive(path, Some(&metadata), PluginStatus::PermissionDenied);
-                    discard_loaded(instance, loader, loader_data).await;
+                    library.discard(instance).await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         "Permission denied".to_string(),
                     )));
@@ -1978,10 +2046,9 @@ impl PluginManager {
                 return self
                     .spawn_plugin_initialization(
                         server.clone(),
-                        loader_data,
+                        library,
                         instance,
                         metadata,
-                        loader.clone(),
                         path.to_path_buf(),
                     )
                     .await;
@@ -2382,6 +2449,10 @@ impl PluginManager {
 
     /// Unload the plugin `id` names, not a later load of the same name.
     pub async fn unload_loaded(self: &Arc<Self>, id: &PluginId) -> Result<(), ManagerError> {
+        // Another manager's token can match a load of this one
+        if id.manager != self.id {
+            return Err(ManagerError::PluginNotFound(id.name.clone()));
+        }
         self.unload(&id.name, Some(id.token), false).await
     }
 
@@ -3077,6 +3148,20 @@ mod tests {
         assert!(!registrations.in_use());
     }
 
+    #[test]
+    fn registering_a_service_again_retires_nothing() {
+        let payload: Arc<dyn Payload> = Arc::new(TestService);
+        let mut services = Services::default();
+        for _ in 0..2 {
+            let service = Service {
+                owner: "p".to_string(),
+                payload: Arc::clone(&payload),
+            };
+            services.insert("one".to_string(), service);
+        }
+        assert!(services.replaced.is_empty());
+    }
+
     /// Waits on initializations that name a plugin of manager `id`.
     fn init_waits_of(id: u64) -> usize {
         INIT_WAITS
@@ -3381,10 +3466,9 @@ mod tests {
         let reserved = manager
             .spawn_plugin_initialization(
                 Arc::clone(&server),
-                loader_data,
+                PendingLibrary::new(&picked, loader_data),
                 instance,
                 metadata,
-                picked,
                 child.clone(),
             )
             .await;
@@ -3814,18 +3898,18 @@ mod tests {
                 waiting.wait_for_initialization("a").await
             }),
         );
-        while init_waits_of(manager.id) == 0 {
-            tokio::task::yield_now().await;
-        }
-        let mutual = INITIALIZING_PLUGIN
-            .scope(
+        eventually(|| init_waits_of(manager.id) > 0).await;
+        let mutual = tokio::time::timeout(
+            HANDLER_DRAIN_TIMEOUT,
+            INITIALIZING_PLUGIN.scope(
                 (manager.id, "a".to_string()),
                 manager.wait_for_initialization("b"),
-            )
-            .await;
+            ),
+        )
+        .await;
         assert!(matches!(
             mutual,
-            Err(ManagerError::InitializationDeadlock(_))
+            Ok(Err(ManagerError::InitializationDeadlock(_)))
         ));
 
         // Once a finishes, b's wait ends and leaves no edge behind
@@ -3835,7 +3919,10 @@ mod tests {
             .await
             .insert("a".to_string(), PluginState::Loaded);
         manager.state_notify.notify_waiters();
-        assert!(matches!(b_waits_on_a.await, Ok(Ok(()))));
+        assert!(matches!(
+            tokio::time::timeout(HANDLER_DRAIN_TIMEOUT, b_waits_on_a).await,
+            Ok(Ok(Ok(())))
+        ));
         assert_eq!(init_waits_of(manager.id), 0);
     }
 
@@ -3858,18 +3945,18 @@ mod tests {
                 awaited.wait_for_initialization("p").await
             }),
         );
-        while init_waits_of(second.id) == 0 {
-            tokio::task::yield_now().await;
-        }
-        let mutual = INITIALIZING_PLUGIN
-            .scope(
+        eventually(|| init_waits_of(second.id) > 0).await;
+        let mutual = tokio::time::timeout(
+            HANDLER_DRAIN_TIMEOUT,
+            INITIALIZING_PLUGIN.scope(
                 (second.id, "p".to_string()),
                 first.wait_for_initialization("p"),
-            )
-            .await;
+            ),
+        )
+        .await;
         assert!(matches!(
             mutual,
-            Err(ManagerError::InitializationDeadlock(_))
+            Ok(Err(ManagerError::InitializationDeadlock(_)))
         ));
 
         second
@@ -3878,7 +3965,10 @@ mod tests {
             .await
             .insert("p".to_string(), PluginState::Loaded);
         second.state_notify.notify_waiters();
-        assert!(matches!(waiting.await, Ok(Ok(()))));
+        assert!(matches!(
+            tokio::time::timeout(HANDLER_DRAIN_TIMEOUT, waiting).await,
+            Ok(Ok(Ok(())))
+        ));
     }
 
     #[tokio::test]
