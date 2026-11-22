@@ -861,6 +861,7 @@ impl BlockRegistry {
             return Ok(None);
         }
 
+        // TODO: a listener that changed the target block above gets overwritten here
         let _replaced_id =
             world.set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL);
 
