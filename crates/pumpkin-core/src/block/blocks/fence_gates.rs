@@ -20,21 +20,14 @@ use pumpkin_world::world::BlockFlags;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 
-fn get_sound(block: &Block, open: bool) -> Sound {
-    match (block, open) {
-        (b, true) if b == &Block::BAMBOO_FENCE_GATE => Sound::BlockBambooWoodFenceGateOpen,
-        (b, false) if b == &Block::BAMBOO_FENCE_GATE => Sound::BlockBambooWoodFenceGateClose,
-        (b, true) if b == &Block::CHERRY_FENCE_GATE => Sound::BlockCherryWoodFenceGateOpen,
-        (b, false) if b == &Block::CHERRY_FENCE_GATE => Sound::BlockCherryWoodFenceGateClose,
-        (b, true) if b == &Block::CRIMSON_FENCE_GATE || b == &Block::WARPED_FENCE_GATE => {
-            Sound::BlockNetherWoodFenceGateOpen
+fn get_sound(block: &Block, open: bool) -> Option<Sound> {
+    block.wood_type.map(|wood_type| {
+        if open {
+            wood_type.fence_gate_open
+        } else {
+            wood_type.fence_gate_close
         }
-        (b, false) if b == &Block::CRIMSON_FENCE_GATE || b == &Block::WARPED_FENCE_GATE => {
-            Sound::BlockNetherWoodFenceGateClose
-        }
-        (_, true) => Sound::BlockFenceGateOpen,
-        (_, false) => Sound::BlockFenceGateClose,
-    }
+    })
 }
 
 pub fn toggle_fence_gate(
@@ -60,12 +53,9 @@ pub fn toggle_fence_gate(
         fence_gate_props.open = true;
     }
 
-    world.play_block_sound_expect(
-        player,
-        get_sound(block, fence_gate_props.open),
-        SoundCategory::Blocks,
-        *block_pos,
-    );
+    if let Some(sound) = get_sound(block, fence_gate_props.open) {
+        world.play_block_sound_expect(player, sound, SoundCategory::Blocks, *block_pos);
+    }
 
     let game_event = if fence_gate_props.open {
         pumpkin_data::game_event::GameEvent::BlockOpen
@@ -140,11 +130,10 @@ impl BlockBehaviour for FenceGateBlock {
             if powered != fence_gate_props.open {
                 fence_gate_props.open = powered;
 
-                args.world.play_block_sound(
-                    get_sound(args.block, powered),
-                    SoundCategory::Blocks,
-                    *args.position,
-                );
+                if let Some(sound) = get_sound(args.block, powered) {
+                    args.world
+                        .play_block_sound(sound, SoundCategory::Blocks, *args.position);
+                }
                 let game_event = if powered {
                     pumpkin_data::game_event::GameEvent::BlockOpen
                 } else {
@@ -182,4 +171,33 @@ fn is_in_wall(world: &World, pos: &BlockPos, facing: HorizontalFacing) -> bool {
         || world
             .get_block(&side_offset_right)
             .has_tag(&tag::Block::MINECRAFT_WALLS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fence_gate_sound_comes_from_the_wood_type() {
+        assert_eq!(
+            get_sound(&Block::OAK_FENCE_GATE, true),
+            Some(Sound::BlockFenceGateOpen)
+        );
+        assert_eq!(
+            get_sound(&Block::CHERRY_FENCE_GATE, false),
+            Some(Sound::BlockCherryWoodFenceGateClose)
+        );
+        assert_eq!(
+            get_sound(&Block::BAMBOO_FENCE_GATE, true),
+            Some(Sound::BlockBambooWoodFenceGateOpen)
+        );
+        assert_eq!(
+            get_sound(&Block::CRIMSON_FENCE_GATE, false),
+            Some(Sound::BlockNetherWoodFenceGateClose)
+        );
+        assert_eq!(
+            get_sound(&Block::WARPED_FENCE_GATE, true),
+            Some(Sound::BlockNetherWoodFenceGateOpen)
+        );
+    }
 }
