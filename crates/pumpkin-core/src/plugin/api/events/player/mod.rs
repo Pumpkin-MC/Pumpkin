@@ -70,6 +70,7 @@ pub mod player_teleport;
 pub mod player_toggle_flight_event;
 pub mod player_toggle_sneak_event;
 pub mod player_toggle_sprint_event;
+pub mod player_transfer;
 pub mod player_unleash_entity;
 pub mod player_unregister_channel;
 pub mod player_velocity;

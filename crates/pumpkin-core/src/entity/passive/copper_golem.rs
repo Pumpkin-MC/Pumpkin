@@ -23,6 +23,7 @@ use crate::entity::{
     custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     player::Player,
+    shearable::{Shearable, shear_by_player},
 };
 
 pub const EQUIPMENT_SLOT_ANTENNA: EquipmentSlot = EquipmentSlot::SADDLE;
@@ -179,6 +180,39 @@ impl CopperGolemEntity {
     }
 }
 
+impl Shearable for CopperGolemEntity {
+    fn shear(&self, category: SoundCategory, _tool: &ItemStack) -> bool {
+        // Taking the antenna and emptying the slot in one step keeps two shears from both dropping it.
+        let antenna_item = self
+            .mob_entity
+            .set_item_slot(&EQUIPMENT_SLOT_ANTENNA, ItemStack::EMPTY.clone());
+        if antenna_item.is_empty() {
+            return false;
+        }
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        world.play_sound(Sound::EntityCopperGolemShear, category, &pos);
+        let drop_pos = pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y + 1.5, pos.z);
+        world.spawn_entity(Arc::new(crate::entity::item::ItemEntity::new(
+            Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+            antenna_item,
+        )));
+        true
+    }
+
+    fn ready_for_shearing(&self) -> bool {
+        self.mob_entity
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&EQUIPMENT_SLOT_ANTENNA)
+            .item
+            .has_tag(&tag::Item::MINECRAFT_SHEARABLE_FROM_COPPER_GOLEM)
+    }
+}
+
 impl CustomSound for CopperGolemEntity {
     fn hurt_sound(&self) -> Option<Sound> {
         Some(match self.get_weather_state() {
@@ -198,6 +232,10 @@ impl CustomSound for CopperGolemEntity {
 }
 
 impl Mob for CopperGolemEntity {
+    fn as_shearable(&self) -> Option<&dyn Shearable> {
+        Some(self)
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(self.step_sound(), 1.0, 1.0);
     }
@@ -250,9 +288,13 @@ impl Mob for CopperGolemEntity {
         );
     }
 
-    fn mob_interact(&self, _player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         let entity = self.get_entity();
         let world = entity.world.load();
+
+        if item_stack.item.id == Item::SHEARS.id && self.ready_for_shearing() {
+            return shear_by_player(self, player, item_stack);
+        }
 
         // Honeycomb waxing
         if item_stack.item.id == Item::HONEYCOMB.id

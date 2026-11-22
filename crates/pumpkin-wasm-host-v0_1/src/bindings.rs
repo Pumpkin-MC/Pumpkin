@@ -154,7 +154,7 @@ bindgen!({
         "pumpkin:plugin/player@0.1.0.[method]player.set-ender-chest-item": async | trappable,
         "pumpkin:plugin/player@0.1.0.[method]player.set-inventory-item": async | trappable,
         "pumpkin:plugin/player@0.1.0.[method]player.set-item-in-hand": async | trappable,
-        "pumpkin:plugin/player@0.1.0.[method]player.transfer": async | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.transfer": async | store | trappable,
         "pumpkin:plugin/recipe@0.1.0.[method]recipe-manager.register-cooking": async | trappable,
         "pumpkin:plugin/recipe@0.1.0.[method]recipe-manager.register-shaped": async | trappable,
         "pumpkin:plugin/recipe@0.1.0.[method]recipe-manager.register-shapeless": async | trappable,

@@ -1,8 +1,10 @@
 mod chest;
-mod container;
+pub mod command_block;
+pub(crate) mod container;
 mod furnace;
 mod hopper;
 mod rideable;
+mod spawner;
 mod tnt;
 
 use std::sync::Arc;
@@ -11,6 +13,7 @@ use std::sync::atomic::Ordering;
 use pumpkin_protocol::java::server::play::SPlayerInput;
 use rand::RngExt;
 
+use crate::entity::projectile::abstract_arrow::is_abstract_arrow;
 use crate::{
     entity::{Entity, EntityBase, living::LivingEntity, player::Player},
     server::Server,
@@ -30,10 +33,12 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
 use chest::ChestMinecart;
+use command_block::CommandBlockMinecart;
 use container::MinecartInventory;
 use furnace::FurnaceMinecart;
 use hopper::HopperMinecart;
 use rideable::RideableMinecart;
+use spawner::SpawnerMinecart;
 use tnt::TntMinecart;
 
 const fn get_exits(
@@ -65,8 +70,10 @@ pub struct MinecartEntity {
 enum MinecartKind {
     Rideable(RideableMinecart),
     Chest(ChestMinecart),
+    CommandBlock(CommandBlockMinecart),
     Furnace(FurnaceMinecart),
     Hopper(HopperMinecart),
+    Spawner(SpawnerMinecart),
     Tnt(TntMinecart),
     Other,
 }
@@ -77,11 +84,17 @@ impl MinecartEntity {
         let kind = match entity.entity_type.id {
             id if id == EntityType::MINECART.id => MinecartKind::Rideable(RideableMinecart),
             id if id == EntityType::CHEST_MINECART.id => MinecartKind::Chest(ChestMinecart::new()),
+            id if id == EntityType::COMMAND_BLOCK_MINECART.id => {
+                MinecartKind::CommandBlock(CommandBlockMinecart::new())
+            }
             id if id == EntityType::FURNACE_MINECART.id => {
                 MinecartKind::Furnace(FurnaceMinecart::new())
             }
             id if id == EntityType::HOPPER_MINECART.id => {
                 MinecartKind::Hopper(HopperMinecart::new())
+            }
+            id if id == EntityType::SPAWNER_MINECART.id => {
+                MinecartKind::Spawner(SpawnerMinecart::new())
             }
             id if id == EntityType::TNT_MINECART.id => MinecartKind::Tnt(TntMinecart::new()),
             _ => MinecartKind::Other,
@@ -89,6 +102,14 @@ impl MinecartEntity {
         Self {
             vehicle: VehicleEntity::new(entity),
             kind,
+        }
+    }
+
+    #[must_use]
+    pub const fn command_block(&self) -> Option<&CommandBlockMinecart> {
+        match &self.kind {
+            MinecartKind::CommandBlock(minecart) => Some(minecart),
+            _ => None,
         }
     }
 
@@ -100,13 +121,16 @@ impl MinecartEntity {
         }
     }
 
-    const fn drop_item(&self) -> Option<&'static Item> {
+    const fn drop_item(&self) -> &'static Item {
         match &self.kind {
-            MinecartKind::Chest(_) => Some(&Item::CHEST_MINECART),
-            MinecartKind::Furnace(_) => Some(&Item::FURNACE_MINECART),
-            MinecartKind::Hopper(_) => Some(&Item::HOPPER_MINECART),
-            MinecartKind::Tnt(_) => Some(&Item::TNT_MINECART),
-            _ => None,
+            MinecartKind::Chest(_) => &Item::CHEST_MINECART,
+            MinecartKind::Furnace(_) => &Item::FURNACE_MINECART,
+            MinecartKind::Hopper(_) => &Item::HOPPER_MINECART,
+            MinecartKind::Tnt(_) => &Item::TNT_MINECART,
+            MinecartKind::Rideable(_)
+            | MinecartKind::CommandBlock(_)
+            | MinecartKind::Spawner(_)
+            | MinecartKind::Other => &Item::MINECART,
         }
     }
 }
@@ -127,8 +151,10 @@ impl EntityBase for MinecartEntity {
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         match &self.kind {
             MinecartKind::Chest(minecart) => minecart.write_nbt(nbt),
+            MinecartKind::CommandBlock(minecart) => minecart.write_nbt(nbt),
             MinecartKind::Furnace(minecart) => minecart.write_nbt(nbt),
             MinecartKind::Hopper(minecart) => minecart.write_nbt(nbt),
+            MinecartKind::Spawner(minecart) => minecart.write_nbt(nbt),
             MinecartKind::Tnt(minecart) => minecart.write_nbt(nbt),
             MinecartKind::Rideable(_) | MinecartKind::Other => {}
         }
@@ -137,8 +163,10 @@ impl EntityBase for MinecartEntity {
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         match &self.kind {
             MinecartKind::Chest(minecart) => minecart.read_nbt(nbt),
+            MinecartKind::CommandBlock(minecart) => minecart.read_nbt(&self.vehicle.entity, nbt),
             MinecartKind::Furnace(minecart) => minecart.read_nbt(nbt),
             MinecartKind::Hopper(minecart) => minecart.read_nbt(nbt),
+            MinecartKind::Spawner(minecart) => minecart.read_nbt(nbt),
             MinecartKind::Tnt(minecart) => minecart.read_nbt(nbt),
             MinecartKind::Rideable(_) | MinecartKind::Other => {}
         }
@@ -147,8 +175,10 @@ impl EntityBase for MinecartEntity {
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         self.vehicle.tick();
-        if let MinecartKind::Furnace(minecart) = &self.kind {
-            minecart.tick(&self.vehicle.entity);
+        match &self.kind {
+            MinecartKind::Furnace(minecart) => minecart.tick(&self.vehicle.entity),
+            MinecartKind::CommandBlock(minecart) => minecart.step_tick(),
+            _ => {}
         }
 
         let world = self.vehicle.entity.world.load();
@@ -239,6 +269,9 @@ impl EntityBase for MinecartEntity {
                     self.vehicle.entity.send_velocity();
                 } else if is_activator_rail {
                     match &self.kind {
+                        MinecartKind::CommandBlock(minecart) => {
+                            minecart.activate(&self.vehicle.entity);
+                        }
                         MinecartKind::Tnt(minecart) => {
                             minecart.prime(&self.vehicle.entity, 80);
                         }
@@ -280,7 +313,7 @@ impl EntityBase for MinecartEntity {
         }
 
         if let MinecartKind::Tnt(minecart) = &self.kind
-            && minecart.tick(&self.vehicle.entity)
+            && minecart.tick(self)
         {
             return;
         }
@@ -447,8 +480,9 @@ impl EntityBase for MinecartEntity {
                 && velocity.x.mul_add(velocity.x, velocity.z * velocity.z) >= 0.01
             {
                 minecart.explode(
-                    &self.vehicle.entity,
+                    self,
                     velocity.x.mul_add(velocity.x, velocity.z * velocity.z),
+                    None,
                 );
                 return;
             }
@@ -502,8 +536,10 @@ impl EntityBase for MinecartEntity {
             }
         }
 
-        if let MinecartKind::Hopper(minecart) = &self.kind {
-            minecart.tick(&self.vehicle.entity);
+        match &self.kind {
+            MinecartKind::Hopper(minecart) => minecart.tick(&self.vehicle.entity),
+            MinecartKind::Spawner(minecart) => minecart.tick(&self.vehicle.entity),
+            _ => {}
         }
     }
 
@@ -513,6 +549,23 @@ impl EntityBase for MinecartEntity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn has_container_inventory(&self) -> bool {
+        self.container().is_some()
+    }
+
+    fn get_container_inventory(&self) -> Option<Arc<dyn Inventory>> {
+        let container = self.container()?;
+        if container.has_loot_table() {
+            let world = self.vehicle.entity.world.load();
+            container.unpack_loot(&crate::world::loot::LootContextParameters {
+                world: Some(&world),
+                position: Some(self.vehicle.entity.pos.load()),
+                ..Default::default()
+            });
+        }
+        Some(container.clone() as Arc<dyn Inventory>)
     }
 
     fn is_pushable(&self) -> bool {
@@ -658,8 +711,14 @@ impl EntityBase for MinecartEntity {
 
     fn init_data_tracker(&self) {
         self.vehicle.send_wobble_metadata();
-        if let MinecartKind::Furnace(minecart) = &self.kind {
-            minecart.init_data_tracker(&self.vehicle.entity);
+        match &self.kind {
+            MinecartKind::CommandBlock(minecart) => {
+                minecart.init_data_tracker(&self.vehicle.entity);
+            }
+            MinecartKind::Furnace(minecart) => {
+                minecart.init_data_tracker(&self.vehicle.entity);
+            }
+            _ => {}
         }
     }
 
@@ -681,13 +740,18 @@ impl EntityBase for MinecartEntity {
             .is_some_and(|player| player.gamemode.load() == GameMode::Creative);
 
         if let MinecartKind::Tnt(minecart) = &self.kind
-            && damage_type == DamageType::ARROW
-            && self.vehicle.entity.fire_ticks.load(Ordering::Relaxed) > 0
+            && let Some(projectile) = source
+            && is_abstract_arrow(projectile.get_entity().entity_type)
+            && projectile.get_entity().is_on_fire()
         {
-            let projectile_speed_squared = cause
-                .map(|entity| entity.get_entity().velocity.load().length_squared())
-                .unwrap_or_default();
-            minecart.explode(&self.vehicle.entity, projectile_speed_squared);
+            let world = self.vehicle.entity.world.load();
+            let cause =
+                cause.and_then(|cause| world.get_entity_by_id(cause.get_entity().entity_id));
+            minecart.explode(
+                self,
+                projectile.get_entity().velocity.load().length_squared(),
+                cause,
+            );
             if self.vehicle.entity.is_removed() {
                 return true;
             }
@@ -743,9 +807,13 @@ impl EntityBase for MinecartEntity {
                     let inventory: Arc<dyn Inventory> = container.clone();
                     world.scatter_inventory(&position, &inventory);
                 }
-                if let Some(item) = self.drop_item() {
-                    world.drop_stack(&position, ItemStack::new(1, item));
+                let mut stack = ItemStack::new(1, self.drop_item());
+                if let Some(custom_name) = self.vehicle.entity.custom_name.load().as_ref() {
+                    stack.set_data_component(pumpkin_data::data_component_impl::CustomNameImpl {
+                        name: custom_name.clone(),
+                    });
                 }
+                world.drop_stack(&position, stack);
             }
         }
 
@@ -758,6 +826,7 @@ impl EntityBase for MinecartEntity {
                 minecart.interact(&self.vehicle.entity, player);
                 true
             }
+            MinecartKind::CommandBlock(_) => CommandBlockMinecart::interact(player),
             MinecartKind::Furnace(minecart) => {
                 minecart.interact(&self.vehicle.entity, player, item_stack)
             }
@@ -766,7 +835,7 @@ impl EntityBase for MinecartEntity {
                 true
             }
             MinecartKind::Rideable(_) => RideableMinecart::interact(&self.vehicle.entity, player),
-            MinecartKind::Tnt(_) | MinecartKind::Other => false,
+            MinecartKind::Spawner(_) | MinecartKind::Tnt(_) | MinecartKind::Other => false,
         }
     }
 
@@ -787,5 +856,119 @@ impl EntityBase for MinecartEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::ai::test_support::world;
+    use pumpkin_util::text::TextComponent;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[tokio::test]
+    async fn command_block_minecart_nbt_and_activation_cooldown() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cart = MinecartEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::COMMAND_BLOCK_MINECART,
+        ));
+
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("Command", "Searge".to_string());
+        nbt.put_bool("TrackOutput", true);
+        nbt.put_long("LastExecution", 12);
+        cart.read_nbt_non_mut(&nbt);
+
+        let Some(cb) = cart.command_block() else {
+            return Err("expected CommandBlockMinecart".into());
+        };
+        assert_eq!(cb.get_command(), "Searge");
+        assert_eq!(cb.get_success_count(), 0);
+
+        // Fewer than 4 ticks elapsed since `last_activated` (0): must not activate.
+        for _ in 0..3 {
+            cb.step_tick();
+            cb.activate(&cart.vehicle.entity);
+        }
+        assert_eq!(cb.get_success_count(), 0);
+
+        // Tick 4 reaches ACTIVATION_DELAY (4) and triggers the command.
+        cb.step_tick();
+        cb.activate(&cart.vehicle.entity);
+        assert_eq!(cb.get_success_count(), 1);
+        assert_eq!(
+            cb.get_last_output_or_empty(),
+            TextComponent::text("#itzlipofutzli")
+        );
+
+        let mut saved = NbtCompound::new();
+        cart.write_nbt(&mut saved);
+        assert_eq!(saved.get_string("Command"), Some("Searge"));
+        assert_eq!(saved.get_int("SuccessCount"), Some(1));
+        assert_eq!(saved.get_bool("TrackOutput"), Some(true));
+        assert!(saved.get("LastOutput").is_some());
+
+        // Setting TrackOutput=false clears LastOutput on load and omits it on save.
+        let mut no_track = saved.clone();
+        no_track.put_bool("TrackOutput", false);
+        cart.read_nbt_non_mut(&no_track);
+        let mut saved_no_track = NbtCompound::new();
+        cart.write_nbt(&mut saved_no_track);
+        assert!(saved_no_track.get("LastOutput").is_none());
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn spawner_minecart_nbt_roundtrip() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cart = MinecartEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::SPAWNER_MINECART,
+        ));
+
+        let mut spawn_entity = NbtCompound::new();
+        spawn_entity.put_string("id", "minecraft:pig".to_string());
+        let mut spawn_data = NbtCompound::new();
+        spawn_data.put_compound("entity", spawn_entity);
+
+        let mut nbt = NbtCompound::new();
+        nbt.put_short("Delay", 45);
+        nbt.put_short("MinSpawnDelay", 100);
+        nbt.put_short("MaxSpawnDelay", 300);
+        nbt.put_short("SpawnCount", 2);
+        nbt.put_short("SpawnRange", 3);
+        nbt.put_short("MaxNearbyEntities", 5);
+        nbt.put_short("RequiredPlayerRange", 12);
+        nbt.put_compound("SpawnData", spawn_data);
+
+        cart.read_nbt_non_mut(&nbt);
+
+        let mut saved = NbtCompound::new();
+        cart.write_nbt(&mut saved);
+        assert_eq!(saved.get_short("Delay"), Some(45));
+        assert_eq!(saved.get_short("MinSpawnDelay"), Some(100));
+        assert_eq!(saved.get_short("MaxSpawnDelay"), Some(300));
+        assert_eq!(saved.get_short("SpawnCount"), Some(2));
+        assert_eq!(saved.get_short("SpawnRange"), Some(3));
+        assert_eq!(saved.get_short("MaxNearbyEntities"), Some(5));
+        assert_eq!(saved.get_short("RequiredPlayerRange"), Some(12));
+        assert_eq!(
+            saved
+                .get_compound("SpawnData")
+                .and_then(|d| d.get_compound("entity"))
+                .and_then(|e| e.get_string("id")),
+            Some("minecraft:pig")
+        );
+
+        world.level.shutdown().await;
+        Ok(())
     }
 }

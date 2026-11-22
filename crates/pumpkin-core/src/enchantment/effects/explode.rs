@@ -88,10 +88,12 @@ impl super::EnchantmentEntityEffectExt for ExplodeEffect {
             self.calculate_knockback(enchantment_level),
             immune_blocks,
         ));
-        let source_entity_id = if self.attribute_to_user {
+        // The user is credited only with `attribute_to_user`; the owner stands in when the effect has no entity.
+        let source = if self.attribute_to_user {
             entity
                 .map(|e| e.entity_id)
                 .or_else(|| owner.map(|o| o.entity_id()))
+                .and_then(|id| world.get_entity_by_id(id))
         } else {
             None
         };
@@ -109,9 +111,9 @@ impl super::EnchantmentEntityEffectExt for ExplodeEffect {
         if let Some(damage_type) = self.damage_type {
             explosion = explosion.with_damage_type(*damage_type);
         }
-        if let Some(source_id) = source_entity_id {
-            explosion = explosion.with_source_entity_id(source_id);
+        if let Some(source) = &source {
+            explosion = explosion.with_source(source.as_ref());
         }
-        world.run_explosion(&explosion, center, r);
+        world.run_explosion(&explosion);
     }
 }

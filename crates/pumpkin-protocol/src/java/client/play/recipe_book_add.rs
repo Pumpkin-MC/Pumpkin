@@ -415,7 +415,7 @@ fn write_entry(
             }
             // Skip special/decorated_pot recipes as they have no useful display
             CraftingRecipeTypes::CraftingDecoratedPot { .. }
-            | CraftingRecipeTypes::CraftingSpecial => {
+            | CraftingRecipeTypes::CraftingSpecial(_) => {
                 return Ok(false);
             }
         }
@@ -481,7 +481,7 @@ impl ClientPacket for CRecipeBookAdd<'_> {
             .filter(|r| {
                 !matches!(
                     r,
-                    CraftingRecipeTypes::CraftingSpecial
+                    CraftingRecipeTypes::CraftingSpecial(_)
                         | CraftingRecipeTypes::CraftingDecoratedPot { .. }
                 )
             })
@@ -514,7 +514,7 @@ impl ClientPacket for CRecipeBookAdd<'_> {
                     (group.map(Cow::Borrowed), true)
                 }
                 CraftingRecipeTypes::CraftingDecoratedPot { .. }
-                | CraftingRecipeTypes::CraftingSpecial => (None, true),
+                | CraftingRecipeTypes::CraftingSpecial(_) => (None, true),
             };
             let group_id = resolve_group_id_owned(&mut group_ids, &mut next_group_id, group);
             let flags = entry_flags(self.replace, notification, highlight);

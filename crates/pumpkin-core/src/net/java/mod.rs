@@ -1263,6 +1263,12 @@ impl JavaClient {
                                 .fire_blocking(server, &mut unreg_event);
                         }
                     }
+                } else if channel_str == "minecraft:brand" {
+                    use pumpkin_protocol::ser::NetworkReadSliceExt;
+                    let mut brand_slice = payload.data;
+                    if let Ok(brand) = brand_slice.get_str_bounded_borrowed(256) {
+                        self.brand.store(Arc::new(Some(brand.to_string())));
+                    }
                 }
             }
             id if id == SRecipeBookChangeSettings::PACKET_ID => {

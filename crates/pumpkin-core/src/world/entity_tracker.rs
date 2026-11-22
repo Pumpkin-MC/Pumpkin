@@ -444,9 +444,11 @@ impl TrackedEntity {
             entity_chunk,
             entity_pos,
             self.get_effective_range(),
+            true,
         );
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn update_player_in_view(
         &self,
         player: &Arc<Player>,
@@ -455,6 +457,7 @@ impl TrackedEntity {
         entity_chunk: Vector2<i32>,
         entity_pos: Vector3<f64>,
         effective_range: u32,
+        chunk_changed: bool,
     ) {
         let dx = player_pos.x - entity_pos.x;
         let dz = player_pos.z - entity_pos.z;
@@ -463,39 +466,48 @@ impl TrackedEntity {
         let visible_range_blocks = f64::from((effective_range as i32).min(player_vd) * 16);
         let range_sq = visible_range_blocks * visible_range_blocks;
 
-        // Vanilla `isChunkTracked`: never spawn before the chunk packet.
-        let is_visible = dist_sq <= range_sq
-            && self.broadcast_to_player(player)
-            && player
-                .chunk_sender
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_chunk_ready(&entity_chunk);
-
-        if is_visible {
-            if self
-                .seen_by
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .contains_key(&player.gameprofile.id)
+        if dist_sq <= range_sq && self.broadcast_to_player(player) {
+            if !chunk_changed
+                && self
+                    .seen_by
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains_key(&player.gameprofile.id)
             {
                 return;
             }
-            let inserted = self
-                .seen_by
-                .write()
+            // Vanilla `isChunkTracked`: never spawn before the chunk packet.
+            if player
+                .chunk_sender
+                .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(player.gameprofile.id, player.clone())
-                .is_none();
-            if inserted {
-                if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
-                    self.bedrock_watchers.fetch_add(1, Relaxed);
+                .is_chunk_ready(&entity_chunk)
+            {
+                if chunk_changed
+                    && self
+                        .seen_by
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .contains_key(&player.gameprofile.id)
+                {
+                    return;
                 }
-                self.add_pairing(player);
+                let inserted = self
+                    .seen_by
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(player.gameprofile.id, player.clone())
+                    .is_none();
+                if inserted {
+                    if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
+                        self.bedrock_watchers.fetch_add(1, Relaxed);
+                    }
+                    self.add_pairing(player);
+                }
+                return;
             }
-        } else {
-            self.remove_player(player);
         }
+        self.remove_player(player);
     }
 
     pub fn update_players(&self, players: &[Arc<Player>], _world: &World) {
@@ -532,11 +544,16 @@ impl TrackedEntity {
                 entity_chunk,
                 entity_pos,
                 effective_range,
+                true,
             );
         }
     }
 
-    fn update_players_from_snapshots(&self, snapshots: &[PlayerViewSnapshot<'_>]) {
+    fn update_players_from_snapshots(
+        &self,
+        snapshots: &[PlayerViewSnapshot<'_>],
+        chunk_changed: bool,
+    ) {
         if snapshots.is_empty() {
             return;
         }
@@ -566,6 +583,7 @@ impl TrackedEntity {
                 entity_chunk,
                 entity_pos,
                 effective_range,
+                chunk_changed,
             );
         }
     }
@@ -878,6 +896,7 @@ impl TrackedEntity {
     }
 
     pub fn broadcast_removed(&self, _world: &World) {
+        let had_bedrock = self.bedrock_watchers.swap(0, Relaxed) > 0;
         let seen_by = {
             let mut guard = self
                 .seen_by
@@ -885,24 +904,22 @@ impl TrackedEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             std::mem::take(&mut *guard)
         };
-        self.bedrock_watchers.store(0, Relaxed);
         if seen_by.is_empty() {
             return;
         }
         let entity_ids = [self.entity_id.into()];
         let je_packet = CRemoveEntities::new(&entity_ids);
-        let be_packet = CRemoveActor::new(VarLong(i64::from(self.entity_id)));
-
-        let mut java_recipients = Vec::with_capacity(seen_by.len());
-        let mut bedrock_recipients = Vec::new();
-        for p in seen_by.values() {
-            match p.client.as_ref() {
-                ClientPlatform::Java(_) => java_recipients.push(p),
-                ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
-            }
+        World::broadcast_java_players(&je_packet, seen_by.values());
+        if had_bedrock {
+            let be_packet = CRemoveActor::new(VarLong(i64::from(self.entity_id)));
+            World::broadcast_bedrock_grouped(
+                &be_packet,
+                seen_by.values().filter_map(|p| match p.client.as_ref() {
+                    ClientPlatform::Bedrock(be_client) => Some(be_client),
+                    ClientPlatform::Java(_) => None,
+                }),
+            );
         }
-        World::broadcast_java_players(&je_packet, java_recipients.into_iter());
-        World::broadcast_bedrock_grouped(&be_packet, bedrock_recipients.into_iter());
     }
 
     /// Vanilla `TrackedEntity.removePlayer`: despawn on the client, only if it was paired.
@@ -995,17 +1012,16 @@ impl TrackedEntity {
         if seen_by.is_empty() {
             return;
         }
-
-        let mut java_recipients = Vec::with_capacity(seen_by.len());
-        let mut bedrock_recipients = Vec::new();
-        for p in seen_by.values() {
-            match p.client.as_ref() {
-                ClientPlatform::Java(_) => java_recipients.push(p),
-                ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
-            }
+        World::broadcast_java_players(je_packet, seen_by.values());
+        if self.has_bedrock_watchers() {
+            World::broadcast_bedrock_grouped(
+                be_packet,
+                seen_by.values().filter_map(|p| match p.client.as_ref() {
+                    ClientPlatform::Bedrock(be_client) => Some(be_client),
+                    ClientPlatform::Java(_) => None,
+                }),
+            );
         }
-        World::broadcast_java_players(je_packet, java_recipients.into_iter());
-        World::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 
     pub fn send_to_tracking_players_and_self<P: ClientPacket + Sync>(
@@ -1047,8 +1063,7 @@ impl TrackedEntity {
         if seen_by.is_empty() {
             return;
         }
-        let recipients = seen_by.values().filter(|p| filter(p));
-        World::broadcast_java_players(packet, recipients);
+        World::broadcast_java_players(packet, seen_by.values().filter(|p| filter(p)));
     }
 
     pub fn send_to_tracking_players_filtered_editioned<
@@ -1069,17 +1084,19 @@ impl TrackedEntity {
         if seen_by.is_empty() {
             return;
         }
-        let recipients = seen_by.values().filter(|p| filter(p));
-
+        if !self.has_bedrock_watchers() {
+            World::broadcast_java_players(je_packet, seen_by.values().filter(|p| filter(p)));
+            return;
+        }
         let mut java_recipients = Vec::new();
         let mut bedrock_recipients = Vec::new();
-        for p in recipients {
+        for p in seen_by.values().filter(|p| filter(p)) {
             match p.client.as_ref() {
-                ClientPlatform::Java(_) => java_recipients.push(p),
+                ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
             }
         }
-        World::broadcast_java_players(je_packet, java_recipients.into_iter());
+        World::broadcast_java_clients(je_packet, java_recipients.into_iter());
         World::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 }
@@ -1267,7 +1284,8 @@ impl EntityTracker {
                     None
                 } else {
                     *moved_slot = true;
-                    tracked.update_players_from_snapshots(&all_snapshots);
+                    let chunk_changed = old_pos.x != new_pos.x || old_pos.z != new_pos.z;
+                    tracked.update_players_from_snapshots(&all_snapshots, chunk_changed);
                     if section_changed {
                         tracked.last_section_pos.store(new_pos);
                     }
@@ -1287,7 +1305,7 @@ impl EntityTracker {
                 .zip(entity_moved.par_iter())
                 .for_each(|(tracked, &moved)| {
                     if !moved {
-                        tracked.update_players_from_snapshots(&moved_snapshots);
+                        tracked.update_players_from_snapshots(&moved_snapshots, false);
                     }
                 });
         }

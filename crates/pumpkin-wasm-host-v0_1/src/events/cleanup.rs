@@ -217,10 +217,6 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::PacketSentEvent(data) => {
             cleanup_player(state, &data.player);
         }
-        Event::JavaConnectionPacketReceivedEvent(_)
-        | Event::JavaConnectionPacketSentEvent(_)
-        | Event::BedrockConnectionPacketReceivedEvent(_)
-        | Event::BedrockConnectionPacketSentEvent(_) => {}
         Event::ChunkLoadEvent(data) => {
             cleanup_world(state, &data.target_world);
         }

@@ -52,6 +52,9 @@ default = [
     "slot_ranges",
     "bedrock_creative",
     "bedrock_biome",
+    "bedrock_jigsaw",
+    "bedrock_recipe",
+    "bedrock_voxel_shape",
     "map_color",
     "map_decoration",
     "dye_color",
@@ -117,6 +120,9 @@ entity_variant = ["dye_color"]
 advancement = []
 bedrock_creative = []
 bedrock_biome = []
+bedrock_jigsaw = []
+bedrock_recipe = []
+bedrock_voxel_shape = []
 item = []
 packet = []
 jukebox_song = []
@@ -178,6 +184,7 @@ pumpkin-nbt.workspace = true
 serde = {workspace = true, features = ["rc"]}
 crc32c.workspace = true
 rand.workspace = true
+tracing.workspace = true
 
 [build-dependencies]
 reqwest = { workspace = true, features = ["blocking", "json"] }

@@ -8,6 +8,8 @@ use crate::{
 };
 use std::io::Read;
 
+const MAX_MESSAGE_LENGTH: usize = 32767;
+
 #[java_packet(SET_TEST_BLOCK)]
 pub struct SSetTestBlock<'a> {
     pub position: BlockPos,
@@ -20,7 +22,7 @@ impl<'a> ServerPacket<'a> for SSetTestBlock<'a> {
         Ok(Self {
             position: bytebuf.get_block_pos()?,
             mode: TestBlockMode::read(&mut bytebuf)?,
-            message: bytebuf.get_str_borrowed()?,
+            message: bytebuf.get_str_bounded_borrowed(MAX_MESSAGE_LENGTH)?,
         })
     }
 }
@@ -33,12 +35,12 @@ impl crate::ClientPacket for SSetTestBlock<'_> {
         use crate::ser::NetworkWriteExt;
         write.write_block_pos(&self.position)?;
         self.mode.write(&mut write)?;
-        write.write_string(self.message)?;
+        write.write_string_bounded(self.message, MAX_MESSAGE_LENGTH)?;
         Ok(())
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TestBlockMode {
     Start,
     Log,

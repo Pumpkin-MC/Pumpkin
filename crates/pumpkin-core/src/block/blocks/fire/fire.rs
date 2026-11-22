@@ -161,7 +161,7 @@ impl FireBlock {
 
             // The TNT was already replaced above, so `prime` would find no TNT here.
             if old_block == &Block::TNT {
-                TNTBlock::spawn_primed(world, pos);
+                TNTBlock::spawn_primed(world, pos, None);
             }
         }
     }

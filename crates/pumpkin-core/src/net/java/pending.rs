@@ -147,14 +147,20 @@ impl PendingConnection {
         self.close_token.cancelled().await;
     }
 
-    pub fn set_encryption(&mut self, shared_secret: &[u8]) -> Result<(), EncryptionError> {
+    pub async fn set_encryption(&mut self, shared_secret: &[u8]) -> Result<(), EncryptionError> {
         let crypt_key: [u8; 16] = shared_secret
             .try_into()
             .map_err(|_| EncryptionError::SharedWrongLength)?;
-        self.network_reader
+        // Drain all unencrypted outgoing bytes before switching the wire cipher.
+        // A failed flush is fatal; the client must not see mixed wire modes.
+        self.network_writer
+            .flush()
+            .await
+            .map_err(|err| EncryptionError::UnencryptedFlushFailed(err.to_string()))?;
+        self.network_writer
             .set_encryption(&crypt_key)
             .map_err(|_| EncryptionError::AlreadyEncrypted)?;
-        self.network_writer
+        self.network_reader
             .set_encryption(&crypt_key)
             .map_err(|_| EncryptionError::AlreadyEncrypted)?;
         Ok(())
@@ -227,13 +233,21 @@ impl PendingConnection {
             && let Err(err) = self.network_writer.write_packet(payload).await
         {
             warn!("Failed to send packet to client {}: {}", self.id, err);
+            self.close();
+            return false;
         }
         for extra in extras {
             if let Err(err) = self.network_writer.write_packet(extra).await {
                 warn!("Failed to send extra packet to client {}: {}", self.id, err);
+                self.close();
+                return false;
             }
         }
-        let _ = self.network_writer.flush().await;
+        if let Err(err) = self.network_writer.flush().await {
+            warn!("Failed to flush packet for client {}: {}", self.id, err);
+            self.close();
+            return false;
+        }
         sent
     }
 
@@ -636,7 +650,8 @@ impl PendingConnection {
         debug!("Handling plugin message");
         if plugin_message.channel.starts_with(BRAND_CHANNEL_PREFIX) {
             debug!("Got a client brand");
-            match core::str::from_utf8(plugin_message.data) {
+            let mut brand_slice = plugin_message.data;
+            match brand_slice.get_str_bounded_borrowed(256) {
                 Ok(brand) => self.brand = Some(brand.to_string()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
             }

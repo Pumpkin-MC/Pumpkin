@@ -102,22 +102,15 @@ impl JavaClient {
                                 }
                             }
                             let packet_hand = interact.hand.map_or(0, |hand| hand.0);
-                            let Ok(mut hand) = pumpkin_util::Hand::from_packet_id(packet_hand)
-                            else {
+                            let Ok(hand) = pumpkin_util::Hand::from_packet_id(packet_hand) else {
                                 return;
                             };
                             let mut stack = player.inventory().get_stack_in_hand(hand);
-                            let mut before = stack.clone();
+                            let before = stack.clone();
                             let native_interaction =
                                 event.target.interact_with_hand(player, &mut stack, hand);
-                            let interacted = if let Some(handled) = native_interaction {
-                                handled
-                            } else {
-                                hand = pumpkin_util::Hand::Right;
-                                stack = player.inventory().held_item();
-                                before = stack.clone();
-                                event.target.interact(player, &mut stack)
-                            };
+                            let interacted = native_interaction
+                                .unwrap_or_else(|| event.target.interact(player, &mut stack));
                             let item_id = before.item.id;
                             if !interacted {
                                 server
@@ -153,7 +146,9 @@ impl JavaClient {
                                     );
                                     player.world().send_entity_status(
                                         player.get_entity(),
-                                        equipment_break_status(&EquipmentSlot::MAIN_HAND),
+                                        crate::entity::equipment_break_status(
+                                            &crate::entity::hand_equipment_slot(hand),
+                                        ),
                                         ActorEventID::None,
                                     );
                                 }

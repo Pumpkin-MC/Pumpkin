@@ -74,6 +74,8 @@ pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
     pub telemetry_config: TelemetryConfig,
+    /// Tracks active and completed player session durations for anonymous telemetry.
+    pub telemetry_sessions: crate::telemetry::TelemetrySessionTracker,
 
     pub data: VanillaData,
 
@@ -326,6 +328,7 @@ impl Server {
             basic_config,
             advanced_config,
             telemetry_config,
+            telemetry_sessions: crate::telemetry::TelemetrySessionTracker::default(),
             data: vanilla_data,
             plugin_manager: Arc::new(PluginManager::new(plugin_loaders)),
             permission_manager,
@@ -776,6 +779,9 @@ impl Server {
                         Some(player.gameprofile.name.clone()),
                     );
                     self.management_hub.broadcast_player_joined(&player_dto);
+                    if self.telemetry_config.enabled {
+                        self.telemetry_sessions.record_join(player.gameprofile.id);
+                    }
 
                     Some((player, world))
                 } else {
@@ -794,6 +800,9 @@ impl Server {
     }
 
     pub fn remove_player(&self, player: &Player) {
+        if self.telemetry_config.enabled {
+            self.telemetry_sessions.record_leave(player);
+        }
         let player_dto = crate::net::management::dto::PlayerDto::new(
             Some(player.gameprofile.id),
             Some(player.gameprofile.name.clone()),
