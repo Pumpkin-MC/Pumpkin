@@ -1055,13 +1055,36 @@ impl PluginManager {
                 if !matches!(task.await, Ok(Ok(()))) {
                     return;
                 }
-                for (child, child_path) in children {
-                    if self.is_plugin_loaded(&child) {
-                        continue;
+                // Owners come first, but a child may depend on one found after it. Those go
+                // again for as long as a pass still loads something
+                let mut pending = children;
+                loop {
+                    let mut loaded = false;
+                    let mut blocked = Vec::new();
+                    for (child, child_path) in pending {
+                        if self.is_plugin_loaded(&child) {
+                            continue;
+                        }
+                        match self.try_load_plugin(server, &child_path).await {
+                            Ok(_) => loaded = true,
+                            Err(e @ ManagerError::DependencyError(_)) => {
+                                blocked.push((child, child_path, e));
+                            }
+                            Err(e) => error!(
+                                "Failed to reload plugin {child} after its loader's owner: {e}"
+                            ),
+                        }
                     }
-                    if let Err(e) = self.try_load_plugin(server, &child_path).await {
-                        error!("Failed to reload plugin {child} after its loader's owner: {e}");
+                    if !loaded || blocked.is_empty() {
+                        for (child, _, e) in blocked {
+                            error!("Failed to reload plugin {child} after its loader's owner: {e}");
+                        }
+                        break;
                     }
+                    pending = blocked
+                        .into_iter()
+                        .map(|(child, child_path, _)| (child, child_path))
+                        .collect();
                 }
             }
             Ok(_) => {}
@@ -3615,21 +3638,9 @@ mod tests {
             child = child_loader.add("c", ok(), ok());
             child_loaders.push(child_loader);
         }
-        let child_loaders = SyncMutex::new(child_loaders);
         let owner = loader.add(
             "p",
-            hook(move |context| {
-                let child_loader = child_loaders
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .pop();
-                async move {
-                    if let Some(child_loader) = child_loader {
-                        context.register_plugin_loader(child_loader).await;
-                    }
-                    Ok(())
-                }
-            }),
+            registers_one_of(Arc::new(SyncMutex::new(child_loaders))),
             ok(),
         );
         let server = test_server(&world, Arc::clone(&loader)).await;
@@ -3640,6 +3651,56 @@ mod tests {
         manager.hot_reload(&server, &owner).await;
         eventually(|| manager.is_plugin_active("p")).await;
         assert!(manager.is_plugin_active("c"));
+    }
+
+    /// A loader hook handing out one of `loaders` per load.
+    fn registers_one_of(loaders: Arc<SyncMutex<Vec<Arc<TestLoader>>>>) -> Hook {
+        hook(move |context| {
+            let loader = loaders.lock().unwrap_or_else(PoisonError::into_inner).pop();
+            async move {
+                if let Some(loader) = loader {
+                    context.register_plugin_loader(loader).await;
+                }
+                Ok(())
+            }
+        })
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn hot_reloaded_owner_brings_back_a_child_depending_on_a_later_one() {
+        let world = tempfile::tempdir().unwrap();
+        let loader = Arc::new(TestLoader::default());
+        // p loads q and d, q loads c, d depends on c. Fresh loaders per load of their owner
+        let outer: Arc<SyncMutex<Vec<Arc<TestLoader>>>> = Arc::default();
+        let inner: Arc<SyncMutex<Vec<Arc<TestLoader>>>> = Arc::default();
+        let (mut q, mut d, mut c) = (PathBuf::new(), PathBuf::new(), PathBuf::new());
+        for _ in 0..2 {
+            let p_loader = Arc::new(TestLoader::default());
+            q = p_loader.add("q", registers_one_of(Arc::clone(&inner)), ok());
+            d = p_loader.add("d", ok(), ok());
+            p_loader.depend(&d, "c");
+            let q_loader = Arc::new(TestLoader::default());
+            c = q_loader.add("c", ok(), ok());
+            outer
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(p_loader);
+            inner
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(q_loader);
+        }
+        let owner = loader.add("p", registers_one_of(outer), ok());
+        let server = test_server(&world, Arc::clone(&loader)).await;
+        let manager = &server.plugin_manager;
+        for path in [&owner, &q, &c, &d] {
+            assert!(manager.try_load_plugin(&server, path).await.is_ok());
+        }
+
+        manager.hot_reload(&server, &owner).await;
+        for name in ["p", "q", "c", "d"] {
+            assert!(manager.is_plugin_active(name), "{name} is not back");
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
