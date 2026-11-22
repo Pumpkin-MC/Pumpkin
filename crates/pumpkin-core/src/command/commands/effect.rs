@@ -54,7 +54,6 @@ struct GiveExecutor {
 }
 
 impl CommandExecutor for GiveExecutor {
-    #[expect(clippy::too_many_lines)]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let targets = EntityArgumentType::get_entities(context, "targets")?;
         let effect = ResourceArgument::get_mob_effect(context, "effect")?;
@@ -159,6 +158,7 @@ enum ClearMode {
 struct ClearExecutor(ClearMode);
 
 impl CommandExecutor for ClearExecutor {
+    #[expect(clippy::too_many_lines)]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let targets = match self.0 {
             ClearMode::SelfAll => {
