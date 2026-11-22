@@ -1,0 +1,1 @@
+pub const AMBIENT_SOUND_INTERVAL: i32 = 120;

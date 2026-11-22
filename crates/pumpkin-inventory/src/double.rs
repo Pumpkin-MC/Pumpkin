@@ -81,6 +81,14 @@ impl Inventory for DoubleInventory {
         }
     }
 
+    fn update_stack(&self, slot: usize, update: &mut dyn FnMut(&mut ItemStack) -> bool) -> bool {
+        if slot >= self.first.size() {
+            self.second.update_stack(slot - self.first.size(), update)
+        } else {
+            self.first.update_stack(slot, update)
+        }
+    }
+
     fn on_open(&self) {
         self.first.on_open();
         self.second.on_open();
@@ -106,6 +114,20 @@ impl Inventory for DoubleInventory {
                 .is_valid_slot_for(slot - self.first.size(), stack)
         } else {
             self.first.is_valid_slot_for(slot, stack)
+        }
+    }
+
+    fn can_transfer_to(
+        &self,
+        hopper_inventory: &dyn Inventory,
+        slot: usize,
+        stack: &ItemStack,
+    ) -> bool {
+        if slot >= self.first.size() {
+            self.second
+                .can_transfer_to(hopper_inventory, slot - self.first.size(), stack)
+        } else {
+            self.first.can_transfer_to(hopper_inventory, slot, stack)
         }
     }
 

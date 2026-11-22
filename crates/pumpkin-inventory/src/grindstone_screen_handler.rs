@@ -142,7 +142,12 @@ pub fn get_enchantments_for_crafting(stack: &ItemStack) -> Vec<(&'static Enchant
 
 #[must_use]
 pub fn has_any_enchantments(stack: &ItemStack) -> bool {
-    !get_enchantments_for_crafting(stack).is_empty()
+    stack
+        .get_data_component::<EnchantmentsImpl>()
+        .is_some_and(|e| !e.enchantment.is_empty())
+        || stack
+            .get_data_component::<StoredEnchantmentsImpl>()
+            .is_some_and(|e| !e.enchantment.is_empty())
 }
 
 pub fn set_enchantments(result: &mut ItemStack, enchantments: Vec<(&'static Enchantment, i32)>) {
@@ -313,7 +318,7 @@ impl GrindstoneScreenHandler {
         let curses_count = curses.len();
 
         if item.item == &Item::ENCHANTED_BOOK && curses_count == 0 {
-            item.item = &Item::BOOK;
+            item = item.transmute_copy(&Item::BOOK, item.item_count);
         }
 
         set_enchantments(&mut item, curses);
@@ -486,9 +491,7 @@ impl ScreenHandler for GrindstoneScreenHandler {
         player: &dyn InventoryPlayer,
     ) {
         self.internal_on_slot_click(slot_index, button, action_type, player);
-        if (slot_index as usize) <= Self::RESULT_SLOT {
-            self.create_result();
-            self.send_content_updates();
-        }
+        self.create_result();
+        self.send_content_updates();
     }
 }

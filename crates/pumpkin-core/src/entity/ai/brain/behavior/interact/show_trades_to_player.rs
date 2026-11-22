@@ -162,7 +162,7 @@ impl Behavior for ShowTradesToPlayer {
         self.look_time -= 1;
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.state.erase(types::INTERACTION_TARGET.id());
         clear_held_item(tick);
         self.player_item_stack = None;

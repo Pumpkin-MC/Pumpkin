@@ -870,20 +870,30 @@ impl BlockRegistry {
             BlockState::to_be_network_id(new_state) as i32,
         );
 
-        if !held_stack.is_empty() && placed_block.default_state.block_entity_type != u16::MAX {
+        if !held_stack.is_empty() && placed_block.default_state.has_block_entity() {
             if let Some(block_entity_data) = held_stack
                 .get_data_component::<pumpkin_data::data_component_impl::BlockEntityDataImpl>(
             ) && let Some(existing_be) = world.get_block_entity(&final_block_pos)
             {
-                let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-                existing_be.write_internal(&mut nbt);
-                for (k, v) in &block_entity_data.nbt.child_tags {
-                    if !matches!(k.as_ref(), "x" | "y" | "z" | "id") {
-                        nbt.child_tags.insert(k.clone(), v.clone());
+                let expected_id = existing_be
+                    .resource_location()
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(existing_be.resource_location());
+                let id_matches = block_entity_data
+                    .nbt
+                    .get_string("id")
+                    .is_none_or(|id| id.strip_prefix("minecraft:").unwrap_or(id) == expected_id);
+                if id_matches {
+                    let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+                    existing_be.write_internal(&mut nbt);
+                    for (k, v) in &block_entity_data.nbt.child_tags {
+                        if !matches!(k.as_ref(), "x" | "y" | "z" | "id") {
+                            nbt.child_tags.insert(k.clone(), v.clone());
+                        }
                     }
-                }
-                if let Some(reloaded) = crate::block::entities::block_entity_from_nbt(&nbt) {
-                    world.add_block_entity(reloaded);
+                    if let Some(reloaded) = crate::block::entities::block_entity_from_nbt(&nbt) {
+                        world.add_block_entity(reloaded);
+                    }
                 }
             }
             if let Some(block_entity) = world.get_block_entity(&final_block_pos) {
@@ -1247,10 +1257,10 @@ impl BlockRegistry {
         notify: bool,
     ) {
         let state = world.get_block_state(position);
-        if state.block_entity_type != u16::MAX
+        if state.has_block_entity()
             && world.get_block_entity(position).is_none()
             && let Some(entity) =
-                crate::block::entities::create_block_entity(state.block_entity_type, *position)
+                crate::block::entities::create_block_entity_for_state(state.id, *position)
         {
             world.add_block_entity(entity);
         }

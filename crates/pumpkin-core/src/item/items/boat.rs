@@ -166,6 +166,8 @@ impl ItemBehaviour for BoatItem {
             return;
         }
 
+        let mut stack = player.inventory.get_stack_in_hand(hand);
+
         // Create and spawn the boat
         let entity = Entity::new(world.clone(), hit_vec, entity_type);
 
@@ -173,10 +175,14 @@ impl ItemBehaviour for BoatItem {
         entity.set_rotation(yaw, 0.0);
 
         let boat_entity = Arc::new(BoatEntity::new(entity));
+        crate::item::items::spawn_egg::apply_entity_variant(
+            &stack,
+            boat_entity.as_ref(),
+            Some(player),
+        );
         world.spawn_entity(boat_entity);
         world.emit_game_event(GameEvent::EntityPlace.name(), hit_vec);
 
-        let mut stack = player.inventory.get_stack_in_hand(hand);
         if !stack.is_empty() && stack.item.id == item.id {
             stack.decrement_unless_creative(player.gamemode.load(), 1);
             player.inventory.set_stack_in_hand(hand, stack.clone());

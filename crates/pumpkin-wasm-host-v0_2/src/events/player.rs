@@ -41,8 +41,9 @@ use crate::{
             PlayerShowEntityEventData, PlayerSpawnChangeEventData, PlayerSpawnLocationEventData,
             PlayerStatisticIncrementEventData, PlayerSwapHandsEventData,
             PlayerTakeLecternBookEventData, PlayerTeleportEventData, PlayerToggleFlightEventData,
-            PlayerToggleSneakEventData, PlayerToggleSprintEventData, PlayerUnleashEntityEventData,
-            PlayerUnregisterChannelEventData, PlayerVelocityEventData,
+            PlayerToggleSneakEventData, PlayerToggleSprintEventData, PlayerTransferEventData,
+            PlayerUnleashEntityEventData, PlayerUnregisterChannelEventData,
+            PlayerVelocityEventData,
         },
         uuid::Uuid as WitUuid,
     },
@@ -117,6 +118,7 @@ use pumpkin_core::plugin::player::{
     player_toggle_flight_event::PlayerToggleFlightEvent,
     player_toggle_sneak_event::PlayerToggleSneakEvent,
     player_toggle_sprint_event::PlayerToggleSprintEvent,
+    player_transfer::PlayerTransferEvent,
     player_unleash_entity::PlayerUnleashEntityEvent,
     player_unregister_channel::PlayerUnregisterChannelEvent,
     player_velocity::PlayerVelocityEvent,
@@ -264,6 +266,42 @@ impl ToFromWasmEvent for PlayerLeaveEvent {
             Event::PlayerLeaveEvent(data) => Self {
                 player: consume_player(state, &data.player),
                 leave_message: consume_text_component(state, &data.leave_message),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for PlayerTransferEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerTransferEvent(PlayerTransferEventData {
+            player,
+            host: self.host.clone(),
+            port: self.port,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
+        if let Event::PlayerTransferEvent(data) = event {
+            self.host = data.host;
+            self.port = data.port;
+            self.cancelled = data.cancelled;
+        }
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerTransferEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                host: data.host,
+                port: data.port,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

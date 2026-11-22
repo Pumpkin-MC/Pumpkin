@@ -76,7 +76,7 @@ impl Behavior for JumpOnBed {
         }
     }
 
-    fn stop(&mut self, _tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, _tick: &mut BrainTick<'_>, _timed_out: bool) {
         self.target_bed = None;
         self.remaining_time_to_reach_bed = 0;
         self.remaining_jumps = 0;

@@ -514,6 +514,48 @@ impl ChunkSender {
         output
     }
 
+    #[must_use]
+    pub fn encode_batch_shared(
+        batch: &PreparedBatch,
+        cache: &dashmap::DashMap<Vector2<i32>, EncodedChunk>,
+    ) -> Vec<EncodedChunk> {
+        batch
+            .chunks
+            .par_iter()
+            .filter_map(|candidate| {
+                let pos = candidate.position;
+                if let Some(cached) = cache.get(&pos)
+                    && cached.is_fresh_for(candidate)
+                {
+                    return Some(cached.value().clone());
+                }
+
+                let chunk = &candidate.chunk;
+                let mut chunk_buf = Vec::with_capacity(32 * 1024);
+                if chunk_buf
+                    .write_var_int(&VarInt(CChunkData::to_id(CURRENT_MC_VERSION)))
+                    .is_err()
+                {
+                    return None;
+                }
+                if CChunkData(chunk)
+                    .write_packet_data(&mut chunk_buf, &CURRENT_MC_VERSION)
+                    .is_err()
+                {
+                    return None;
+                }
+
+                let encoded = EncodedChunk {
+                    position: pos,
+                    payload: Bytes::from(chunk_buf),
+                    chunk_ref: Arc::downgrade(chunk),
+                };
+                cache.insert(pos, encoded.clone());
+                Some(encoded)
+            })
+            .collect()
+    }
+
     /// Chunks `encode_batch` dropped stay pending, retried a bounded number of times.
     fn settle_unencoded(&mut self, batch: &PreparedBatch, encoded_chunks: &[EncodedChunk]) {
         for candidate in &batch.chunks {

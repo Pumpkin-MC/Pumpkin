@@ -262,6 +262,10 @@ impl From<&pumpkin_data::trial_spawner::TrialSpawnerConfigData> for TrialSpawner
 }
 
 impl TrialSpawnerConfig {
+    pub const DEFAULT_ITEMS_TO_DROP_WHEN_OMINOUS: &'static str =
+        "minecraft:spawners/trial_chamber/items_to_drop_when_ominous";
+    pub const TICKS_BETWEEN_ITEM_SPAWNERS: i64 = 160;
+
     #[must_use]
     pub fn from_key(key: &str) -> Option<Self> {
         if let Some(cfg) = pumpkin_data::trial_spawner::get_trial_spawner_config(key) {
@@ -581,6 +585,17 @@ impl TrialSpawnerFullConfig {
     }
 }
 
+#[derive(Clone, Default)]
+struct DispensingCache(Option<Vec<(ItemStack, i32)>>);
+
+impl std::fmt::Debug for DispensingCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("DispensingCache")
+            .field(&self.0.as_ref().map(Vec::len))
+            .finish()
+    }
+}
+
 /// Dynamic state data tracking current progress of a trial spawner.
 #[derive(Clone, Debug, Default)]
 pub struct TrialSpawnerStateData {
@@ -591,6 +606,7 @@ pub struct TrialSpawnerStateData {
     pub total_mobs_spawned: i32,
     pub next_spawn_data: Option<SpawnData>,
     pub ejecting_loot_table: Option<String>,
+    dispensing: DispensingCache,
 }
 
 impl TrialSpawnerStateData {
@@ -602,13 +618,54 @@ impl TrialSpawnerStateData {
         self.cooldown_ends_at = 0;
         self.next_spawn_data = None;
         self.ejecting_loot_table = None;
+        self.dispensing.0 = None;
     }
 
     pub fn reset_after_becoming_ominous(&mut self, game_time: i64) {
         self.current_mobs.clear();
         self.next_mob_spawns_at = game_time + TrialSpawner::DETECT_PLAYER_SPAWN_BUFFER;
+        self.cooldown_ends_at = game_time + TrialSpawnerConfig::TICKS_BETWEEN_ITEM_SPAWNERS;
         self.total_mobs_spawned = 0;
         self.next_spawn_data = None;
+        self.dispensing.0 = None;
+    }
+
+    pub fn get_dispensing_items(
+        &mut self,
+        world: &Arc<World>,
+        config: &TrialSpawnerConfig,
+        pos: BlockPos,
+    ) -> &[(ItemStack, i32)] {
+        if self.dispensing.0.is_none() {
+            let key = config
+                .items_to_drop_when_ominous
+                .as_deref()
+                .unwrap_or(TrialSpawnerConfig::DEFAULT_ITEMS_TO_DROP_WHEN_OMINOUS);
+            let mut entries = Vec::new();
+            if let Some(loot_table) = world.get_loot_table(key) {
+                let low_res = BlockPos::new(
+                    (pos.0.x as f32 / 30.0).floor() as i32,
+                    (pos.0.y as f32 / 20.0).floor() as i32,
+                    (pos.0.z as f32 / 30.0).floor() as i32,
+                );
+                let seed = (world.level.seed.0 as i64).wrapping_add(low_res.as_long());
+                let drops = loot_table.generate_loot_with_context(
+                    seed,
+                    &crate::world::loot::LootContextParameters {
+                        world: Some(world),
+                        ..Default::default()
+                    },
+                );
+                for drop in drops {
+                    if !drop.is_empty() {
+                        let weight = i32::from(drop.item_count).max(1);
+                        entries.push((drop.copy_with_count(1), weight));
+                    }
+                }
+            }
+            self.dispensing.0 = Some(entries);
+        }
+        self.dispensing.0.as_deref().unwrap_or(&[])
     }
 
     #[must_use]
@@ -1144,6 +1201,141 @@ impl TrialSpawner {
         hit.is_miss || hit.block_pos == origin_block
     }
 
+    fn spawn_ominous_item_spawner(
+        &mut self,
+        world: &Arc<World>,
+        spawner_pos: BlockPos,
+        game_time: i64,
+    ) {
+        let config = self.active_config().clone();
+        let dispensing = self.data.get_dispensing_items(world, &config, spawner_pos);
+        let total_weight: i32 = dispensing.iter().map(|(_, w)| *w).sum();
+        if total_weight <= 0 {
+            return;
+        }
+
+        let mut rng = rand::rng();
+        let mut roll = rng.random_range(0..total_weight);
+        let mut chosen = None;
+        for (stack, weight) in dispensing {
+            if roll < *weight {
+                chosen = Some(stack.clone());
+                break;
+            }
+            roll -= *weight;
+        }
+        let Some(item_to_dispense) = chosen.filter(|s| !s.is_empty()) else {
+            return;
+        };
+
+        if game_time < self.data.cooldown_ends_at {
+            return;
+        }
+
+        let Some(pos) = self.calculate_position_to_spawn_spawner(world, spawner_pos) else {
+            return;
+        };
+
+        let item_spawner = crate::entity::ominous_item_spawner::OminousItemSpawnerEntity::create(
+            world.clone(),
+            pos,
+            item_to_dispense,
+        );
+        world.spawn_entity(item_spawner);
+
+        let pitch = (rng.random::<f32>() - rng.random::<f32>()).mul_add(0.2, 1.0);
+        let sound_pos = BlockPos::floored_v(pos).to_centered_f64();
+        world.play_sound_fine(
+            Sound::BlockTrialSpawnerSpawnItemBegin,
+            SoundCategory::Blocks,
+            &sound_pos,
+            1.0,
+            pitch,
+        );
+        self.data.cooldown_ends_at = game_time + TrialSpawnerConfig::TICKS_BETWEEN_ITEM_SPAWNERS;
+    }
+
+    fn calculate_position_to_spawn_spawner(
+        &self,
+        world: &Arc<World>,
+        spawner_pos: BlockPos,
+    ) -> Option<Vector3<f64>> {
+        let center = spawner_pos.to_centered_f64();
+        let max_dist_sq = f64::from(self.config.required_player_range.pow(2));
+
+        let nearby_players: Vec<(Vector3<f64>, f32)> = self
+            .data
+            .registered_players
+            .iter()
+            .filter_map(|&uuid| {
+                let player = world.get_player_by_uuid(uuid)?;
+                let mode = player.gamemode.load();
+                if mode == pumpkin_util::GameMode::Creative
+                    || mode == pumpkin_util::GameMode::Spectator
+                {
+                    return None;
+                }
+                let ent = player.get_entity();
+                let pos = ent.pos.load();
+                (ent.is_alive() && pos.squared_distance_to_vec(&center) <= max_dist_sq)
+                    .then_some((pos, ent.height()))
+            })
+            .collect();
+        if nearby_players.is_empty() {
+            return None;
+        }
+
+        let nearby_mobs: Vec<(Vector3<f64>, f32)> = self
+            .data
+            .current_mobs
+            .iter()
+            .filter_map(|&uuid| {
+                let entity = world.get_entity_by_uuid(uuid)?;
+                let ent = entity.get_entity();
+                let pos = ent.pos.load();
+                (ent.is_alive() && pos.squared_distance_to_vec(&center) <= max_dist_sq)
+                    .then_some((pos, ent.height()))
+            })
+            .collect();
+
+        let mut rng = rand::rng();
+        let eligible = if rng.random_bool(0.5) {
+            &nearby_mobs
+        } else {
+            &nearby_players
+        };
+        if eligible.is_empty() {
+            return None;
+        }
+        let (entity_pos, entity_height) = if eligible.len() == 1 {
+            eligible[0]
+        } else {
+            eligible[rng.random_range(0..eligible.len())]
+        };
+
+        let try_spawn_pos = Vector3::new(
+            entity_pos.x,
+            entity_pos.y + f64::from(entity_height) + 2.0 + f64::from(rng.random_range(0..4)),
+            entity_pos.z,
+        );
+        let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
+            entity_pos,
+            try_spawn_pos,
+            pumpkin_world::clip::ClipBlock::Visual,
+            pumpkin_world::clip::ClipFluid::None,
+        ));
+        let down = hit
+            .block_pos
+            .to_centered_f64()
+            .sub(&Vector3::new(0.0, 1.0, 0.0));
+        let block_pos_down = BlockPos::floored_v(down);
+        world
+            .get_block_state(&block_pos_down)
+            .collision_shapes
+            .is_empty()
+            .then_some(down)
+    }
+
     pub fn eject_reward(
         &self,
         world: &Arc<World>,
@@ -1277,6 +1469,9 @@ impl TrialSpawner {
                 }
 
                 self.try_detect_players(world, spawner_pos);
+                if self.is_ominous {
+                    self.spawn_ominous_item_spawner(world, spawner_pos, game_time);
+                }
 
                 let (total_mobs_needed, max_simultaneous, ticks_between_spawn) = {
                     let active_config = self.active_config();
