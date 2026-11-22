@@ -593,6 +593,25 @@ impl LivingEntity {
         }
     }
 
+    pub fn remove_all_effects(&self) -> bool {
+        let effects: Vec<_> = self
+            .active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .keys()
+            .copied()
+            .collect();
+
+        let mut succeeded = false;
+        for effect in effects {
+            if self.remove_effect(effect) {
+                succeeded = true;
+            }
+        }
+
+        succeeded
+    }
+
     pub fn get_last_hurt_by_player(&self) -> Option<Arc<crate::entity::player::Player>> {
         let uuid = self.last_hurt_by_player.load()?;
         self.entity.world.load().get_player_by_uuid(uuid)

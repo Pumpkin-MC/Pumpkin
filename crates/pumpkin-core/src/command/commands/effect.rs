@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::potion::Effect;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
@@ -14,6 +16,7 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
+use crate::entity::living::LivingEntity;
 
 const DESCRIPTION: &str = "Adds or removes the status effects of players and other entities.";
 const PERMISSION: &str = "minecraft:command.effect";
@@ -53,8 +56,13 @@ struct GiveExecutor {
 
 impl CommandExecutor for GiveExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let targets = EntityArgumentType::get_players(context, "targets")?;
+        let targets = EntityArgumentType::get_entities(context, "targets")?;
         let effect = ResourceArgument::get_mob_effect(context, "effect")?;
+
+        let living_targets: Vec<&LivingEntity> = targets
+            .iter()
+            .filter_map(|target| target.get_living_entity())
+            .collect();
 
         let duration_ticks = match self.duration {
             Duration::Default => 30 * 20,
@@ -76,9 +84,8 @@ impl CommandExecutor for GiveExecutor {
 
         let mut successes = 0;
 
-        for target in &targets {
+        for target in &living_targets {
             let should_skip = target
-                .living_entity
                 .get_effect(effect)
                 .is_some_and(|existing| existing.amplifier >= amplifier);
 
@@ -106,7 +113,7 @@ impl CommandExecutor for GiveExecutor {
             return Err(ERROR_GIVE_FAILED.create_without_context());
         }
 
-        if targets.len() == 1 {
+        if living_targets.len() == 1 {
             context.source.send_feedback(
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_SINGLE,
@@ -122,7 +129,7 @@ impl CommandExecutor for GiveExecutor {
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_MULTIPLE,
                     [
                         translation_name,
-                        TextComponent::text(targets.len().to_string()),
+                        TextComponent::text(living_targets.len().to_string()),
                     ],
                 ),
                 true,
@@ -150,25 +157,23 @@ impl CommandExecutor for ClearExecutor {
                     .output
                     .as_player()
                     .ok_or_else(|| ERROR_NOT_PLAYER.create_without_context())?;
-                vec![player]
+                vec![player as Arc<dyn EntityBase>]
             }
             ClearMode::TargetsAll | ClearMode::TargetsSpecific => {
-                EntityArgumentType::get_players(context, "targets")?
+                EntityArgumentType::get_entities(context, "targets")?
             }
         };
+
+        let living_targets: Vec<&LivingEntity> = targets
+            .iter()
+            .filter_map(|target| target.get_living_entity())
+            .collect();
 
         match self.0 {
             ClearMode::SelfAll | ClearMode::TargetsAll => {
                 let mut succeeded_clears = 0;
-                for target in &targets {
-                    let has_effects = !target
-                        .living_entity
-                        .active_effects
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .is_empty();
-                    if has_effects {
-                        target.remove_all_effects();
+                for target in &living_targets {
+                    if target.remove_all_effects() {
                         succeeded_clears += 1;
                     }
                 }
@@ -177,7 +182,7 @@ impl CommandExecutor for ClearExecutor {
                     return Err(ERROR_CLEAR_EVERYTHING_FAILED.create_without_context());
                 }
 
-                if targets.len() == 1 {
+                if living_targets.len() == 1 {
                     context.source.send_feedback(
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_SINGLE,
@@ -191,7 +196,7 @@ impl CommandExecutor for ClearExecutor {
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_MULTIPLE,
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_MULTIPLE,
-                            [TextComponent::text(targets.len().to_string())],
+                            [TextComponent::text(living_targets.len().to_string())],
                         ),
                         true,
                     );
@@ -201,8 +206,8 @@ impl CommandExecutor for ClearExecutor {
             ClearMode::TargetsSpecific => {
                 let effect = ResourceArgument::get_mob_effect(context, "effect")?;
                 let mut succeeded_clears = 0;
-                for target in &targets {
-                    if target.living_entity.has_effect(effect) {
+                for target in &living_targets {
+                    if target.has_effect(effect) {
                         target.remove_effect(effect);
                         succeeded_clears += 1;
                     }
@@ -212,7 +217,7 @@ impl CommandExecutor for ClearExecutor {
                     return Err(ERROR_CLEAR_SPECIFIC_FAILED.create_without_context());
                 }
 
-                if targets.len() == 1 {
+                if living_targets.len() == 1 {
                     context.source.send_feedback(
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_SPECIFIC_SUCCESS_SINGLE,
@@ -239,7 +244,7 @@ impl CommandExecutor for ClearExecutor {
                                     effect.translation_key,
                                     [],
                                 ),
-                                TextComponent::text(targets.len().to_string()),
+                                TextComponent::text(living_targets.len().to_string()),
                             ],
                         ),
                         true,
@@ -303,7 +308,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         );
 
     let give_node = literal("give").then(
-        argument("targets", EntityArgumentType::Players).then(
+        argument("targets", EntityArgumentType::Entities).then(
             argument("effect", MOB_EFFECT_ARGUMENT.clone())
                 .executes(GiveExecutor {
                     duration: Duration::Default,
@@ -318,7 +323,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     let clear_node = literal("clear")
         .executes(ClearExecutor(ClearMode::SelfAll))
         .then(
-            argument("targets", EntityArgumentType::Players)
+            argument("targets", EntityArgumentType::Entities)
                 .executes(ClearExecutor(ClearMode::TargetsAll))
                 .then(
                     argument("effect", MOB_EFFECT_ARGUMENT.clone())
