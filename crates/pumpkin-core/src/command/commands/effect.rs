@@ -16,7 +16,6 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
-use crate::entity::living::LivingEntity;
 
 const DESCRIPTION: &str = "Adds or removes the status effects of players and other entities.";
 const PERMISSION: &str = "minecraft:command.effect";
@@ -55,14 +54,10 @@ struct GiveExecutor {
 }
 
 impl CommandExecutor for GiveExecutor {
+    #[expect(clippy::too_many_lines)]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let targets = EntityArgumentType::get_entities(context, "targets")?;
         let effect = ResourceArgument::get_mob_effect(context, "effect")?;
-
-        let living_targets: Vec<&LivingEntity> = targets
-            .iter()
-            .filter_map(|target| target.get_living_entity())
-            .collect();
 
         let duration_ticks = match self.duration {
             Duration::Default => 30 * 20,
@@ -84,15 +79,19 @@ impl CommandExecutor for GiveExecutor {
 
         let mut successes = 0;
 
-        let mut last_target: Option<&LivingEntity> = None;
+        let mut last_target: Option<&dyn EntityBase> = None;
 
-        for target in &living_targets {
-            let should_skip = target
+        for target in &targets {
+            let Some(living) = target.get_living_entity() else {
+                continue;
+            };
+
+            let should_skip = living
                 .get_effect(effect)
                 .is_some_and(|existing| existing.amplifier >= amplifier);
 
             if !should_skip {
-                last_target = Some(target);
+                last_target = Some(target.as_ref());
 
                 let new_effect = Effect {
                     effect_type: effect,
@@ -107,11 +106,11 @@ impl CommandExecutor for GiveExecutor {
                 let applied = if let Some(player) = target.get_player() {
                     player.add_effect(new_effect)
                 } else {
-                    target.add_effect(new_effect)
+                    living.add_effect(new_effect)
                 };
 
                 if applied {
-                    last_target = Some(target);
+                    last_target = Some(target.as_ref());
                     successes += 1;
                 }
             }
@@ -175,19 +174,18 @@ impl CommandExecutor for ClearExecutor {
             }
         };
 
-        let living_targets: Vec<&LivingEntity> = targets
-            .iter()
-            .filter_map(|target| target.get_living_entity())
-            .collect();
-
         match self.0 {
             ClearMode::SelfAll | ClearMode::TargetsAll => {
                 let mut succeeded_clears = 0;
-                let mut last_target: Option<&LivingEntity> = None;
+                let mut last_target: Option<&dyn EntityBase> = None;
 
-                for target in &living_targets {
-                    if target.remove_all_effects() {
-                        last_target = Some(target);
+                for target in &targets {
+                    let Some(living) = target.get_living_entity() else {
+                        continue;
+                    };
+
+                    if living.remove_all_effects() {
+                        last_target = Some(target.as_ref());
                         succeeded_clears += 1;
                     }
                 }
@@ -220,12 +218,16 @@ impl CommandExecutor for ClearExecutor {
             ClearMode::TargetsSpecific => {
                 let effect = ResourceArgument::get_mob_effect(context, "effect")?;
                 let mut succeeded_clears = 0;
-                let mut last_target: Option<&LivingEntity> = None;
+                let mut last_target: Option<&dyn EntityBase> = None;
 
-                for target in &living_targets {
-                    if target.has_effect(effect) {
-                        target.remove_effect(effect);
-                        last_target = Some(target);
+                for target in &targets {
+                    let Some(living) = target.get_living_entity() else {
+                        continue;
+                    };
+
+                    if living.has_effect(effect) {
+                        living.remove_effect(effect);
+                        last_target = Some(target.as_ref());
                         succeeded_clears += 1;
                     }
                 }

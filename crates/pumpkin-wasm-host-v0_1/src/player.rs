@@ -2952,7 +2952,9 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
 
         plugin
             .store
-            .pump_blocking(&mut host, move || player.add_effect(effect))
+            .pump_blocking(&mut host, move || {
+                player.add_effect(effect);
+            })
             .await
     }
 
