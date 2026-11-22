@@ -46,6 +46,7 @@ const PLUGIN_DIR: &str = "./plugins";
 #[derive(Clone)]
 pub struct QueuedEvent {
     storage: Arc<RwLock<dyn EventSlot>>,
+    generation: u32,
     writable: bool,
 }
 
@@ -60,7 +61,7 @@ impl QueuedEvent {
         &self,
     ) -> Result<Option<RwLockReadGuard<'_, E>>, tokio::sync::TryLockError> {
         Ok(RwLockReadGuard::try_map(self.storage.try_read()?, |slot| {
-            slot.payload()?.downcast_ref()
+            slot.payload(self.generation)?.downcast_ref()
         })
         .ok())
     }
@@ -79,7 +80,7 @@ impl QueuedEvent {
         }
         Ok(
             RwLockWriteGuard::try_map(self.storage.try_write()?, |slot| {
-                slot.payload_mut()?.downcast_mut()
+                slot.payload_mut(self.generation)?.downcast_mut()
             })
             .ok(),
         )
@@ -88,17 +89,25 @@ impl QueuedEvent {
 
 // The erased lock and typed lock both refer to the same allocation.
 trait EventSlot: Send + Sync {
-    fn payload(&self) -> Option<&dyn Payload>;
-    fn payload_mut(&mut self) -> Option<&mut dyn Payload>;
+    fn payload(&self, handle_generation: u32) -> Option<&dyn Payload>;
+    fn payload_mut(&mut self, handle_generation: u32) -> Option<&mut dyn Payload>;
 }
 
-impl<E: Payload + 'static> EventSlot for Option<E> {
-    fn payload(&self) -> Option<&dyn Payload> {
-        self.as_ref().map(|event| event as &dyn Payload)
+impl<E: Payload + 'static> EventSlot for (Option<E>, u32) {
+    fn payload(&self, handle_generation: u32) -> Option<&dyn Payload> {
+        if handle_generation == self.1 {
+            self.0.as_ref().map(|event| event as &dyn Payload)
+        } else {
+            None
+        }
     }
 
-    fn payload_mut(&mut self) -> Option<&mut dyn Payload> {
-        self.as_mut().map(|event| event as &mut dyn Payload)
+    fn payload_mut(&mut self, handle_generation: u32) -> Option<&mut dyn Payload> {
+        if handle_generation == self.1 {
+            self.0.as_mut().map(|event| event as &mut dyn Payload)
+        } else {
+            None
+        }
     }
 }
 
@@ -1337,19 +1346,26 @@ impl PluginManager {
         event: E,
         handlers: &[Arc<dyn DynEventHandler>],
     ) -> E {
-        let slot = Arc::new(RwLock::new(Some(event)));
+        let slot = Arc::new(RwLock::new((Some(event), 0u32)));
 
         for handler in handlers.iter().filter(|handler| handler.is_blocking()) {
+            let generation = slot.read().await.1;
+
             handler
                 .handle_dyn(
                     server,
                     QueuedEvent {
                         storage: slot.clone(),
                         writable: true,
+                        generation: generation,
                     },
                 )
                 .await;
+
+            slot.write().await.1 += 1;
         }
+
+        let generation = slot.read().await.1;
 
         join_all(
             handlers
@@ -1362,13 +1378,17 @@ impl PluginManager {
                         QueuedEvent {
                             storage: slot.clone(),
                             writable: false,
+                            generation: generation,
                         },
                     )
                 }),
         )
         .await;
 
-        slot.write().await.take().expect("dispatch owns the event")
+        let mut slot_guard = slot.write().await;
+
+        slot_guard.1 += 1;
+        slot_guard.0.take().expect("dispatch owns the event")
     }
 
     /// Returns the event after blocking handlers and notifications have finished.
