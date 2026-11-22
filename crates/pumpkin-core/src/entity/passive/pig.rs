@@ -4,7 +4,11 @@ use std::sync::{
 };
 
 use pumpkin_data::BlockState;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::chunk::Biome;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{
+    DataComponentImpl, EquipmentSlot, PigSoundVariantImpl, PigVariantImpl,
+};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::pig_sound_variant::PigSoundVariant;
 use pumpkin_data::pig_variant::PigVariant;
@@ -14,6 +18,7 @@ use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::position::BlockPos;
+use rand::RngExt;
 
 use crate::entity::EntityBase;
 use crate::entity::custom_sound::CustomSound;
@@ -26,10 +31,15 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity, equipment::equip_on_target},
+    mob::{
+        Mob, MobEntity,
+        equipment::equip_on_target,
+        spawn::{EntitySpawnReason, SpawnGroupData},
+    },
     passive::animal::Animal,
     player::Player,
 };
+use crate::world::World;
 
 /// Represents a Pig, a common passive mob that provides porkchops.
 ///
@@ -44,15 +54,12 @@ pub struct PigEntity {
 
 impl PigEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let world = entity.world.load();
-        let biome = world.get_biome(&entity.block_pos.load());
-        let variant = PigVariant::select_for_biome(biome.registry_id);
         let mob_entity = MobEntity::new(entity);
         let pig = Self {
             mob_entity,
             ageable_data: crate::entity::ageable::AgeableData::default(),
             steering: ItemBasedSteering::default(),
-            variant: AtomicU8::new(variant.id()),
+            variant: AtomicU8::new(PigVariant::default().id()),
             sound_variant: AtomicU8::new(PigSoundVariant::Classic as u8),
         };
         let mob_arc = Arc::new(pig);
@@ -66,26 +73,26 @@ impl PigEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
-            goal_selector.add_goal(2, BreedGoal::new(1.0));
+            goal_selector.add_goal(3, BreedGoal::new(1.0));
             goal_selector.add_goal(
-                3,
+                4,
                 Box::new(TemptGoal::new(1.2, &[&Item::CARROT_ON_A_STICK], false)),
             );
             goal_selector.add_goal(
-                3,
+                4,
                 Box::new(TemptGoal::with_tag(
                     1.2,
                     &tag::Item::MINECRAFT_PIG_FOOD,
                     false,
                 )),
             );
-            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.1)));
+            goal_selector.add_goal(6, Box::new(WanderAroundGoal::water_avoiding(1.0)));
             goal_selector.add_goal(
-                6,
+                7,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
@@ -104,6 +111,18 @@ impl PigEntity {
         );
     }
 
+    fn variant_name(&self) -> String {
+        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
+        self.resolve_dynamic_entry_id("minecraft:pig_variant", variant_id, |id| {
+            let variant = PigVariant::from_id(id as u8).unwrap_or_default();
+            format!("minecraft:{}", variant.to_name())
+        })
+    }
+
+    fn sound_variant(&self) -> PigSoundVariant {
+        PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed)).unwrap_or_default()
+    }
+
     pub fn set_sound_variant(&self, sound_variant: PigSoundVariant) {
         self.sound_variant
             .store(sound_variant as u8, Ordering::Relaxed);
@@ -113,21 +132,23 @@ impl PigEntity {
             VarInt(sound_variant as u8 as i32),
         );
     }
+
+    fn select_spawn_variants(&self, biome: &'static Biome) {
+        self.set_variant(PigVariant::select_for_biome(biome.registry_id));
+        let sound_variants = PigSoundVariant::ALL;
+        self.set_sound_variant(
+            sound_variants[self.get_random().random_range(0..sound_variants.len())],
+        );
+    }
 }
 
 impl CustomSound for PigEntity {
     fn death_sound(&self) -> Option<Sound> {
-        let is_baby = self.is_baby();
-        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        Some(sound_variant.death_sound(is_baby))
+        Some(self.sound_variant().death_sound(self.is_baby()))
     }
 
     fn hurt_sound(&self) -> Option<Sound> {
-        let is_baby = self.is_baby();
-        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        Some(sound_variant.hurt_sound(is_baby))
+        Some(self.sound_variant().hurt_sound(self.is_baby()))
     }
 }
 
@@ -139,13 +160,30 @@ impl AgeableMob for PigEntity {
 
 impl Animal for PigEntity {
     fn play_eating_sound(&self) {
-        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        self.make_sound(sound_variant.eat_sound(self.is_baby()));
+        self.make_sound(self.sound_variant().eat_sound(self.is_baby()));
     }
 
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         item_stack.item.has_tag(&tag::Item::MINECRAFT_PIG_FOOD)
+    }
+
+    fn get_breed_offspring(&self, partner: &dyn EntityBase) -> Arc<dyn EntityBase> {
+        let entity = self.get_entity();
+        let baby = Self::new(Entity::new(
+            entity.world.load_full(),
+            entity.pos.load(),
+            &EntityType::PIG,
+        ));
+        if let Some(partner) = partner.cast_any().downcast_ref::<Self>() {
+            let parent = if self.get_random().random::<bool>() {
+                self
+            } else {
+                partner
+            };
+            baby.variant
+                .store(parent.variant.load(Ordering::Relaxed), Ordering::Relaxed);
+        }
+        baby
     }
 }
 
@@ -159,9 +197,38 @@ impl Mob for PigEntity {
     }
 
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
-        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
-        self.play_entity_sound(sound_variant.step_sound(self.is_baby()), 0.15, 1.0);
+        self.play_entity_sound(self.sound_variant().step_sound(self.is_baby()), 0.15, 1.0);
+    }
+
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        Some(self.sound_variant().ambient_sound(self.is_baby()))
+    }
+
+    fn mob_get_component(&self, component: DataComponent) -> Option<Box<dyn DataComponentImpl>> {
+        match component {
+            DataComponent::PigVariant => Some(Box::new(PigVariantImpl {
+                value: self.variant_name().into(),
+            })),
+            DataComponent::PigSoundVariant => Some(Box::new(PigSoundVariantImpl {
+                value: format!("minecraft:{}", self.sound_variant().to_name()).into(),
+            })),
+            _ => None,
+        }
+    }
+
+    fn finalize_spawn(
+        &self,
+        world: &Arc<World>,
+        _reason: EntitySpawnReason,
+        group_data: Option<SpawnGroupData>,
+    ) -> Option<SpawnGroupData> {
+        let biome = world.get_biome(&self.get_entity().block_pos.load());
+        self.select_spawn_variants(biome);
+        self.finalize_spawn_super(group_data)
+    }
+
+    fn finalize_spawn_in_biome(&self, biome: &'static Biome) {
+        self.select_spawn_variants(biome);
     }
 
     fn has_audited_tick(&self) -> bool {
@@ -212,18 +279,10 @@ impl Mob for PigEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let variant_id = u32::from(self.variant.load(Ordering::Relaxed));
-        let variant_str =
-            self.resolve_dynamic_entry_id("minecraft:pig_variant", variant_id, |id| {
-                let variant = PigVariant::from_id(id as u8).unwrap_or_default();
-                format!("minecraft:{}", variant.to_name())
-            });
-        nbt.put_string("variant", variant_str);
-        let sound_variant = PigSoundVariant::from_id(self.sound_variant.load(Ordering::Relaxed))
-            .unwrap_or_default();
+        nbt.put_string("variant", self.variant_name());
         nbt.put_string(
             "sound_variant",
-            format!("minecraft:{}", sound_variant.to_name()),
+            format!("minecraft:{}", self.sound_variant().to_name()),
         );
     }
 
