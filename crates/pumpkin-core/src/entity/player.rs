@@ -5087,20 +5087,34 @@ impl Player {
     /// Whether a teleport is still unconfirmed. Resends it with a new id once
     /// it has been pending for more than 20 ticks.
     pub fn is_awaiting_teleport(&self) -> bool {
-        let mut awaiting = self
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some((_, position)) = *awaiting else {
-            return false;
+        let ClientPlatform::Java(client) = self.client.as_ref() else {
+            return self
+                .awaiting_teleport
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some();
         };
-        if self.tick_counter.load(Ordering::Relaxed)
+        let mut resend = self.tick_counter.load(Ordering::Relaxed)
             - self.teleport_issued_tick.load(Ordering::Relaxed)
-            > 20
-            && let ClientPlatform::Java(client) = self.client.as_ref()
-        {
-            let id = self.next_teleport_id();
-            *awaiting = Some((id.into(), position));
+            > 20;
+        loop {
+            let (id, position) = {
+                let mut awaiting = self
+                    .awaiting_teleport
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some((_, position)) = *awaiting else {
+                    return false;
+                };
+                if !resend {
+                    return true;
+                }
+                let id = self.next_teleport_id();
+                *awaiting = Some((id.into(), position));
+                (id, position)
+            };
+            // Enqueueing fires `PacketSentEvent`, whose handlers may teleport this player
+            // and lock `awaiting_teleport` again.
             let entity = self.get_entity();
             if let Ok(data) = client.serialize_packet(&CPlayerPosition::new(
                 id.into(),
@@ -5112,8 +5126,10 @@ impl Player {
             )) {
                 client.try_enqueue_packet(data);
             }
+            // A teleport issued during that event went out before this resend, so the
+            // client would end at the stale position. Resend the newest one after it.
+            resend = self.teleport_id_count.load(Ordering::Relaxed) != id;
         }
-        true
     }
 
     /// `yaw` and `pitch` are in degrees.
