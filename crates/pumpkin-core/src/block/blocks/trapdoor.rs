@@ -11,8 +11,7 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::Half;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, BlockStateId, tag};
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -26,12 +25,9 @@ fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
     let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state);
     trapdoor_props.open = !trapdoor_props.open;
 
-    world.play_block_sound_expect(
-        player,
-        get_sound(block, trapdoor_props.open),
-        SoundCategory::Blocks,
-        *block_pos,
-    );
+    if let Some(sound) = get_sound(block, trapdoor_props.open) {
+        world.play_block_sound_expect(player, sound, SoundCategory::Blocks, *block_pos);
+    }
 
     let game_event = if trapdoor_props.open {
         pumpkin_data::game_event::GameEvent::BlockOpen
@@ -48,25 +44,19 @@ fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
 }
 
 fn can_open_trapdoor(block: &Block) -> bool {
-    block != &Block::IRON_TRAPDOOR
+    block
+        .block_set_type
+        .is_some_and(|set_type| set_type.can_open_by_hand)
 }
 
-fn get_sound(block: &Block, open: bool) -> Sound {
-    if open {
-        if block.has_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) {
-            Sound::BlockWoodenTrapdoorOpen
-        } else if block == &Block::IRON_TRAPDOOR {
-            Sound::BlockIronTrapdoorOpen
+fn get_sound(block: &Block, open: bool) -> Option<Sound> {
+    block.block_set_type.map(|set_type| {
+        if open {
+            set_type.trapdoor_open
         } else {
-            Sound::BlockCopperTrapdoorOpen
+            set_type.trapdoor_close
         }
-    } else if block.has_tag(&tag::Block::MINECRAFT_WOODEN_TRAPDOORS) {
-        Sound::BlockWoodenTrapdoorClose
-    } else if block == &Block::IRON_TRAPDOOR {
-        Sound::BlockIronTrapdoorClose
-    } else {
-        Sound::BlockCopperTrapdoorClose
-    }
+    })
 }
 
 #[pumpkin_block_from_tag("minecraft:trapdoors")]
@@ -144,11 +134,10 @@ impl BlockBehaviour for TrapDoorBlock {
             if powered != trapdoor_props.open {
                 trapdoor_props.open = powered;
 
-                args.world.play_block_sound(
-                    get_sound(args.block, powered),
-                    SoundCategory::Blocks,
-                    *args.position,
-                );
+                if let Some(sound) = get_sound(args.block, powered) {
+                    args.world
+                        .play_block_sound(sound, SoundCategory::Blocks, *args.position);
+                }
                 let game_event = if powered {
                     pumpkin_data::game_event::GameEvent::BlockOpen
                 } else {
@@ -174,5 +163,39 @@ impl BlockBehaviour for TrapDoorBlock {
             PathComputationType::Land | PathComputationType::Air => props.open,
             PathComputationType::Water => props.waterlogged,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_open_by_hand_comes_from_the_block_set_type() {
+        assert!(!can_open_trapdoor(&Block::IRON_TRAPDOOR));
+        assert!(can_open_trapdoor(&Block::OAK_TRAPDOOR));
+        assert!(can_open_trapdoor(&Block::CHERRY_TRAPDOOR));
+        assert!(can_open_trapdoor(&Block::BAMBOO_TRAPDOOR));
+        assert!(can_open_trapdoor(&Block::COPPER_TRAPDOOR));
+    }
+
+    #[test]
+    fn trapdoor_sound_comes_from_the_block_set_type() {
+        assert_eq!(
+            get_sound(&Block::CHERRY_TRAPDOOR, true),
+            Some(Sound::BlockCherryWoodTrapdoorOpen)
+        );
+        assert_eq!(
+            get_sound(&Block::BAMBOO_TRAPDOOR, false),
+            Some(Sound::BlockBambooWoodTrapdoorClose)
+        );
+        assert_eq!(
+            get_sound(&Block::IRON_TRAPDOOR, true),
+            Some(Sound::BlockIronTrapdoorOpen)
+        );
+        assert_eq!(
+            get_sound(&Block::COPPER_TRAPDOOR, false),
+            Some(Sound::BlockCopperTrapdoorClose)
+        );
     }
 }

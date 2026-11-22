@@ -49,12 +49,9 @@ fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
     let mut other_door_props = DoorProperties::from_state_id(other_state_id);
     other_door_props.open = door_props.open;
 
-    world.play_block_sound_expect(
-        player,
-        get_sound(block, door_props.open),
-        SoundCategory::Blocks,
-        *block_pos,
-    );
+    if let Some(sound) = get_sound(block, door_props.open) {
+        world.play_block_sound_expect(player, sound, SoundCategory::Blocks, *block_pos);
+    }
 
     let game_event = if door_props.open {
         pumpkin_data::game_event::GameEvent::BlockOpen
@@ -76,26 +73,19 @@ fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
 }
 
 fn can_open_door(block: &Block) -> bool {
-    block != &Block::IRON_DOOR
+    block
+        .block_set_type
+        .is_some_and(|set_type| set_type.can_open_by_hand)
 }
 
-// Todo: The sounds should be from BlockSetType
-fn get_sound(block: &Block, open: bool) -> Sound {
-    if open {
-        if block.has_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
-            Sound::BlockWoodenDoorOpen
-        } else if block == &Block::IRON_DOOR {
-            Sound::BlockIronDoorOpen
+fn get_sound(block: &Block, open: bool) -> Option<Sound> {
+    block.block_set_type.map(|set_type| {
+        if open {
+            set_type.door_open
         } else {
-            Sound::BlockCopperDoorOpen
+            set_type.door_close
         }
-    } else if block.has_tag(&tag::Block::MINECRAFT_WOODEN_DOORS) {
-        Sound::BlockWoodenDoorClose
-    } else if block == &Block::IRON_DOOR {
-        Sound::BlockIronDoorClose
-    } else {
-        Sound::BlockCopperDoorClose
-    }
+    })
 }
 
 #[expect(clippy::pedantic)]
@@ -192,7 +182,9 @@ impl DoorBlock {
 
         let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos);
 
-        world.play_block_sound(get_sound(block, open), SoundCategory::Blocks, *block_pos);
+        if let Some(sound) = get_sound(block, open) {
+            world.play_block_sound(sound, SoundCategory::Blocks, *block_pos);
+        }
 
         let game_event = if open {
             pumpkin_data::game_event::GameEvent::BlockOpen
@@ -329,11 +321,10 @@ impl BlockBehaviour for DoorBlock {
                 other_door_props.open = powered;
 
                 if door_props.half == sound_half {
-                    args.world.play_block_sound(
-                        get_sound(args.block, powered),
-                        SoundCategory::Blocks,
-                        *args.position,
-                    );
+                    if let Some(sound) = get_sound(args.block, powered) {
+                        args.world
+                            .play_block_sound(sound, SoundCategory::Blocks, *args.position);
+                    }
                     let game_event = if powered {
                         pumpkin_data::game_event::GameEvent::BlockOpen
                     } else {
@@ -421,4 +412,42 @@ fn has_support(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     world
         .get_block_state(&block_pos.down())
         .is_side_solid(BlockDirection::Up)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_open_by_hand_comes_from_the_block_set_type() {
+        assert!(!can_open_door(&Block::IRON_DOOR));
+        assert!(can_open_door(&Block::OAK_DOOR));
+        assert!(can_open_door(&Block::CHERRY_DOOR));
+        assert!(can_open_door(&Block::BAMBOO_DOOR));
+        assert!(can_open_door(&Block::COPPER_DOOR));
+    }
+
+    #[test]
+    fn door_sound_comes_from_the_block_set_type() {
+        assert_eq!(
+            get_sound(&Block::OAK_DOOR, true),
+            Some(Sound::BlockWoodenDoorOpen)
+        );
+        assert_eq!(
+            get_sound(&Block::CHERRY_DOOR, false),
+            Some(Sound::BlockCherryWoodDoorClose)
+        );
+        assert_eq!(
+            get_sound(&Block::BAMBOO_DOOR, true),
+            Some(Sound::BlockBambooWoodDoorOpen)
+        );
+        assert_eq!(
+            get_sound(&Block::IRON_DOOR, false),
+            Some(Sound::BlockIronDoorClose)
+        );
+        assert_eq!(
+            get_sound(&Block::COPPER_DOOR, true),
+            Some(Sound::BlockCopperDoorOpen)
+        );
+    }
 }
