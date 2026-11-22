@@ -84,12 +84,16 @@ impl CommandExecutor for GiveExecutor {
 
         let mut successes = 0;
 
+        let mut last_target: Option<&LivingEntity> = None;
+
         for target in &living_targets {
             let should_skip = target
                 .get_effect(effect)
                 .is_some_and(|existing| existing.amplifier >= amplifier);
 
             if !should_skip {
+                last_target = Some(target);
+
                 target.add_effect(Effect {
                     effect_type: effect,
                     duration: duration_ticks,
@@ -113,12 +117,12 @@ impl CommandExecutor for GiveExecutor {
             return Err(ERROR_GIVE_FAILED.create_without_context());
         }
 
-        if living_targets.len() == 1 {
+        if successes == 1 {
             context.source.send_feedback(
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_SINGLE,
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_SINGLE,
-                    [translation_name, targets[0].as_ref().get_display_name()],
+                    [translation_name, last_target.unwrap().get_display_name()],
                 ),
                 true,
             );
@@ -127,10 +131,7 @@ impl CommandExecutor for GiveExecutor {
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_MULTIPLE,
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_MULTIPLE,
-                    [
-                        translation_name,
-                        TextComponent::text(living_targets.len().to_string()),
-                    ],
+                    [translation_name, TextComponent::text(successes.to_string())],
                 ),
                 true,
             );
@@ -172,8 +173,11 @@ impl CommandExecutor for ClearExecutor {
         match self.0 {
             ClearMode::SelfAll | ClearMode::TargetsAll => {
                 let mut succeeded_clears = 0;
+                let mut last_target: Option<&LivingEntity> = None;
+
                 for target in &living_targets {
                     if target.remove_all_effects() {
+                        last_target = Some(target);
                         succeeded_clears += 1;
                     }
                 }
@@ -182,12 +186,12 @@ impl CommandExecutor for ClearExecutor {
                     return Err(ERROR_CLEAR_EVERYTHING_FAILED.create_without_context());
                 }
 
-                if living_targets.len() == 1 {
+                if succeeded_clears == 1 {
                     context.source.send_feedback(
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_SINGLE,
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_SINGLE,
-                            [targets[0].as_ref().get_display_name()],
+                            [last_target.unwrap().get_display_name()],
                         ),
                         true,
                     );
@@ -196,7 +200,7 @@ impl CommandExecutor for ClearExecutor {
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_MULTIPLE,
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_MULTIPLE,
-                            [TextComponent::text(living_targets.len().to_string())],
+                            [TextComponent::text(succeeded_clears.to_string())],
                         ),
                         true,
                     );
@@ -206,9 +210,12 @@ impl CommandExecutor for ClearExecutor {
             ClearMode::TargetsSpecific => {
                 let effect = ResourceArgument::get_mob_effect(context, "effect")?;
                 let mut succeeded_clears = 0;
+                let mut last_target: Option<&LivingEntity> = None;
+
                 for target in &living_targets {
                     if target.has_effect(effect) {
                         target.remove_effect(effect);
+                        last_target = Some(target);
                         succeeded_clears += 1;
                     }
                 }
@@ -217,7 +224,7 @@ impl CommandExecutor for ClearExecutor {
                     return Err(ERROR_CLEAR_SPECIFIC_FAILED.create_without_context());
                 }
 
-                if living_targets.len() == 1 {
+                if succeeded_clears == 1 {
                     context.source.send_feedback(
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_SPECIFIC_SUCCESS_SINGLE,
@@ -228,7 +235,7 @@ impl CommandExecutor for ClearExecutor {
                                     effect.translation_key,
                                     [],
                                 ),
-                                targets[0].as_ref().get_display_name(),
+                                last_target.unwrap().get_display_name(),
                             ],
                         ),
                         true,
@@ -244,7 +251,7 @@ impl CommandExecutor for ClearExecutor {
                                     effect.translation_key,
                                     [],
                                 ),
-                                TextComponent::text(living_targets.len().to_string()),
+                                TextComponent::text(succeeded_clears.to_string()),
                             ],
                         ),
                         true,
