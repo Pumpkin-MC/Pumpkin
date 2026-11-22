@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, fs};
 
+use crate::loot_table::Generator as LootConditionGenerator;
 use heck::{ToPascalCase, ToShoutySnakeCase};
 use proc_macro2::TokenStream;
 use pumpkin_util::text::TextComponent;
@@ -765,7 +766,25 @@ fn parse_conditional_entity_effects(val: Option<&serde_json::Value>) -> TokenStr
     quote! { &[#(#effects),*] }
 }
 
-fn parse_targeted_conditional_entity_effects(val: Option<&serde_json::Value>) -> TokenStream {
+fn parse_requirements(
+    item: &serde_json::Value,
+    generator: &mut LootConditionGenerator,
+) -> TokenStream {
+    item.get("requirements").map_or_else(
+        || quote! { None },
+        |requirements| {
+            let condition = pumpkin_util::loot_table::parser::parse_condition(requirements)
+                .expect("unsupported enchantment requirement");
+            let condition = generator.condition(&condition);
+            quote! { Some(#condition) }
+        },
+    )
+}
+
+fn parse_targeted_conditional_entity_effects(
+    val: Option<&serde_json::Value>,
+    generator: &mut LootConditionGenerator,
+) -> TokenStream {
     let effects: Vec<TokenStream> = val
         .and_then(|v| v.as_array())
         .map(|arr| {
@@ -789,11 +808,13 @@ fn parse_targeted_conditional_entity_effects(val: Option<&serde_json::Value>) ->
                         Some("victim") => quote! { Some(EnchantmentTarget::Victim) },
                         _ => quote! { None },
                     };
+                    let requirements = parse_requirements(item, generator);
                     quote! {
                         TargetedConditionalEffect {
                             enchanted: #enchanted,
                             affected: #affected,
                             effect: #eff_tokens,
+                            requirements: #requirements,
                         }
                     }
                 })
@@ -819,7 +840,10 @@ fn parse_conditional_value_effects(val: Option<&serde_json::Value>) -> TokenStre
     quote! { &[#(#effects),*] }
 }
 
-fn parse_targeted_conditional_value_effects(val: Option<&serde_json::Value>) -> TokenStream {
+fn parse_targeted_conditional_value_effects(
+    val: Option<&serde_json::Value>,
+    generator: &mut LootConditionGenerator,
+) -> TokenStream {
     let effects: Vec<TokenStream> = val
         .and_then(|v| v.as_array())
         .map(|arr| {
@@ -843,11 +867,13 @@ fn parse_targeted_conditional_value_effects(val: Option<&serde_json::Value>) -> 
                         Some("victim") => quote! { Some(EnchantmentTarget::Victim) },
                         _ => quote! { None },
                     };
+                    let requirements = parse_requirements(item, generator);
                     quote! {
                         TargetedConditionalEffect {
                             enchanted: #enchanted,
                             affected: #affected,
                             effect: #eff_tokens,
+                            requirements: #requirements,
                         }
                     }
                 })
@@ -1038,6 +1064,7 @@ pub fn build() -> TokenStream {
     let mut all_variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
     let mut id_to_type = TokenStream::new();
+    let mut requirements_generator = LootConditionGenerator::default();
 
     for (name, enchantment) in enchantments {
         let id = enchantment.id;
@@ -1076,8 +1103,10 @@ pub fn build() -> TokenStream {
         let effects_map = enchantment.effects;
         let projectile_spawned =
             parse_conditional_entity_effects(effects_map.get("minecraft:projectile_spawned"));
-        let post_attack =
-            parse_targeted_conditional_entity_effects(effects_map.get("minecraft:post_attack"));
+        let post_attack = parse_targeted_conditional_entity_effects(
+            effects_map.get("minecraft:post_attack"),
+            &mut requirements_generator,
+        );
         let projectile_count =
             parse_conditional_value_effects(effects_map.get("minecraft:projectile_count"));
         let projectile_spread =
@@ -1093,8 +1122,10 @@ pub fn build() -> TokenStream {
             parse_conditional_value_effects(effects_map.get("minecraft:damage_protection"));
         let hit_block = parse_conditional_entity_effects(effects_map.get("minecraft:hit_block"));
         let item_damage = parse_conditional_value_effects(effects_map.get("minecraft:item_damage"));
-        let equipment_drops =
-            parse_targeted_conditional_value_effects(effects_map.get("minecraft:equipment_drops"));
+        let equipment_drops = parse_targeted_conditional_value_effects(
+            effects_map.get("minecraft:equipment_drops"),
+            &mut requirements_generator,
+        );
         let fishing_time_reduction =
             parse_conditional_value_effects(effects_map.get("minecraft:fishing_time_reduction"));
         let fishing_luck_bonus =
@@ -1228,6 +1259,8 @@ pub fn build() -> TokenStream {
         id_to_type.extend(quote! { #id => Some(&Self::#format_name), });
     }
 
+    let requirements_predicates = requirements_generator.predicates;
+
     quote! {
         use crate::item::Item;
         use crate::tag::Enchantment as EnchantmentTag;
@@ -1236,10 +1269,13 @@ pub fn build() -> TokenStream {
         use crate::tag::EntityType as EntityTypeTag;
         use crate::tag::{RegistryKey, Tag, Taggable};
         use crate::data_component_impl::EnchantmentsImpl;
+        use pumpkin_util::loot_table::{LootCondition, LootEntityTarget, LootPredicateValue};
         use pumpkin_util::text::TextComponent;
         use pumpkin_util::text::color::NamedColor;
         use std::hash::{Hash, Hasher};
         use std::slice::Iter;
+
+        #requirements_predicates
 
         #[derive(Clone, Debug, PartialEq)]
         pub enum LevelBasedValue {
@@ -1306,11 +1342,12 @@ pub fn build() -> TokenStream {
             Victim,
         }
 
-        #[derive(Clone, Debug, PartialEq, Eq)]
+        #[derive(Clone, Debug)]
         pub struct TargetedConditionalEffect<T> {
             pub enchanted: Option<EnchantmentTarget>,
             pub affected: Option<EnchantmentTarget>,
             pub effect: T,
+            pub requirements: Option<LootCondition>,
         }
 
         #[derive(Clone, Debug, PartialEq, Eq)]

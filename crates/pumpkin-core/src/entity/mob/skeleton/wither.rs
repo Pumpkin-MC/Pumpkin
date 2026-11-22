@@ -51,15 +51,18 @@ impl Mob for WitherSkeletonEntity {
 
     fn on_attack(&self, target: &dyn EntityBase) {
         if let Some(living) = target.get_living_entity() {
-            living.add_effect(Effect {
-                effect_type: &StatusEffect::WITHER,
-                duration: 200,
-                amplifier: 0,
-                ambient: false,
-                show_particles: true,
-                show_icon: true,
-                blend: false,
-            });
+            living.add_effect_with_source(
+                Effect {
+                    effect_type: &StatusEffect::WITHER,
+                    duration: 200,
+                    amplifier: 0,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                },
+                Some(self),
+            );
         }
     }
 

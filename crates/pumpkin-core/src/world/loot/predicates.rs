@@ -118,6 +118,12 @@ fn entity_matches(
                                 })
                         }
                         "is_on_ground" => entity.get_entity().on_ground.load(Ordering::Relaxed),
+                        "is_flying" => {
+                            entity.get_entity().is_fall_flying()
+                                || entity
+                                    .get_player()
+                                    .is_some_and(crate::entity::player::Player::is_flying)
+                        }
                         _ => true,
                     };
                     actual == expected_val
