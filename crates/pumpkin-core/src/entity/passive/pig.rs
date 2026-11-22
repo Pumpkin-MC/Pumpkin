@@ -58,7 +58,7 @@ impl PigEntity {
         let pig = Self {
             mob_entity,
             ageable_data: crate::entity::ageable::AgeableData::default(),
-            steering: ItemBasedSteering::default(),
+            steering: ItemBasedSteering::new(pumpkin_data::tracked_data::pig::DATA_BOOST_TIME),
             variant: AtomicU8::new(PigVariant::default().id()),
             sound_variant: AtomicU8::new(PigSoundVariant::Classic as u8),
         };
@@ -231,6 +231,15 @@ impl Mob for PigEntity {
         self.select_spawn_variants(biome);
     }
 
+    fn mob_ai_step(&self) {
+        if self
+            .mob_controlling_passenger()
+            .is_some_and(|rider| rider.get_player().is_some())
+        {
+            self.steering.tick_boost();
+        }
+    }
+
     fn has_audited_tick(&self) -> bool {
         true
     }
@@ -348,7 +357,8 @@ impl Mob for PigEntity {
 
 impl ItemSteerable for PigEntity {
     fn boost(&self) -> bool {
-        self.steering.boost()
+        let mut rng = self.get_random();
+        self.steering.boost(self.get_entity(), &mut rng)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
