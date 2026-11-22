@@ -108,7 +108,7 @@ impl Behavior for HarvestFarmland {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.state.erase(types::LOOK_TARGET.id());
         tick.state.erase(types::WALK_TARGET.id());
         self.time_worked_so_far = 0;
