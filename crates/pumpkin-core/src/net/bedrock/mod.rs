@@ -57,7 +57,10 @@ use pumpkin_protocol::{
     serial::{PacketRead, PacketReadSlice, PacketWrite},
 };
 use tokio::{
-    sync::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, error::TryRecvError},
+    sync::mpsc::{
+        Receiver, Sender, UnboundedReceiver, UnboundedSender,
+        error::{TryRecvError, TrySendError},
+    },
     sync::{Mutex, RwLock, oneshot},
     task::JoinHandle,
 };
@@ -96,14 +99,16 @@ pub use versions::BedrockVersions;
 pub struct OutgoingPacket {
     pub data: Bytes,
     pub target_sub_client: SubClient,
+    pub sender_client_id: u64,
     pub completion: Option<oneshot::Sender<()>>,
 }
 
 impl OutgoingPacket {
-    pub const fn normal(data: Bytes, target_sub_client: SubClient) -> Self {
+    pub const fn normal(data: Bytes, target_sub_client: SubClient, sender_client_id: u64) -> Self {
         Self {
             data,
             target_sub_client,
+            sender_client_id,
             completion: None,
         }
     }
@@ -111,11 +116,13 @@ impl OutgoingPacket {
     pub const fn priority(
         data: Bytes,
         target_sub_client: SubClient,
+        sender_client_id: u64,
         completion: oneshot::Sender<()>,
     ) -> Self {
         Self {
             data,
             target_sub_client,
+            sender_client_id,
             completion: Some(completion),
         }
     }
@@ -162,6 +169,8 @@ pub struct BedrockClient {
     parent: Option<std::sync::Weak<Self>>,
     /// Active split-screen sub-clients multiplexed over this connection (main client only).
     sub_clients: std::sync::Mutex<HashMap<SubClient, Arc<Self>>>,
+    /// Serializes sub-client admission (`can_complete_login` + `add_player`) on this connection.
+    sub_client_login_lock: Mutex<()>,
     session: Arc<NetherNetSession>,
     /// The client's IP address.
     pub address: SocketAddr,
@@ -241,6 +250,7 @@ impl BedrockClient {
             sub_client_id: SubClient::Main,
             parent: None,
             sub_clients: std::sync::Mutex::new(HashMap::new()),
+            sub_client_login_lock: Mutex::new(()),
             session,
             player: ArcSwap::new(Arc::new(None)),
             address,
@@ -302,6 +312,7 @@ impl BedrockClient {
             sub_client_id,
             parent: Some(Arc::downgrade(self)),
             sub_clients: std::sync::Mutex::new(HashMap::new()),
+            sub_client_login_lock: Mutex::new(()),
             session: self.session.clone(),
             player: ArcSwap::new(Arc::new(None)),
             address: self.address,
@@ -399,8 +410,18 @@ impl BedrockClient {
                             client.address
                         );
                         decrement_pending_bytes(&client.pending_bytes, packet_len);
+                        if let Some(completion) = packet.completion {
+                            let _ = completion.send(());
+                        }
                         continue;
                     };
+                    if client.should_skip_stale_sub_client_packet(&packet, packet_id) {
+                        decrement_pending_bytes(&client.pending_bytes, packet_len);
+                        if let Some(completion) = packet.completion {
+                            let _ = completion.send(());
+                        }
+                        continue;
+                    }
                     wire_buf.clear();
                     let encode_res = client.network_writer.read().await.write_game_packet(
                         packet_id,
@@ -439,6 +460,20 @@ impl BedrockClient {
                 }
             }
         });
+    }
+
+    fn should_skip_stale_sub_client_packet(&self, packet: &OutgoingPacket, packet_id: u16) -> bool {
+        if !packet.target_sub_client.is_sub_client() {
+            return false;
+        }
+        let subs = self
+            .sub_clients
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        subs.get(&packet.target_sub_client).map_or_else(
+            || i32::from(packet_id) != CDisconnect::PACKET_ID && packet.sender_client_id != self.id,
+            |active| active.id != packet.sender_client_id,
+        )
     }
 
     async fn tick_connection(&self) -> bool {
@@ -503,9 +538,11 @@ impl BedrockClient {
         {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-            let _ = self
-                .outgoing_packet_queue_send
-                .send(OutgoingPacket::normal(data, self.sub_client_id));
+            let _ = self.outgoing_packet_queue_send.send(OutgoingPacket::normal(
+                data,
+                self.sub_client_id,
+                self.id,
+            ));
         }
         if !self.close_token.is_cancelled() {
             self.close_token.cancel();
@@ -857,7 +894,7 @@ impl BedrockClient {
                 return false;
             };
             if !self.queue_outgoing(
-                OutgoingPacket::normal(extra, self.sub_client_id),
+                OutgoingPacket::normal(extra, self.sub_client_id, self.id),
                 packet_len,
             ) {
                 return false;
@@ -871,7 +908,7 @@ impl BedrockClient {
             return false;
         };
         if !self.queue_outgoing(
-            OutgoingPacket::normal(packet_data, self.sub_client_id),
+            OutgoingPacket::normal(packet_data, self.sub_client_id, self.id),
             packet_len,
         ) {
             return false;
@@ -921,7 +958,7 @@ impl BedrockClient {
             return false;
         };
         self.queue_outgoing(
-            OutgoingPacket::normal(packet_data, self.sub_client_id),
+            OutgoingPacket::normal(packet_data, self.sub_client_id, self.id),
             packet_len,
         )
     }
@@ -1017,7 +1054,7 @@ impl BedrockClient {
                 return;
             };
             if !self.queue_outgoing(
-                OutgoingPacket::normal(packet, self.sub_client_id),
+                OutgoingPacket::normal(packet, self.sub_client_id, self.id),
                 packet_len,
             ) {
                 return;
@@ -1028,7 +1065,7 @@ impl BedrockClient {
         };
         let (tx, rx) = oneshot::channel();
         if self.queue_outgoing(
-            OutgoingPacket::priority(last_packet, self.sub_client_id, tx),
+            OutgoingPacket::priority(last_packet, self.sub_client_id, self.id, tx),
             last_len,
         ) {
             let _ = rx.await;
@@ -1043,11 +1080,19 @@ impl BedrockClient {
         self.send_and_wait_translated(translated).await;
     }
 
-    pub async fn close(&self) {
-        if self.close_token.is_cancelled() {
-            return;
-        }
-        self.close_token.cancel();
+    fn is_registered_in_parent(&self) -> bool {
+        let Some(parent) = self.parent.as_ref().and_then(std::sync::Weak::upgrade) else {
+            return false;
+        };
+        let subs = parent
+            .sub_clients
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        subs.get(&self.sub_client_id)
+            .is_some_and(|entry| entry.id == self.id)
+    }
+
+    fn detach_from_parent(&self) {
         if let Some(parent) = self.parent.as_ref().and_then(std::sync::Weak::upgrade) {
             let mut subs = parent
                 .sub_clients
@@ -1059,6 +1104,18 @@ impl BedrockClient {
             {
                 subs.remove(&self.sub_client_id);
             }
+        }
+    }
+
+    pub async fn close(&self) {
+        let already_cancelled = self.close_token.is_cancelled();
+        self.close_token.cancel();
+        if self.parent.is_some() {
+            // Always detach the slot even when `try_kick()` already cancelled the token.
+            self.detach_from_parent();
+            return;
+        }
+        if already_cancelled {
             return;
         }
         let active_subs: Vec<Arc<Self>> = {
@@ -1107,27 +1164,29 @@ impl BedrockClient {
                 .get_game_packet_with_subclient(&mut cursor)
                 .map_err(|e| Error::other(e.to_string()))?;
 
-            if game_packet.sender_sub_client == SubClient::Main {
-                if !self.packet_limiter.check_packet() {
-                    warn!(
-                        "Bedrock client {} exceeded packet rate limit (rate: {}/s)",
-                        self.address,
-                        self.packet_limiter.max_rate()
-                    );
-                    self.kick(
-                        DisconnectReason::Kicked,
-                        server
-                            .advanced_config
-                            .networking
-                            .bedrock
-                            .packet_limiter
-                            .kick_message
-                            .clone(),
-                    )
-                    .await;
-                    return Err(Error::other("Packet rate limit exceeded"));
-                }
+            // Apply the connection-wide rate limit before slot dispatch so SubClientLogin
+            // floods and inactive-slot packets cannot bypass the limiter.
+            if !self.packet_limiter.check_packet() {
+                warn!(
+                    "Bedrock client {} exceeded packet rate limit (rate: {}/s)",
+                    self.address,
+                    self.packet_limiter.max_rate()
+                );
+                self.kick(
+                    DisconnectReason::Kicked,
+                    server
+                        .advanced_config
+                        .networking
+                        .bedrock
+                        .packet_limiter
+                        .kick_message
+                        .clone(),
+                )
+                .await;
+                return Err(Error::other("Packet rate limit exceeded"));
+            }
 
+            if game_packet.sender_sub_client == SubClient::Main {
                 if game_packet.packet.id == SDisconnect::PACKET_ID {
                     self.close().await;
                     return Ok(());
@@ -1137,58 +1196,105 @@ impl BedrockClient {
                 continue;
             }
 
-            let sub_client_id = game_packet.sender_sub_client;
-            if game_packet.packet.id == SSubClientLogin::PACKET_ID {
-                self.handle_incoming_sub_client_login(server, sub_client_id, game_packet.packet);
-                continue;
-            }
+            self.route_sub_client_packet(server, game_packet.sender_sub_client, game_packet.packet)
+                .await;
+        }
 
-            let sub_client = {
-                let subs = self
-                    .sub_clients
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                subs.get(&sub_client_id).cloned()
-            };
-            let Some(sub_client) = sub_client else {
-                debug!(
-                    "Ignoring Bedrock game packet {} for inactive sub-client {:?} from {}",
-                    game_packet.packet.id, sub_client_id, self.address
-                );
-                continue;
-            };
+        Ok(())
+    }
 
-            if !sub_client.packet_limiter.check_packet() {
+    async fn route_sub_client_packet(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        sub_client_id: SubClient,
+        packet: RawPacket,
+    ) {
+        if packet.id == SSubClientLogin::PACKET_ID {
+            self.handle_incoming_sub_client_login(server, sub_client_id, packet);
+            return;
+        }
+
+        let sub_client = {
+            let subs = self
+                .sub_clients
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            subs.get(&sub_client_id).cloned()
+        };
+        let Some(sub_client) = sub_client else {
+            debug!(
+                "Ignoring Bedrock game packet {} for inactive sub-client {:?} from {}",
+                packet.id, sub_client_id, self.address
+            );
+            return;
+        };
+
+        if !sub_client.packet_limiter.check_packet() {
+            warn!(
+                "Bedrock sub-client {:?} on {} exceeded packet rate limit (rate: {}/s)",
+                sub_client_id,
+                self.address,
+                sub_client.packet_limiter.max_rate()
+            );
+            sub_client
+                .kick(
+                    DisconnectReason::Kicked,
+                    server
+                        .advanced_config
+                        .networking
+                        .bedrock
+                        .packet_limiter
+                        .kick_message
+                        .clone(),
+                )
+                .await;
+            return;
+        }
+
+        if packet.id == SDisconnect::PACKET_ID {
+            sub_client.close().await;
+            return;
+        }
+
+        match sub_client.incoming_game_packet_send.try_send(packet) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
                 warn!(
-                    "Bedrock sub-client {:?} on {} exceeded packet rate limit (rate: {}/s)",
-                    sub_client_id,
-                    self.address,
-                    sub_client.packet_limiter.max_rate()
+                    "Bedrock sub-client {:?} on {} overflowed incoming packet queue",
+                    sub_client_id, self.address
                 );
                 sub_client
                     .kick(
                         DisconnectReason::Kicked,
-                        server
-                            .advanced_config
-                            .networking
-                            .bedrock
-                            .packet_limiter
-                            .kick_message
-                            .clone(),
+                        "Incoming packet queue overflow".into(),
                     )
                     .await;
-                continue;
             }
-
-            if game_packet.packet.id == SDisconnect::PACKET_ID {
-                sub_client.close().await;
-                continue;
+            Err(TrySendError::Closed(_)) => {
+                debug!(
+                    "Sub-client {:?} incoming packet channel closed for {}",
+                    sub_client_id, self.address
+                );
             }
-
-            sub_client.handle_game_packet(game_packet.packet).await?;
         }
+    }
 
-        Ok(())
+    fn send_sub_client_rejection(
+        &self,
+        sub_client_id: SubClient,
+        reason: DisconnectReason,
+        message: String,
+    ) {
+        let packet = CDisconnect::new(reason as i32, message);
+        if let Ok(data) = self.serialize_packet(&packet) {
+            let packet_len = data.len();
+            if let Some(reserved) = self.reserve_bytes(packet_len) {
+                let _ = self.queue_outgoing(
+                    OutgoingPacket::normal(data, sub_client_id, self.id),
+                    reserved,
+                );
+            }
+        }
     }
 
     fn handle_incoming_sub_client_login(
@@ -1199,8 +1305,13 @@ impl BedrockClient {
     ) {
         if self.player.load().is_none() {
             warn!(
-                "Ignoring SubClientLogin ({:?}) from {} before primary player joined",
+                "Rejecting early SubClientLogin ({:?}) from {} before primary player joined",
                 sub_client_id, self.address
+            );
+            self.send_sub_client_rejection(
+                sub_client_id,
+                DisconnectReason::NotAllowed,
+                "Primary player must finish joining first.".into(),
             );
             return;
         }
@@ -1234,16 +1345,7 @@ impl BedrockClient {
         });
         if spawned.is_none() {
             sub_client.close_token.cancel();
-            let mut subs = self
-                .sub_clients
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if subs
-                .get(&sub_client_id)
-                .is_some_and(|entry| entry.id == sub_client.id)
-            {
-                subs.remove(&sub_client_id);
-            }
+            sub_client.detach_from_parent();
         }
     }
 
@@ -1263,44 +1365,62 @@ impl BedrockClient {
                 return;
             }
         };
-        let login_result = match self
-            .try_handle_sub_client_login(login_packet, &server)
-            .await
-        {
-            Ok(result) => result,
-            Err(err) => {
-                self.kick(DisconnectReason::Unknown, err.to_string()).await;
-                self.await_tasks().await;
-                return;
-            }
-        };
-        match login_result {
-            PacketHandlerResult::Stop => {
-                self.close().await;
-                self.await_tasks().await;
-            }
-            PacketHandlerResult::ReadyToPlay(profile, config) => {
-                if let Some((player, world)) = server.add_player(
-                    Arc::new(ClientPlatform::Bedrock(self.clone())),
-                    profile,
-                    Some(config),
-                ) {
-                    world
-                        .spawn_bedrock_player(&server.basic_config, player.clone(), &server)
-                        .await;
-                    self.progress_player_packets(&player).await;
-                    self.close().await;
-                    self.await_tasks().await;
-                    player.remove().await;
-                    server.remove_player(&player);
-                    if let Err(error) = server.player_data_storage.handle_player_leave(&player) {
-                        error!("Failed to save sub-client player data on disconnect: {error}");
+
+        // Serialize admission (`can_complete_login` + `add_player`) across sub-clients on the
+        // same connection so concurrent split-screen logins cannot race duplicate or cap checks.
+        let parent = self.parent.as_ref().and_then(std::sync::Weak::upgrade);
+        let admission_result = {
+            let _admission_guard = match parent.as_ref() {
+                Some(parent) => Some(parent.sub_client_login_lock.lock().await),
+                None => None,
+            };
+
+            if self.is_closed() || !self.is_registered_in_parent() {
+                None
+            } else {
+                match self
+                    .try_handle_sub_client_login(login_packet, &server)
+                    .await
+                {
+                    Ok(PacketHandlerResult::Stop) => None,
+                    Ok(PacketHandlerResult::ReadyToPlay(profile, config)) => {
+                        if self.is_closed() || !self.is_registered_in_parent() {
+                            None
+                        } else {
+                            server.add_player(
+                                Arc::new(ClientPlatform::Bedrock(self.clone())),
+                                profile,
+                                Some(config),
+                            )
+                        }
                     }
-                } else {
-                    self.close().await;
-                    self.await_tasks().await;
+                    Err(err) => {
+                        self.kick(DisconnectReason::Unknown, err.to_string()).await;
+                        None
+                    }
                 }
             }
+        };
+
+        if let Some((player, world)) = admission_result {
+            if !self.is_closed() {
+                world
+                    .spawn_bedrock_player(&server.basic_config, player.clone(), &server)
+                    .await;
+                self.progress_player_packets(&player).await;
+            }
+            self.close().await;
+            self.await_tasks().await;
+            player.remove().await;
+            server.remove_player(&player);
+            if let Err(error) = server.player_data_storage.handle_player_leave(&player) {
+                error!("Failed to save sub-client player data on disconnect: {error}");
+            }
+            // Break the `Player <-> BedrockClient` Arc cycle unconditionally.
+            self.clear_player();
+        } else {
+            self.close().await;
+            self.await_tasks().await;
         }
     }
 

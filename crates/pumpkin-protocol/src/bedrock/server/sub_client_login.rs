@@ -5,6 +5,7 @@ use pumpkin_macros::packet;
 use crate::{bedrock::server::login::read_connection_request, serial::PacketRead};
 
 /// Sent by a split-screen sub-client over an existing Bedrock connection to authenticate and join.
+#[derive(Debug)]
 #[packet(94)]
 pub struct SSubClientLogin {
     /// Identity and authentication JSON/JWT payload.
@@ -22,7 +23,7 @@ impl PacketRead for SSubClientLogin {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::io::{Cursor, ErrorKind};
 
     use crate::{
         MAX_PACKET_DATA_SIZE,
@@ -63,6 +64,21 @@ mod tests {
             .write(&mut input)
             .expect("write oversized length");
 
-        assert!(SSubClientLogin::read(&mut Cursor::new(input)).is_err());
+        let err = SSubClientLogin::read(&mut Cursor::new(input)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn rejects_token_exceeding_connection_request_budget() {
+        // Declared outer length is 8 bytes, but inner tokens require 4 + 1 + 4 + 1 = 10 bytes.
+        let mut input = Vec::new();
+        VarUInt(8).write(&mut input).expect("write outer length");
+        1u32.write(&mut input).expect("write jwt len");
+        input.push(b'a');
+        1u32.write(&mut input).expect("write raw token len");
+        input.push(b'b');
+
+        let err = SSubClientLogin::read(&mut Cursor::new(input)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidData);
     }
 }
