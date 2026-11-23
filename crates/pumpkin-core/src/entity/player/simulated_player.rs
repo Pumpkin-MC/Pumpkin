@@ -2,9 +2,10 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::{
-    BlockDirection, data_component_impl::EquipmentSlot, item::Item, item_stack::ItemStack,
+    Block, BlockDirection, data_component_impl::EquipmentSlot, item::Item, item_stack::ItemStack,
 };
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_protocol::{codec::var_int::VarInt, java::server::play::SUseItemOn};
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::{GameMode, Hand, PermissionLvl};
 use pumpkin_world::world::BlockFlags;
 
@@ -13,6 +14,7 @@ use crate::entity::{
     EntityBase,
     player::{ClientMove, ClientMoveOutcome, Player},
 };
+use crate::item::registry::should_try_block_placement;
 use crate::plugin::player::item_held::PlayerItemHeldEvent;
 use crate::server::Server;
 
@@ -222,9 +224,11 @@ impl SimulatedPlayer {
             .upgrade()
             .ok_or_else(|| "Server stopped".to_string())?;
         let block = world.get_block(position);
+        let face = BlockDirection::North;
+        let cursor_pos = Vector3::new(0.5, 0.5, 0.5);
         let hit = BlockHitResult {
-            face: &BlockDirection::Up,
-            cursor_pos: &pumpkin_util::math::vector3::Vector3::new(0.5, 0.5, 0.5),
+            face: &face,
+            cursor_pos: &cursor_pos,
         };
         let mut held = self.player.inventory.get_stack_in_hand(hand);
         let slot = match hand {
@@ -248,8 +252,54 @@ impl SimulatedPlayer {
         } else {
             result
         };
+        let handled = if result.consumes_action() {
+            true
+        } else if held.is_empty() {
+            false
+        } else {
+            let item_result = server.item_registry.use_on_block(
+                &mut held,
+                &self.player,
+                *position,
+                face,
+                cursor_pos,
+                block,
+                &server,
+            );
+            if should_try_block_placement(&item_result)
+                && let Some(placed_block) = Block::from_item_id(held.item.id)
+            {
+                let use_item_on = SUseItemOn {
+                    hand: VarInt(i32::from(hand.packet_id())),
+                    position: *position,
+                    face: VarInt(i32::from(face.to_index())),
+                    cursor_pos,
+                    inside_block: true,
+                    is_against_world_border: false,
+                    sequence: VarInt(0),
+                };
+                let placed = server
+                    .block_registry
+                    .place_block(
+                        &self.player,
+                        placed_block,
+                        &server,
+                        &use_item_on,
+                        *position,
+                        face,
+                    )
+                    .map_err(|error| format!("Block placement at {position:?} failed: {error:?}"))?
+                    .is_some();
+                if placed && self.gamemode() != GameMode::Creative {
+                    held.decrement(1);
+                }
+                placed
+            } else {
+                item_result.consumes_action()
+            }
+        };
         self.player.inventory.set_stack_in_hand(hand, held);
-        if result.consumes_action() {
+        if handled {
             Ok(())
         } else {
             Err(format!("Block use was not handled at {position:?}"))

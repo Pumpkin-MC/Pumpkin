@@ -1,9 +1,13 @@
-use pumpkin_data::{Block, block_properties::OakTrapdoorLikeProperties};
+use pumpkin_data::{
+    Block, block_properties::OakTrapdoorLikeProperties, item::Item, item_stack::ItemStack,
+};
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::{
     GameMode, Hand, PermissionLvl,
     math::{position::BlockPos, vector3::Vector3},
 };
+
+use crate::server::server_test_manager::server_world;
 
 pub(super) async fn test_world_block_use_and_break(test: GameTestContext) -> GameTestResult<()> {
     test.set_dimensions(5, 5, 5).await?;
@@ -37,6 +41,33 @@ pub(super) async fn test_world_block_use_and_break(test: GameTestContext) -> Gam
     )?;
     test.assert_item_entity_count("minecraft:gold_block", &break_pos, 1.0, 0)
         .await?;
+
+    player.set_gamemode(GameMode::Survival)?;
+    let log = BlockPos::new(3, 1, 2);
+    test.set_block_default(&log, &Block::OAK_LOG).await?;
+    player.set_held_item(Hand::Right, ItemStack::new(1, &Item::IRON_AXE))?;
+    player.use_block(&test.absolute_pos(&log), Hand::Right)?;
+    test.assert_block_present(&log, &Block::STRIPPED_OAK_LOG)
+        .await?;
+    test.assert_true(
+        player.held_item(Hand::Right).get_damage() == 1,
+        "Stripping a log did not wear down the held axe",
+    )?;
+
+    let support = BlockPos::new(2, 3, 2);
+    test.set_block_default(&support, &Block::STONE).await?;
+    player.set_held_item(Hand::Left, ItemStack::new(2, &Item::GOLD_BLOCK))?;
+    let support = test.absolute_pos(&support);
+    player.use_block(&support, Hand::Left)?;
+    // The hit face is world north regardless of the test's rotation.
+    test.assert_true(
+        server_world(&test)?.get_block(&support.north()) == &Block::GOLD_BLOCK,
+        "Block use did not place the held block on the north face",
+    )?;
+    test.assert_true(
+        player.held_item(Hand::Left).item_count == 1,
+        "Placing a block did not consume one item from the offhand",
+    )?;
     test.succeed();
     Ok(())
 }
