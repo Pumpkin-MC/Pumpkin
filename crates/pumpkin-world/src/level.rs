@@ -573,7 +573,10 @@ impl Level {
                     .chunk_loading
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if loading.ticket.contains_key(&pos) || saved_chunk.is_dirty() {
+                if loading.ticket.contains_key(&pos)
+                    || saved_chunk.live.load(Ordering::Acquire)
+                    || saved_chunk.is_dirty()
+                {
                     continue;
                 }
 
@@ -695,14 +698,14 @@ impl Level {
             .copied()
             .collect();
 
-        let entity_chunks_to_remove: Vec<_> = self
+        // The eviction task locks watchers before entity chunks.
+        let mut entity_chunks_to_remove: Vec<_> = self
             .loaded_entity_chunks
             .iter()
-            .filter(|entry| {
-                !self.chunk_watchers.contains_key(entry.key()) && !ticketed.contains(entry.key())
-            })
             .map(|entry| *entry.key())
             .collect();
+        entity_chunks_to_remove
+            .retain(|pos| !self.chunk_watchers.contains_key(pos) && !ticketed.contains(pos));
 
         // We do not clean them here because we want the caller to save any active entities in them first.
 

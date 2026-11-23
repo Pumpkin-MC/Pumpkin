@@ -740,7 +740,7 @@ impl World {
     pub async fn shutdown(&self) {
         self.save_forced_chunks().await;
         let entities = self.entities.load_full();
-        self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
+        self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions(), false)
             .await;
 
         let chunks: Vec<Vector2<i32>> = self
@@ -772,6 +772,7 @@ impl World {
         &self,
         entities: &[Arc<dyn EntityBase>],
         snapshot_chunks: impl IntoIterator<Item = Vector2<i32>>,
+        unloading: bool,
     ) {
         let mut groups: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
         for entity in entities {
@@ -799,17 +800,20 @@ impl World {
             } else {
                 self.level.get_entity_chunk(pos).await
             };
-            let live = chunk.live.load(Relaxed);
-            if !live && records.is_empty() {
-                continue;
-            }
             let mut data = chunk
                 .data
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let live = chunk.live.load(Relaxed);
+            if !live && records.is_empty() {
+                continue;
+            }
             merge_entity_records(&mut data, live, records);
-            drop(data);
             chunk.mark_dirty(true);
+            if unloading {
+                // The records are now authoritative, even while the chunk stays cached for I/O.
+                chunk.live.store(false, Ordering::Release);
+            }
         }
     }
 
@@ -5743,7 +5747,7 @@ impl World {
             new_entities
         });
 
-        self.save_entities_by_chunk(&entities_to_remove, chunks_set.iter().copied())
+        self.save_entities_by_chunk(&entities_to_remove, chunks_set.iter().copied(), true)
             .await;
 
         for entity in entities_to_remove {
@@ -8128,7 +8132,7 @@ impl World {
     pub async fn save(&self) {
         self.save_forced_chunks().await;
         let entities = self.entities.load_full();
-        self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
+        self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions(), false)
             .await;
 
         let chunks: Vec<Vector2<i32>> = self
@@ -9049,6 +9053,57 @@ mod tests {
         assert!(cow.mob_entity.is_no_ai());
         Ok(())
     }
+    #[tokio::test]
+    async fn repeated_entity_unload_preserves_saved_records()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{
+            Entity, EntityBase, ai::test_support::world as test_world, passive::cow::CowEntity,
+        };
+        use pumpkin_data::entity::EntityType;
+        use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+        use std::sync::Arc;
+
+        let folder = tempfile::tempdir()?;
+        let world = test_world(&folder);
+        let pos = Vector2::new(0, 0);
+        world.level.mark_chunks_as_newly_watched(&[pos]);
+        let chunk = world.level.get_entity_chunk(pos).await;
+        assert!(world.activate_entity_chunk(&chunk).is_some());
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::COW,
+        ));
+        let uuid = cow.get_entity().entity_uuid;
+        world.entities.store(Arc::new(vec![cow]));
+
+        let unwatched = world.level.mark_chunks_as_not_watched([pos]);
+        assert_eq!(unwatched, [pos]);
+        world.remove_entities_in_chunks(&unwatched).await;
+        world.level.clean_entity_chunks(&unwatched);
+
+        // The writer cannot evict the chunk before this synchronous sweep.
+        let cached = world.level.clean_memory();
+        assert!(cached.contains(&pos));
+        world.remove_entities_in_chunks(&cached).await;
+        world.level.clean_entity_chunks(&cached);
+        world.level.shutdown().await;
+
+        let reopened = test_world(&folder);
+        let saved = reopened.level.get_entity_chunk(pos).await;
+        let preserved = {
+            let records = saved
+                .data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            matches!(&records[..], [record] if record.get_uuid("UUID") == Some(uuid))
+        };
+        reopened.level.shutdown().await;
+
+        assert!(preserved);
+        Ok(())
+    }
+
     #[tokio::test]
     async fn removal_clears_brain_memories_after_unload_serialization()
     -> Result<(), Box<dyn std::error::Error>> {
