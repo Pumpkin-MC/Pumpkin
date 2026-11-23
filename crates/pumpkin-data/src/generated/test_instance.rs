@@ -321,6 +321,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:light_weighted_pressure_plate_counts_entities" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/light_weighted_pressure_plate_counts_entities.json"
         )),
+        "pumpkin:list_counts_visible_simulated_players" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/list_counts_visible_simulated_players.json"
+        )),
         "pumpkin:loot_entity_context_and_nested_tables" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/loot_entity_context_and_nested_tables.json"
         )),
@@ -760,6 +763,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:lever_toggles_power",
         "pumpkin:lever_wall_and_ceiling_orientations",
         "pumpkin:light_weighted_pressure_plate_counts_entities",
+        "pumpkin:list_counts_visible_simulated_players",
         "pumpkin:loot_entity_context_and_nested_tables",
         "pumpkin:note_block_instrument_and_power",
         "pumpkin:note_block_instruments_bone_iron_soul_pumpkin",

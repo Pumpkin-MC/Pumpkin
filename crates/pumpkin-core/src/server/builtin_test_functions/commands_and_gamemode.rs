@@ -44,7 +44,22 @@ pub(super) async fn test_commands_gamemode_give_setblock(
         test.block_state_id(&marker).await == Block::EMERALD_BLOCK.default_state.id,
         "Player /setblock did not place the emerald block",
     )?;
+    test.succeed();
+    Ok(())
+}
 
+pub(super) async fn test_list_counts_visible_simulated_players(
+    test: GameTestContext,
+) -> GameTestResult<()> {
+    test.set_dimensions(3, 3, 3).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
+    let player = test
+        .spawn_simulated_player(
+            "ListTester",
+            Vector3::new(1.5, 1.0, 1.5),
+            GameMode::Survival,
+        )
+        .await?;
     let server = server_world(&test)?
         .server
         .upgrade()
