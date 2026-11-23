@@ -25,6 +25,10 @@ impl LeapAtTargetGoal {
 
 impl Goal for LeapAtTargetGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if mob.get_controlling_passenger().is_some() {
+            return false;
+        }
+
         let mob_entity = mob.get_mob_entity();
         let entity = &mob_entity.living_entity.entity;
 
@@ -85,7 +89,7 @@ impl Goal for LeapAtTargetGoal {
                 (dz / dist_xz) * 0.4 + movement.z * 0.2,
             )
         } else {
-            Vector3::new(movement.x, f64::from(self.yd), movement.z)
+            Vector3::new(dx, f64::from(self.yd), dz)
         };
 
         entity.set_velocity(delta);
