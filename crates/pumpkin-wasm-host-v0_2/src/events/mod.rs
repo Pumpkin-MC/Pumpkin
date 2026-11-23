@@ -39,11 +39,39 @@ fn get_event_inner<E: Payload + ToFromWasmEvent + 'static>(
     state: &mut PluginHostState,
     event: &Resource<WasmEvent>,
 ) -> wasmtime::Result<Result<E::Wit, ()>> {
-    let handle = state.get(event)?.clone();
-    let Some(value) = handle.read::<E>()? else {
-        return Ok(Err(()));
+    let handle = match state.get_mut(event) {
+        Ok(slot) => slot
+            .take()
+            .ok_or(wasmtime::Error::msg("event resource is empty"))?,
+        Err(error) => {
+            return Err(error);
+        }
     };
-    Ok(Ok(value.to_wasm_event(state)))
+
+    let result = match handle.read::<E>() {
+        Some(value) => Ok(Ok(value.to_wasm_event(state))),
+        None => Ok(Err(())),
+    };
+
+    match state.get_mut(event) {
+        Ok(slot) => {
+            if slot.is_some() {
+                if let Ok(Ok(data)) = result {
+                    data.cleanup_event(state);
+                }
+                return Err(wasmtime::Error::msg("event resource isn't empty"));
+            }
+            slot.replace(handle);
+        }
+        Err(error) => {
+            if let Ok(Ok(data)) = result {
+                data.cleanup_event(state);
+            }
+            return Err(error);
+        }
+    };
+
+    result
 }
 
 fn set_event_inner<E: Payload + ToFromWasmEvent + 'static>(
@@ -51,28 +79,40 @@ fn set_event_inner<E: Payload + ToFromWasmEvent + 'static>(
     event: &Resource<WasmEvent>,
     data: E::Wit,
 ) -> wasmtime::Result<Result<(), ()>> {
-    let handle = match state.get(event) {
-        Ok(handle) => handle.clone(),
+    let mut handle = match state.get_mut(event) {
+        Ok(slot) => slot
+            .take()
+            .ok_or(wasmtime::Error::msg("event resource is empty"))?,
         Err(error) => {
             data.cleanup_event(state);
             return Err(error);
         }
     };
 
-    match handle.write::<E>() {
-        Ok(Some(mut value)) => {
+    let result = match handle.write::<E>() {
+        Some(value) => {
             value.apply_wasm_event(data, state);
             Ok(Ok(()))
         }
-        Ok(None) => {
+        None => {
             data.cleanup_event(state);
             Ok(Err(()))
         }
-        Err(error) => {
-            data.cleanup_event(state);
-            Err(error.into())
+    };
+
+    match state.get_mut(event) {
+        Ok(slot) => {
+            if slot.is_some() {
+                return Err(wasmtime::Error::msg("event resource isn't empty"));
+            }
+            slot.replace(handle);
         }
-    }
+        Err(error) => {
+            return Err(error);
+        }
+    };
+
+    result
 }
 
 macro_rules! impl_event_getter_setter {
@@ -1693,7 +1733,7 @@ impl DynEventHandler for WasmPluginEventHandler {
                 .func();
             let result = self.plugin.store.call_guest(move |mut guest| {
                 Box::pin(async move {
-                    let owned = guest.with(|mut store| store.data_mut().add::<WasmEvent>(event))?;
+                    let owned = guest.with(|mut store| store.data_mut().add::<WasmEvent>(Some(event)))?;
                     let server_resource = guest.with(|mut store| store.data_mut().add(server));
                     let result = match server_resource {
                         Ok(server) => {

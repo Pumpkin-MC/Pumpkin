@@ -13,7 +13,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    sync::{Notify, RwLock, RwLockMappedWriteGuard, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Notify, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock},
     task::JoinHandle,
 };
 use tracing::{debug, error, info, warn};
@@ -43,46 +43,34 @@ pub const PLUGIN_API_VERSION: u32 = 7;
 const PLUGIN_DIR: &str = "./plugins";
 
 /// Access to an event whose handler can continue running after its caller stops waiting.
-#[derive(Clone)]
-pub struct QueuedEvent {
-    storage: Arc<RwLock<dyn EventSlot>>,
-    writable: bool,
+pub struct QueuedEvent(QueuedEventInner);
+
+enum QueuedEventInner {
+    ReadOnly(OwnedRwLockReadGuard<dyn EventSlot>),
+    ReadWrite(OwnedRwLockWriteGuard<dyn EventSlot>),
 }
 
 impl QueuedEvent {
     /// Borrows a live event of the requested type for one synchronous host accessor.
     ///
     /// Returns `None` if the type differs or dispatch has reclaimed the payload.
-    ///
-    /// # Errors
-    /// Returns a lock error if another accessor holds an exclusive borrow.
-    pub fn read<E: Payload + 'static>(
-        &self,
-    ) -> Result<Option<RwLockReadGuard<'_, E>>, tokio::sync::TryLockError> {
-        Ok(RwLockReadGuard::try_map(self.storage.try_read()?, |slot| {
-            slot.payload()?.downcast_ref()
-        })
-        .ok())
+    #[must_use]
+    pub fn read<E: Payload + 'static>(&self) -> Option<&E> {
+        match &self.0 {
+            QueuedEventInner::ReadOnly(guard) => guard.payload()?.downcast_ref(),
+            QueuedEventInner::ReadWrite(guard) => guard.payload()?.downcast_ref(),
+        }
     }
 
     /// Borrows a live event for an edit by a blocking handler.
     ///
     /// Returns `None` for notifications, a type mismatch, or a reclaimed payload.
-    ///
-    /// # Errors
-    /// Returns a lock error if another accessor has borrowed the event.
-    pub fn write<E: Payload + 'static>(
-        &self,
-    ) -> Result<Option<RwLockMappedWriteGuard<'_, E>>, tokio::sync::TryLockError> {
-        if !self.writable {
-            return Ok(None);
+    #[must_use]
+    pub fn write<E: Payload + 'static>(&mut self) -> Option<&mut E> {
+        match &mut self.0 {
+            QueuedEventInner::ReadOnly(_) => None,
+            QueuedEventInner::ReadWrite(guard) => guard.payload_mut()?.downcast_mut(),
         }
-        Ok(
-            RwLockWriteGuard::try_map(self.storage.try_write()?, |slot| {
-                slot.payload_mut()?.downcast_mut()
-            })
-            .ok(),
-        )
     }
 }
 
@@ -176,10 +164,9 @@ where
     /// Asynchronously handles a dynamic event.
     fn handle_dyn<'a>(&'a self, server: &'a Arc<Server>, event: QueuedEvent) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            let guard = event.read::<E>();
-            let payload = guard.unwrap().unwrap();
+            let payload = event.read::<E>().unwrap();
 
-            self.handler.handle(server, &*payload).await;
+            self.handler.handle(server, payload).await;
         })
     }
 
@@ -218,12 +205,15 @@ where
     H: EventRwHandler<E>,
 {
     /// Asynchronously handles a dynamic event.
-    fn handle_dyn<'a>(&'a self, server: &'a Arc<Server>, event: QueuedEvent) -> BoxFuture<'a, ()> {
+    fn handle_dyn<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        mut event: QueuedEvent,
+    ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            let guard = event.write::<E>();
-            let mut payload = guard.unwrap().unwrap();
+            let payload = event.write::<E>().unwrap();
 
-            self.handler.handle(server, &mut *payload).await;
+            self.handler.handle(server, payload).await;
         })
     }
 
@@ -1340,13 +1330,12 @@ impl PluginManager {
         let slot = Arc::new(RwLock::new(Some(event)));
 
         for handler in handlers.iter().filter(|handler| handler.is_blocking()) {
+            let slot_clone: Arc<RwLock<dyn EventSlot>> = slot.clone();
+
             handler
                 .handle_dyn(
                     server,
-                    QueuedEvent {
-                        storage: slot.clone(),
-                        writable: true,
-                    },
+                    QueuedEvent(QueuedEventInner::ReadWrite(slot_clone.write_owned().await)),
                 )
                 .await;
         }
@@ -1356,14 +1345,17 @@ impl PluginManager {
                 .iter()
                 .filter(|handler| !handler.is_blocking())
                 .map(|handler| {
-                    let slot = &slot;
-                    handler.handle_dyn(
-                        server,
-                        QueuedEvent {
-                            storage: slot.clone(),
-                            writable: false,
-                        },
-                    )
+                    let slot_clone: Arc<RwLock<dyn EventSlot>> = slot.clone();
+                    async {
+                        handler
+                            .handle_dyn(
+                                server,
+                                QueuedEvent(QueuedEventInner::ReadOnly(
+                                    slot_clone.read_owned().await,
+                                )),
+                            )
+                            .await;
+                    }
                 }),
         )
         .await;
@@ -1457,70 +1449,59 @@ mod tests {
         let (submitted, queued) = tokio::sync::oneshot::channel();
         let caller = tokio::spawn(async move {
             let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(3))));
-            let handle = QueuedEvent {
-                storage: slot.clone(),
-                writable: true,
-            };
+            let slot_clone: Arc<RwLock<dyn EventSlot>> = slot.clone();
+            let handle = QueuedEvent(QueuedEventInner::ReadWrite(
+                slot_clone.try_write_owned().unwrap(),
+            ));
             assert!(submitted.send(handle).is_ok());
             std::future::pending::<()>().await;
             drop(slot);
         });
 
-        let handle = queued.await.unwrap();
+        let mut handle = queued.await.unwrap();
         caller.abort();
         assert!(caller.await.unwrap_err().is_cancelled());
-        handle
-            .write::<ServerTickStartEvent>()
-            .unwrap()
-            .unwrap()
-            .tick = 4;
-        assert_eq!(
-            handle.read::<ServerTickStartEvent>().unwrap().unwrap().tick,
-            4
-        );
+        handle.write::<ServerTickStartEvent>().unwrap().tick = 4;
+        assert_eq!(handle.read::<ServerTickStartEvent>().unwrap().tick, 4);
     }
 
     #[tokio::test]
     async fn queued_event_shares_edits_and_expires_after_dispatch() {
         let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(1))));
-        let blocking = QueuedEvent {
-            storage: slot.clone(),
-            writable: true,
-        };
-        let notification = QueuedEvent {
-            storage: slot.clone(),
-            writable: false,
-        };
-        blocking
-            .write::<ServerTickStartEvent>()
-            .unwrap()
-            .unwrap()
-            .tick = 2;
-        assert!(
-            notification
-                .write::<ServerTickStartEvent>()
-                .unwrap()
-                .is_none()
-        );
-        assert_eq!(
-            notification
-                .read::<ServerTickStartEvent>()
-                .unwrap()
-                .unwrap()
-                .tick,
-            2
-        );
+
         {
-            let mut guard = blocking.storage.write().await;
+            let mut blocking = QueuedEvent(QueuedEventInner::ReadWrite(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .write_owned()
+                    .await,
+            ));
+
+            blocking.write::<ServerTickStartEvent>().unwrap().tick = 2;
+        }
+
+        {
+            let mut notification = QueuedEvent(QueuedEventInner::ReadOnly(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .read_owned()
+                    .await,
+            ));
+
+            assert!(notification.write::<ServerTickStartEvent>().is_none());
+            assert_eq!(notification.read::<ServerTickStartEvent>().unwrap().tick, 2);
+        }
+
+        {
+            let mut guard = slot.write().await;
             let event = guard.payload_mut().unwrap();
             event
                 .as_any_mut()
                 .downcast_mut::<ServerTickStartEvent>()
                 .unwrap()
                 .tick = 3;
-        };
+        }
+
         {
-            let guard = notification.storage.read().await;
+            let guard = slot.read().await;
             let event = guard.payload().unwrap();
             assert_eq!(
                 event
@@ -1530,19 +1511,39 @@ mod tests {
                     .tick,
                 3
             );
-            assert_eq!(
-                notification
-                    .read::<ServerTickStartEvent>()
-                    .unwrap()
-                    .unwrap()
-                    .tick,
-                3
-            );
-        };
+        }
+
+        {
+            let notification = QueuedEvent(QueuedEventInner::ReadOnly(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .read_owned()
+                    .await,
+            ));
+
+            assert_eq!(notification.read::<ServerTickStartEvent>().unwrap().tick, 3);
+        }
+
         assert_eq!(slot.write().await.take().unwrap().tick, 3);
-        assert!(blocking.read::<ServerTickStartEvent>().unwrap().is_none());
-        assert!(blocking.write::<ServerTickStartEvent>().unwrap().is_none());
-        assert!(blocking.storage.read().await.payload().is_none());
+
+        {
+            let notification = QueuedEvent(QueuedEventInner::ReadOnly(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .read_owned()
+                    .await,
+            ));
+            assert!(notification.read::<ServerTickStartEvent>().is_none());
+        }
+
+        {
+            let mut blocking = QueuedEvent(QueuedEventInner::ReadWrite(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .write_owned()
+                    .await,
+            ));
+
+            assert!(blocking.write::<ServerTickStartEvent>().is_none());
+        }
+        assert!(slot.read().await.payload().is_none());
     }
 
     #[tokio::test]

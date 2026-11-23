@@ -476,7 +476,7 @@ mod resource_with {
     }
 
     impl FromResource for plugin::event::Event {
-        type Internal = QueuedEvent;
+        type Internal = Option<QueuedEvent>;
     }
 }
 
