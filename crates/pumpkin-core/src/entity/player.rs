@@ -6546,17 +6546,9 @@ impl Player {
     }
 
     pub fn add_effect(&self, effect: Effect) -> bool {
-        let is_added = self.living_entity.add_effect(effect);
-
-        if is_added {
-            self.trigger_advancement(
-                crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged,
-            );
-        }
-
-        is_added
+        self.living_entity.add_effect(effect)
     }
- 
+
     pub fn add_effect_with_source(&self, effect: Effect, source: &dyn EntityBase) -> bool {
         self.living_entity
             .add_effect_with_source(effect, Some(source))
