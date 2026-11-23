@@ -578,8 +578,30 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     fn notify_leash_holder(&self, _leashed: &dyn EntityBase) {}
 
     /// Checks whether this entity can accept the given passenger.
-    fn can_add_passenger(&self, _passenger: &dyn EntityBase) -> bool {
-        true
+    fn can_add_passenger(&self, passenger: &dyn EntityBase) -> bool {
+        let passengers = self
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        passengers.len() < self.max_passengers()
+            && !passengers
+                .iter()
+                .any(|p| p.get_entity().entity_id == passenger.get_entity().entity_id)
+    }
+
+    /// Maximum number of passengers this entity can carry.
+    fn max_passengers(&self) -> usize {
+        1
+    }
+
+    /// Vanilla `Entity.getDismountLocationForPassenger`.
+    /// Returns a custom dismount position if overridden (e.g. Happy Ghast center top).
+    fn get_dismount_location_for_passenger(
+        &self,
+        _passenger: &dyn EntityBase,
+    ) -> Option<Vector3<f64>> {
+        None
     }
 
     /// Called after a passenger has been added to this entity.
@@ -625,7 +647,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
-    fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
+    fn is_collidable(&self, _entity: Option<&dyn EntityBase>) -> bool {
         false
     }
 
@@ -1718,6 +1740,8 @@ pub struct Entity {
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
     /// Vanilla `needsSync`: tracker resyncs position and velocity of entities
     pub velocity_dirty: AtomicBool,
+    /// Vanilla `requiresPrecisePosition`: forces absolute position syncs instead of delta move packets.
+    pub requires_precise_position: AtomicBool,
     /// velocity goes to the own client
     pub sync_velocity: AtomicBool,
     /// Unsent entity pushes on a player. Bedrock clients don't predict them, so they stay
@@ -1990,6 +2014,7 @@ impl Entity {
             synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
+            requires_precise_position: AtomicBool::new(false),
             sync_velocity: AtomicBool::new(false),
             push_impulse: AtomicCell::new(Vector3::default()),
             removed: AtomicBool::new(false),
@@ -2672,10 +2697,22 @@ impl Entity {
     pub(crate) fn collide(&self, movement: Vector3<f64>, caller: &dyn EntityBase) -> Collision {
         let bounding_box = self.bounding_box.load();
 
-        let (collisions, block_positions) = self
+        let (mut collisions, block_positions) = self
             .world
             .load()
             .get_block_collisions(bounding_box.stretch(movement), caller);
+
+        let test_area = bounding_box.stretch(movement).expand_all(1.0e-7);
+        for entity in self.world.load().get_all_at_box(&test_area) {
+            let other = entity.get_entity();
+            if other.entity_id != self.entity_id
+                && !entity.is_spectator()
+                && entity.is_collidable(Some(caller))
+                && !self.is_passenger_of_same_vehicle(other)
+            {
+                collisions.push(other.bounding_box.load());
+            }
+        }
 
         if collisions.is_empty() {
             return Collision::free(movement);
@@ -5636,7 +5673,8 @@ impl Entity {
 
     #[expect(
         clippy::needless_pass_by_value,
-        reason = "callers pass owned Arc for vehicle and passenger"
+        clippy::too_many_lines,
+        reason = "callers pass owned Arc for vehicle and passenger, handles mount admission, sync, and events"
     )]
     pub fn add_passenger_with_force(
         &self,
@@ -5669,16 +5707,27 @@ impl Entity {
             return false;
         }
 
-        let passenger_entity = passenger.get_entity();
-        *passenger_entity
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&vehicle));
-
         let mut passengers = self
             .passengers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let passenger_entity = passenger.get_entity();
+        let passenger_id = passenger_entity.entity_id;
+
+        if !force
+            && (passengers.len() >= vehicle.max_passengers()
+                || passengers
+                    .iter()
+                    .any(|p| p.get_entity().entity_id == passenger_id))
+        {
+            return false;
+        }
+
+        *passenger_entity
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&vehicle));
 
         if let Some(player) = passenger.get_player() {
             let other_passenger_type = passengers
@@ -5906,7 +5955,8 @@ impl Entity {
         let chunk_pos = self.chunk_pos.load();
 
         if let Some(passenger) = removed_passenger {
-            if let Some(this) = self.world.load().get_entity_by_id(self.entity_id) {
+            let vehicle = self.world.load().get_entity_by_id(self.entity_id);
+            if let Some(this) = &vehicle {
                 this.on_passenger_removed(passenger.as_ref());
             }
             let vehicle_box = self.bounding_box.load();
@@ -6056,97 +6106,106 @@ impl Entity {
             let fallback_pos =
                 Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
 
-            let dismount_pos = if is_water {
-                fallback_pos
-            } else {
-                // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
-                let poses_and_heights = [
-                    (EntityPose::Standing, vec![0, 1, -1]),
-                    (EntityPose::Crouching, vec![0, 1, -1]),
-                    (EntityPose::Swimming, vec![0, 1]),
-                ];
+            let dismount_pos = vehicle
+                .as_ref()
+                .and_then(|v| v.get_dismount_location_for_passenger(passenger.as_ref()))
+                .unwrap_or_else(|| {
+                    if is_water {
+                        fallback_pos
+                    } else {
+                        // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
+                        let poses_and_heights = [
+                            (EntityPose::Standing, vec![0, 1, -1]),
+                            (EntityPose::Crouching, vec![0, 1, -1]),
+                            (EntityPose::Swimming, vec![0, 1]),
+                        ];
 
-                let vehicle_block_pos = self.block_pos.load();
-                let mut found = None;
+                        let vehicle_block_pos = self.block_pos.load();
+                        let mut found = None;
 
-                'search: for (pose, y_offsets) in poses_and_heights {
-                    let dims = passenger_entity.get_dimensions(pose);
+                        'search: for (pose, y_offsets) in poses_and_heights {
+                            let dims = passenger_entity.get_dimensions(pose);
 
-                    for y_offset in y_offsets {
-                        for &(ox, oz) in &offsets {
-                            let target_block_x = vehicle_block_pos.0.x + ox;
-                            let target_block_y = vehicle_block_pos.0.y + y_offset;
-                            let target_block_z = vehicle_block_pos.0.z + oz;
+                            for y_offset in y_offsets {
+                                for &(ox, oz) in &offsets {
+                                    let target_block_x = vehicle_block_pos.0.x + ox;
+                                    let target_block_y = vehicle_block_pos.0.y + y_offset;
+                                    let target_block_z = vehicle_block_pos.0.z + oz;
 
-                            let target_pos = BlockPos(Vector3::new(
-                                target_block_x,
-                                target_block_y,
-                                target_block_z,
-                            ));
-                            let height = world.get_dismount_height(&target_pos);
+                                    let target_pos = BlockPos(Vector3::new(
+                                        target_block_x,
+                                        target_block_y,
+                                        target_block_z,
+                                    ));
+                                    let height = world.get_dismount_height(&target_pos);
 
-                            if height.is_finite() && height < 1.0 {
-                                let location = Vector3::new(
-                                    f64::from(target_block_x) + 0.5,
-                                    f64::from(target_block_y) + height,
-                                    f64::from(target_block_z) + 0.5,
-                                );
+                                    if height.is_finite() && height < 1.0 {
+                                        let location = Vector3::new(
+                                            f64::from(target_block_x) + 0.5,
+                                            f64::from(target_block_y) + height,
+                                            f64::from(target_block_z) + 0.5,
+                                        );
 
-                                let bbox = BoundingBox::new_from_pos(
-                                    location.x, location.y, location.z, &dims,
-                                );
-                                if world.is_space_empty(bbox) {
-                                    found = Some((location, pose));
-                                    break 'search;
+                                        let bbox = BoundingBox::new_from_pos(
+                                            location.x, location.y, location.z, &dims,
+                                        );
+                                        if world.is_space_empty(bbox) {
+                                            found = Some((location, pose));
+                                            break 'search;
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                }
 
-                if let Some((pos, pose)) = found {
-                    if pose != EntityPose::Standing {
-                        passenger_entity.set_pose(pose);
-                    }
-                    pos
-                } else {
-                    // Try dismounting directly on top of the vehicle as fallback
-                    let mut found_fallback = None;
-                    let vehicle_top = vehicle_box.max.y;
+                        if let Some((pos, pose)) = found {
+                            if pose != EntityPose::Standing {
+                                passenger_entity.set_pose(pose);
+                            }
+                            pos
+                        } else {
+                            // Try dismounting directly on top of the vehicle as fallback
+                            let mut found_fallback = None;
+                            let vehicle_top = vehicle_box.max.y;
 
-                    let poses = [
-                        EntityPose::Standing,
-                        EntityPose::Crouching,
-                        EntityPose::Swimming,
-                    ];
+                            let poses = [
+                                EntityPose::Standing,
+                                EntityPose::Crouching,
+                                EntityPose::Swimming,
+                            ];
 
-                    for pose in poses {
-                        let dims = passenger_entity.get_dimensions(pose);
-                        let bbox = BoundingBox::new_from_pos(
-                            self.pos.load().x,
-                            vehicle_top,
-                            self.pos.load().z,
-                            &dims,
-                        );
-                        if world.is_space_empty(bbox) {
-                            found_fallback = Some((
-                                Vector3::new(self.pos.load().x, vehicle_top, self.pos.load().z),
-                                pose,
-                            ));
-                            break;
+                            for pose in poses {
+                                let dims = passenger_entity.get_dimensions(pose);
+                                let bbox = BoundingBox::new_from_pos(
+                                    self.pos.load().x,
+                                    vehicle_top,
+                                    self.pos.load().z,
+                                    &dims,
+                                );
+                                if world.is_space_empty(bbox) {
+                                    found_fallback = Some((
+                                        Vector3::new(
+                                            self.pos.load().x,
+                                            vehicle_top,
+                                            self.pos.load().z,
+                                        ),
+                                        pose,
+                                    ));
+                                    break;
+                                }
+                            }
+
+                            if let Some((pos, pose)) = found_fallback {
+                                if pose != EntityPose::Standing {
+                                    passenger_entity.set_pose(pose);
+                                }
+                                pos
+                            } else {
+                                fallback_pos
+                            }
                         }
                     }
-
-                    if let Some((pos, pose)) = found_fallback {
-                        if pose != EntityPose::Standing {
-                            passenger_entity.set_pose(pose);
-                        }
-                        pos
-                    } else {
-                        fallback_pos
-                    }
-                }
-            };
+                });
 
             // Clean up any remaining reference to the dismounted passenger.
             passenger_entity.set_pos(dismount_pos);

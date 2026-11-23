@@ -80,6 +80,9 @@ impl HappyGhastEntity {
 
     pub fn set_server_still_timeout(&self, timeout: i32) {
         let old = self.server_still_timeout.swap(timeout, Ordering::Relaxed);
+        self.get_entity()
+            .requires_precise_position
+            .store(self.is_on_still_timeout(), Ordering::Relaxed);
         if old <= 0 && timeout > 0 {
             let entity = self.get_entity();
             let pos = entity.pos.load();
@@ -200,8 +203,11 @@ impl HappyGhastEntity {
                 .mob_entity
                 .position_target_range
                 .load(Ordering::Relaxed);
-            let dist_sq = home_pos.squared_distance(&current_pos);
-            let limit = radius + Self::RESTRICTION_RADIUS_BUFFER;
+            let dx = i64::from(home_pos.0.x) - i64::from(current_pos.0.x);
+            let dy = i64::from(home_pos.0.y) - i64::from(current_pos.0.y);
+            let dz = i64::from(home_pos.0.z) - i64::from(current_pos.0.z);
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+            let limit = i64::from(radius + Self::RESTRICTION_RADIUS_BUFFER);
             if dist_sq < limit * limit && radius == home_radius {
                 return;
             }
@@ -519,7 +525,21 @@ impl Mob for HappyGhastEntity {
         Some(0.95)
     }
 
-    fn mob_is_collidable(&self, entity: Option<Box<dyn EntityBase>>) -> bool {
+    fn mob_max_passengers(&self) -> usize {
+        Self::MAX_PASSENGERS
+    }
+
+    fn mob_get_dismount_location_for_passenger(
+        &self,
+        _passenger: &dyn EntityBase,
+    ) -> Option<Vector3<f64>> {
+        let entity = self.get_entity();
+        let pos = entity.pos.load();
+        let bb = entity.bounding_box.load();
+        Some(Vector3::new(pos.x, bb.max.y, pos.z))
+    }
+
+    fn mob_is_collidable(&self, entity: Option<&dyn EntityBase>) -> bool {
         if self.is_baby() || !self.get_entity().is_alive() {
             return false;
         }
@@ -627,6 +647,9 @@ impl Mob for HappyGhastEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
+        self.get_entity()
+            .requires_precise_position
+            .store(self.is_on_still_timeout(), Ordering::Relaxed);
         let mut leash_time = self.leash_holder_time.load(Ordering::Relaxed);
         if leash_time > 0 {
             leash_time -= 1;
@@ -788,6 +811,18 @@ mod tests {
         ghast.set_server_still_timeout(10);
         assert!(ghast.is_on_still_timeout());
         assert!(ghast.stays_still.load(Ordering::Relaxed));
+        assert!(
+            ghast
+                .get_entity()
+                .requires_precise_position
+                .load(Ordering::Relaxed)
+        );
+        assert!(ghast.is_collidable(None));
+
+        let dismount = ghast.get_dismount_location_for_passenger(ghast.as_ref());
+        let pos = ghast.get_entity().pos.load();
+        let bb = ghast.get_entity().bounding_box.load();
+        assert_eq!(dismount, Some(Vector3::new(pos.x, bb.max.y, pos.z)));
 
         // Yaw snapping: e.g. 85.0 should snap to 90.0, 190.0 should snap to 180.0
         let entity = ghast.get_entity();
@@ -849,7 +884,8 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let ghast = test_happy_ghast(&folder, 0);
         let rider = test_happy_ghast(&folder, 0);
-        assert!(ghast.mob_can_add_passenger(rider.as_ref()));
+        assert_eq!(ghast.max_passengers(), 4);
+        assert!(ghast.can_add_passenger(rider.as_ref()));
 
         // Cannot add duplicate passenger
         ghast
@@ -858,7 +894,7 @@ mod tests {
             .lock()
             .unwrap()
             .push(rider.clone());
-        assert!(!ghast.mob_can_add_passenger(rider.as_ref()));
+        assert!(!ghast.can_add_passenger(rider.as_ref()));
     }
 
     #[tokio::test]

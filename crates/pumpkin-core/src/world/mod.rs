@@ -85,7 +85,6 @@ use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::FluidState;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::noise_settings::NoiseSettings;
-use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{
     Block, BlockStateId,
     entity::{EntityStatus, EntityType},
@@ -2660,9 +2659,8 @@ impl World {
         !self.get_all_at_box(&area).iter().any(|entity| {
             let other = entity.get_entity();
             !entity.is_spectator()
-                && (other.entity_type == &EntityType::SHULKER
-                    || other.entity_type == &EntityType::HAPPY_GHAST
-                    || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
+                && other.entity_id != source.get_entity().entity_id
+                && entity.is_collidable(Some(source))
                 && !source.get_entity().is_passenger_of_same_vehicle(other)
         })
     }
