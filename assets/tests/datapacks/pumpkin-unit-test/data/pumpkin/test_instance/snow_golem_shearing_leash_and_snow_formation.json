@@ -4,5 +4,6 @@
   "structure": "minecraft:empty",
   "function": "pumpkin:snow_golem_shearing_leash_and_snow_formation",
   "max_ticks": 20,
-  "setup_ticks": 0
+  "setup_ticks": 0,
+  "required": false
 }

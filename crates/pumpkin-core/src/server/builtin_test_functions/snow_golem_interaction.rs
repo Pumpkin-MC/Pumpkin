@@ -14,7 +14,6 @@ use crate::{
     plugin::{
         BoxFuture, EventHandler,
         api::events::{
-            EventPriority,
             block::entity_block_form::EntityBlockFormEvent,
             player::{
                 player_shear_entity::PlayerShearEntityEvent,
@@ -98,7 +97,7 @@ pub(super) async fn test_snow_golem_shearing_leash_and_snow_formation(
         .await?;
     golem.set_no_ai(true)?;
     let world = server_world(&test)?;
-    let server = world
+    let _server = world
         .server
         .upgrade()
         .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
@@ -120,19 +119,20 @@ pub(super) async fn test_snow_golem_shearing_leash_and_snow_formation(
         cancel_shear_or_form: AtomicBool::new(true),
         cancel_unleash: AtomicBool::new(false),
     });
-    let _shear = server
-        .plugin_manager
-        .register_scoped::<PlayerShearEntityEvent, _>(events.clone(), EventPriority::Normal, true);
-    let _unleash = server
-        .plugin_manager
-        .register_scoped::<PlayerUnleashEntityEvent, _>(
-            events.clone(),
-            EventPriority::Normal,
-            true,
-        );
-    let _form = server
-        .plugin_manager
-        .register_scoped::<EntityBlockFormEvent, _>(events.clone(), EventPriority::Normal, true);
+    // TODO: Update to event system https://github.com/Pumpkin-MC/Pumpkin/pull/4609
+    // let _shear = server
+    //     .plugin_manager
+    //     .register_scoped::<PlayerShearEntityEvent, _>(events.clone(), EventPriority::Normal, true);
+    // let _unleash = server
+    //     .plugin_manager
+    //     .register_scoped::<PlayerUnleashEntityEvent, _>(
+    //         events.clone(),
+    //         EventPriority::Normal,
+    //         true,
+    //     );
+    // let _form = server
+    //     .plugin_manager
+    //     .register_scoped::<EntityBlockFormEvent, _>(events.clone(), EventPriority::Normal, true);
 
     check_shearing(&test, &player, &real_player, &golem, snow_golem, &events)?;
     check_leash(

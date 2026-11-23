@@ -15,11 +15,8 @@ use pumpkin_util::{
 use crate::{
     plugin::{
         BoxFuture, EventHandler,
-        api::events::{
-            EventPriority,
-            player::{
-                player_item_break::PlayerItemBreakEvent, player_item_damage::PlayerItemDamageEvent,
-            },
+        api::events::player::{
+            player_item_break::PlayerItemBreakEvent, player_item_damage::PlayerItemDamageEvent,
         },
     },
     server::{Server, server_test_manager::server_world},
@@ -127,12 +124,13 @@ pub(super) async fn test_shearing_tool_loot_and_item_events(
         broken: AtomicUsize::new(0),
         cancel: AtomicBool::new(false),
     });
-    let _damage_handler = server
-        .plugin_manager
-        .register_scoped::<PlayerItemDamageEvent, _>(hooks.clone(), EventPriority::Normal, true);
-    let _break_handler = server
-        .plugin_manager
-        .register_scoped::<PlayerItemBreakEvent, _>(hooks.clone(), EventPriority::Normal, true);
+    // TODO: Update to event system https://github.com/Pumpkin-MC/Pumpkin/pull/4609
+    // let _damage_handler = server
+    //     .plugin_manager
+    //     .register_scoped::<PlayerItemDamageEvent, _>(hooks.clone(), EventPriority::Normal, true);
+    // let _break_handler = server
+    //     .plugin_manager
+    //     .register_scoped::<PlayerItemBreakEvent, _>(hooks.clone(), EventPriority::Normal, true);
 
     let sheep = test
         .spawn_entity("minecraft:sheep", Vector3::new(4.5, 1.0, 3.5))

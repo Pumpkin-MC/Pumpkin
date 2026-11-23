@@ -1,6 +1,6 @@
 # Creating a GameTest
 
-Minecraft has a built-in GameTest system. It places a test structure in the world, runs the test, and reports a pass or failure. A test instance JSON file names the structure and sets the test type and time limit.
+Minecraft has a built-in GameTest system. It places a test structure in the world, runs the test, and reports a pass or failure. A test instance JSON file names the structure and sets the test type and time limit. See the [Test Instance Definition](https://minecraft.wiki/w/Test_instance_definition) for the JSON format.
 
 - **Block based test:** The structure contains test blocks. A START block starts the test. An ACCEPT block marks a pass. A FAIL block marks a failure. This type does not need a Rust test function.
 - **Function test:** The test instance names a registered function. In Pumpkin, the function uses Rust code to set up the test and check the result. It can use `minecraft:empty` as its structure.

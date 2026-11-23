@@ -206,24 +206,6 @@ pub struct PluginManager {
     main_thread_id: ThreadId,
 }
 
-pub(crate) struct ScopedEventHandler {
-    manager: Arc<PluginManager>,
-    handler: Arc<dyn DynEventHandler>,
-}
-
-impl Drop for ScopedEventHandler {
-    fn drop(&mut self) {
-        self.manager.handlers.rcu(|handlers| {
-            let mut new_handlers = (**handlers).clone();
-            new_handlers.retain(|_, handlers| {
-                handlers.retain(|handler| !Arc::ptr_eq(handler, &self.handler));
-                !handlers.is_empty()
-            });
-            Arc::new(new_handlers)
-        });
-    }
-}
-
 /// Represents a successfully loaded plugin
 ///
 /// OS specific issues
@@ -1221,22 +1203,6 @@ impl PluginManager {
         H: EventHandler<E> + 'static,
     {
         self.add_handler::<E, H>(handler, priority, blocking);
-    }
-
-    pub(crate) fn register_scoped<E, H>(
-        self: &Arc<Self>,
-        handler: Arc<H>,
-        priority: EventPriority,
-        blocking: bool,
-    ) -> ScopedEventHandler
-    where
-        E: Payload + Send + Sync + 'static,
-        H: EventHandler<E> + 'static,
-    {
-        ScopedEventHandler {
-            manager: self.clone(),
-            handler: self.add_handler::<E, H>(handler, priority, blocking),
-        }
     }
 
     fn add_handler<E, H>(
