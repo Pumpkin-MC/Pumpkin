@@ -123,7 +123,10 @@ pub async fn run(options: GameTestOptions) -> Result<(), String> {
     let server = Server::new(
         basic_config,
         advanced_config,
-        TelemetryConfig::default(),
+        TelemetryConfig {
+            enabled: false,
+            ..Default::default()
+        },
         VanillaData::load(),
         Vec::new(),
     )
