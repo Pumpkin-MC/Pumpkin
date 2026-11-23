@@ -77,7 +77,7 @@ impl Behavior for CelebrateVillagersSurvivedRaid {
         raids.get(raid_id).is_some_and(|raid| !raid.is_stopped())
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         self.current_raid = None;
         let pos = tick.mob.get_entity().block_pos.load();
         tick.state

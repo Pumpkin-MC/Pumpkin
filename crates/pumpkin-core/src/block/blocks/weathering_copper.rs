@@ -11,13 +11,11 @@ use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, Mirror, Rotation};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
@@ -36,6 +34,7 @@ use crate::block::{
     UseWithItemArgs,
 };
 use crate::entity::EntityBase;
+use crate::entity::passive::copper_golem::CopperGolemEntity;
 use crate::entity::r#type::from_type;
 use crate::world::World;
 
@@ -973,25 +972,18 @@ impl BlockBehaviour for CopperGolemStatueBlock {
                     args.world,
                     Uuid::new_v4(),
                 );
+                let yaw = Self::horizontal_facing_to_yaw(props.facing);
                 let entity = golem.get_entity();
-                entity.set_rotation(Self::horizontal_facing_to_yaw(props.facing), 0.0);
+                entity.set_rotation(yaw, 0.0);
+                entity.head_yaw.store(yaw);
+                entity.body_yaw.store(yaw);
                 if let Some(name) = custom_name {
-                    entity.set_custom_name(TextComponent::text(name));
+                    entity.set_custom_name(name);
+                }
+                if let Some(copper_golem) = golem.cast_any().downcast_ref::<CopperGolemEntity>() {
+                    copper_golem.play_spawn_sound();
                 }
                 args.world.spawn_entity(golem);
-
-                args.world.play_sound(
-                    Sound::BlockCopperBreak,
-                    SoundCategory::Blocks,
-                    &args.position.to_f64(),
-                );
-                args.world.play_sound(
-                    Sound::ItemAxeScrape,
-                    SoundCategory::Blocks,
-                    &args.position.to_f64(),
-                );
-                args.world
-                    .sync_world_event(WorldEvent::ParticlesScrape, *args.position, 0);
 
                 if args.player.gamemode.load() != GameMode::Creative {
                     let _ = args.item_stack.damage_item(1);
@@ -1009,6 +1001,11 @@ impl BlockBehaviour for CopperGolemStatueBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         Self::update_pose(args.world, args.block, args.position);
         BlockActionResult::Success
+    }
+
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        args.world
+            .update_neighbour_for_output_signal(args.position, args.block);
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
