@@ -444,14 +444,13 @@ fn extract_zip(source: &Path, target: &Path) -> io::Result<()> {
     }
     let mut remaining_bytes = MAX_PACK_BYTES;
     for index in 0..archive.len() {
-        let entry = archive.by_index(index)?;
+        let mut entry = archive.by_index(index)?;
         if entry.size() > remaining_bytes {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Zip pack is too large",
             ));
         }
-        remaining_bytes -= entry.size();
         let relative = entry.enclosed_name().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -466,7 +465,14 @@ fn extract_zip(source: &Path, target: &Path) -> io::Result<()> {
                 fs::create_dir_all(parent)?;
             }
             let mut output = File::create(destination)?;
-            io::copy(&mut entry.take(MAX_PACK_BYTES + 1), &mut output)?;
+            let written = io::copy(&mut entry.by_ref().take(remaining_bytes), &mut output)?;
+            remaining_bytes -= written;
+            if remaining_bytes == 0 && entry.read(&mut [0])? != 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Zip pack is too large",
+                ));
+            }
         }
     }
     Ok(())
