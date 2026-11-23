@@ -2,7 +2,7 @@
   "type": "minecraft:function",
   "environment": "minecraft:default",
   "structure": "minecraft:empty",
-  "function": "pumpkin:piston_one_stone_leaves_pushed_block",
+  "function": "pumpkin:stone_button_ceiling_mount_strong_power",
   "max_ticks": 30,
   "setup_ticks": 0
 }

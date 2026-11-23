@@ -2,7 +2,7 @@
   "type": "minecraft:function",
   "environment": "minecraft:default",
   "structure": "minecraft:empty",
-  "function": "pumpkin:stone_pressure_plate_ignores_items_activates_on_mob",
-  "max_ticks": 30,
+  "function": "pumpkin:redstone_wire_corner_south_west",
+  "max_ticks": 20,
   "setup_ticks": 0
 }

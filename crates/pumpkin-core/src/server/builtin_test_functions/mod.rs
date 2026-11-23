@@ -106,7 +106,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:redstone_wire_attenuation_5_to_8", redstone_wire_and_power::test_redstone_wire_attenuation_5_to_8);
         register_test_function("pumpkin:redstone_wire_attenuation_9_to_12", redstone_wire_and_power::test_redstone_wire_attenuation_9_to_12);
         register_test_function("pumpkin:redstone_wire_attenuation_13_to_15", redstone_wire_and_power::test_redstone_wire_attenuation_13_to_15);
-        register_test_function("pumpkin:redstone_wire_corner_ne_and_sw", redstone_wire_and_power::test_redstone_wire_corner_north_east);
+        register_test_function("pumpkin:redstone_wire_corner_north_east", redstone_wire_and_power::test_redstone_wire_corner_north_east);
         register_test_function("pumpkin:redstone_wire_t_junction", redstone_wire_and_power::test_redstone_wire_t_junction_split);
         register_test_function("pumpkin:redstone_wire_cross_4_way", redstone_wire_and_power::test_redstone_wire_cross_junction_four_way);
         register_test_function("pumpkin:redstone_wire_step_up_climb", redstone_wire_and_power::test_redstone_wire_step_up_climb);
@@ -115,7 +115,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:redstone_wire_source_removal_deenergizes", redstone_wire_and_power::test_redstone_wire_source_removal_deenergizes);
         register_test_function("pumpkin:redstone_wire_repeater_reboosts_to_15", redstone_wire_and_power::test_redstone_wire_repeater_reboosts_signal);
         register_test_function("pumpkin:redstone_wire_strong_power_through_stone", redstone_wire_and_power::test_redstone_wire_strong_power_through_stone);
-        register_test_function("pumpkin:redstone_block_powers_all_horizontal_wires", redstone_wire_and_power::test_redstone_wire_corner_south_west);
+        register_test_function("pumpkin:redstone_wire_corner_south_west", redstone_wire_and_power::test_redstone_wire_corner_south_west);
 
         // redstone_logic_circuits (12)
         register_test_function("pumpkin:redstone_double_inverter_buffer", redstone_logic_circuits::test_redstone_double_inverter_buffer);
@@ -156,7 +156,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:lever_wall_and_ceiling_orientations", buttons_levers_plates_variants::test_lever_ceiling_mount_strong_power);
         register_test_function("pumpkin:lever_strong_powers_supporting_block", buttons_levers_plates_variants::test_lever_wall_mount_strong_power);
         register_test_function("pumpkin:lever_breaks_when_support_removed", buttons_levers_plates_variants::test_lever_breaks_when_support_removed);
-        register_test_function("pumpkin:stone_pressure_plate_ignores_items_activates_on_mob", buttons_levers_plates_variants::test_stone_button_ceiling_mount_strong_power);
+        register_test_function("pumpkin:stone_button_ceiling_mount_strong_power", buttons_levers_plates_variants::test_stone_button_ceiling_mount_strong_power);
         register_test_function("pumpkin:wooden_pressure_plate_activates_on_item_and_clears", buttons_levers_plates_variants::test_wooden_pressure_plate_item_activation);
         register_test_function("pumpkin:light_weighted_pressure_plate_counts_entities", buttons_levers_plates_variants::test_weighted_pressure_plate_light_scaling);
         register_test_function("pumpkin:heavy_weighted_pressure_plate_signal_1", buttons_levers_plates_variants::test_weighted_pressure_plate_heavy_scaling);
@@ -187,7 +187,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:piston_destroys_torch_and_moss_carpet", pistons_extended::test_piston_destroys_fragile_torch_and_moss);
         register_test_function("pumpkin:sticky_piston_leaves_obsidian_behind", pistons_extended::test_sticky_piston_leaves_obsidian_unmoved);
         register_test_function("pumpkin:sticky_piston_redstone_block_powers_lamp", pistons_extended::test_piston_pushes_redstone_block_powers_lamp);
-        register_test_function("pumpkin:piston_one_stone_leaves_pushed_block", pistons_extended::test_sticky_piston_pulls_redstone_block_cuts_power);
+        register_test_function("pumpkin:sticky_piston_pulls_redstone_block_cuts_power", pistons_extended::test_sticky_piston_pulls_redstone_block_cuts_power);
 
         // dispensers_and_droppers_extended (12)
         register_test_function("pumpkin:dispenser_lava_bucket_places_and_picks_up", dispensers_and_droppers_extended::test_dispenser_lava_bucket_place_and_pickup);

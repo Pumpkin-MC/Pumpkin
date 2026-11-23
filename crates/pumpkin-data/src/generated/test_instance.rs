@@ -366,9 +366,6 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:piston_destroys_torch_and_moss_carpet" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/piston_destroys_torch_and_moss_carpet.json"
         )),
-        "pumpkin:piston_one_stone_leaves_pushed_block" => Some(include_str!(
-            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/piston_one_stone_leaves_pushed_block.json"
-        )),
         "pumpkin:piston_pushes_downward_and_retracts" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/piston_pushes_downward_and_retracts.json"
         )),
@@ -410,9 +407,6 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         )),
         "pumpkin:redstone_and_gate_three_torches" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/redstone_and_gate_three_torches.json"
-        )),
-        "pumpkin:redstone_block_powers_all_horizontal_wires" => Some(include_str!(
-            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/redstone_block_powers_all_horizontal_wires.json"
         )),
         "pumpkin:redstone_comparator_modes" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/redstone_comparator_modes.json"
@@ -477,8 +471,11 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:redstone_wire_attenuation_9_to_12" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/redstone_wire_attenuation_9_to_12.json"
         )),
-        "pumpkin:redstone_wire_corner_ne_and_sw" => Some(include_str!(
-            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/redstone_wire_corner_ne_and_sw.json"
+        "pumpkin:redstone_wire_corner_north_east" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/redstone_wire_corner_north_east.json"
+        )),
+        "pumpkin:redstone_wire_corner_south_west" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/redstone_wire_corner_south_west.json"
         )),
         "pumpkin:redstone_wire_cross_4_way" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/redstone_wire_cross_4_way.json"
@@ -555,17 +552,20 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:sticky_piston_leaves_obsidian_behind" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/sticky_piston_leaves_obsidian_behind.json"
         )),
+        "pumpkin:sticky_piston_pulls_redstone_block_cuts_power" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/sticky_piston_pulls_redstone_block_cuts_power.json"
+        )),
         "pumpkin:sticky_piston_pulls_upward_and_downward" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/sticky_piston_pulls_upward_and_downward.json"
         )),
         "pumpkin:sticky_piston_redstone_block_powers_lamp" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/sticky_piston_redstone_block_powers_lamp.json"
         )),
+        "pumpkin:stone_button_ceiling_mount_strong_power" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/stone_button_ceiling_mount_strong_power.json"
+        )),
         "pumpkin:stone_button_pulse" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/stone_button_pulse.json"
-        )),
-        "pumpkin:stone_pressure_plate_ignores_items_activates_on_mob" => Some(include_str!(
-            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/stone_pressure_plate_ignores_items_activates_on_mob.json"
         )),
         "pumpkin:sugar_cane_breaks_when_water_removed" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/sugar_cane_breaks_when_water_removed.json"
@@ -769,7 +769,6 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:piston_blocked_by_bedrock",
         "pumpkin:piston_blocked_by_obsidian",
         "pumpkin:piston_destroys_torch_and_moss_carpet",
-        "pumpkin:piston_one_stone_leaves_pushed_block",
         "pumpkin:piston_pushes_downward_and_retracts",
         "pumpkin:piston_pushes_multi_block_row",
         "pumpkin:piston_pushes_north_and_south",
@@ -784,7 +783,6 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:pressure_plate_entity_activation",
         "pumpkin:rail_breaks_when_supporting_block_removed",
         "pumpkin:redstone_and_gate_three_torches",
-        "pumpkin:redstone_block_powers_all_horizontal_wires",
         "pumpkin:redstone_comparator_modes",
         "pumpkin:redstone_double_inverter_buffer",
         "pumpkin:redstone_lamp_delayed_off",
@@ -806,7 +804,8 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:redstone_wire_attenuation_1_to_4",
         "pumpkin:redstone_wire_attenuation_5_to_8",
         "pumpkin:redstone_wire_attenuation_9_to_12",
-        "pumpkin:redstone_wire_corner_ne_and_sw",
+        "pumpkin:redstone_wire_corner_north_east",
+        "pumpkin:redstone_wire_corner_south_west",
         "pumpkin:redstone_wire_cross_4_way",
         "pumpkin:redstone_wire_dual_sources_max",
         "pumpkin:redstone_wire_repeater_reboosts_to_15",
@@ -832,10 +831,11 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:stairs_revert_to_straight_when_neighbor_removed",
         "pumpkin:standing_lantern_breaks_when_floor_removed",
         "pumpkin:sticky_piston_leaves_obsidian_behind",
+        "pumpkin:sticky_piston_pulls_redstone_block_cuts_power",
         "pumpkin:sticky_piston_pulls_upward_and_downward",
         "pumpkin:sticky_piston_redstone_block_powers_lamp",
+        "pumpkin:stone_button_ceiling_mount_strong_power",
         "pumpkin:stone_button_pulse",
-        "pumpkin:stone_pressure_plate_ignores_items_activates_on_mob",
         "pumpkin:sugar_cane_breaks_when_water_removed",
         "pumpkin:sugar_cane_tall_column_cascades_break",
         "pumpkin:summon_command_regression",
