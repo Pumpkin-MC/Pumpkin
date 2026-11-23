@@ -267,21 +267,16 @@ impl BedBlock {
             // Mirrors AbstractBedBlock#kickVillagerOutOfBed: wake a sleeping villager
             // occupying the bed instead of showing the occupied message to the player.
             let bed_box = BoundingBox::from_block(&bed_head_pos);
-            let mut kicked_villager = false;
-            for entity in
-                world.get_entities_of_type_at_box(&bed_box, |t| t == &EntityType::VILLAGER)
-            {
-                let Some(villager) = entity.cast_any().downcast_ref::<VillagerEntity>() else {
-                    continue;
-                };
-                if villager.is_sleeping() {
-                    villager.wake_up();
-                    kicked_villager = true;
-                    break;
-                }
-            }
+            let entities =
+                world.get_entities_of_type_at_box(&bed_box, |e| e == &EntityType::VILLAGER);
+            let villager = entities
+                .iter()
+                .filter_map(|e| e.cast_any().downcast_ref::<VillagerEntity>())
+                .find(|v| v.is_sleeping());
 
-            if !kicked_villager {
+            if let Some(villager) = villager {
+                villager.wake_up();
+            } else {
                 player.send_system_message_raw(
                     &pumpkin_macros::translate_cross!(
                         translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
