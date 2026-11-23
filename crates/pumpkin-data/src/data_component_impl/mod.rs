@@ -871,6 +871,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_util::text::{TextComponent, color::NamedColor};
 
     #[test]
     fn hash() {
@@ -898,6 +899,26 @@ mod tests {
     #[test]
     fn max_damage_round_trip() {
         assert_round_trip(MaxDamageImpl { max_damage: 1561 }, MaxDamageImpl::read_data);
+    }
+
+    #[test]
+    fn custom_name_round_trip() {
+        assert_round_trip(
+            CustomNameImpl {
+                name: TextComponent::text("color me"),
+            },
+            CustomNameImpl::read_data,
+        );
+
+        // Styled names must not be modified after being a component, not coerced to a string
+        let styled = CustomNameImpl {
+            name: TextComponent::text("color me")
+                .color_named(NamedColor::Aqua)
+                .italic(),
+        };
+
+        assert!(matches!(styled.write_data(), NbtTag::Compound(_)));
+        assert_round_trip(styled, CustomNameImpl::read_data);
     }
 
     #[test]

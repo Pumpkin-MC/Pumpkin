@@ -112,14 +112,20 @@ pub struct CustomNameImpl {
 }
 impl CustomNameImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        data.extract_string().map(|name| Self {
-            name: TextComponent::text(name.to_string()),
-        })
+        match data {
+            // Vanilla accepts a string, a component compound, or list of components
+            NbtTag::String(_) | NbtTag::Compound(_) | NbtTag::List(_) => Some(Self {
+                name: TextComponent::from_nbt(data),
+            }),
+            _ => None,
+        }
     }
 }
 impl DataComponentImpl for CustomNameImpl {
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.name.clone().get_text().into())
+        self.name
+            .clone()
+            .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)
     }
     fn get_hash(&self) -> i32 {
         get_str_hash(self.name.clone().get_text().as_str()) as i32
