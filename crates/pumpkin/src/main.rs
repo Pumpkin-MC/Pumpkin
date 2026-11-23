@@ -56,10 +56,12 @@ async fn main() {
     // wasmtime-wasi-http/rtc already force) before any client can be constructed.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Initialize global Rayon thread pool with named worker threads
-    let _ = rayon::ThreadPoolBuilder::new()
-        .thread_name(|i| format!("Rayon-Worker-{i}"))
-        .build_global();
+    // Prepare Rayon while configuration and administrative JSON files are loaded.
+    let rayon_init = tokio::task::spawn_blocking(|| {
+        let _ = rayon::ThreadPoolBuilder::new()
+            .thread_name(|i| format!("Rayon-Worker-{i}"))
+            .build_global();
+    });
 
     // Set the panic handler.
     std::panic::set_hook(Box::new(handle_panic));
@@ -79,6 +81,11 @@ async fn main() {
     let vanilla_data = VanillaData::load();
 
     pumpkin_core::init_logger(&config.advanced);
+
+    if let Err(error) = rayon_init.await {
+        tracing::error!("Failed to initialize Rayon workers: {error}");
+        exit(1);
+    }
 
     if let Some(target_arg) = parse_convert_world_arg(std::env::args().skip(1)) {
         let anvil_default = match &config.advanced.world.chunk {
