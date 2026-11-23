@@ -838,6 +838,7 @@ pub fn spawn_category_for_position(
                         let despawn_dist = f64::from(entity_type.category.despawn_distance);
                         !(player_distance_sq > despawn_dist * despawn_dist
                             && mob.remove_when_far_away(player_distance_sq))
+                            && mob.check_spawn_obstruction(world)
                     });
 
                     if is_valid_for_mob {
