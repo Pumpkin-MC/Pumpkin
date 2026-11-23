@@ -3010,6 +3010,60 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
+    /// Applies a client sign edit after checking the editor, reach, and wax state.
+    pub(crate) fn update_sign_text(
+        &self,
+        location: BlockPos,
+        is_front_text: bool,
+        lines: [&str; 4],
+    ) {
+        let world = self.world();
+        // Vanilla checks the chunk before looking up the block entity. The reusable
+        // `may_update_text` gate repeats this for the Bedrock path, which has no pre-check.
+        if !world.level.is_chunk_loaded(&location.chunk_position()) {
+            return;
+        }
+
+        let Some(block_entity) = world.get_block_entity(&location) else {
+            return;
+        };
+        let Some(sign_entity) =
+            crate::block::entities::sign::SignEntityRef::from_block_entity(&*block_entity)
+        else {
+            return;
+        };
+        if !sign_entity.may_update_text(&world, self) {
+            warn!(
+                "Player {} just tried to change non-editable sign",
+                self.gameprofile.name
+            );
+            return;
+        }
+
+        if let Some(player_arc) = world.get_player_by_uuid(self.gameprofile.id) {
+            let mut event = crate::plugin::api::events::block::sign_change::SignChangeEvent::new(
+                player_arc,
+                location,
+                lines.map(str::to_owned).into(),
+            );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire_blocking(&server, &mut event);
+            }
+            if event.cancelled {
+                return;
+            }
+        }
+
+        sign_entity
+            .get_text(is_front_text)
+            .set_client_messages(&lines.map(Box::<str>::from));
+        *sign_entity
+            .currently_editing_player()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        world.update_block_entity(&block_entity);
+    }
+
     pub fn open_sign_editor(&self, location: BlockPos, is_front_text: bool) {
         if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
             && let Some(server) = self.world().server.upgrade()

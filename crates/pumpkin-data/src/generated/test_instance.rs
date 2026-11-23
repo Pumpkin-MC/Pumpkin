@@ -510,6 +510,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:shearing_tool_loot_and_item_events" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/shearing_tool_loot_and_item_events.json"
         )),
+        "pumpkin:sign_authorization_click_commands_and_applicators" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/sign_authorization_click_commands_and_applicators.json"
+        )),
         "pumpkin:simulated_player_actions" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/simulated_player_actions.json"
         )),
@@ -820,6 +823,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:referenced_environment",
         "pumpkin:scaffolding_distance_and_collapse",
         "pumpkin:shearing_tool_loot_and_item_events",
+        "pumpkin:sign_authorization_click_commands_and_applicators",
         "pumpkin:simulated_player_actions",
         "pumpkin:simulated_player_lifecycle",
         "pumpkin:smoker_cooks_raw_beef",

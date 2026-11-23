@@ -18,13 +18,13 @@ use pumpkin_protocol::{
             config::{SAcknowledgeFinishConfig, SClientInformationConfig, SKnownPacks},
             handshake::SHandShake,
             login::{SLoginAcknowledged, SLoginStart},
-            play::{SConfirmTeleport, SPlayerLoaded, SPlayerPosition, SUseItemOn},
+            play::{SConfirmTeleport, SPlayerLoaded, SPlayerPosition},
         },
     },
     packet::MultiVersionJavaPacket,
     ser::NetworkWriteExt,
 };
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::vector3::Vector3;
 use tokio::{
     io::{AsyncWrite, BufReader, BufWriter},
     net::TcpStream,
@@ -178,19 +178,6 @@ impl HeadlessBot {
         self.send_packet(&SPlayerPosition {
             position,
             collision: u8::from(on_ground),
-        })
-        .await
-    }
-
-    pub async fn use_block(&mut self, position: BlockPos, sequence: i32) -> Result<(), String> {
-        self.send_packet(&SUseItemOn {
-            hand: VarInt(0),
-            position,
-            face: VarInt(1),
-            cursor_pos: Vector3::new(0.5, 0.5, 0.5),
-            inside_block: false,
-            is_against_world_border: false,
-            sequence: VarInt(sequence),
         })
         .await
     }

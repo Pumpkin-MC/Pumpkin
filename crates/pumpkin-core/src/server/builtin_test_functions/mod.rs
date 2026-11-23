@@ -34,6 +34,7 @@ mod redstone_logic_circuits;
 mod redstone_wire_and_power;
 mod scaffolding;
 mod sheep_shearing;
+mod sign_authorization;
 mod simulated_player;
 mod snow_golem_interaction;
 mod target_and_projectiles;
@@ -56,6 +57,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:allay_interaction", allay_interaction::test_allay_interaction);
         register_test_function("pumpkin:polar_bear_cub_defense_and_target_lifecycle", polar_bear::test_polar_bear_cub_defense_and_target_lifecycle);
         register_test_function("pumpkin:shearing_tool_loot_and_item_events", sheep_shearing::test_shearing_tool_loot_and_item_events);
+        register_test_function("pumpkin:sign_authorization_click_commands_and_applicators", sign_authorization::test_sign_authorization_click_commands_and_applicators);
         register_test_function("pumpkin:block_tuning_and_invert", block_tuning_and_invert::test_block_tuning_and_invert);
         register_test_function("pumpkin:commands_gamemode_give_setblock", commands_and_gamemode::test_commands_gamemode_give_setblock);
         register_test_function("pumpkin:loot_entity_context_and_nested_tables", loot_tables::test_loot_entity_context_and_nested_tables);
