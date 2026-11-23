@@ -1,7 +1,11 @@
+use std::sync::Arc;
+
 use pumpkin_data::Block;
 use pumpkin_data::{item::Item, item_stack::ItemStack};
-use pumpkin_gametest::{GameTestContext, GameTestResult};
+use pumpkin_gametest::{GameTestContext, GameTestError, GameTestResult};
 use pumpkin_util::{GameMode, Hand, math::vector3::Vector3};
+
+use crate::{entity::EntityBase, server::server_test_manager::server_world};
 
 pub(super) async fn test_simulated_player_lifecycle(test: GameTestContext) -> GameTestResult<()> {
     test.set_dimensions(5, 5, 5).await?;
@@ -41,12 +45,52 @@ pub(super) async fn test_simulated_player_lifecycle(test: GameTestContext) -> Ga
         test.simulated_player_position(name).await == Some(destination),
         "Disconnecting one simulated player removed the other",
     )?;
-    simulated_player.disconnect().await?;
-    test.assert_true(
-        test.simulated_player_position(name).await.is_none(),
-        "Simulated player remained in the world after disconnect",
-    )?;
-    test.succeed();
+    let world = server_world(&test)?;
+    let server = world
+        .server
+        .upgrade()
+        .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+    let other_world = server
+        .worlds
+        .load()
+        .iter()
+        .find(|candidate| !Arc::ptr_eq(candidate, &world))
+        .cloned()
+        .ok_or_else(|| GameTestError::World("Cross-world teleport needs two worlds".to_string()))?;
+    let player_id = simulated_player.entity_id();
+    let player = world
+        .get_player_by_id(player_id)
+        .ok_or_else(|| GameTestError::World("Simulated player is missing".to_string()))?;
+    player.teleport(start, None, None, other_world.clone());
+
+    let destination_world = other_world.clone();
+    test.start_sequence()
+        .then_wait_until(move |test| {
+            let player = player.clone();
+            let world = world.clone();
+            let destination_world = destination_world.clone();
+            async move {
+                test.assert_true(
+                    Arc::ptr_eq(&player.world(), &destination_world)
+                        && player.position() == start
+                        && world.get_player_by_id(player_id).is_none()
+                        && destination_world.get_player_by_id(player_id).is_some(),
+                    "Simulated player did not teleport to the destination world",
+                )
+            }
+        })
+        .then_execute(move |test| {
+            let simulated_player = simulated_player.clone();
+            let other_world = other_world.clone();
+            async move {
+                simulated_player.disconnect().await?;
+                test.assert_true(
+                    other_world.get_player_by_id(player_id).is_none(),
+                    "Simulated player remained in the destination world after disconnect",
+                )
+            }
+        })
+        .then_succeed();
     Ok(())
 }
 

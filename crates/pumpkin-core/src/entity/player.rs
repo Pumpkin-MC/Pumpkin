@@ -1328,17 +1328,27 @@ impl Player {
         }
     }
 
-    /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
-    /// when the client. This means tasks should complete in a reasonable amount of time or select
-    /// on `Self::await_close_interrupt` to cancel the task when the client is closed
-    ///
-    /// Returns an `Option<JoinHandle<F::Output>>`. If the client is closed, this returns `None`.
+    /// Spawns a player task on the client runtime, or on the server runtime for a simulated player.
+    /// Client tasks are tracked until disconnect. Simulated player tasks are tracked until server
+    /// shutdown, so they must finish on their own. Returns `None` if the client is closed or the
+    /// simulated player's server is unavailable.
     pub fn spawn_task<F>(&self, task: F) -> Option<JoinHandle<F::Output>>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.client.spawn_task(task)
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
+            let Some(server) = self.world().server.upgrade() else {
+                warn!(
+                    "Cannot spawn a task for simulated player {} without a server",
+                    self.gameprofile.name
+                );
+                return None;
+            };
+            Some(server.spawn_task(task))
+        } else {
+            self.client.spawn_task(task)
+        }
     }
 
     /// Pairs tracked entities in chunks that were just queued for a player.
