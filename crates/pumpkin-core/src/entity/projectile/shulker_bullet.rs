@@ -351,15 +351,20 @@ impl EntityBase for ShulkerBulletEntity {
                     owner.as_deref(),
                 );
                 if hurt && let Some(living) = target.get_living_entity() {
-                    living.add_effect(Effect {
-                        effect_type: &StatusEffect::LEVITATION,
-                        duration: 200,
-                        amplifier: 0,
-                        ambient: false,
-                        show_particles: true,
-                        show_icon: true,
-                        blend: false,
-                    });
+                    let source_owner = self.owner.get(&world);
+                    let source: &dyn EntityBase = source_owner.as_deref().unwrap_or(self);
+                    living.add_effect_with_source(
+                        Effect {
+                            effect_type: &StatusEffect::LEVITATION,
+                            duration: 200,
+                            amplifier: 0,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                            blend: false,
+                        },
+                        Some(source),
+                    );
                 }
             }
             ProjectileHit::Block { .. } => {

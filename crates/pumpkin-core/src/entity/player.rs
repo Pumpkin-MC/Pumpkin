@@ -1347,7 +1347,7 @@ impl Player {
                 skin: (**self.bedrock_skin.load()).clone(),
                 is_teacher: false,
                 is_host: false,
-                is_sub_client: false,
+                is_sub_client: self.client.bedrock().is_some_and(|c| c.is_sub_client()),
                 player_color: [0; 4],
             }],
         }
@@ -1735,16 +1735,17 @@ impl Player {
         }
 
         let old_movement = victim_entity.velocity.load();
+        let damage_type = if is_mace_smash {
+            DamageType::MACE_SMASH
+        } else {
+            item_stack
+                .get_data_component::<pumpkin_data::data_component_impl::DamageTypeImpl>()
+                .map_or(DamageType::PLAYER_ATTACK, |dt| dt.damage_type)
+        };
         if !victim.damage_with_context(
             victim.as_ref(),
             damage as f32,
-            if is_mace_smash {
-                DamageType::MACE_SMASH
-            } else {
-                item_stack
-                    .get_data_component::<pumpkin_data::data_component_impl::DamageTypeImpl>()
-                    .map_or(DamageType::PLAYER_ATTACK, |dt| dt.damage_type)
-            },
+            damage_type,
             None,
             Some(self),
             Some(self),
@@ -1786,7 +1787,12 @@ impl Player {
             mace_smash_knockback(&world, self, victim.as_ref());
         }
 
-        crate::enchantment::EnchantmentHelper::on_post_attack(self, victim_entity, &item_stack);
+        crate::enchantment::EnchantmentHelper::on_post_attack(
+            self,
+            victim.as_ref(),
+            &item_stack,
+            damage_type,
+        );
 
         if is_mace_smash_living {
             self.living_entity.fall_distance.store(0.0);
@@ -6541,9 +6547,11 @@ impl Player {
 
     pub fn add_effect(&self, effect: Effect) {
         self.living_entity.add_effect(effect);
-        self.trigger_advancement(
-            crate::entity::player::advancement::trigger::AdvancementTrigger::EffectsChanged,
-        );
+    }
+
+    pub fn add_effect_with_source(&self, effect: Effect, source: &dyn EntityBase) {
+        self.living_entity
+            .add_effect_with_source(effect, Some(source));
     }
 
     pub fn has_effect(&self, effect_type: &'static StatusEffect) -> bool {

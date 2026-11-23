@@ -29,8 +29,8 @@ where
 }
 
 #[derive(Default)]
-struct Generator {
-    predicates: TokenStream,
+pub(crate) struct Generator {
+    pub(crate) predicates: TokenStream,
     predicate_count: usize,
 }
 
@@ -106,7 +106,7 @@ impl Generator {
         quote! { &#name }
     }
 
-    fn condition(&mut self, condition: &DynamicLootCondition) -> TokenStream {
+    pub(crate) fn condition(&mut self, condition: &DynamicLootCondition) -> TokenStream {
         match condition {
             DynamicLootCondition::None => quote! { LootCondition::None },
             DynamicLootCondition::Never => quote! { LootCondition::Never },
@@ -121,6 +121,12 @@ impl Generator {
             DynamicLootCondition::KilledByPlayer => quote! { LootCondition::KilledByPlayer },
             DynamicLootCondition::RandomChance { chance } => {
                 quote! { LootCondition::RandomChance { chance: #chance } }
+            }
+            DynamicLootCondition::RandomChanceWithEnchantmentLevel {
+                base,
+                per_level_above_first,
+            } => {
+                quote! { LootCondition::RandomChanceWithEnchantmentLevel { base: #base, per_level_above_first: #per_level_above_first } }
             }
             DynamicLootCondition::RandomChanceWithEnchantedBonus {
                 enchantment,

@@ -47,7 +47,7 @@ impl Behavior for Croak {
         self.croak_counter += 1;
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.mob.get_entity().set_pose(EntityPose::Standing);
     }
 
