@@ -1,9 +1,11 @@
 use pumpkin_data::{Block, item::Item};
-use pumpkin_gametest::{GameTestContext, GameTestResult};
+use pumpkin_gametest::{GameTestContext, GameTestError, GameTestResult};
 use pumpkin_util::{
     GameMode, PermissionLvl,
     math::{position::BlockPos, vector3::Vector3},
 };
+
+use crate::{command::CommandSender, server::server_test_manager::server_world};
 
 pub(super) async fn test_commands_gamemode_give_setblock(
     test: GameTestContext,
@@ -41,6 +43,28 @@ pub(super) async fn test_commands_gamemode_give_setblock(
     test.assert_true(
         test.block_state_id(&marker).await == Block::EMERALD_BLOCK.default_state.id,
         "Player /setblock did not place the emerald block",
+    )?;
+
+    let server = server_world(&test)?
+        .server
+        .upgrade()
+        .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+    let source = CommandSender::Dummy.into_source(&server);
+    let dispatcher = server.command_dispatcher.load();
+    let list_count = || {
+        dispatcher
+            .execute_input("list", &source)
+            .map_err(|error| GameTestError::World(error.message.get_text()))
+    };
+
+    player.set_visible_in_list(false);
+    let hidden_count = list_count()?;
+    player.set_visible_in_list(true);
+    let visible_count = list_count();
+    player.set_visible_in_list(false);
+    test.assert_true(
+        visible_count? == hidden_count + 1,
+        "/list did not count a simulated player marked visible",
     )?;
     test.succeed();
     Ok(())

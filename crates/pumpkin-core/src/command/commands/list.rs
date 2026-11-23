@@ -34,7 +34,7 @@ impl CommandExecutor for ListCommandExecutor {
             .into_iter()
             .filter(|player| player.client.visible_in_list())
             .collect();
-        let online_count = context.server().get_player_count();
+        let online_count = players.len();
 
         let list = match self.0 {
             ListMode::Names => get_player_names(&players),
