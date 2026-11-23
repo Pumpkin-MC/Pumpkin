@@ -16,8 +16,8 @@ use crate::model::{GameTestRotation, TestType};
 use crate::structure::clear_placed_test;
 use crate::structure::{
     GameTestPosition, GameTestStructureTemplate, TestBlockMode, TestStructureInstance,
-    clear_success_entities, encase_structure,
-    place_structure_with_controller_rotation_and_entities, remove_barriers,
+    clear_success_entities, encase_structure, place_prepared_structure, remove_barriers,
+    resolve_structure_placement,
 };
 use crate::world::GameTestWorld;
 
@@ -147,6 +147,7 @@ impl GameTestSession {
                 self.world.as_ref(),
                 &placement,
                 self.test.definition().padding,
+                self.test.definition().sky_access,
             )
             .await?;
         }
@@ -191,39 +192,45 @@ impl GameTestSession {
     }
 
     async fn tick_queued(&mut self) {
-        let placement = place_structure_with_controller_rotation_and_entities(
+        let placement = resolve_structure_placement(
+            self.world.as_ref(),
+            &self.template,
+            self.effective_rotation,
+            GameTestPosition::new(self.test_x, self.test_y, self.test_z),
+            self.test.definition().padding,
+        )
+        .await;
+        self.test_y = Some(placement.test_instance_pos().0.y);
+        self.placement = Some(placement);
+
+        if let Err(error) = place_prepared_structure(
             self.world.as_ref(),
             &self.template,
             self.test.id(),
-            self.effective_rotation,
             self.extra_rotation,
-            GameTestPosition::new(self.test_x, self.test_y, self.test_z),
+            &placement,
             self.test.definition().padding,
             self.ignore_entities,
         )
-        .await;
-
-        match placement {
-            Ok(placement) => {
-                self.test_y = Some(placement.test_instance_pos().0.y);
-                self.placement = Some(placement);
-                if let Err(error) = encase_structure(
-                    self.world.as_ref(),
-                    &placement,
-                    self.test.definition().sky_access,
-                )
-                .await
-                {
-                    self.finish_failure(0, error, None).await;
-                    return;
-                }
-
-                // Vanilla's StructureSpawner calls startExecution(1), so even a test
-                // with zero setup ticks waits until the next server tick to start.
-                self.state = GameTestState::SettingUp { elapsed_ticks: 0 };
-            }
-            Err(error) => self.finish_failure(0, error, None).await,
+        .await
+        {
+            self.finish_failure(0, error, None).await;
+            return;
         }
+        if let Err(error) = encase_structure(
+            self.world.as_ref(),
+            &placement,
+            self.test.definition().sky_access,
+        )
+        .await
+        {
+            self.finish_failure(0, error, None).await;
+            return;
+        }
+
+        // Vanilla's StructureSpawner calls startExecution(1), so even a test
+        // with zero setup ticks waits until the next server tick to start.
+        self.state = GameTestState::SettingUp { elapsed_ticks: 0 };
     }
 
     async fn tick_setup(&mut self, elapsed_ticks: u32) {

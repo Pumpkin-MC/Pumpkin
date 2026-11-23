@@ -7,6 +7,7 @@ pub use placement::{
     place_structure, place_structure_block_entity, place_structure_with_controller_rotation,
     place_structure_with_controller_rotation_and_entities, remove_barriers,
 };
+pub(crate) use placement::{place_prepared_structure, resolve_structure_placement};
 pub use template::{
     GameTestStructureBlock, GameTestStructureEntity, GameTestStructureTemplate, TestBlockMode,
 };

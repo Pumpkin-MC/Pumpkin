@@ -194,6 +194,27 @@ pub async fn place_structure_with_controller_rotation_and_entities(
     padding: i32,
     ignore_entities: bool,
 ) -> GameTestResult<TestStructureInstance> {
+    let placement = resolve_structure_placement(world, template, rotation, position, padding).await;
+    place_prepared_structure(
+        world,
+        template,
+        test_id,
+        controller_rotation,
+        &placement,
+        padding,
+        ignore_entities,
+    )
+    .await?;
+    Ok(placement)
+}
+
+pub async fn resolve_structure_placement(
+    world: &dyn GameTestWorld,
+    template: &GameTestStructureTemplate,
+    rotation: GameTestRotation,
+    position: GameTestPosition,
+    padding: i32,
+) -> TestStructureInstance {
     // TestInstanceBlockEntity.getStructurePos offsets the controller by padding and
     // then by STRUCTURE_OFFSET. The controller itself is outside the structure box.
     // Reruns retain the original controller Y instead of querying a heightmap again.
@@ -215,12 +236,21 @@ pub async fn place_structure_with_controller_rotation_and_entities(
         source_size[2],
     ));
     let size = [rotated_size.x, rotated_size.y, rotated_size.z];
-    let placement =
-        TestStructureInstance::new(test_instance_pos, origin, source_size, size, rotation);
+    TestStructureInstance::new(test_instance_pos, origin, source_size, size, rotation)
+}
 
+pub async fn place_prepared_structure(
+    world: &dyn GameTestWorld,
+    template: &GameTestStructureTemplate,
+    test_id: &str,
+    controller_rotation: GameTestRotation,
+    placement: &TestStructureInstance,
+    padding: i32,
+    ignore_entities: bool,
+) -> GameTestResult<()> {
     world
         .set_block_state(
-            &test_instance_pos,
+            placement.test_instance_pos(),
             Block::TEST_INSTANCE_BLOCK.default_state.id,
             BlockFlags::NOTIFY_ALL,
         )
@@ -231,7 +261,7 @@ pub async fn place_structure_with_controller_rotation_and_entities(
     // minecraft:test_instance registry.
     let mut data = NbtCompound::new();
     data.put_string("test", test_id.to_string());
-    data.put("size", NbtTag::IntArray(source_size.to_vec()));
+    data.put("size", NbtTag::IntArray(placement.source_size().to_vec()));
     data.put_string(
         "rotation",
         controller_rotation.serialized_name().to_string(),
@@ -243,12 +273,12 @@ pub async fn place_structure_with_controller_rotation_and_entities(
     test_instance_nbt.put_string("id", "minecraft:test_instance_block".to_string());
     test_instance_nbt.put_compound("data", data);
     world
-        .set_block_entity_nbt(&test_instance_pos, &test_instance_nbt)
+        .set_block_entity_nbt(placement.test_instance_pos(), &test_instance_nbt)
         .await?;
 
-    place_existing_structure(world, template, &placement, padding, ignore_entities).await?;
+    place_existing_structure(world, template, placement, padding, ignore_entities).await?;
 
-    Ok(placement)
+    Ok(())
 }
 
 /// Places a template around an existing test controller without changing its saved data.
@@ -502,6 +532,7 @@ pub async fn clear_placed_test(
     world: &dyn GameTestWorld,
     placement: &TestStructureInstance,
     padding: i32,
+    sky_access: bool,
 ) -> GameTestResult<()> {
     let origin = placement.origin();
     let size = placement.size();
@@ -519,7 +550,7 @@ pub async fn clear_placed_test(
     clear_test_area(world, origin, size, padding).await?;
     world.clear_scheduled_block_ticks(&min, &max).await?;
     world.clear_block_events(&min, &max).await?;
-    remove_barriers(world, placement, false).await?;
+    remove_barriers(world, placement, sky_access).await?;
     world
         .set_block_state(
             placement.test_instance_pos(),

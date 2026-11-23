@@ -50,6 +50,7 @@ mod tests {
     #[derive(Default)]
     struct InMemoryTestWorld {
         blocks: Mutex<HashMap<BlockPos, BlockStateId>>,
+        fail_block_state_at: Mutex<Option<BlockPos>>,
         test_blocks_triggered: Mutex<HashMap<BlockPos, bool>>,
         test_block_messages: Mutex<HashMap<BlockPos, String>>,
         instance_state: Mutex<InstanceState>,
@@ -77,6 +78,18 @@ mod tests {
             block_state_id: BlockStateId,
             _flags: BlockFlags,
         ) -> GameTestResult<()> {
+            if block_state_id != Block::AIR.default_state.id
+                && self
+                    .fail_block_state_at
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .as_ref()
+                    == Some(position)
+            {
+                return Err(GameTestError::World(
+                    "Test block placement failed".to_string(),
+                ));
+            }
             self.blocks
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -221,6 +234,131 @@ mod tests {
         assert!(report.is_done());
         assert_eq!(report.failed_required(), 0);
         assert_eq!(report.failed_optional(), 1);
+    }
+
+    #[tokio::test]
+    async fn failed_structure_placement_keeps_bounds_for_cleanup() -> GameTestResult<()> {
+        let world = Arc::new(InMemoryTestWorld::default());
+        let first_block = BlockPos::new(0, 66, 1);
+        let failed_block = BlockPos::new(1, 66, 1);
+        *world
+            .fail_block_state_at
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(failed_block);
+        let template = Arc::new(GameTestStructureTemplate::new(
+            [2, 1, 1],
+            vec![
+                GameTestStructureBlock {
+                    position: [0, 0, 0],
+                    state: Block::STONE.default_state.id,
+                    nbt: None,
+                    test_mode: None,
+                },
+                GameTestStructureBlock {
+                    position: [1, 0, 0],
+                    state: Block::GOLD_BLOCK.default_state.id,
+                    nbt: None,
+                    test_mode: None,
+                },
+            ],
+        )?);
+        let definition = GameTestDefinition {
+            instance_type: TestType::BlockBased,
+            environment: serde_json::Value::String("minecraft:default".to_string()),
+            dimension: "minecraft:overworld".to_string(),
+            function: None,
+            structure: "test:partial".to_string(),
+            max_ticks: 20,
+            setup_ticks: 0,
+            required: true,
+            rotation: GameTestRotation::None,
+            manual_only: false,
+            max_attempts: 1,
+            required_successes: 1,
+            sky_access: false,
+            padding: 0,
+        };
+        let test = BlockBasedTest::new("test:partial", definition);
+        let mut session = GameTestSession::new(test, world.clone(), template, 0, 0);
+
+        session.tick().await;
+        assert!(matches!(&session.state, GameTestState::Failed { .. }));
+        assert_eq!(
+            world.block_state_id(&first_block).await,
+            Block::STONE.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&BlockPos::new(0, 65, 0)).await,
+            Block::TEST_INSTANCE_BLOCK.default_state.id
+        );
+
+        session.clear_placement().await?;
+        assert_eq!(
+            world.block_state_id(&first_block).await,
+            Block::AIR.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&BlockPos::new(0, 65, 0)).await,
+            Block::AIR.default_state.id
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn clearing_sky_access_test_preserves_open_ceiling() -> GameTestResult<()> {
+        let world = InMemoryTestWorld::default();
+        let controller = BlockPos::new(0, 65, 0);
+        let origin = BlockPos::new(0, 66, 1);
+        let placement = TestStructureInstance::new(
+            controller,
+            origin,
+            [3, 1, 3],
+            [3, 1, 3],
+            GameTestRotation::None,
+        );
+        let ceiling = BlockPos::new(1, 67, 2);
+        let shell = BlockPos::new(1, 65, 2);
+        world
+            .set_block_state(
+                &controller,
+                Block::TEST_INSTANCE_BLOCK.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await?;
+        world
+            .set_block_state(
+                &origin,
+                Block::STONE.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await?;
+        world
+            .set_block_state(
+                &ceiling,
+                Block::BARRIER.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await?;
+        encase_structure(&world, &placement, true).await?;
+
+        clear_placed_test(&world, &placement, 0, true).await?;
+        assert_eq!(
+            world.block_state_id(&ceiling).await,
+            Block::BARRIER.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&shell).await,
+            Block::AIR.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&origin).await,
+            Block::AIR.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&controller).await,
+            Block::AIR.default_state.id
+        );
+        Ok(())
     }
 
     #[test]

@@ -886,22 +886,23 @@ async fn clear_test_instance(
             "Block entity at {position} is not a test instance block"
         ))
     })?;
-    let padding = {
+    let (padding, sky_access) = {
         let data = entity
             .data
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Unknown tests may not have placed a ceiling, so preserve that layer.
         data.as_ref()
             .and_then(|data| data.get_string("test"))
             .and_then(|test| server.datapack_manager.get_test_instance(test))
-            .map_or(0, |test| test.padding)
+            .map_or((0, true), |test| (test.padding, test.sky_access))
     };
     let adapter = ServerGameTestWorld {
         world,
         forced_chunks: StdMutex::new(HashSet::new()),
         simulated_players: StdMutex::new(Vec::new()),
     };
-    clear_placed_test(&adapter, &placement, padding).await?;
+    clear_placed_test(&adapter, &placement, padding, sky_access).await?;
     Ok(true)
 }
 
