@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_protocol::bedrock::client::transfer::CTransfer as BedrockCTransfer;
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::CTransfer as JavaCTransfer;
+use indexmap::IndexMap;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
@@ -39,46 +37,51 @@ fn transfer_players(
         return Err(ERROR_NOT_PLAYER.create_without_context());
     }
 
-    for p in players {
-        let bedrock_packet = BedrockCTransfer::new(hostname.to_string(), port as u16, false);
-        let java_packet = JavaCTransfer::new(hostname, VarInt(port));
-        p.try_enqueue_packet_editioned(&java_packet, &bedrock_packet);
+    let mut destinations = IndexMap::new();
+    let mut transferred = 0;
+    for player in players {
+        let Some((hostname, port)) = player.transfer(hostname, port as u16) else {
+            continue;
+        };
 
         info!(
             "[{}: Transferring {} to {hostname}:{port}]",
-            source.name, p.gameprofile.name
+            source.name, player.gameprofile.name
         );
+        destinations
+            .entry((hostname, port))
+            .or_insert_with(Vec::new)
+            .push(player);
+        transferred += 1;
     }
 
-    if players.len() == 1 {
+    for ((hostname, port), players) in destinations {
+        let (key, target) = if let [player] = players.as_slice() {
+            (
+                "commands.transfer.success.single",
+                player.get_display_name(),
+            )
+        } else {
+            (
+                "commands.transfer.success.multiple",
+                TextComponent::text(players.len().to_string()),
+            )
+        };
         source.send_feedback(
             TextComponent::translate_cross(
-                "commands.transfer.success.single",
-                "commands.transfer.success.single",
+                key,
+                key,
                 [
-                    players[0].as_ref().get_display_name(),
-                    TextComponent::text(hostname.to_string()),
+                    target,
+                    TextComponent::text(hostname),
                     TextComponent::text(port.to_string()),
                 ],
             ),
             true,
         );
-    } else {
-        source.send_feedback(
-            TextComponent::translate_cross(
-                "commands.transfer.success.multiple",
-                "commands.transfer.success.multiple",
-                [
-                    TextComponent::text(players.len().to_string()),
-                    TextComponent::text(hostname.to_string()),
-                    TextComponent::text(port.to_string()),
-                ],
-            ),
-            true,
-        );
     }
 
-    Ok(players.len() as i32)
+    Ok(transferred)
 }
 
 #[derive(Clone, Copy)]

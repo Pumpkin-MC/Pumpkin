@@ -15,6 +15,7 @@ const ENTRY_CONDITIONS: [(MemoryModuleId, MemoryStatus); 2] = [
 
 pub struct AnimalPanic {
     speed_multiplier: f32,
+    panic_causes: &'static tag::Tag,
     fly_height: Option<i32>,
 }
 
@@ -28,6 +29,7 @@ impl AnimalPanic {
     pub const fn new(speed_multiplier: f32) -> Self {
         Self {
             speed_multiplier,
+            panic_causes: &tag::DamageType::MINECRAFT_PANIC_CAUSES,
             fly_height: None,
         }
     }
@@ -36,8 +38,16 @@ impl AnimalPanic {
     pub const fn with_fly_height(speed_multiplier: f32, fly_height: i32) -> Self {
         Self {
             speed_multiplier,
+            panic_causes: &tag::DamageType::MINECRAFT_PANIC_CAUSES,
             fly_height: Some(fly_height),
         }
+    }
+
+    /// The damage that makes the mob panic, for mobs that use a narrower tag than `PANIC_CAUSES`.
+    #[must_use]
+    pub const fn with_panic_causes(mut self, panic_causes: &'static tag::Tag) -> Self {
+        self.panic_causes = panic_causes;
+        self
     }
 
     fn look_for_water(tick: &BrainTick<'_>) -> Option<Vector3<f64>> {
@@ -84,11 +94,10 @@ impl Behavior for AnimalPanic {
     }
 
     fn check_extra_start_conditions(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        tick.state.get(types::HURT_BY).is_some_and(|damage| {
-            damage
-                .damage_type
-                .has_tag(&tag::DamageType::MINECRAFT_PANIC_CAUSES)
-        }) || tick.state.has_memory_value(types::IS_PANICKING.id())
+        tick.state
+            .get(types::HURT_BY)
+            .is_some_and(|damage| damage.damage_type.has_tag(self.panic_causes))
+            || tick.state.has_memory_value(types::IS_PANICKING.id())
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
@@ -101,7 +110,7 @@ impl Behavior for AnimalPanic {
         true
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.state.erase(types::IS_PANICKING.id());
     }
 

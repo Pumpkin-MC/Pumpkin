@@ -7,6 +7,7 @@ use super::memory::{MemoryModuleId, types};
 use super::{BrainTick, VisibilityContext};
 
 pub mod adult;
+pub mod armadillo_scare_detected;
 pub mod axolotl_attackables;
 pub mod dummy;
 pub mod frog_attackables;
@@ -53,6 +54,7 @@ pub enum SensorType {
     SecondaryPois,
     GolemDetected,
     AxolotlAttackables,
+    ArmadilloScareDetected,
 }
 
 impl SensorType {
@@ -76,6 +78,7 @@ impl SensorType {
             Self::SecondaryPois => "minecraft:secondary_pois",
             Self::GolemDetected => "minecraft:golem_detected",
             Self::AxolotlAttackables => "minecraft:axolotl_attackables",
+            Self::ArmadilloScareDetected => "minecraft:armadillo_scare_detected",
         }
     }
 
@@ -97,6 +100,7 @@ impl SensorType {
             | Self::VillagerBabies
             | Self::VillagerHostiles
             | Self::AxolotlAttackables => DEFAULT_SCAN_RATE,
+            Self::ArmadilloScareDetected => 5,
             Self::SecondaryPois => 40,
             Self::GolemDetected => 200,
         }
@@ -121,6 +125,9 @@ impl SensorType {
             Self::SecondaryPois => Box::new(secondary_pois::SecondaryPoiSensor),
             Self::GolemDetected => Box::new(golem::GolemSensor),
             Self::AxolotlAttackables => Box::new(axolotl_attackables::AxolotlAttackablesSensor),
+            Self::ArmadilloScareDetected => {
+                Box::new(armadillo_scare_detected::ArmadilloScareDetectedSensor)
+            }
         }
     }
 

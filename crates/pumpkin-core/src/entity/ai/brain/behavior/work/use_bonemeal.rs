@@ -115,7 +115,7 @@ impl Behavior for UseBonemeal {
         self.time_worked_so_far = 0;
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.mob
             .get_mob_entity()
             .set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::EMPTY.clone());

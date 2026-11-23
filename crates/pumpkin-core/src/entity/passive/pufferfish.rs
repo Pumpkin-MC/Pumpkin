@@ -214,8 +214,7 @@ impl Mob for PufferfishEntity {
                     0.0,
                 ));
             }
-            // Through the player, so `effects_changed` advancements trigger like vanilla.
-            player.add_effect(Self::poison(state));
+            player.add_effect_with_source(Self::poison(state), this);
         }
     }
 

@@ -72,15 +72,18 @@ impl Mob for ElderGuardianEntity {
 
             for player in players {
                 player.try_send_client_packet(&packet);
-                player.living_entity.add_effect(Effect {
-                    effect_type: &StatusEffect::MINING_FATIGUE,
-                    duration: 6000,
-                    amplifier: 2,
-                    ambient: false,
-                    show_particles: true,
-                    show_icon: true,
-                    blend: false,
-                });
+                player.add_effect_with_source(
+                    Effect {
+                        effect_type: &StatusEffect::MINING_FATIGUE,
+                        duration: 6000,
+                        amplifier: 2,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: false,
+                    },
+                    self,
+                );
             }
         }
     }
