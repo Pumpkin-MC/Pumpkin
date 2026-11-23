@@ -31,13 +31,13 @@ impl BedrockClient {
         self.try_handle_login(packet, server).await
     }
 
-    #[expect(clippy::too_many_lines)]
-    pub async fn try_handle_login(
+    async fn authenticate_connection_request(
         self: &Arc<Self>,
-        packet: SLogin,
+        jwt: &[u8],
+        raw_token: &[u8],
         server: &Arc<Server>,
-    ) -> Result<PacketHandlerResult, LoginError> {
-        let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
+    ) -> Result<(GameProfile, ClientData), LoginError> {
+        let auth_payload: AuthPayload = serde_json::from_slice(jwt)?;
         let player_data = if server.advanced_config.networking.bedrock.online_mode {
             match auth_payload.authentication_type {
                 AuthenticationType::Full => {
@@ -64,11 +64,11 @@ impl BedrockClient {
             pumpkin_auth::jwt::extract_oidc_token_player_claims(&auth_payload.token)?
         };
 
-        let raw_token_str = std::str::from_utf8(&packet.raw_token).map_err(|_| {
+        let raw_token_str = std::str::from_utf8(raw_token).map_err(|_| {
             LoginError::InvalidTokenFormat(serde_json::Error::custom(
                 "raw_token is not valid UTF-8",
             ))
-        })?; // You'll need to add a string conversion error to LoginError, or handle it cleanly.
+        })?;
 
         let mut parts = raw_token_str.split('.');
         let _header = parts.next().ok_or(AuthError::InvalidTokenFormat)?;
@@ -97,18 +97,34 @@ impl BedrockClient {
             profile_actions: None,
         };
 
-        let login_public_key = pumpkin_auth::jwt::extract_cpk_from_token(&auth_payload.token)
-            .map_err(LoginError::ChainValidationFailed)?;
-        if self
-            .nethernet_public_key()
-            .is_some_and(|public_key| public_key != &login_public_key)
-        {
-            return Err(LoginError::ChainValidationFailed(
-                AuthError::PublicKeyBuild(
-                    "NetherNet and Bedrock login identities do not match".into(),
-                ),
-            ));
+        // The NetherNet session key belongs to the primary player; split-screen sub-clients
+        // authenticate with their own identity key over the shared session.
+        if !self.is_sub_client() {
+            let login_public_key = pumpkin_auth::jwt::extract_cpk_from_token(&auth_payload.token)
+                .map_err(LoginError::ChainValidationFailed)?;
+            if self
+                .nethernet_public_key()
+                .is_some_and(|public_key| public_key != &login_public_key)
+            {
+                return Err(LoginError::ChainValidationFailed(
+                    AuthError::PublicKeyBuild(
+                        "NetherNet and Bedrock login identities do not match".into(),
+                    ),
+                ));
+            }
         }
+
+        Ok((profile, client_data))
+    }
+
+    pub async fn try_handle_login(
+        self: &Arc<Self>,
+        packet: SLogin,
+        server: &Arc<Server>,
+    ) -> Result<PacketHandlerResult, LoginError> {
+        let (profile, client_data) = self
+            .authenticate_connection_request(&packet.jwt, &packet.raw_token, server)
+            .await?;
 
         if !self.can_complete_login(&profile, server).await {
             return Ok(PacketHandlerResult::Stop);
@@ -155,6 +171,34 @@ impl BedrockClient {
         Ok(PacketHandlerResult::ReadyToPlay(profile, new_config))
     }
 
+    /// Authenticates a split-screen sub-client. Sub-clients skip the resource-pack handshake
+    /// because the primary client on the same device already negotiated and loaded the packs.
+    pub async fn try_handle_sub_client_login(
+        self: &Arc<Self>,
+        packet: SSubClientLogin,
+        server: &Arc<Server>,
+    ) -> Result<PacketHandlerResult, LoginError> {
+        let (profile, client_data) = self
+            .authenticate_connection_request(&packet.jwt, &packet.raw_token, server)
+            .await?;
+
+        if !self.can_complete_login(&profile, server).await {
+            return Ok(PacketHandlerResult::Stop);
+        }
+
+        self.enqueue_client_packet(&CPlayStatus::LoginSuccess).await;
+
+        let new_config = PlayerConfig {
+            locale: client_data.language_code.clone(),
+            ..Default::default()
+        };
+
+        self.client_data
+            .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
+
+        Ok(PacketHandlerResult::ReadyToPlay(profile, new_config))
+    }
+
     async fn can_complete_login(
         self: &Arc<Self>,
         profile: &GameProfile,
@@ -169,6 +213,9 @@ impl BedrockClient {
 
         let max_players = server.advanced_config.networking.bedrock.max_players;
         if max_players > 0 && server.get_player_count() >= max_players as usize {
+            if self.is_sub_client() {
+                self.send_packet(&CPlayStatus::ServerFullSubClient).await;
+            }
             self.kick(
                 DisconnectReason::ServerFull,
                 TextComponent::translate_cross(
@@ -190,6 +237,7 @@ impl BedrockClient {
 
         if server.get_player_by_uuid(profile.id).is_some()
             || server.get_player_by_name(&profile.name).is_some()
+            || self.is_sub_client_saving(profile.id)
         {
             self.kick(
                 DisconnectReason::LoggedInOtherLocation,

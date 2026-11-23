@@ -32,6 +32,9 @@ console-subscriber = { workspace = true, optional = true }
 [dev-dependencies]
 tempfile.workspace = true
 
+[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
+libc.workspace = true
+
 [features]
 console-subscriber = ["dep:console-subscriber"]
 # Load plugins built against the v0.2 API. Off until the v0.2 ABI is finished.

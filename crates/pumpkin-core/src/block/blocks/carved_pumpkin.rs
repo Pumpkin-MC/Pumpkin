@@ -1,17 +1,30 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockDirection, BlockId, BlockStateId, block_properties::WallTorchLikeProperties,
-    entity::EntityType, world::WorldEvent,
+    Block, BlockDirection, BlockId, BlockStateId,
+    block_properties::WallTorchLikeProperties,
+    block_transformer::get_unwaxed,
+    entity::EntityType,
+    tag::{self, Taggable},
+    world::WorldEvent,
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
-    block::{BlockBehaviour, BlockMetadata, OnPlaceArgs, PlacedArgs},
+    block::{
+        BlockBehaviour, BlockMetadata, OnPlaceArgs, PlacedArgs,
+        blocks::{
+            chests::CopperChestBlock,
+            weathering_copper::{self, WeatherState},
+        },
+    },
     entity::{
         Entity, EntityBase,
-        passive::{iron_golem::IronGolemEntity, snow_golem::SnowGolemEntity},
+        passive::{
+            copper_golem::CopperGolemEntity, iron_golem::IronGolemEntity,
+            snow_golem::SnowGolemEntity,
+        },
     },
     world::World,
 };
@@ -20,6 +33,8 @@ const SNOW_GOLEM_BASE: [&str; 3] = [" ", "#", "#"];
 const SNOW_GOLEM_FULL: [&str; 3] = ["^", "#", "#"];
 const IRON_GOLEM_BASE: [&str; 3] = ["~ ~", "###", "~#~"];
 const IRON_GOLEM_FULL: [&str; 3] = ["~^~", "###", "~#~"];
+const COPPER_GOLEM_BASE: [&str; 2] = [" ", "#"];
+const COPPER_GOLEM_FULL: [&str; 2] = ["^", "#"];
 
 pub struct GolemPattern {
     entity_type: &'static EntityType,
@@ -50,6 +65,9 @@ fn cell_matches(cell: u8, world: &World, pos: &BlockPos, entity_type: &EntityTyp
         }
         b'#' if entity_type == &EntityType::SNOW_GOLEM => {
             world.get_block(pos) == &Block::SNOW_BLOCK
+        }
+        b'#' if entity_type == &EntityType::COPPER_GOLEM => {
+            world.get_block(pos).has_tag(&tag::Block::MINECRAFT_COPPER)
         }
         b'#' => world.get_block(pos) == &Block::IRON_BLOCK,
         b'~' => world.get_block_state(pos).is_air(),
@@ -105,6 +123,18 @@ fn find_pattern(
 pub fn can_spawn_golem(world: &World, top_pos: &BlockPos) -> bool {
     find_pattern(world, top_pos, &EntityType::SNOW_GOLEM, &SNOW_GOLEM_BASE).is_some()
         || find_pattern(world, top_pos, &EntityType::IRON_GOLEM, &IRON_GOLEM_BASE).is_some()
+        || find_pattern(
+            world,
+            top_pos,
+            &EntityType::COPPER_GOLEM,
+            &COPPER_GOLEM_BASE,
+        )
+        .is_some()
+}
+
+fn weather_state_from_copper_block(block: &'static Block) -> WeatherState {
+    let unwaxed = get_unwaxed(block.id).map_or(block, BlockId::to_block);
+    weathering_copper::get_weather_state(unwaxed).unwrap_or(WeatherState::Unaffected)
 }
 
 fn try_spawn_golem(world: &Arc<World>, top_pos: &BlockPos) {
@@ -127,26 +157,50 @@ fn try_spawn_golem(world: &Arc<World>, top_pos: &BlockPos) {
         ));
         golem.set_player_created(true);
         spawn_golem_in_world(world, &pattern, &(golem as Arc<dyn EntityBase>), spawn_pos);
+        return;
+    }
+    if let Some(pattern) = find_pattern(
+        world,
+        top_pos,
+        &EntityType::COPPER_GOLEM,
+        &COPPER_GOLEM_FULL,
+    ) {
+        let pumpkin_pos = pattern.block_pos(0, 0);
+        let copper_pos = pattern.block_pos(0, 1);
+        let pumpkin_state_id = world.get_block_state_id(&pumpkin_pos);
+        let copper_block = world.get_block(&copper_pos);
+        let facing = WallTorchLikeProperties::from_state_id(pumpkin_state_id).facing;
+        let weather_state = weather_state_from_copper_block(copper_block);
+
+        let golem = CopperGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::default(),
+            &EntityType::COPPER_GOLEM,
+        ));
+        let golem_entity: Arc<dyn EntityBase> = golem.clone();
+        if spawn_golem_in_world(world, &pattern, &golem_entity, pumpkin_pos) {
+            CopperChestBlock::place_from_copper_block(world, &copper_pos, copper_block, facing);
+            golem.spawn(weather_state);
+        }
     }
 }
 
+/// Clears the pattern and spawns `golem`, `false` when a plugin cancels the spawn.
 fn spawn_golem_in_world(
     world: &Arc<World>,
     pattern: &GolemPattern,
     golem: &Arc<dyn EntityBase>,
     spawn_pos: BlockPos,
-) {
-    for pos in pattern.cells() {
-        let state_id = world.get_block_state_id(&pos);
+) -> bool {
+    let cells: Vec<(BlockPos, BlockStateId)> = pattern
+        .cells()
+        .map(|pos| (pos, world.get_block_state_id(&pos)))
+        .collect();
+    for (pos, _) in &cells {
         world.set_block_state(
-            &pos,
+            pos,
             Block::AIR.default_state.id,
             BlockFlags::NOTIFY_LISTENERS,
-        );
-        world.sync_world_event(
-            WorldEvent::ParticlesDestroyBlock,
-            pos,
-            i32::from(state_id.as_u16()),
         );
     }
 
@@ -156,7 +210,16 @@ fn spawn_golem_in_world(
         f64::from(spawn_pos.0.y) + 0.05,
         f64::from(spawn_pos.0.z) + 0.5,
     ));
-    world.spawn_entity(golem.clone());
+    if !world.spawn_entity(golem.clone()) {
+        return false;
+    }
+    for (pos, state_id) in &cells {
+        world.sync_world_event(
+            WorldEvent::ParticlesDestroyBlock,
+            *pos,
+            i32::from(state_id.as_u16()),
+        );
+    }
 
     let entity_type = format!("minecraft:{}", pattern.entity_type.resource_name);
     for player in world.get_players_at_box(&entity.bounding_box.load().expand_all(5.0)) {
@@ -167,9 +230,10 @@ fn spawn_golem_in_world(
         );
     }
 
-    for pos in pattern.cells() {
-        world.update_neighbors(&pos, None);
+    for (pos, _) in &cells {
+        world.update_neighbors(pos, None);
     }
+    true
 }
 
 pub struct CarvedPumpkinBlock;
