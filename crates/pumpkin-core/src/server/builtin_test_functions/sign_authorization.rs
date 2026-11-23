@@ -321,8 +321,7 @@ fn set_editor(sign: &SignEntityRef<'_>, editor: Option<uuid::Uuid>) {
 fn stored_text(sign: &SignEntityRef<'_>) -> String {
     let raw = sign.front_text().get_message(0, false);
     serde_json::from_str::<TextComponent>(&raw)
-        .map(|component| component.get_text())
-        .unwrap_or_else(|_| raw.to_string())
+        .map_or_else(|_| raw.to_string(), TextComponent::get_text)
 }
 
 fn set_click_component(sign: &SignBlockEntity, line: &str, allow_op_features: bool) {
