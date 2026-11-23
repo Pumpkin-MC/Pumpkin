@@ -481,11 +481,35 @@ impl World {
         }
     }
 
+    pub fn update_active_chunks(self: &Arc<Self>) {
+        let changes: Vec<_> = self.level.loaded_chunk_changes().collect();
+        self.update_active_chunk_tracker(&changes);
+        if let Some(server) = self.server.upgrade() {
+            for change in changes {
+                match change {
+                    pumpkin_world::level::LoadedChunkChange::Loaded(chunk) => {
+                        let event = crate::plugin::api::events::world::ChunkLoad {
+                            world: self.clone(),
+                            chunk,
+                        };
+                        server.plugin_manager.fire_blocking(&server, event);
+                    }
+                    pumpkin_world::level::LoadedChunkChange::Unloaded(pos) => {
+                        self.unload_chunk(pos);
+                    }
+                }
+            }
+        }
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "active chunk tracking combines players and force tickets"
     )]
-    pub fn update_active_chunks(self: &Arc<Self>) {
+    fn update_active_chunk_tracker(
+        self: &Arc<Self>,
+        changes: &[pumpkin_world::level::LoadedChunkChange],
+    ) {
         let sim_dist = self.server.upgrade().map_or(16, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
@@ -555,9 +579,10 @@ impl World {
                 migrations.push(pos);
             }
         }
-        for change in self.level.loaded_chunk_changes() {
+        for change in changes {
             match change {
-                pumpkin_world::level::LoadedChunkChange::Loaded(pos) => {
+                pumpkin_world::level::LoadedChunkChange::Loaded(chunk) => {
+                    let pos = Vector2::new(chunk.x, chunk.z);
                     loaded_for_poi.insert(pos);
                     if active_chunks.contains(&pos)
                         && self.level.is_chunk_loaded(&pos)
@@ -567,8 +592,8 @@ impl World {
                     }
                 }
                 pumpkin_world::level::LoadedChunkChange::Unloaded(pos) => {
-                    if !self.level.is_chunk_loaded(&pos) {
-                        tracker.loaded_active_chunks.remove(&pos);
+                    if !self.level.is_chunk_loaded(pos) {
+                        tracker.loaded_active_chunks.remove(pos);
                     }
                 }
             }
@@ -8831,6 +8856,124 @@ mod tests {
             GameRuleValue::Int(v) => assert_eq!(*v, 20),
             GameRuleValue::Bool(_) => panic!("expected int"),
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Lifecycle regression includes notification handlers and server setup"
+    )]
+    async fn chunk_lifecycle_dispatches_ordered_notifications()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{
+            data::VanillaData,
+            plugin::{
+                BoxFuture, EventPriority, EventRwHandler,
+                world::{ChunkLoad, ChunkUnloadEvent},
+            },
+            server::Server,
+        };
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use std::{
+            sync::{Arc, Mutex},
+            time::Duration,
+        };
+
+        #[derive(Default)]
+        struct Notifications(Mutex<Vec<(bool, Vector2<i32>)>>);
+        impl EventRwHandler<ChunkLoad> for Notifications {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut ChunkLoad,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    // Plugin callbacks must run after the active-chunk locks are released.
+                    assert!(event.world.active_chunk_tracker.try_lock().is_ok());
+                    assert!(event.world.active_chunks.try_write().is_ok());
+                    self.0
+                        .lock()
+                        .unwrap()
+                        .push((true, Vector2::new(event.chunk.x, event.chunk.z)));
+                })
+            }
+        }
+        impl EventRwHandler<ChunkUnloadEvent> for Notifications {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut ChunkUnloadEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    self.0.lock().unwrap().push((false, event.chunk_pos));
+                })
+            }
+        }
+
+        let directory = tempfile::tempdir()?;
+        let basic = BasicConfiguration {
+            default_level_name: directory
+                .path()
+                .join("world")
+                .to_string_lossy()
+                .into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..Default::default()
+        };
+        let server = Server::new(
+            basic,
+            AdvancedConfiguration::default(),
+            TelemetryConfig::default(),
+            VanillaData::default(),
+            vec![],
+        )
+        .await?;
+        let world = server.worlds.load().first().cloned().ok_or("No world")?;
+        let notifications = Arc::new(Notifications::default());
+        server.plugin_manager.register_blocking::<ChunkLoad, _>(
+            notifications.clone(),
+            EventPriority::Normal,
+            None,
+        );
+        server
+            .plugin_manager
+            .register_blocking::<ChunkUnloadEvent, _>(
+                notifications.clone(),
+                EventPriority::Normal,
+                None,
+            );
+        let pos = Vector2::new(0, 0);
+        for expected in [2, 4] {
+            // First generate the chunk, then reload the saved copy on the second pass.
+            tokio::time::timeout(
+                Duration::from_secs(45),
+                world.level.get_or_fetch_chunk(pos, |_| ()),
+            )
+            .await?;
+            tokio::time::timeout(Duration::from_secs(10), async {
+                while world.level.is_chunk_loaded(&pos) {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await?;
+            // Both transitions occurred before the tick: the load notification must survive removal.
+            tokio::time::timeout(Duration::from_secs(10), async {
+                while notifications.0.lock().unwrap().len() < expected {
+                    world.update_active_chunks();
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await?;
+            world.update_active_chunks();
+        }
+        let observed = notifications.0.lock().unwrap().clone();
+        world.shutdown().await;
+        assert_eq!(
+            observed,
+            vec![(true, pos), (false, pos), (true, pos), (false, pos)]
+        );
+        Ok(())
     }
 
     #[tokio::test]

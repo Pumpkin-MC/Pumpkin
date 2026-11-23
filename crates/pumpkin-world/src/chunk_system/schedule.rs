@@ -91,10 +91,10 @@ pub struct GenerationSchedule {
 
 impl GenerationSchedule {
     fn publish_chunk(&self, pos: ChunkPos, chunk: SyncChunk) -> Option<SyncChunk> {
-        let previous = self.public_chunk_map.insert(pos, chunk);
+        let previous = self.public_chunk_map.insert(pos, chunk.clone());
         if previous.is_none() {
             self.loaded_chunk_changes
-                .push(LoadedChunkChange::Loaded(pos));
+                .push(LoadedChunkChange::Loaded(chunk));
         }
         previous
     }

@@ -54,16 +54,12 @@ impl ToFromWasmEvent for ChunkLoad {
         let target_world = state
             .add(self.world.clone())
             .expect("failed to add world resource");
-
-        let (chunk_x, chunk_z) = self
-            .chunk
-            .try_read()
-            .map_or((0, 0), |guard| (guard.x, guard.z));
         Event::ChunkLoadEvent(ChunkLoadEventData {
             target_world,
-            chunk_x,
-            chunk_z,
-            cancelled: self.cancelled,
+            chunk_x: self.chunk.x,
+            chunk_z: self.chunk.z,
+            // Retained for ABI compatibility; lifecycle notifications cannot be cancelled.
+            cancelled: false,
         })
     }
 
@@ -71,35 +67,25 @@ impl ToFromWasmEvent for ChunkLoad {
         match event {
             Event::ChunkLoadEvent(data) => {
                 let world = consume_world(state, &data.target_world);
-                let chunk_data = pumpkin_world::chunk::ChunkData {
-                    section: pumpkin_world::chunk::ChunkSections::new(24, -64),
-                    heightmap: std::sync::Mutex::new(
-                        pumpkin_world::chunk::ChunkHeightmaps::default(),
-                    ),
-                    x: data.chunk_x,
-                    z: data.chunk_z,
-                    block_ticks: pumpkin_world::tick::scheduler::ChunkTickScheduler::default(),
-                    fluid_ticks: pumpkin_world::tick::scheduler::ChunkTickScheduler::default(),
-                    pending_block_entities: std::sync::Mutex::new(
-                        std::collections::HashMap::default(),
-                    ),
-                    light_engine: std::sync::Mutex::new(pumpkin_world::chunk::ChunkLight::default()),
-                    light_populated: std::sync::atomic::AtomicBool::new(false),
-                    status: pumpkin_data::chunk::ChunkStatus::Empty,
-                    blending_data: None,
-                    dirty: std::sync::atomic::AtomicBool::new(false),
-                    inhabited_time: std::sync::atomic::AtomicU64::new(0),
-                    custom_data: std::sync::Mutex::new(pumpkin_nbt::compound::NbtCompound::new()),
-                    preserved_tags: std::sync::Mutex::new(pumpkin_nbt::compound::NbtCompound::new()),
-                };
-                Self {
-                    world,
-                    chunk: Arc::new(tokio::sync::RwLock::new(chunk_data)),
-                    cancelled: data.cancelled,
-                }
+                let chunk = world
+                    .level
+                    .loaded_chunks
+                    .get(&pumpkin_util::math::vector2::Vector2::new(
+                        data.chunk_x,
+                        data.chunk_z,
+                    ))
+                    .map_or_else(
+                        || pumpkin_world::chunk::ChunkData::empty_sync(data.chunk_x, data.chunk_z),
+                        |entry| entry.value().clone(),
+                    );
+                Self { world, chunk }
             }
             _ => panic!("unexpected event type"),
         }
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
     }
 }
 
@@ -403,7 +389,7 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::world::chunk_unload:
         Event::ChunkUnloadEvent(crate::pumpkin::plugin::event::ChunkUnloadEventData {
             chunk_x: self.chunk_pos.x,
             chunk_z: self.chunk_pos.y,
-            cancelled: self.cancelled,
+            cancelled: false,
         })
     }
 
@@ -411,7 +397,6 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::world::chunk_unload:
         match event {
             Event::ChunkUnloadEvent(data) => Self {
                 chunk_pos: pumpkin_util::math::vector2::Vector2::new(data.chunk_x, data.chunk_z),
-                cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
         }
@@ -419,9 +404,6 @@ impl ToFromWasmEvent for pumpkin_core::plugin::api::events::world::chunk_unload:
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         cleanup_event(&event, state);
-        if let Event::ChunkUnloadEvent(data) = event {
-            self.cancelled = data.cancelled;
-        }
     }
 }
 
