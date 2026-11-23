@@ -1,6 +1,7 @@
-name: GameTest report (optional)
+name: GameTest
 
 on:
+  pull_request:
   workflow_run:
     workflows: ["Cargo Build, Test, and Linting"]
     types: [completed]
@@ -17,7 +18,7 @@ jobs:
   gametest:
     name: Run GameTests and generate report
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      github.event_name != 'workflow_run' ||
       (github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'master' &&
        github.event.workflow_run.conclusion == 'success')
