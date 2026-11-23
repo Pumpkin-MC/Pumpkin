@@ -22,7 +22,7 @@ use tokio::signal::unix::{Signal, SignalKind, signal};
 use tokio::signal::windows;
 
 use pumpkin_core::{
-    CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING, SHOULD_STOP,
+    CRASH_REPORT, SERVER_IS_STOPPING, SHOULD_STOP,
     crash::{CrashReport, FullBacktrace},
     stop_or_exit_server, stop_server,
 };

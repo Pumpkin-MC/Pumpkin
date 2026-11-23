@@ -525,6 +525,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:snow_golem_pattern_spawns" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/snow_golem_pattern_spawns.json"
         )),
+        "pumpkin:snow_golem_shearing_leash_and_snow_formation" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/snow_golem_shearing_leash_and_snow_formation.json"
+        )),
         "pumpkin:snow_golem_snow_trail_support" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/snow_golem_snow_trail_support.json"
         )),
@@ -822,6 +825,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:smoker_cooks_raw_beef",
         "pumpkin:snow_golem_horizontal_pattern_spawns",
         "pumpkin:snow_golem_pattern_spawns",
+        "pumpkin:snow_golem_shearing_leash_and_snow_formation",
         "pumpkin:snow_golem_snow_trail_support",
         "pumpkin:sponge_absorbs_multi_block_water_pool",
         "pumpkin:sponge_absorbs_water",

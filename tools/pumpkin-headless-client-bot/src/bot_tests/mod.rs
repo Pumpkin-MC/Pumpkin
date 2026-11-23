@@ -1,7 +1,6 @@
 mod embedded_stop;
 mod login_and_movement;
 mod sign_authorization;
-mod snow_golem;
 mod status_ping;
 
 use std::{net::SocketAddr, sync::Arc};
@@ -17,8 +16,6 @@ pub async fn run_bot_tests(
 
     let (bot1, bot2) =
         login_and_movement::run_login_and_movement_tests(server, addr, summary_lines).await?;
-
-    snow_golem::run_snow_golem_shearing_test(server, summary_lines)?;
 
     drop(bot1);
     drop(bot2);

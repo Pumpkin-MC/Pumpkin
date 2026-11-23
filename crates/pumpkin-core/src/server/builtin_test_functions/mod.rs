@@ -35,6 +35,7 @@ mod redstone_wire_and_power;
 mod scaffolding;
 mod sheep_shearing;
 mod simulated_player;
+mod snow_golem_interaction;
 mod target_and_projectiles;
 mod tripwire;
 mod walls_stairs_and_shapes;
@@ -96,6 +97,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:tripwire_entity_collision", tripwire::test_tripwire_entity_collision);
         register_test_function("pumpkin:snow_golem_pattern_spawns", golems::test_snow_golem_pattern_spawns);
         register_test_function("pumpkin:snow_golem_snow_trail_support", golems::test_snow_golem_snow_trail_support);
+        register_test_function("pumpkin:snow_golem_shearing_leash_and_snow_formation", snow_golem_interaction::test_snow_golem_shearing_leash_and_snow_formation);
         register_test_function("pumpkin:iron_golem_pattern_spawns", golems::test_iron_golem_pattern_spawns);
         register_test_function("pumpkin:wither_pattern_spawns", golems::test_wither_pattern_spawns);
         register_test_function("pumpkin:item_entities_merge", entities_and_ai::test_item_entities_merge);
