@@ -1202,20 +1202,7 @@ impl PluginManager {
         E: Payload + Send + Sync + 'static,
         H: EventHandler<E> + 'static,
     {
-        self.add_handler::<E, H>(handler, priority, blocking);
-    }
-
-    fn add_handler<E, H>(
-        &self,
-        handler: Arc<H>,
-        priority: EventPriority,
-        blocking: bool,
-    ) -> Arc<dyn DynEventHandler>
-    where
-        E: Payload + Send + Sync + 'static,
-        H: EventHandler<E> + 'static,
-    {
-        let typed_handler: Arc<dyn DynEventHandler> = Arc::new(TypedEventHandler {
+        let typed_handler = Arc::new(TypedEventHandler {
             handler,
             priority,
             blocking,
@@ -1231,7 +1218,6 @@ impl PluginManager {
                 .push(typed_handler.clone());
             Arc::new(new_handlers)
         });
-        typed_handler
     }
 
     #[must_use]
