@@ -44,9 +44,9 @@ pub(super) async fn test_zombie_pathfinds_to_villager(test: GameTestContext) -> 
         }
     }
 
-    test.spawn_entity_at("minecraft:villager", Vector3::new(2.5, 1.0, 6.0))
+    test.spawn_entity("minecraft:villager", Vector3::new(2.5, 1.0, 6.0))
         .await?;
-    test.spawn_entity_at("minecraft:husk", Vector3::new(2.5, 1.0, 1.5))
+    test.spawn_entity("minecraft:husk", Vector3::new(2.5, 1.0, 1.5))
         .await?;
 
     test.succeed_when(move |test| async move {

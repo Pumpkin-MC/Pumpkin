@@ -40,7 +40,7 @@ pub(super) async fn test_tripwire_entity_collision(test: GameTestContext) -> Gam
     test.set_block(&wire_pos, wire_props.to_state_id(&Block::TRIPWIRE))
         .await?;
 
-    test.spawn_entity_at("minecraft:armor_stand", Vector3::new(2.5, 1.0, 2.5))
+    test.spawn_entity("minecraft:armor_stand", Vector3::new(2.5, 1.0, 2.5))
         .await?;
 
     test.succeed_when(move |test| async move {

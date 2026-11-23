@@ -99,7 +99,7 @@ pub(super) async fn test_detector_rail_minecart(test: GameTestContext) -> GameTe
     test.set_block_default(&wire_pos, &Block::REDSTONE_WIRE)
         .await?;
 
-    test.spawn_entity_at("minecraft:minecart", Vector3::new(2.5, 1.1, 2.5))
+    test.spawn_entity("minecraft:minecart", Vector3::new(2.5, 1.1, 2.5))
         .await?;
 
     test.succeed_when(move |test| async move {

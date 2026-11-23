@@ -88,7 +88,7 @@ pub(super) async fn test_arrow_falls_onto_block_below(test: GameTestContext) -> 
     test.build_floor(5, 5, &Block::STONE).await?;
     let support_pos = BlockPos::new(2, 2, 2);
     test.set_block_default(&support_pos, &Block::STONE).await?;
-    test.spawn_entity_at("minecraft:arrow", Vector3::new(2.5, 3.2, 2.5))
+    test.spawn_entity("minecraft:arrow", Vector3::new(2.5, 3.2, 2.5))
         .await?;
 
     test.start_sequence()

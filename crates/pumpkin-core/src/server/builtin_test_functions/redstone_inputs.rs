@@ -154,7 +154,7 @@ pub(super) async fn test_pressure_plate_entity_activation(
     test.set_block_default(&gold_plate_pos, &Block::LIGHT_WEIGHTED_PRESSURE_PLATE)
         .await?;
 
-    test.spawn_entity_at("minecraft:armor_stand", Vector3::new(1.5, 1.25, 1.5))
+    test.spawn_entity("minecraft:armor_stand", Vector3::new(1.5, 1.25, 1.5))
         .await?;
     test.spawn_item_at("minecraft:diamond", 1, Vector3::new(3.5, 1.25, 1.5))
         .await?;

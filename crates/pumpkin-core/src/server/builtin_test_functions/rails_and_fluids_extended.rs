@@ -112,7 +112,7 @@ pub(super) async fn test_detector_rail_powers_adjacent_powered_rail(
     test.set_block(&pwr_rail, ns_rail_state(&Block::POWERED_RAIL))
         .await?;
 
-    test.spawn_entity_at("minecraft:minecart", Vector3::new(1.5, 1.1, 1.5))
+    test.spawn_entity("minecraft:minecart", Vector3::new(1.5, 1.1, 1.5))
         .await?;
 
     test.start_sequence()
@@ -138,7 +138,7 @@ pub(super) async fn test_detector_rail_comparator_reads_chest_minecart(
     let det = BlockPos::new(1, 1, 2);
     test.set_block(&det, ns_rail_state(&Block::DETECTOR_RAIL))
         .await?;
-    test.spawn_entity_at("minecraft:chest_minecart", Vector3::new(1.5, 1.1, 2.5))
+    test.spawn_entity("minecraft:chest_minecart", Vector3::new(1.5, 1.1, 2.5))
         .await?;
 
     test.start_sequence()

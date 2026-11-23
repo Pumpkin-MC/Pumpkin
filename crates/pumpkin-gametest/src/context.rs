@@ -531,14 +531,6 @@ impl GameTestContext {
         self.world.spawn_entity(entity_name, position).await
     }
 
-    pub async fn spawn_entity_at(
-        &self,
-        entity_name: &str,
-        relative: Vector3<f64>,
-    ) -> GameTestResult<()> {
-        self.spawn_entity(entity_name, relative).await.map(|_| ())
-    }
-
     /// Spawns a simulated player with a unique server-visible name derived from `name`.
     /// Use the returned simulated player's `name()` when referring to it outside this test.
     pub async fn spawn_simulated_player(
