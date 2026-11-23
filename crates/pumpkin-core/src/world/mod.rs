@@ -4777,19 +4777,19 @@ impl World {
                     continue 'main;
                 }
 
-                if first_load {
+                let entity_nbts = if first_load {
+                    let mut data = chunk.data.lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    (!chunk.live.swap(true, Relaxed)).then(|| std::mem::take(&mut *data))
+                } else {
+                    None
+                };
+                if let Some(entity_nbts) = entity_nbts {
                     // First watcher: consume the serialized entities and make them
                     // live. The live entity list becomes the single source of
                     // truth, so the chunk's NBT is taken (cleared) to avoid keeping
                     // a duplicate copy that would be re-appended on the next unload
                     // and doubled on every reload.
-                    let entity_nbts = std::mem::take(
-                        &mut *chunk
-                            .data
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
-                    chunk.live.store(true, Relaxed);
                     for entity_nbt in &entity_nbts {
                         let Some(root) =
                             load_entity_from_nbt(entity_nbt, Vector3::default(), &world)

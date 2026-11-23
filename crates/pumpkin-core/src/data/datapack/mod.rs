@@ -150,7 +150,7 @@ impl DatapackManager {
         recipe_manager: &RecipeManager,
     ) {
         let datapacks_dir = world_path.join("datapacks");
-        structure_loader::clear_dynamic_worldgen_data();
+        let mut all_worldgen = Vec::new();
         let mut loaded_packs_vec = Vec::new();
         let mut all_recipes: Vec<DynamicRecipe> = Vec::new();
         let mut all_functions: HashMap<String, Vec<String>> = HashMap::new();
@@ -191,6 +191,7 @@ impl DatapackManager {
             HashMap::new();
 
         let mut acc = PackContentAccumulators {
+            deferred_worldgen: Some(&mut all_worldgen),
             recipes: &mut all_recipes,
             functions: &mut all_functions,
             function_tags: &mut all_function_tags,
@@ -216,6 +217,16 @@ impl DatapackManager {
         );
 
         load_bundled_datapacks(enabled_packs, &mut acc, &mut loaded_packs_vec);
+
+        {
+            let reload = pumpkin_world::generation::structure::DYNAMIC_WORLDGEN_RELOAD
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            structure_loader::clear_dynamic_worldgen_data();
+            for structures in all_worldgen {
+                structures.apply(Some(&reload));
+            }
+        }
 
         let damage_type_registry = build_damage_type_registry(all_damage_type_defs);
 
@@ -1516,6 +1527,7 @@ fn build_damage_type_registry(
 }
 
 struct PackContentAccumulators<'a> {
+    deferred_worldgen: Option<&'a mut Vec<structure_loader::PreparedStructures>>,
     recipes: &'a mut Vec<DynamicRecipe>,
     functions: &'a mut HashMap<String, Vec<String>>,
     function_tags: &'a mut HashMap<String, Vec<String>>,
@@ -1558,6 +1570,7 @@ struct PreparedPack {
 impl PreparedPack {
     const fn accumulators(&mut self) -> PackContentAccumulators<'_> {
         PackContentAccumulators {
+            deferred_worldgen: None,
             recipes: &mut self.recipes,
             functions: &mut self.functions,
             function_tags: &mut self.function_tags,
@@ -1634,7 +1647,11 @@ impl PreparedPack {
             counts.structures += structures.templates.len();
             counts.template_pools += structures.pools.len();
             counts.processor_lists += structures.processors.len();
-            structures.apply();
+            if let Some(deferred) = acc.deferred_worldgen.as_mut() {
+                deferred.push(structures);
+            } else {
+                structures.apply(None);
+            }
         }
         counts
     }
@@ -1731,6 +1748,9 @@ fn load_bundled_datapacks(
         .map(|(_, path)| (read_pack_mcmeta(path), prepare_pack_contents(path)))
         .collect();
     for ((bundled, pack_path), (metadata, contents)) in packs.into_iter().zip(prepared) {
+        let Some(contents) = contents else {
+            continue;
+        };
         let (description, pack_format, known_packs) = metadata;
         let counts = contents.apply(acc);
         info!(
@@ -1786,7 +1806,16 @@ fn scan_datapacks_dir(
     };
 
     let packs: Vec<_> = entries
-        .flatten()
+        .filter_map(|entry| {
+            entry
+                .inspect_err(|error| {
+                    warn!(
+                        "Failed to read directory entry in '{}': {error}",
+                        datapacks_dir.display()
+                    );
+                })
+                .ok()
+        })
         .filter_map(|entry| {
             let pack_path = entry.path();
             let file_name = entry.file_name().to_string_lossy().to_string();
@@ -1806,11 +1835,22 @@ fn scan_datapacks_dir(
             Some((pack_path, file_name, pack_id))
         })
         .collect();
+    load_discovered_packs(packs, acc, loaded_packs_vec);
+}
+
+fn load_discovered_packs(
+    packs: Vec<(PathBuf, String, String)>,
+    acc: &mut PackContentAccumulators<'_>,
+    loaded_packs_vec: &mut Vec<LoadedDatapack>,
+) {
     let prepared: Vec<_> = packs
         .par_iter()
         .map(|(path, _, _)| (read_pack_mcmeta(path), prepare_pack_contents(path)))
         .collect();
     for ((pack_path, file_name, pack_id), (metadata, contents)) in packs.into_iter().zip(prepared) {
+        let Some(contents) = contents else {
+            continue;
+        };
         let (description, pack_format, known_packs) = metadata;
         let counts = contents.apply(acc);
 
@@ -1854,11 +1894,11 @@ fn load_pack_contents(
     pack_path: &Path,
     acc: &mut PackContentAccumulators<'_>,
 ) -> PackContentCounts {
-    prepare_pack_contents(pack_path).apply(acc)
+    prepare_pack_contents(pack_path).unwrap().apply(acc)
 }
 
 #[allow(clippy::too_many_lines)]
-fn prepare_pack_contents(pack_path: &Path) -> PreparedPack {
+fn prepare_pack_contents(pack_path: &Path) -> Option<PreparedPack> {
     let data_dir = pack_path.join("data");
     let mut prepared = PreparedPack::default();
     let mut tag_operations = Vec::new();
@@ -1866,10 +1906,28 @@ fn prepare_pack_contents(pack_path: &Path) -> PreparedPack {
     let acc = prepared.accumulators();
     let mut counts = PackContentCounts::default();
 
-    if data_dir.is_dir()
-        && let Ok(ns_entries) = fs::read_dir(&data_dir)
     {
-        for ns_entry in ns_entries.flatten() {
+        let ns_entries = match fs::read_dir(&data_dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Some(prepared),
+            Err(error) => {
+                warn!(
+                    "Failed to read datapack data directory '{}': {error}",
+                    data_dir.display()
+                );
+                return None;
+            }
+        };
+        let ns_entries = ns_entries
+            .collect::<Result<Vec<_>, _>>()
+            .inspect_err(|error| {
+                warn!(
+                    "Failed to read namespace entry in '{}': {error}",
+                    data_dir.display()
+                );
+            })
+            .ok()?;
+        for ns_entry in ns_entries {
             let ns_path = ns_entry.path();
             if !ns_path.is_dir() {
                 continue;
@@ -2128,7 +2186,7 @@ fn prepare_pack_contents(pack_path: &Path) -> PreparedPack {
     prepared.tag_operations = tag_operations;
     prepared.structures = structures;
     prepared.counts = counts;
-    prepared
+    Some(prepared)
 }
 
 #[must_use]
@@ -2328,7 +2386,7 @@ mod tests {
         paths.push(dir.path().join("missing"));
         let prepared: Vec<_> = paths
             .par_iter()
-            .map(|path| prepare_pack_contents(path))
+            .map(|path| prepare_pack_contents(path).unwrap())
             .collect();
         let mut merged = PreparedPack::default();
         let mut counts = Vec::new();
@@ -2389,18 +2447,14 @@ mod tests {
             fs::create_dir_all(&ns).unwrap();
             fs::write(ns.join("shared.mcfunction"), format!("say {name}")).unwrap();
         }
-        let expected: Vec<_> = fs::read_dir(dir.path())
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        let expected = ["z_last".to_string(), "a_first".to_string()];
+        let discovered = expected
+            .iter()
+            .map(|name| (dir.path().join(name), name.clone(), format!("file/{name}")))
             .collect();
         let mut merged = PreparedPack::default();
         let mut packs = Vec::new();
-        scan_datapacks_dir(
-            dir.path(),
-            &expected,
-            &mut merged.accumulators(),
-            &mut packs,
-        );
+        load_discovered_packs(discovered, &mut merged.accumulators(), &mut packs);
         assert_eq!(
             packs.iter().map(|pack| &pack.name).collect::<Vec<_>>(),
             expected.iter().collect::<Vec<_>>()
@@ -2409,6 +2463,23 @@ mod tests {
             merged.functions["custom:shared"],
             [format!("say {}", expected.last().unwrap())]
         );
+    }
+
+    #[test]
+    fn pack_without_data_is_valid_but_unreadable_data_is_not_loaded() {
+        use super::*;
+        let dir = tempfile::tempdir().unwrap();
+        assert!(prepare_pack_contents(dir.path()).is_some());
+        fs::write(dir.path().join("data"), "not a directory").unwrap();
+        assert!(prepare_pack_contents(dir.path()).is_none());
+        let mut merged = PreparedPack::default();
+        let mut packs = Vec::new();
+        load_discovered_packs(
+            vec![(dir.path().into(), "broken".into(), "file/broken".into())],
+            &mut merged.accumulators(),
+            &mut packs,
+        );
+        assert!(packs.is_empty());
     }
 
     #[test]
@@ -2595,6 +2666,7 @@ mod tests {
         let mut tags = std::collections::HashMap::new();
 
         let mut acc = super::PackContentAccumulators {
+            deferred_worldgen: None,
             recipes: &mut recipes,
             functions: &mut functions,
             function_tags: &mut function_tags,
@@ -2675,6 +2747,7 @@ mod tests {
             let mut tags = std::collections::HashMap::new();
 
             let mut acc = super::PackContentAccumulators {
+                deferred_worldgen: None,
                 recipes: &mut recipes,
                 functions: &mut functions,
                 function_tags: &mut function_tags,

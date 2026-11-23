@@ -84,7 +84,24 @@ impl TemplateCache {
     /// Returns the loaded template wrapped in an `Arc`, or `None` if the template
     /// doesn't exist or failed to load.
     pub fn get(&self, name: &str) -> Option<Arc<StructureTemplate>> {
-        match self.get_or_error(name) {
+        let _reload = super::super::DYNAMIC_WORLDGEN_RELOAD
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.get_unlocked(name)
+    }
+
+    /// Resolves a template while the caller holds the datapack reload lock.
+    #[must_use]
+    pub fn get_during_reload(
+        &self,
+        name: &str,
+        _reload: &std::sync::RwLockWriteGuard<'_, ()>,
+    ) -> Option<Arc<StructureTemplate>> {
+        self.get_unlocked(name)
+    }
+
+    fn get_unlocked(&self, name: &str) -> Option<Arc<StructureTemplate>> {
+        match self.get_or_error_unlocked(name) {
             Ok(template) => Some(template),
             Err(TemplateError::MissingField("template file not found")) => None,
             Err(e) => {
@@ -100,6 +117,13 @@ impl TemplateCache {
     ///
     /// Returns an error if the template doesn't exist or fails to parse.
     pub fn get_or_error(&self, name: &str) -> Result<Arc<StructureTemplate>, TemplateError> {
+        let _reload = super::super::DYNAMIC_WORLDGEN_RELOAD
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.get_or_error_unlocked(name)
+    }
+
+    fn get_or_error_unlocked(&self, name: &str) -> Result<Arc<StructureTemplate>, TemplateError> {
         let key = canonicalize(name);
 
         // Check cache first

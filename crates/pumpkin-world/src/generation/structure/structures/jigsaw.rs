@@ -67,18 +67,30 @@ impl PreparedTemplatePool {
     /// Resolves structure references against the currently published templates.
     #[must_use]
     pub fn resolve(self) -> Arc<TemplatePool> {
+        self.resolve_with(crate::generation::structure::template::get_template)
+    }
+
+    /// Resolves structure references using the supplied template lookup.
+    #[must_use]
+    pub fn resolve_with(
+        self,
+        get_template: impl Fn(&str) -> Option<Arc<StructureTemplate>>,
+    ) -> Arc<TemplatePool> {
         let elements = self
             .raw
             .elements
             .into_iter()
             .filter_map(|weighted| {
-                weighted.element.into_element().map(|(kind, projection)| {
-                    Arc::new(PoolElement {
-                        weight: weighted.weight,
-                        projection,
-                        kind,
+                weighted
+                    .element
+                    .into_element(&get_template)
+                    .map(|(kind, projection)| {
+                        Arc::new(PoolElement {
+                            weight: weighted.weight,
+                            projection,
+                            kind,
+                        })
                     })
-                })
             })
             .collect();
         Arc::new(TemplatePool {
@@ -196,6 +208,7 @@ impl RawPoolElement {
         processors: RawProcessorList,
         projection: RawProjection,
         legacy: bool,
+        get_template: &impl Fn(&str) -> Option<Arc<StructureTemplate>>,
     ) -> (PoolElementKind, JigsawProjection) {
         let processors = match processors {
             RawProcessorList::Named(name) => ProcessorListRef::Named(name),
@@ -204,7 +217,7 @@ impl RawPoolElement {
                 ProcessorListRef::Empty
             }
         };
-        let resolved_template = crate::generation::structure::template::get_template(&location);
+        let resolved_template = get_template(&location);
         (
             PoolElementKind::Single {
                 template: location,
@@ -216,19 +229,34 @@ impl RawPoolElement {
         )
     }
 
-    fn into_element(self) -> Option<(PoolElementKind, JigsawProjection)> {
+    fn into_element(
+        self,
+        get_template: &impl Fn(&str) -> Option<Arc<StructureTemplate>>,
+    ) -> Option<(PoolElementKind, JigsawProjection)> {
         match self {
             Self::Empty => Some((PoolElementKind::Empty, JigsawProjection::Rigid)),
             Self::Single {
                 location,
                 processors,
                 projection,
-            } => Some(Self::single(location, processors, projection, false)),
+            } => Some(Self::single(
+                location,
+                processors,
+                projection,
+                false,
+                get_template,
+            )),
             Self::LegacySingle {
                 location,
                 processors,
                 projection,
-            } => Some(Self::single(location, processors, projection, true)),
+            } => Some(Self::single(
+                location,
+                processors,
+                projection,
+                true,
+                get_template,
+            )),
             Self::List {
                 elements,
                 projection,
@@ -236,7 +264,7 @@ impl RawPoolElement {
                 let projection = projection.into();
                 let elements = elements
                     .into_iter()
-                    .filter_map(|element| element.into_element().map(|(kind, _)| kind))
+                    .filter_map(|element| element.into_element(get_template).map(|(kind, _)| kind))
                     .collect();
                 Some((PoolElementKind::List(elements), projection))
             }
@@ -612,6 +640,9 @@ impl TemplatePool {
             format!("minecraft:{id}")
         };
 
+        let _reload = super::super::DYNAMIC_WORLDGEN_RELOAD
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         // 1. Dynamic datapack pools take precedence (allows overriding vanilla pools)
         if let Some(pool) = DYNAMIC_POOLS.get(&canonical_id) {
             return Some(Arc::clone(&pool));

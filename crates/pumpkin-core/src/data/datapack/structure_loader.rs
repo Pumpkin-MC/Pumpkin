@@ -22,7 +22,7 @@ pub(super) struct PreparedStructures {
 }
 
 impl PreparedStructures {
-    pub(super) fn apply(self) {
+    pub(super) fn apply(self, reload: Option<&std::sync::RwLockWriteGuard<'_, ()>>) {
         for (id, bytes) in self.templates {
             pumpkin_world::generation::structure::template::global_cache()
                 .register_template(&id, bytes);
@@ -30,7 +30,16 @@ impl PreparedStructures {
         let pools: Vec<_> = self
             .pools
             .into_par_iter()
-            .map(|(id, pool)| (id, pool.resolve()))
+            .map(|(id, pool)| {
+                let pool = match reload {
+                    Some(reload) => pool.resolve_with(|name| {
+                        pumpkin_world::generation::structure::template::global_cache()
+                            .get_during_reload(name, reload)
+                    }),
+                    None => pool.resolve(),
+                };
+                (id, pool)
+            })
             .collect();
         for (id, pool) in pools {
             register_dynamic_template_pool(&id, pool);
@@ -49,7 +58,7 @@ use super::file_loader::{collect_files, resource_path_without_extension};
 pub fn load_structures_from_dir(namespace: &str, structure_dir: &Path) -> usize {
     let prepared = prepare_structures_from_dir(namespace, structure_dir);
     let count = prepared.templates.len();
-    prepared.apply();
+    prepared.apply(None);
     count
 }
 
@@ -85,7 +94,7 @@ pub(super) fn prepare_structures_from_dir(
 pub fn load_template_pools_from_dir(namespace: &str, template_pool_dir: &Path) -> usize {
     let prepared = prepare_template_pools_from_dir(namespace, template_pool_dir);
     let count = prepared.pools.len();
-    prepared.apply();
+    prepared.apply(None);
     count
 }
 
@@ -131,7 +140,7 @@ pub(super) fn prepare_template_pools_from_dir(
 pub fn load_processor_lists_from_dir(namespace: &str, processor_list_dir: &Path) -> usize {
     let prepared = prepare_processor_lists_from_dir(namespace, processor_list_dir);
     let count = prepared.processors.len();
-    prepared.apply();
+    prepared.apply(None);
     count
 }
 
@@ -176,6 +185,8 @@ pub fn clear_dynamic_worldgen_data() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_world::generation::structure::{DYNAMIC_WORLDGEN_RELOAD, template::get_template};
+    use std::{sync::mpsc, time::Duration};
     use tempfile::tempdir;
 
     #[test]
@@ -225,7 +236,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(current.elements[0].weight, 10);
-        prepared.apply();
+        prepared.apply(None);
         let replaced =
             pumpkin_world::generation::structure::structures::jigsaw::TemplatePool::discover(
                 "test_ns:test_pool",
@@ -255,8 +266,22 @@ mod tests {
         }"#;
         fs::write(template_pool_dir.join("deferred.json"), pool_json).unwrap();
         let prepared = prepare_template_pools_from_dir("test_ns", &template_pool_dir);
+        let reload = DYNAMIC_WORLDGEN_RELOAD.write().unwrap();
+        cache.remove_dynamic("test_ns:deferred");
+        let (tx, rx) = mpsc::channel();
+        let (started_tx, started_rx) = mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            tx.send(get_template("test_ns:deferred")).unwrap();
+        });
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(rx.recv_timeout(Duration::from_millis(100)).is_err());
         cache.register_template("test_ns:deferred", make_template(2));
-        prepared.apply();
+        prepared.apply(Some(&reload));
+        drop(reload);
+        let observed = rx.recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+        assert_eq!(observed.size.x, 2);
+        reader.join().unwrap();
         let pool =
             pumpkin_world::generation::structure::structures::jigsaw::TemplatePool::discover(
                 "test_ns:deferred",

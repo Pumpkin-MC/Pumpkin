@@ -459,7 +459,10 @@ impl Server {
             });
         }
 
+        let mut initialized_levels = Vec::with_capacity(server.dimensions.len());
         let world_tasks = server.dimensions.iter().map(|dim| {
+            let initialized = Arc::new(std::sync::OnceLock::new());
+            initialized_levels.push(initialized.clone());
             let server = server.clone();
             let level_path = world_path.clone();
             let dim = dim.clone();
@@ -473,6 +476,7 @@ impl Server {
                 );
                 let level =
                     into_level(dim.clone(), &server.advanced_config.world, level_path, seed);
+                let _ = initialized.set(level.clone());
                 let world = Arc::new(World::load(
                     level.clone(),
                     server.level_info.clone(),
@@ -486,11 +490,32 @@ impl Server {
             })
         });
         // Wait for every dimension before firing events, preserving the configured world order.
-        let worlds_vec = futures::future::join_all(world_tasks)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(std::io::Error::other)?;
+        let results = futures::future::join_all(world_tasks).await;
+        let mut worlds_vec = Vec::with_capacity(results.len());
+        let mut initialization_error = None;
+        for result in results {
+            match result {
+                Ok(world) => worlds_vec.push(world),
+                Err(error) => {
+                    initialization_error.get_or_insert(error);
+                }
+            }
+        }
+        if let Some(error) = initialization_error {
+            for world in &worlds_vec {
+                world.shutdown().await;
+            }
+            for initialized in initialized_levels {
+                if let Some(level) = initialized.get()
+                    && !worlds_vec
+                        .iter()
+                        .any(|world| Arc::ptr_eq(&world.level, level))
+                {
+                    level.shutdown().await;
+                }
+            }
+            return Err(std::io::Error::other(error).into());
+        }
 
         for world in &worlds_vec {
             let mut world_init_event =
@@ -515,11 +540,16 @@ impl Server {
         let enabled_packs = server.level_info.load().data_packs.enabled.clone();
         let datapacks = server.datapack_manager.clone();
         let recipes = server.recipe_manager.clone();
-        tokio::task::spawn_blocking(move || {
+        if let Err(error) = tokio::task::spawn_blocking(move || {
             datapacks.load_all(&world_path, &enabled_packs, &recipes);
         })
         .await
-        .map_err(std::io::Error::other)?;
+        {
+            for world in server.worlds.load_full().iter() {
+                world.shutdown().await;
+            }
+            return Err(std::io::Error::other(error).into());
+        }
 
         let source = crate::command::CommandSender::Console.into_source(&server);
         let _ = server

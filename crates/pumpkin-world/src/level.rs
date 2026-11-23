@@ -769,12 +769,14 @@ impl Level {
             let fetch_task = async {
                 let mut to_fetch = Vec::new();
                 for pos in chunks {
-                    let cached = level
-                        .loaded_entity_chunks
-                        .get(&pos)
-                        .map(|chunk| Arc::downgrade(chunk.value()));
+                    let cached = level.loaded_entity_chunks.get(&pos).map(|chunk| {
+                        (
+                            Arc::downgrade(chunk.value()),
+                            !chunk.live.load(Ordering::Relaxed),
+                        )
+                    });
                     if let Some(chunk) = cached {
-                        if sender.send((chunk, false)).await.is_err() {
+                        if sender.send(chunk).await.is_err() {
                             return;
                         }
                     } else {
@@ -1060,15 +1062,17 @@ mod tests {
         );
         let positions: Vec<_> = (0..80).map(|x| Vector2::new(x, 0)).collect();
         for &pos in &positions {
-            level.spawn_entity_generation(pos);
+            let chunk = level.get_entity_chunk(pos).await;
+            chunk.live.store(pos.x % 2 == 0, Ordering::Relaxed);
         }
         let mut rx = level.receive_entity_chunks(positions.clone());
         for pos in positions {
             let (chunk, first_load) = rx.recv().await.unwrap();
-            assert!(!first_load);
+            assert_eq!(first_load, pos.x % 2 != 0);
             assert_eq!(chunk.upgrade().unwrap().x, pos.x);
         }
         assert!(rx.recv().await.is_none());
+        level.shutdown().await;
     }
 
     #[tokio::test]

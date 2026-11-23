@@ -42,11 +42,12 @@ fn collect_files_into(dir: &Path, extension: &str, files: &mut Vec<PathBuf>) {
         }) else {
             continue;
         };
-        if kind.is_dir() || (kind.is_symlink() && path.is_dir()) {
+        if kind.is_dir() {
             collect_files_into(&path, extension, files);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case(extension))
+        } else if (kind.is_file() || (kind.is_symlink() && path.is_file()))
+            && path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case(extension))
         {
             files.push(path);
         }
@@ -57,12 +58,14 @@ fn collect_files_into(dir: &Path, extension: &str, files: &mut Vec<PathBuf>) {
 /// suffix removed and backslashes normalised to `/`.
 fn resource_path(base_dir: &Path, path: &Path, extension: &str) -> Option<String> {
     let rel_path = path.strip_prefix(base_dir).ok()?;
-    let relative = rel_path.to_string_lossy();
-    let stem = relative
-        .strip_suffix(extension)
-        .and_then(|path| path.strip_suffix('.'))
-        .unwrap_or(&relative);
-    Some(stem.replace('\\', "/"))
+    if rel_path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case(extension))
+    {
+        resource_path_without_extension(base_dir, path)
+    } else {
+        Some(rel_path.to_string_lossy().replace('\\', "/"))
+    }
 }
 
 /// Like [`resource_path`], but strips whatever extension the file has, matching
@@ -108,4 +111,43 @@ where
             Some((entry_id, rel_path, value))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn case_insensitive_extensions_produce_the_same_resource_path() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["reward.json", "reward.JSON"] {
+            fs::write(dir.path().join(name), "{}").unwrap();
+        }
+        let files = collect_files(dir.path(), "json");
+        let loaded = load_files_parallel("test", dir.path(), &files, "json", |_, _, _| Some(()));
+        assert_eq!(loaded.len(), 2);
+        assert!(
+            loaded
+                .iter()
+                .all(|(id, path, ())| id == "test:reward" && path == "reward")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn discovery_skips_directory_symlinks_and_special_files() {
+        use std::os::unix::{fs::symlink, net::UnixListener};
+
+        let dir = tempfile::tempdir().unwrap();
+        let nested = dir.path().join("nested");
+        fs::create_dir(&nested).unwrap();
+        let file = nested.join("reward.json");
+        fs::write(&file, "{}").unwrap();
+        symlink(dir.path(), nested.join("cycle")).unwrap();
+        symlink(&nested, dir.path().join("alias")).unwrap();
+        let file_link = dir.path().join("linked.JSON");
+        symlink(&file, &file_link).unwrap();
+        let _socket = UnixListener::bind(dir.path().join("socket.json")).unwrap();
+        assert_eq!(collect_files(dir.path(), "json"), [file_link, file]);
+    }
 }

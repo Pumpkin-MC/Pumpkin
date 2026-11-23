@@ -136,11 +136,19 @@ impl DynamicRegistryManager {
         &self,
         custom_registries: &HashMap<String, HashMap<String, RegistryEntryData, S1>, S2>,
     ) {
-        if custom_registries.is_empty() {
-            self.registries.store(self.base_registries.clone());
-            return;
-        }
+        let live = self.registries.load_full();
         let mut registries = (*self.base_registries).clone();
+        // Without client reconfiguration, removed entries must retain their network slots.
+        for (id, existing) in live.iter().filter(|(_, registry)| !registry.is_empty()) {
+            let mut entries = existing.entries.clone();
+            if let Some(base) = self.base_registries.get(id) {
+                entries[..base.entries.len()].clone_from_slice(&base.entries);
+            }
+            registries.insert(
+                id.clone(),
+                Arc::new(DynamicRegistry::new(id.clone(), entries)),
+            );
+        }
         let mut custom: Vec<_> = custom_registries.iter().collect();
         custom.sort_unstable_by_key(|(id, _)| *id);
         for (raw_reg_id, custom_entries) in custom {
@@ -316,6 +324,48 @@ mod tests {
         assert_eq!(order.next().map(String::as_str), Some("example:z"));
         assert_eq!(order.next().map(String::as_str), Some("example:a"));
         assert!(!manager.synced_snapshot().contains_key("example:z"));
+    }
+
+    #[test]
+    fn reload_preserves_live_custom_network_ids() {
+        let manager = DynamicRegistryManager::default();
+        let registry = "minecraft:painting_variant".to_string();
+        let mut entries = HashMap::new();
+        for name in ["custom:b", "custom:c"] {
+            entries.insert(
+                name.to_string(),
+                RegistryEntryData {
+                    entry_id: name.to_string(),
+                    data: None,
+                },
+            );
+        }
+        let mut custom = HashMap::from([(registry.clone(), entries)]);
+        manager.apply_custom_registries(&custom);
+        let b = manager.get_raw_id(&registry, "custom:b");
+        let c = manager.get_raw_id(&registry, "custom:c");
+        let login = manager.synced_snapshot();
+        custom.get_mut(&registry).unwrap().insert(
+            "custom:a".into(),
+            RegistryEntryData {
+                entry_id: "custom:a".into(),
+                data: None,
+            },
+        );
+        manager.apply_custom_registries(&custom);
+        assert_eq!(manager.get_raw_id(&registry, "custom:b"), b);
+        assert_eq!(manager.get_raw_id(&registry, "custom:c"), c);
+        custom.get_mut(&registry).unwrap().remove("custom:b");
+        manager.apply_custom_registries(&custom);
+        assert_eq!(manager.get_raw_id(&registry, "custom:c"), c);
+        manager
+            .apply_custom_registries(&HashMap::<String, HashMap<String, RegistryEntryData>>::new());
+        assert_eq!(manager.get_raw_id(&registry, "custom:c"), c);
+        assert_eq!(
+            manager.get_entry_id(&registry, b.unwrap()).as_deref(),
+            Some("custom:b")
+        );
+        assert_eq!(login[&registry].get_raw_id("custom:c"), c);
     }
 
     #[test]

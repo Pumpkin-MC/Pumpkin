@@ -1382,6 +1382,9 @@ impl StructureProcessor {
 pub fn load_processor_list(name: &str) -> Arc<[StructureProcessor]> {
     static CACHE: LazyLock<dashmap::DashMap<String, Arc<[StructureProcessor]>>> =
         LazyLock::new(dashmap::DashMap::new);
+    let _reload = super::super::DYNAMIC_WORLDGEN_RELOAD
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     let name_key = name.strip_prefix("minecraft:").unwrap_or(name);
 

@@ -527,19 +527,27 @@ pub fn load_trade_tags_from_dir<S: std::hash::BuildHasher>(
 ) -> usize {
     let before = registry.len();
     let files = collect_files(dir, "json");
-    let loaded = load_files_parallel(namespace, dir, &files, "json", |_id, _path, content| {
-        let tag_file = serde_json::from_str::<TradeTagDefinition>(content).ok()?;
-        let values = tag_file
-            .values
-            .into_iter()
-            .filter_map(|v| match v {
-                Value::String(s) => Some(s),
-                Value::Object(obj) => obj.get("id").and_then(Value::as_str).map(String::from),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        Some(values)
-    });
+    let loaded = load_files_parallel(
+        namespace,
+        dir,
+        &files,
+        "json",
+        |entry_id, _path, content| {
+            let tag_file = serde_json::from_str::<TradeTagDefinition>(content)
+                .inspect_err(|err| warn!("Failed to parse trade tag {entry_id}: {err}"))
+                .ok()?;
+            let values = tag_file
+                .values
+                .into_iter()
+                .filter_map(|v| match v {
+                    Value::String(s) => Some(s),
+                    Value::Object(obj) => obj.get("id").and_then(Value::as_str).map(String::from),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            Some(values)
+        },
+    );
 
     for (entry_id, rel, values) in loaded {
         registry.insert(entry_id, values.clone());
