@@ -26,7 +26,6 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
-use pumpkin_world::generation::generator::GeneratorInit;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
@@ -193,11 +192,13 @@ fn load_level_info(
                 world_path.display(),
                 seed.0 as i64
             );
-            let overworld_gen = pumpkin_world::generation::generator::VanillaGenerator::new(
-                seed,
-                Dimension::OVERWORLD,
-            );
-            let mut default_data = LevelData::from_world_generator(seed, &overworld_gen);
+            let spawn_pos =
+                pumpkin_world::generation::generator::VanillaGenerator::find_spawn_position_for_seed(
+                    seed,
+                    &Dimension::OVERWORLD,
+                );
+            let mut default_data = LevelData::default(seed);
+            default_data.set_pos(spawn_pos.0.x, spawn_pos.0.z);
             if hardcore {
                 default_data.difficulty = Difficulty::Hard;
                 default_data.difficulty_locked = true;
