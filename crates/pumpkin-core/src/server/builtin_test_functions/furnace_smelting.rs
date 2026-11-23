@@ -27,3 +27,33 @@ pub(super) async fn test_furnace_ignites_and_smelts(test: GameTestContext) -> Ga
     })?;
     Ok(())
 }
+
+pub(super) async fn test_furnace_returns_empty_bucket_from_lava_bucket_fuel(
+    test: GameTestContext,
+) -> GameTestResult<()> {
+    test.set_dimensions(3, 4, 3).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
+
+    let furnace_pos = BlockPos::new(1, 1, 1);
+    test.set_block_default(&furnace_pos, &Block::FURNACE)
+        .await?;
+    test.set_container_item(&furnace_pos, 0, "minecraft:raw_iron", 1)
+        .await?;
+    test.set_container_item(&furnace_pos, 1, "minecraft:lava_bucket", 1)
+        .await?;
+
+    test.start_sequence()
+        .then_wait_until(move |test| async move {
+            test.assert_container_contains_count(&furnace_pos, "minecraft:lava_bucket", 0)
+                .await?;
+            test.assert_container_contains_count(&furnace_pos, "minecraft:bucket", 1)
+                .await
+        })
+        .then_idle(1)
+        .then_execute(move |test| async move {
+            test.assert_container_contains_count(&furnace_pos, "minecraft:bucket", 1)
+                .await
+        })
+        .then_succeed();
+    Ok(())
+}

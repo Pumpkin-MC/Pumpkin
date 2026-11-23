@@ -153,6 +153,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:crafter_crafts_sticks_from_two_planks" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/crafter_crafts_sticks_from_two_planks.json"
         )),
+        "pumpkin:crafter_dispenses_crafting_remainders" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/crafter_dispenses_crafting_remainders.json"
+        )),
         "pumpkin:creeper_should_run_from_cat" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/creeper_should_run_from_cat.json"
         )),
@@ -248,6 +251,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         )),
         "pumpkin:furnace_ignites_and_smelts" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/furnace_ignites_and_smelts.json"
+        )),
+        "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/furnace_returns_empty_bucket_from_lava_bucket_fuel.json"
         )),
         "pumpkin:hanging_lantern_breaks_when_ceiling_removed" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/hanging_lantern_breaks_when_ceiling_removed.json"
@@ -707,6 +713,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:crafter_crafts_into_chest",
         "pumpkin:crafter_crafts_iron_ingot_from_nuggets",
         "pumpkin:crafter_crafts_sticks_from_two_planks",
+        "pumpkin:crafter_dispenses_crafting_remainders",
         "pumpkin:creeper_should_run_from_cat",
         "pumpkin:daylight_detector_normal_and_inverted_signal",
         "pumpkin:detector_rail_activates_on_chest_minecart",
@@ -739,6 +746,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:fence_gate_wooden_variants_redstone",
         "pumpkin:fence_horizontal_connections",
         "pumpkin:furnace_ignites_and_smelts",
+        "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
         "pumpkin:hanging_lantern_breaks_when_ceiling_removed",
         "pumpkin:heavy_weighted_pressure_plate_signal_1",
         "pumpkin:hopper_chain_three_hoppers_to_chest",

@@ -83,6 +83,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:dispenser_and_dropper", dispensers_and_crafters::test_dispenser_and_dropper);
         register_test_function("pumpkin:dispenser_honeycomb_beehive_and_shulker", dispenser_utilities::test_dispenser_honeycomb_beehive_and_shulker);
         register_test_function("pumpkin:crafter_crafts_into_chest", dispensers_and_crafters::test_crafter_crafts_into_chest);
+        register_test_function("pumpkin:crafter_dispenses_crafting_remainders", dispensers_and_crafters::test_crafter_dispenses_crafting_remainders);
         register_test_function("pumpkin:doors_trapdoors_fence_gates_redstone", doors_and_gates::test_doors_trapdoors_fence_gates_redstone);
         register_test_function("pumpkin:water_lava_interactions", fluids_and_sponge::test_water_lava_interactions);
         register_test_function("pumpkin:sponge_absorbs_water", fluids_and_sponge::test_sponge_absorbs_water);
@@ -93,6 +94,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:hopper_transfers_to_chest", containers_and_commands::test_hopper_transfers_to_chest);
         register_test_function("pumpkin:tnt_redstone_ignites", containers_and_commands::test_tnt_redstone_ignites);
         register_test_function("pumpkin:furnace_ignites_and_smelts", furnace_smelting::test_furnace_ignites_and_smelts);
+        register_test_function("pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel", furnace_smelting::test_furnace_returns_empty_bucket_from_lava_bucket_fuel);
         register_test_function("pumpkin:brewing_returns_glass_bottle_from_dragon_breath", brewing_stand::test_brewing_returns_glass_bottle_from_dragon_breath);
         register_test_function("pumpkin:powered_rail_propagation", rails::test_powered_rail_propagation);
         register_test_function("pumpkin:activator_rail_propagation", rails::test_activator_rail_propagation);

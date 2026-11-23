@@ -109,3 +109,37 @@ pub(super) async fn test_crafter_crafts_into_chest(test: GameTestContext) -> Gam
         .then_succeed();
     Ok(())
 }
+
+pub(super) async fn test_crafter_dispenses_crafting_remainders(
+    test: GameTestContext,
+) -> GameTestResult<()> {
+    test.set_dimensions(3, 4, 3).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
+
+    let crafter_pos = BlockPos::new(1, 1, 1);
+    let chest_pos = crafter_pos.up();
+    let mut props = CrafterLikeProperties::default(&Block::CRAFTER);
+    props.orientation = Orientation::UpNorth;
+    test.set_block(&crafter_pos, props.to_state_id(&Block::CRAFTER))
+        .await?;
+    test.set_block_default(&chest_pos, &Block::CHEST).await?;
+
+    for slot in [0, 1, 3, 4] {
+        test.set_container_item(&crafter_pos, slot, "minecraft:honey_bottle", 1)
+            .await?;
+    }
+    test.set_block_default(&crafter_pos.down(), &Block::REDSTONE_BLOCK)
+        .await?;
+
+    test.start_sequence()
+        .then_idle(6)
+        .then_execute(move |test| async move {
+            test.assert_container_empty(&crafter_pos).await?;
+            test.assert_container_contains_count(&chest_pos, "minecraft:honey_block", 1)
+                .await?;
+            test.assert_container_contains_count(&chest_pos, "minecraft:glass_bottle", 4)
+                .await
+        })
+        .then_succeed();
+    Ok(())
+}
