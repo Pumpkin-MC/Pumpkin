@@ -46,7 +46,6 @@ const PLUGIN_DIR: &str = "./plugins";
 #[derive(Clone)]
 pub struct QueuedEvent {
     storage: Arc<RwLock<dyn EventSlot>>,
-    generation: u32,
     writable: bool,
 }
 
@@ -61,7 +60,7 @@ impl QueuedEvent {
         &self,
     ) -> Result<Option<RwLockReadGuard<'_, E>>, tokio::sync::TryLockError> {
         Ok(RwLockReadGuard::try_map(self.storage.try_read()?, |slot| {
-            slot.payload(self.generation)?.downcast_ref()
+            slot.payload()?.downcast_ref()
         })
         .ok())
     }
@@ -80,7 +79,7 @@ impl QueuedEvent {
         }
         Ok(
             RwLockWriteGuard::try_map(self.storage.try_write()?, |slot| {
-                slot.payload_mut(self.generation)?.downcast_mut()
+                slot.payload_mut()?.downcast_mut()
             })
             .ok(),
         )
@@ -89,25 +88,17 @@ impl QueuedEvent {
 
 // The erased lock and typed lock both refer to the same allocation.
 trait EventSlot: Send + Sync {
-    fn payload(&self, handle_generation: u32) -> Option<&dyn Payload>;
-    fn payload_mut(&mut self, handle_generation: u32) -> Option<&mut dyn Payload>;
+    fn payload(&self) -> Option<&dyn Payload>;
+    fn payload_mut(&mut self) -> Option<&mut dyn Payload>;
 }
 
-impl<E: Payload + 'static> EventSlot for (Option<E>, u32) {
-    fn payload(&self, handle_generation: u32) -> Option<&dyn Payload> {
-        if handle_generation == self.1 {
-            self.0.as_ref().map(|event| event as &dyn Payload)
-        } else {
-            None
-        }
+impl<E: Payload + 'static> EventSlot for Option<E> {
+    fn payload(&self) -> Option<&dyn Payload> {
+        self.as_ref().map(|event| event as &dyn Payload)
     }
 
-    fn payload_mut(&mut self, handle_generation: u32) -> Option<&mut dyn Payload> {
-        if handle_generation == self.1 {
-            self.0.as_mut().map(|event| event as &mut dyn Payload)
-        } else {
-            None
-        }
+    fn payload_mut(&mut self) -> Option<&mut dyn Payload> {
+        self.as_mut().map(|event| event as &mut dyn Payload)
     }
 }
 
@@ -1346,26 +1337,19 @@ impl PluginManager {
         event: E,
         handlers: &[Arc<dyn DynEventHandler>],
     ) -> E {
-        let slot = Arc::new(RwLock::new((Some(event), 0u32)));
+        let slot = Arc::new(RwLock::new(Some(event)));
 
         for handler in handlers.iter().filter(|handler| handler.is_blocking()) {
-            let generation = slot.read().await.1;
-
             handler
                 .handle_dyn(
                     server,
                     QueuedEvent {
                         storage: slot.clone(),
                         writable: true,
-                        generation: generation,
                     },
                 )
                 .await;
-
-            slot.write().await.1 += 1;
         }
-
-        let generation = slot.read().await.1;
 
         join_all(
             handlers
@@ -1378,17 +1362,13 @@ impl PluginManager {
                         QueuedEvent {
                             storage: slot.clone(),
                             writable: false,
-                            generation: generation,
                         },
                     )
                 }),
         )
         .await;
 
-        let mut slot_guard = slot.write().await;
-
-        slot_guard.1 += 1;
-        slot_guard.0.take().expect("dispatch owns the event")
+        slot.write().await.take().expect("dispatch owns the event")
     }
 
     /// Returns the event after blocking handlers and notifications have finished.
@@ -1476,10 +1456,9 @@ mod tests {
     async fn queued_event_survives_caller_cancellation() {
         let (submitted, queued) = tokio::sync::oneshot::channel();
         let caller = tokio::spawn(async move {
-            let slot = Arc::new(RwLock::new((Some(ServerTickStartEvent::new(3)), 0u32)));
+            let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(3))));
             let handle = QueuedEvent {
                 storage: slot.clone(),
-                generation: 0,
                 writable: true,
             };
             assert!(submitted.send(handle).is_ok());
@@ -1503,15 +1482,13 @@ mod tests {
 
     #[tokio::test]
     async fn queued_event_shares_edits_and_expires_after_dispatch() {
-        let slot = Arc::new(RwLock::new((Some(ServerTickStartEvent::new(1)), 0u32)));
+        let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(1))));
         let blocking = QueuedEvent {
             storage: slot.clone(),
-            generation: 0,
             writable: true,
         };
         let notification = QueuedEvent {
             storage: slot.clone(),
-            generation: 0,
             writable: false,
         };
         blocking
@@ -1535,16 +1512,16 @@ mod tests {
         );
         {
             let mut guard = blocking.storage.write().await;
-            let event = guard.payload_mut(0).unwrap();
+            let event = guard.payload_mut().unwrap();
             event
                 .as_any_mut()
                 .downcast_mut::<ServerTickStartEvent>()
                 .unwrap()
                 .tick = 3;
-        }
+        };
         {
             let guard = notification.storage.read().await;
-            let event = guard.payload(0).unwrap();
+            let event = guard.payload().unwrap();
             assert_eq!(
                 event
                     .as_any()
@@ -1561,97 +1538,11 @@ mod tests {
                     .tick,
                 3
             );
-        }
-        assert_eq!(slot.write().await.0.take().unwrap().tick, 3);
+        };
+        assert_eq!(slot.write().await.take().unwrap().tick, 3);
         assert!(blocking.read::<ServerTickStartEvent>().unwrap().is_none());
         assert!(blocking.write::<ServerTickStartEvent>().unwrap().is_none());
-        assert!(blocking.storage.read().await.payload(0).is_none());
-    }
-
-    #[tokio::test]
-    async fn queued_event_invalidates_handles_on_phase_advance() {
-        let slot = Arc::new(RwLock::new((Some(ServerTickStartEvent::new(1)), 0u32)));
-
-        let blocking_gen = slot.read().await.1;
-        assert_eq!(blocking_gen, 0);
-        let blocking = QueuedEvent {
-            storage: slot.clone(),
-            generation: blocking_gen,
-            writable: true,
-        };
-        blocking
-            .write::<ServerTickStartEvent>()
-            .unwrap()
-            .unwrap()
-            .tick = 2;
-
-        slot.write().await.1 += 1;
-
-        assert!(blocking.read::<ServerTickStartEvent>().unwrap().is_none());
-        assert!(blocking.write::<ServerTickStartEvent>().unwrap().is_none());
-
-        let notify_gen = slot.read().await.1;
-        assert_eq!(notify_gen, 1);
-        let notification_a = QueuedEvent {
-            storage: slot.clone(),
-            generation: notify_gen,
-            writable: false,
-        };
-        let notification_b = QueuedEvent {
-            storage: slot.clone(),
-            generation: notify_gen,
-            writable: false,
-        };
-
-        assert!(
-            notification_a
-                .write::<ServerTickStartEvent>()
-                .unwrap()
-                .is_none()
-        );
-        assert_eq!(
-            notification_a
-                .read::<ServerTickStartEvent>()
-                .unwrap()
-                .unwrap()
-                .tick,
-            2
-        );
-        assert_eq!(
-            notification_b
-                .read::<ServerTickStartEvent>()
-                .unwrap()
-                .unwrap()
-                .tick,
-            2
-        );
-
-        slot.write().await.1 += 1;
-
-        assert!(
-            notification_a
-                .read::<ServerTickStartEvent>()
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            notification_b
-                .read::<ServerTickStartEvent>()
-                .unwrap()
-                .is_none()
-        );
-        assert!(slot.read().await.payload(notify_gen).is_none());
-        assert_eq!(
-            slot.read()
-                .await
-                .payload(2)
-                .unwrap()
-                .as_any()
-                .downcast_ref::<ServerTickStartEvent>()
-                .unwrap()
-                .tick,
-            2
-        );
+        assert!(blocking.storage.read().await.payload().is_none());
     }
 
     #[tokio::test]
