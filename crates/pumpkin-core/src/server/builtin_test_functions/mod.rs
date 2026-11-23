@@ -103,7 +103,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:item_entities_merge", entities_and_ai::test_item_entities_merge);
         register_test_function("pumpkin:zombie_pathfinds_to_villager", entities_and_ai::test_zombie_pathfinds_to_villager);
 
-        // redstone_wire_and_power (14)
+        // redstone_wire_and_power
         register_test_function("pumpkin:redstone_wire_attenuation_1_to_4", redstone_wire_and_power::test_redstone_wire_attenuation_1_to_4);
         register_test_function("pumpkin:redstone_wire_attenuation_5_to_8", redstone_wire_and_power::test_redstone_wire_attenuation_5_to_8);
         register_test_function("pumpkin:redstone_wire_attenuation_9_to_12", redstone_wire_and_power::test_redstone_wire_attenuation_9_to_12);
@@ -119,7 +119,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:redstone_wire_strong_power_through_stone", redstone_wire_and_power::test_redstone_wire_strong_power_through_stone);
         register_test_function("pumpkin:redstone_wire_corner_south_west", redstone_wire_and_power::test_redstone_wire_corner_south_west);
 
-        // redstone_logic_circuits (12)
+        // redstone_logic_circuits
         register_test_function("pumpkin:redstone_double_inverter_buffer", redstone_logic_circuits::test_redstone_double_inverter_buffer);
         register_test_function("pumpkin:redstone_wall_torch_inverter", redstone_logic_circuits::test_redstone_wall_torch_inverter);
         register_test_function("pumpkin:redstone_or_gate", redstone_logic_circuits::test_redstone_or_gate_two_inputs);
@@ -133,7 +133,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:redstone_repeater_locking_holds_off", redstone_logic_circuits::test_redstone_repeater_locking_holds_off);
         register_test_function("pumpkin:redstone_repeater_locking_holds_on", redstone_logic_circuits::test_redstone_repeater_locking_holds_on);
 
-        // comparators_extended (14)
+        // comparators_extended
         register_test_function("pumpkin:comparator_composter_levels_1_to_4", comparators_extended::test_comparator_composter_levels_1_to_4);
         register_test_function("pumpkin:comparator_composter_levels_5_to_8", comparators_extended::test_comparator_composter_levels_5_to_8);
         register_test_function("pumpkin:comparator_water_cauldron_levels_1_to_3", comparators_extended::test_comparator_water_cauldron_levels_1_2_3);
@@ -149,7 +149,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:comparator_copper_bulb_oxidized_variants", comparators_extended::test_comparator_copper_bulbs_oxidation_variants);
         register_test_function("pumpkin:comparator_subtract_clamps_to_zero", comparators_extended::test_comparator_subtract_mode_clamps_to_zero);
 
-        // buttons_levers_plates_variants (12)
+        // buttons_levers_plates_variants
         register_test_function("pumpkin:oak_button_30_tick_pulse", buttons_levers_plates_variants::test_oak_button_30_tick_pulse);
         register_test_function("pumpkin:polished_blackstone_button_20_tick_pulse", buttons_levers_plates_variants::test_polished_blackstone_button_20_tick_pulse);
         register_test_function("pumpkin:button_floor_and_ceiling_power", buttons_levers_plates_variants::test_stone_button_floor_mount_strong_power);
@@ -163,7 +163,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:light_weighted_pressure_plate_counts_entities", buttons_levers_plates_variants::test_weighted_pressure_plate_light_scaling);
         register_test_function("pumpkin:heavy_weighted_pressure_plate_signal_1", buttons_levers_plates_variants::test_weighted_pressure_plate_heavy_scaling);
 
-        // doors_trapdoors_gates_variants (12)
+        // doors_trapdoors_gates_variants
         register_test_function("pumpkin:oak_and_spruce_doors_redstone", doors_trapdoors_gates_variants::test_oak_and_spruce_doors_redstone);
         register_test_function("pumpkin:birch_and_jungle_doors_redstone", doors_trapdoors_gates_variants::test_birch_and_jungle_doors_redstone);
         register_test_function("pumpkin:acacia_dark_oak_mangrove_cherry_doors_redstone", doors_trapdoors_gates_variants::test_acacia_dark_oak_mangrove_cherry_doors);
@@ -177,7 +177,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:fence_horizontal_connections", doors_trapdoors_gates_variants::test_fence_horizontal_connections_update);
         register_test_function("pumpkin:iron_bars_and_glass_pane_connections", doors_trapdoors_gates_variants::test_iron_bars_and_glass_pane_connections);
 
-        // pistons_extended (12)
+        // pistons_extended
         register_test_function("pumpkin:piston_pushes_upward_and_retracts", pistons_extended::test_piston_pushes_upward_and_retracts);
         register_test_function("pumpkin:piston_pushes_downward_and_retracts", pistons_extended::test_piston_pushes_downward_and_retracts);
         register_test_function("pumpkin:piston_pushes_north_and_south", pistons_extended::test_piston_pushes_north_and_south);
@@ -191,7 +191,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:sticky_piston_redstone_block_powers_lamp", pistons_extended::test_piston_pushes_redstone_block_powers_lamp);
         register_test_function("pumpkin:sticky_piston_pulls_redstone_block_cuts_power", pistons_extended::test_sticky_piston_pulls_redstone_block_cuts_power);
 
-        // dispensers_and_droppers_extended (12)
+        // dispensers_and_droppers_extended
         register_test_function("pumpkin:dispenser_lava_bucket_places_and_picks_up", dispensers_and_droppers_extended::test_dispenser_lava_bucket_place_and_pickup);
         register_test_function("pumpkin:dispenser_powder_snow_bucket_places_and_picks_up", dispensers_and_droppers_extended::test_dispenser_powder_snow_bucket_place_and_pickup);
         register_test_function("pumpkin:dispenser_shears_harvest_full_beehive", dispensers_and_droppers_extended::test_dispenser_shears_full_beehive_drops_honeycomb);
@@ -205,7 +205,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:dropper_drops_bucket_as_item_entity", dispensers_and_droppers_extended::test_dropper_drops_item_entity_into_air);
         register_test_function("pumpkin:dropper_transfers_into_hopper_and_barrel", dispensers_and_droppers_extended::test_dropper_transfers_into_hopper_and_barrel);
 
-        // containers_and_hoppers_extended (12)
+        // containers_and_hoppers_extended
         register_test_function("pumpkin:hopper_pulls_item_entity_from_above", containers_and_hoppers_extended::test_hopper_pulls_item_entity_from_above);
         register_test_function("pumpkin:hopper_pulls_from_chest_above", containers_and_hoppers_extended::test_hopper_pulls_from_chest_above);
         register_test_function("pumpkin:hopper_pushes_sideways_into_barrel", containers_and_hoppers_extended::test_hopper_pushes_sideways_into_barrel);
@@ -219,7 +219,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:crafter_crafts_sticks_from_two_planks", containers_and_hoppers_extended::test_crafter_disabled_slots_skip_items);
         register_test_function("pumpkin:barrel_and_trapped_chest_store_items", containers_and_hoppers_extended::test_barrel_and_trapped_chest_inventories);
 
-        // walls_stairs_and_shapes (12)
+        // walls_stairs_and_shapes
         register_test_function("pumpkin:wall_straight_line_has_no_center_post", walls_stairs_and_shapes::test_cobblestone_wall_connects_north_south_straight);
         register_test_function("pumpkin:wall_corner_raises_center_post", walls_stairs_and_shapes::test_cobblestone_wall_corner_raises_center_post);
         register_test_function("pumpkin:wall_under_full_block_turns_tall", walls_stairs_and_shapes::test_cobblestone_wall_tall_side_under_full_block);
@@ -233,7 +233,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:campfire_signal_fire_over_hay_block", walls_stairs_and_shapes::test_campfire_signal_fire_over_hay_block);
         register_test_function("pumpkin:campfire_waterlogged_extinguishes_lit", walls_stairs_and_shapes::test_campfire_waterlogged_extinguishes_lit);
 
-        // plants_and_support_blocks (12)
+        // plants_and_support_blocks
         register_test_function("pumpkin:cactus_breaks_when_solid_block_placed_adjacent", plants_and_support_blocks::test_cactus_breaks_when_solid_block_placed_adjacent);
         register_test_function("pumpkin:cactus_breaks_when_sand_below_removed", plants_and_support_blocks::test_cactus_breaks_when_sand_support_removed);
         register_test_function("pumpkin:sugar_cane_breaks_when_water_removed", plants_and_support_blocks::test_sugar_cane_breaks_when_water_removed);
@@ -247,7 +247,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:carpet_and_moss_carpet_break_without_support", plants_and_support_blocks::test_carpet_and_moss_carpet_break_when_floor_removed);
         register_test_function("pumpkin:pressure_plate_and_redstone_wire_break_without_support", plants_and_support_blocks::test_pressure_plate_breaks_when_floor_removed);
 
-        // lamps_bulbs_and_noteblocks_extended (12)
+        // lamps_bulbs_and_noteblocks_extended
         register_test_function("pumpkin:copper_bulb_variants_toggle_and_remember_lit", lamps_bulbs_and_noteblocks_extended::test_copper_bulb_oxidation_variants_toggle);
         register_test_function("pumpkin:waxed_copper_bulb_variants_toggle_and_remember_lit", lamps_bulbs_and_noteblocks_extended::test_waxed_copper_bulb_variants_toggle);
         register_test_function("pumpkin:redstone_lamp_stays_lit_while_powered", lamps_bulbs_and_noteblocks_extended::test_redstone_lamp_stays_lit_while_powered);
@@ -261,7 +261,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:observer_chain_propagates_pulse", lamps_bulbs_and_noteblocks_extended::test_observer_chain_propagates_pulse);
         register_test_function("pumpkin:target_block_egg_hit_emits_pulse_and_clears", lamps_bulbs_and_noteblocks_extended::test_target_block_arrow_hit_20_tick_pulse);
 
-        // rails_and_fluids_extended (12)
+        // rails_and_fluids_extended
         register_test_function("pumpkin:powered_rail_deenergizes_beyond_8_blocks", rails_and_fluids_extended::test_powered_rail_deenergizes_beyond_8_blocks);
         register_test_function("pumpkin:activator_rail_deenergizes_beyond_8_blocks", rails_and_fluids_extended::test_activator_rail_deenergizes_beyond_8_blocks);
         register_test_function("pumpkin:powered_rail_bidirectional_boost_from_center", rails_and_fluids_extended::test_powered_rail_bidirectional_boost_from_center);
@@ -275,7 +275,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:sponge_absorbs_multi_block_water_pool", rails_and_fluids_extended::test_water_meets_lava_source_forms_obsidian);
         register_test_function("pumpkin:sponge_does_not_absorb_lava", rails_and_fluids_extended::test_sponge_ignores_lava_and_stays_dry);
 
-        // commands_and_entities_extended (11)
+        // commands_and_entities_extended
         register_test_function("pumpkin:impulse_command_block_setblock_on_power", commands_and_entities_extended::test_command_block_impulse_setblock);
         register_test_function("pumpkin:chain_command_block_three_stage_pipeline", commands_and_entities_extended::test_command_block_chain_three_stages);
         register_test_function("pumpkin:conditional_chain_command_block_skips_on_failure", commands_and_entities_extended::test_command_block_unconditional_vs_conditional);

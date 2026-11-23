@@ -5,5 +5,6 @@
   "max_ticks": 22,
   "max_attempts": 6,
   "required_successes": 3,
-  "manual_only": false
+  "manual_only": false,
+  "required": false
 }
