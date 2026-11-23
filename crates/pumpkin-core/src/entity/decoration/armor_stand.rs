@@ -233,20 +233,30 @@ impl ArmorStandEntity {
             .entity_equipment
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let drop_pos = entity.block_pos.load().up();
+        // Clear all slots while holding the equipment lock, drop after releasing
+        // it: a plugin handling ItemSpawnEvent can reach this stand and lock
+        // entity_equipment again, which would deadlock if we still held it.
+        let mut dropped = Vec::new();
         for slot in [
+            EquipmentSlot::MAIN_HAND,
+            EquipmentSlot::OFF_HAND,
             EquipmentSlot::HEAD,
             EquipmentSlot::CHEST,
             EquipmentSlot::LEGS,
             EquipmentSlot::FEET,
             EquipmentSlot::BODY,
             EquipmentSlot::SADDLE,
-            EquipmentSlot::OFF_HAND,
         ] {
             let stack = equipment.put(&slot, ItemStack::EMPTY.clone());
             if !stack.is_empty() {
-                world.drop_stack(&drop_pos, stack);
+                dropped.push(stack);
             }
+        }
+        drop(equipment);
+
+        let drop_pos = entity.block_pos.load().up();
+        for stack in dropped {
+            world.drop_stack(&drop_pos, stack);
         }
     }
 
