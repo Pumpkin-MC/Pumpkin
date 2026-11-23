@@ -23,7 +23,7 @@ pub struct GameTestOptions {
 #[derive(Parser)]
 #[command(name = "pumpkin")]
 struct GameTestArgs {
-    /// The path to where the test server world will be created. Any existing folder will be replaced.
+    /// The path to the test server world. Only empty or marked GameTest folders are replaced.
     #[arg(long, default_value = "gametestserver")]
     universe: PathBuf,
     /// Exports results in a JUnit-like XML report (default: report.xml).

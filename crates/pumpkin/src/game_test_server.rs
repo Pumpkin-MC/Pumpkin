@@ -29,6 +29,8 @@ use tracing::info;
 use zip::ZipArchive;
 
 const WORLD_NAME: &str = "gametestworld";
+const UNIVERSE_MARKER: &str = ".pumpkin-gametest-universe";
+const UNIVERSE_MARKER_CONTENTS: &[u8] = b"Pumpkin GameTest universe\n";
 const TEST_BASE_X: i32 = 64;
 const TEST_BASE_Y: i32 = 180;
 const TEST_BASE_Z: i32 = 64;
@@ -310,9 +312,26 @@ fn reset_universe(universe: &Path) -> Result<PathBuf, String> {
                 universe.display()
             ));
         }
+        let nonempty = fs::read_dir(universe)
+            .map_err(|error| format!("Failed to inspect GameTest universe: {error}"))?
+            .next()
+            .is_some();
+        if nonempty
+            && !fs::read(universe.join(UNIVERSE_MARKER))
+                .is_ok_and(|contents| contents == UNIVERSE_MARKER_CONTENTS)
+        {
+            return Err(format!(
+                "Refusing to replace a nonempty directory without a GameTest universe marker: {}",
+                universe.display()
+            ));
+        }
         fs::remove_dir_all(universe)
             .map_err(|error| format!("Failed to reset GameTest universe: {error}"))?;
     }
+    fs::create_dir_all(universe)
+        .map_err(|error| format!("Failed to create GameTest universe: {error}"))?;
+    fs::write(universe.join(UNIVERSE_MARKER), UNIVERSE_MARKER_CONTENTS)
+        .map_err(|error| format!("Failed to mark GameTest universe: {error}"))?;
     let world_dir = universe.join(WORLD_NAME);
     fs::create_dir_all(&world_dir)
         .map_err(|error| format!("Failed to create GameTest universe: {error}"))?;
@@ -512,7 +531,38 @@ fn escape_xml(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::escape_xml;
+    use std::fs;
+
+    use super::{UNIVERSE_MARKER, UNIVERSE_MARKER_CONTENTS, escape_xml, reset_universe};
+
+    #[test]
+    fn reset_universe_requires_marker_for_nonempty_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let universe = root.path().join("universe");
+        fs::create_dir(&universe).unwrap();
+        let unrelated_file = universe.join("keep.txt");
+        fs::write(&unrelated_file, b"keep").unwrap();
+
+        assert!(reset_universe(&universe).is_err());
+        assert_eq!(fs::read(&unrelated_file).unwrap(), b"keep");
+
+        fs::remove_file(unrelated_file).unwrap();
+        let world_dir = reset_universe(&universe).unwrap();
+        assert!(world_dir.is_dir());
+        assert_eq!(
+            fs::read(universe.join(UNIVERSE_MARKER)).unwrap(),
+            UNIVERSE_MARKER_CONTENTS
+        );
+
+        let stale_file = world_dir.join("stale.txt");
+        fs::write(&stale_file, b"stale").unwrap();
+        reset_universe(&universe).unwrap();
+        assert!(!stale_file.exists());
+
+        fs::write(universe.join(UNIVERSE_MARKER), b"unrelated").unwrap();
+        assert!(reset_universe(&universe).is_err());
+        assert!(world_dir.is_dir());
+    }
 
     #[test]
     fn xml_escaping_removes_forbidden_controls() {

@@ -2955,6 +2955,7 @@ dependencies = [
  "pumpkin-world",
  "rayon",
  "rustls",
+ "tempfile",
  "tokio",
  "tracing",
  "zip",
