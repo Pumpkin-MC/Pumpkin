@@ -871,6 +871,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_util::text::{TextComponent, color::NamedColor};
 
     #[test]
     fn hash() {
@@ -898,6 +899,31 @@ mod tests {
     #[test]
     fn max_damage_round_trip() {
         assert_round_trip(MaxDamageImpl { max_damage: 1561 }, MaxDamageImpl::read_data);
+    }
+
+    #[test]
+    fn lore_round_trip() {
+        assert_round_trip(
+            LoreImpl {
+                lines: vec![TextComponent::text("Unbreakable")],
+            },
+            LoreImpl::read_data,
+        );
+
+        // Styled lines must not be modified after becoming components instead of becoming a plain string
+        let styled = LoreImpl {
+            lines: vec![
+                TextComponent::text("hello color!")
+                    .color_named(NamedColor::Red)
+                    .italic(),
+            ],
+        };
+
+        assert!(matches!(
+            styled.write_data(),
+            NbtTag::List(lines) if matches!(lines.as_slice(), [NbtTag::Compound(_)])
+        ));
+        assert_round_trip(styled, LoreImpl::read_data);
     }
 
     #[test]

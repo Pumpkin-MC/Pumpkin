@@ -184,18 +184,30 @@ pub struct LoreImpl {
     pub lines: Vec<TextComponent>,
 }
 impl LoreImpl {
+    /// Maximum number of lore lines,
+    /// same as vanilla `ItemLore.MAX_LINES`
+    pub const MAX_LINES: usize = 256;
+
     pub fn read_data(data: &NbtTag) -> Option<Self> {
         let NbtTag::List(lines) = data else {
             return None;
         };
+        if lines.len() > Self::MAX_LINES {
+            return None;
+        }
 
-        Some(Self {
-            lines: lines
-                .iter()
-                .filter_map(NbtTag::extract_string)
-                .map(|line| TextComponent::text(line.to_owned()))
-                .collect(),
-        })
+        let mut parsed = Vec::with_capacity(lines.len());
+        for line in lines {
+            match line {
+                // Each line is a string, compound, or a list
+                NbtTag::String(_) | NbtTag::Compound(_) | NbtTag::List(_) => {
+                    parsed.push(TextComponent::from_nbt(line));
+                }
+                _ => return None,
+            }
+        }
+
+        Some(Self { lines: parsed })
     }
 }
 impl DataComponentImpl for LoreImpl {
@@ -203,7 +215,11 @@ impl DataComponentImpl for LoreImpl {
         NbtTag::List(
             self.lines
                 .iter()
-                .map(|line| NbtTag::String(line.clone().get_text().into_boxed_str()))
+                .map(|line| {
+                    line.to_nbt_tag_for_version(
+                        &pumpkin_util::version::JavaMinecraftVersion::V_26_2,
+                    )
+                })
                 .collect(),
         )
     }

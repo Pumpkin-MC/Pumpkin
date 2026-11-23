@@ -366,13 +366,11 @@ impl DataComponentCodec<Self> for LoreImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        // TODO: Could probably be extracted?
-        const MAX_LORE_LINES: i32 = 256;
-
         let count = seq.get_var_int()?.0;
-        if !(0..=MAX_LORE_LINES).contains(&count) {
+        if !(0..=(Self::MAX_LINES as i32)).contains(&count) {
             return Err(ReadingError::Message(format!(
-                "LoreImpl line count {count} is out of bounds (0-{MAX_LORE_LINES})"
+                "LoreImpl line count {count} is out of bounds (0-{})",
+                Self::MAX_LINES
             )));
         }
 
