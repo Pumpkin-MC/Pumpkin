@@ -6155,6 +6155,11 @@ impl Player {
         // Returns a new stack with the target cleared, or None if the target is still valid.
         let cleared_target = |stack: &ItemStack| -> Option<ItemStack> {
             let tracker = stack.get_data_component::<LodestoneTrackerImpl>()?;
+            // Vanilla keeps the target while `tracked` is false (LodestoneTracker#tick
+            // only acts when tracked and a target is present).
+            if !tracker.tracked {
+                return None;
+            }
             let target = tracker.target.as_ref()?;
             if target.dimension != world.dimension.minecraft_name {
                 return None;
@@ -6197,6 +6202,9 @@ impl Player {
             && let Some(new_stack) = cleared_target(&off_hand)
         {
             inventory.set_slot(PlayerInventory::OFF_HAND_SLOT, new_stack);
+            // set_slot alone does not notify the client; the off-hand slot only
+            // reaches it through the player screen handler sync.
+            self.sync_inventory_to_client();
         }
 
         for (slot, stack) in changed {
