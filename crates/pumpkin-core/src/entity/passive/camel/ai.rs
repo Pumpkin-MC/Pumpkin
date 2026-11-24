@@ -162,8 +162,8 @@ impl Behavior for CamelPanic {
         self.0.tick(tick);
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
-        self.0.stop(tick);
+    fn stop(&mut self, tick: &mut BrainTick<'_>, timed_out: bool) {
+        self.0.stop(tick, timed_out);
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
