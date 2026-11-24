@@ -9623,7 +9623,7 @@ mod tests {
         read_root_vehicle, write_last_death_location, write_root_vehicle,
     };
     use crate::{
-        plugin::{BoxFuture, EventHandler, player::player_transfer::PlayerTransferEvent},
+        plugin::{BoxFuture, EventRwHandler, player::player_transfer::PlayerTransferEvent},
         server::Server,
     };
     use std::sync::Arc;
@@ -9696,8 +9696,8 @@ mod tests {
 
     struct TransferHandler;
 
-    impl EventHandler<PlayerTransferEvent> for TransferHandler {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerTransferEvent> for TransferHandler {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PlayerTransferEvent,
@@ -9792,9 +9792,11 @@ mod tests {
             &world,
             GameMode::Survival,
         ));
-        server
-            .plugin_manager
-            .register(Arc::new(TransferHandler), EventPriority::Normal, true);
+        server.plugin_manager.register_blocking(
+            Arc::new(TransferHandler),
+            EventPriority::Normal,
+            None,
+        );
 
         assert_eq!(player.transfer("cancel.example", 25565), None);
         assert_eq!(
