@@ -589,7 +589,7 @@ pub fn spawn_mobs_for_chunk_generation(
     let mob_settings = &biome.spawners;
     let creatures = &mob_settings.creature;
 
-    if creatures.is_empty() || !world.level_info.load().game_rules.spawn_mobs {
+    if !creatures.iter().any(|s| s.weight > 0) || !world.level_info.load().game_rules.spawn_mobs {
         return;
     }
 
