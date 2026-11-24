@@ -262,8 +262,7 @@ fn clip_fluid(
         }
         ClipFluid::Water => {
             state.is_waterlogged()
-                || Fluid::from_state_id(state.id)
-                    .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id)
+                || Fluid::from_state_id(state.id).is_some_and(|f| f.matches_type(&Fluid::WATER))
         }
     };
 

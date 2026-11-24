@@ -2645,8 +2645,7 @@ impl Player {
                 let block_pos = entity.block_pos.load();
                 let world = entity.world.load();
                 let (fluid, _) = world.get_fluid_and_fluid_state(&block_pos);
-                let is_water_block = fluid.id == pumpkin_data::fluid::Fluid::WATER.id
-                    || fluid.id == pumpkin_data::fluid::Fluid::FLOWING_WATER.id;
+                let is_water_block = fluid.matches_type(&pumpkin_data::fluid::Fluid::WATER);
 
                 entity.set_swimming(
                     is_sprinting && is_under_water && !is_passenger && is_water_block,
