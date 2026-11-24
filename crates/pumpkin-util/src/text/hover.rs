@@ -75,7 +75,10 @@ pub(super) fn json_to_nbt(value: &serde_json::Value) -> pumpkin_nbt::tag::NbtTag
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum HoverEvent {
     /// Displays a tooltip with the given text.
-    ShowText { value: Vec<TextComponentBase> },
+    ShowText {
+        #[serde(deserialize_with = "super::short_form::one_component")]
+        value: Vec<TextComponentBase>,
+    },
     /// Shows an item.
     ShowItem {
         /// Resource identifier of the item.
@@ -96,7 +99,11 @@ pub enum HoverEvent {
         /// The UUID cannot use `uuid::Uuid` because its serialization parses it into bytes, so its double bytes serialized.
         uuid: Cow<'static, str>,
         /// Optional custom name for the entity.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "super::short_form::optional_component"
+        )]
         name: Option<Vec<TextComponentBase>>,
     },
 }

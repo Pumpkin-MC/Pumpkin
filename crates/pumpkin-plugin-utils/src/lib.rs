@@ -2,7 +2,7 @@
 //!
 //! A fast, secure, and developer-friendly utility crate for Pumpkin server plugins, providing:
 //! - **Automatic Metadata Caching**: Call `init(context)` once on load; marketplace metadata is retrieved from host WIT and cached globally.
-//! - **Zero-Argument Crashlytics**: `init(context)` automatically installs a panic hook that captures uncaught panics (`file:line:col`, message, and active hook context), scrubs PII, and transmits signed crash reports to `/api/v1/rest/telemetry/crash`. Also provides `record_error` / `report_crash` for handled errors.
+//! - **Zero-Argument Crashlytics**: `init(context)` automatically installs a panic hook that captures uncaught panics (`file:line:col`, message, and active hook context), scrubs PII, and transmits signed crash reports to `https://telemetry.pumpkinmc.org/v1/crash`. Also provides `record_error` / `report_crash` for handled errors.
 //! - **Zero-Argument Updates & Online Licensing**: Check licenses and updates against official Pumpkin Marketplace endpoints without manual arguments.
 //! - **Online License Checks**: Verify active licenses with `https://market.pumpkinmc.org/api/v1/rest/check-license`.
 //! - **License Checks & Grace Periods**: Local lease management (`license_lease.json`) to prevent outages during marketplace downtime.
@@ -82,8 +82,8 @@ pub use license::LicenseChecker;
 pub use license::LicenseError;
 pub use models::{
     CheckLicenseResponse, CheckUpdateResponse, CrashBacktraceFrame, CrashReportPayload,
-    CrashReportResponse, DEFAULT_MARKETPLACE_URL, LicenseLease, LicenseStatus, PumpkinMetadata,
-    RuntimeEnvironment,
+    CrashReportResponse, DEFAULT_MARKETPLACE_URL, DEFAULT_TELEMETRY_URL, LicenseLease,
+    LicenseStatus, PumpkinMetadata, RuntimeEnvironment,
 };
 #[cfg(feature = "updater")]
 pub use updater::{UpdateChecker, UpdateError};
@@ -254,8 +254,8 @@ pub fn evaluate_license(grace_period_days: u32) -> LicenseStatus {
     checker.evaluate_license(meta, grace_period_days)
 }
 
-/// Reports a crash or non-fatal trap to Pumpkin Marketplace Crashlytics using the globally cached
-/// plugin metadata (`POST /api/v1/rest/telemetry/crash`).
+/// Reports a crash or non-fatal trap to Pumpkin Crashlytics using the globally cached
+/// plugin metadata (`POST /v1/crash`).
 ///
 /// # Errors
 ///

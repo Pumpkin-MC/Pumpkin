@@ -420,6 +420,10 @@ impl Mob for EndermanEntity {
         true
     }
 
+    fn projectile_receives_side_effects_on_hit(&self, was_hurt: bool) -> bool {
+        was_hurt
+    }
+
     fn as_neutral(&self) -> Option<&dyn NeutralMob> {
         Some(self)
     }
@@ -551,20 +555,6 @@ impl Mob for EndermanEntity {
 
     fn apply_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
         self.set_target(target);
-    }
-
-    fn mob_tick(&self, caller: &dyn EntityBase) {
-        let entity = &self.mob_entity.living_entity.entity;
-        if !entity.is_alive() {
-            return;
-        }
-
-        let world = entity.world.load();
-        let raining_at_feet = world.is_raining_at(&entity.block_pos.load());
-        let raining_at_head = world.is_raining_at(&entity.bounding_box.load().max_block_pos());
-        if entity.touching_water.load(Ordering::SeqCst) || raining_at_feet || raining_at_head {
-            caller.damage(caller, 1.0, DamageType::DROWN);
-        }
     }
 
     fn pre_damage_with_context(

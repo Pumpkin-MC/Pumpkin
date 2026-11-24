@@ -3,21 +3,29 @@ use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::translation::get_translation_text;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 
-use crate::command::argument_builder::{ArgumentBuilder, command, literal};
+use crate::command::CommandSource;
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::client_parsed::MessageArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::telemetry::{
+    HEADER_PUBLIC_KEY, HEADER_SIGNATURE, HEADER_TIMESTAMP, TelemetryClient,
+    build_heartbeat_payload, resolve_identity_key, sign_telemetry_payload,
+};
 
 const DESCRIPTION: &str = "Display information about Pumpkin.";
 const PERMISSION: &str = "pumpkin:command.pumpkin";
+const ARG_SERVER_NAME: &str = "name";
+const DEFAULT_ACCOUNTS_URL: &str = "https://accounts.pumpkinmc.org";
 
 const CACHE_DURATION: Duration = Duration::from_hours(24);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -25,6 +33,8 @@ const SPONSOR_URL: &str = "https://pumpkinmc.org/donate/";
 
 struct Executor;
 struct ContributorsExecutor;
+struct LinkExecutor;
+struct LinkNamedExecutor;
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_HASH: &str = env!("GIT_HASH");
@@ -523,6 +533,250 @@ impl CommandExecutor for ContributorsExecutor {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+struct ServerLinkInitRequest {
+    server_name: String,
+    server_type: String,
+    server_version: String,
+    minecraft_version: String,
+    os: String,
+    arch: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ServerLinkInitResponse {
+    code: String,
+    link_url: String,
+    expires_in_secs: u64,
+}
+
+#[derive(Deserialize)]
+struct ApiErrorBody {
+    error: String,
+}
+
+fn resolve_accounts_base_url() -> String {
+    std::env::var("PUMPKIN_ACCOUNTS_URL")
+        .ok()
+        .map(|val| val.trim().trim_end_matches('/').to_string())
+        .filter(|val| !val.is_empty())
+        .unwrap_or_else(|| DEFAULT_ACCOUNTS_URL.to_string())
+}
+
+fn resolve_link_server_name(
+    custom_name: Option<&str>,
+    configured_name: Option<&str>,
+    motd: Option<&str>,
+) -> String {
+    custom_name
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| configured_name.map(str::trim).filter(|s| !s.is_empty()))
+        .or_else(|| motd.map(str::trim).filter(|s| !s.is_empty()))
+        .unwrap_or("Pumpkin Server")
+        .to_string()
+}
+
+fn detect_host_os() -> String {
+    sysinfo::System::long_os_version().unwrap_or_else(|_| {
+        let name = sysinfo::System::name().unwrap_or_else(|_| std::env::consts::OS.to_string());
+        sysinfo::System::os_version().map_or(name.clone(), |ver| format!("{name} {ver}"))
+    })
+}
+
+fn format_link_success_message(
+    resp: &ServerLinkInitResponse,
+    telemetry_enabled: bool,
+) -> TextComponent {
+    let expires_mins = resp.expires_in_secs.div_ceil(60);
+    let mut msg = TextComponent::text("\nPumpkin Account Server Link\n")
+        .color_named(NamedColor::Gold)
+        .bold();
+
+    msg = msg.add_child(TextComponent::text("  Code: ").color_named(NamedColor::Gray));
+    msg = msg.add_child(
+        TextComponent::text(resp.code.clone())
+            .color_named(NamedColor::Aqua)
+            .bold()
+            .click_event(ClickEvent::CopyToClipboard {
+                value: Cow::from(resp.code.clone()),
+            })
+            .hover_event(HoverEvent::show_text(TextComponent::text(
+                "Click to copy link code",
+            ))),
+    );
+    msg = msg.add_child(
+        TextComponent::text(format!(" (expires in {expires_mins}m)\n"))
+            .color_named(NamedColor::DarkGray),
+    );
+
+    msg = msg.add_child(TextComponent::text("  Claim: ").color_named(NamedColor::Gray));
+    msg = msg.add_child(
+        TextComponent::text(resp.link_url.clone())
+            .color_named(NamedColor::Green)
+            .bold()
+            .underlined()
+            .click_event(ClickEvent::OpenUrl {
+                url: Cow::from(resp.link_url.clone()),
+            })
+            .hover_event(HoverEvent::show_text(TextComponent::text(
+                "Click to open Pumpkin Account and claim this server",
+            ))),
+    );
+
+    if !telemetry_enabled {
+        msg = msg.add_child(
+            TextComponent::text(
+                "\n  Note: Telemetry is disabled in pumpkin.toml ([telemetry] enabled = false). Enable it to see live stats and crash reports.",
+            )
+            .color_named(NamedColor::Yellow),
+        );
+    }
+
+    msg
+}
+
+async fn request_server_link(server_name: String) -> Result<ServerLinkInitResponse, String> {
+    let signing_key = resolve_identity_key();
+    let payload = ServerLinkInitRequest {
+        server_name,
+        server_type: "pumpkin".to_string(),
+        server_version: CARGO_PKG_VERSION.to_string(),
+        minecraft_version: CURRENT_MC_VERSION.to_string(),
+        os: detect_host_os(),
+        arch: std::env::consts::ARCH.to_string(),
+    };
+
+    let body_bytes =
+        serde_json::to_vec(&payload).map_err(|e| format!("Failed to serialize payload: {e}"))?;
+    let timestamp_str = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .to_string();
+    let (pubkey_hex, sig_hex) = sign_telemetry_payload(&signing_key, &timestamp_str, &body_bytes);
+
+    let user_agent = format!("Pumpkin-Server/{CARGO_PKG_VERSION}");
+    let client = pumpkin_auth::client_builder()
+        .user_agent(&user_agent)
+        .timeout(HTTP_TIMEOUT)
+        .build()
+        .map_err(|e| format!("Failed to initialize HTTP client: {e}"))?;
+
+    let init_url = format!("{}/api/user/servers/link/init", resolve_accounts_base_url());
+    let response = client
+        .post(&init_url)
+        .header("Content-Type", "application/json")
+        .header(HEADER_PUBLIC_KEY, pubkey_hex)
+        .header(HEADER_SIGNATURE, sig_hex)
+        .header(HEADER_TIMESTAMP, timestamp_str)
+        .body(body_bytes)
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach Pumpkin Account ({init_url}): {e}"))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let detail = response
+            .json::<ApiErrorBody>()
+            .await
+            .map_or_else(|_| format!("HTTP {status}"), |b| b.error);
+        return Err(detail);
+    }
+
+    response
+        .json::<ServerLinkInitResponse>()
+        .await
+        .map_err(|e| format!("Invalid response from Pumpkin Account: {e}"))
+}
+
+const fn is_console_only(source: &CommandSource) -> bool {
+    source.output.is_console() && !source.silent
+}
+
+fn execute_link(context: &CommandContext, custom_name: Option<&str>) -> i32 {
+    if !is_console_only(&context.source) {
+        context.source.send_message(
+            TextComponent::text(
+                "For security, `pumpkin link` can only be executed from the server console.",
+            )
+            .color_named(NamedColor::Red),
+        );
+        return 0;
+    }
+
+    let server_ref = context.source.server.as_ref();
+    let configured_name = server_ref.and_then(|s| s.telemetry_config.server_name.as_deref());
+    let motd = server_ref.map(|s| s.advanced_config.networking.java.motd.as_str());
+    let server_name = resolve_link_server_name(custom_name, configured_name, motd);
+
+    let telemetry_enabled = server_ref.is_some_and(|s| s.telemetry_config.enabled);
+    let immediate_heartbeat = server_ref.filter(|s| s.telemetry_config.enabled).map(|s| {
+        (
+            s.telemetry_config.endpoint.clone(),
+            build_heartbeat_payload(s, &s.telemetry_config),
+        )
+    });
+
+    let rt_handle = server_ref
+        .map(|s| s.runtime.clone())
+        .or_else(|| tokio::runtime::Handle::try_current().ok());
+
+    let Some(handle) = rt_handle else {
+        context.source.send_message(
+            TextComponent::text("Unable to start async runtime for /pumpkin link.")
+                .color_named(NamedColor::Red),
+        );
+        return 0;
+    };
+
+    context.source.send_message(
+        TextComponent::text("Generating Pumpkin Account link code...")
+            .color_named(NamedColor::Gray),
+    );
+
+    let source = context.source.clone();
+    handle.spawn(async move {
+        if let Some((endpoint, hb_payload)) = immediate_heartbeat
+            && let Ok(http_client) = pumpkin_auth::client_builder()
+                .user_agent(format!("Pumpkin-Server/{CARGO_PKG_VERSION}"))
+                .timeout(HTTP_TIMEOUT)
+                .build()
+        {
+            let client = TelemetryClient::new(resolve_identity_key(), http_client, endpoint);
+            let _ = client.send_heartbeat(&hb_payload).await;
+        }
+
+        match request_server_link(server_name).await {
+            Ok(resp) => {
+                source.send_message(format_link_success_message(&resp, telemetry_enabled));
+            }
+            Err(err) => {
+                source.send_message(
+                    TextComponent::text(format!("Failed to generate server link code: {err}"))
+                        .color_named(NamedColor::Red),
+                );
+            }
+        }
+    });
+
+    1
+}
+
+impl CommandExecutor for LinkExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        Ok(execute_link(context, None))
+    }
+}
+
+impl CommandExecutor for LinkNamedExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let custom_name = context.get_argument::<String>(ARG_SERVER_NAME)?;
+        Ok(execute_link(context, Some(custom_name.as_str())))
+    }
+}
+
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
@@ -534,6 +788,14 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         command("pumpkin", DESCRIPTION)
             .requires(PERMISSION)
             .then(literal("contributors").executes(ContributorsExecutor))
+            .then(
+                literal("link")
+                    .requires(is_console_only)
+                    .executes(LinkExecutor)
+                    .then(
+                        argument(ARG_SERVER_NAME, MessageArgumentType).executes(LinkNamedExecutor),
+                    ),
+            )
             .executes(Executor),
         &["version"],
     );
@@ -580,5 +842,69 @@ mod test {
 
         let cached = fetch_sponsors_cached();
         assert_eq!(cached, expected);
+    }
+
+    #[test]
+    fn link_server_name_precedence() {
+        assert_eq!(
+            resolve_link_server_name(
+                Some("  My Custom SMP "),
+                Some("Telemetry Name"),
+                Some("MOTD")
+            ),
+            "My Custom SMP"
+        );
+        assert_eq!(
+            resolve_link_server_name(Some("   "), Some("Telemetry Name"), Some("MOTD")),
+            "Telemetry Name"
+        );
+        assert_eq!(
+            resolve_link_server_name(None, None, Some("  A blazingly fast server! ")),
+            "A blazingly fast server!"
+        );
+        assert_eq!(
+            resolve_link_server_name(None, Some(""), Some("")),
+            "Pumpkin Server"
+        );
+    }
+
+    #[test]
+    fn link_payload_signing_verifies_with_telemetry_verifier() {
+        let seed = [42u8; 32];
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+        let req = ServerLinkInitRequest {
+            server_name: "Survival Node 1".to_string(),
+            server_type: "pumpkin".to_string(),
+            server_version: CARGO_PKG_VERSION.to_string(),
+            minecraft_version: CURRENT_MC_VERSION.to_string(),
+            os: "Linux".to_string(),
+            arch: "x86_64".to_string(),
+        };
+        let body = serde_json::to_vec(&req).unwrap();
+        let ts = "1700000000";
+        let (pub_hex, sig_hex) = sign_telemetry_payload(&signing_key, ts, &body);
+
+        assert!(
+            crate::telemetry::verify_telemetry_request(
+                &pub_hex,
+                &sig_hex,
+                ts,
+                &body,
+                1_700_000_010
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn link_command_requires_non_silent_console() {
+        let mut src = CommandSource::dummy();
+        assert!(!is_console_only(&src));
+
+        src.output = crate::command::CommandSender::Console;
+        assert!(is_console_only(&src));
+
+        src.silent = true;
+        assert!(!is_console_only(&src));
     }
 }

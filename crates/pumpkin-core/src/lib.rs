@@ -214,16 +214,16 @@ pub static CRASH_REPORT: OnceLock<CrashReport> = OnceLock::new();
 pub static SERVER_EXIT_CODE: AtomicI32 = AtomicI32::new(0);
 
 pub fn stop_server() {
-    SHOULD_STOP.store(true, Ordering::Relaxed);
+    SHOULD_STOP.store(true, Ordering::Release);
     STOP_INTERRUPT.cancel();
 }
 
 pub fn stop_or_exit_server() {
-    if SERVER_IS_STOPPING.load(Ordering::Acquire) {
+    if SHOULD_STOP.swap(true, Ordering::AcqRel) || SERVER_IS_STOPPING.load(Ordering::Acquire) {
         // Server is already stopping, so we forcefully exit.
         exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
     }
-    stop_server();
+    STOP_INTERRUPT.cancel();
 }
 
 /// Runs one Java connection from handshake to disconnect: login, configuration, play, and the
@@ -695,16 +695,19 @@ impl PumpkinServer {
             // Branch for Bedrock NetherNet connections negotiated over HTTP/WebRTC.
             nethernet_result = resolve_some(self.nethernet_listener.as_ref(), NetherNetListener::accept) => {
                 if let Some((session, client_addr)) = nethernet_result {
+                    let client_id = *master_client_id_counter;
                     *master_client_id_counter += 1;
                     let be_clients = bedrock_clients.clone();
                     let packet_limiter = PacketRateLimiter::from_config(
                         &self.server.advanced_config.networking.bedrock.packet_limiter,
                     );
                     let client = Arc::new(BedrockClient::new(
+                        client_id,
                         session.clone(),
                         client_addr,
                         be_clients,
                         packet_limiter,
+                        Arc::downgrade(&self.server),
                     ));
                     client.start_outgoing_packet_task();
                     bedrock_clients.lock().await.insert(client_addr, client.clone());
@@ -750,7 +753,6 @@ impl PumpkinServer {
                         profile,
                         Some(config),
                     ) {
-                        client.set_player(player.clone());
                         client.progress_player_packets(&player).await;
                         client.close().await;
                         client.await_tasks().await;

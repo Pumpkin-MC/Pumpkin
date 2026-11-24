@@ -2,12 +2,12 @@ use super::EnderDragonPhase;
 use crate::entity::EntityBase;
 use crate::entity::{
     Entity,
-    area_effect_cloud::AreaEffectCloudEntity,
     boss::ender_dragon::{EnderDragonEntity, Vector3Ext, find_path},
+    projectile::dragon_fireball::DragonFireballEntity,
 };
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::{entity::EntityType, world::WorldEvent};
 use pumpkin_util::math::vector3::Vector3;
-use std::sync::atomic::Ordering;
+use std::sync::{Arc, atomic::Ordering};
 
 pub struct StrafingPhase;
 
@@ -117,72 +117,90 @@ impl super::Phase for StrafingPhase {
         drop(path);
         drop(target_location);
 
+        let dragon_entity = &dragon.mob_entity.living_entity.entity;
         if player_pos.distance_squared(pos) < 4096.0 {
-            let mut charge = dragon
-                .fireball_charge
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            let aim_diff = player_pos - pos;
-            let aim = if aim_diff.length_squared() > 1e-6 {
-                aim_diff.normalize()
-            } else {
-                Vector3::new(0.0, 0.0, 0.0)
-            };
-
-            let yaw = dragon.mob_entity.living_entity.entity.yaw.load();
-            let dir = Vector3::new(
-                (yaw * (std::f32::consts::PI / 180.0)).sin() as f64,
-                0.0,
-                -(yaw * (std::f32::consts::PI / 180.0)).cos() as f64,
-            );
-
-            let dir_norm = if dir.length_squared() > 1e-6 {
-                dir.normalize()
-            } else {
-                Vector3::new(0.0, 0.0, 0.0)
-            };
-
-            let dot = dir_norm.dot(&aim);
-            let angle_degs = dot.acos().to_degrees() + 0.5;
-
-            *charge += 1;
-
-            if *charge >= 5 && angle_degs < 10.0 {
-                *charge = 0;
-                drop(charge);
-
-                let cloud_entity =
-                    Entity::new(world.clone(), player_pos, &EntityType::AREA_EFFECT_CLOUD);
-                let cloud = AreaEffectCloudEntity::create(
-                    cloud_entity,
-                    pumpkin_data::item_stack::ItemStack::new(
-                        0,
-                        &pumpkin_data::item::Item::DRAGON_BREATH,
-                    ),
-                    vec![(
-                        &pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE,
-                        1,
-                        0,
-                        false,
-                        true,
-                        true,
-                    )],
-                    600,
-                    3.0,
-                    20,
-                    20,
-                    0.5,
-                    -100,
-                );
-                world.spawn_entity(cloud);
-
-                dragon
-                    .path
+            if dragon_entity.has_line_of_sight(player.get_entity()) {
+                let mut charge = dragon
+                    .fireball_charge
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clear();
-                dragon.set_phase(EnderDragonPhase::Circling);
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                *charge += 1;
+
+                let aim_diff = Vector3::new(player_pos.x - pos.x, 0.0, player_pos.z - pos.z);
+                let aim = if aim_diff.length_squared() > 1e-6 {
+                    aim_diff.normalize()
+                } else {
+                    Vector3::new(0.0, 0.0, 0.0)
+                };
+
+                let yaw = dragon_entity.yaw.load();
+                let dir = Vector3::new(
+                    f64::from((yaw * (std::f32::consts::PI / 180.0)).sin()),
+                    0.0,
+                    f64::from(-(yaw * (std::f32::consts::PI / 180.0)).cos()),
+                );
+                let dir_norm = if dir.length_squared() > 1e-6 {
+                    dir.normalize()
+                } else {
+                    Vector3::new(0.0, 0.0, 0.0)
+                };
+
+                let dot = dir_norm.dot(&aim).clamp(-1.0, 1.0);
+                let angle_degs = dot.acos().to_degrees() + 0.5;
+
+                if *charge >= 5 && (0.0..10.0).contains(&angle_degs) {
+                    *charge = 0;
+                    drop(charge);
+
+                    let view_vec = dragon_entity.rotation();
+                    let head = &dragon.parts[0].entity;
+                    let head_pos = head.pos.load();
+                    let starting_pos = Vector3::new(
+                        head_pos.x - f64::from(view_vec.x),
+                        head_pos.y + f64::from(head.height()) * 0.5 + 0.5,
+                        head_pos.z - f64::from(view_vec.z),
+                    );
+                    let target_center_y =
+                        player_pos.y + f64::from(player.get_entity().height()) * 0.5;
+                    let direction = Vector3::new(
+                        player_pos.x - starting_pos.x,
+                        target_center_y - starting_pos.y,
+                        player_pos.z - starting_pos.z,
+                    );
+
+                    if !dragon_entity.is_silent() {
+                        world.sync_world_event(
+                            WorldEvent::SoundDragonFireball,
+                            dragon_entity.block_pos.load(),
+                            0,
+                        );
+                    }
+
+                    let fireball_entity =
+                        Entity::new(world.clone(), starting_pos, &EntityType::DRAGON_FIREBALL);
+                    fireball_entity.set_rotation(0.0, 0.0);
+                    let fireball = Arc::new(DragonFireballEntity::new_shot(
+                        fireball_entity,
+                        dragon_entity,
+                        direction,
+                    ));
+                    world.spawn_entity(fireball);
+
+                    dragon
+                        .path
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clear();
+                    dragon.set_phase(EnderDragonPhase::Circling);
+                }
+            } else {
+                let mut charge = dragon
+                    .fireball_charge
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if *charge > 0 {
+                    *charge -= 1;
+                }
             }
         } else {
             let mut charge = dragon

@@ -9,6 +9,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -55,7 +56,7 @@ impl ItemBehaviour for CompassItem {
             if gamemode != pumpkin_util::GameMode::Creative && item.item_count == 1 {
                 item.set_data_component(tracker);
             } else {
-                let mut new_compass = item.copy_with_count(1);
+                let mut new_compass = item.transmute_copy(&Item::COMPASS, 1);
                 new_compass.set_data_component(tracker);
                 item.decrement_unless_creative(gamemode, 1);
                 let was_added = player.inventory.insert_stack_anywhere(&mut new_compass);
@@ -63,6 +64,11 @@ impl ItemBehaviour for CompassItem {
                     world.drop_stack(&player.position().to_block_pos(), new_compass);
                 }
             }
+            player
+                .player_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .send_content_updates();
             BlockActionResult::Success
         } else {
             BlockActionResult::Pass

@@ -35,6 +35,7 @@ pub struct BlastingFurnaceBlockEntity {
     /// Tracks recipes used for XP calculation (vanilla `RecipesUsed` NBT format)
     /// Maps result item ID -> craft count
     pub recipes_used: StdMutex<HashMap<String, u32>>,
+    pub metadata: super::ContainerMetadata,
 }
 
 impl BlastingFurnaceBlockEntity {
@@ -53,13 +54,14 @@ impl BlastingFurnaceBlockEntity {
             lit_total_time: AtomicU16::new(0),
             lit_time_remaining: AtomicU16::new(0),
             recipes_used: StdMutex::new(HashMap::new()),
+            metadata: super::ContainerMetadata::default(),
         }
     }
 }
 
 impl_cooking_block_entity_base!(BlastingFurnaceBlockEntity);
 impl_block_entity_for_cooking!(BlastingFurnaceBlockEntity, CookingRecipeKind::Blasting);
-impl_inventory_for_cooking!(BlastingFurnaceBlockEntity);
+impl_inventory_for_cooking!(BlastingFurnaceBlockEntity, CookingRecipeKind::Blasting);
 impl_clearable_for_cooking!(BlastingFurnaceBlockEntity);
 impl_property_delegate_for_cooking!(BlastingFurnaceBlockEntity);
 impl_experience_container_for_cooking!(BlastingFurnaceBlockEntity);

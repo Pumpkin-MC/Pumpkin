@@ -37,6 +37,16 @@ pub struct LootContextParameters<'a> {
     /// Computed from `Entity.fire_ticks > 0`.
     pub is_on_fire: Option<bool>,
     pub direct_attacker_weapon: Option<ItemStack>,
+    pub enchantment_level: Option<i32>,
+}
+
+fn enchantment_level_chance(
+    base: f32,
+    per_level_above_first: f32,
+    params: &LootContextParameters<'_>,
+) -> f32 {
+    let level = params.enchantment_level.unwrap_or(0);
+    per_level_above_first.mul_add((level - 1) as f32, base)
 }
 
 fn attacker_enchantment_level(params: &LootContextParameters<'_>, name: &str) -> i32 {
@@ -120,7 +130,7 @@ fn weather_matches(
     }) && thundering.is_none_or(|value| {
         params
             .is_thundering
-            .or_else(|| params.world.map(World::is_thundering))
+            .or_else(|| params.world.map(World::is_thunderstorm))
             .unwrap_or(false)
             == value
     })
@@ -161,6 +171,10 @@ fn check_dynamic_condition(
             .explosion_radius
             .is_none_or(|radius| radius <= 1.0 || rng.next_f32() <= 1.0 / radius),
         DynamicLootCondition::RandomChance { chance } => rng.next_f32() < *chance,
+        DynamicLootCondition::RandomChanceWithEnchantmentLevel {
+            base,
+            per_level_above_first,
+        } => rng.next_f32() < enchantment_level_chance(*base, *per_level_above_first, params),
         DynamicLootCondition::RandomChanceWithEnchantedBonus {
             enchantment,
             unenchanted_chance,
@@ -261,6 +275,10 @@ fn check_condition(
             .explosion_radius
             .is_none_or(|radius| radius <= 1.0 || rng.next_f32() <= 1.0 / radius),
         LootCondition::RandomChance { chance } => rng.next_f32() < chance,
+        LootCondition::RandomChanceWithEnchantmentLevel {
+            base,
+            per_level_above_first,
+        } => rng.next_f32() < enchantment_level_chance(base, per_level_above_first, params),
         LootCondition::RandomChanceWithEnchantedBonus {
             enchantment,
             unenchanted_chance,
@@ -318,6 +336,22 @@ fn check_condition(
         }
         LootCondition::Reference(name) => evaluate_predicate(name, params),
     }
+}
+
+pub(crate) fn test_loot_condition(
+    condition: LootCondition,
+    params: &LootContextParameters<'_>,
+) -> bool {
+    let has_silk_touch = params
+        .tool
+        .as_ref()
+        .is_some_and(|tool| tool.get_enchantment_level(&pumpkin_data::Enchantment::SILK_TOUCH) > 0);
+    let has_shears = params
+        .tool
+        .as_ref()
+        .is_some_and(|tool| tool.item.id == pumpkin_data::item::Item::SHEARS.id);
+    let mut rng = Xoroshiro::from_seed(rand::random());
+    check_condition(condition, has_silk_touch, has_shears, params, &mut rng)
 }
 
 fn apply_bonus_formula(
@@ -516,35 +550,84 @@ pub fn generate_loot_from_handle(
     }
 }
 
+/// Places loot into empty slots of `slots`. Occupied slots stay.
+pub fn place_items_in_slots(slots: &mut [ItemStack], items_to_place: Vec<ItemStack>, seed: i64) {
+    let empty_slots = slots
+        .iter()
+        .enumerate()
+        .filter(|(_, stack)| stack.is_empty())
+        .map(|(slot, _)| slot)
+        .collect();
+    place_items(empty_slots, items_to_place, seed, |slot, item| {
+        slots[slot] = item;
+    });
+}
+
+/// Vanilla `RandomizableContainer.unpackLootTable` lock protocol for concurrent containers.
+///
+/// Takes the pending loot-table key so another unpack cannot run, runs `generate` with neither
+/// chest lock held, then places into still-empty slots so concurrent inserts stay.
+// TODO vanilla `LootTable.fill` shuffles empty slots with the loot-context RNG after `getRandomItems`,
+// not a fresh generator from the same seed.
+pub fn unpack_loot_into_slots<const N: usize>(
+    loot_table: &std::sync::Mutex<Option<String>>,
+    seed: i64,
+    items: &std::sync::RwLock<[ItemStack; N]>,
+    generate: impl FnOnce(String, i64) -> Vec<ItemStack>,
+) -> Option<String> {
+    let key = {
+        let mut loot = loot_table
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        loot.take()?
+    };
+    let generated = generate(key.clone(), seed);
+    let mut slots = items
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    place_items_in_slots(&mut *slots, generated, seed);
+    Some(key)
+}
+
 fn place_items_in_chest(
     inventory: &std::sync::Arc<dyn pumpkin_inventory::Inventory>,
+    items_to_place: Vec<ItemStack>,
+    seed: i64,
+) {
+    let empty_slots = (0..inventory.size())
+        .filter(|&slot| inventory.get_stack(slot).is_empty())
+        .collect();
+    place_items(empty_slots, items_to_place, seed, |slot, item| {
+        inventory.set_stack(slot, item);
+    });
+}
+
+/// Vanilla `LootTable.fill` placement: shuffled empty slots, split stacks, last slot first.
+fn place_items(
+    mut empty_slots: Vec<usize>,
     mut items_to_place: Vec<ItemStack>,
     seed: i64,
+    mut set: impl FnMut(usize, ItemStack),
 ) {
     if items_to_place.is_empty() {
         return;
     }
 
-    let inv_size = inventory.size();
     let mut rng = Xoroshiro::from_seed(seed as u64);
 
-    let mut available_slots: Vec<usize> = (0..inv_size)
-        .filter(|&slot| inventory.get_stack(slot).is_empty())
-        .collect();
-
-    for i in (1..available_slots.len()).rev() {
+    for i in (1..empty_slots.len()).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;
-        available_slots.swap(i, j);
+        empty_slots.swap(i, j);
     }
 
-    shuffle_and_split_items(&mut items_to_place, available_slots.len(), &mut rng);
+    shuffle_and_split_items(&mut items_to_place, empty_slots.len(), &mut rng);
 
     for item in items_to_place {
-        let Some(slot) = available_slots.pop() else {
+        let Some(slot) = empty_slots.pop() else {
             tracing::warn!("Tried to over-fill a container");
             return;
         };
-        inventory.set_stack(slot, item);
+        set(slot, item);
     }
 }
 

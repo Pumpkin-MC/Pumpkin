@@ -1,10 +1,24 @@
-use crate::enchantment::effects::EnchantmentEntityEffectExt;
+use std::sync::Arc;
+
+use crate::enchantment::effects::{DamageEntity, EnchantmentEntityEffectExt};
+use crate::entity::living::{LivingEntity, attribute_modifier_slot_matches};
+use crate::entity::player::Player;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::{Entity, EntityBase};
-use pumpkin_data::data_component_impl::EnchantmentsImpl;
+use crate::world::World;
+use crate::world::loot::LootContextParameters;
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::{EnchantmentsImpl, EquipmentSlot};
 use pumpkin_data::enchantment::{Enchantment, EnchantmentEntityEffect, EnchantmentTarget};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_inventory::Inventory;
+use pumpkin_util::loot_table::LootCondition;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 
 /// Data-driven helper for enchantment effects matching vanilla `EnchantmentHelper`.
 pub struct EnchantmentHelper;
@@ -97,54 +111,227 @@ impl EnchantmentHelper {
         });
     }
 
-    /// Applies the weapon's post-attack enchantment effects (e.g. Fire Aspect igniting the victim,
-    /// Wind Burst triggering an explosion at the attacker).
-    ///
-    /// Only `Ignite` and `Explode` are applied: the effect data carries no `requirements`, so
-    /// conditional effects such as Thorns or Bane of Arthropods cannot be told apart from
-    /// unconditional ones without their specific predicate checks.
+    /// Applies the post-attack enchantment effects of the victim's equipment and the attacker's
+    /// weapon, mirroring vanilla `doPostAttackEffectsWithItemSource`.
     pub fn on_post_attack(
-        attacker: &dyn crate::entity::EntityBase,
-        victim: &Entity,
+        attacker: &dyn EntityBase,
+        victim: &dyn EntityBase,
         weapon: &ItemStack,
+        damage_type: DamageType,
     ) {
-        let attacker_entity = attacker.get_entity();
-        let world = attacker_entity.world.load_full();
-        let owner = attacker
-            .get_player()
-            .and_then(|player| world.get_player_by_id(player.entity_id()));
-        Self::run_iteration_on_item(weapon, |enchantment, level| {
-            for targeted_effect in enchantment.get_post_attack_effects() {
-                if targeted_effect.enchanted == Some(EnchantmentTarget::Attacker)
-                    && targeted_effect.affected == Some(EnchantmentTarget::Victim)
-                    && let EnchantmentEntityEffect::Ignite { duration } = &targeted_effect.effect
+        let world = victim.get_entity().world.load_full();
+        Self::apply_post_attack_effects(
+            &world,
+            victim,
+            Some(weapon),
+            Some(attacker),
+            Some(attacker),
+            damage_type,
+        );
+    }
+
+    fn equipped_stacks(
+        living: &LivingEntity,
+        player: Option<&Player>,
+    ) -> Vec<(EquipmentSlot, ItemStack)> {
+        player.map_or_else(
+            || {
+                living
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .equipment
+                    .iter()
+                    .map(|(slot, stack)| (slot.clone(), stack.clone()))
+                    .collect()
+            },
+            |player| {
+                let mut stacks = Vec::with_capacity(player.inventory.equipment_slots.len() + 1);
+                stacks.push((EquipmentSlot::MAIN_HAND, player.inventory.held_item()));
+                for (index, slot) in player.inventory.equipment_slots.iter() {
+                    stacks.push((slot.clone(), player.inventory.get_stack(*index)));
+                }
+                stacks
+            },
+        )
+    }
+
+    fn requirements_match(
+        requirements: Option<LootCondition>,
+        params: &LootContextParameters<'_>,
+        level: i32,
+    ) -> bool {
+        requirements.is_none_or(|requirements| {
+            let params = LootContextParameters {
+                enchantment_level: Some(level),
+                ..params.clone()
+            };
+            crate::world::loot::test_loot_condition(requirements, &params)
+        })
+    }
+
+    fn post_attack_target<'a>(
+        affected: Option<EnchantmentTarget>,
+        victim: &'a dyn EntityBase,
+        attacker: Option<&'a dyn EntityBase>,
+        direct_entity: Option<&'a dyn EntityBase>,
+    ) -> Option<&'a Entity> {
+        match affected? {
+            EnchantmentTarget::Attacker => attacker.map(EntityBase::get_entity),
+            EnchantmentTarget::DamagingEntity => direct_entity.map(EntityBase::get_entity),
+            EnchantmentTarget::Victim => Some(victim.get_entity()),
+        }
+    }
+
+    fn apply_post_attack_effect(
+        world: &Arc<World>,
+        level: i32,
+        effect: &EnchantmentEntityEffect,
+        owner: Option<&Arc<Player>>,
+        target: &Entity,
+        holder: &dyn EntityBase,
+        slot: &EquipmentSlot,
+    ) {
+        match effect {
+            EnchantmentEntityEffect::AllOf(effects) => {
+                for effect in *effects {
+                    Self::apply_post_attack_effect(
+                        world, level, effect, owner, target, holder, slot,
+                    );
+                }
+            }
+            EnchantmentEntityEffect::ChangeItemDamage { amount } => {
+                if let Some(living) = holder.get_living_entity() {
+                    living.damage_equipped_item(world, slot, amount.calculate(level) as i32);
+                }
+            }
+            EnchantmentEntityEffect::DamageEntity {
+                min_damage,
+                max_damage,
+                damage_type,
+            } => {
+                let mut rng = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+                let damage =
+                    DamageEntity::new(min_damage.clone(), max_damage.clone(), *damage_type)
+                        .calculate_damage(level, &mut rng);
+                let damage_type = damage_type.copied().unwrap_or(DamageType::GENERIC);
+                let target_entity = world
+                    .get_player_by_id(target.entity_id)
+                    .map(|p| p as Arc<dyn EntityBase>)
+                    .or_else(|| world.get_entity_by_id(target.entity_id));
+                if let Some(target_entity) = target_entity {
+                    target_entity.damage_with_context(
+                        target_entity.as_ref(),
+                        damage,
+                        damage_type,
+                        None,
+                        Some(holder),
+                        Some(holder),
+                    );
+                }
+            }
+            _ => effect.apply(world, level, owner, Some(target), target.pos.load()),
+        }
+    }
+
+    fn apply_post_attack_effects(
+        world: &Arc<World>,
+        victim: &dyn EntityBase,
+        weapon: Option<&ItemStack>,
+        attacker: Option<&dyn EntityBase>,
+        direct_entity: Option<&dyn EntityBase>,
+        damage_type: DamageType,
+    ) {
+        let victim_entity = victim.get_entity();
+        let params = LootContextParameters {
+            world: Some(world.as_ref()),
+            this_entity: Some(victim),
+            killer_entity: attacker,
+            direct_killer_entity: direct_entity,
+            position: Some(victim_entity.pos.load()),
+            damage_type: Some(damage_type),
+            ..Default::default()
+        };
+
+        if let Some(living) = victim.get_living_entity() {
+            let owner = world.get_player_by_id(victim_entity.entity_id);
+            for (slot, stack) in Self::equipped_stacks(living, owner.as_deref()) {
+                Self::run_iteration_on_item(&stack, |enchantment, level| {
+                    if !enchantment
+                        .slots
+                        .iter()
+                        .any(|group| attribute_modifier_slot_matches(group, &slot))
+                    {
+                        return;
+                    }
+                    for targeted_effect in enchantment.get_post_attack_effects() {
+                        if targeted_effect.enchanted != Some(EnchantmentTarget::Victim)
+                            || !Self::requirements_match(
+                                targeted_effect.requirements,
+                                &params,
+                                level,
+                            )
+                        {
+                            continue;
+                        }
+                        if let Some(target) = Self::post_attack_target(
+                            targeted_effect.affected,
+                            victim,
+                            attacker,
+                            direct_entity,
+                        ) {
+                            Self::apply_post_attack_effect(
+                                world,
+                                level,
+                                &targeted_effect.effect,
+                                owner.as_ref(),
+                                target,
+                                victim,
+                                &slot,
+                            );
+                        }
+                    }
+                });
+            }
+        }
+
+        if let Some(weapon) = weapon
+            && let Some(attacker) = attacker
+        {
+            let owner = world.get_player_by_id(attacker.get_entity().entity_id);
+            Self::run_iteration_on_item(weapon, |enchantment, level| {
+                if !enchantment
+                    .slots
+                    .iter()
+                    .any(|group| attribute_modifier_slot_matches(group, &EquipmentSlot::MAIN_HAND))
                 {
-                    victim.set_on_fire_for_ticks((duration.calculate(level) * 20.0) as u32);
-                } else if targeted_effect.enchanted == Some(EnchantmentTarget::Attacker)
-                    && targeted_effect.affected == Some(EnchantmentTarget::Attacker)
-                    && let EnchantmentEntityEffect::Explode { .. } = &targeted_effect.effect
-                {
-                    // Vanilla `Enchantments.WIND_BURST` requires `DIRECT_ATTACKER` to have
-                    // `isFlying == false` (`!isFallFlying() && !abilities.flying`) and `fallDistance >= 1.5`.
-                    let is_flying = attacker_entity.is_fall_flying()
-                        || attacker
-                            .get_player()
-                            .is_some_and(crate::entity::player::Player::is_flying);
-                    let fall_distance = attacker
-                        .get_living_entity()
-                        .map_or(0.0, |living| living.fall_distance.load());
-                    if !is_flying && fall_distance >= 1.5 {
-                        targeted_effect.effect.apply(
-                            &world,
+                    return;
+                }
+                for targeted_effect in enchantment.get_post_attack_effects() {
+                    if targeted_effect.enchanted != Some(EnchantmentTarget::Attacker)
+                        || !Self::requirements_match(targeted_effect.requirements, &params, level)
+                    {
+                        continue;
+                    }
+                    if let Some(target) = Self::post_attack_target(
+                        targeted_effect.affected,
+                        victim,
+                        Some(attacker),
+                        direct_entity,
+                    ) {
+                        Self::apply_post_attack_effect(
+                            world,
                             level,
+                            &targeted_effect.effect,
                             owner.as_ref(),
-                            Some(attacker_entity),
-                            attacker_entity.pos.load(),
+                            target,
+                            attacker,
+                            &EquipmentSlot::MAIN_HAND,
                         );
                     }
                 }
-            }
-        });
+            });
+        }
     }
 
     /// Computes projectile spread angle using data-driven projectile spread effects.
@@ -207,6 +394,97 @@ impl EnchantmentHelper {
             }
         }
         damage
+    }
+
+    /// Modifies damage against a specific target type (e.g. Impaling, Smite, Bane of Arthropods, Sharpness).
+    #[must_use]
+    pub fn modify_damage_against(
+        weapon: &ItemStack,
+        base_damage: f64,
+        victim_type: Option<&'static EntityType>,
+    ) -> f64 {
+        let mut damage = base_damage;
+        if let Some(enchantments) = weapon.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                enchantment.modify_damage_against(*level, &mut damage, victim_type);
+            }
+        }
+        damage
+    }
+
+    /// Applies post-attack enchantment effects for a thrown trident hitting `victim`.
+    pub fn on_trident_post_attack(
+        world: &Arc<World>,
+        trident: &Entity,
+        owner: Option<&dyn EntityBase>,
+        victim: &dyn EntityBase,
+        weapon: &ItemStack,
+    ) {
+        let attacker = owner.unwrap_or(trident);
+        Self::apply_post_attack_effects(
+            world,
+            victim,
+            Some(weapon),
+            Some(attacker),
+            Some(trident),
+            DamageType::TRIDENT,
+        );
+    }
+
+    /// Applies `hit_block` enchantment effects for a thrown trident hitting `block_pos`.
+    pub fn on_trident_hit_block(
+        world: &Arc<World>,
+        trident: &Entity,
+        owner: Option<&Arc<Player>>,
+        block_pos: &BlockPos,
+        hit_pos: Vector3<f64>,
+        weapon: &ItemStack,
+    ) {
+        const CLAMP_EPSILON: f64 = 1.0e-5f32 as f64;
+        let bx = f64::from(block_pos.0.x);
+        let by = f64::from(block_pos.0.y);
+        let bz = f64::from(block_pos.0.z);
+        let compensated_pos = Vector3::new(
+            hit_pos
+                .x
+                .clamp(bx + CLAMP_EPSILON, bx + 1.0 - CLAMP_EPSILON),
+            hit_pos
+                .y
+                .clamp(by + CLAMP_EPSILON, by + 1.0 - CLAMP_EPSILON),
+            hit_pos
+                .z
+                .clamp(bz + CLAMP_EPSILON, bz + 1.0 - CLAMP_EPSILON),
+        );
+        let clamped_block_pos = BlockPos::floored_v(compensated_pos);
+
+        Self::run_iteration_on_item(weapon, |enchantment, level| {
+            for conditional_effect in enchantment.effects.hit_block {
+                if *enchantment == Enchantment::CHANNELING {
+                    if world.is_thunderstorm()
+                        && world
+                            .get_block(&clamped_block_pos)
+                            .has_tag(&tag::Block::MINECRAFT_LIGHTNING_RODS)
+                        && world.can_see_sky(&clamped_block_pos)
+                    {
+                        conditional_effect.effect.apply(
+                            world,
+                            level,
+                            owner,
+                            Some(trident),
+                            compensated_pos,
+                        );
+                    }
+                } else {
+                    conditional_effect.effect.apply(
+                        world,
+                        level,
+                        owner,
+                        Some(trident),
+                        compensated_pos,
+                    );
+                }
+            }
+        });
     }
 
     /// Modifies smash / fall-based damage using data-driven effects (e.g. Density).

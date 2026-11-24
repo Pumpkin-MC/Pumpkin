@@ -1,5 +1,4 @@
 use crate::entity::projectile::owner::ProjectileOwner;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
 use crate::{
@@ -27,8 +26,6 @@ impl SplashPotionEntity {
         let thrown = ThrownItemEntity {
             entity,
             owner: ProjectileOwner::none(),
-            collides_with_projectiles: false,
-            has_hit: AtomicBool::new(false),
             gravity: GRAVITY,
         };
 
@@ -60,16 +57,10 @@ impl SplashPotionEntity {
             .item_stack
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(potion) = stack
-            .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
-            .and_then(|contents| contents.potion_id)
-            .and_then(|id| u8::try_from(id).ok())
-            .and_then(pumpkin_data::potion::Potion::from_id)
-        else {
-            return false;
-        };
-        let (names, ids) = pumpkin_data::tag::Potion::MINECRAFT_HURTS_WATER_SENSITIVE_ENTITIES;
-        names.contains(&potion.name) || ids.contains(&u16::from(potion.id))
+        potion_has_tag(
+            &stack,
+            pumpkin_data::tag::Potion::MINECRAFT_HURTS_WATER_SENSITIVE_ENTITIES,
+        )
     }
 }
 
@@ -78,6 +69,41 @@ fn is_water_potion(stack: &ItemStack) -> bool {
         .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
         .and_then(|pc| pc.potion_id)
         == Some(pumpkin_data::potion::Potion::WATER.id as i32)
+}
+
+fn potion_has_tag(stack: &ItemStack, tag: pumpkin_data::tag::Tag) -> bool {
+    let (names, ids) = tag;
+    stack
+        .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+        .and_then(|contents| contents.potion_id)
+        .and_then(|id| u8::try_from(id).ok())
+        .and_then(pumpkin_data::potion::Potion::from_id)
+        .is_some_and(|potion| names.contains(&potion.name) || ids.contains(&u16::from(potion.id)))
+}
+
+fn rehydrates_axolotls(stack: &ItemStack) -> bool {
+    potion_has_tag(
+        stack,
+        pumpkin_data::tag::Potion::MINECRAFT_REHYDRATES_AXOLOTLS,
+    )
+}
+
+pub(crate) fn rehydrate_axolotls_around(
+    world: &Arc<crate::world::World>,
+    stack: &ItemStack,
+    search_box: &BoundingBox,
+) {
+    if !rehydrates_axolotls(stack) {
+        return;
+    }
+    for entity in world.get_all_at_box(search_box) {
+        if let Some(axolotl) = entity
+            .cast_any()
+            .downcast_ref::<crate::entity::passive::axolotl::AxolotlEntity>()
+        {
+            axolotl.rehydrate();
+        }
+    }
 }
 
 /// Extinguishes fire (including soul fire) at the hit position and its four horizontal neighbors.
@@ -117,6 +143,10 @@ pub(crate) fn extinguish_fire_if_water_potion(
 }
 
 impl EntityBase for SplashPotionEntity {
+    fn hurt_knockback_direction(&self, hurt: &Entity) -> Option<(f64, f64)> {
+        super::knockback_away_from(self.get_entity(), hurt)
+    }
+
     fn get_projectile_owner(&self) -> Option<&ProjectileOwner> {
         Some(&self.thrown.owner)
     }
@@ -135,8 +165,8 @@ impl EntityBase for SplashPotionEntity {
         );
     }
 
-    fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
-        self.thrown.process_tick(caller);
+    fn tick(&self, caller: &dyn EntityBase, server: &Server) {
+        self.thrown.process_tick(caller, server);
     }
 
     fn get_entity(&self) -> &Entity {
@@ -230,10 +260,11 @@ impl EntityBase for SplashPotionEntity {
             &CWorldEvent::new(event_id, block_pos, color, false),
         );
 
+        let search_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
+        rehydrate_axolotls_around(&world, &stack, &search_box);
         if self.hurts_water_sensitive_entities() {
             let owner = self.thrown.owner.get(&world);
             let potion_pos = self.get_entity().pos.load();
-            let search_box = self.get_entity().bounding_box.load().expand(4.0, 2.0, 4.0);
             for entity in world.get_all_at_box(&search_box) {
                 if entity.get_living_entity().is_some()
                     && entity.is_sensitive_to_water()
@@ -308,6 +339,7 @@ impl EntityBase for SplashPotionEntity {
         }
 
         let owner = self.thrown.owner.get(&world);
+        let effect_source: &dyn crate::entity::EntityBase = owner.as_deref().unwrap_or(self);
         for (cand, scale) in affected {
             if let Some(living) = cand.get_living_entity() {
                 crate::item::potion::PotionContents::apply_effects_to(
@@ -319,8 +351,108 @@ impl EntityBase for SplashPotionEntity {
                         direct: self,
                         owner: owner.as_deref(),
                     }),
+                    Some(effect_source),
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::Ordering;
+
+    use pumpkin_data::{
+        data_component::DataComponent, data_component_impl::PotionContentsImpl, entity::EntityType,
+        item::Item, potion::Potion,
+    };
+
+    use super::*;
+    use crate::entity::{ai::test_support::world, passive::axolotl::AxolotlEntity};
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn potion_stack(potion: &Potion) -> ItemStack {
+        ItemStack::new_with_component(
+            1,
+            &Item::SPLASH_POTION,
+            vec![(
+                DataComponent::PotionContents,
+                Some(Box::new(PotionContentsImpl {
+                    potion_id: Some(i32::from(potion.id)),
+                    custom_color: None,
+                    custom_effects: Vec::new(),
+                    custom_name: None,
+                }) as Box<_>),
+            )],
+        )
+    }
+
+    fn axolotl_at(world: &Arc<crate::world::World>, x: f64, y: f64) -> Arc<AxolotlEntity> {
+        let axolotl = AxolotlEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(x, y, 0.0),
+            &EntityType::AXOLOTL,
+        ));
+        axolotl
+            .get_entity()
+            .air_supply
+            .store(100, Ordering::Relaxed);
+        world.spawn_entity(axolotl.clone());
+        axolotl
+    }
+
+    #[tokio::test]
+    async fn a_thrown_water_potion_rehydrates_the_axolotls_it_lands_next_to() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let throw = |stack: ItemStack| {
+            let potion = SplashPotionEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(0.0, 64.0, 0.0),
+                &EntityType::SPLASH_POTION,
+            ));
+            *potion
+                .item_stack
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+            potion.on_hit(crate::entity::projectile::ProjectileHit::Block {
+                pos: BlockPos(Vector3::new(0, 63, 0)),
+                face: pumpkin_data::BlockDirection::Up,
+                hit_pos: Vector3::new(0.0, 64.0, 0.0),
+                normal: Vector3::new(0.0, 1.0, 0.0),
+                world_border: false,
+            });
+        };
+        let air =
+            |axolotl: &Arc<AxolotlEntity>| axolotl.get_entity().air_supply.load(Ordering::Relaxed);
+        let near = axolotl_at(&world, 2.0, 64.0);
+        let far = axolotl_at(&world, 9.0, 64.0);
+
+        throw(potion_stack(&Potion::AWKWARD));
+        let awkward = (air(&near), air(&far));
+        throw(potion_stack(&Potion::WATER));
+        let water = (air(&near), air(&far));
+        near.get_entity().air_supply.store(100, Ordering::Relaxed);
+        let lingering = super::super::lingering_potion::LingeringPotionEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::LINGERING_POTION,
+        ));
+        lingering.set_item_stack(potion_stack(&Potion::WATER));
+        lingering.on_hit(crate::entity::projectile::ProjectileHit::Block {
+            pos: BlockPos(Vector3::new(0, 63, 0)),
+            face: pumpkin_data::BlockDirection::Up,
+            hit_pos: Vector3::new(0.0, 64.0, 0.0),
+            normal: Vector3::new(0.0, 1.0, 0.0),
+            world_border: false,
+        });
+        let lingering_water = (air(&near), air(&far));
+        world.level.shutdown().await;
+
+        assert_eq!(awkward, (100, 100));
+        assert_eq!(water, (1900, 100));
+        assert_eq!(lingering_water, (1900, 100));
+        Ok(())
     }
 }

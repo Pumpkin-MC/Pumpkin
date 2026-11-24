@@ -52,6 +52,7 @@ pub struct EntityType {
     pub summonable: bool,
     /// Whether this entity is immune to fire damage.
     pub fire_immune: bool,
+    pub immune_to: String,
     /// Whether this entity is saved to the world file.
     pub saveable: bool,
     /// Mob category controlling this entity's spawn cap and persistence.
@@ -300,6 +301,7 @@ impl ToTokens for NamedEntityType<'_> {
         let saveable = entity.saveable;
         let summonable = entity.summonable;
         let fire_immune = entity.fire_immune;
+        let immune_to = format_ident!("{}", entity.immune_to.replace(':', "_").to_uppercase());
         let eye_height = entity.eye_height;
         assert!(
             !(entity.mob.is_none() && name != "player"),
@@ -400,6 +402,7 @@ impl ToTokens for NamedEntityType<'_> {
                 limit_per_chunk: #limit_per_chunk,
                 summonable: #summonable,
                 fire_immune: #fire_immune,
+                immune_to: &crate::tag::Block::#immune_to,
                 category: &#spawn_category,
                 can_spawn_far_from_player: #can_spawn_far_from_player,
                 client_tracking_range: #client_tracking_range,
@@ -509,6 +512,7 @@ pub fn build() -> TokenStream {
             pub limit_per_chunk: i32,
             pub summonable: bool,
             pub fire_immune: bool,
+            pub immune_to: &'static crate::tag::Tag,
             pub category: &'static MobCategory,
             pub can_spawn_far_from_player: bool,
             pub client_tracking_range: u32,
