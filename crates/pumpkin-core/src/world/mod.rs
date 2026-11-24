@@ -978,6 +978,30 @@ impl World {
                 .clone();
             level_time.send_time(self);
         }
+        if *rule == GameRule::ImmediateRespawn {
+            self.broadcast_immediate_respawn();
+        }
+    }
+
+    /// Tells every player in this world whether to show the death screen.
+    ///
+    /// The `/gamerule` command writes `level_info` itself instead of going through
+    /// [`Self::set_game_rule`], so it has to call this too.
+    pub(crate) fn broadcast_immediate_respawn(&self) {
+        self.broadcast_packet_all(&self.immediate_respawn_event());
+    }
+
+    /// The packet that tells a client whether to show the death screen.
+    ///
+    /// The server does not respawn the player itself. The client skips the screen
+    /// and asks to respawn on its own, so it only needs to be told the value, both
+    /// when it joins and whenever the gamerule changes.
+    fn immediate_respawn_event(&self) -> CGameEvent {
+        let immediate = self.level_info.load().game_rules.immediate_respawn;
+        CGameEvent::new(
+            GameEvent::EnabledRespawnScreen,
+            if immediate { 1.0 } else { 0.0 },
+        )
     }
 
     pub fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
@@ -4144,6 +4168,10 @@ impl World {
                 ))
                 .await;
         }
+
+        client
+            .enqueue_client_packet(&self.immediate_respawn_event())
+            .await;
 
         let player_bossbars = server
             .bossbars

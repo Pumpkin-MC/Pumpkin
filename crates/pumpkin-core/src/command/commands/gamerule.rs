@@ -99,6 +99,15 @@ impl CommandExecutor for SetBoolExecutor {
             }
         }
 
+        if self.0 == GameRule::ImmediateRespawn {
+            // Clients decide whether to draw the death screen, so they have to be
+            // told when this changes or it only takes effect on the next join.
+            let server = context.server();
+            for world in server.worlds.load().iter() {
+                world.broadcast_immediate_respawn();
+            }
+        }
+
         let value_component = TextComponent::text(arg_value.to_string());
         context.source.send_feedback(
             TextComponent::translate_cross(
