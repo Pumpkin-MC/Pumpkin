@@ -19,6 +19,7 @@ event_kinds! {
     by_value {
         PlayerJoinEvent => PlayerJoin, get_player_join, set_player_join;
         PlayerLeaveEvent => PlayerLeave, get_player_leave, set_player_leave;
+        PlayerTransferEvent => PlayerTransfer, get_player_transfer, set_player_transfer;
         PlayerLoginEvent => PlayerLogin, get_player_login, set_player_login;
         PlayerChatEvent => PlayerChat, get_player_chat, set_player_chat;
         PlayerCommandSendEvent => PlayerCommandSend, get_player_command_send, set_player_command_send;
