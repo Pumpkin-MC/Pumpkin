@@ -164,7 +164,13 @@ where
     /// Asynchronously handles a dynamic event.
     fn handle_dyn<'a>(&'a self, server: &'a Arc<Server>, event: QueuedEvent) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            let payload = event.read::<E>().unwrap();
+            let Some(payload) = event.read::<E>() else {
+                tracing::error!(
+                    "A handler for `{}` failed. Unable to read access to event. Skipped.",
+                    E::get_name_static()
+                );
+                return;
+            };
 
             self.handler.handle(server, payload).await;
         })
@@ -211,7 +217,13 @@ where
         mut event: QueuedEvent,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            let payload = event.write::<E>().unwrap();
+            let Some(payload) = event.write::<E>() else {
+                tracing::error!(
+                    "A handler for `{}` failed. Unable to get write acces to event. Skipped.",
+                    E::get_name_static()
+                );
+                return;
+            };
 
             self.handler.handle(server, payload).await;
         })
