@@ -1,54 +1,32 @@
 use std::sync::Arc;
 
+use crate::block::blocks::redstone::rails::rails_tag_shape;
 use crate::block::registry::BlockActionResult;
-use crate::entity::Entity;
 use crate::entity::player::Player;
-use crate::entity::vehicle::minecart::MinecartEntity;
+use crate::entity::vehicle::minecart::{AbstractMinecart, MinecartType, RAIL_HEIGHT, is_minecart};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use crate::world::game_event::GameEventContext;
+use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{
-    BlockProperties, PoweredRailLikeProperties, RailLikeProperties,
-};
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+/// Vanilla `MinecartItem`.
 pub struct MinecartItem;
 
-impl MinecartItem {
-    pub(crate) fn item_to_entity(item: &Item) -> &'static EntityType {
-        match item.id {
-            val if val == Item::MINECART.id => &EntityType::MINECART,
-            val if val == Item::TNT_MINECART.id => &EntityType::TNT_MINECART,
-            val if val == Item::CHEST_MINECART.id => &EntityType::CHEST_MINECART,
-            val if val == Item::HOPPER_MINECART.id => &EntityType::HOPPER_MINECART,
-            val if val == Item::FURNACE_MINECART.id => &EntityType::FURNACE_MINECART,
-            val if val == Item::COMMAND_BLOCK_MINECART.id => &EntityType::COMMAND_BLOCK_MINECART,
-            _ => {
-                tracing::error!("Unknown minecart item ID: {}", item.id);
-                &EntityType::MINECART
-            }
-        }
-    }
-}
+/// Extra spawn height on a slope.
+const SLOPE_HEIGHT: f64 = 0.5;
 
 impl ItemMetadata for MinecartItem {
     fn ids() -> Box<[u16]> {
-        [
-            Item::MINECART.id,
-            Item::TNT_MINECART.id,
-            Item::CHEST_MINECART.id,
-            Item::HOPPER_MINECART.id,
-            Item::FURNACE_MINECART.id,
-            Item::COMMAND_BLOCK_MINECART.id,
-        ]
-        .into()
+        MinecartType::ALL
+            .into_iter()
+            .filter_map(MinecartType::item)
+            .map(|item| item.id)
+            .collect()
     }
 }
 
@@ -64,36 +42,50 @@ impl ItemBehaviour for MinecartItem {
         _server: &Server,
     ) -> BlockActionResult {
         let world = player.world();
-
-        if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
+        let Some(shape) = rails_tag_shape(block, world.get_block_state_id(&location)) else {
+            return BlockActionResult::Fail;
+        };
+        let Some(kind) = MinecartType::from_item(item.item) else {
+            return BlockActionResult::Fail;
+        };
+        let offset = if shape.is_ascending() {
+            SLOPE_HEIGHT
+        } else {
+            0.0
+        };
+        // Vanilla `pos.getX() + 0.5`: the rail block's corner plus half a block.
+        let corner = location.0.to_f64();
+        let minecart = Arc::new(AbstractMinecart::create(
+            world.clone(),
+            Vector3::new(
+                corner.x + 0.5,
+                corner.y + RAIL_HEIGHT + offset,
+                corner.z + 0.5,
+            ),
+            kind,
+            item,
+            Some(player),
+        ));
+        // Experimental carts don't stack on one spot.
+        if minecart.uses_experimental_movement()
+            && !world
+                .get_entities_of_type_at_box(
+                    &minecart.vehicle.entity.bounding_box.load(),
+                    is_minecart,
+                )
+                .is_empty()
+        {
             return BlockActionResult::Fail;
         }
-        let state_id = world.get_block_state_id(&location);
-        let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
-            PoweredRailLikeProperties::from_state_id(state_id)
-                .shape
-                .is_ascending()
-        } else {
-            RailLikeProperties::from_state_id(state_id)
-                .shape
-                .is_ascending()
-        };
-        let height = if is_ascending { 0.5 } else { 0.0 };
-        let entity_type = Self::item_to_entity(item.item);
-        let pos = location.to_f64();
-        let entity = Entity::new(
-            world.clone(),
-            Vector3::new(pos.x + 0.5, pos.y + 0.0625 + height, pos.z + 0.5),
-            entity_type,
+        world.spawn_entity(minecart);
+        // TODO: vanilla's context also carries the block state below the rail.
+        world.emit_game_event_with_context(
+            GameEvent::EntityPlace.name(),
+            location.to_centered_f64(),
+            &GameEventContext {
+                source_entity: Some(player),
+            },
         );
-        let minecart_entity = Arc::new(MinecartEntity::new(entity));
-        crate::item::items::spawn_egg::apply_entity_variant(
-            item,
-            minecart_entity.as_ref(),
-            Some(player),
-        );
-        world.spawn_entity(minecart_entity);
-        world.emit_game_event(GameEvent::EntityPlace.name(), pos);
         item.decrement_unless_creative(player.gamemode.load(), 1);
         BlockActionResult::Success
     }

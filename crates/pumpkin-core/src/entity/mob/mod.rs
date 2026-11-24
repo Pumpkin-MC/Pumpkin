@@ -346,7 +346,7 @@ impl MobEntity {
             LeashTick::Snapped => self.goals_selector.disable_control(Controls::MOVE),
             LeashTick::Elastic(holder) => {
                 self.when_leashed_to(&*holder);
-                entity.check_fall_distance_accumulation(&self.living_entity);
+                entity.check_fall_distance_accumulation();
                 mob.on_elastic_leash_pull();
             }
             LeashTick::CloseRange(holder) => {
@@ -1689,6 +1689,19 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().living_entity.is_dead_or_dying()
     }
 
+    /// See [`EntityBase::dismount_location_for_passenger`]: the `Animal` and `AbstractHorse`
+    /// rules for those, on top for other mobs.
+    fn mob_dismount_location_for_passenger(&self, passenger: &dyn EntityBase) -> Vector3<f64> {
+        let entity = self.get_entity();
+        if self.as_abstract_horse().is_some() {
+            crate::entity::dismount_helper::horse_dismount_location(entity, passenger)
+        } else if self.as_animal().is_some() {
+            crate::entity::dismount_helper::animal_dismount_location(entity, passenger)
+        } else {
+            crate::entity::dismount_helper::vehicle_top(entity)
+        }
+    }
+
     /// See [`EntityBase::passenger_attachment_point`].
     fn mob_passenger_attachment_point(
         &self,
@@ -2114,7 +2127,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,
-        fall_distance: f32,
+        fall_distance: f64,
         damage_modifier: f32,
     ) -> bool {
         self.get_mob_entity().living_entity.cause_fall_damage(
@@ -2124,7 +2137,7 @@ pub trait Mob: EntityBase + Send + Sync {
         )
     }
 
-    fn calculate_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+    fn calculate_fall_damage(&self, fall_distance: f64, damage_modifier: f32) -> i32 {
         self.get_mob_entity()
             .living_entity
             .base_fall_damage(fall_distance, damage_modifier)
@@ -3298,6 +3311,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_controlling_passenger(&self) -> Option<Arc<dyn EntityBase>> {
         self.mob_controlling_passenger()
+    }
+
+    fn dismount_location_for_passenger(&self, passenger: &dyn EntityBase) -> Vector3<f64> {
+        self.mob_dismount_location_for_passenger(passenger)
     }
 
     fn passenger_attachment_point(

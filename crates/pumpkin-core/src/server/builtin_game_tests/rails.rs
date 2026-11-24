@@ -126,3 +126,88 @@ pub(super) async fn test_detector_rail_minecart(helper: GameTestHelper) -> GameT
     })?;
     Ok(())
 }
+
+/// Vanilla `MinecartTNT.causeFallDamage`: a fall of 3 blocks or more sets the cart off.
+pub(super) async fn test_tnt_minecart_explodes_after_fall(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    build_stone_floor(&helper, 3, 3).await?;
+    helper
+        .spawn_entity_at("minecraft:tnt_minecart", Vector3::new(1.5, 5.0, 1.5))
+        .await?;
+
+    helper
+        .start_sequence()
+        .then_execute(|helper| async move {
+            helper.assert_entity_present("minecraft:tnt_minecart").await
+        })
+        .then_wait_until(|helper| async move {
+            helper
+                .assert_entity_not_present("minecraft:tnt_minecart")
+                .await
+        })
+        .then_succeed();
+    Ok(())
+}
+
+/// Vanilla `AbstractMinecart.getDismountLocationForPassenger`: a cart at yaw 0 drops its
+/// passenger north of it with the default movement, which rides sideways, and west of it with
+/// the experimental one.
+pub(super) async fn test_minecart_dismounts_beside_its_motion(
+    helper: GameTestHelper,
+) -> GameTestResult<()> {
+    build_stone_floor(&helper, 5, 5).await?;
+    let cart = BlockPos::new(2, 1, 2);
+    helper
+        .execute_command(&cart, "summon minecraft:minecart ~ ~ ~")
+        .await?;
+    helper
+        .execute_command(&cart, "summon minecraft:zombie ~ ~ ~ {NoAI:1b}")
+        .await?;
+    helper
+        .execute_command(
+            &cart,
+            "ride @e[type=minecraft:zombie,limit=1,sort=nearest] mount @e[type=minecraft:minecart,limit=1,sort=nearest]",
+        )
+        .await?;
+
+    helper
+        .start_sequence()
+        .then_idle(1)
+        .then_execute(move |helper| async move {
+            helper
+                .execute_command(
+                    &cart,
+                    "ride @e[type=minecraft:zombie,limit=1,sort=nearest] dismount",
+                )
+                .await?;
+            Ok(())
+        })
+        .then_execute(move |helper| async move {
+            // A second dismount fails once the zombie no longer rides.
+            let still_riding = helper
+                .execute_command(
+                    &cart,
+                    "ride @e[type=minecraft:zombie,limit=1,sort=nearest] dismount",
+                )
+                .await
+                .is_ok();
+            helper.assert_true(!still_riding, "the zombie still rides the cart")?;
+            let (expected, other) = if helper
+                .is_feature_enabled("minecraft:minecart_improvements")
+                .await?
+            {
+                (BlockPos::new(1, 1, 2), BlockPos::new(2, 1, 1))
+            } else {
+                (BlockPos::new(2, 1, 1), BlockPos::new(1, 1, 2))
+            };
+            helper
+                .assert_entity_present_at("minecraft:zombie", &expected)
+                .await?;
+            helper
+                .assert_entity_not_present_at("minecraft:zombie", &other)
+                .await
+        })
+        .then_succeed();
+    Ok(())
+}

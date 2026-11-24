@@ -136,7 +136,7 @@ impl Player {
             PlayerToggleFlightEvent::new(player, new_flying);
             'after: {
                 if event.is_flying {
-                    self.living_entity.fall_distance.store(0.0);
+                    self.living_entity.entity.fall_distance.store(0.0);
                 }
                 self.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying = event.is_flying;
                 self.send_abilities_update();
@@ -314,7 +314,7 @@ impl Player {
 
         self.do_check_fall_damage(delta, requested.on_ground, requested.horizontal_collision);
         if delta.y > 0.0 {
-            self.living_entity.fall_distance.store(0.0);
+            self.living_entity.entity.fall_distance.store(0.0);
         }
         if requested.on_ground
             || self.living_entity.has_landed_in_liquid()

@@ -194,6 +194,11 @@ impl Mob for HoglinEntity {
         Some(self)
     }
 
+    /// Vanilla `Animal.getDismountLocationForPassenger`, until hoglins become [`Mob::as_animal`].
+    fn mob_dismount_location_for_passenger(&self, passenger: &dyn EntityBase) -> Vector3<f64> {
+        crate::entity::dismount_helper::animal_dismount_location(self.get_entity(), passenger)
+    }
+
     fn finalize_spawn(
         &self,
         world: &Arc<World>,

@@ -2533,8 +2533,12 @@ impl World {
         let min = BlockPos::floored_v(bounding_box.min.add_raw(0.0, -0.50001, 0.0));
         let max = bounding_box.max_block_pos();
         let pos_iter = BlockPos::iterate(min, max);
+        let ignored = entity.ignored_block_collisions();
 
         for pos in pos_iter {
+            if ignored.is_some_and(|(below, slope)| pos == below || slope == Some(pos)) {
+                continue;
+            }
             let state = self.get_block_state(&pos);
 
             if state.is_air() {
@@ -6441,7 +6445,14 @@ impl World {
                 f64::from(pos.0.z) + 0.5 + r.random_range(-0.25..0.25),
             )
         };
+        self.spawn_item_at(spawn_pos, stack);
+    }
 
+    /// Spawns `stack` as an item entity at exactly `spawn_pos`, unless a plugin cancels it.
+    pub fn spawn_item_at(self: &Arc<Self>, spawn_pos: Vector3<f64>, stack: ItemStack) {
+        if stack.is_empty() {
+            return;
+        }
         let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
         let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
             entity.entity_id,

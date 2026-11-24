@@ -77,6 +77,8 @@ const BUILTIN_TEST_IDS: &[&str] = &[
     "pumpkin:powered_rail_propagation",
     "pumpkin:activator_rail_propagation",
     "pumpkin:detector_rail_minecart",
+    "pumpkin:tnt_minecart_explodes_after_fall",
+    "pumpkin:minecart_dismounts_beside_its_motion",
     "pumpkin:tripwire_entity_collision",
     "pumpkin:snow_golem_pattern_spawns",
     "pumpkin:snow_golem_snow_trail_support",
@@ -506,6 +508,20 @@ pub fn ensure_builtin_game_tests_registered() {
             30,
             0,
             rails::test_detector_rail_minecart,
+        );
+        register_function_test(
+            "pumpkin:tnt_minecart_explodes_after_fall",
+            "pumpkin:empty_3x6x3",
+            40,
+            0,
+            rails::test_tnt_minecart_explodes_after_fall,
+        );
+        register_function_test(
+            "pumpkin:minecart_dismounts_beside_its_motion",
+            "pumpkin:empty_5x4x5",
+            20,
+            0,
+            rails::test_minecart_dismounts_beside_its_motion,
         );
         register_function_test(
             "pumpkin:tripwire_entity_collision",

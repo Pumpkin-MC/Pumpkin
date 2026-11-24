@@ -129,7 +129,7 @@ impl Mob for CreeperEntity {
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,
-        fall_distance: f32,
+        fall_distance: f64,
         damage_modifier: f32,
     ) -> bool {
         let damaged =

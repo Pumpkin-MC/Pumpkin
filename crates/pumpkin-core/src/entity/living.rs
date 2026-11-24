@@ -103,8 +103,6 @@ pub struct LivingEntity {
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
-    /// The distance the entity has been falling.
-    pub fall_distance: AtomicCell<f32>,
     pub active_effects: std::sync::Mutex<FxHashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<std::sync::Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<std::sync::Mutex<FxHashMap<EquipmentSlot, f32>>>,
@@ -201,7 +199,7 @@ impl EffectParticle {
     }
 }
 
-fn is_allowed_by_team_rules(
+pub(crate) fn is_allowed_by_team_rules(
     own_team: Option<&crate::world::scoreboard::Team>,
     their_team: Option<&crate::world::scoreboard::Team>,
 ) -> bool {
@@ -494,7 +492,6 @@ impl LivingEntity {
             remove_stinger_time: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
             absorption: AtomicCell::new(0.0),
-            fall_distance: AtomicCell::new(0.0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
             item_use_time: AtomicI32::new(0),
@@ -2024,7 +2021,7 @@ impl LivingEntity {
         if self.has_effect(&StatusEffect::SLOW_FALLING)
             || self.has_effect(&StatusEffect::LEVITATION)
         {
-            self.fall_distance.store(0.0);
+            self.entity.fall_distance.store(0.0);
         }
 
         // Vanilla Mob.isEffectiveAi / Mannequin.isEffectiveAi: non-effective AI entities don't travel.
@@ -2480,7 +2477,7 @@ impl LivingEntity {
 
     fn apply_climbing_speed(&self, caller: &dyn EntityBase) {
         if caller.on_climbable() {
-            self.fall_distance.store(0.0);
+            self.entity.fall_distance.store(0.0);
 
             let mut velo = self.entity.velocity.load();
 
@@ -2590,16 +2587,18 @@ impl LivingEntity {
         {
             return;
         }
+        // TODO: vanilla `Entity.checkFallDamage` adds the landing move's `ya` before the ground
+        // check, so it counts towards the fall.
         if ground {
-            let fall_distance = self.fall_distance.swap(0.0);
+            let fall_distance = self.entity.fall_distance.swap(0.0);
             if fall_distance > 0.0 {
                 self.on_changed_block(caller, self.entity.block_pos.load());
                 if let Some(player) = caller.get_player() {
                     let current_y = self.entity.pos.load().y;
                     player.trigger_advancement(
                         crate::entity::player::advancement::trigger::AdvancementTrigger::FallFromHeight {
-                            distance_y: f64::from(fall_distance),
-                            from_y: current_y + f64::from(fall_distance),
+                            distance_y: fall_distance,
+                            from_y: current_y + fall_distance,
                             to_y: current_y,
                         },
                     );
@@ -2622,12 +2621,12 @@ impl LivingEntity {
             let new_fall_distance = if !self.should_prevent_fall_damage()
                 && !self.should_prevent_fall_damage_in_area()
             {
-                let distance = self.fall_distance.load();
-                distance - (height_difference as f32)
+                let distance = self.entity.fall_distance.load();
+                distance - f64::from(height_difference as f32)
             } else {
-                0f32
+                0.0
             };
-            self.fall_distance.store(new_fall_distance);
+            self.entity.fall_distance.store(new_fall_distance);
         }
     }
 
@@ -2635,19 +2634,26 @@ impl LivingEntity {
     pub fn handle_fall_damage(
         &self,
         caller: &dyn EntityBase,
-        fall_distance: f32,
+        fall_distance: f64,
         damage_modifier: f32,
     ) -> bool {
         caller.get_mob().map_or_else(
             || self.cause_fall_damage(caller, fall_distance, damage_modifier),
-            |mob| mob.cause_fall_damage(caller, fall_distance, damage_modifier),
+            |mob| {
+                crate::entity::mob::Mob::cause_fall_damage(
+                    mob,
+                    caller,
+                    fall_distance,
+                    damage_modifier,
+                )
+            },
         )
     }
 
     pub fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,
-        fall_distance: f32,
+        fall_distance: f64,
         damage_modifier: f32,
     ) -> bool {
         let may_fly = caller.get_player().is_some_and(|player| {
@@ -2689,9 +2695,7 @@ impl LivingEntity {
             self.current_impulse_impact_pos
                 .load()
                 .map_or(fall_distance, |impact_pos| {
-                    let effective = f64::from(fall_distance)
-                        .min(impact_pos.y - self.entity.pos.load().y)
-                        as f32;
+                    let effective = fall_distance.min(impact_pos.y - self.entity.pos.load().y);
                     if effective <= 0.0 {
                         self.reset_current_impulse_context();
                     } else {
@@ -2700,7 +2704,8 @@ impl LivingEntity {
                     effective
                 });
 
-        self.propagate_fall_to_passengers(effective_fall_distance, damage_modifier);
+        self.entity
+            .propagate_fall_to_passengers(effective_fall_distance, damage_modifier);
         let damage = self.calculate_fall_damage(caller, effective_fall_distance, damage_modifier);
         if damage <= 0 {
             return false;
@@ -2715,7 +2720,7 @@ impl LivingEntity {
     fn calculate_fall_damage(
         &self,
         caller: &dyn EntityBase,
-        fall_distance: f32,
+        fall_distance: f64,
         damage_modifier: f32,
     ) -> i32 {
         caller.get_mob().map_or_else(
@@ -2724,30 +2729,16 @@ impl LivingEntity {
         )
     }
 
-    pub fn base_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+    pub fn base_fall_damage(&self, fall_distance: f64, damage_modifier: f32) -> i32 {
         if self.is_immune_to_fall_damage() {
             return 0;
         }
-        let fall_power = f64::from(fall_distance) + 1.0E-6
-            - self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE);
+        let fall_power =
+            fall_distance + 1.0E-6 - self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE);
         (fall_power
             * f64::from(damage_modifier)
             * self.get_attribute_value(&Attributes::FALL_DAMAGE_MULTIPLIER))
         .floor() as i32
-    }
-
-    pub fn propagate_fall_to_passengers(&self, fall_distance: f32, damage_modifier: f32) {
-        let passengers = self
-            .entity
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        for passenger in passengers {
-            if let Some(living) = passenger.get_living_entity() {
-                living.handle_fall_damage(passenger.as_ref(), fall_distance, damage_modifier);
-            }
-        }
     }
 
     /// Vanilla `getFallDamageSound`.
@@ -3697,7 +3688,7 @@ impl LivingEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
 
         // Clear fall/fire state
-        self.fall_distance.store(0f32);
+        self.entity.fall_distance.store(0.0);
         self.reset_current_impulse_context();
         self.death_time.store(0, Relaxed);
         self.entity.extinguish();
@@ -3754,12 +3745,9 @@ impl LivingEntity {
 impl LivingEntity {
     pub fn write_living_nbt(&self, nbt: &mut NbtCompound) {
         // Avoid persisting a lethal fall distance when the entity is dead to prevent death loops
-        let fall_distance = if self.dead.load(Relaxed) {
-            0.0
-        } else {
-            self.fall_distance.load()
-        };
-        nbt.put_double("fall_distance", f64::from(fall_distance));
+        if self.dead.load(Relaxed) {
+            nbt.put_double("fall_distance", 0.0);
+        }
         let invulnerable_time = self.hurt_cooldown.load(Relaxed);
         if invulnerable_time > 0 {
             nbt.put_int("invulnerable_time", invulnerable_time);
@@ -3835,16 +3823,9 @@ impl LivingEntity {
     }
 
     pub fn read_living_nbt_non_mut(&self, nbt: &NbtCompound) {
-        // Load fall distance, but if this entity is currently marked dead ensure we don't restore
-        // a lethal fall distance that would immediately re-kill on spawn.
-        let fall_distance = nbt
-            .get_numeric_float("fall_distance")
-            .or_else(|| nbt.get_numeric_float("FallDistance"))
-            .unwrap_or(0.0);
+        // A dead entity must not restore a lethal fall distance that re-kills it on spawn.
         if self.dead.load(Relaxed) {
-            self.fall_distance.store(0.0);
-        } else {
-            self.fall_distance.store(fall_distance);
+            self.entity.fall_distance.store(0.0);
         }
         self.hurt_cooldown
             .store(nbt.get_int("invulnerable_time").unwrap_or(0), Relaxed);
@@ -4447,7 +4428,7 @@ impl LivingEntity {
         if dmg_to_health > 0.0 || absorbed_damage > 0.0 {
             let current_tick = world.get_world_age();
             let fall_location = FallLocation::get_current_fall_location(self, &world);
-            let fall_distance = self.fall_distance.load();
+            let fall_distance = self.entity.fall_distance.load();
 
             {
                 let mut tracker = self
@@ -5077,7 +5058,7 @@ impl LivingEntity {
 
                     let destination = self.entity.pos.load();
                     if destination != center {
-                        self.fall_distance.store(0.0);
+                        self.entity.fall_distance.store(0.0);
                         self.reset_current_impulse_context();
                         // Vanilla broadcasts entity event 46 (teleport particles) on success.
                         world.send_entity_status(

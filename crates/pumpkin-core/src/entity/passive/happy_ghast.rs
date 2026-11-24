@@ -122,6 +122,14 @@ impl Animal for HappyGhastEntity {
 }
 
 impl Mob for HappyGhastEntity {
+    /// Vanilla `HappyGhast.getDismountLocationForPassenger`: on top, not the `Animal` rule.
+    fn mob_dismount_location_for_passenger(
+        &self,
+        _passenger: &dyn EntityBase,
+    ) -> pumpkin_util::math::vector3::Vector3<f64> {
+        crate::entity::dismount_helper::vehicle_top(self.get_entity())
+    }
+
     fn mob_support_quad_leash_as_holder(&self) -> bool {
         true
     }
