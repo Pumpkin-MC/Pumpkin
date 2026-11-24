@@ -3337,14 +3337,53 @@ impl Player {
                         &world.encoded_chunk_cache,
                     );
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-                    let sent = self.chunk_sender.try_lock().map_or_else(
-                        |_| Vec::new(),
+                    let commit = self.chunk_sender.try_lock().map_or_else(
+                        |_| crate::net::JavaCommit::default(),
                         |mut sender| {
                             sender.cancel_pending(&batch, current_epoch, &cancelled);
                             sender.commit_batch(&batch, &encoded, &self.client, current_epoch)
                         },
                     );
-                    self.pair_entities_in_chunks(&world, &sent);
+                    self.pair_entities_in_chunks(&world, &commit.sent);
+                    if !commit.awaiting.is_empty() {
+                        // A `PacketSentEvent` handler can still cancel these on the writer.
+                        let world = world.clone();
+                        let uuid = self.gameprofile.id;
+                        self.spawn_task(async move {
+                            let mut deliveries = Vec::new();
+                            let mut dropped = Vec::new();
+                            for awaiting in commit.awaiting {
+                                let key = (awaiting.position, awaiting.delivery_token);
+                                match awaiting.written.await {
+                                    Ok(true) => deliveries.push(key),
+                                    Ok(false) => {
+                                        dropped.push((
+                                            key.0,
+                                            key.1,
+                                            crate::net::DeliveryFailure::Cancelled,
+                                        ));
+                                    }
+                                    Err(_) => {
+                                        dropped.push((
+                                            key.0,
+                                            key.1,
+                                            crate::net::DeliveryFailure::Deferred,
+                                        ));
+                                    }
+                                }
+                            }
+                            if let Some(player) = world.get_player_by_uuid(uuid) {
+                                let mut sender = player
+                                    .chunk_sender
+                                    .lock()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                let mut ready = sender.fail_delivery(&dropped);
+                                ready.extend(sender.mark_delivered(&deliveries));
+                                drop(sender);
+                                player.pair_entities_in_chunks(&world, &ready);
+                            }
+                        });
+                    }
                 }
                 ClientPlatform::Bedrock(bedrock) => {
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);

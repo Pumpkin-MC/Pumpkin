@@ -33,7 +33,7 @@ pub mod authentication;
 pub mod bedrock;
 pub mod chat;
 pub mod chunk_sender;
-pub use chunk_sender::{ChunkSendOutcome, ChunkSender};
+pub use chunk_sender::{ChunkSendOutcome, ChunkSender, DeliveryFailure, JavaCommit, JavaDelivery};
 pub mod java;
 pub mod lan_broadcast;
 pub mod packet_limiter;

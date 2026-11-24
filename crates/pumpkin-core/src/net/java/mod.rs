@@ -73,6 +73,16 @@ use outgoing::{
 };
 pub use versions::JavaVersions;
 
+/// What [`JavaClient::try_enqueue_packet_data_tracked`] did with a packet.
+pub enum Enqueued {
+    /// Not queued (closed, buffer full).
+    Dropped,
+    /// Queued; nothing can cancel it any more.
+    Queued,
+    /// Queued; a `PacketSentEvent` handler can still cancel it. `true` once written.
+    Tracked(oneshot::Receiver<bool>),
+}
+
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
 
@@ -153,6 +163,8 @@ pub struct JavaClient {
     pub packet_limiter: PacketRateLimiter,
     /// Vanilla `suspendFlushingOnServerThread`.
     suspend_flushing: Arc<AtomicBool>,
+    /// Set by the outgoing writer while it runs a `PacketSentEvent` transform.
+    writer_in_transform: Arc<AtomicBool>,
 }
 
 impl JavaClient {
@@ -191,6 +203,7 @@ impl JavaClient {
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
             suspend_flushing: Arc::new(AtomicBool::new(false)),
+            writer_in_transform: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -539,7 +552,9 @@ impl JavaClient {
         self.try_enqueue_packet_data(packet_data);
     }
 
-    /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
+    /// `false` when the packet was dropped instead (closed, buffer full). A
+    /// `PacketSentEvent` cancel happens later, on the writer; see
+    /// [`Self::try_enqueue_packet_data_tracked`] to learn about it.
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
         let Some((packet_data, packet_len, transform)) =
             self.reserve_pending_bytes(packet_data, true)
@@ -550,6 +565,33 @@ impl JavaClient {
             OutgoingPacket::normal(packet_data).with_transform(transform),
             packet_len,
         )
+    }
+
+    /// Like [`Self::try_enqueue_packet_data`], for callers that must know whether a
+    /// `PacketSentEvent` handler cancelled the packet. [`Enqueued::Tracked`] resolves to
+    /// `true` once the writer frames it, `false` if it was cancelled. Only packets that
+    /// go through the event are tracked; the others cannot be cancelled any more.
+    pub fn try_enqueue_packet_data_tracked(&self, packet_data: Bytes) -> Enqueued {
+        let Some((packet_data, packet_len, transform)) =
+            self.reserve_pending_bytes(packet_data, true)
+        else {
+            return Enqueued::Dropped;
+        };
+        let Some(transform) = transform else {
+            return if self.queue_outgoing(OutgoingPacket::normal(packet_data), packet_len) {
+                Enqueued::Queued
+            } else {
+                Enqueued::Dropped
+            };
+        };
+        let (completion_tx, completion_rx) = oneshot::channel();
+        let packet = OutgoingPacket::high_priority(packet_data, completion_tx)
+            .with_transform(Some(transform));
+        if self.queue_outgoing(packet, packet_len) {
+            Enqueued::Tracked(completion_rx)
+        } else {
+            Enqueued::Dropped
+        }
     }
 
     /// Like [`Self::try_enqueue_packet_data`] but does not fire `PacketSentEvent` for
@@ -706,11 +748,16 @@ impl JavaClient {
     }
 
     /// Enqueue and wait for the writer's completion, `Framed` or `Flushed` per `make`.
-    /// `false` when the packet was dropped instead of queued.
+    /// `false` when the packet was dropped instead of queued, or cancelled by a
+    /// `PacketSentEvent` handler.
+    ///
+    /// Called while this client's writer runs a `PacketSentEvent` handler (the handler
+    /// itself sending to the player), it returns once the packet is queued: the writer
+    /// only gets to it after the handler returns, so waiting would never end.
     async fn send_and_wait(
         &self,
         packet: Bytes,
-        make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
+        make: fn(Bytes, oneshot::Sender<bool>) -> OutgoingPacket,
     ) -> bool {
         let Some((packet, packet_len, transform)) = self.reserve_pending_bytes(packet, true) else {
             return false;
@@ -724,11 +771,15 @@ impl JavaClient {
             return false;
         }
 
-        if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
+        if self.writer_in_transform.load(Ordering::Acquire) {
+            return true;
+        }
+        let written = completion_rx.await;
+        if written.is_err() && !self.close_token.is_cancelled() {
             // The outgoing packet task dropped before confirming the write.
             self.close();
         }
-        true
+        written.unwrap_or(false)
     }
 
     pub fn write_packet_for_version<P: ClientPacket>(
@@ -801,6 +852,7 @@ impl JavaClient {
         };
         let id = self.id;
         let suspend_flushing = self.suspend_flushing.clone();
+        let in_transform = self.writer_in_transform.clone();
         self.spawn_task(async move {
             run_outgoing_packet_writer(
                 packet_receiver,
@@ -809,6 +861,7 @@ impl JavaClient {
                 suspend_flushing,
                 pending_bytes,
                 id,
+                in_transform,
             )
             .await;
         });

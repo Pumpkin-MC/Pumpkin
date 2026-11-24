@@ -19,6 +19,7 @@ use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::level::{Level, SyncChunk};
 
 use crate::net::ClientPlatform;
+use crate::net::java::Enqueued;
 
 const MIN_CHUNKS_PER_TICK: f32 = 0.01;
 const MAX_CHUNKS_PER_TICK: f32 = 64.0;
@@ -41,10 +42,28 @@ pub struct DispatchedChunk {
     pub delivery_token: u64,
 }
 
-/// Why a committed Bedrock chunk did not reach the client.
+/// What [`ChunkSender::commit_batch`] queued for a Java client.
+#[derive(Default)]
+pub struct JavaCommit {
+    /// Queued and ready: nothing can cancel these any more.
+    pub sent: Vec<Vector2<i32>>,
+    /// Queued, but a `PacketSentEvent` handler can still cancel them on the writer.
+    /// Not ready until settled with [`ChunkSender::mark_delivered`] / [`ChunkSender::fail_delivery`].
+    pub awaiting: Vec<JavaDelivery>,
+}
+
+pub struct JavaDelivery {
+    pub position: Vector2<i32>,
+    pub delivery_token: u64,
+    /// `true` once written, `false` when cancelled.
+    pub written: tokio::sync::oneshot::Receiver<bool>,
+}
+
+/// Why a committed chunk did not reach the client.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DeliveryFailure {
-    /// Cancelled `ChunkSend` -> parked, offered again after `CANCELLED_RETRY_TICKS`.
+    /// Cancelled `ChunkSend` or `PacketSentEvent` -> parked, offered again after
+    /// `CANCELLED_RETRY_TICKS`.
     Cancelled,
     /// Not queued for a passing reason (player not set, closed connection) -> retried.
     Deferred,
@@ -569,33 +588,33 @@ impl ChunkSender {
         }
     }
 
-    // TODO: a chunk's lifecycle is built twice: `commit_batch` (Java, marks sent once queued)
-    // and `commit_bedrock_batch` (Bedrock, marks sent first and settles through
-    // `mark_delivered` / `fail_delivery`). Both should share one token-based path.
+    /// Java chunks a `PacketSentEvent` handler can still cancel on the writer settle like
+    /// Bedrock ones, through [`Self::mark_delivered`] / [`Self::fail_delivery`]; the rest
+    /// are ready once queued.
     pub fn commit_batch(
         &mut self,
         batch: &PreparedBatch,
         encoded_chunks: &[EncodedChunk],
         client: &ClientPlatform,
         current_epoch: u32,
-    ) -> Vec<Vector2<i32>> {
+    ) -> JavaCommit {
+        let mut commit = JavaCommit::default();
         if current_epoch != batch.epoch_snapshot {
-            return Vec::new();
+            return commit;
         }
 
         self.settle_unencoded(batch, encoded_chunks);
         if encoded_chunks.is_empty() {
-            return Vec::new();
+            return commit;
         }
 
-        let mut dispatched_positions = Vec::with_capacity(encoded_chunks.len());
         let version = batch.target_version;
 
         let batch_client = match client {
             ClientPlatform::Java(java_client) if version >= JavaMinecraftVersion::V_1_20_2 => {
                 // Without the start packet the client would get an end packet out of nowhere
                 if !java_client.try_send_packet(&CChunkBatchStart) {
-                    return Vec::new();
+                    return commit;
                 }
                 Some(java_client)
             }
@@ -607,27 +626,37 @@ impl ChunkSender {
                 continue;
             }
 
-            // A dropped packet (e.g. cancelled `PacketSentEvent`) never reached the client.
-            let queued = match client {
+            let enqueued = match client {
                 ClientPlatform::Java(java_client) => {
-                    java_client.try_enqueue_packet_data(chunk.payload.clone())
+                    java_client.try_enqueue_packet_data_tracked(chunk.payload.clone())
                 }
                 ClientPlatform::Bedrock(_) => {
                     client.try_enqueue_packet(chunk.payload.clone());
-                    true
+                    Enqueued::Queued
                 }
             };
-            if queued {
-                self.encode_failures.remove(&chunk.position);
-                self.sent_chunks.insert(chunk.position);
-                dispatched_positions.push(chunk.position);
-            } else {
-                // Dropped on purpose (e.g. a `PacketSentEvent` cancel) -> offered again later
-                self.park(chunk.position);
+            match enqueued {
+                Enqueued::Queued => {
+                    self.encode_failures.remove(&chunk.position);
+                    // This copy reaches the client, whatever an earlier tracked one does.
+                    self.awaiting_delivery.remove(&chunk.position);
+                    self.sent_chunks.insert(chunk.position);
+                    commit.sent.push(chunk.position);
+                }
+                Enqueued::Tracked(written) => {
+                    let delivery_token = self.begin_delivery(chunk.position);
+                    commit.awaiting.push(JavaDelivery {
+                        position: chunk.position,
+                        delivery_token,
+                        written,
+                    });
+                }
+                // Not queued (closed, buffer full) -> offered again later
+                Enqueued::Dropped => self.park(chunk.position),
             }
         }
 
-        let sent_count = dispatched_positions.len();
+        let sent_count = commit.sent.len() + commit.awaiting.len();
         // A started batch is always closed. The client acks every `CChunkBatchEnd` it receives,
         // so only a queued one counts as in flight
         if let Some(java_client) = batch_client
@@ -637,7 +666,30 @@ impl ChunkSender {
         }
         self.send_quota -= sent_count as f32;
 
-        dispatched_positions
+        commit
+    }
+
+    /// Marks `pos` sent but not ready until the returned token is settled.
+    fn begin_delivery(&mut self, pos: Vector2<i32>) -> u64 {
+        let delivery_token = self.next_delivery_token;
+        self.next_delivery_token += 1;
+        let (held_before, earlier) = match self.awaiting_delivery.remove(&pos) {
+            Some(mut previous) => {
+                previous.earlier.push(previous.token);
+                (previous.held_before, previous.earlier)
+            }
+            None => (self.sent_chunks.contains(&pos), Vec::new()),
+        };
+        self.sent_chunks.insert(pos);
+        self.awaiting_delivery.insert(
+            pos,
+            AwaitingDelivery {
+                token: delivery_token,
+                held_before,
+                earlier,
+            },
+        );
+        delivery_token
     }
 
     /// Marks a prepared Bedrock batch as dispatched and returns its chunks for encoding.
@@ -661,24 +713,7 @@ impl ChunkSender {
                 continue;
             }
 
-            let delivery_token = self.next_delivery_token;
-            self.next_delivery_token += 1;
-            let (held_before, earlier) = match self.awaiting_delivery.remove(&candidate.position) {
-                Some(mut previous) => {
-                    previous.earlier.push(previous.token);
-                    (previous.held_before, previous.earlier)
-                }
-                None => (self.sent_chunks.contains(&candidate.position), Vec::new()),
-            };
-            self.sent_chunks.insert(candidate.position);
-            self.awaiting_delivery.insert(
-                candidate.position,
-                AwaitingDelivery {
-                    token: delivery_token,
-                    held_before,
-                    earlier,
-                },
-            );
+            let delivery_token = self.begin_delivery(candidate.position);
             dispatched_chunks.push(DispatchedChunk {
                 position: candidate.position,
                 chunk: candidate.chunk.clone(),
