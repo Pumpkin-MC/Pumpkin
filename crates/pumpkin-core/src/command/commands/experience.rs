@@ -86,25 +86,23 @@ impl ExperienceExecutor {
             Mode::Query => "query",
         };
 
+        // Java and Bedrock share one argument list, so the key has to agree with
+        // the sign of the amount passed to it. Bedrock's
+        // `commands.xp.success.negative.levels` reads "Taken %1$d levels from
+        // %2$s" and wants a positive count, which is where the dropped minus sign
+        // came from. Vanilla Java prints the signed amount, so both editions use
+        // the "Gave" key and keep the sign.
         let bedrock_key = match self.exp_type {
             ExpType::Points => pumpkin_data::translation::bedrock::COMMANDS_XP_SUCCESS,
-            ExpType::Levels => {
-                if amount >= 0 {
-                    pumpkin_data::translation::bedrock::COMMANDS_XP_SUCCESS_LEVELS
-                } else {
-                    pumpkin_data::translation::bedrock::COMMANDS_XP_SUCCESS_NEGATIVE_LEVELS
-                }
-            }
+            ExpType::Levels => pumpkin_data::translation::bedrock::COMMANDS_XP_SUCCESS_LEVELS,
         };
-
-        let bedrock_amount = if amount >= 0 { amount } else { amount.abs() };
 
         if targets.len() > 1 {
             TextComponent::translate_cross(
                 format!("commands.experience.{mode_str}.{type_str}.success.multiple"),
                 bedrock_key,
                 [
-                    TextComponent::text(bedrock_amount.to_string()),
+                    TextComponent::text(amount.to_string()),
                     TextComponent::text(targets.len().to_string()),
                 ],
             )
@@ -112,10 +110,7 @@ impl ExperienceExecutor {
             TextComponent::translate_cross(
                 format!("commands.experience.{mode_str}.{type_str}.success.single"),
                 bedrock_key,
-                [
-                    TextComponent::text(bedrock_amount.to_string()),
-                    first_target_name,
-                ],
+                [TextComponent::text(amount.to_string()), first_target_name],
             )
         }
     }

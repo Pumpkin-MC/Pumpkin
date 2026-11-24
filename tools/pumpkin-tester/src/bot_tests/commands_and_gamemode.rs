@@ -1,5 +1,6 @@
 use std::{
     sync::Arc,
+    sync::atomic::Ordering,
     time::{Duration, Instant},
 };
 
@@ -111,6 +112,70 @@ pub async fn run_commands_and_gamemode_tests(
     summary_lines.push(format!(
         "[PASS] bot:commands_gamemode_give_setblock_test ({}ms)",
         cmd_start.elapsed().as_millis()
+    ));
+
+    run_xp_negative_amount_test(server, bot1, &player1, runner, summary_lines).await?;
+
+    Ok(())
+}
+
+/// `/xp add` with a negative amount has to clamp at level 0 instead of going
+/// negative. The level is read back off the player rather than out of the command
+/// reply, so this covers the state and not the message.
+async fn run_xp_negative_amount_test(
+    server: &Arc<Server>,
+    bot1: &mut HeadlessBot,
+    player1: &Arc<pumpkin_core::entity::player::Player>,
+    runner: &mut GameTestRunner,
+    summary_lines: &mut Vec<String>,
+) -> Result<(), String> {
+    let xp_start = Instant::now();
+    bot1.send_command("xp set @s 24 levels").await?;
+
+    // Wait for the set to land first, otherwise the clamp check below passes on
+    // the starting state before either command has run.
+    let mut xp_set = false;
+    for _ in 0..MAX_POLL_TICKS {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        server.tick();
+        runner.tick().await;
+        if player1.experience_level.load(Ordering::Relaxed) == 24 {
+            xp_set = true;
+            break;
+        }
+    }
+    if !xp_set {
+        return Err(format!(
+            "Bot `/xp set @s 24 levels` left the player on level {}",
+            player1.experience_level.load(Ordering::Relaxed)
+        ));
+    }
+
+    bot1.send_command("xp add @s -100 levels").await?;
+
+    let mut xp_clamped = false;
+    for _ in 0..MAX_POLL_TICKS {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        server.tick();
+        runner.tick().await;
+        if player1.experience_level.load(Ordering::Relaxed) == 0
+            && player1.experience_points.load(Ordering::Relaxed) == 0
+        {
+            xp_clamped = true;
+            break;
+        }
+    }
+    if !xp_clamped {
+        return Err(format!(
+            "Bot `/xp add @s -100 levels` left the player on level {} with {} points, expected 0 and 0",
+            player1.experience_level.load(Ordering::Relaxed),
+            player1.experience_points.load(Ordering::Relaxed)
+        ));
+    }
+
+    summary_lines.push(format!(
+        "[PASS] bot:commands_xp_add_negative_clamps ({}ms)",
+        xp_start.elapsed().as_millis()
     ));
     Ok(())
 }
