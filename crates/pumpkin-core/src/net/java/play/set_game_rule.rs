@@ -14,19 +14,6 @@ impl JavaClient {
         }
 
         let world = player.world();
-        let minecart_improvements_enabled = world.server.upgrade().map_or_else(
-            || {
-                world
-                    .level_info
-                    .load()
-                    .data_packs
-                    .enabled
-                    .iter()
-                    .any(|p| p == "minecart_improvements" || p == "file/minecart_improvements")
-            },
-            |s| s.is_feature_enabled("minecraft:minecart_improvements"),
-        );
-
         for entry in &packet.entries {
             let key = entry
                 .game_rule_key
@@ -37,45 +24,25 @@ impl JavaClient {
                 continue;
             };
 
-            if *rule == GameRule::MaxMinecartSpeed && !minecart_improvements_enabled {
+            let value = match world.get_game_rule(rule) {
+                GameRuleValue::Int(_) => entry.value.parse::<i64>().ok().map(GameRuleValue::Int),
+                GameRuleValue::Bool(_) => entry.value.parse::<bool>().ok().map(GameRuleValue::Bool),
+            };
+            let Some(value) = value else {
                 warn!(
-                    "Player {} tried to set game rule {} which is not enabled by feature flags",
-                    player.gameprofile.name, entry.game_rule_key
+                    "Player {} tried to set invalid value '{}' for gamerule {}",
+                    player.gameprofile.name, entry.value, key
                 );
                 continue;
-            }
-
-            let level_info = player.world().level_info.load();
-            let current_val = level_info.game_rules.get(rule);
-            match current_val {
-                GameRuleValue::Int(_) => {
-                    if let Ok(val) = entry.value.parse::<i64>() {
-                        player.world().set_game_rule(rule, GameRuleValue::Int(val));
-                        info!(
-                            "Player {} set gamerule {} to {}",
-                            player.gameprofile.name, key, val
-                        );
-                    } else {
-                        warn!(
-                            "Player {} tried to set invalid int value '{}' for gamerule {}",
-                            player.gameprofile.name, entry.value, key
-                        );
-                    }
-                }
-                GameRuleValue::Bool(_) => {
-                    if let Ok(val) = entry.value.parse::<bool>() {
-                        player.world().set_game_rule(rule, GameRuleValue::Bool(val));
-                        info!(
-                            "Player {} set gamerule {} to {}",
-                            player.gameprofile.name, key, val
-                        );
-                    } else {
-                        warn!(
-                            "Player {} tried to set invalid bool value '{}' for gamerule {}",
-                            player.gameprofile.name, entry.value, key
-                        );
-                    }
-                }
+            };
+            // `World::set_game_rule` refuses rules this world's features leave out, like vanilla
+            // `GameRules.set`.
+            if world.set_game_rule(rule, value) {
+                // TODO vanilla `broadcastGameRuleChangeToOperators`: send `commands.gamerule.set` to ops.
+                info!(
+                    "Player {} set gamerule {} to {}",
+                    player.gameprofile.name, key, entry.value
+                );
             }
         }
     }

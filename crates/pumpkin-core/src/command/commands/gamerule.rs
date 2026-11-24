@@ -5,6 +5,7 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
+use crate::command::CommandSource;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::core::bool::BoolArgumentType;
 use crate::command::argument_types::core::integer::IntegerArgumentType;
@@ -126,7 +127,15 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     // Vanilla takes each rule by its name and by its namespaced id.
     for rule in GameRule::all() {
         for name in [rule.to_string(), format!("minecraft:{rule}")] {
-            let rule_literal = literal(name).executes(QueryExecutor(rule.clone()));
+            let enabled_rule = rule.clone();
+            // Vanilla only registers the rules this world's features enable.
+            let rule_literal = literal(name)
+                .requires(move |source: &CommandSource| {
+                    source.server.as_ref().is_none_or(|server| {
+                        server.level_info.load().is_game_rule_enabled(&enabled_rule)
+                    })
+                })
+                .executes(QueryExecutor(rule.clone()));
             let branch = match rule_registry.get(rule) {
                 GameRuleValue::Int(_) => {
                     let arg = rule

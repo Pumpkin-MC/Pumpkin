@@ -73,16 +73,12 @@ impl JavaClient {
 
         let world = player.world();
         let level_info = world.level_info.load();
-        let minecart_improvements_enabled = world.server.upgrade().map_or_else(
-            || {
-                level_info
-                    .data_packs
-                    .enabled
-                    .iter()
-                    .any(|p| p == "minecart_improvements" || p == "file/minecart_improvements")
-            },
-            |s| s.is_feature_enabled("minecraft:minecart_improvements"),
-        );
+        let minecart_improvements_enabled = world
+            .level_info
+            .load()
+            .enabled_features
+            .iter()
+            .any(|feature| feature == "minecraft:minecart_improvements");
 
         let rules: Vec<(String, String)> = GameRule::all()
             .iter()
