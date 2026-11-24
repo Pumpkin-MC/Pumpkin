@@ -305,7 +305,7 @@ impl ShulkerEntity {
 
     fn on_peek_amount_change(&self) {
         let entity = self.get_entity();
-        entity.refresh_dimensions_without_relocation();
+        entity.refresh_dimensions();
         let old = Self::physical_peek(self.prev_peek_amount.load());
         let current = Self::physical_peek(self.current_peek_amount.load());
         let push = (current - old) * entity.scale.load();
@@ -501,9 +501,12 @@ impl ShulkerEntity {
                     source_entity: Some(self),
                 },
             );
-            let packed = ((candidate.0.x - old_pos.0.x + MAX_TELEPORT_DISTANCE) << 16)
-                | ((candidate.0.y - old_pos.0.y + MAX_TELEPORT_DISTANCE) << 8)
-                | (candidate.0.z - old_pos.0.z + MAX_TELEPORT_DISTANCE);
+            let packed = old_pos.pack_difference_in_position(
+                &candidate,
+                MAX_TELEPORT_DISTANCE,
+                MAX_TELEPORT_DISTANCE,
+                MAX_TELEPORT_DISTANCE,
+            );
             world.sync_world_event(WorldEvent::ParticlesShulkerTeleport, old_pos, packed);
             self.store_peek(0);
             self.set_mob_target(None, TargetReason::Unknown);
@@ -1271,7 +1274,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mounted_peek_and_attachment_changes_keep_the_seat_position() -> TestResult {
+    async fn mounted_peek_relocates_before_rider_position_is_restored() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
         let shulker = spawn(&world);
@@ -1294,8 +1297,10 @@ mod tests {
         shulker.set_raw_peek(100);
         assert!(shulker.update_peek_amount());
         shulker.on_peek_amount_change();
-        assert_eq!(entity.pos.load(), seat);
-        assert!(cow.get_entity().pos.load().y > seat.y + 1.001);
+        assert!(entity.pos.load().y < seat.y);
+        crate::entity::position_rider(vehicle.as_ref(), shulker.as_ref());
+        let restored = entity.pos.load();
+        assert_eq!(cow.get_entity().pos.load().y, seat.y + 1.001);
         for _ in 0..20 {
             shulker.update_peek_amount();
         }
@@ -1305,7 +1310,8 @@ mod tests {
         shulker.set_attach_face(BlockDirection::Down);
         assert_eq!(entity.entity_dimension.load().height, 2.0);
         assert_eq!(entity.get_eye_height(), 1.0);
-        assert_eq!(entity.pos.load(), seat);
+        crate::entity::position_rider(vehicle.as_ref(), shulker.as_ref());
+        assert_eq!(entity.pos.load(), restored);
         world.level.shutdown().await;
         Ok(())
     }

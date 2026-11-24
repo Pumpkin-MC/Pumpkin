@@ -1401,11 +1401,7 @@ impl LivingEntity {
         };
         if (self.entity.scale.load() - scale).abs() > f32::EPSILON {
             self.entity.scale.store(scale);
-            if self.entity.entity_type == &EntityType::SHULKER && self.entity.has_vehicle() {
-                self.entity.refresh_dimensions_without_relocation();
-            } else {
-                self.entity.refresh_dimensions();
-            }
+            self.entity.refresh_dimensions();
         }
     }
 
@@ -5362,7 +5358,7 @@ pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
 #[cfg(test)]
 mod tests {
     #[tokio::test]
-    async fn mounted_shulker_scale_keeps_the_seat_and_other_entities_still_relocate()
+    async fn mounted_shulker_scale_relocates_until_rider_position_is_restored()
     -> Result<(), Box<dyn std::error::Error>> {
         use crate::entity::ai::test_support::world;
         use crate::entity::mob::shulker::ShulkerEntity;
@@ -5383,9 +5379,13 @@ mod tests {
             attribute.mark_dirty();
         });
         living.update_scale();
-        assert_eq!(living.entity.pos.load(), seat);
+        assert!(living.entity.pos.load().y < seat.y);
+        crate::entity::position_rider(vehicle.as_ref(), shulker.as_ref());
+        let restored = living.entity.pos.load();
+        crate::entity::position_rider(vehicle.as_ref(), shulker.as_ref());
+        assert_eq!(living.entity.pos.load(), restored);
         assert_eq!(living.entity.entity_dimension.load().width, 2.0);
-        assert_eq!(living.entity.bounding_box.load().max.y, seat.y + 2.0);
+        assert_eq!(living.entity.bounding_box.load().max.y, restored.y + 2.0);
 
         let cow = CowEntity::new(Entity::new(
             world.clone(),
