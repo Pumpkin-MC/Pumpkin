@@ -171,6 +171,20 @@ impl OutgoingPacket {
     }
 }
 
+/// The writer's answer for a packet queued with a completion. `reentrant`: the
+/// writer was already running a `Transform` when the packet was queued, so this is
+/// that transform's handler sending to its own player. The writer only gets to the
+/// packet after the handler returns, so it counts as written once queued.
+pub async fn wait_for_write(
+    reentrant: bool,
+    completion: oneshot::Receiver<bool>,
+) -> Result<bool, oneshot::error::RecvError> {
+    if reentrant {
+        return Ok(true);
+    }
+    completion.await
+}
+
 /// Written: `Framed` releases now, `Flushed` waits for the TCP flush.
 fn complete(completion: Option<Completion>, on_flush: &mut Vec<oneshot::Sender<bool>>) {
     match completion {
@@ -1065,6 +1079,68 @@ mod tests {
 
         assert_eq!(*writes.lock().unwrap(), vec![3, 1, 2, 3]);
         assert_eq!(pending.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_send_sees_its_own_packet_cancelled_while_the_writer_runs_it() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let in_transform = Arc::new(AtomicBool::new(false));
+        let (started_tx, started_rx) = oneshot::channel::<()>();
+        let (release_tx, release_rx) = oneshot::channel::<()>();
+
+        // Read before queueing, as `send_and_wait` does.
+        let reentrant = in_transform.load(Ordering::Acquire);
+        let (done_tx, done_rx) = oneshot::channel();
+        tx.send(
+            OutgoingPacket::high_priority(Bytes::from_static(&[1]), done_tx).with_transform(Some(
+                Box::pin(async move {
+                    let _ = started_tx.send(());
+                    let _ = release_rx.await;
+                    Transformed {
+                        packet: None,
+                        extras: Vec::new(),
+                    }
+                }),
+            )),
+        )
+        .unwrap();
+        drop(tx);
+
+        let writer = tokio::spawn(run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: Arc::new(std::sync::Mutex::new(Vec::new())),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            CancellationToken::new(),
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicUsize::new(1)),
+            0,
+            in_transform.clone(),
+        ));
+
+        // The writer is now running this packet's own transform.
+        started_rx.await.unwrap();
+        assert!(in_transform.load(Ordering::Acquire));
+        let wait = tokio::spawn(wait_for_write(reentrant, done_rx));
+        release_tx.send(()).unwrap();
+
+        assert_eq!(
+            wait.await.unwrap(),
+            Ok(false),
+            "the cancel reaches the caller"
+        );
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_send_from_a_running_handler_does_not_wait_on_the_writer() {
+        let (_done_tx, done_rx) = oneshot::channel();
+        // Queued while the writer runs a transform: never completed until it returns.
+        let written = tokio::time::timeout(Duration::from_secs(1), wait_for_write(true, done_rx))
+            .await
+            .expect("must not wait on the writer");
+        assert_eq!(written, Ok(true));
     }
 
     #[tokio::test]

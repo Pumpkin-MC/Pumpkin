@@ -70,6 +70,7 @@ pub mod versions;
 pub use chunk_data::{CChunkData, ChunkLightExt};
 use outgoing::{
     DISCONNECT_FLUSH_TIMEOUT, OutgoingPacket, Transform, Transformed, run_outgoing_packet_writer,
+    wait_for_write,
 };
 pub use versions::JavaVersions;
 
@@ -759,6 +760,8 @@ impl JavaClient {
         packet: Bytes,
         make: fn(Bytes, oneshot::Sender<bool>) -> OutgoingPacket,
     ) -> bool {
+        // Read before queueing: a transform that starts later may be this packet's own.
+        let reentrant = self.writer_in_transform.load(Ordering::Acquire);
         let Some((packet, packet_len, transform)) = self.reserve_pending_bytes(packet, true) else {
             return false;
         };
@@ -771,10 +774,7 @@ impl JavaClient {
             return false;
         }
 
-        if self.writer_in_transform.load(Ordering::Acquire) {
-            return true;
-        }
-        let written = completion_rx.await;
+        let written = wait_for_write(reentrant, completion_rx).await;
         if written.is_err() && !self.close_token.is_cancelled() {
             // The outgoing packet task dropped before confirming the write.
             self.close();
