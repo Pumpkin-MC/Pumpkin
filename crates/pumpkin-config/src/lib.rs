@@ -228,6 +228,12 @@ pub struct BasicConfiguration {
     /// Players without operator privileges cannot break or place blocks within this radius.
     /// Set to 0 to disable spawn protection.
     pub spawn_protection: u32,
+    /// Data packs a new world starts with, like vanilla's `initial-enabled-packs`.
+    /// Add `minecart_improvements`, `redstone_experiments` or `trade_rebalance` to create an
+    /// experimental world. Existing worlds keep the packs in their `level.dat`.
+    pub initial_enabled_packs: Vec<String>,
+    /// Data packs a new world starts without, like vanilla's `initial-disabled-packs`.
+    pub initial_disabled_packs: Vec<String>,
 }
 
 impl Default for BasicConfiguration {
@@ -251,6 +257,8 @@ impl Default for BasicConfiguration {
             enforce_whitelist: false,
             accepts_transfers: true,
             spawn_protection: 16,
+            initial_enabled_packs: vec!["vanilla".to_string()],
+            initial_disabled_packs: Vec::new(),
         }
     }
 }

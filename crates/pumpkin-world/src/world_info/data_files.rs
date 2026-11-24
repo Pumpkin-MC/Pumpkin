@@ -9,7 +9,7 @@ use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, t
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::world_info::{WorldGenSettings, WorldInfoError};
+use crate::world_info::{LevelData, WorldGenSettings, WorldInfoError};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct DataFileRoot<T> {
@@ -437,11 +437,14 @@ pub fn write_world_gen_settings(
 }
 
 #[must_use]
-pub fn game_rules_to_nbt(rules: &GameRuleRegistry, data_version: i32) -> NbtCompound {
+pub fn game_rules_to_nbt(level: &LevelData, data_version: i32) -> NbtCompound {
     let mut inner = NbtCompound::new();
     for rule in GameRule::all() {
+        if !level.is_game_rule_enabled(rule) {
+            continue;
+        }
         let key = format!("minecraft:{rule}");
-        match rules.get(rule) {
+        match level.game_rules.get(rule) {
             GameRuleValue::Bool(b) => inner.put(&key, NbtTag::Byte(i8::from(*b))),
             GameRuleValue::Int(i) => inner.put(&key, NbtTag::Int(*i as i32)),
         }
@@ -470,7 +473,16 @@ pub fn game_rules_from_nbt(root: &NbtCompound) -> GameRuleRegistry {
                 }
             }
             GameRuleValue::Int(i) => {
-                if let Some(v) = inner.get_int(&key) {
+                let Some(v) = inner.get_int(&key) else {
+                    continue;
+                };
+                // Vanilla `Codec.intRange`: an out of range value keeps the default.
+                if rule
+                    .int_bounds()
+                    .is_some_and(|(min, max)| !(min..=max).contains(&v))
+                {
+                    warn!("Game rule {key} value {v} is out of range, using the default");
+                } else {
                     *i = i64::from(v);
                 }
             }
@@ -506,13 +518,13 @@ pub fn read_game_rules(level_folder: &Path) -> GameRuleRegistry {
 
 pub fn write_game_rules(
     level_folder: &Path,
-    rules: &GameRuleRegistry,
+    level: &LevelData,
     data_version: i32,
 ) -> Result<(), WorldInfoError> {
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("game_rules.dat");
 
-    let compound = game_rules_to_nbt(rules, data_version);
+    let compound = game_rules_to_nbt(level, data_version);
     let file = File::create(&path)?;
 
     pumpkin_nbt::nbt_compress::write_gzip_compound_tag(compound, file)

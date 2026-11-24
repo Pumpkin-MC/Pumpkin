@@ -240,6 +240,9 @@ fn level_data_from_nbt(data: &NbtCompound, seed: i64) -> LevelData {
     if let Some(data_packs) = data.get_compound("DataPacks") {
         level_data.data_packs = data_packs_from_nbt(data_packs);
     }
+    if let Some(features) = data.get_list("enabled_features") {
+        level_data.enabled_features = strings_from_nbt(features);
+    }
     if let Some(data_version) = data.get_int("DataVersion") {
         level_data.data_version = data_version;
     }
@@ -307,6 +310,7 @@ fn level_data_to_nbt(info: &LevelData, data: &mut NbtCompound) {
     data.put_double("BorderWarningBlocks", info.border_warning_blocks);
     data.put_double("BorderWarningTime", info.border_warning_time);
     data.put_compound("DataPacks", data_packs_to_nbt(&info.data_packs));
+    data.put_list("enabled_features", strings_to_nbt(&info.enabled_features));
     data.put_int("DataVersion", info.data_version);
 
     // 26.2 difficulty_settings
@@ -473,7 +477,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         // ── Write data/minecraft/*.dat files ─────────────────────────────────
 
         // game_rules.dat
-        if let Err(e) = write_game_rules(level_folder, &info.game_rules, data_version) {
+        if let Err(e) = write_game_rules(level_folder, info, data_version) {
             error!("Failed to write game_rules.dat: {e}");
         }
 
@@ -987,6 +991,9 @@ mod test {
         original.border_center_x = 8.0;
         original.day_time = 12_345;
         original.map_id = 3;
+        original
+            .enabled_features
+            .push("minecraft:minecart_improvements".to_string());
 
         AnvilLevelInfo
             .write_world_info(&original, temp_dir.path())
@@ -1065,6 +1072,7 @@ mod test {
                 ],
                 enabled: vec!["vanilla".to_string()],
             },
+            enabled_features: vec!["minecraft:vanilla".to_string()],
             data_version: 4189,
             day_time: 1727,
             difficulty: Difficulty::Normal,
