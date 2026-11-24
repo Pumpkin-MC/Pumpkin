@@ -140,9 +140,7 @@ pub trait FlowingFluid: Send + Sync {
         props: &FlowingFluidProperties,
     ) {
         let below_pos = block_pos.down();
-        let below_state = world.get_block_state(&below_pos);
-        let below_block = Block::from_state_id(below_state.id);
-        let is_hole = physics::can_be_replaced(below_state, below_block, fluid);
+        let is_hole = physics::can_hold_fluid(world.get_block(&below_pos));
 
         // Try to flow down first
         if is_hole {
