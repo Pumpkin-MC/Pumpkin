@@ -16,6 +16,22 @@ pub fn stroll(speed_modifier: f32) -> OneShot {
     stroll_with_water(speed_modifier, true)
 }
 
+#[must_use]
+pub fn stroll_with_distance(speed_modifier: f32, max_xz_dist: i32, max_y_dist: i32) -> OneShot {
+    OneShot::new(
+        "RandomStroll",
+        vec![(types::WALK_TARGET.id(), MemoryStatus::ValueAbsent)],
+        move |tick| {
+            let target = land_random_pos::get_pos(tick.mob, max_xz_dist, max_y_dist);
+            tick.state.set_optional(
+                types::WALK_TARGET,
+                target.map(|pos| WalkTarget::from_vec(pos, speed_modifier, 0)),
+            );
+            true
+        },
+    )
+}
+
 /// [`stroll`] that, unless `may_stroll_from_water`, only starts out of water.
 #[must_use]
 pub fn stroll_with_water(speed_modifier: f32, may_stroll_from_water: bool) -> OneShot {

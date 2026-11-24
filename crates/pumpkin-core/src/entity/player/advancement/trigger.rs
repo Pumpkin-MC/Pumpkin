@@ -158,7 +158,6 @@ pub enum AdvancementTrigger {
     CrafterRecipeCrafted {
         recipe_id: String,
     },
-    EffectsChanged,
     SpearMobs {
         count: i32,
     },
@@ -216,6 +215,26 @@ impl Player {
         for (player, advancement, award) in to_finish {
             PlayerAdvancement::finish_award(&player, advancement, award);
         }
+    }
+
+    /// Evaluates `minecraft:effects_changed` against the player's current effects and source.
+    pub fn trigger_effects_changed(&self, source: Option<&dyn crate::entity::EntityBase>) {
+        let effects = self.get_active_effects();
+        let origin = self.position();
+
+        self.trigger_criterion_event("minecraft:effects_changed", |cond| match cond {
+            CriterionConditions::EffectsChanged {
+                effects: expected,
+                source: expected_source,
+            } => {
+                expected.matches(&effects)
+                    && expected_source.as_ref().is_none_or(|expected_source| {
+                        source.is_some_and(|source| expected_source.matches_entity(source, origin))
+                    })
+            }
+            CriterionConditions::Custom { .. } => true,
+            _ => false,
+        });
     }
 
     /// Evaluates data-driven advancement triggers for the player.
@@ -868,7 +887,7 @@ impl Player {
                                 return false;
                             }
                             if let Some(p) = player
-                                && p.safe_armor_disallowed == Some(true)
+                                && p.disallows_safe_armor()
                                 && player_wearing_safe_armor
                             {
                                 return false;
@@ -905,7 +924,7 @@ impl Player {
                                 return false;
                             }
                             if let Some(p) = player
-                                && p.safe_armor_disallowed == Some(true)
+                                && p.disallows_safe_armor()
                                 && player_wearing_safe_armor
                             {
                                 return false;
@@ -943,23 +962,7 @@ impl Player {
             } => {
                 self.trigger_criterion_event("minecraft:started_riding", |cond| match cond {
                     CriterionConditions::StartedRiding(Some(pred)) => {
-                        if let Some(vt) = &pred.vehicle_type {
-                            let Some(actual_v) = vehicle_type.as_deref() else {
-                                return false;
-                            };
-                            if !vt.matches(pumpkin_data::tag::RegistryKey::EntityType, actual_v) {
-                                return false;
-                            }
-                        }
-                        if let Some(pt) = &pred.passenger_type {
-                            let Some(actual_p) = passenger_type.as_deref() else {
-                                return false;
-                            };
-                            if !pt.matches(pumpkin_data::tag::RegistryKey::EntityType, actual_p) {
-                                return false;
-                            }
-                        }
-                        true
+                        pred.matches_riding(vehicle_type.as_deref(), passenger_type.as_deref())
                     }
                     CriterionConditions::StartedRiding(None)
                     | CriterionConditions::Custom { .. } => true,
@@ -988,10 +991,6 @@ impl Player {
                         _ => false,
                     },
                 );
-            }
-
-            AdvancementTrigger::EffectsChanged => {
-                self.trigger_criterion_event("minecraft:effects_changed", |_cond| true);
             }
 
             AdvancementTrigger::SpearMobs { count } => {
