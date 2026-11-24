@@ -1455,7 +1455,6 @@ impl Player {
         world.remove_player(self, true).await;
 
         let cylindrical = self.watched_section.load();
-        self.clean_up_chunk_tickets(&world.level);
         if let Ok(mut sender) = self.chunk_sender.lock() {
             sender.reset();
         }
@@ -1485,6 +1484,10 @@ impl Player {
             world.remove_entities_in_chunks(&cleaned_chunks).await;
             level.clean_entity_chunks(&cleaned_chunks);
         }
+
+        // Release tickets last:
+        // Otherwise chunks can unload before live block entities are copied
+        self.clean_up_chunk_tickets(&world.level);
 
         debug!(
             "Removed player id {} from world {} ({} chunks remain cached)",
