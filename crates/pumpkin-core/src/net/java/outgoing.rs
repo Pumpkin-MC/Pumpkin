@@ -210,6 +210,14 @@ async fn apply_transforms(
         } = transform.await;
         ctx.in_transform.store(false, Ordering::Release);
         if let Some(data) = data {
+            // A bigger replacement counts its growth, under the same limit.
+            let growth = data.len().saturating_sub(packet.reserved);
+            if growth > 0 && reserve(growth, ctx).is_none() {
+                decrement_pending_bytes(&ctx.pending_bytes, packet.reserved);
+                complete_dropped(packet.completion);
+                continue;
+            }
+            packet.reserved += growth;
             packet.data = data;
             ready.push_back(packet);
         } else {
@@ -217,7 +225,7 @@ async fn apply_transforms(
             complete_dropped(packet.completion);
         }
         for extra in extras {
-            let Some(reserved) = reserve_extra(&extra, ctx) else {
+            let Some(reserved) = reserve(extra.len(), ctx) else {
                 break;
             };
             ready.push_back(FramePacket {
@@ -231,10 +239,9 @@ async fn apply_transforms(
     ready
 }
 
-/// Counts an extra packet in `pending_bytes` like any queued packet, under the same
-/// `MAX_PENDING_BYTES` limit. `None` (and the connection closed) on overflow.
-fn reserve_extra(extra: &Bytes, ctx: &WriterCtx) -> Option<usize> {
-    let len = extra.len();
+/// Counts bytes a `Transform` added in `pending_bytes` like any queued packet, under
+/// the same `MAX_PENDING_BYTES` limit. `None` (and the connection closed) on overflow.
+fn reserve(len: usize, ctx: &WriterCtx) -> Option<usize> {
     let new_bytes = ctx
         .pending_bytes
         .fetch_add(len, Ordering::AcqRel)
@@ -994,6 +1001,70 @@ mod tests {
         assert_eq!(*writes.lock().unwrap(), vec![1, 1]);
         assert_eq!(pending.load(Ordering::SeqCst), MAX_PENDING_BYTES - 1);
         assert_eq!(done_rx.await, Ok(true));
+    }
+
+    #[tokio::test]
+    async fn bigger_replacement_over_the_buffer_limit_closes_the_connection() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        // The queued packet's byte fills the buffer; its replacement is two bytes.
+        let pending = Arc::new(AtomicUsize::new(MAX_PENDING_BYTES));
+        let close = CancellationToken::new();
+        let (done_tx, done_rx) = oneshot::channel();
+
+        tx.send(
+            OutgoingPacket::high_priority(Bytes::from_static(&[1]), done_tx)
+                .with_transform(Some(transform(Some(&[1, 2]), &[]))),
+        )
+        .unwrap();
+        drop(tx);
+
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: writes.clone(),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            close.clone(),
+            Arc::new(AtomicBool::new(false)),
+            pending.clone(),
+            0,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await;
+
+        assert!(close.is_cancelled(), "overflow closes the connection");
+        assert!(writes.lock().unwrap().is_empty());
+        assert_eq!(pending.load(Ordering::SeqCst), MAX_PENDING_BYTES - 1);
+        assert_eq!(done_rx.await, Ok(false));
+    }
+
+    #[tokio::test]
+    async fn bigger_replacement_is_counted_until_written() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let pending = Arc::new(AtomicUsize::new(1));
+
+        tx.send(packet(1).with_transform(Some(transform(Some(&[1, 2, 3]), &[]))))
+            .unwrap();
+        drop(tx);
+
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: writes.clone(),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            CancellationToken::new(),
+            Arc::new(AtomicBool::new(false)),
+            pending.clone(),
+            0,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await;
+
+        assert_eq!(*writes.lock().unwrap(), vec![3, 1, 2, 3]);
+        assert_eq!(pending.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]

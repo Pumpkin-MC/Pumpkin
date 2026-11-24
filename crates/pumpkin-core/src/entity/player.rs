@@ -3345,7 +3345,7 @@ impl Player {
                         },
                     );
                     self.pair_entities_in_chunks(&world, &commit.sent);
-                    if !commit.awaiting.is_empty() {
+                    if !commit.awaiting.is_empty() || commit.batch_end.is_some() {
                         // A `PacketSentEvent` handler can still cancel these on the writer.
                         let world = world.clone();
                         let uuid = self.gameprofile.id;
@@ -3372,11 +3372,18 @@ impl Player {
                                     }
                                 }
                             }
+                            let end_unsent = match commit.batch_end {
+                                Some(written) => written.await != Ok(true),
+                                None => false,
+                            };
                             if let Some(player) = world.get_player_by_uuid(uuid) {
                                 let mut sender = player
                                     .chunk_sender
                                     .lock()
                                     .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                if end_unsent {
+                                    sender.release_unsent_batch();
+                                }
                                 let mut ready = sender.fail_delivery(&dropped);
                                 ready.extend(sender.mark_delivered(&deliveries));
                                 drop(sender);

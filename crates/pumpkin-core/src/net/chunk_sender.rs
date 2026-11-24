@@ -50,6 +50,9 @@ pub struct JavaCommit {
     /// Queued, but a `PacketSentEvent` handler can still cancel them on the writer.
     /// Not ready until settled with [`ChunkSender::mark_delivered`] / [`ChunkSender::fail_delivery`].
     pub awaiting: Vec<JavaDelivery>,
+    /// The batch's `CChunkBatchEnd`, when a `PacketSentEvent` handler can still cancel
+    /// it. `false` -> call [`ChunkSender::release_unsent_batch`].
+    pub batch_end: Option<tokio::sync::oneshot::Receiver<bool>>,
 }
 
 pub struct JavaDelivery {
@@ -658,15 +661,29 @@ impl ChunkSender {
 
         let sent_count = commit.sent.len() + commit.awaiting.len();
         // A started batch is always closed. The client acks every `CChunkBatchEnd` it receives,
-        // so only a queued one counts as in flight
+        // so only a queued one counts as in flight; one a handler cancels is released again.
         if let Some(java_client) = batch_client
-            && java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16))
+            && let Ok(end) = java_client.serialize_packet(&CChunkBatchEnd::new(sent_count as u16))
         {
-            self.in_flight_batches = self.in_flight_batches.saturating_add(1);
+            match java_client.try_enqueue_packet_data_tracked(end) {
+                Enqueued::Dropped => {}
+                Enqueued::Queued => {
+                    self.in_flight_batches = self.in_flight_batches.saturating_add(1);
+                }
+                Enqueued::Tracked(written) => {
+                    self.in_flight_batches = self.in_flight_batches.saturating_add(1);
+                    commit.batch_end = Some(written);
+                }
+            }
         }
         self.send_quota -= sent_count as f32;
 
         commit
+    }
+
+    /// A `CChunkBatchEnd` counted in flight never reached the client, so no ack will come.
+    pub const fn release_unsent_batch(&mut self) {
+        self.in_flight_batches = self.in_flight_batches.saturating_sub(1);
     }
 
     /// Marks `pos` sent but not ready until the returned token is settled.
