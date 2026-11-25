@@ -339,6 +339,7 @@ impl EntityBase for SplashPotionEntity {
         }
 
         let owner = self.thrown.owner.get(&world);
+        let effect_source: &dyn crate::entity::EntityBase = owner.as_deref().unwrap_or(self);
         for (cand, scale) in affected {
             if let Some(living) = cand.get_living_entity() {
                 crate::item::potion::PotionContents::apply_effects_to(
@@ -350,6 +351,7 @@ impl EntityBase for SplashPotionEntity {
                         direct: self,
                         owner: owner.as_deref(),
                     }),
+                    Some(effect_source),
                 );
             }
         }

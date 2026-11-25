@@ -7,12 +7,9 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
-use crate::{
-    block::{
-        BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
-        RandomTickArgs,
-    },
-    world::World,
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
+    RandomTickArgs,
 };
 
 #[pumpkin_block("minecraft:sugar_cane")]
@@ -84,7 +81,7 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> boo
         for direction in HorizontalFacing::all() {
             let neighbor_pos = below.offset(direction.to_offset());
             let (block, state) = block_accessor.get_block_and_state(&neighbor_pos);
-            let fluid = World::get_fluid_from_state_id(state.id);
+            let fluid = pumpkin_data::fluid::Fluid::of_block_state(state.id);
             if fluid.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
                 || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
             {
