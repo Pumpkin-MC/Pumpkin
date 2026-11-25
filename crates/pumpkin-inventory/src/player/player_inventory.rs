@@ -44,6 +44,11 @@ pub struct PlayerInventory {
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
 }
 
+pub struct PlayerInventoryDelivery<'a> {
+    _main: Option<std::sync::RwLockReadGuard<'a, [ItemStack; PlayerInventory::MAIN_SIZE]>>,
+    _equipment: Option<std::sync::MutexGuard<'a, EntityEquipment>>,
+}
+
 impl PlayerInventory {
     /// Size of the main inventory (36 slots: 27 storage + 9 hotbar).
     pub const MAIN_SIZE: usize = 36;
@@ -164,19 +169,100 @@ impl PlayerInventory {
         let Some(slot) = self.equipment_slots.get(&Self::OFF_HAND_SLOT) else {
             return (ItemStack::EMPTY.clone(), ItemStack::EMPTY.clone());
         };
+        let mut main_inv = self
+            .main_inventory
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut equipment = self
             .entity_equipment
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let selected = self.get_selected_slot() as usize;
-        let mut main_inv = self
-            .main_inventory
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let main_hand_item = main_inv[selected].clone();
         let new_main = equipment.put(slot, main_hand_item.clone());
         main_inv[selected] = new_main.clone();
         (new_main, main_hand_item)
+    }
+
+    /// Swaps an item under the same lock order as hand swapping.
+    pub fn swap_equippable(
+        &self,
+        hand: Hand,
+        destination: &EquipmentSlot,
+        expected: &ItemStack,
+        creative: bool,
+    ) -> Option<Vec<ItemStack>> {
+        use pumpkin_data::data_component_impl::UseRemainderImpl;
+
+        let source = match hand {
+            Hand::Right => EquipmentSlot::MAIN_HAND,
+            Hand::Left => EquipmentSlot::OFF_HAND,
+        };
+        if source == *destination {
+            return None;
+        }
+        let mut main = self
+            .main_inventory
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let selected = self.get_selected_slot() as usize;
+        let held = if source == EquipmentSlot::MAIN_HAND {
+            main[selected].clone()
+        } else {
+            equipment.get(&source)
+        };
+        if held.uid != expected.uid || !held.are_equal(expected) {
+            return None;
+        }
+        let current = if *destination == EquipmentSlot::MAIN_HAND {
+            main[selected].clone()
+        } else {
+            equipment.get(destination)
+        };
+        if (!creative && current.has_prevent_armor_change())
+            || current.are_items_and_components_equal(&held)
+        {
+            return None;
+        }
+        let mut extras = Vec::new();
+        let mut next_hand = if held.item_count > 1 {
+            let mut remainder = held.clone();
+            if !creative {
+                remainder.decrement(1);
+            }
+            if !current.is_empty() {
+                extras.push(current);
+            }
+            remainder
+        } else if creative && current.is_empty() {
+            held.clone()
+        } else {
+            current
+        };
+        if held.get_base_use_time() == 0
+            && let Some(component) = held.get_data_component::<UseRemainderImpl>()
+        {
+            next_hand =
+                component.convert_into_remainder(next_hand, held.item_count, creative, |stack| {
+                    extras.push(stack);
+                });
+        }
+        let equipped = held.copy_with_count(1);
+        if *destination == EquipmentSlot::MAIN_HAND {
+            main[selected] = equipped;
+        } else {
+            equipment.put(destination, equipped);
+        }
+        if source == EquipmentSlot::MAIN_HAND {
+            main[selected] = next_hand;
+        } else {
+            equipment.put(&source, next_hand);
+        }
+        Some(extras)
     }
 
     /// Checks if a slot index is a valid hotbar slot.
@@ -446,6 +532,43 @@ impl PlayerInventory {
         }
     }
 
+    /// Holds the physical inventory stable when the represented wire values still match.
+    #[must_use]
+    pub fn lock_matching_slots<'stack>(
+        &self,
+        slots: impl IntoIterator<Item = (usize, &'stack ItemStack)>,
+    ) -> Option<PlayerInventoryDelivery<'_>> {
+        let mut slots = slots.into_iter().peekable();
+        if slots.peek().is_none() {
+            return Some(PlayerInventoryDelivery {
+                _main: None,
+                _equipment: None,
+            });
+        }
+        let main = self
+            .main_inventory
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let equipment = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        slots
+            .all(|(index, expected)| {
+                let Some(current) = main.get(index).or_else(|| {
+                    let key = self.equipment_slots.get(&index)?;
+                    Some(equipment.equipment.get(key).unwrap_or(ItemStack::EMPTY))
+                }) else {
+                    return false;
+                };
+                current.are_equal(expected) && (expected.is_empty() || current.uid == expected.uid)
+            })
+            .then_some(PlayerInventoryDelivery {
+                _main: Some(main),
+                _equipment: Some(equipment),
+            })
+    }
+
     /// Sets the item in the specified slot (synchronously).
     pub fn set_slot(&self, slot: usize, stack: ItemStack) {
         if slot < Self::MAIN_SIZE {
@@ -460,6 +583,37 @@ impl PlayerInventory {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .put(slot_type, stack);
         }
+    }
+
+    /// Commits a change to a physical slot if it still holds the observed stack.
+    pub fn replace_slot_if_same(
+        &self,
+        slot: usize,
+        expected: &ItemStack,
+        update: ItemStack,
+    ) -> bool {
+        let matches =
+            |current: &ItemStack| current.uid == expected.uid && current.are_equal(expected);
+        if slot < Self::MAIN_SIZE {
+            let mut inv = self
+                .main_inventory
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if matches(&inv[slot]) {
+                inv[slot] = update;
+                return true;
+            }
+        } else if let Some(slot) = self.equipment_slots.get(&slot) {
+            let mut equipment = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if equipment.equipment.get(slot).is_some_and(matches) {
+                equipment.put(slot, update);
+                return true;
+            }
+        }
+        false
     }
 
     /// Gives a stack to the player or drops it if inventory is full.

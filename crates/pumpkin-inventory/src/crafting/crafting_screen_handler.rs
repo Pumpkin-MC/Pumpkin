@@ -43,13 +43,13 @@ use pumpkin_data::recipes::{
     CraftingRecipeTypes, RECIPES_CRAFTING, RecipeResultStruct, SpecialCraftingRecipe,
 };
 use pumpkin_data::screen::WindowType;
-use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::codec::recipe::{DynamicRecipe, OwnedCraftingRecipe};
 
 /// The result slot in a crafting screen.
 pub struct ResultSlot {
+    deferred_effects: Option<Arc<Mutex<crate::screen_handler::DeferredScreenEffects>>>,
     /// The crafting inventory (grid) that provides recipe input.
     pub inventory: Arc<dyn RecipeInputInventory>,
     /// Protocol ID for this slot (assigned by screen handler).
@@ -1073,6 +1073,7 @@ impl ResultSlot {
         provider: Option<Arc<dyn RecipeProvider>>,
     ) -> Self {
         Self {
+            deferred_effects: None,
             inventory,
             id: AtomicU8::new(0),
             result: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
@@ -1111,12 +1112,11 @@ impl Slot for ResultSlot {
         self.refill_output();
     }
     fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
-        player.increment_stat(
-            StatisticCategory::Crafted,
-            stack.item.id as i32,
-            stack.item_count as i32,
+        crate::screen_handler::DeferredScreenEffects::publish_or_record(
+            self.deferred_effects.as_deref(),
+            player,
+            crate::screen_handler::ScreenEffect::Crafted(stack.clone()),
         );
-        player.on_recipe_crafted(stack);
         let matched_recipe = self.match_recipe();
         for i in 0..self.inventory.size() {
             let ingredient = self.inventory.get_stack(i);
@@ -1142,7 +1142,11 @@ impl Slot for ResultSlot {
             } else {
                 let mut leftover = remainder;
                 if !player.get_inventory().insert_stack_anywhere(&mut leftover) {
-                    player.drop_item(leftover, false);
+                    crate::screen_handler::DeferredScreenEffects::publish_or_record(
+                        self.deferred_effects.as_deref(),
+                        player,
+                        crate::screen_handler::ScreenEffect::Drop(leftover, false),
+                    );
                 }
             }
         }
@@ -1224,7 +1228,9 @@ pub trait CraftingScreenHandler<I: RecipeInputInventory>:
         crafing_inventory: Arc<dyn RecipeInputInventory>,
         provider: Option<Arc<dyn RecipeProvider>>,
     ) {
-        let result_slot = Arc::new(ResultSlot::new(crafing_inventory.clone(), provider));
+        let mut result_slot = ResultSlot::new(crafing_inventory.clone(), provider);
+        result_slot.deferred_effects = Some(self.get_behaviour().deferred_effects.clone());
+        let result_slot = Arc::new(result_slot);
         self.add_slot(result_slot.clone());
         let width = crafing_inventory.get_width();
         let height = crafing_inventory.get_height();
@@ -1325,7 +1331,7 @@ impl ScreenHandler for CraftingTableScreenHandler {
             if slot_index == 0 {
                 slot.on_quick_move_crafted(stack.clone(), stack_prev.clone());
                 if !stack.is_empty() {
-                    player.drop_item(stack, false);
+                    self.get_behaviour_mut().drop_item(player, stack, false);
                 }
             }
             return stack_prev;
@@ -1342,6 +1348,7 @@ mod tests {
     use pumpkin_data::data_component_impl::EquipmentSlot;
     use pumpkin_data::item::Item;
     use pumpkin_data::sound::Sound;
+    use pumpkin_data::statistic::StatisticCategory;
     use pumpkin_protocol::java::client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
         CSetPlayerInventory, CSetSelectedSlot,
@@ -1548,6 +1555,7 @@ mod tests {
         handler.on_slot_click(0, 0, SlotActionType::Pickup, &player);
 
         assert!(grid_stack(&handler, 1).is_empty());
+        assert!(grid_stack(&handler, 0).is_empty());
     }
 
     #[test]

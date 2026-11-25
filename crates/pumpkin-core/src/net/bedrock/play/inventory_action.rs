@@ -31,8 +31,10 @@ impl BedrockClient {
     #[allow(clippy::too_many_lines, clippy::collapsible_if, clippy::unreachable)]
     pub fn handle_inventory_action(&self, player: &Arc<Player>, packet: SInventoryTransaction) {
         tracing::debug!("handle_inventory_action: packet={:?}", packet);
+        let equipment_before = player.screen_equipment();
         let mut inventory_updated = false;
         let mut updates = Vec::new();
+        let mut drops = Vec::new();
         let result = 0u8;
 
         if packet.actions.is_empty() && packet.legacy_request_id.0 != 0 {
@@ -56,32 +58,36 @@ impl BedrockClient {
                             .get_slot(screen_slot)
                             .get_cloned_stack();
                         if !current_stack.is_empty() {
-                            player.drop_item(current_stack);
-
                             player_screen_handler
                                 .get_slot(screen_slot)
                                 .set_stack(ItemStack::EMPTY.clone());
                             player_screen_handler
                                 .set_received_stack(screen_slot, ItemStack::EMPTY.clone());
+                            drops.push(current_stack);
 
-                            record_update(
-                                &mut updates,
-                                FullContainerName {
-                                    container_name: match legacy_slot.container_id {
-                                        28 => ContainerName::HotBar,
-                                        _ => ContainerName::Inventory,
+                            if let Some((_, container, slot)) =
+                                bedrock_inventory_slot(screen_slot as i16)
+                            {
+                                let container_name = if legacy_slot.container_id == 28 {
+                                    ContainerName::HotBar
+                                } else {
+                                    container
+                                };
+                                record_update(
+                                    &mut updates,
+                                    FullContainerName {
+                                        container_name,
+                                        dynamic_id: None,
                                     },
-                                    dynamic_id: None,
-                                },
-                                slot_id,
-                                ItemStack::EMPTY,
-                            );
+                                    slot as u8,
+                                    ItemStack::EMPTY,
+                                );
+                            }
                             inventory_updated = true;
                         }
                     }
                 }
             }
-            player_screen_handler.send_content_updates();
             drop(player_screen_handler);
         }
 
@@ -92,7 +98,7 @@ impl BedrockClient {
                 let old_stack = descriptor_to_stack(&action.old_item);
                 let new_stack = descriptor_to_stack(&action.new_item);
                 if old_stack.is_empty() && !new_stack.is_empty() {
-                    player.drop_item(new_stack);
+                    drops.push(new_stack);
                 }
             } else if let Some(window_id) = action.window_id {
                 if let Some(screen_slot) =
@@ -105,20 +111,10 @@ impl BedrockClient {
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-                    let is_armor_equipped = player_screen_handler
-                        .get_slot(screen_slot)
-                        .get_stack()
-                        .are_equal(&item_stack);
-
-                    if !is_armor_equipped {
-                        player.sync_screen_slot_equipment(screen_slot, &item_stack);
-                    }
-
                     player_screen_handler
                         .get_slot(screen_slot)
                         .set_stack(item_stack.clone());
                     player_screen_handler.set_received_stack(screen_slot, item_stack);
-                    player_screen_handler.send_content_updates();
                     drop(player_screen_handler);
 
                     inventory_updated = true;
@@ -126,24 +122,13 @@ impl BedrockClient {
             }
         }
 
+        let equipment_committed = player.screen_equipment();
         if inventory_updated {
-            let slots = player
-                .inventory()
-                .main_inventory
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .iter()
-                .map(NetworkItemStackDescriptor::from)
-                .collect();
-            self.try_enqueue_client_packet(&CInventoryContent {
-                container_id: VarUInt(0),
-                slots,
-                full_container_name: FullContainerName {
-                    container_name: ContainerName::Inventory,
-                    dynamic_id: None,
-                },
-                storage_item: NetworkItemStackDescriptor::default(),
-            });
+            player.resync_player_inventory_screen();
+            player.publish_committed_screen_equipment(&equipment_before, &equipment_committed);
+        }
+        for stack in drops {
+            player.drop_item(stack);
         }
 
         match packet.transaction_data {
@@ -169,13 +154,15 @@ impl BedrockClient {
                 };
 
                 if player.gamemode.load() == GameMode::Spectator {
-                    if let Some(factory) = server.block_registry.get_screen_handler_factory(
-                        block,
-                        player,
-                        &data.block_position,
-                        &server,
-                        &world,
-                    ) {
+                    if data.action_type.0 == 0
+                        && let Some(factory) = server.block_registry.get_screen_handler_factory(
+                            block,
+                            player,
+                            &data.block_position,
+                            &server,
+                            &world,
+                        )
+                    {
                         player.open_handled_screen(factory.as_ref(), Some(data.block_position));
                     }
                     return;
@@ -395,8 +382,8 @@ impl BedrockClient {
                                     !current_equipped.are_items_and_components_equal(&held)
                                 };
                                 if should_change {
-                                    player.enqueue_equipment_change(equippable.slot, &held);
-
+                                    let slot = equippable.slot.clone();
+                                    let equipped = held.clone();
                                     let inventory = player.inventory();
                                     let mut equipment_guard = inventory
                                         .entity_equipment
@@ -404,7 +391,7 @@ impl BedrockClient {
                                         .unwrap_or_else(std::sync::PoisonError::into_inner);
                                     let equip_item = equipment_guard
                                         .equipment
-                                        .entry(equippable.slot.clone())
+                                        .entry(slot.clone())
                                         .or_insert_with(|| ItemStack::EMPTY.clone());
                                     if equip_item.is_empty() {
                                         *equip_item = held.clone();
@@ -416,6 +403,7 @@ impl BedrockClient {
                                     }
                                     drop(equipment_guard);
                                     player.inventory().set_stack_in_hand(hand, held.clone());
+                                    player.enqueue_equipment_change(&slot, &equipped);
                                 }
                             }
                         }
@@ -516,19 +504,9 @@ impl BedrockClient {
                 }
             }
             TransactionData::ReleaseItem(_data) => {
-                let item_in_use = player
-                    .living_entity
-                    .item_in_use
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
-                if let Some(stack) = item_in_use {
-                    let Some(server) = player.world().server.upgrade() else {
-                        return;
-                    };
-                    server.item_registry.on_stopped_using(&stack, player);
+                if let Some(server) = player.world().server.upgrade() {
+                    server.item_registry.release_item(player);
                 }
-                player.living_entity.clear_active_hand();
             }
         }
 
@@ -538,9 +516,19 @@ impl BedrockClient {
                 ItemStackResponseSlotInfo,
             };
 
+            use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo;
             let mut container_infos = Vec::new();
+            let mut affected = super::item_stack_request::AcknowledgedSlots::new();
             if result == 0 {
                 for update in updates {
+                    affected.push((
+                        ItemStackRequestSlotInfo {
+                            container_name: update.container_name.clone(),
+                            slot_id: update.slot_id,
+                            stack_id: update.stack_id.0,
+                        },
+                        ItemStack::EMPTY.clone(),
+                    ));
                     let container_info = container_infos.iter_mut().find(
                         |info: &&mut ItemStackResponseContainerInfo| {
                             info.full_container_name == update.container_name
@@ -568,13 +556,24 @@ impl BedrockClient {
                 }
             }
 
-            self.try_enqueue_client_packet(&CItemStackResponse {
+            let response = CItemStackResponse {
                 responses: vec![ItemStackResponseInfo {
                     result,
                     client_request_id: packet.legacy_request_id,
                     containers: container_infos,
                 }],
-            });
+            };
+            let personal: pumpkin_inventory::screen_handler::SharedScreenHandler =
+                player.player_screen_handler.clone();
+            if !self.enqueue_stack_request_response(
+                player,
+                &personal,
+                &[affected],
+                &response,
+                false,
+            ) {
+                player.resync_player_inventory_screen();
+            }
         }
     }
 }

@@ -42,6 +42,38 @@ pub mod management;
 mod proxy;
 pub mod query;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InventoryUpdateScope {
+    PlayerSlot(usize),
+    Content { window: i32, includes_cursor: bool },
+    Slot { window: i32, slot: i32 },
+    Cursor,
+    Property { window: i32, property: i32 },
+}
+
+impl InventoryUpdateScope {
+    fn overlaps(self, other: Self) -> bool {
+        use InventoryUpdateScope::{Content, Cursor, Slot};
+        match (self, other) {
+            (Content { window: a, .. }, Content { window: b, .. } | Slot { window: b, .. })
+            | (Slot { window: a, .. }, Content { window: b, .. }) => a == b,
+            (
+                Cursor,
+                Content {
+                    includes_cursor, ..
+                },
+            )
+            | (
+                Content {
+                    includes_cursor, ..
+                },
+                Cursor,
+            ) => includes_cursor,
+            _ => self == other,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 pub struct GameProfile {
     pub id: Uuid,

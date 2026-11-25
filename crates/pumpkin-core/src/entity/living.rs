@@ -15,7 +15,7 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
-    AtomicBool, AtomicI32, AtomicU8,
+    AtomicBool, AtomicI32, AtomicU8, AtomicU64,
     Ordering::{Relaxed, SeqCst},
 };
 use tracing::warn;
@@ -60,8 +60,7 @@ use pumpkin_protocol::java::client::play::{
     CHurtAnimation, CSwingArm, CTakeItemEntity, CUpdateMobEffect,
 };
 use pumpkin_protocol::{
-    codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CSetEquipment, MetadataSerializer},
+    java::client::play::MetadataSerializer,
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -99,6 +98,8 @@ pub struct LivingEntity {
     pub item_use_time: AtomicI32,
     pub item_in_use: std::sync::Mutex<Option<ItemStack>>,
     pub active_hand: std::sync::Mutex<Option<Hand>>,
+    item_use_revision: AtomicU64,
+    released_item_use_revision: AtomicU64,
     pub recent_kinetic_enemies: std::sync::Mutex<FxHashMap<i32, i32>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
@@ -274,17 +275,28 @@ impl LivingEntity {
             .auto_spin_attack_item_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((item_stack, slot));
-        self.set_living_flag(Self::USING_RIPTIDE_FLAG, true);
+        self.publish_riptide_flag(true);
     }
 
     pub fn stop_auto_spin_attack(&self) {
         self.auto_spin_attack_ticks.store(0, Relaxed);
-        self.set_living_flag(Self::USING_RIPTIDE_FLAG, false);
         self.auto_spin_attack_dmg.store(0.0);
         *self
             .auto_spin_attack_item_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.publish_riptide_flag(false);
+    }
+
+    fn publish_riptide_flag(&self, spinning: bool) {
+        use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::DAMAGE_NEARBY_MOBS;
+        self.set_living_flag(Self::USING_RIPTIDE_FLAG, spinning);
+        Self::set_bedrock_use_bit(
+            &self.entity.bedrock_flags,
+            1i64 << DAMAGE_NEARBY_MOBS,
+            spinning,
+        );
+        self.send_living_bedrock_flags();
     }
 
     /// Vanilla `LivingEntity.checkAutoSpinAttack`.
@@ -500,6 +512,8 @@ impl LivingEntity {
             item_use_time: AtomicI32::new(0),
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
+            item_use_revision: AtomicU64::new(0),
+            released_item_use_revision: AtomicU64::new(0),
             recent_kinetic_enemies: std::sync::Mutex::new(FxHashMap::default()),
             livings_flags: AtomicU8::new(0),
             active_effects: std::sync::Mutex::new(FxHashMap::default()),
@@ -645,71 +659,45 @@ impl LivingEntity {
     }
 
     pub fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
+        use crate::world::entity_tracker::EquippedStacks;
+
         if equipment.is_empty() {
             return;
         }
-        self.apply_and_send_equipment_attribute_modifiers(equipment);
-
-        if equipment
-            .iter()
-            .any(|(slot, _)| *slot == EquipmentSlot::FEET)
+        let world = self.entity.world.load_full();
+        let player = (self.entity.entity_type == &EntityType::PLAYER)
+            .then(|| world.get_player_by_id(self.entity_id()))
+            .flatten();
+        let mut attributes = Vec::new();
+        let mut boots = None;
         {
-            let pos_f64 = self.entity.pos.load();
+            let current = EquippedStacks::lock(self, player.as_deref());
             for (slot, stack) in equipment {
-                if *slot == EquipmentSlot::FEET && !stack.is_empty() {
-                    crate::enchantment::EnchantmentHelper::on_location_changed(
-                        &self.entity,
-                        stack,
-                        pos_f64,
-                    );
+                if !current.matches(slot, Some(stack), true) {
+                    continue;
+                }
+                self.apply_equipment_slot_attribute_modifiers(slot, stack, &mut attributes);
+                if *slot == EquipmentSlot::MAIN_HAND {
+                    for attribute in self.apply_weapon_attributes(stack) {
+                        push_unique_attribute(&mut attributes, &attribute);
+                    }
+                } else if *slot == EquipmentSlot::FEET && !stack.is_empty() {
+                    boots = Some(stack);
                 }
             }
         }
-
-        let equipment_java: Vec<(i8, ItemStackSerializer)> = equipment
-            .iter()
-            .map(|(slot, stack)| {
-                (
-                    slot.discriminant(),
-                    ItemStackSerializer::from(stack.clone()),
-                )
-            })
-            .collect();
-        let je_packet = CSetEquipment::new(self.entity_id().into(), equipment_java);
-        let world = self.entity.world.load();
-        world.send_to_tracking_players(&self.entity, &je_packet);
-
-        let mut armor_changed = false;
-        for (slot, stack) in equipment {
-            if *slot == EquipmentSlot::MAIN_HAND {
-                self.update_weapon_attributes(stack);
-            }
-            if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
-                let window_id = if *slot == EquipmentSlot::OFF_HAND {
-                    pumpkin_protocol::bedrock::server::inventory_transaction::WINDOW_ID_OFF_HAND
-                        as u8
-                } else {
-                    0
-                };
-
-                let be_packet = pumpkin_protocol::bedrock::client::CMobEquipment {
-                    target_runtime_id: (self.entity_id() as u64).into(),
-                    item: pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::from(
-                        stack,
-                    ),
-                    slot: 0,
-                    selected_slot: 0,
-                    container_id: window_id,
-                };
-                world.send_to_tracking_players_bedrock(&self.entity, &be_packet);
-            } else if slot.is_armor_slot() || matches!(slot, EquipmentSlot::Body(_)) {
-                armor_changed = true;
-            }
+        if let Some(boots) = boots {
+            crate::enchantment::EnchantmentHelper::on_location_changed(
+                &self.entity,
+                boots,
+                self.entity.pos.load(),
+            );
         }
-
-        if armor_changed {
-            let armor_packet = self.bedrock_armor_packet(equipment);
-            world.send_to_tracking_players_bedrock(&self.entity, &armor_packet);
+        if !attributes.is_empty() {
+            crate::entity::attributes::send_guarded_attribute_updates(self, &attributes);
+        }
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id()) {
+            tracked.broadcast_equipment(self, equipment);
         }
     }
 
@@ -749,7 +737,7 @@ impl LivingEntity {
     /// attribute map and sends the changed attributes to clients. Without this
     /// the client never sees the reduced attack speed and does not show the
     /// crosshair attack indicator.
-    fn update_weapon_attributes(&self, stack: &ItemStack) {
+    fn apply_weapon_attributes(&self, stack: &ItemStack) -> Vec<Attributes> {
         let component = stack.get_data_component::<AttributeModifiersImpl>();
 
         // Single pass over the item's modifiers, split by attribute.
@@ -798,9 +786,7 @@ impl LivingEntity {
                 changed.push(attribute);
             }
         }
-        if !changed.is_empty() {
-            crate::entity::attributes::send_attribute_updates_for_living(self, changed);
-        }
+        changed
     }
 
     /// Applies item `attribute_modifiers` for the given slots and notifies clients.
@@ -1030,28 +1016,45 @@ impl LivingEntity {
         stack: &ItemStack,
         event: pumpkin_data::game_event::GameEvent,
     ) {
-        if stack
-            .get_data_component::<pumpkin_data::data_component_impl::UseEffectsImpl>()
-            .is_none_or(|u| u.interact_vibrations)
-        {
-            self.entity
-                .world
-                .load()
-                .emit_game_event(event.name(), self.entity.pos.load());
+        if Self::use_vibration_enabled(stack) {
+            self.emit_use_vibration(event);
         }
     }
 
+    fn use_vibration_enabled(stack: &ItemStack) -> bool {
+        stack
+            .get_data_component::<pumpkin_data::data_component_impl::UseEffectsImpl>()
+            .is_none_or(|effects| effects.interact_vibrations)
+    }
+
+    fn emit_use_vibration(&self, event: pumpkin_data::game_event::GameEvent) {
+        self.entity
+            .world
+            .load()
+            .emit_game_event(event.name(), self.entity.pos.load());
+    }
+
     pub fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
-        let is_blocking = stack.get_data_component::<BlocksAttacksImpl>().is_some();
-        self.cause_use_vibration(
-            &stack,
-            pumpkin_data::game_event::GameEvent::ItemInteractStart,
-        );
-        self.item_use_time.store(duration, Ordering::Relaxed);
-        *self
+        self.start_active_hand(hand, stack, duration, true);
+    }
+
+    pub(crate) fn start_blocking_if_idle(&self, hand: Hand, stack: ItemStack, duration: i32) {
+        self.start_active_hand(hand, stack, duration, false);
+    }
+
+    fn start_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32, replace: bool) {
+        let blocking = stack.get_data_component::<BlocksAttacksImpl>().is_some();
+        let vibrates = Self::use_vibration_enabled(&stack);
+        let mut item_in_use = self
             .item_in_use
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(stack);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !replace && self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG != 0 {
+            return;
+        }
+        let revision = self.item_use_revision.fetch_add(1, Relaxed).wrapping_add(1);
+        self.item_use_time.store(duration, Relaxed);
+        *item_in_use = Some(stack);
         *self
             .active_hand
             .lock()
@@ -1062,107 +1065,253 @@ impl LivingEntity {
             .clear();
         self.set_living_flag(Self::USING_ITEM_FLAG, true);
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
-        if is_blocking {
-            self.set_bedrock_blocking(true);
+        self.set_item_use_flags(true, blocking);
+        drop(item_in_use);
+        if vibrates {
+            self.emit_use_vibration(pumpkin_data::game_event::GameEvent::ItemInteractStart);
+        }
+        if self.item_use_revision.load(Relaxed) == revision {
+            self.send_living_bedrock_flags();
         }
     }
 
     fn set_living_flag(&self, flag: u8, value: bool) {
-        let index = flag;
-        let mut b = self.livings_flags.load(Ordering::Relaxed);
         if value {
-            b |= index;
+            self.livings_flags.fetch_or(flag, Relaxed);
         } else {
-            b &= !index;
+            self.livings_flags.fetch_and(!flag, Relaxed);
         }
-        self.livings_flags.store(b, Ordering::Relaxed);
-
-        let bedrock_flag = if flag == Self::USING_ITEM_FLAG {
-            Some(pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM)
-        } else if flag == Self::USING_RIPTIDE_FLAG {
-            Some(
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::DAMAGE_NEARBY_MOBS,
-            )
-        } else {
-            None
-        };
-        let bedrock_meta = bedrock_flag.map(|index| {
-            let mask = 1i64 << index;
-            if value {
-                self.entity.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
-            } else {
-                self.entity
-                    .bedrock_flags
-                    .fetch_and(!mask, Ordering::Relaxed);
-            }
-
-            let mut meta =
-                pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
-            meta.set(
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
-                pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int64(
-                    self.entity.bedrock_flags.load(Ordering::Relaxed),
-                ),
-            );
-            meta
-        });
-
-        self.entity
-            .set_synced_data(tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS, b);
-        if let Some(bedrock_meta) = &bedrock_meta {
-            self.entity.send_bedrock_actor_data(bedrock_meta);
-        }
+        self.entity.set_synced_data(
+            tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS,
+            self.livings_flags.load(Relaxed),
+        );
     }
 
     pub fn set_bedrock_blocking(&self, blocking: bool) {
-        let flag = pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::BLOCKING;
-        let index = (flag - 64) as u8;
-        let mask = 1i64 << index;
-        if blocking {
-            self.entity
-                .bedrock_flags_two
-                .fetch_or(mask, Ordering::Relaxed);
-        } else {
-            self.entity
-                .bedrock_flags_two
-                .fetch_and(!mask, Ordering::Relaxed);
-        }
-
-        let mut meta =
-            pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
-        meta.set(
-            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS_TWO,
-            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int64(
-                self.entity.bedrock_flags_two.load(Ordering::Relaxed),
-            ),
+        use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::BLOCKING;
+        Self::set_bedrock_use_bit(
+            &self.entity.bedrock_flags_two,
+            1i64 << (BLOCKING - 64),
+            blocking,
         );
-        self.entity.send_bedrock_actor_data(&meta);
+        self.send_living_bedrock_flags();
+    }
+
+    fn set_bedrock_use_bit(word: &std::sync::atomic::AtomicI64, mask: i64, set: bool) {
+        if set {
+            word.fetch_or(mask, Relaxed);
+        } else {
+            word.fetch_and(!mask, Relaxed);
+        }
+    }
+
+    fn set_item_use_flags(&self, using: bool, blocking: bool) {
+        use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::{
+            BLOCKING, USING_ITEM,
+        };
+
+        Self::set_bedrock_use_bit(&self.entity.bedrock_flags, 1i64 << USING_ITEM, using);
+        Self::set_bedrock_use_bit(
+            &self.entity.bedrock_flags_two,
+            1i64 << (BLOCKING - 64),
+            blocking,
+        );
+    }
+
+    fn send_living_bedrock_flags(&self) {
+        use pumpkin_protocol::{
+            bedrock::client::set_actor_data::{
+                CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList,
+                entity_data_key,
+            },
+            packet::Packet,
+        };
+        use std::cell::Cell;
+
+        let world = self.entity.world.load_full();
+        let actor = world.get_entity_by_id(self.entity_id());
+        let tracked = world.entity_tracker.get_tracked_entity(self.entity_id());
+        let chunk = self.entity.chunk_pos.load();
+        let is_viewer = |recipient: &super::player::Player| {
+            recipient.entity_id() == self.entity_id()
+                || tracked.as_ref().map_or_else(
+                    || {
+                        recipient
+                            .watched_section
+                            .load()
+                            .is_within_distance(chunk.x, chunk.y)
+                    },
+                    |tracked| tracked.is_seen_by(&recipient.gameprofile.id),
+                )
+        };
+        let keys = [entity_data_key::FLAGS, entity_data_key::FLAGS_TWO];
+        let current_flags = || {
+            let base = self.entity.bedrock_metadata();
+            let species = actor
+                .as_deref()
+                .and_then(EntityBase::get_mob)
+                .and_then(super::mob::Mob::mob_metadata)
+                .map(|metadata| metadata.to_bedrock_actor_data());
+            let word = |data: &SyncedActorDataList, key| match data.0.get(&key) {
+                Some(MetadataValue::Int64(value)) => *value,
+                _ => 0,
+            };
+            keys.map(|key| word(&base, key) | species.as_ref().map_or(0, |data| word(data, key)))
+        };
+
+        for _ in 0..2 {
+            let flags = current_flags();
+            let mut actor_data = SyncedActorDataList::new();
+            for (key, value) in keys.into_iter().zip(flags) {
+                actor_data.set(key, MetadataValue::Int64(value));
+            }
+            let packet = CSetActorData {
+                target_runtime_id: VarULong(self.entity_id() as u64),
+                actor_data,
+                synced_properties: PropertySyncData::default(),
+                tick: VarULong(0),
+            };
+            let changed = Cell::new(false);
+            for recipient in world
+                .players
+                .load()
+                .iter()
+                .filter(|recipient| is_viewer(recipient))
+            {
+                if let Some(client) = recipient.client.bedrock()
+                    && let Ok(data) = client.serialize_packet(&packet)
+                {
+                    let protocol = client.protocol_version.load(Relaxed);
+                    let protocol = if protocol == 0 {
+                        pumpkin_world::CURRENT_BEDROCK_MC_PROTOCOL
+                    } else {
+                        protocol
+                    };
+                    client.try_enqueue_packet_data_if(
+                        data,
+                        CSetActorData::PACKET_ID,
+                        |payload| {
+                            keys.into_iter().any(|key| {
+                                CSetActorData::updates_key(
+                                    payload,
+                                    packet.target_runtime_id,
+                                    protocol,
+                                    key,
+                                )
+                                .unwrap_or(false)
+                            })
+                        },
+                        || {
+                            if self.entity.is_removed()
+                                || !Arc::ptr_eq(&world, &self.entity.world.load())
+                                || !Arc::ptr_eq(&world, &recipient.world())
+                                || !is_viewer(recipient)
+                            {
+                                return None;
+                            }
+                            if current_flags() != flags {
+                                changed.set(true);
+                                return None;
+                            }
+                            Some(())
+                        },
+                    );
+                }
+            }
+            if !changed.get() {
+                return;
+            }
+        }
     }
 
     pub fn clear_active_hand(&self) {
-        let prev = self
+        self.clear_active_hand_if(self.item_use_revision.load(Relaxed));
+    }
+
+    pub(crate) fn release_active_hand(
+        &self,
+        held_stack: impl FnOnce(Hand) -> ItemStack,
+        on_release: impl FnOnce(&ItemStack),
+    ) {
+        let (item_id, hand, revision) = {
+            let active = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(stack) = active.as_ref() else {
+                return;
+            };
+            let hand = *self
+                .active_hand
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let revision = self.item_use_revision.load(Relaxed);
+            if self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG == 0
+                || self.released_item_use_revision.swap(revision, Relaxed) == revision
+            {
+                return;
+            }
+            (stack.item.id, hand, revision)
+        };
+        if let Some(hand) = hand {
+            let held = held_stack(hand);
+            if held.item.id == item_id {
+                let mut active = self
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if self.item_use_revision.load(Relaxed) != revision {
+                    return;
+                }
+                *active = Some(held.clone());
+                drop(active);
+                on_release(&held);
+            }
+        }
+        self.clear_active_hand_if(revision);
+    }
+
+    fn clear_active_hand_if(&self, revision: u64) {
+        let (vibrates, stopping_revision) = {
+            let item_in_use = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if self.item_use_revision.load(Relaxed) != revision {
+                return;
+            }
+            let vibrates = self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG != 0
+                && item_in_use
+                    .as_ref()
+                    .is_some_and(Self::use_vibration_enabled);
+            let stopping_revision = revision.wrapping_add(1);
+            self.item_use_revision.store(stopping_revision, Relaxed);
+            self.recent_kinetic_enemies
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clear();
+            self.set_living_flag(Self::USING_ITEM_FLAG, false);
+            self.set_item_use_flags(false, false);
+            (vibrates, stopping_revision)
+        };
+        if vibrates {
+            self.emit_use_vibration(pumpkin_data::game_event::GameEvent::ItemInteractFinish);
+        }
+        let mut item_in_use = self
             .item_in_use
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if let Some(ref stack) = prev {
-            self.cause_use_vibration(
-                stack,
-                pumpkin_data::game_event::GameEvent::ItemInteractFinish,
-            );
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.item_use_revision.load(Relaxed) != stopping_revision {
+            return;
         }
+        *item_in_use = None;
         *self
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-        self.recent_kinetic_enemies
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-        self.item_use_time.store(0, Ordering::Relaxed);
-
-        self.set_living_flag(Self::USING_ITEM_FLAG, false);
-        self.set_bedrock_blocking(false);
+        self.item_use_time.store(0, Relaxed);
+        drop(item_in_use);
+        self.send_living_bedrock_flags();
     }
 
     pub fn was_recently_stabbed(&self, target_id: i32, now: i32, allowed_ticks: i32) -> bool {
@@ -1185,7 +1334,8 @@ impl LivingEntity {
             .item_in_use
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(item) = item_in_use.as_ref()
+        if self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG != 0
+            && let Some(item) = item_in_use.as_ref()
             && let Some(blocks_attacks) = item.get_data_component::<BlocksAttacksImpl>()
         {
             let use_time = self.item_use_time.load(Ordering::Relaxed);
@@ -3331,7 +3481,7 @@ impl LivingEntity {
             return 0.0;
         }
 
-        let Some(blocks_attacks) = ({
+        let Some((blocks_attacks, use_revision)) = ({
             let item_in_use = self
                 .item_in_use
                 .lock()
@@ -3339,6 +3489,7 @@ impl LivingEntity {
             item_in_use
                 .as_ref()
                 .and_then(|stack| stack.get_data_component::<BlocksAttacksImpl>().cloned())
+                .map(|blocks_attacks| (blocks_attacks, self.item_use_revision.load(Relaxed)))
         }) else {
             return 0.0;
         };
@@ -3389,7 +3540,9 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(hand) = active_hand {
+        if let Some(hand) = active_hand
+            && self.item_use_revision.load(Relaxed) == use_revision
+        {
             let slot = if hand == Hand::Left {
                 EquipmentSlot::OFF_HAND
             } else {
@@ -3414,34 +3567,36 @@ impl LivingEntity {
                     let broke = player.damage_item_in_slot(&slot, durability_damage);
                     let empty = player.inventory.get_stack_in_hand(hand).is_empty();
                     if broke && empty {
-                        self.clear_active_hand();
+                        self.clear_active_hand_if(use_revision);
                     }
                 }
             } else if durability_damage > 0 {
-                let mut equipment_guard = self
+                let break_sound = self
                     .entity_equipment
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
-                    let break_sound = stack
-                        .get_data_component::<pumpkin_data::data_component_impl::BreakSoundImpl>()
-                        .map(|bs| bs.sound.clone());
-                    if stack.damage_item(durability_damage) == DamageResult::Broken {
-                        if let Some(ref sound) = break_sound {
-                            world.play_sound_event(sound, SoundCategory::Neutral, &player_pos);
-                        }
-                        world.send_entity_status(
-                            &self.entity,
-                            crate::entity::equipment_break_status(&slot),
-                            ActorEventID::None,
-                        );
-                        *stack = ItemStack::EMPTY.clone();
-                        let broken_stack = stack.clone();
-                        drop(equipment_guard);
-
-                        self.send_equipment_changes(&[(slot, broken_stack)]);
-                        self.clear_active_hand();
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .equipment
+                    .get_mut(&slot)
+                    .and_then(|stack| {
+                        let sound = stack
+                            .get_data_component::<pumpkin_data::data_component_impl::BreakSoundImpl>()
+                            .map(|bs| bs.sound.clone());
+                        (stack.damage_item(durability_damage) == DamageResult::Broken).then(|| {
+                            *stack = ItemStack::EMPTY.clone();
+                            sound
+                        })
+                    });
+                if let Some(break_sound) = break_sound {
+                    if let Some(ref sound) = break_sound {
+                        world.play_sound_event(sound, SoundCategory::Neutral, &player_pos);
                     }
+                    world.send_entity_status(
+                        &self.entity,
+                        crate::entity::equipment_break_status(&slot),
+                        ActorEventID::None,
+                    );
+                    self.publish_cleared_mob_shield(world, &slot);
+                    self.clear_active_hand_if(use_revision);
                 }
             }
 
@@ -3476,7 +3631,7 @@ impl LivingEntity {
                     {
                         player.start_cooldown(blocking_key, cooldown_ticks);
                     }
-                    self.clear_active_hand();
+                    self.clear_active_hand_if(use_revision);
                     if let Some(ref disabled_sound) = blocks_attacks.disabled_sound {
                         world.play_sound_event(disabled_sound, SoundCategory::Players, &player_pos);
                     }
@@ -3486,6 +3641,36 @@ impl LivingEntity {
         }
 
         damage_blocked
+    }
+
+    fn publish_cleared_mob_shield(&self, world: &crate::world::World, slot: &EquipmentSlot) {
+        let mut attributes = Vec::new();
+        {
+            let equipment = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // A replacement installed by the normal equipment setter was already published.
+            if equipment
+                .equipment
+                .get(slot)
+                .is_some_and(|stack| !stack.is_empty())
+            {
+                return;
+            }
+            self.apply_equipment_slot_attribute_modifiers(slot, ItemStack::EMPTY, &mut attributes);
+            if *slot == EquipmentSlot::MAIN_HAND {
+                for attribute in self.apply_weapon_attributes(ItemStack::EMPTY) {
+                    push_unique_attribute(&mut attributes, &attribute);
+                }
+            }
+        }
+        if !attributes.is_empty() {
+            crate::entity::attributes::send_guarded_attribute_updates(self, &attributes);
+        }
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id()) {
+            tracked.send_cleared_hand_equipment(self, slot);
+        }
     }
 
     pub fn do_hurt_equipment(&self, damage_type: DamageType, damage: f32, slots: &[EquipmentSlot]) {

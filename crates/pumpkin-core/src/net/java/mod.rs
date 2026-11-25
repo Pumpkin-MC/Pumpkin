@@ -93,6 +93,55 @@ fn frame_packet(packet_id: i32, payload: &[u8]) -> Option<Bytes> {
     Some(framed.into())
 }
 
+fn inventory_update_scope(
+    mut data: &[u8],
+    version: JavaMinecraftVersion,
+) -> Option<super::InventoryUpdateScope> {
+    use super::InventoryUpdateScope::{Content, Cursor, PlayerSlot, Property, Slot};
+    use pumpkin_protocol::java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory,
+    };
+
+    let id = data.get_var_int().ok()?.0;
+    if id == CSetPlayerInventory::to_id(version) {
+        return Some(PlayerSlot(
+            usize::try_from(data.get_var_int().ok()?.0).ok()?,
+        ));
+    }
+    if id == CSetCursorItem::to_id(version) {
+        return Some(Cursor);
+    }
+    if id == CSetContainerContent::to_id(version) {
+        return Some(Content {
+            window: data.get_container_id(&version).ok()?.0,
+            includes_cursor: version >= JavaMinecraftVersion::V_1_17_1,
+        });
+    }
+    if id == CSetContainerSlot::to_id(version) {
+        let window = i32::from(data.get_container_id(&version).ok()?.0 as i8);
+        if version >= JavaMinecraftVersion::V_1_17_1 {
+            data.get_var_int().ok()?;
+        }
+        let slot = data.get_i16_be().ok()?;
+        return Some(match window {
+            -1 => Cursor,
+            -2 => PlayerSlot(usize::try_from(slot).ok()?),
+            _ => Slot {
+                window,
+                slot: i32::from(slot),
+            },
+        });
+    }
+    if id == CSetContainerProperty::to_id(version) {
+        return Some(Property {
+            window: data.get_container_id(&version).ok()?.0,
+            property: i32::from(data.get_i16_be().ok()?),
+        });
+    }
+    None
+}
+
 #[repr(C)]
 pub struct JavaClient {
     pub id: u64,
@@ -483,7 +532,7 @@ impl JavaClient {
     }
 
     /// Queues packets a `PacketSentEvent` handler added, already in the client's format.
-    fn queue_extra_packets(&self, extras: Vec<Bytes>) {
+    fn queue_extra_packets(&self, extras: impl IntoIterator<Item = Bytes>) {
         for extra in extras {
             let Some(packet_len) = self.reserve_bytes(extra.len()) else {
                 return;
@@ -557,6 +606,60 @@ impl JavaClient {
             self.queue_extra_packets(extras);
         }
         queued
+    }
+
+    pub(crate) fn try_enqueue_packet_data_filtering<T>(
+        &self,
+        packet_data: Bytes,
+        lock_if_current: impl FnOnce() -> Option<T>,
+        filter_stale_extra: impl Fn(Bytes) -> Option<Bytes>,
+    ) {
+        self.try_enqueue_packet_data_projecting(
+            packet_data,
+            lock_if_current,
+            |data, primary, guard| {
+                if guard.is_some() {
+                    Some(data)
+                } else if primary {
+                    None
+                } else {
+                    filter_stale_extra(data)
+                }
+            },
+            |_, _, _| {},
+        );
+    }
+
+    /// Project the observed primary and extras while holding the caller's validation guard.
+    /// The delivery callback runs only for bytes accepted by the send queue.
+    pub(crate) fn try_enqueue_packet_data_projecting<T>(
+        &self,
+        packet_data: Bytes,
+        validate: impl FnOnce() -> T,
+        mut project: impl FnMut(Bytes, bool, &T) -> Option<Bytes>,
+        mut delivered: impl FnMut(&Bytes, bool, &mut T),
+    ) {
+        if self.close_token.is_cancelled() {
+            return;
+        }
+        let (primary, extras) = self.translate_outgoing(packet_data, true);
+        let mut guard = validate();
+        let packets = primary
+            .into_iter()
+            .map(|data| (data, true))
+            .chain(extras.into_iter().map(|data| (data, false)));
+        for (data, is_primary) in packets {
+            let Some(data) = project(data, is_primary, &guard) else {
+                continue;
+            };
+            let Some(length) = self.reserve_bytes(data.len()) else {
+                break;
+            };
+            if !self.queue_outgoing(OutgoingPacket::normal(data.clone()), length) {
+                break;
+            }
+            delivered(&data, is_primary, &mut guard);
+        }
     }
 
     /// Like [`Self::try_enqueue_packet_data`] but does not fire `PacketSentEvent` for
@@ -756,6 +859,94 @@ impl JavaClient {
 
     pub fn serialize_packet<P: ClientPacket>(&self, packet: &P) -> Result<Bytes, WritingError> {
         Self::serialize_packet_for_version(packet, CURRENT_MC_VERSION)
+    }
+
+    pub(crate) fn try_enqueue_inventory_update<P: ClientPacket>(
+        &self,
+        packet: &P,
+        context: Option<pumpkin_inventory::sync_handler::ScreenUpdateContext<'_>>,
+    ) {
+        self.try_enqueue_inventory_update_validated(packet, context, || Some(()));
+    }
+
+    pub(crate) fn try_enqueue_inventory_update_validated<P: ClientPacket, T>(
+        &self,
+        packet: &P,
+        context: Option<pumpkin_inventory::sync_handler::ScreenUpdateContext<'_>>,
+        validate: impl FnOnce() -> Option<T>,
+    ) {
+        if context.is_some_and(|context| context.lock_if_current().is_none()) {
+            return;
+        }
+        let Ok(data) = self.serialize_packet(packet) else {
+            return;
+        };
+        let origin = inventory_update_scope(&data, CURRENT_MC_VERSION);
+        let version = self.version.load();
+        self.try_enqueue_packet_data_filtering(
+            data,
+            || match context {
+                Some(context) => context
+                    .lock_for_delivery(validate)
+                    .map(|(menu, state)| (Some(menu), state)),
+                None => validate().map(|state| (None, state)),
+            },
+            |data| {
+                let overlaps = origin
+                    .zip(inventory_update_scope(&data, version))
+                    .is_some_and(|(origin, extra)| {
+                        self.inventory_update_overlaps(origin, extra, context)
+                    });
+                (!overlaps).then_some(data)
+            },
+        );
+    }
+
+    fn inventory_update_overlaps(
+        &self,
+        origin: super::InventoryUpdateScope,
+        extra: super::InventoryUpdateScope,
+        context: Option<pumpkin_inventory::sync_handler::ScreenUpdateContext<'_>>,
+    ) -> bool {
+        use super::InventoryUpdateScope::{Content, PlayerSlot, Slot};
+        if origin.overlaps(extra) {
+            return true;
+        }
+        let physical = |scope| match scope {
+            PlayerSlot(index) => Some(index),
+            Slot { window: 0, slot } => {
+                pumpkin_inventory::screen_handler::player_screen_inventory_index(slot)
+            }
+            _ => None,
+        };
+        let Some(index) = physical(extra) else {
+            return false;
+        };
+        if let Some(index_in_origin) = physical(origin) {
+            return index == index_in_origin;
+        }
+        let Some(context) = context else {
+            return false;
+        };
+        if !matches!(origin, Content { .. } | Slot { .. }) {
+            return false;
+        }
+        let player = self.player.load();
+        let Some(player) = player.as_ref() else {
+            return false;
+        };
+        let inventory: Arc<dyn pumpkin_inventory::inventory::Inventory> =
+            player.inventory().clone();
+        let screen = context
+            .screen
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        screen
+            .get_slot_index(&inventory, index)
+            .is_some_and(|index| {
+                matches!(origin, Content { .. })
+                    || matches!(origin, Slot { slot, .. } if slot == index as i32)
+            })
     }
 
     /// `false` when the packet was dropped instead (cancelled, closed, buffer full).

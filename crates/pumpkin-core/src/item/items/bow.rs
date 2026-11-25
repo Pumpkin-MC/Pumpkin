@@ -69,6 +69,16 @@ impl BowItem {
 
     /// Called when the player releases the bow
     pub fn release_bow(player: &Player, weapon: &ItemStack) {
+        let hand = player
+            .living_entity
+            .active_hand
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .unwrap_or(Hand::Right);
+        let slot = crate::entity::hand_equipment_slot(hand);
+        let Some(slot_index) = player.inventory().equipment_slot_index(&slot) else {
+            return;
+        };
         // Get the used ticks
         let use_ticks = player.living_entity.item_use_time.load(Ordering::Relaxed);
         let use_ticks = Self::USE_DURATION - use_ticks;
@@ -125,18 +135,7 @@ impl BowItem {
             player.consume_arrow(slot);
         }
 
-        // Damage bow
-        let active_hand = *player
-            .living_entity
-            .active_hand
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let slot = if active_hand == Some(Hand::Left) {
-            pumpkin_data::data_component_impl::EquipmentSlot::OFF_HAND
-        } else {
-            pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND
-        };
-        player.damage_item_in_slot(&slot, 1);
+        player.damage_item_in_slot_matching(&slot, slot_index, weapon, 1);
         player.increment_stat(StatisticCategory::Used, i32::from(weapon.item.id), 1);
     }
 

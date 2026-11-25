@@ -1650,6 +1650,7 @@ pub struct Entity {
     pub removal_reason: AtomicCell<Option<RemovalReason>>,
     // The passengers that entity has
     pub passengers: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
+    pub(crate) tracking_pairing_lock: std::sync::Mutex<()>,
     /// The vehicle that entity is in
     pub vehicle: std::sync::Mutex<Option<Weak<dyn EntityBase>>>,
     /// The entity this entity is attached/leashed to (if any)
@@ -1947,6 +1948,7 @@ impl Entity {
             was_in_powder_snow: AtomicBool::new(false),
             removal_reason: AtomicCell::new(None),
             passengers: std::sync::Mutex::new(Vec::new()),
+            tracking_pairing_lock: std::sync::Mutex::new(()),
             vehicle: std::sync::Mutex::new(None),
             leashed_to: std::sync::Mutex::new(None),
             delayed_leash: std::sync::Mutex::new(None),
