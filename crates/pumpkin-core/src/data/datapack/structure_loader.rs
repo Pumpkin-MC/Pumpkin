@@ -251,8 +251,8 @@ mod tests {
             );
         assert!(discovered.is_some());
         let pool = discovered.unwrap();
-        assert_eq!(pool.elements.len(), 1);
-        assert_eq!(pool.elements[0].weight, 10);
+        assert_eq!(pool.elements().len(), 1);
+        assert_eq!(pool.elements()[0].weight, 10);
 
         clear_dynamic_worldgen_data();
     }

@@ -1,7 +1,9 @@
+use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnPlaceArgs, PathComputationType,
     is_exception_for_connection,
 };
+use crate::item::items::lead::LeadItem;
 use crate::world::World;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::fluid::Fluid;
@@ -34,7 +36,7 @@ impl BlockBehaviour for FenceBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                Fluid::WATER.flow_speed as u8,
+                pumpkin_data::fluid::Fluid::WATER.flow.tick_delay,
                 TickPriority::Normal,
             );
         }
@@ -43,6 +45,10 @@ impl BlockBehaviour for FenceBlock {
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
         false
+    }
+
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        LeadItem::bind_player_mobs(args.player, args.world, *args.position)
     }
 }
 

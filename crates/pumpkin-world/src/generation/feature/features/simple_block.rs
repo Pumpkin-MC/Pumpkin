@@ -53,7 +53,7 @@ impl SimpleBlockFeature {
                     || state.is_waterlogged()
                     || matches!(
                         Fluid::from_state_id(state.id),
-                        Some(f) if *f == Fluid::WATER || *f == Fluid::FLOWING_WATER
+                        Some(f) if f.matches_type(&Fluid::WATER)
                     );
                 let above_is_water = Self::is_water_at(chunk, &above_pos);
                 if state_is_water != above_is_water || !above_state.replaceable() {
@@ -92,7 +92,7 @@ impl SimpleBlockFeature {
         id.is_waterlogged()
             || matches!(
                 Fluid::from_state_id(id),
-                Some(f) if *f == Fluid::WATER || *f == Fluid::FLOWING_WATER
+                Some(f) if f.matches_type(&Fluid::WATER)
             )
     }
 

@@ -122,6 +122,10 @@ impl ZoglinEntity {
 }
 
 impl Mob for ZoglinEntity {
+    fn can_be_leashed(&self) -> bool {
+        true
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityZoglinStep, 0.15, 1.0);
     }

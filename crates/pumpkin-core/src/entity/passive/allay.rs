@@ -275,12 +275,6 @@ impl AllayEntity {
         {
             return false;
         }
-        if self
-            .mob_entity
-            .mob_interact(player, stack, self.can_be_leashed())
-        {
-            return true;
-        }
         let entity = self.get_entity();
         let world = entity.world.load();
         let sound;
