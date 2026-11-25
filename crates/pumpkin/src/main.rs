@@ -39,12 +39,20 @@ mod game_test_server;
 
 static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 
+#[expect(
+    clippy::print_stderr,
+    reason = "startup arguments are parsed before logging is initialized"
+)]
+fn warn_unknown_startup_arg(arg: &str) {
+    eprintln!("Warning: ignoring unknown startup argument {arg:?}");
+}
+
 // WARNING: All rayon calls from the tokio runtime must be non-blocking! This includes things
 // like `par_iter`. These should be spawned in the the rayon pool and then passed to the tokio
 // runtime with a channel! See `Level::fetch_chunks` as an example!
 #[tokio::main]
 async fn main() {
-    let command = match parse_startup_command(std::env::args().skip(1)) {
+    let command = match parse_startup_command(std::env::args().skip(1), warn_unknown_startup_arg) {
         Ok(command) => command,
         Err(error) => error.exit(),
     };
@@ -55,7 +63,7 @@ async fn main() {
     }
 
     match command {
-        StartupCommand::DedicatedServer => dedicated_server::run().await,
+        StartupCommand::DedicatedServer(options) => dedicated_server::run(options).await,
         StartupCommand::GameTestServer(options) => {
             if let Err(error) = game_test_server::run(options).await {
                 tracing::error!("{error}");

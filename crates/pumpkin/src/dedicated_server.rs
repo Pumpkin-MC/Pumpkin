@@ -4,6 +4,7 @@ use std::{
     time::Instant,
 };
 
+use pumpkin::DedicatedServerOptions;
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_core::{
     PumpkinServer, SERVER_EXIT_CODE, data::VanillaData, plugin::loader::PluginLoader,
@@ -17,14 +18,14 @@ use tracing::{debug, info, warn};
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[allow(clippy::too_many_lines)]
-pub async fn run() {
+pub async fn run(options: DedicatedServerOptions) {
     let time = Instant::now();
 
     let exec_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
     let config = PumpkinConfig::load(&exec_dir);
 
-    if has_init_settings_arg(std::env::args().skip(1)) {
+    if options.init_settings {
         exit(0);
     }
 
@@ -32,7 +33,7 @@ pub async fn run() {
 
     pumpkin_core::init_logger(&config.advanced);
 
-    if let Some(target_arg) = parse_convert_world_arg(std::env::args().skip(1)) {
+    if let Some(target_arg) = options.convert_world {
         let anvil_default = match &config.advanced.world.chunk {
             pumpkin_config::chunk::ChunkConfig::Anvil(cfg) => cfg.clone(),
             _ => pumpkin_config::chunk::AnvilChunkConfig::default(),
@@ -221,20 +222,4 @@ fn print_support_links_and_warning() {
             .color_named(NamedColor::Gold)
             .to_pretty_console()
     );
-}
-
-fn parse_convert_world_arg(mut args: impl Iterator<Item = String>) -> Option<String> {
-    while let Some(arg) = args.next() {
-        if arg == "--convert-world" {
-            return Some(args.next().unwrap_or_default());
-        }
-        if let Some(value) = arg.strip_prefix("--convert-world=") {
-            return Some(value.to_string());
-        }
-    }
-    None
-}
-
-fn has_init_settings_arg(mut args: impl Iterator<Item = String>) -> bool {
-    args.any(|arg| arg == "--init-settings" || arg == "--initSettings")
 }
