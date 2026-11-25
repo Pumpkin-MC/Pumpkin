@@ -182,6 +182,10 @@ impl AgeableMob for HoglinEntity {
 
 // TODO: vanilla hoglins are `Animal`s: crimson fungus breeds adults and grows babies.
 impl Mob for HoglinEntity {
+    fn can_be_leashed(&self) -> bool {
+        true
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityHoglinStep, 0.15, 1.0);
     }
