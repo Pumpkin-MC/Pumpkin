@@ -358,26 +358,29 @@ impl Level {
     fn cache_entity_chunk(
         &self,
         data: LoadedData<SyncEntityChunk, ChunkReadingError>,
-    ) -> SyncEntityChunk {
+    ) -> Option<SyncEntityChunk> {
         let pos = match data {
             LoadedData::Loaded(chunk) => {
                 let pos = Vector2::new(chunk.x, chunk.z);
-                return self
-                    .loaded_entity_chunks
-                    .entry(pos)
-                    .or_insert(chunk)
-                    .clone();
+                return Some(
+                    self.loaded_entity_chunks
+                        .entry(pos)
+                        .or_insert(chunk)
+                        .clone(),
+                );
             }
             LoadedData::Missing(pos) => pos,
             LoadedData::Error((pos, error)) => {
                 warn!("Failed to read entity chunk {pos:?}: {error}");
-                pos
+                return self.get_entity_chunk_sync(&pos);
             }
         };
-        self.loaded_entity_chunks
-            .entry(pos)
-            .or_insert_with(|| Self::empty_entity_chunk(pos))
-            .clone()
+        Some(
+            self.loaded_entity_chunks
+                .entry(pos)
+                .or_insert_with(|| Self::empty_entity_chunk(pos))
+                .clone(),
+        )
     }
 
     /// Spawns a task associated with this world. All tasks spawned with this method are awaited
@@ -792,7 +795,9 @@ impl Level {
                     let forward = async {
                         let mut rx = rx;
                         while let Some(data) = rx.recv().await {
-                            let chunk = level.cache_entity_chunk(data);
+                            let Some(chunk) = level.cache_entity_chunk(data) else {
+                                continue;
+                            };
                             if sender.send((Arc::downgrade(&chunk), true)).await.is_err() {
                                 return;
                             }
@@ -811,19 +816,19 @@ impl Level {
         receiver
     }
 
-    pub async fn get_entity_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncEntityChunk {
+    pub async fn get_entity_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> Option<SyncEntityChunk> {
         if let Some(chunk) = self.loaded_entity_chunks.get(&pos) {
-            return chunk.clone();
+            return Some(chunk.clone());
         }
 
         let (tx, mut rx) = mpsc::channel(1);
         self.entity_saver
             .fetch_chunks(&self.level_folder, &[pos], tx)
             .await;
-        let loaded = rx.recv().await.unwrap_or_else(|| {
+        let Some(loaded) = rx.recv().await else {
             warn!("Entity chunk read returned no result for {pos:?}");
-            LoadedData::Missing(pos)
-        });
+            return self.get_entity_chunk_sync(&pos);
+        };
         self.cache_entity_chunk(loaded)
     }
 
@@ -950,12 +955,12 @@ impl Level {
         self: &Arc<Self>,
         pos: Vector2<i32>,
         f: F,
-    ) -> R {
+    ) -> Option<R> {
         if let Some(res) = self.read_entity_chunk_sync(&pos, &f) {
-            return res;
+            return Some(res);
         }
-        let chunk = self.get_entity_chunk(pos).await;
-        f(&chunk)
+        let chunk = self.get_entity_chunk(pos).await?;
+        Some(f(&chunk))
     }
 
     pub fn try_get_entity_chunk(
@@ -1051,6 +1056,37 @@ mod tests {
     use tempfile::TempDir;
 
     #[tokio::test]
+    async fn failed_entity_reads_do_not_reserve_cache_entries() {
+        let dir = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            dir.path().into(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let pos = Vector2::new(0, 0);
+        assert!(
+            level
+                .cache_entity_chunk(LoadedData::Error((pos, ChunkReadingError::InvalidHeader)))
+                .is_none()
+        );
+        assert!(level.get_entity_chunk_sync(&pos).is_none());
+        let loaded = Level::empty_entity_chunk(pos);
+        let cached = level
+            .cache_entity_chunk(LoadedData::Loaded(loaded.clone()))
+            .unwrap();
+        assert!(Arc::ptr_eq(&loaded, &cached));
+        for result in [
+            LoadedData::Loaded(Level::empty_entity_chunk(pos)),
+            LoadedData::Error((pos, ChunkReadingError::InvalidHeader)),
+        ] {
+            let cached = level.cache_entity_chunk(result).unwrap();
+            assert!(Arc::ptr_eq(&loaded, &cached));
+        }
+        level.shutdown().await;
+    }
+
+    #[tokio::test]
     async fn cached_entity_chunks_survive_receiver_backpressure() {
         let dir = TempDir::new().unwrap();
         let level = Level::from_root_folder(
@@ -1061,7 +1097,7 @@ mod tests {
         );
         let positions: Vec<_> = (0..80).map(|x| Vector2::new(x, 0)).collect();
         for &pos in &positions {
-            let chunk = level.get_entity_chunk(pos).await;
+            let chunk = level.get_entity_chunk(pos).await.unwrap();
             chunk.live.store(pos.x % 2 == 0, Ordering::Relaxed);
         }
         let mut rx = level.receive_entity_chunks(positions.clone());

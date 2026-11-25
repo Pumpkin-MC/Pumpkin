@@ -58,10 +58,7 @@ fn collect_files_into(dir: &Path, extension: &str, files: &mut Vec<PathBuf>) {
 /// suffix removed and backslashes normalised to `/`.
 fn resource_path(base_dir: &Path, path: &Path, extension: &str) -> Option<String> {
     let rel_path = path.strip_prefix(base_dir).ok()?;
-    if rel_path
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case(extension))
-    {
+    if rel_path.extension().is_some_and(|ext| ext == extension) {
         resource_path_without_extension(base_dir, path)
     } else {
         Some(rel_path.to_string_lossy().replace('\\', "/"))
@@ -118,19 +115,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn case_insensitive_extensions_produce_the_same_resource_path() {
-        let dir = tempfile::tempdir().unwrap();
-        for name in ["reward.json", "reward.JSON"] {
+    fn case_insensitive_discovery_with_matching_suffix_produces_the_same_resource_path() {
+        for (name, extension) in [("reward.json", "json"), ("reward.JSON", "JSON")] {
+            let dir = tempfile::tempdir().unwrap();
             fs::write(dir.path().join(name), "{}").unwrap();
+            let files = collect_files(dir.path(), "json");
+            let loaded =
+                load_files_parallel("test", dir.path(), &files, extension, |_, _, _| Some(()));
+            assert_eq!(loaded, [("test:reward".into(), "reward".into(), ())]);
         }
-        let files = collect_files(dir.path(), "json");
-        let loaded = load_files_parallel("test", dir.path(), &files, "json", |_, _, _| Some(()));
-        assert_eq!(loaded.len(), 2);
-        assert!(
-            loaded
-                .iter()
-                .all(|(id, path, ())| id == "test:reward" && path == "reward")
-        );
     }
 
     #[cfg(unix)]

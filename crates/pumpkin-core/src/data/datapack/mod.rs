@@ -1919,15 +1919,16 @@ fn prepare_pack_contents(pack_path: &Path) -> Option<PreparedPack> {
                 return None;
             }
         };
-        let ns_entries = ns_entries
-            .collect::<Result<Vec<_>, _>>()
-            .inspect_err(|error| {
-                warn!(
-                    "Failed to read namespace entry in '{}': {error}",
-                    data_dir.display()
-                );
-            })
-            .ok()?;
+        let ns_entries = ns_entries.filter_map(|entry| {
+            entry
+                .inspect_err(|error| {
+                    warn!(
+                        "Failed to read namespace entry in '{}': {error}",
+                        data_dir.display()
+                    );
+                })
+                .ok()
+        });
         for ns_entry in ns_entries {
             let ns_path = ns_entry.path();
             if !ns_path.is_dir() {

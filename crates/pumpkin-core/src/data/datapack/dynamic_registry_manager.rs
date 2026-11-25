@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
 use indexmap::IndexMap;
@@ -103,6 +103,7 @@ pub(crate) type RegistrySnapshot = IndexMap<String, Arc<DynamicRegistry>>;
 pub struct DynamicRegistryManager {
     registries: ArcSwap<RegistrySnapshot>,
     base_registries: Arc<RegistrySnapshot>,
+    update_lock: Mutex<()>,
 }
 
 impl Default for DynamicRegistryManager {
@@ -126,6 +127,7 @@ impl DynamicRegistryManager {
         Self {
             registries: ArcSwap::from(base_registries.clone()),
             base_registries,
+            update_lock: Mutex::new(()),
         }
     }
 
@@ -136,6 +138,10 @@ impl DynamicRegistryManager {
         &self,
         custom_registries: &HashMap<String, HashMap<String, RegistryEntryData, S1>, S2>,
     ) {
+        let _update = self
+            .update_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let live = self.registries.load_full();
         let mut registries = (*self.base_registries).clone();
         // Without client reconfiguration, removed entries must retain their network slots.
@@ -366,6 +372,42 @@ mod tests {
             Some("custom:b")
         );
         assert_eq!(login[&registry].get_raw_id("custom:c"), c);
+    }
+
+    #[test]
+    fn concurrent_updates_preserve_network_slots() {
+        let manager = DynamicRegistryManager::default();
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            for i in 0..8 {
+                let manager = &manager;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let id = format!("custom:{i}");
+                    let custom = HashMap::from([(
+                        "custom:registry".to_string(),
+                        HashMap::from([(
+                            id.clone(),
+                            RegistryEntryData {
+                                entry_id: id,
+                                data: None,
+                            },
+                        )]),
+                    )]);
+                    barrier.wait();
+                    manager.apply_custom_registries(&custom);
+                });
+            }
+        });
+        let mut ids: Vec<_> = (0..8)
+            .map(|i| {
+                manager
+                    .get_raw_id("custom:registry", &format!("custom:{i}"))
+                    .unwrap()
+            })
+            .collect();
+        ids.sort_unstable();
+        assert_eq!(ids, (0..8).collect::<Vec<_>>());
     }
 
     #[test]

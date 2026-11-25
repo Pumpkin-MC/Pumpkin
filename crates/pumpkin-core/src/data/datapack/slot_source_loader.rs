@@ -27,6 +27,23 @@ mod tests {
     use std::fs;
 
     #[test]
+    fn uppercase_extensions_retain_their_suffix() {
+        for (name, id) in [
+            ("armor.json", "custom:armor"),
+            ("armor.JSON", "custom:armor.JSON"),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            fs::write(dir.path().join(name), "{}").unwrap();
+            let mut map = HashMap::new();
+            assert_eq!(
+                load_slot_sources_from_dir("custom", dir.path(), &mut map),
+                1
+            );
+            assert!(map.contains_key(id));
+        }
+    }
+
+    #[test]
     fn parse_and_load_slot_sources() {
         let temp = tempfile::tempdir().expect("tempdir");
         let slot_dir = temp.path().join("slot_source");

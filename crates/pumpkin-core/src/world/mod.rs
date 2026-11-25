@@ -707,7 +707,10 @@ impl World {
                 };
                 chunk
             } else {
-                self.level.get_entity_chunk(pos).await
+                let Some(chunk) = self.level.get_entity_chunk(pos).await else {
+                    continue;
+                };
+                chunk
             };
             let live = chunk.live.load(Relaxed);
             if !live && records.is_empty() {
@@ -8796,7 +8799,11 @@ mod tests {
             world.entities.store(Arc::new(vec![cow.clone()]));
             if unload {
                 world.remove_entities_in_chunks([Vector2::new(0, 0)]).await;
-                let chunk = world.level.get_entity_chunk(Vector2::new(0, 0)).await;
+                let chunk = world
+                    .level
+                    .get_entity_chunk(Vector2::new(0, 0))
+                    .await
+                    .unwrap();
                 let saved_home = {
                     let records = chunk
                         .data
