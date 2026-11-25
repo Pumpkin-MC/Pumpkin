@@ -1489,7 +1489,7 @@ mod tests {
             ));
 
             blocking.write::<ServerTickStartEvent>().unwrap().tick = 2;
-        }
+        };
 
         {
             let mut notification = QueuedEvent(QueuedEventInner::ReadOnly(
@@ -1500,7 +1500,7 @@ mod tests {
 
             assert!(notification.write::<ServerTickStartEvent>().is_none());
             assert_eq!(notification.read::<ServerTickStartEvent>().unwrap().tick, 2);
-        }
+        };
 
         {
             let mut guard = slot.write().await;
@@ -1510,7 +1510,7 @@ mod tests {
                 .downcast_mut::<ServerTickStartEvent>()
                 .unwrap()
                 .tick = 3;
-        }
+        };
 
         {
             let guard = slot.read().await;
@@ -1523,7 +1523,7 @@ mod tests {
                     .tick,
                 3
             );
-        }
+        };
 
         {
             let notification = QueuedEvent(QueuedEventInner::ReadOnly(
@@ -1533,7 +1533,7 @@ mod tests {
             ));
 
             assert_eq!(notification.read::<ServerTickStartEvent>().unwrap().tick, 3);
-        }
+        };
 
         assert_eq!(slot.write().await.take().unwrap().tick, 3);
 
@@ -1544,7 +1544,7 @@ mod tests {
                     .await,
             ));
             assert!(notification.read::<ServerTickStartEvent>().is_none());
-        }
+        };
 
         {
             let mut blocking = QueuedEvent(QueuedEventInner::ReadWrite(
@@ -1554,7 +1554,7 @@ mod tests {
             ));
 
             assert!(blocking.write::<ServerTickStartEvent>().is_none());
-        }
+        };
         assert!(slot.read().await.payload().is_none());
     }
 
