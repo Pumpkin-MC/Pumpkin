@@ -24,7 +24,7 @@ use std::sync::Arc;
 pub trait FluidBehaviour: Send + Sync {
     fn normal_use(
         &self,
-        _fluid: &Fluid,
+        _fluid: &'static Fluid,
         _player: &Player,
         _location: BlockPos,
         _server: &Server,
@@ -34,7 +34,7 @@ pub trait FluidBehaviour: Send + Sync {
 
     fn use_with_item(
         &self,
-        _fluid: &Fluid,
+        _fluid: &'static Fluid,
         _player: &Player,
         _location: BlockPos,
         _item: &Item,
@@ -47,7 +47,7 @@ pub trait FluidBehaviour: Send + Sync {
     fn placed(
         &self,
         _world: &Arc<World>,
-        _fluid: &Fluid,
+        _fluid: &'static Fluid,
         _state_id: BlockStateId,
         _block_pos: &BlockPos,
         _old_state_id: BlockStateId,
@@ -60,7 +60,7 @@ pub trait FluidBehaviour: Send + Sync {
         &self,
         _server: &Server,
         _world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         _face: BlockDirection,
         _block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
@@ -72,7 +72,7 @@ pub trait FluidBehaviour: Send + Sync {
     fn get_state_for_neighbour_update(
         &self,
         _world: &Arc<World>,
-        _fluid: &Fluid,
+        _fluid: &'static Fluid,
         _block_pos: &BlockPos,
         _notify: bool,
     ) -> BlockStateId {
@@ -82,7 +82,7 @@ pub trait FluidBehaviour: Send + Sync {
     fn on_neighbor_update(
         &self,
         _world: &Arc<World>,
-        _fluid: &Fluid,
+        _fluid: &'static Fluid,
         _block_pos: &BlockPos,
         _notify: bool,
     ) {
@@ -90,9 +90,15 @@ pub trait FluidBehaviour: Send + Sync {
 
     fn on_entity_collision(&self, _entity: &dyn EntityBase) {}
 
-    fn on_scheduled_tick(&self, _world: &Arc<World>, _fluid: &Fluid, _block_pos: &BlockPos) {}
+    fn on_scheduled_tick(
+        &self,
+        _world: &Arc<World>,
+        _fluid: &'static Fluid,
+        _block_pos: &BlockPos,
+    ) {
+    }
 
-    fn random_tick(&self, _fluid: &Fluid, _world: &Arc<World>, _block_pos: &BlockPos) {}
+    fn random_tick(&self, _fluid: &'static Fluid, _world: &Arc<World>, _block_pos: &BlockPos) {}
 
     fn create_legacy_block(&self, _world: &Arc<World>, _block_pos: &BlockPos) {}
 }

@@ -5,7 +5,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
-use crate::world::World;
 
 use crate::block::{BlockBehaviour, CanPlaceAtArgs, OnEntityCollisionArgs};
 
@@ -46,7 +45,7 @@ impl PlantBlockBase for LilyPadBlock {
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let (block, state) = block_accessor.get_block_and_state(pos);
         let above_state = block_accessor.get_block_state(&pos.up());
-        let above_fluid = World::get_fluid_from_state_id(above_state.id);
+        let above_fluid = Fluid::of_block_state(above_state.id);
         let is_source_water = (block == &Block::WATER && state.id == Block::WATER.default_state.id)
             || state.is_waterlogged()
             || matches!(

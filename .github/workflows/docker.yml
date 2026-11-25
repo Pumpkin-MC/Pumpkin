@@ -190,17 +190,19 @@ jobs:
       - name: Extract Metadata
         id: meta
         uses: docker/metadata-action@v6
+        env:
+          IS_RELEASE: ${{ !startsWith(env.PUMPKIN_TAG, 'nightly') && !startsWith(env.PUMPKIN_TAG, 'canary') }}
         with:
           images: ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}
           tags: |
             type=raw,value=master,enable=${{ env.PUMPKIN_TAG == 'nightly' }}
             type=raw,value=nightly,enable=${{ env.PUMPKIN_TAG == 'nightly' }}
             type=raw,value=${{ env.DOCKER_RELEASE_TAG }},enable=${{ env.PUMPKIN_TAG != 'nightly' }}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ env.IS_RELEASE == 'true' }}
             type=sha
-            type=raw,value=mc${{ env.MC_VERSION }}
-            type=raw,value=${{ env.PUMPKIN_VERSION }}
-            type=raw,value=mc${{ env.MC_VERSION }}-${{ env.PUMPKIN_VERSION }}
+            type=raw,value=mc${{ env.MC_VERSION }},enable=${{ env.IS_RELEASE == 'true' }}
+            type=raw,value=${{ env.PUMPKIN_VERSION }},enable=${{ env.IS_RELEASE == 'true' }}
+            type=raw,value=mc${{ env.MC_VERSION }}-${{ env.PUMPKIN_VERSION }},enable=${{ env.IS_RELEASE == 'true' }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests

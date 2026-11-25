@@ -3,21 +3,14 @@ use std::sync::{Arc, Weak};
 
 use pumpkin_data::BlockState;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::Sound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::entity::ai::behavior::{fleeing, hunting};
-use crate::entity::mob::spider::{SPIDER_FLEES, SPIDER_HUNTS};
 use crate::entity::{
     Entity, EntityBase,
-    ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
-        spider_attack::SpiderAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
-    },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, MobMetadata},
 };
 
 const VEHICLE_SEAT_HEIGHT: f64 = 0.218_75;
@@ -39,24 +32,7 @@ impl CaveSpiderEntity {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
-
-        {
-            let goal_selector = &mob_arc.mob_entity.goals_selector;
-            let target_selector = &mob_arc.mob_entity.target_selector;
-
-            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            fleeing::apply(goal_selector, SPIDER_FLEES);
-            goal_selector.add_goal(3, SpiderAttackGoal::new(1.0, false));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
-            goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
-
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            hunting::apply(target_selector, &mob_arc.mob_entity, SPIDER_HUNTS);
-        };
+        super::spider::init_spider_ai(&mob_arc.mob_entity, mob_weak);
 
         mob_arc
     }
@@ -77,11 +53,12 @@ impl Mob for CaveSpiderEntity {
 
     fn finalize_spawn(
         &self,
-        world: &Arc<crate::world::World>,
-        reason: crate::entity::mob::spawn::EntitySpawnReason,
+        _world: &Arc<crate::world::World>,
+        _reason: crate::entity::mob::spawn::EntitySpawnReason,
         group_data: Option<super::spawn::SpawnGroupData>,
     ) -> Option<super::spawn::SpawnGroupData> {
-        super::spider::finalize_spider_spawn(&self.mob_entity, world, reason, group_data)
+        // No base spawn setup: no jockey, group effect, follow range bonus or handedness.
+        group_data
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
@@ -92,12 +69,11 @@ impl Mob for CaveSpiderEntity {
         self.is_climbing.load(Ordering::Relaxed)
     }
 
-    fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
-        let mut meta = crate::entity::mob::MobMetadata::new().no_ai(self.mob_entity.is_no_ai());
-        if self.is_climbing.load(Ordering::Relaxed) {
-            meta = meta.spider_climbing(true);
-        }
-        Some(meta)
+    fn mob_metadata(&self) -> Option<MobMetadata> {
+        Some(super::spider::spider_metadata(
+            &self.mob_entity,
+            self.is_climbing.load(Ordering::Relaxed),
+        ))
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {

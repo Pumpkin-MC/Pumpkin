@@ -35,6 +35,12 @@ pub enum TargetCondition {
 }
 
 impl TargetCondition {
+    /// Daylight and taming stop the goal before its random roll. Anger and age are part of
+    /// the target test, so the roll still happens while they fail.
+    const fn gates_roll(self) -> bool {
+        matches!(self, Self::NoDaylight | Self::Untamed)
+    }
+
     /// Checked once per search attempt.
     fn allows_search(self, mob: &dyn Mob) -> bool {
         match self {
@@ -254,12 +260,16 @@ impl Goal for ActiveTargetGoal {
         if self.gate.is_some_and(|gate| !gate(mob)) {
             return false;
         }
+        let gates_roll = self.condition.gates_roll();
+        if gates_roll && !self.condition.allows_search(mob) {
+            return false;
+        }
         if self.reciprocal_chance > 0
             && mob.get_random().random_range(0..self.reciprocal_chance) != 0
         {
             return false;
         }
-        if !self.condition.allows_search(mob) {
+        if !gates_roll && !self.condition.allows_search(mob) {
             return false;
         }
         self.find_closest_target(mob);

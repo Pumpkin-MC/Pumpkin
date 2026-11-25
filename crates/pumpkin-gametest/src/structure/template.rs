@@ -266,6 +266,7 @@ fn resolve_palette(structure: &NbtCompound) -> GameTestResult<Vec<PaletteEntry>>
                 parsed_properties.push(prop);
             }
 
+            // TODO: `NbtUtils.readBlockState` starts from the default state, so omitted properties keep their default.
             block
                 .state_from_properties(&parsed_properties)
                 .ok_or_else(|| {
