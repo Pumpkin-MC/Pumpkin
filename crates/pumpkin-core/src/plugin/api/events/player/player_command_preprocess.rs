@@ -15,6 +15,17 @@ pub struct PlayerCommandPreprocessEvent {
     pub command: String,
 }
 
+impl PlayerCommandPreprocessEvent {
+    #[must_use]
+    pub const fn new(player: Arc<Player>, command: String) -> Self {
+        Self {
+            player,
+            command,
+            cancelled: false,
+        }
+    }
+}
+
 impl PlayerEvent for PlayerCommandPreprocessEvent {
     fn get_player(&self) -> &Arc<Player> {
         &self.player

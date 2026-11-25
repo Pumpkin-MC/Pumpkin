@@ -459,13 +459,27 @@ impl Server {
             });
         }
 
+        let enabled_packs = server.level_info.load().data_packs.enabled.clone();
+        let datapacks = server.datapack_manager.clone();
+        let recipes = server.recipe_manager.clone();
+        let datapack_path = world_path.clone();
+        if let Err(error) = tokio::task::spawn_blocking(move || {
+            datapacks.load_all(&datapack_path, &enabled_packs, &recipes);
+        })
+        .await
+        {
+            return Err(std::io::Error::other(error).into());
+        }
+
         let mut initialized_levels = Vec::with_capacity(server.dimensions.len());
         let world_tasks = server.dimensions.iter().map(|dim| {
             let initialized = Arc::new(std::sync::OnceLock::new());
             initialized_levels.push(initialized.clone());
             let server = server.clone();
             let level_path = world_path.clone();
-            let dim = dim.clone();
+            let dim = server
+                .datapack_manager
+                .with_dimension_type_attributes(dim.clone());
             let block_registry = block_registry.clone();
             tokio::task::spawn_blocking(move || {
                 info!(
@@ -537,20 +551,6 @@ impl Server {
 
         info!("All worlds loaded successfully.");
 
-        let enabled_packs = server.level_info.load().data_packs.enabled.clone();
-        let datapacks = server.datapack_manager.clone();
-        let recipes = server.recipe_manager.clone();
-        if let Err(error) = tokio::task::spawn_blocking(move || {
-            datapacks.load_all(&world_path, &enabled_packs, &recipes);
-        })
-        .await
-        {
-            for world in server.worlds.load_full().iter() {
-                world.shutdown().await;
-            }
-            return Err(std::io::Error::other(error).into());
-        }
-
         let source = crate::command::CommandSender::Console.into_source(&server);
         let _ = server
             .datapack_manager
@@ -601,6 +601,9 @@ impl Server {
         let config = Arc::new(self.advanced_config.world.clone());
         let seed = self.level_info.load().world_gen_settings.seed;
 
+        let dimension = self
+            .datapack_manager
+            .with_dimension_type_attributes(dimension);
         let level =
             pumpkin_world::dimension::into_level(dimension.clone(), &config, world_path, seed);
         let world: World = World::load(level.clone(), l_info, dimension, registry, weak);

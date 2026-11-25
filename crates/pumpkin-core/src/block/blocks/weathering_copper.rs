@@ -11,13 +11,11 @@ use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, Mirror, Rotation};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use uuid::Uuid;
@@ -36,6 +34,7 @@ use crate::block::{
     UseWithItemArgs,
 };
 use crate::entity::EntityBase;
+use crate::entity::passive::copper_golem::CopperGolemEntity;
 use crate::entity::r#type::from_type;
 use crate::world::World;
 
@@ -203,28 +202,18 @@ pub const fn get_chance_modifier(state: WeatherState) -> f32 {
     }
 }
 
-/// Converts a block state ID of `from_block` to the corresponding state ID of `to_block`, preserving all block properties.
-#[must_use]
-pub fn with_properties_of(
-    from_block: &Block,
-    from_state_id: BlockStateId,
-    to_block: &Block,
-) -> BlockStateId {
-    to_block.with_properties_of(from_block, from_state_id)
-}
-
 /// Returns the next block state for a weathering copper block, preserving all properties.
 #[must_use]
 pub fn get_next_state(current_block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
     let next_block = get_next(current_block)?;
-    Some(with_properties_of(current_block, state_id, next_block))
+    Some(next_block.with_properties_of(current_block, state_id))
 }
 
 /// Returns the previous block state for a weathering copper block, preserving all properties.
 #[must_use]
 pub fn get_previous_state(current_block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
     let prev_block = get_previous(current_block)?;
-    Some(with_properties_of(current_block, state_id, prev_block))
+    Some(prev_block.with_properties_of(current_block, state_id))
 }
 
 /// Returns the first (unaffected) block state in this family, preserving all properties.
@@ -234,7 +223,7 @@ pub fn get_first_state(current_block: &Block, state_id: BlockStateId) -> BlockSt
         if first_block == current_block {
             state_id
         } else {
-            with_properties_of(current_block, state_id, first_block)
+            first_block.with_properties_of(current_block, state_id)
         }
     })
 }
@@ -319,7 +308,7 @@ pub fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &Block) 
 
     // 5. Apply state change
     let current_state_id = world.get_block_state_id(position);
-    let new_state_id = with_properties_of(block, current_state_id, next_block);
+    let new_state_id = next_block.with_properties_of(block, current_state_id);
 
     world.set_block_state(position, new_state_id, BlockFlags::NOTIFY_ALL);
 
@@ -331,7 +320,7 @@ pub fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &Block) 
             let top_pos = position.up();
             let (top_block, top_state_id) = world.get_block_and_state_id(&top_pos);
             if top_block == block {
-                let top_new_state_id = with_properties_of(top_block, top_state_id, next_block);
+                let top_new_state_id = next_block.with_properties_of(top_block, top_state_id);
                 world.set_block_state(&top_pos, top_new_state_id, BlockFlags::NOTIFY_ALL);
             }
         }
@@ -347,8 +336,7 @@ pub fn change_over_time(world: &Arc<World>, position: &BlockPos, block: &Block) 
             let right_pos = position.offset(right_dir.to_offset());
             let (right_block, right_state_id) = world.get_block_and_state_id(&right_pos);
             if right_block == block {
-                let right_new_state_id =
-                    with_properties_of(right_block, right_state_id, next_block);
+                let right_new_state_id = next_block.with_properties_of(right_block, right_state_id);
                 world.set_block_state(&right_pos, right_new_state_id, BlockFlags::NOTIFY_LISTENERS);
             }
         }
@@ -835,7 +823,7 @@ impl BlockBehaviour for WeatheringCopperGrateBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                Fluid::WATER.flow_speed as u8,
+                pumpkin_data::fluid::Fluid::WATER.flow.tick_delay,
                 TickPriority::Normal,
             );
         }
@@ -932,7 +920,7 @@ impl BlockBehaviour for CopperGolemStatueBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                Fluid::WATER.flow_speed as u8,
+                pumpkin_data::fluid::Fluid::WATER.flow.tick_delay,
                 TickPriority::Normal,
             );
         }
@@ -973,25 +961,18 @@ impl BlockBehaviour for CopperGolemStatueBlock {
                     args.world,
                     Uuid::new_v4(),
                 );
+                let yaw = Self::horizontal_facing_to_yaw(props.facing);
                 let entity = golem.get_entity();
-                entity.set_rotation(Self::horizontal_facing_to_yaw(props.facing), 0.0);
+                entity.set_rotation(yaw, 0.0);
+                entity.head_yaw.store(yaw);
+                entity.body_yaw.store(yaw);
                 if let Some(name) = custom_name {
-                    entity.set_custom_name(TextComponent::text(name));
+                    entity.set_custom_name(name);
+                }
+                if let Some(copper_golem) = golem.cast_any().downcast_ref::<CopperGolemEntity>() {
+                    copper_golem.play_spawn_sound();
                 }
                 args.world.spawn_entity(golem);
-
-                args.world.play_sound(
-                    Sound::BlockCopperBreak,
-                    SoundCategory::Blocks,
-                    &args.position.to_f64(),
-                );
-                args.world.play_sound(
-                    Sound::ItemAxeScrape,
-                    SoundCategory::Blocks,
-                    &args.position.to_f64(),
-                );
-                args.world
-                    .sync_world_event(WorldEvent::ParticlesScrape, *args.position, 0);
 
                 if args.player.gamemode.load() != GameMode::Creative {
                     let _ = args.item_stack.damage_item(1);
@@ -1009,6 +990,11 @@ impl BlockBehaviour for CopperGolemStatueBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         Self::update_pose(args.world, args.block, args.position);
         BlockActionResult::Success
+    }
+
+    fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
+        args.world
+            .update_neighbour_for_output_signal(args.position, args.block);
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {

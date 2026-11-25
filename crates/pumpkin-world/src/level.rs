@@ -1004,7 +1004,7 @@ impl Level {
 
     pub fn schedule_fluid_tick(
         &self,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         block_pos: BlockPos,
         delay: u8,
         priority: TickPriority,
@@ -1015,8 +1015,7 @@ impl Level {
             delay,
             position: block_pos,
             priority,
-            // SAFETY: `fluid` is a valid reference that outlives this function call for scheduling.
-            value: unsafe { &*std::ptr::from_ref::<Fluid>(fluid) },
+            value: fluid,
         };
 
         let chunk_pos = block_pos.chunk_position();

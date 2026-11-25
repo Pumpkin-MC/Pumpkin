@@ -38,7 +38,7 @@ impl StriderEntity {
         let strider = Self {
             mob_entity,
             ageable_data: AgeableData::default(),
-            steering: ItemBasedSteering::default(),
+            steering: ItemBasedSteering::new(pumpkin_data::tracked_data::strider::DATA_BOOST_TIME),
             suffocating: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(strider);
@@ -124,6 +124,15 @@ impl Mob for StriderEntity {
         self.play_entity_sound(sound, 1.0, 1.0);
     }
 
+    fn mob_ai_step(&self) {
+        if self
+            .mob_controlling_passenger()
+            .is_some_and(|rider| rider.get_player().is_some())
+        {
+            self.steering.tick_boost();
+        }
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -197,7 +206,8 @@ impl Mob for StriderEntity {
 
 impl ItemSteerable for StriderEntity {
     fn boost(&self) -> bool {
-        self.steering.boost()
+        let mut rng = self.get_random();
+        self.steering.boost(self.get_entity(), &mut rng)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

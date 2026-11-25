@@ -68,7 +68,7 @@ use crate::{
     plugin::player::{
         item_held::PlayerItemHeldEvent,
         player_chat::PlayerChatEvent,
-        player_command_send::PlayerCommandSendEvent,
+        player_command_preprocess::PlayerCommandPreprocessEvent,
         player_interact_entity_event::PlayerInteractEntityEvent,
         player_interact_event::{InteractAction, PlayerInteractEvent},
     },
