@@ -17,7 +17,7 @@ impl JavaClient {
         let command_str = command.command;
         send_cancellable! {{
             server;
-            PlayerCommandSendEvent {
+            PlayerCommandPreprocessEvent {
                 player: player.clone(),
                 command: command_str.to_string(),
                 cancelled: false

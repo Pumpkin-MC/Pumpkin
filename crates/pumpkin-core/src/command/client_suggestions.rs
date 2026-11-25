@@ -7,17 +7,53 @@ use pumpkin_protocol::{
 };
 use std::sync::Arc;
 
+use rustc_hash::FxHashSet;
+
 use crate::command::node::{
     attached::{AttachedNode, NodeId},
     dispatcher::CommandDispatcher,
     tree::ROOT_NODE_ID,
 };
 use crate::entity::player::Player;
+use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
 use crate::server::Server;
 use pumpkin_protocol::bedrock::client::available_commands::{
     CAvailableCommands, CommandData, EnumData, OverloadData, ParamData, arg_flags, arg_types,
 };
 use pumpkin_protocol::java::client::play::SuggestionProviders;
+
+fn filter_sent_commands<'a>(
+    player: &Arc<Player>,
+    server: &Arc<Server>,
+    names: impl Iterator<Item = &'a str>,
+) -> Option<FxHashSet<String>> {
+    if !server
+        .plugin_manager
+        .has_handlers::<PlayerCommandSendEvent>()
+    {
+        return None;
+    }
+    let mut event = PlayerCommandSendEvent::new(player.clone(), names.map(str::to_owned).collect());
+    server.plugin_manager.fire_blocking(server, &mut event);
+    Some(event.commands.into_iter().collect())
+}
+
+fn wire_literal_name(literal: &str) -> &str {
+    if literal.starts_with("//") {
+        &literal[1..]
+    } else {
+        literal
+    }
+}
+
+fn is_enabled_unshadowed_root_literal(
+    dispatcher: &CommandDispatcher,
+    lowercase: &str,
+    literal: &str,
+) -> bool {
+    !dispatcher.is_disabled(lowercase)
+        && (!literal.starts_with("//") || dispatcher.tree.get(&literal[1..]).is_none())
+}
 
 #[allow(clippy::too_many_lines)]
 pub fn send_c_commands_packet(
@@ -30,32 +66,46 @@ pub fn send_c_commands_packet(
     for node in &dispatcher.tree {
         let children: Box<[VarInt]> = match node {
             AttachedNode::Root(_) => {
-                // Drop disabled commands from the root's child list so they
-                // disappear from the client's command graph (and tab-completion)
-                // entirely.
-                node.children_ref()
+                // Drop disabled, unpermitted, and plugin-filtered commands from the
+                // root's child list so they disappear from the client's command graph
+                // (and tab-completion) entirely.
+                let usable: Vec<(NodeId, Option<&str>)> = node
+                    .children_ref()
                     .values()
                     .copied()
-                    .filter(|id| {
-                        let (disabled, requirement, name) = match &dispatcher.tree[*id] {
+                    .filter_map(|id| {
+                        let (lowercase, requirement, literal) = match &dispatcher.tree[id] {
                             AttachedNode::Literal(child) => (
-                                dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.meta.literal_lowercase.as_str(),
                                 child.owned.requirements.evaluate(source),
                                 child.meta.literal.as_ref(),
                             ),
                             AttachedNode::Command(child) => (
-                                dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.meta.literal_lowercase.as_str(),
                                 child.owned.requirements.evaluate(source),
                                 child.meta.literal.as_ref(),
                             ),
-                            _ => (false, true, ""),
+                            _ => return Some((id, None)),
                         };
-                        !disabled
-                            && requirement
-                            && (!name.starts_with("//")
-                                || dispatcher.tree.get(&name[1..]).is_none())
+                        (requirement
+                            && is_enabled_unshadowed_root_literal(dispatcher, lowercase, literal))
+                        .then(|| (id, Some(wire_literal_name(literal))))
                     })
-                    .map(|id| VarInt((id.0.get() - 1) as i32))
+                    .collect();
+
+                let allowed = filter_sent_commands(
+                    player,
+                    server,
+                    usable.iter().filter_map(|(_, name)| *name),
+                );
+
+                usable
+                    .into_iter()
+                    .filter(|(_, name)| match (&allowed, name) {
+                        (Some(allowed), Some(name)) => allowed.contains(*name),
+                        _ => true,
+                    })
+                    .map(|(id, _)| VarInt((id.0.get() - 1) as i32))
                     .collect()
             }
             _ => node
@@ -81,11 +131,7 @@ pub fn send_c_commands_packet(
                 });
             }
             AttachedNode::Literal(literal_attached_node) => {
-                let name = if literal_attached_node.meta.literal.starts_with("//") {
-                    &literal_attached_node.meta.literal[1..]
-                } else {
-                    &literal_attached_node.meta.literal
-                };
+                let name = wire_literal_name(&literal_attached_node.meta.literal);
                 let node = ProtoNode {
                     children,
                     node_type: ProtoNodeType::Literal {
@@ -98,11 +144,7 @@ pub fn send_c_commands_packet(
                 proto_nodes.push(node);
             }
             AttachedNode::Command(command_attached_node) => {
-                let name = if command_attached_node.meta.literal.starts_with("//") {
-                    &command_attached_node.meta.literal[1..]
-                } else {
-                    &command_attached_node.meta.literal
-                };
+                let name = wire_literal_name(&command_attached_node.meta.literal);
                 let node = ProtoNode {
                     children,
                     node_type: ProtoNodeType::Literal {
@@ -153,7 +195,7 @@ struct BuilderContext<'a> {
 
 pub fn send_bedrock_commands_packet(
     player: &Arc<Player>,
-    _server: &Server,
+    server: &Arc<Server>,
     dispatcher: &CommandDispatcher,
 ) {
     let mut enum_values: Vec<String> = Vec::new();
@@ -173,31 +215,44 @@ pub fn send_bedrock_commands_packet(
         })
         .unwrap_or_default();
 
+    let mut usable_commands = Vec::with_capacity(root_child_ids.len());
     for child_id in root_child_ids {
         let idx = child_id.0.get() - 1;
         let Some(node) = tree_nodes.get(idx) else {
             continue;
         };
 
-        let (name, is_executable, child_ids) = match node {
+        let (name, lowercase, is_executable, child_ids) = match node {
             AttachedNode::Literal(lit) => (
-                lit.meta.literal.to_string(),
+                lit.meta.literal.as_ref(),
+                lit.meta.literal_lowercase.as_str(),
                 lit.owned.command.is_some(),
                 node.children_ref().values().copied().collect::<Vec<_>>(),
             ),
             AttachedNode::Command(cmd) => (
-                cmd.meta.literal.to_string(),
+                cmd.meta.literal.as_ref(),
+                cmd.meta.literal_lowercase.as_str(),
                 cmd.owned.command.is_some(),
                 node.children_ref().values().copied().collect::<Vec<_>>(),
             ),
             _ => continue,
         };
 
-        if dispatcher.is_disabled(&name.to_ascii_lowercase()) {
+        if !is_enabled_unshadowed_root_literal(dispatcher, lowercase, name) {
             continue;
         }
 
-        if name.starts_with("//") && dispatcher.tree.get(&name[1..]).is_some() {
+        usable_commands.push((name, is_executable, child_ids));
+    }
+
+    let allowed = filter_sent_commands(
+        player,
+        server,
+        usable_commands.iter().map(|(name, _, _)| *name),
+    );
+
+    for (name, is_executable, child_ids) in usable_commands {
+        if allowed.as_ref().is_some_and(|set| !set.contains(name)) {
             continue;
         }
 
@@ -210,7 +265,7 @@ pub fn send_bedrock_commands_packet(
             build_overloads_from_attached_nodes(&tree_nodes, &child_ids, is_executable, &mut ctx);
 
         commands.push(CommandData {
-            name,
+            name: name.to_string(),
             description: String::new(),
             flags: 0,
             permission_level: CommandPermissionLevel::Any.into(),
@@ -408,4 +463,272 @@ const fn bedrock_param_type(arg: &ArgumentType) -> u32 {
         _ => arg_types::ARG_TYPE_STRING,
     };
     base | arg_flags::ARG_FLAG_VALID
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::Duration,
+    };
+
+    use arc_swap::ArcSwap;
+    use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+    use pumpkin_data::packet::CURRENT_MC_VERSION;
+    use pumpkin_protocol::{
+        ConnectionState,
+        java::{
+            client::play::CCommands, packet_decoder::TCPNetworkDecoder, server::play::SChatCommand,
+        },
+        packet::MultiVersionJavaPacket,
+        ser::NetworkReadExt,
+    };
+    use pumpkin_util::GameMode;
+    use uuid::Uuid;
+
+    use super::send_c_commands_packet;
+    use crate::{
+        command::{
+            argument_builder::{ArgumentBuilder, command},
+            context::command_context::CommandContext,
+            node::{CommandExecutor, CommandExecutorResult, dispatcher::CommandDispatcher},
+        },
+        data::VanillaData,
+        entity::player::Player,
+        net::{
+            ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
+            java::{JavaClient, pending::PendingConnection},
+        },
+        plugin::{
+            BoxFuture, EventHandler, EventPriority,
+            player::{
+                player_command_preprocess::PlayerCommandPreprocessEvent,
+                player_command_send::PlayerCommandSendEvent,
+            },
+        },
+        server::Server,
+    };
+
+    struct NoopExecutor;
+
+    impl CommandExecutor for NoopExecutor {
+        fn execute(&self, _context: &CommandContext) -> CommandExecutorResult {
+            Ok(1)
+        }
+    }
+
+    struct CountingExecutor(Arc<AtomicUsize>);
+
+    impl CommandExecutor for CountingExecutor {
+        fn execute(&self, _context: &CommandContext) -> CommandExecutorResult {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(1)
+        }
+    }
+
+    struct CommandFilterHandler {
+        seen: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl EventHandler<PlayerCommandSendEvent> for CommandFilterHandler {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PlayerCommandSendEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                *self
+                    .seen
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = event.commands.clone();
+                event.commands.retain(|cmd| cmd != "hidden_cmd");
+                event.commands.push("op_only_cmd".to_string());
+                event.commands.push("nonexistent_cmd".to_string());
+            })
+        }
+    }
+
+    struct CommandPreprocessHandler;
+
+    impl EventHandler<PlayerCommandPreprocessEvent> for CommandPreprocessHandler {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PlayerCommandPreprocessEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.command == "blocked_cmd" {
+                    event.cancelled = true;
+                } else if event.command == "alias_cmd" {
+                    event.command = "counted_cmd".to_string();
+                }
+            })
+        }
+    }
+
+    async fn test_server_and_player() -> Result<
+        (
+            tempfile::TempDir,
+            Arc<Server>,
+            Arc<Player>,
+            tokio::io::DuplexStream,
+        ),
+        Box<dyn std::error::Error>,
+    > {
+        let directory = tempfile::tempdir()?;
+        let basic = BasicConfiguration {
+            default_level_name: directory
+                .path()
+                .join("world")
+                .to_string_lossy()
+                .into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..Default::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.bedrock.online_mode = false;
+        let server = Server::new(
+            basic,
+            advanced,
+            TelemetryConfig::default(),
+            VanillaData::default(),
+            vec![],
+        )
+        .await?;
+        let world = server.worlds.load().first().cloned().ok_or("No world")?;
+        let (transport, peer) = tokio::io::duplex(65536);
+        let (read, write) = tokio::io::split(transport);
+        let pending = PendingConnection::from_transport(
+            Box::new(read),
+            Box::new(write),
+            "127.0.0.1:25565".parse()?,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(&server),
+        );
+        let profile = GameProfile {
+            id: Uuid::new_v4(),
+            name: "CmdEventTest".into(),
+            properties: ArcSwap::from_pointee(vec![]),
+            profile_actions: None,
+        };
+        let mut client =
+            JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+        client.connection_state.store(ConnectionState::Play);
+        client.start_outgoing_packet_task();
+        let player = Arc::new(Player::new(
+            Arc::new(ClientPlatform::Java(client)),
+            profile,
+            PlayerConfig::default(),
+            &world,
+            GameMode::Survival,
+        ));
+        Ok((directory, server, player, peer))
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn command_send_event_filters_root_commands_without_adding_unpermitted_ones()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, server, player, peer) = test_server_and_player().await?;
+
+        let mut dispatcher = CommandDispatcher::default();
+        dispatcher.register(command("allowed_cmd", "allowed").executes(NoopExecutor));
+        dispatcher.register(command("hidden_cmd", "hidden").executes(NoopExecutor));
+        dispatcher.register(
+            command("op_only_cmd", "op")
+                .requires("minecraft:command.op")
+                .executes(NoopExecutor),
+        );
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        server.plugin_manager.register(
+            Arc::new(CommandFilterHandler { seen: seen.clone() }),
+            EventPriority::Normal,
+            true,
+        );
+
+        send_c_commands_packet(&player, &server, &dispatcher);
+
+        let seen_cmds = seen
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        assert_eq!(seen_cmds, vec!["allowed_cmd", "hidden_cmd"]);
+
+        let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
+        let packet =
+            tokio::time::timeout(Duration::from_secs(10), decoder.get_raw_packet()).await??;
+        assert_eq!(packet.id, CCommands::to_id(CURRENT_MC_VERSION));
+
+        let mut cursor = &packet.payload[..];
+        let node_count = cursor.get_var_int()?.0;
+        assert_eq!(node_count, 4);
+        let root_flags = cursor.get_u8()?;
+        assert_eq!(root_flags, 0);
+        let root_children_len = cursor.get_var_int()?.0;
+        assert_eq!(root_children_len, 1);
+        let only_child_idx = cursor.get_var_int()?.0;
+        assert_eq!(only_child_idx, 1);
+
+        if let Some(client) = player.client.java() {
+            client.close();
+            client.await_tasks().await;
+        }
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn command_preprocess_event_can_cancel_or_rewrite_commands()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, server, player, _peer) = test_server_and_player().await?;
+
+        let executions = Arc::new(AtomicUsize::new(0));
+        server.command_dispatcher.rcu(|dispatcher| {
+            let mut next = (**dispatcher).clone();
+            next.register(
+                command("counted_cmd", "counted").executes(CountingExecutor(executions.clone())),
+            );
+            next.register(
+                command("blocked_cmd", "blocked").executes(CountingExecutor(executions.clone())),
+            );
+            Arc::new(next)
+        });
+
+        server.plugin_manager.register(
+            Arc::new(CommandPreprocessHandler),
+            EventPriority::Normal,
+            true,
+        );
+
+        let client = player.client.java().ok_or("No Java client")?;
+        client
+            .handle_chat_command(
+                &player,
+                &server,
+                &SChatCommand {
+                    command: "blocked_cmd",
+                },
+            )
+            .await;
+        assert_eq!(executions.load(Ordering::SeqCst), 0);
+
+        client
+            .handle_chat_command(
+                &player,
+                &server,
+                &SChatCommand {
+                    command: "alias_cmd",
+                },
+            )
+            .await;
+        assert_eq!(executions.load(Ordering::SeqCst), 1);
+
+        client.close();
+        client.await_tasks().await;
+        Ok(())
+    }
 }

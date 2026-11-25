@@ -1,4 +1,7 @@
-use pumpkin_data::{Block, fluid::FluidProperties};
+use pumpkin_data::{
+    Block,
+    fluid::{Falling, FlowingFluidProperties, Fluid, Level},
+};
 use pumpkin_gametest::{GameTestContext, GameTestResult};
 use pumpkin_util::math::position::BlockPos;
 
@@ -25,18 +28,14 @@ pub(super) async fn test_water_lava_interactions(test: GameTestContext) -> GameT
 
     let lava_cobble_pos = BlockPos::new(2, 1, 3);
     let water_adj_pos = BlockPos::new(1, 1, 3);
-    let mut flowing_lava = pumpkin_data::fluid::FlowingWaterLikeFluidProperties::default(
-        &pumpkin_data::fluid::Fluid::FLOWING_LAVA,
-    );
-    flowing_lava.level = pumpkin_data::fluid::Level::L2;
-    flowing_lava.falling = pumpkin_data::fluid::Falling::False;
+    let flowing_lava = FlowingFluidProperties {
+        level: Level::L2,
+        falling: Falling::False,
+    }
+    .to_state_id(&Fluid::FLOWING_LAVA);
     test.set_block_default(&water_adj_pos, &Block::WATER)
         .await?;
-    test.set_block(
-        &lava_cobble_pos,
-        flowing_lava.to_state_id(&pumpkin_data::fluid::Fluid::FLOWING_LAVA),
-    )
-    .await?;
+    test.set_block(&lava_cobble_pos, flowing_lava).await?;
     test.assert_block_present(&lava_cobble_pos, &Block::COBBLESTONE)
         .await?;
 
@@ -47,11 +46,7 @@ pub(super) async fn test_water_lava_interactions(test: GameTestContext) -> GameT
         .await?;
     test.set_block_default(&blue_ice_pos, &Block::BLUE_ICE)
         .await?;
-    test.set_block(
-        &basalt_pos,
-        flowing_lava.to_state_id(&pumpkin_data::fluid::Fluid::FLOWING_LAVA),
-    )
-    .await?;
+    test.set_block(&basalt_pos, flowing_lava).await?;
     test.assert_block_present(&basalt_pos, &Block::BASALT)
         .await?;
 

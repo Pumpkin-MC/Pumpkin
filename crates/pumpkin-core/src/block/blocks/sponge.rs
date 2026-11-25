@@ -109,7 +109,7 @@ impl BlockBehaviour for WetSpongeBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         {
             // Check if placed where water evaporates (EnvironmentAttributes.WATER_EVAPORATES), if so, dry out
-            if args.world.dimension.water_evaporates {
+            if args.world.water_evaporates(args.position) {
                 args.world.set_block_state(
                     args.position,
                     Block::SPONGE.default_state.id,
