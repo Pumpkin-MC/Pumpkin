@@ -221,6 +221,8 @@ impl Mob for PolarBearEntity {
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
+        // Vanilla restores the saved grudge target on load, so before any AI target selection.
+        self.restore_persistent_target(&self.get_entity().world.load());
         if self.warning_sound_ticks.load(Ordering::Relaxed) > 0 {
             self.warning_sound_ticks.fetch_sub(1, Ordering::Relaxed);
         }
