@@ -52,23 +52,11 @@ fn can_be_lit(block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
         return None;
     }
 
-    let mut props = block.properties(state_id)?.to_props();
-
-    if props
-        .iter()
-        .any(|p| matches!(p, pumpkin_data::Property::Waterlogged(true)))
+    if state_id.is_waterlogged()
+        || block.get_property(state_id, pumpkin_data::PropertyKey::Lit)
+            != Some(pumpkin_data::Property::Lit(false))
     {
         return None;
     }
-
-    let value = props.iter_mut().find_map(|p| match p {
-        pumpkin_data::Property::Lit(lit) => Some(lit),
-        _ => None,
-    })?;
-    if *value {
-        return None;
-    }
-
-    *value = true;
-    Some(block.from_properties(&props).to_state_id(block))
+    block.with_property(state_id, pumpkin_data::Property::Lit(true))
 }

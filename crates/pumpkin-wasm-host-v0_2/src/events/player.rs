@@ -384,17 +384,22 @@ impl ToFromWasmEvent for PlayerCommandSendEvent {
 
         Event::PlayerCommandSendEvent(PlayerCommandSendEventData {
             player,
-            command: self.command.clone(),
-            cancelled: self.cancelled,
+            commands: self.commands.clone(),
         })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
+        if let Event::PlayerCommandSendEvent(data) = event {
+            self.commands = data.commands;
+        }
     }
 
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerCommandSendEvent(data) => Self {
                 player: consume_player(state, &data.player),
-                command: data.command,
-                cancelled: data.cancelled,
+                commands: data.commands,
             },
             _ => panic!("unexpected event type"),
         }

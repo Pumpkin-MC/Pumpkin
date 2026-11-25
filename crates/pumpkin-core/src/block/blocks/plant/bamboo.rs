@@ -71,7 +71,7 @@ impl BlockBehaviour for BambooBlock {
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         if args.player.is_some()
-            && World::get_fluid_from_state_id(args.block_accessor.get_block_state_id(args.position))
+            && Fluid::of_block_state(args.block_accessor.get_block_state_id(args.position))
                 != &Fluid::EMPTY
         {
             return false;

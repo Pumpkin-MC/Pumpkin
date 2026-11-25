@@ -222,7 +222,7 @@ pub(super) fn consume_world(
 type WasmEvent = crate::pumpkin::plugin::event::Event;
 
 /// An event crossing into a guest handler and back, with its type erased.
-trait PendingWasmEvent: Send {
+pub(crate) trait PendingWasmEvent: Send {
     fn to_wasm(&self, state: &mut PluginHostState) -> WasmEvent;
 
     fn from_wasm(
@@ -232,7 +232,7 @@ trait PendingWasmEvent: Send {
     ) -> Box<dyn Any + Send>;
 }
 
-struct NotifiedEvent<E>(E);
+pub(crate) struct NotifiedEvent<E>(pub(crate) E);
 
 impl<E: ToFromWasmEvent + Send> PendingWasmEvent for NotifiedEvent<E> {
     fn to_wasm(&self, state: &mut PluginHostState) -> WasmEvent {
@@ -249,7 +249,7 @@ impl<E: ToFromWasmEvent + Send> PendingWasmEvent for NotifiedEvent<E> {
     }
 }
 
-struct BlockingEvent<E>(E);
+pub(crate) struct BlockingEvent<E>(pub(crate) E);
 
 impl<E: ToFromWasmEvent + Send + 'static> PendingWasmEvent for BlockingEvent<E> {
     fn to_wasm(&self, state: &mut PluginHostState) -> WasmEvent {
@@ -270,7 +270,7 @@ impl<E: ToFromWasmEvent + Send + 'static> PendingWasmEvent for BlockingEvent<E> 
 impl WasmPluginEventHandler {
     // Kept non-generic over the event type so the guest round trip is compiled once, not
     // once per event (~27% of the pumpkin crate's LLVM IR before this was split out).
-    async fn dispatch(
+    pub(crate) async fn dispatch(
         &self,
         server: Arc<Server>,
         event: Box<dyn PendingWasmEvent>,

@@ -564,8 +564,9 @@ impl PandaEntity {
 
         let counter = self.get_eat_counter();
         if counter % EATING_EFFECT_INTERVAL == 0 {
-            let volume = 0.5 + 0.5 * f32::from(rand::random::<bool>());
-            let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, 1.0);
+            let mut rng = self.get_random();
+            let volume = 0.5 + 0.5 * f32::from(rng.random_range(0i8..2));
+            let pitch = (rng.random::<f32>() - rng.random::<f32>()).mul_add(0.2, 1.0);
             self.play_entity_sound(Sound::EntityPandaEat, volume, pitch);
         }
         if counter > EATING_MIN_TICKS_BEFORE_STOP && next_int(EATING_STOP_ODDS) == 1 {

@@ -17,7 +17,7 @@ use pumpkin_protocol::bedrock::{
     },
     server::{
         login::SLogin, request_network_settings::SRequestNetworkSettings,
-        resource_pack_chunk_request::SResourcePackChunkRequest,
+        resource_pack_chunk_request::SResourcePackChunkRequest, sub_client_login::SSubClientLogin,
     },
 };
 use pumpkin_protocol::bedrock::{
