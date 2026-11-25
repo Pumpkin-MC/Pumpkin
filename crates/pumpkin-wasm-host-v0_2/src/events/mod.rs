@@ -48,10 +48,9 @@ fn get_event_inner<E: Payload + ToFromWasmEvent + 'static>(
         }
     };
 
-    let result = match handle.read::<E>() {
-        Some(value) => Ok(Ok(value.to_wasm_event(state))),
-        None => Ok(Err(())),
-    };
+    let result = handle
+        .read::<E>()
+        .map_or_else(|| Ok(Err(())), |value| Ok(Ok(value.to_wasm_event(state))));
 
     match state.get_mut(event) {
         Ok(slot) => {
@@ -69,7 +68,7 @@ fn get_event_inner<E: Payload + ToFromWasmEvent + 'static>(
             }
             return Err(error);
         }
-    };
+    }
 
     result
 }
@@ -89,15 +88,12 @@ fn set_event_inner<E: Payload + ToFromWasmEvent + 'static>(
         }
     };
 
-    let result = match handle.write::<E>() {
-        Some(value) => {
-            value.apply_wasm_event(data, state);
-            Ok(Ok(()))
-        }
-        None => {
-            data.cleanup_event(state);
-            Ok(Err(()))
-        }
+    let result = if let Some(value) = handle.write::<E>() {
+        value.apply_wasm_event(data, state);
+        Ok(Ok(()))
+    } else {
+        data.cleanup_event(state);
+        Ok(Err(()))
     };
 
     match state.get_mut(event) {
@@ -110,7 +106,7 @@ fn set_event_inner<E: Payload + ToFromWasmEvent + 'static>(
         Err(error) => {
             return Err(error);
         }
-    };
+    }
 
     result
 }

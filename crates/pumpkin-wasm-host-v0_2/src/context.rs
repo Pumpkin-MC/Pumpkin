@@ -19,6 +19,7 @@ use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl pumpkin::plugin::context::Host for PluginHostState {}
 
+#[expect(clippy::too_many_lines)]
 fn event_type_to_name(event_type: EventType) -> &'static str {
     use pumpkin_core::plugin::api::events::{
         block::{
