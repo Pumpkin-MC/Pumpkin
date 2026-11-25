@@ -16,29 +16,31 @@ impl JavaClient {
             return;
         }
 
-        if entity_id.0 == player.entity_id() {
-            self.try_kick(&TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                [],
-            ));
-            return;
-        }
-
         let player_target = world.get_player_by_id(entity_id.0);
         let target: Option<Arc<dyn EntityBase>> = player_target
             .as_ref()
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
             .or_else(|| world.get_entity_by_id(entity_id.0));
+        // Vanilla ignores a target that is gone, like a cart broken by the previous hit.
         let Some(target) = target else {
+            return;
+        };
+        // TODO: vanilla `handleAttack` ignores spectators, targets outside the world border and
+        // `PIERCING_WEAPON` main hands, and checks `isWithinAttackRange` (the weapon's
+        // `ATTACK_RANGE`) with a 3.0 buffer.
+        if !player.can_interact_with_entity(target.as_ref(), 1.0) {
+            return;
+        }
+        if is_invalid_attack_target(player, target.as_ref()) {
             self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 [],
             ));
-            return;
-        };
-        if !player.can_interact_with_entity(target.as_ref(), 1.0) {
+            warn!(
+                "Player {} tried to attack an invalid entity",
+                player.gameprofile.name
+            );
             return;
         }
         if let Some(player_victim) = &player_target {
@@ -56,4 +58,19 @@ impl JavaClient {
         }
         player.attack(&target);
     }
+}
+
+/// Vanilla `handleAttack`: items, experience orbs, the player itself and arrows that can't be
+/// hit are never valid targets.
+fn is_invalid_attack_target(player: &Player, target: &dyn EntityBase) -> bool {
+    let target_entity = target.get_entity();
+    let entity_type = target_entity.entity_type;
+    target_entity.entity_id == player.entity_id()
+        || entity_type == &pumpkin_data::entity::EntityType::ITEM
+        || entity_type == &pumpkin_data::entity::EntityType::EXPERIENCE_ORB
+        || (crate::entity::projectile::abstract_arrow::is_abstract_arrow(entity_type)
+            && !pumpkin_data::tag::Taggable::has_tag(
+                entity_type,
+                &pumpkin_data::tag::EntityType::MINECRAFT_REDIRECTABLE_PROJECTILE,
+            ))
 }

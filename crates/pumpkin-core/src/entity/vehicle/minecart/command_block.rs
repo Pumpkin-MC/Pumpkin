@@ -34,6 +34,7 @@ impl ReturnValueCallable for SuccessCounter {
 /// Vanilla `MinecartCommandBlock` + `BaseCommandBlock`.
 pub struct CommandBlockMinecart {
     tick_count: AtomicI32,
+    /// Not saved, so the cooldown starts over on load (MC-121903).
     last_activated: AtomicI32,
     last_execution: AtomicI64,
     update_last_execution: AtomicBool,

@@ -929,7 +929,7 @@ pub fn generate_speed(mut probability: impl FnMut() -> f64) -> f64 {
 pub fn cause_fall_damage(
     mob: &dyn Mob,
     caller: &dyn EntityBase,
-    fall_distance: f32,
+    fall_distance: f64,
     damage_modifier: f32,
 ) -> bool {
     if fall_distance > 1.0 {
@@ -946,7 +946,9 @@ pub fn cause_fall_damage(
     }
     let living = &mob.get_mob_entity().living_entity;
     living.damage(caller, damage as f32, DamageType::FALL);
-    living.propagate_fall_to_passengers(fall_distance, damage_modifier);
+    living
+        .entity
+        .propagate_fall_to_passengers(fall_distance, damage_modifier);
     living.play_block_fall_sound(caller);
     true
 }
@@ -1342,7 +1344,7 @@ macro_rules! abstract_horse_mob_hooks {
         fn cause_fall_damage(
             &self,
             caller: &dyn $crate::entity::EntityBase,
-            fall_distance: f32,
+            fall_distance: f64,
             damage_modifier: f32,
         ) -> bool {
             $crate::entity::passive::abstract_horse::cause_fall_damage(

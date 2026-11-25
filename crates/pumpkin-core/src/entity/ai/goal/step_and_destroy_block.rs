@@ -113,7 +113,11 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
 
     fn stop(&mut self, mob: &dyn Mob) {
         // Assuming fall_distance is AtomicF32/f32
-        mob.get_mob_entity().living_entity.fall_distance.store(1.0);
+        mob.get_mob_entity()
+            .living_entity
+            .entity
+            .fall_distance
+            .store(1.0);
     }
 
     fn tick(&mut self, mob: &dyn Mob) {

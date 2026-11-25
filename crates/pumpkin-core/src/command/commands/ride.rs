@@ -4,7 +4,6 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
-use crate::entity::EntityBase;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
@@ -34,17 +33,6 @@ static ERROR_NOT_RIDING: CommandErrorType<1> = CommandErrorType::new(
     "Not riding anything",
 );
 
-fn is_riding_recursive(entity: &dyn EntityBase, possible_vehicle: &dyn EntityBase) -> bool {
-    let mut current = possible_vehicle.get_entity().get_vehicle();
-    while let Some(vehicle) = current {
-        if vehicle.get_entity().entity_id == entity.get_entity().entity_id {
-            return true;
-        }
-        current = vehicle.get_entity().get_vehicle();
-    }
-    false
-}
-
 struct RideMountExecutor;
 
 impl CommandExecutor for RideMountExecutor {
@@ -63,7 +51,9 @@ impl CommandExecutor for RideMountExecutor {
         }
 
         if target.get_entity().entity_id == vehicle.get_entity().entity_id
-            || is_riding_recursive(target.as_ref(), vehicle.as_ref())
+            || vehicle
+                .get_entity()
+                .rides_through(target.get_entity().entity_id)
         {
             return Err(ERROR_LOOP.create_without_context());
         }
@@ -100,7 +90,11 @@ impl CommandExecutor for RideDismountExecutor {
             || Err(ERROR_NOT_RIDING.create_without_context(target.get_display_name())),
             |vehicle| {
                 let target_id = target.get_entity().entity_id;
-                vehicle.get_entity().remove_passenger_sync(target_id);
+                vehicle.get_entity().remove_passenger(target_id);
+                // A plugin may cancel the dismount.
+                if target.get_entity().get_vehicle().is_some() {
+                    return Ok(0);
+                }
 
                 let msg = TextComponent::translate_cross(
                     translation::java::COMMANDS_RIDE_DISMOUNT_SUCCESS,

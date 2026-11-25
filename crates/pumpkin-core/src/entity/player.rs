@@ -1719,7 +1719,7 @@ impl Player {
             && can_smash_attack(&self.living_entity);
         // Vanilla adds the weapon's damage bonus before the critical hit multiplier.
         if is_mace_smash {
-            let fall_distance = f64::from(self.living_entity.fall_distance.load());
+            let fall_distance = self.living_entity.entity.fall_distance.load();
             let mut smash_bonus_per_block = 0.0f64;
             if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
@@ -1771,7 +1771,7 @@ impl Player {
             self.living_entity
                 .set_ignore_fall_damage_from_current_impulse(true, impact_pos);
 
-            let fall_distance = self.living_entity.fall_distance.load();
+            let fall_distance = self.living_entity.entity.fall_distance.load();
             let sound = if victim_entity.on_ground.load(Ordering::Relaxed) {
                 self.spawn_extra_particles_on_fall
                     .store(true, Ordering::Relaxed);
@@ -1795,7 +1795,7 @@ impl Player {
         );
 
         if is_mace_smash_living {
-            self.living_entity.fall_distance.store(0.0);
+            self.living_entity.entity.fall_distance.store(0.0);
         }
 
         player_attack_sound(&pos, &world, attack_type);
@@ -3030,7 +3030,7 @@ impl Player {
         let entity = self.get_entity();
         let Some(velocity) = self.fire_velocity_event(entity.velocity.load()) else {
             // Cancelled -> back to the motion the client has, watchers get that instead
-            entity.velocity.store(entity.known_movement());
+            entity.velocity.store(entity.movement.load());
             entity.velocity_dirty.store(true, Ordering::SeqCst);
             return;
         };
@@ -3729,8 +3729,8 @@ impl Player {
         }
         // Vanilla `checkFallDistanceAccumulation`: only a steep dive builds it up. In the tick,
         // so a landing move has already taken its damage.
-        if entity.movement.load().y > -0.5 && self.living_entity.fall_distance.load() > 1.0 {
-            self.living_entity.fall_distance.store(1.0);
+        if entity.movement.load().y > -0.5 && self.living_entity.entity.fall_distance.load() > 1.0 {
+            self.living_entity.entity.fall_distance.store(1.0);
         }
         if !self.can_glide() {
             if self.glide_stop_allowed() {
@@ -3784,7 +3784,7 @@ impl Player {
         {
             return;
         }
-        let fall_distance = self.living_entity.fall_distance.load();
+        let fall_distance = self.living_entity.entity.fall_distance.load();
         if self.spawn_extra_particles_on_fall.load(Ordering::Relaxed)
             && on_ground
             && fall_distance > 0.0
@@ -3796,7 +3796,7 @@ impl Player {
                 f64::from(pos.0.y) + 1.0,
                 f64::from(pos.0.z) + 0.5,
             );
-            let particles = (50.0 * f64::from(fall_distance)).clamp(0.0, 200.0) as i32;
+            let particles = (50.0 * fall_distance).clamp(0.0, 200.0) as i32;
             self.world().spawn_block_particle(
                 centered,
                 Vector3::new(0.3, 0.3, 0.3),
@@ -5577,7 +5577,7 @@ impl Player {
 
     pub fn set_flying(&self, flying: bool) {
         if flying {
-            self.living_entity.fall_distance.store(0.0);
+            self.living_entity.entity.fall_distance.store(0.0);
         }
         self.abilities
             .lock()
@@ -5905,7 +5905,7 @@ impl Player {
                 entity.set_sneaking(false);
             }
             entity.on_ground.store(false, Ordering::Relaxed);
-            self.living_entity.fall_distance.store(0.0);
+            self.living_entity.entity.fall_distance.store(0.0);
         }
 
         if gamemode != GameMode::Spectator && self.camera_target_id.load().is_some() {

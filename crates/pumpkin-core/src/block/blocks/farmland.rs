@@ -57,7 +57,7 @@ impl BlockBehaviour for FarmlandBlock {
     }
 
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity() {
+        if args.entity.get_living_entity().is_some() {
             let entity = args.entity.get_entity();
             let pos = entity.get_supporting_block_pos().unwrap_or_else(|| {
                 let entity_pos = entity.pos.load();
@@ -68,7 +68,7 @@ impl BlockBehaviour for FarmlandBlock {
                 ))
             });
             if args.world.get_block(&pos) == &Block::FARMLAND
-                && rand::rng().random::<f32>() < args.fall_distance - 0.5
+                && f64::from(rand::rng().random::<f32>()) < args.fall_distance - 0.5
             {
                 let can_trample = args.entity.get_player().map_or_else(
                     || args.world.level_info.load().game_rules.mob_griefing,
@@ -83,8 +83,9 @@ impl BlockBehaviour for FarmlandBlock {
                     );
                 }
             }
-            living.handle_fall_damage(args.entity, args.fall_distance, 1.0);
         }
+        args.entity
+            .cause_fall_damage(args.entity, args.fall_distance, 1.0);
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
