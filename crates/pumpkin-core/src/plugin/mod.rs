@@ -219,7 +219,7 @@ where
         Box::pin(async move {
             let Some(payload) = event.write::<E>() else {
                 tracing::error!(
-                    "A handler for `{}` failed. Unable to get write acces to event. Skipped.",
+                    "A handler for `{}` failed. Unable to get write access to event. Skipped.",
                     E::get_name_static()
                 );
                 return;
