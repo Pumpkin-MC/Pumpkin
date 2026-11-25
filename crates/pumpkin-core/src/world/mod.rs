@@ -4368,7 +4368,7 @@ impl World {
                 position,
                 power,
                 block_count as i32,
-                None,
+                explosion.player_knockback(player.entity_id()),
                 VarInt(particle as i32),
                 sound.clone(),
             ));

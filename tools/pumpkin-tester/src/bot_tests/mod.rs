@@ -1,6 +1,7 @@
 mod block_tuning_and_invert;
 mod commands_and_gamemode;
 mod embedded_stop;
+mod explosion_knockback;
 mod leashed_bucket;
 mod login_and_movement;
 mod loot_tables;
@@ -27,6 +28,8 @@ pub async fn run_bot_tests(
 
     let (mut bot1, bot2) =
         login_and_movement::run_login_and_movement_tests(server, addr, summary_lines).await?;
+
+    explosion_knockback::run_explosion_knockback_test(server, &mut bot1, summary_lines).await?;
 
     commands_and_gamemode::run_commands_and_gamemode_tests(
         server,
