@@ -1795,13 +1795,12 @@ mod tests {
             islands(&nodes, &[], &[])
         };
         assert_eq!(partitioned(&original), [vec![0, 1]]);
+        let prune = |reaches: &mut [TickReach]| {
+            prune_block_writes(&world, reaches, &[check, BlockWriteCheck::Unconditional])
+                .ok_or("unexpected pruning budget exhaustion")
+        };
         let mut reaches = original.clone();
-        prune_block_writes(
-            &world,
-            &mut reaches,
-            &[check, BlockWriteCheck::Unconditional],
-        )
-        .ok_or("unexpected pruning budget exhaustion")?;
+        prune(&mut reaches)?;
         assert_eq!(partitioned(&reaches), [vec![0], vec![1]]);
         assert_box(&reaches[0].body, &original[0].body);
         assert_box(&reaches[0].entities, &original[0].entities);
@@ -1809,12 +1808,7 @@ mod tests {
 
         chunk.set_block_absolute_y(8, 39, 8, Block::DETECTOR_RAIL.default_state.id);
         let mut reaches = original.clone();
-        prune_block_writes(
-            &world,
-            &mut reaches,
-            &[check, BlockWriteCheck::Unconditional],
-        )
-        .ok_or("unexpected pruning budget exhaustion")?;
+        prune(&mut reaches)?;
         assert_eq!(partitioned(&reaches), [vec![0, 1]]);
 
         chunk.set_block_absolute_y(8, 39, 8, Block::AIR.default_state.id);
@@ -1836,12 +1830,7 @@ mod tests {
 
         world.level.loaded_chunks.remove(&Vector2::new(0, 0));
         let mut reaches = original;
-        prune_block_writes(
-            &world,
-            &mut reaches,
-            &[check, BlockWriteCheck::Unconditional],
-        )
-        .ok_or("unexpected pruning budget exhaustion")?;
+        prune(&mut reaches)?;
         assert!(reaches[0].block_writes.is_some());
         world.level.shutdown().await;
         Ok(())
