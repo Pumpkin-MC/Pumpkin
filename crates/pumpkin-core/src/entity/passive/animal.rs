@@ -16,6 +16,8 @@ use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
+pub const DEFAULT_AMBIENT_SOUND_INTERVAL: i32 = 120;
+
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
 

@@ -22,9 +22,14 @@ impl ItemMetadata for DyeItem {
 }
 
 impl ItemBehaviour for DyeItem {
-    fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+    fn use_on_entity(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
+        entity: Arc<dyn EntityBase>,
+    ) -> bool {
         let Some(color) = item.get_data_component::<DyeImpl>().map(|d| d.color.id()) else {
-            return;
+            return false;
         };
         if let Some(sheep) = entity
             .cast_any()
@@ -42,7 +47,9 @@ impl ItemBehaviour for DyeItem {
             );
             sheep.set_color(color);
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            return true;
         }
+        false
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

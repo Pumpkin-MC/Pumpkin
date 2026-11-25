@@ -414,14 +414,8 @@ impl Mob for HappyGhastEntity {
             .any(|p| p.get_entity().entity_id == passenger.get_entity().entity_id)
     }
 
-    fn mob_on_passenger_added(&self, _passenger: &dyn EntityBase) {
-        let count = self
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len();
-        if count == 1 {
+    fn mob_on_passenger_added(&self, _passenger: &dyn EntityBase, is_first_passenger: bool) {
+        if is_first_passenger {
             self.play_entity_sound(Sound::EntityHappyGhastHarnessGogglesDown, 1.0, 1.0);
         }
         if !self.scan_player_above_ghast() {
@@ -431,15 +425,9 @@ impl Mob for HappyGhastEntity {
         }
     }
 
-    fn mob_on_passenger_removed(&self, _passenger: &dyn EntityBase) {
+    fn mob_on_passenger_removed(&self, _passenger: &dyn EntityBase, is_last_passenger: bool) {
         self.set_server_still_timeout(Self::MAX_STILL_TIMEOUT);
-        let is_empty = self
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_empty();
-        if is_empty {
+        if is_last_passenger {
             self.mob_entity.clear_home();
             self.play_entity_sound(Sound::EntityHappyGhastHarnessGogglesUp, 1.0, 1.0);
         }
@@ -592,7 +580,7 @@ impl Mob for HappyGhastEntity {
     }
 
     fn get_ambient_sound_interval(&self) -> i32 {
-        let base = MobEntity::DEFAULT_AMBIENT_SOUND_INTERVAL;
+        let base = crate::entity::passive::animal::DEFAULT_AMBIENT_SOUND_INTERVAL;
         if self.get_entity().has_passengers() {
             base * 6
         } else {
@@ -694,22 +682,18 @@ impl Mob for HappyGhastEntity {
             return self.animal_interact(player, item_stack);
         }
 
-        if !item_stack.is_empty() {
-            let before = item_stack.clone();
-            if let Some(server) = self.get_entity().world.load().server.upgrade()
-                && let Some(this_entity) = self
-                    .get_entity()
-                    .world
-                    .load()
-                    .get_entity_by_id(self.get_entity().entity_id)
-            {
-                server
-                    .item_registry
-                    .use_on_entity(item_stack, player, this_entity);
-                if !item_stack.are_equal(&before) {
-                    return true;
-                }
-            }
+        if !item_stack.is_empty()
+            && let Some(server) = self.get_entity().world.load().server.upgrade()
+            && let Some(this_entity) = self
+                .get_entity()
+                .world
+                .load()
+                .get_entity_by_id(self.get_entity().entity_id)
+            && server
+                .item_registry
+                .use_on_entity(item_stack, player, this_entity)
+        {
+            return true;
         }
 
         if self.is_wearing_body_armor() && !player.get_entity().is_sneaking() {
@@ -921,14 +905,14 @@ mod tests {
         let ghast = test_happy_ghast(&folder, 0);
         let rider = test_happy_ghast(&folder, 0);
 
-        ghast.on_passenger_added(rider.as_ref());
+        ghast.on_passenger_added(rider.as_ref(), true);
         // Since no player is standing above, timeout is reset to 0
         assert_eq!(ghast.server_still_timeout.load(Ordering::Relaxed), 0);
 
         ghast.mob_entity.set_home_to(BlockPos::new(0, 64, 0), 16);
         assert!(ghast.mob_entity.has_position_target());
 
-        ghast.on_passenger_removed(rider.as_ref());
+        ghast.on_passenger_removed(rider.as_ref(), true);
         // Removing passenger sets still timeout to 10 and clears home when empty
         assert_eq!(ghast.server_still_timeout.load(Ordering::Relaxed), 10);
         assert!(!ghast.mob_entity.has_position_target());

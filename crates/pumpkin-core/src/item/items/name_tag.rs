@@ -17,7 +17,12 @@ impl ItemMetadata for NameTagItem {
 }
 
 impl ItemBehaviour for NameTagItem {
-    fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+    fn use_on_entity(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
+        entity: Arc<dyn EntityBase>,
+    ) -> bool {
         let raw_entity = entity.get_entity();
         if let Some(living) = entity.get_living_entity()
             && raw_entity.entity_type.saveable
@@ -31,7 +36,9 @@ impl ItemBehaviour for NameTagItem {
                     .store(true, Ordering::Relaxed);
             }
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            return true;
         }
+        false
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -605,10 +605,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     /// Called after a passenger has been added to this entity.
-    fn on_passenger_added(&self, _passenger: &dyn EntityBase) {}
+    fn on_passenger_added(&self, _passenger: &dyn EntityBase, _is_first_passenger: bool) {}
 
     /// Called after a passenger has been removed from this entity.
-    fn on_passenger_removed(&self, _passenger: &dyn EntityBase) {}
+    fn on_passenger_removed(&self, _passenger: &dyn EntityBase, _is_last_passenger: bool) {}
 
     fn is_spectator(&self) -> bool {
         false
@@ -2504,9 +2504,16 @@ impl Entity {
     ) -> Vector3<f64> {
         let was_on_ground = self.on_ground.load(Ordering::SeqCst);
         let bounding_box = self.bounding_box.load();
-        let movement_step = self.collide_bounding_box(movement, caller);
-
         let max_up_step = Self::max_up_step(caller);
+        let entity_colliders = self.get_entity_collisions(
+            &bounding_box
+                .stretch(movement)
+                .expand_towards(0.0, f64::from(max_up_step), 0.0)
+                .expand_all(1.0e-7),
+            caller,
+        );
+        let movement_step = self.collide_bounding_box(movement, caller, &entity_colliders);
+
         let horizontal_collision = movement.x != movement_step.x || movement.z != movement_step.z;
         let on_ground_after_collision = movement.y != movement_step.y && movement.y < 0.0;
         if max_up_step <= 0.0
@@ -2526,7 +2533,8 @@ impl Entity {
         if !on_ground_after_collision {
             step_up_box = step_up_box.expand_towards(0.0, f64::from(-1.0E-5f32), 0.0);
         }
-        let (colliders, _) = self.world.load().get_block_collisions(step_up_box, caller);
+        let (mut colliders, _) = self.world.load().get_block_collisions(step_up_box, caller);
+        colliders.extend(entity_colliders.iter().copied());
 
         for step_height in Self::candidate_step_up_heights(
             &grounded_box,
@@ -2675,12 +2683,13 @@ impl Entity {
         &self,
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
+        entity_colliders: &[BoundingBox],
     ) -> Vector3<f64> {
         self.vertical_collision.store(false, Ordering::SeqCst);
         if movement.length_squared() == 0.0 {
             return movement;
         }
-        let collision = self.collide(movement, caller);
+        let collision = self.collide_with_entities(movement, caller, entity_colliders);
         // Vanilla `onGround`: stopped while moving down, even with no supporting block found.
         self.on_ground
             .store(collision.vertical && movement.y < 0.0, Ordering::SeqCst);
@@ -2692,18 +2701,13 @@ impl Entity {
         collision.movement
     }
 
-    /// Vanilla `collide` without writing state.
-    #[expect(clippy::float_cmp)]
-    pub(crate) fn collide(&self, movement: Vector3<f64>, caller: &dyn EntityBase) -> Collision {
-        let bounding_box = self.bounding_box.load();
-
-        let (mut collisions, block_positions) = self
-            .world
-            .load()
-            .get_block_collisions(bounding_box.stretch(movement), caller);
-
-        let test_area = bounding_box.stretch(movement).expand_all(1.0e-7);
-        for entity in self.world.load().get_all_at_box(&test_area) {
+    pub(crate) fn get_entity_collisions(
+        &self,
+        test_area: &BoundingBox,
+        caller: &dyn EntityBase,
+    ) -> Vec<BoundingBox> {
+        let mut collisions = Vec::new();
+        for entity in self.world.load().get_all_at_box(test_area) {
             let other = entity.get_entity();
             if other.entity_id != self.entity_id
                 && !entity.is_spectator()
@@ -2713,6 +2717,35 @@ impl Entity {
                 collisions.push(other.bounding_box.load());
             }
         }
+        collisions
+    }
+
+    /// Vanilla `collide` without writing state.
+    pub(crate) fn collide(&self, movement: Vector3<f64>, caller: &dyn EntityBase) -> Collision {
+        let test_area = self
+            .bounding_box
+            .load()
+            .stretch(movement)
+            .expand_all(1.0e-7);
+        let entity_colliders = self.get_entity_collisions(&test_area, caller);
+        self.collide_with_entities(movement, caller, &entity_colliders)
+    }
+
+    #[expect(clippy::float_cmp)]
+    pub(crate) fn collide_with_entities(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+        entity_colliders: &[BoundingBox],
+    ) -> Collision {
+        let bounding_box = self.bounding_box.load();
+
+        let (mut collisions, block_positions) = self
+            .world
+            .load()
+            .get_block_collisions(bounding_box.stretch(movement), caller);
+
+        collisions.extend(entity_colliders.iter().copied());
 
         if collisions.is_empty() {
             return Collision::free(movement);
@@ -4175,6 +4208,15 @@ impl Entity {
     #[must_use]
     pub fn is_in_clouds(&self) -> bool {
         let world = self.world.load();
+        // Fully transparent clouds disable cloud effects (vanilla CLOUD_COLOR.w() == 0.0).
+        // Biome-specific cloud height/color overrides remain a parity gap.
+        if world
+            .dimension
+            .cloud_color
+            .is_some_and(|color| ((color as u32) >> 24) == 0)
+        {
+            return false;
+        }
         world.dimension.cloud_height.is_some_and(|cloud_height| {
             let y = self.pos.load().y;
             let height = f64::from(self.height());
@@ -5775,7 +5817,8 @@ impl Entity {
         passenger_entity.send_bedrock_actor_data(&rider_meta);
 
         passengers.push(passenger.clone());
-        let link_type = if passengers.len() == 1 { 1 } else { 2 };
+        let is_first_passenger = passengers.len() == 1;
+        let link_type = if is_first_passenger { 1 } else { 2 };
 
         let passenger_ids: Vec<VarInt> = passengers
             .iter()
@@ -5802,7 +5845,7 @@ impl Entity {
             &be_link,
         );
 
-        vehicle.on_passenger_added(passenger.as_ref());
+        vehicle.on_passenger_added(passenger.as_ref(), is_first_passenger);
         true
     }
 
@@ -5865,6 +5908,7 @@ impl Entity {
                     .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
                 passenger
             });
+        let is_last_passenger = passengers.is_empty();
 
         let passenger_ids: Vec<VarInt> = passengers
             .iter()
@@ -5892,7 +5936,7 @@ impl Entity {
         if let Some(passenger) = removed_passenger
             && let Some(this) = self.world.load().get_entity_by_id(self.entity_id)
         {
-            this.on_passenger_removed(passenger.as_ref());
+            this.on_passenger_removed(passenger.as_ref(), is_last_passenger);
         }
     }
 
@@ -5932,7 +5976,7 @@ impl Entity {
             return;
         }
 
-        let (removed_passenger, passenger_ids) = {
+        let (removed_passenger, passenger_ids, is_last_passenger) = {
             let mut passengers = self
                 .passengers
                 .lock()
@@ -5949,12 +5993,13 @@ impl Entity {
                         .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
                     passenger
                 });
+            let is_last_passenger = passengers.is_empty();
 
             let passenger_ids: Vec<VarInt> = passengers
                 .iter()
                 .map(|p| VarInt(p.get_entity().entity_id))
                 .collect();
-            (removed_passenger, passenger_ids)
+            (removed_passenger, passenger_ids, is_last_passenger)
         };
 
         let chunk_pos = self.chunk_pos.load();
@@ -5962,7 +6007,7 @@ impl Entity {
         if let Some(passenger) = removed_passenger {
             let vehicle = self.world.load().get_entity_by_id(self.entity_id);
             if let Some(this) = &vehicle {
-                this.on_passenger_removed(passenger.as_ref());
+                this.on_passenger_removed(passenger.as_ref(), is_last_passenger);
             }
             let vehicle_box = self.bounding_box.load();
             let passenger_entity = passenger.get_entity();

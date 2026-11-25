@@ -185,17 +185,20 @@ impl ItemRegistry {
         stack: &mut ItemStack,
         player: &Player,
         entity: Arc<dyn EntityBase>,
-    ) {
+    ) -> bool {
         if let Some(mob) = entity.get_mob()
             && equip_on_target(mob, player, stack)
         {
-            return;
+            return true;
         }
 
+        let before = stack.clone();
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.use_on_entity(stack, player, entity);
+            let handled = pumpkin_item.use_on_entity(stack, player, entity);
+            return handled || !stack.are_equal(&before);
         }
+        false
     }
 
     pub fn can_mine(&self, item: &Item, player: &Player) -> bool {

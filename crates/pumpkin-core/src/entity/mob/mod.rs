@@ -1661,9 +1661,9 @@ pub trait Mob: EntityBase + Send + Sync {
                 .any(|p| p.get_entity().entity_id == passenger.get_entity().entity_id)
     }
 
-    fn mob_on_passenger_added(&self, _passenger: &dyn EntityBase) {}
+    fn mob_on_passenger_added(&self, _passenger: &dyn EntityBase, _is_first_passenger: bool) {}
 
-    fn mob_on_passenger_removed(&self, _passenger: &dyn EntityBase) {}
+    fn mob_on_passenger_removed(&self, _passenger: &dyn EntityBase, _is_last_passenger: bool) {}
 
     fn mob_notify_leash_holder(&self, _leashed: &dyn EntityBase) {}
 
@@ -3053,12 +3053,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_can_add_passenger(passenger)
     }
 
-    fn on_passenger_added(&self, passenger: &dyn EntityBase) {
-        self.mob_on_passenger_added(passenger);
+    fn on_passenger_added(&self, passenger: &dyn EntityBase, is_first_passenger: bool) {
+        self.mob_on_passenger_added(passenger, is_first_passenger);
     }
 
-    fn on_passenger_removed(&self, passenger: &dyn EntityBase) {
-        self.mob_on_passenger_removed(passenger);
+    fn on_passenger_removed(&self, passenger: &dyn EntityBase, is_last_passenger: bool) {
+        self.mob_on_passenger_removed(passenger, is_last_passenger);
     }
 
     fn notify_leash_holder(&self, leashed: &dyn EntityBase) {
