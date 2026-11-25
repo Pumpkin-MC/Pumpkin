@@ -1146,6 +1146,7 @@ impl Slot for ResultSlot {
                 }
             }
         }
+        self.refill_output();
         self.mark_dirty();
     }
     fn can_insert(&self, _stack: &ItemStack) -> bool {
