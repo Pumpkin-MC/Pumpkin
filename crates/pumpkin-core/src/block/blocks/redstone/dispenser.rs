@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::block::blocks::carved_pumpkin::can_spawn_golem;
 use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::blocks::redstone::rails::rails_tag_shape;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::wither_skull::find_wither_pattern;
 use crate::block::registry::BlockActionResult;
@@ -32,7 +33,7 @@ use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEnti
 use crate::entity::tnt::TNTEntity;
 use crate::entity::r#type::from_type;
 use crate::entity::vehicle::boat::BoatEntity;
-use crate::entity::vehicle::minecart::MinecartEntity;
+use crate::entity::vehicle::minecart::{AbstractMinecart, MinecartType};
 use crate::entity::{Entity, EntityBase};
 use crate::item::ItemMetadata;
 use crate::item::items::boat::BoatItem;
@@ -42,7 +43,6 @@ use crate::item::items::bucket::{
 };
 use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
-use crate::item::items::minecart::MinecartItem;
 use crate::item::items::spawn_egg::prepare_egg_mob;
 use crate::plugin::api::events::block::block_shear_entity::BlockShearEntityEvent;
 use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
@@ -50,8 +50,7 @@ use crate::world::World;
 
 use crate::block::entities::dispenser::DispenserBlockEntity;
 use pumpkin_data::block_properties::{
-    BeeNestLikeProperties, BlockProperties, EndRodLikeProperties, Facing,
-    PoweredRailLikeProperties, RailLikeProperties, RespawnAnchorLikeProperties,
+    BeeNestLikeProperties, EndRodLikeProperties, Facing, RespawnAnchorLikeProperties,
     SkeletonSkullLikeProperties,
 };
 use pumpkin_data::data_component::DataComponent;
@@ -325,9 +324,9 @@ impl DispenserBlock {
             if !Self::dispense_boat(ctx, item) {
                 Self::drop_item(ctx, item);
             }
-        } else if MinecartItem::ids().contains(&item.item.id) {
+        } else if let Some(kind) = MinecartType::from_item(item.item) {
             // Minecarts
-            if !Self::dispense_minecart(ctx, item) {
+            if !Self::dispense_minecart(ctx, item, kind) {
                 Self::drop_item(ctx, item);
             }
         } else if item.item.id == Item::ARMOR_STAND.id {
@@ -985,30 +984,24 @@ impl DispenserBlock {
         }
     }
 
-    fn dispense_minecart(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
-        fn rail_is_ascending(world: &Arc<World>, pos: &BlockPos) -> Option<bool> {
-            let (block, state_id) = world.get_block_and_state_id(pos);
-            if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
-                return None;
-            }
-            Some(if PoweredRailLikeProperties::handles_block_id(block.id) {
-                PoweredRailLikeProperties::from_state_id(state_id)
-                    .shape
-                    .is_ascending()
-            } else {
-                RailLikeProperties::from_state_id(state_id)
-                    .shape
-                    .is_ascending()
-            })
-        }
+    /// Vanilla `MinecartDispenseItemBehavior.execute`.
+    fn dispense_minecart(
+        ctx: &DispenseContext<'_>,
+        item: &mut ItemStack,
+        kind: MinecartType,
+    ) -> bool {
+        let shape_at = |pos: &BlockPos| {
+            let (block, state_id) = ctx.world.get_block_and_state_id(pos);
+            rails_tag_shape(block, state_id)
+        };
 
         let target = Self::target_position(ctx);
-        let height = if let Some(ascending) = rail_is_ascending(ctx.world, &target) {
-            if ascending { 0.6 } else { 0.1 }
+        let height = if let Some(shape) = shape_at(&target) {
+            if shape.is_ascending() { 0.6 } else { 0.1 }
         } else if ctx.world.get_block_state(&target).is_air()
-            && let Some(ascending) = rail_is_ascending(ctx.world, &target.down())
+            && let Some(shape) = shape_at(&target.down())
         {
-            if ascending && ctx.facing != Facing::Down {
+            if shape.is_ascending() && ctx.facing != Facing::Down {
                 -0.4
             } else {
                 -0.9
@@ -1017,9 +1010,7 @@ impl DispenserBlock {
             return false;
         };
 
-        let entity_type = MinecartItem::item_to_entity(item.item);
         let dispensed = item.split(1);
-
         let normal = to_normal(ctx.facing);
         let center = ctx.position.to_centered_f64();
         let spawn_pos = Vector3::new(
@@ -1028,13 +1019,16 @@ impl DispenserBlock {
             normal.z.mul_add(1.125, center.z),
         );
 
-        let entity = Entity::new(ctx.world.clone(), spawn_pos, entity_type);
-        let minecart = Arc::new(MinecartEntity::new(entity));
-        crate::item::items::spawn_egg::apply_entity_variant(&dispensed, minecart.as_ref(), None);
+        let minecart = Arc::new(AbstractMinecart::create(
+            ctx.world.clone(),
+            spawn_pos,
+            kind,
+            &dispensed,
+            None,
+        ));
         ctx.world.spawn_entity(minecart);
 
-        ctx.world
-            .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
+        Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
         true
     }
 

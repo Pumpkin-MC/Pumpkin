@@ -10,9 +10,8 @@ pub struct HoneyBlock;
 
 impl BlockBehaviour for HoneyBlock {
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance, 0.2);
-        }
+        args.entity
+            .cause_fall_damage(args.entity, args.fall_distance, 0.2);
     }
 
     fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {

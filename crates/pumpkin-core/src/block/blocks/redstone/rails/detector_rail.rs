@@ -1,13 +1,9 @@
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::RailShapeStraight;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection, BlockStateId};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -34,21 +30,13 @@ use super::common::{
     can_place_rail_at, compute_placed_rail_shape, rail_placement_is_valid,
     update_flanking_rails_shape,
 };
+use crate::entity::vehicle::minecart::{AbstractMinecart, is_minecart};
 use pumpkin_data::block_properties::DetectorRailProperties;
 
 #[pumpkin_block("minecraft:detector_rail")]
 pub struct DetectorRailBlock;
 
-fn is_minecart(entity_type: &EntityType) -> bool {
-    entity_type == &EntityType::MINECART
-        || entity_type == &EntityType::CHEST_MINECART
-        || entity_type == &EntityType::COMMAND_BLOCK_MINECART
-        || entity_type == &EntityType::FURNACE_MINECART
-        || entity_type == &EntityType::HOPPER_MINECART
-        || entity_type == &EntityType::SPAWNER_MINECART
-        || entity_type == &EntityType::TNT_MINECART
-}
-
+/// Vanilla `updatePowerToConnected`: only the rails' two connections hear the change.
 fn update_power_to_connected(world: &Arc<World>, pos: &BlockPos, shape: RailShapeStraight) {
     let (c1, c2) = match shape {
         RailShapeStraight::NorthSouth => (pos.north(), pos.south()),
@@ -60,11 +48,6 @@ fn update_power_to_connected(world: &Arc<World>, pos: &BlockPos, shape: RailShap
     };
     world.update_neighbor(&c1, world.get_block(&c1));
     world.update_neighbor(&c2, world.get_block(&c2));
-    world.update_neighbors(&c1, None);
-    world.update_neighbors(&c2, None);
-    if shape.as_shape().is_ascending() {
-        world.update_neighbors(&pos.up(), None);
-    }
 }
 
 impl DetectorRailBlock {
@@ -82,10 +65,9 @@ impl DetectorRailBlock {
         // Search bounding box matching vanilla AABB (0.2 to 0.8 on X and Z, 0.0 to 0.8 on Y)
         let search_box = BoundingBox::new_array([0.2, 0.0, 0.2], [0.8, 0.8, 0.8]).at_pos(*pos);
 
-        let entities = world.get_entities_at_box(&search_box);
-        let has_minecart = entities
-            .iter()
-            .any(|e| is_minecart(e.get_entity().entity_type));
+        let has_minecart = !world
+            .get_entities_of_type_at_box(&search_box, is_minecart)
+            .is_empty();
 
         let mut props = DetectorRailProperties::from_state_id(state_id);
         let was_pressed = props.powered;
@@ -207,47 +189,32 @@ impl BlockBehaviour for DetectorRailBlock {
         }
     }
 
+    /// Vanilla `getAnalogOutputSignal`: a command block cart's success count first, else the
+    /// first live container cart's fill.
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        let props = DetectorRailProperties::from_state_id(args.state.id);
-        if !props.powered {
+        if !DetectorRailProperties::from_state_id(args.state.id).powered {
             return Some(0);
         }
         let search_box =
             BoundingBox::new_array([0.2, 0.0, 0.2], [0.8, 0.8, 0.8]).at_pos(*args.position);
-        for entity in args.world.get_entities_at_box(&search_box) {
-            let entity_type = entity.get_entity().entity_type;
-            if entity_type == &EntityType::CHEST_MINECART
-                || entity_type == &EntityType::HOPPER_MINECART
-            {
-                let size = if entity_type == &EntityType::CHEST_MINECART {
-                    27
-                } else {
-                    5
-                };
-                let mut nbt = NbtCompound::new();
-                entity.write_custom_nbt(&mut nbt);
-                let mut total_weight = 0.0f32;
-                let mut has_items = false;
-                if let Some(items) = nbt.get_list("Items") {
-                    for tag in items {
-                        if let NbtTag::Compound(compound) = tag
-                            && let Some(stack) = ItemStack::read_item_stack(compound)
-                            && !stack.is_empty()
-                        {
-                            let max_stack = stack.get_max_stack_size().max(1);
-                            total_weight += f32::from(stack.item_count) / f32::from(max_stack);
-                            has_items = true;
-                        }
-                    }
-                }
-                let output = if has_items {
-                    ((total_weight / size as f32) * 14.0).floor() as u8 + 1
-                } else {
-                    0
-                };
-                return Some(output);
-            }
+        let found = args
+            .world
+            .get_entities_of_type_at_box(&search_box, is_minecart);
+        let carts = || {
+            found
+                .iter()
+                .filter_map(|cart| cart.cast_any().downcast_ref::<AbstractMinecart>())
+        };
+        if let Some(command_block) = carts().find_map(AbstractMinecart::command_block) {
+            // Vanilla passes the count on unclamped; saturate instead of wrapping.
+            let count = command_block.get_success_count().max(0);
+            return Some(u8::try_from(count).unwrap_or(u8::MAX));
         }
-        Some(0)
+        Some(
+            carts()
+                .filter(|cart| cart.vehicle.entity.is_alive())
+                .find_map(AbstractMinecart::container_signal)
+                .unwrap_or(0),
+        )
     }
 }

@@ -2,7 +2,7 @@ use std::sync::atomic::{
     AtomicBool, AtomicU32,
     Ordering::{self, Relaxed},
 };
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
 use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
@@ -21,9 +21,9 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
-    CEntityPositionSync, CEntityVelocity, CHeadRot, CRemoveEntities, CSetEntityMetadata,
-    CSetEquipment, CSetPassengers, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
-    Metadata,
+    CEntityPositionSync, CEntityVelocity, CHeadRot, CMoveMinecartAlongTrack, CRemoveEntities,
+    CSetEntityMetadata, CSetEquipment, CSetPassengers, CUpdateEntityPos, CUpdateEntityPosRot,
+    CUpdateEntityRot, Metadata, MinecartStep,
 };
 use pumpkin_protocol::{BClientPacket, ClientPacket};
 use pumpkin_util::GameMode;
@@ -186,6 +186,10 @@ impl TrackedEntity {
                 entity.last_sent_pos.store(entity.pos.load());
                 entity.send_dirty_entity_data();
                 self.was_riding.store(true, Relaxed);
+            } else if let Some(steps) = self.entity.minecart_lerp_steps() {
+                self.send_minecart_steps(entity, steps, tick, rot_changed, world);
+                entity.last_sent_yaw.store(yaw, Relaxed);
+                entity.last_sent_pitch.store(pitch, Relaxed);
             } else {
                 let pos = entity.pos.load();
                 let sync = self.pick_move(entity, pos, tick, rot_changed);
@@ -273,6 +277,42 @@ impl TrackedEntity {
                 Some(MoveSync::Absolute)
             }
         }
+    }
+
+    /// Vanilla `handleMinecartPosRot`: experimental carts move along their track steps.
+    fn send_minecart_steps(
+        &self,
+        entity: &Entity,
+        steps: &Mutex<Vec<MinecartStep>>,
+        tick: u32,
+        rot_changed: bool,
+        world: &World,
+    ) {
+        entity.send_dirty_entity_data();
+        let pos = entity.pos.load();
+        let steps = std::mem::take(&mut *steps.lock().unwrap_or_else(PoisonError::into_inner));
+        let id = VarInt(self.entity_id);
+        if steps.is_empty() {
+            let velocity = entity.velocity.load();
+            // Vanilla never updates `lastSentMovement` here.
+            let velocity_changed =
+                velocity.squared_distance_to_vec(&entity.last_sent_velocity.load()) > 1.0e-7;
+            let pos_changed = (pos - entity.last_sent_pos.load()).length_squared()
+                >= f64::from(7.629_394_5e-6f32);
+            if pos_changed || tick.is_multiple_of(60) || rot_changed || velocity_changed {
+                let step = MinecartStep {
+                    position: pos,
+                    movement: velocity,
+                    yaw: entity.yaw.load(),
+                    pitch: entity.pitch.load(),
+                    weight: 1.0,
+                };
+                self.send_to_tracking_players(&CMoveMinecartAlongTrack::new(id, &[step]), world);
+            }
+        } else {
+            self.send_to_tracking_players(&CMoveMinecartAlongTrack::new(id, &steps), world);
+        }
+        entity.last_sent_pos.store(pos);
     }
 
     fn send_motion(&self, entity: &Entity, world: &World) {

@@ -560,6 +560,10 @@ impl GameTestHelper {
         self.world.execute_command(pos, command).await
     }
 
+    pub async fn is_feature_enabled(&self, flag: &str) -> GameTestResult<bool> {
+        self.world.is_feature_enabled(flag).await
+    }
+
     pub fn assert_true(&self, condition: bool, message: impl Into<String>) -> GameTestResult<()> {
         if condition {
             return Ok(());
