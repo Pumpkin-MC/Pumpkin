@@ -3,27 +3,37 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// Plugin system configuration.
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct PluginsConfig {
     /// Whether the plugin system is enabled. If false, no plugins will be loaded.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Whether to watch the plugins directory and automatically hot-reload modified plugins.
+    #[toml(default = Self::default().hot_reload)]
     pub hot_reload: bool,
     /// Whether the server asks for confirmation in the console when a plugin requests new permissions.
+    #[toml(default = Self::default().ask_permission_confirmation)]
     pub ask_permission_confirmation: bool,
     /// Whether to allow loading unsigned WASM plugins.
+    #[toml(default = Self::default().allow_unsigned)]
     pub allow_unsigned: bool,
     /// List of permissions that are globally pre-approved for all plugins (bypassing confirmation).
+    #[toml(default = Self::default().allowed_permissions)]
     pub allowed_permissions: Vec<String>,
     /// List of permissions that are globally blocked for all plugins.
+    #[toml(default = Self::default().blocked_permissions)]
     pub blocked_permissions: Vec<String>,
     /// Whether host environment variables are inherited into WASI environments by default without explicit permissions.
+    #[toml(default = Self::default().inherit_env)]
     pub inherit_env: bool,
     /// Whether network sockets in plugins are restricted to localhost/loopback by default.
+    #[toml(default = Self::default().loopback_only)]
     pub loopback_only: bool,
     /// Optional global maximum memory limit in megabytes (MB) per plugin instance.
     /// If not set, memory is only constrained by the host system's available memory.
+    #[toml(default = Self::default().max_memory_mb)]
     pub max_memory_mb: Option<u64>,
     /// Per-plugin configuration and overrides, keyed by plugin name.
     ///
@@ -44,8 +54,10 @@ pub struct PluginsConfig {
     /// [plugins.overrides.my_plugin.environment]
     /// MY_API_KEY = "secret_key"
     /// ```
+    #[toml(default = Self::default().overrides)]
     pub overrides: HashMap<String, PluginOverride>,
     /// Whether Pumpkin should verify WASM plugin signatures before loading.
+    #[toml(default = Self::default().verify_signatures)]
     pub verify_signatures: bool,
 }
 
@@ -69,23 +81,31 @@ impl Default for PluginsConfig {
 
 /// Settings for a single plugin, letting a server owner turn it off or change
 /// its permissions, unsigned execution policy, memory limit, or environment variables.
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct PluginOverride {
     /// Whether this specific plugin is enabled. If set to `false`, the plugin will be ignored during loading.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Override whether this plugin is allowed to run if unsigned.
+    #[toml(default = Self::default().allow_unsigned)]
     pub allow_unsigned: Option<bool>,
     /// Optional maximum memory limit in megabytes (MB) for this specific plugin.
     /// Overrides the global `max_memory_mb` setting if specified.
+    #[toml(default = Self::default().max_memory_mb)]
     pub max_memory_mb: Option<u64>,
     /// Permissions pre-approved specifically for this plugin (skips interactive confirmation).
+    #[toml(default = Self::default().allowed_permissions)]
     pub allowed_permissions: Vec<String>,
     /// Additional permissions blocked specifically for this plugin.
+    #[toml(default = Self::default().blocked_permissions)]
     pub blocked_permissions: Vec<String>,
     /// Override whether network access is restricted to loopback for this plugin.
+    #[toml(default = Self::default().loopback_only)]
     pub loopback_only: Option<bool>,
     /// Custom environment variables passed directly to this plugin's WASI environment.
+    #[toml(default = Self::default().environment)]
     pub environment: HashMap<String, String>,
 }
 

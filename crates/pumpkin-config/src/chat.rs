@@ -3,13 +3,16 @@ use serde::{Deserialize, Serialize};
 /// Configuration for in-game chat behaviour.
 ///
 /// Controls chat formatting, display, and anti-spam protection.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct ChatConfig {
     /// The custom chat format.
     /// `Note`: it does not apply when secure chat is enabled.
+    #[toml(default = Self::default().format)]
     pub format: String,
     /// Anti-spam protection settings for player chat and commands.
+    #[toml(default = Self::default().anti_spam)]
     pub anti_spam: AntiSpamConfig,
 }
 
@@ -23,32 +26,40 @@ impl Default for ChatConfig {
 }
 
 /// Configuration for chat and command anti-spam protection.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct AntiSpamConfig {
     /// Whether anti-spam protection is enabled.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// Legacy tick-based spam threshold. Kept for compatibility.
+    #[toml(default = Self::default().spam_threshold)]
     pub spam_threshold: u32,
     /// Chat spam threshold in seconds. Overrides the legacy tick threshold when set.
     #[serde(
         alias = "chat-spam-threshold-seconds",
         alias = "chat_spam_threshold_seconds"
     )]
+    #[toml(default = Self::default().chat_spam_threshold_seconds, alias = "chat-spam-threshold-seconds")]
     pub chat_spam_threshold_seconds: Option<u32>,
     /// Command spam threshold in seconds. Overrides the legacy tick threshold when set.
     #[serde(
         alias = "command-spam-threshold-seconds",
         alias = "command_spam_threshold_seconds"
     )]
+    #[toml(default = Self::default().command_spam_threshold_seconds, alias = "command-spam-threshold-seconds")]
     pub command_spam_threshold_seconds: Option<u32>,
     /// The amount added to the spam counter for each chat message or command sent.
     /// Vanilla default is 20 ticks.
+    #[toml(default = Self::default().message_cost)]
     pub message_cost: u32,
     /// The amount decayed from the spam counter per server tick.
     /// Vanilla default is 1 tick.
+    #[toml(default = Self::default().decay_per_tick)]
     pub decay_per_tick: u32,
     /// Whether operators/admins bypass the anti-spam check.
+    #[toml(default = Self::default().ops_bypass)]
     pub ops_bypass: bool,
 }
 

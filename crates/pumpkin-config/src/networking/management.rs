@@ -9,19 +9,25 @@ const SECRET_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv
 ///
 /// Controls whether the management server is enabled, its network address,
 /// authentication secret, allowed origins, and heartbeat interval.
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, toml_spanner::Toml)]
 #[serde(default)]
+#[toml(ignore_unknown_fields, recoverable)]
 pub struct ManagementServerConfig {
     /// Whether the management server is enabled.
+    #[toml(default = Self::default().enabled)]
     pub enabled: bool,
     /// The network address and port where the management server will listen for WebSocket connections.
+    #[toml(default = Self::default().address, with = toml_spanner::helper::parse_string)]
     pub address: SocketAddr,
     /// The 40-character alphanumeric secret required for authentication.
     /// If empty on startup, a random 40-character secret will be generated.
+    #[toml(default = Self::default().secret)]
     pub secret: String,
     /// Allowed origins for Web browser connections via the `Origin` header.
+    #[toml(default = Self::default().allowed_origins)]
     pub allowed_origins: Vec<String>,
     /// Interval in seconds between server status heartbeats (0 disables heartbeats).
+    #[toml(default = Self::default().status_heartbeat_interval)]
     pub status_heartbeat_interval: u32,
 }
 
