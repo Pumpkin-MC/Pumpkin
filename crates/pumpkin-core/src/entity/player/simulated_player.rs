@@ -42,7 +42,7 @@ impl SimulatedPlayer {
         self.player
             .world()
             .get_player_by_uuid(self.player.gameprofile.id)
-            .is_some()
+            .is_some_and(|player| Arc::ptr_eq(&player, &self.player))
     }
 
     #[must_use]
@@ -384,11 +384,12 @@ impl SimulatedPlayer {
         if !self.is_connected() {
             return Ok(());
         }
-        self.player.remove().await;
         if let Some(server) = self.server.upgrade() {
-            server.remove_player(&self.player);
+            server.disconnect_simulated_player(&self.player).await
+        } else {
+            self.player.remove().await;
+            Ok(())
         }
-        Ok(())
     }
 
     pub fn look_at_entity(&self, entity_id: i32) -> SimulatedPlayerResult<()> {

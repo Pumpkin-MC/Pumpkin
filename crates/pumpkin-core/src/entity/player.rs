@@ -5357,8 +5357,10 @@ impl Player {
             if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
                 let server_clone = server.clone();
                 server.spawn_task(async move {
-                    player_arc.remove().await;
-                    server_clone.remove_player(&player_arc);
+                    if let Err(error) = server_clone.disconnect_simulated_player(&player_arc).await
+                    {
+                        warn!("{error}");
+                    }
                 });
                 return;
             }

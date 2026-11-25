@@ -797,14 +797,14 @@ impl Server {
                     return None;
                 }
                 Some({
-                    {
+                    if player.client.should_persist_player_data() {
                         let mut user_cache = self
                             .data
                             .user_cache
                             .write()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
                         user_cache.upsert(player.gameprofile.id, player.gameprofile.name.clone());
-                    };
+                    }
 
                     // TODO: Config if we want increase online
                     if let Some(config) = config {
@@ -840,13 +840,29 @@ impl Server {
         }}
     }
 
-    /// Admits a server-controlled player without a network connection.
+    /// Admits a simulated player whose profile and state are discarded on disconnect.
     pub async fn spawn_simulated_player(
         self: &Arc<Self>,
         world: &Arc<World>,
         name: &str,
         position: Vector3<f64>,
         gamemode: GameMode,
+    ) -> Result<Arc<SimulatedPlayer>, String> {
+        self.spawn_simulated_player_with_persistence(world, name, position, gamemode, false)
+            .await
+    }
+
+    /// Admits a simulated player with optional persistence.
+    ///
+    /// Persistent players use a stable UUID based on their name and restore saved data, subject
+    /// to the server's save settings. The supplied world and position are used on each spawn.
+    pub async fn spawn_simulated_player_with_persistence(
+        self: &Arc<Self>,
+        world: &Arc<World>,
+        name: &str,
+        position: Vector3<f64>,
+        gamemode: GameMode,
+        persistent: bool,
     ) -> Result<Arc<SimulatedPlayer>, String> {
         if name.is_empty() || name.len() > 16 || name.chars().any(char::is_control) {
             return Err("Invalid simulated player name".to_string());
@@ -862,12 +878,16 @@ impl Server {
         {
             return Err("Simulated player world is not loaded by this server".to_string());
         }
-        if self.get_player_by_name(name).is_some() {
-            return Err(format!("Player '{name}' is already online"));
-        }
-
+        let id = if persistent {
+            uuid::Uuid::new_v3(
+                &uuid::Uuid::NAMESPACE_OID,
+                format!("pumpkin:simulated_player:{}", name.to_ascii_lowercase()).as_bytes(),
+            )
+        } else {
+            uuid::Uuid::new_v4()
+        };
         let profile = GameProfile {
-            id: uuid::Uuid::new_v4(),
+            id,
             name: name.to_string(),
             properties: ArcSwap::new(Arc::new(Vec::new())),
             profile_actions: None,
@@ -876,13 +896,38 @@ impl Server {
             server_listing: false,
             ..PlayerConfig::default()
         };
-        let player = Arc::new(Player::new(
-            Arc::new(ClientPlatform::simulated_player()),
+        let mut player = Player::new(
+            Arc::new(ClientPlatform::simulated_player(persistent)),
             profile,
             config.clone(),
             world,
             gamemode,
-        ));
+        );
+        if persistent {
+            let server = self.clone();
+            player = self
+                .runtime
+                .spawn_blocking(move || {
+                    if let Ok(Some(mut data)) = server.player_data_storage.load_data(&id) {
+                        player.read_nbt(&mut data);
+                    }
+                    let mut advancements = player
+                        .advancements
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if let Err(error) = advancements.load() {
+                        warn!("Error loading player {id}: {error}");
+                    }
+                    drop(advancements);
+                    player
+                })
+                .await
+                .map_err(|error| format!("Failed to load simulated player: {error}"))?;
+        }
+        if self.get_player_by_name(name).is_some() {
+            return Err(format!("Player '{name}' is already online"));
+        }
+        let player = Arc::new(player);
         player.tab_list_listed.store(false, Ordering::Relaxed);
         player.living_entity.entity.set_pos(position);
         player.has_played_before.store(true, Ordering::Relaxed);
@@ -899,6 +944,36 @@ impl Server {
         };
         world.announce_player_join(&player, self).await;
         Ok(Arc::new(SimulatedPlayer::new(player, Arc::downgrade(self))))
+    }
+
+    pub(crate) async fn disconnect_simulated_player(
+        self: &Arc<Self>,
+        player: &Arc<Player>,
+    ) -> Result<(), String> {
+        if !player
+            .world()
+            .get_player_by_uuid(player.gameprofile.id)
+            .is_some_and(|current| Arc::ptr_eq(&current, player))
+        {
+            return Ok(());
+        }
+        player.remove().await;
+        self.remove_player(player);
+        if !player.client.should_persist_player_data() {
+            return Ok(());
+        }
+
+        let save_player = player.clone();
+        let server = self.clone();
+        self.runtime
+            .spawn_blocking(move || server.player_data_storage.handle_player_leave(&save_player))
+            .await
+            .map_err(|error| format!("Failed to save simulated player: {error}"))?
+            .map_err(|error| format!("Failed to save simulated player data: {error}"))?;
+        self.advancement_manager
+            .save_player(player)
+            .await
+            .map_err(|error| format!("Failed to save simulated player advancements: {error}"))
     }
 
     pub fn remove_player(&self, player: &Player) {

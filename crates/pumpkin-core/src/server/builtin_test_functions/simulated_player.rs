@@ -7,6 +7,78 @@ use pumpkin_util::{GameMode, Hand, math::vector3::Vector3};
 
 use crate::{entity::EntityBase, server::server_test_manager::server_world};
 
+pub(super) async fn test_simulated_player_is_ephemeral(
+    test: GameTestContext,
+) -> GameTestResult<()> {
+    test.set_dimensions(3, 3, 3).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
+
+    let world = server_world(&test)?;
+    let server = world
+        .server
+        .upgrade()
+        .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+    let simulated_player = test
+        .spawn_simulated_player(
+            "EphemeralPlayer",
+            Vector3::new(1.5, 1.0, 1.5),
+            GameMode::Survival,
+        )
+        .await?;
+    let player = world
+        .get_player_by_id(simulated_player.entity_id())
+        .ok_or_else(|| GameTestError::World("Simulated player is missing".to_string()))?;
+    let uuid = player.gameprofile.id;
+
+    let save_server = server.clone();
+    let save_player = player.clone();
+    tokio::task::spawn_blocking(move || {
+        save_server
+            .player_data_storage
+            .extract_data_and_save_player(&save_player)
+    })
+    .await
+    .map_err(|error| GameTestError::World(error.to_string()))?
+    .map_err(|error| GameTestError::World(error.to_string()))?;
+    server
+        .advancement_manager
+        .save_player(&player)
+        .await
+        .map_err(|error| GameTestError::World(error.to_string()))?;
+    simulated_player.disconnect().await?;
+
+    let cached = server
+        .data
+        .user_cache
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_by_uuid(uuid)
+        .is_some();
+    test.assert_true(!cached, "A simulated player was added to the user cache")?;
+
+    let data = tokio::task::spawn_blocking(move || server.player_data_storage.load_data(&uuid))
+        .await
+        .map_err(|error| GameTestError::World(error.to_string()))?
+        .map_err(|error| GameTestError::World(error.to_string()))?;
+    test.assert_true(data.is_none(), "A simulated player's data was saved")?;
+
+    let advancement_path = player
+        .advancements
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .path
+        .clone();
+    let advancement_file = tokio::fs::try_exists(advancement_path)
+        .await
+        .map_err(|error| GameTestError::World(error.to_string()))?;
+    test.assert_true(
+        !advancement_file,
+        "A simulated player's advancements were saved",
+    )?;
+    test.succeed();
+    Ok(())
+}
+
 pub(super) async fn test_simulated_player_lifecycle(test: GameTestContext) -> GameTestResult<()> {
     test.set_dimensions(5, 5, 5).await?;
     test.build_floor(5, 5, &Block::STONE).await?;

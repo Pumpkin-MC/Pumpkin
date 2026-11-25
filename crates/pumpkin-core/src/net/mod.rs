@@ -137,6 +137,7 @@ pub fn decrement_pending_bytes(pending_bytes: &AtomicUsize, bytes: usize) {
 #[derive(Default)]
 pub struct SimulatedPlayerClient {
     list_visible: AtomicBool,
+    persistent: bool,
 }
 
 /// The connection used by a player.
@@ -149,8 +150,18 @@ pub enum ClientPlatform {
 }
 
 impl ClientPlatform {
-    pub(crate) fn simulated_player() -> Self {
-        Self::SimulatedPlayer(SimulatedPlayerClient::default())
+    pub(crate) fn simulated_player(persistent: bool) -> Self {
+        Self::SimulatedPlayer(SimulatedPlayerClient {
+            persistent,
+            ..SimulatedPlayerClient::default()
+        })
+    }
+
+    pub(crate) const fn should_persist_player_data(&self) -> bool {
+        match self {
+            Self::SimulatedPlayer(client) => client.persistent,
+            Self::Java(_) | Self::Bedrock(_) => true,
+        }
     }
 
     pub(crate) fn visible_in_list(&self) -> bool {

@@ -64,6 +64,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:loot_entity_context_and_nested_tables", loot_tables::test_loot_entity_context_and_nested_tables);
         register_test_function("pumpkin:simulated_player_lifecycle", simulated_player::test_simulated_player_lifecycle);
         register_test_function("pumpkin:simulated_player_actions", simulated_player::test_simulated_player_actions);
+        register_test_function("pumpkin:simulated_player_is_ephemeral", simulated_player::test_simulated_player_is_ephemeral);
         register_test_function("pumpkin:world_block_use_and_break", world_interaction::test_world_block_use_and_break);
         register_test_function("pumpkin:redstone_torch_inverter", redstone_gates::test_redstone_torch_inverter);
         register_test_function("pumpkin:redstone_repeater_delay", redstone_gates::test_redstone_repeater_delay);
