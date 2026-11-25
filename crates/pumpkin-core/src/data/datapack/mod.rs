@@ -308,16 +308,12 @@ impl DatapackManager {
             tags: &mut all_tags,
         };
 
-        // TODO vanilla applies packs in `DataPacks.Enabled` order; this loads world packs, then
-        // feature packs.
-        scan_datapacks_dir(
+        load_enabled_packs(
             &datapacks_dir,
             enabled_packs,
             &mut acc,
             &mut loaded_packs_vec,
         );
-
-        load_bundled_datapacks(enabled_packs, &mut acc, &mut loaded_packs_vec);
 
         let damage_type_registry = build_damage_type_registry(all_damage_type_defs);
 
@@ -1040,7 +1036,7 @@ impl DatapackManager {
     /// with, which it also keeps.
     pub fn configure_world_packs(world_path: &Path, level: &mut LevelData, new_world: bool) {
         let available = available_packs(world_path, true);
-        if !new_world {
+        if !new_world && level.enabled_features_missing {
             enable_legacy_pack_features(level, &available);
         }
         let saved: Vec<&'static str> = level
@@ -1340,8 +1336,11 @@ impl DatapackManager {
                 .collect();
 
         // Zip packs stay in `level.dat` for vanilla, but Pumpkin can't load them.
+        let world_path = server.basic_config.get_world_path();
         for pack in &server.level_info.load().data_packs.enabled {
-            if !is_archive_pack(pack) && !packs.iter().any(|existing| existing == pack) {
+            if !is_world_archive_pack(&world_path, pack)
+                && !packs.iter().any(|existing| existing == pack)
+            {
                 packs.push(pack.clone());
             }
         }
@@ -1365,7 +1364,18 @@ impl DatapackManager {
     }
 
     pub fn find_pack_name(server: &Server, input: &str) -> Option<String> {
-        let known = Self::get_all_known_packs(server);
+        Self::resolve_pack_name(&Self::get_all_known_packs(server), input)
+    }
+
+    /// The pack `/datapack disable` targets. Vanilla drops a pack that became unreadable from the
+    /// selection on reload, but Pumpkin keeps it in `DataPacks.Enabled`, so it stays removable.
+    pub fn find_pack_to_disable(server: &Server, input: &str) -> Option<String> {
+        Self::find_pack_name(server, input)
+            .or_else(|| Self::resolve_pack_name(&Self::get_enabled_packs(server), input))
+    }
+
+    /// Resolves `input` to one of `known`, also matching a world pack's name without `file/`.
+    fn resolve_pack_name(known: &[String], input: &str) -> Option<String> {
         if let Some(p) = known.iter().find(|p| *p == input) {
             return Some(p.clone());
         }
@@ -1587,7 +1597,7 @@ impl DatapackManager {
     }
 
     pub fn disable_pack(server: &Arc<Server>, name: &str) -> Result<(), String> {
-        let Some(target_pack) = Self::find_pack_name(server, name) else {
+        let Some(target_pack) = Self::find_pack_to_disable(server, name) else {
             return Err(format!("Unknown datapack '{name}'"));
         };
 
@@ -1801,63 +1811,10 @@ fn find_bundled_datapacks_dir() -> Option<PathBuf> {
     None
 }
 
-fn load_bundled_datapacks(
-    enabled_packs: &[String],
-    acc: &mut PackContentAccumulators<'_>,
-    loaded_packs_vec: &mut Vec<LoadedDatapack>,
-) {
-    let Some(root) = find_bundled_datapacks_dir() else {
-        return;
-    };
-    for pack in feature_packs() {
-        let bundled = pack.id.as_str();
-        // Vanilla ids: `minecart_improvements` is this pack, `file/minecart_improvements` a
-        // world pack.
-        if enabled_packs.iter().any(|p| p == bundled) {
-            let pack_path = root.join(bundled);
-            let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
-            let counts = load_pack_contents(&pack_path, acc);
-            info!(
-                "Loaded bundled datapack '{bundled}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s), {} advancement(s), {} predicate(s), {} tag(s)",
-                counts.recipes,
-                counts.functions,
-                counts.test_instances,
-                counts.damage_types,
-                counts.int_providers,
-                counts.float_providers,
-                counts.loot_tables,
-                counts.structures,
-                counts.template_pools,
-                counts.processor_lists,
-                counts.dynamic_registries,
-                counts.trade_sets,
-                counts.trades,
-                counts.advancements,
-                counts.predicates,
-                counts.tags,
-            );
-            loaded_packs_vec.push(LoadedDatapack {
-                id: bundled.to_string(),
-                name: bundled.to_string(),
-                description,
-                pack_format,
-                root_path: pack_path,
-                recipe_count: counts.recipes,
-                function_count: counts.functions,
-                known_packs,
-            });
-        }
-    }
-}
-
-fn scan_datapacks_dir(
-    datapacks_dir: &Path,
-    enabled_packs: &[String],
-    acc: &mut PackContentAccumulators<'_>,
-    loaded_packs_vec: &mut Vec<LoadedDatapack>,
-) {
+/// The folder packs in a world's `datapacks` directory, by folder name.
+fn world_pack_dirs(datapacks_dir: &Path) -> Vec<(String, PathBuf)> {
     if !datapacks_dir.is_dir() {
-        return;
+        return Vec::new();
     }
     let entries = match fs::read_dir(datapacks_dir) {
         Ok(entries) => entries,
@@ -1866,31 +1823,57 @@ fn scan_datapacks_dir(
                 "Failed to read datapacks directory '{}': {error}",
                 datapacks_dir.display()
             );
-            return;
+            return Vec::new();
         }
     };
+    entries
+        .flatten()
+        .map(|entry| {
+            (
+                entry.file_name().to_string_lossy().into_owned(),
+                entry.path(),
+            )
+        })
+        .filter(|(name, path)| !name.starts_with('.') && path.is_dir())
+        .collect()
+}
 
-    for entry in entries.flatten() {
-        let pack_path = entry.path();
-        let file_name = entry.file_name().to_string_lossy().to_string();
-
-        if file_name.starts_with('.') || !pack_path.is_dir() {
+/// Loads the enabled world and feature packs in `DataPacks.Enabled` order, so a later pack
+/// overrides an earlier one like in vanilla `MultiPackResourceManager`.
+// TODO: recipes don't follow that yet: every pack's recipes are appended and lookups take the
+// first match, so an earlier pack wins a duplicate recipe id.
+fn load_enabled_packs(
+    datapacks_dir: &Path,
+    enabled_packs: &[String],
+    acc: &mut PackContentAccumulators<'_>,
+    loaded_packs_vec: &mut Vec<LoadedDatapack>,
+) {
+    let world_packs = world_pack_dirs(datapacks_dir);
+    let bundled_root = find_bundled_datapacks_dir();
+    let feature_packs = feature_packs();
+    for id in enabled_packs {
+        // Vanilla ids: `minecart_improvements` is a feature pack, `file/minecart_improvements`
+        // a world pack.
+        let (name, pack_path, kind) = if let Some(name) = id.strip_prefix("file/") {
+            let Some((_, path)) = world_packs.iter().find(|(dir, _)| dir == name) else {
+                continue;
+            };
+            if read_pack_features(id, path).is_none() {
+                continue;
+            }
+            (name, path.clone(), "datapack")
+        } else if let Some(root) = &bundled_root
+            && feature_packs.iter().any(|pack| pack.id == *id)
+        {
+            (id.as_str(), root.join(id), "bundled datapack")
+        } else {
             continue;
-        }
+        };
 
-        let pack_id = format!("file/{file_name}");
-        if !enabled_packs.contains(&pack_id) {
-            continue;
-        }
-
-        if read_pack_features(&pack_id, &pack_path).is_none() {
-            continue;
-        }
         let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
         let counts = load_pack_contents(&pack_path, acc);
-
         info!(
-            "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s), {} advancement(s), {} predicate(s), {} tag(s)",
+            "Loaded {kind} '{name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s), {} structure(s), {} template pool(s), {} processor list(s), {} dynamic registry entry/entries, {} trade set(s), {} trade(s), {} advancement(s), {} predicate(s), {} tag(s)",
             counts.recipes,
             counts.functions,
             counts.test_instances,
@@ -1908,10 +1891,9 @@ fn scan_datapacks_dir(
             counts.predicates,
             counts.tags,
         );
-
         loaded_packs_vec.push(LoadedDatapack {
-            id: pack_id,
-            name: file_name,
+            id: id.clone(),
+            name: name.to_owned(),
             description,
             pack_format,
             root_path: pack_path,
@@ -2293,13 +2275,22 @@ fn enable_legacy_pack_features(level: &mut LevelData, available: &[AvailablePack
             .strip_prefix("file/")
             .or_else(|| id.strip_prefix("minecraft:"))
             .unwrap_or(id);
-        let Some(pack) = available
+        // Without the bundled pack, the name maps to its flag like it did in those versions, so
+        // the saved flag brings the pack back once it's installed.
+        let flags: Vec<&'static str> = available
             .iter()
             .find(|pack| pack.source == PackSource::Feature && pack.id == name)
-        else {
-            continue;
-        };
-        for flag in missing_flags(&pack.requested_features, &level.enabled_features) {
+            .map_or_else(
+                || {
+                    feature_flags::ALL
+                        .iter()
+                        .copied()
+                        .filter(|flag| flag.strip_prefix("minecraft:") == Some(name))
+                        .collect()
+                },
+                |pack| pack.requested_features.clone(),
+            );
+        for flag in missing_flags(&flags, &level.enabled_features) {
             info!("Keeping feature {flag} that data pack {id} enabled in an older Pumpkin version");
             level.enabled_features.push(flag.to_owned());
         }
@@ -2454,8 +2445,26 @@ fn mcmeta_features(pack_path: &Path) -> Result<Vec<&'static str>, PackMetaError>
     }
     let meta: serde_json::Value = serde_json::from_str(&content)
         .map_err(|error| PackMetaError::Invalid(error.to_string()))?;
-    if meta.get("pack").is_none() {
+    let meta = meta
+        .as_object()
+        .ok_or_else(|| PackMetaError::Invalid("pack.mcmeta is not a JSON object".to_owned()))?;
+    let Some(pack) = meta.get("pack") else {
         return Err(PackMetaError::Missing);
+    };
+    // Vanilla `PackMetadataSection.FALLBACK_CODEC` needs only a `description` component, so a
+    // bad format range alone doesn't reject the pack.
+    // TODO: check the whole component, not just that it is a string, list or object.
+    let has_description = pack
+        .get("description")
+        .is_some_and(|description| match description {
+            serde_json::Value::String(_) | serde_json::Value::Object(_) => true,
+            serde_json::Value::Array(parts) => !parts.is_empty(),
+            _ => false,
+        });
+    if !has_description {
+        return Err(PackMetaError::Invalid(
+            "pack.description is missing or not a text component".to_owned(),
+        ));
     }
     let Some(section) = meta.get("features") else {
         return Ok(Vec::new());
@@ -2602,7 +2611,7 @@ fn load_recipes_from_dir(
 mod tests {
     use super::{
         DatapackManager, FunctionChainGuard, FunctionRunError, MAX_FUNCTION_CHAIN_COMMANDS,
-        MAX_FUNCTION_CHAIN_DEPTH,
+        MAX_FUNCTION_CHAIN_DEPTH, enable_legacy_pack_features,
     };
 
     #[test]
@@ -2932,13 +2941,18 @@ mod tests {
         assert!(plain.data_packs.enabled.contains(&pack("file/old.zip")));
         assert_eq!(plain.enabled_features, ["minecraft:vanilla"]);
 
-        // Older Pumpkin enabled a feature from the pack name alone.
-        let mut migrated = level();
-        migrated
+        // Older Pumpkin enabled a feature from the pack name alone, but only saves without
+        // `enabled_features` get it back.
+        let mut saved = level();
+        saved
             .data_packs
             .enabled
             .push(pack("file/minecart_improvements"));
-        migrated.data_packs.disabled.push(pack("file/carts"));
+        saved.data_packs.disabled.push(pack("file/carts"));
+        let mut migrated = saved.clone();
+        DatapackManager::configure_world_packs(world.path(), &mut saved, false);
+        assert_eq!(saved.enabled_features, ["minecraft:vanilla"]);
+        migrated.enabled_features_missing = true;
         DatapackManager::configure_world_packs(world.path(), &mut migrated, false);
         assert!(
             migrated
@@ -2966,6 +2980,107 @@ mod tests {
             kept.enabled_features,
             ["minecraft:vanilla", "minecraft:minecart_improvements"]
         );
+    }
+
+    /// An older save keeps its feature flag even when the bundled feature packs are missing.
+    #[test]
+    fn legacy_features_survive_missing_bundled_packs() {
+        let mut level =
+            pumpkin_world::world_info::LevelData::default(pumpkin_util::world_seed::Seed(0));
+        level.data_packs.enabled.extend([
+            "file/minecart_improvements".to_owned(),
+            "file/carts".to_owned(),
+        ]);
+        enable_legacy_pack_features(&mut level, &[]);
+        assert_eq!(
+            level.enabled_features,
+            ["minecraft:vanilla", "minecraft:minecart_improvements"]
+        );
+    }
+
+    #[test]
+    fn pack_metadata_needs_a_described_pack_section() {
+        let dir = tempfile::tempdir().unwrap();
+        let features = |meta: &str| {
+            std::fs::write(dir.path().join("pack.mcmeta"), meta).unwrap();
+            super::mcmeta_features(dir.path())
+        };
+        // A bad format range falls back to the description alone, and no `features` is fine.
+        assert!(matches!(
+            features(r#"{"pack":{"description":"x","min_format":"bad"}}"#),
+            Ok(requested) if requested.is_empty()
+        ));
+        assert!(matches!(
+            features(r#"{"features":{"enabled":[]}}"#),
+            Err(super::PackMetaError::Missing)
+        ));
+        for invalid in [
+            r#"{"pack":null}"#,
+            r#"{"pack":{}}"#,
+            r#"{"pack":{"description":[]}}"#,
+            "[]",
+        ] {
+            assert!(
+                matches!(features(invalid), Err(super::PackMetaError::Invalid(_))),
+                "{invalid}"
+            );
+        }
+    }
+
+    #[test]
+    fn enabled_packs_load_in_saved_order() {
+        let world = tempfile::tempdir().unwrap();
+        let datapacks = world.path().join("datapacks");
+        for name in ["a", "b"] {
+            let dir = datapacks.join(name);
+            std::fs::create_dir_all(dir.join("data/test/function")).unwrap();
+            std::fs::write(dir.join("pack.mcmeta"), r#"{"pack":{"description":""}}"#).unwrap();
+            std::fs::write(
+                dir.join("data/test/function/f.mcfunction"),
+                format!("say {name}"),
+            )
+            .unwrap();
+        }
+
+        let mut recipes = Vec::new();
+        let mut functions = std::collections::HashMap::new();
+        let mut function_tags = std::collections::HashMap::new();
+        let mut test_instances = std::collections::HashMap::new();
+        let mut damage_types = std::collections::HashMap::new();
+        let mut context_int_providers = std::collections::HashMap::new();
+        let mut context_float_providers = std::collections::HashMap::new();
+        let mut loot_tables = std::collections::HashMap::new();
+        let mut dynamic_registries = std::collections::HashMap::new();
+        let mut trade_registry = super::TradeRegistry::new();
+        let mut advancements = std::collections::HashMap::new();
+        let mut predicates = std::collections::HashMap::new();
+        let mut item_modifiers = std::collections::HashMap::new();
+        let mut slot_sources = std::collections::HashMap::new();
+        let mut tags = std::collections::HashMap::new();
+        let mut acc = super::PackContentAccumulators {
+            recipes: &mut recipes,
+            functions: &mut functions,
+            function_tags: &mut function_tags,
+            test_instances: &mut test_instances,
+            damage_types: &mut damage_types,
+            context_int_providers: &mut context_int_providers,
+            context_float_providers: &mut context_float_providers,
+            loot_tables: &mut loot_tables,
+            dynamic_registries: &mut dynamic_registries,
+            trade_registry: &mut trade_registry,
+            advancements: &mut advancements,
+            predicates: &mut predicates,
+            item_modifiers: &mut item_modifiers,
+            slot_sources: &mut slot_sources,
+            tags: &mut tags,
+        };
+        let mut loaded = Vec::new();
+        let enabled = ["file/b".to_owned(), "file/a".to_owned()];
+        super::load_enabled_packs(&datapacks, &enabled, &mut acc, &mut loaded);
+
+        let ids: Vec<&str> = loaded.iter().map(|pack| pack.id.as_str()).collect();
+        assert_eq!(ids, ["file/b", "file/a"]);
+        assert_eq!(functions["test:f"], ["say a"]);
     }
 
     #[test]
@@ -3062,8 +3177,9 @@ mod tests {
 
     #[test]
     fn bundled_trade_rebalance_coverage_test() {
-        if let Some(pack_path) =
-            super::find_bundled_datapacks_dir().map(|root| root.join("trade_rebalance"))
+        if let Some(pack_path) = super::find_bundled_datapacks_dir()
+            .map(|root| root.join("trade_rebalance"))
+            .filter(|pack_path| pack_path.is_dir())
         {
             let mut recipes = Vec::new();
             let mut functions = std::collections::HashMap::new();

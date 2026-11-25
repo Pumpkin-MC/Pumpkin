@@ -398,7 +398,9 @@ impl CommandExecutor for DatapackDisableExecutor {
         let name_str = StringArgumentType::get(context, "name")?;
         let server = context.server();
 
-        let Some(target_pack) = find_pack_name(server, name_str) else {
+        let Some(target_pack) =
+            crate::data::datapack::DatapackManager::find_pack_to_disable(server, name_str)
+        else {
             return Err(ERROR_DISABLE_FAILED
                 .create_without_context(TextComponent::text(name_str.to_string())));
         };
