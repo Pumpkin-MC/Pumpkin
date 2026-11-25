@@ -1,5 +1,6 @@
 use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::player::statistics::StatisticCategory;
+use crate::plugin::api::events::player::player_teleport::TeleportCause;
 use crate::server::Server;
 use crate::world::World;
 use core::f32;
@@ -693,18 +694,22 @@ impl EntityBase for ItemEntity {
         }
     }
 
-    fn teleport(
+    fn teleport_with_cause(
         &self,
         position: Vector3<f64>,
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) {
-        self.entity.teleport(position, yaw, pitch, &world);
+        _cause: TeleportCause,
+    ) -> Option<Vector3<f64>> {
+        let position = self
+            .entity
+            .teleport_with_event(position, yaw, pitch, &world)?;
         // Vanilla `ItemEntity.teleport`: merge at the destination, if the item lives in that world.
         if Arc::ptr_eq(&self.entity.world.load(), &world) {
             self.merge_with_neighbours();
         }
+        Some(position)
     }
 
     fn init_data_tracker(&self) {

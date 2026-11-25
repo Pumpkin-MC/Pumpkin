@@ -151,18 +151,8 @@ impl Player {
     pub fn reject_client_move(&self) {
         let entity = self.get_entity();
         let position = entity.pos.load();
-        let teleport_id = self.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
-        if !matches!(
-            self.client.as_ref(),
-            ClientPlatform::Java(c)
-                if c.version.load() < pumpkin_util::version::JavaMinecraftVersion::V_1_9
-        ) {
-            *self
-                .awaiting_teleport
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some((teleport_id.into(), position));
-        }
+        let teleport_id = self.next_teleport_id();
+        self.expect_teleport_confirm(teleport_id, position);
         match self.client.as_ref() {
             ClientPlatform::Java(_) => {
                 self.try_send_client_packet(&CPlayerPosition::new(
@@ -204,12 +194,7 @@ impl Player {
         }
 
         // Vanilla `absSnapRotationTo` while awaiting a teleport: look only.
-        if self
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-        {
+        if self.is_awaiting_teleport() {
             self.apply_and_broadcast_look(requested);
             return ClientMoveOutcome::Ignored;
         }
