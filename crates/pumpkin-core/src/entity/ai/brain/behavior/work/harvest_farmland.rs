@@ -239,14 +239,10 @@ pub(super) fn is_max_age(block: &Block, state_id: BlockStateId) -> bool {
 }
 
 fn age_property(block: &Block, state_id: BlockStateId) -> Option<u8> {
-    block
-        .properties(state_id)?
-        .to_props()
-        .into_iter()
-        .find_map(|property| match property {
-            Property::Age(age) => Some(age),
-            _ => None,
-        })
+    match block.get_property(state_id, pumpkin_data::PropertyKey::Age)? {
+        Property::Age(age) => Some(age),
+        _ => None,
+    }
 }
 
 fn max_age(block: &Block) -> Option<u8> {

@@ -72,6 +72,8 @@ pub trait SculkLevel {
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool;
 
     /// Whether the position holds water (any water fluid state).
+    // TODO: vanilla waterlogs growths and leaves water behind veins on any non-empty fluid
+    // (`!getFluidState().isEmpty()`); only `canPlaceGrowth` and `stateCanBeReplaced` use exact `is(Fluids.WATER)`.
     fn sculk_is_water(&self, pos: BlockPos) -> bool;
 
     /// Whether the face of the block at `pos` in the given direction is
@@ -176,12 +178,12 @@ impl<T: GenerationCache> SculkLevel for T {
 
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
         let (fluid, fluid_state) = GenerationCache::get_fluid_and_fluid_state(self, &pos.0);
-        fluid == Fluid::WATER && fluid_state.is_source
+        *fluid == Fluid::WATER && fluid_state.is_source
     }
 
     fn sculk_is_water(&self, pos: BlockPos) -> bool {
         let (fluid, _fluid_state) = GenerationCache::get_fluid_and_fluid_state(self, &pos.0);
-        fluid == Fluid::WATER
+        *fluid == Fluid::WATER
     }
 
     fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {

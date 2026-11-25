@@ -284,19 +284,22 @@ struct DolphinSwimWithPlayerGoal {
 }
 
 impl DolphinSwimWithPlayerGoal {
-    fn give_grace(&self) {
+    fn give_grace(&self, source: &dyn EntityBase) {
         if let Some(player) = self.player.as_ref().and_then(Weak::upgrade)
             && let Some(player) = player.get_player()
         {
-            player.add_effect(Effect {
-                effect_type: &StatusEffect::DOLPHINS_GRACE,
-                duration: 100,
-                amplifier: 0,
-                ambient: false,
-                show_particles: true,
-                show_icon: true,
-                blend: false,
-            });
+            player.add_effect_with_source(
+                Effect {
+                    effect_type: &StatusEffect::DOLPHINS_GRACE,
+                    duration: 100,
+                    amplifier: 0,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                    blend: false,
+                },
+                source,
+            );
         }
     }
 }
@@ -345,8 +348,8 @@ impl Goal for DolphinSwimWithPlayerGoal {
             })
     }
 
-    fn start(&mut self, _mob: &dyn Mob) {
-        self.give_grace();
+    fn start(&mut self, mob: &dyn Mob) {
+        self.give_grace(mob);
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
@@ -388,7 +391,7 @@ impl Goal for DolphinSwimWithPlayerGoal {
             );
         }
         if target.is_swimming() && mob.get_random().random_range(0..6) == 0 {
-            self.give_grace();
+            self.give_grace(mob);
         }
     }
 

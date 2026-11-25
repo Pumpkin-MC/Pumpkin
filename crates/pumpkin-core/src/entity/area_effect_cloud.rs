@@ -442,6 +442,7 @@ impl EntityBase for AreaEffectCloudEntity {
                         direct: self,
                         owner: owner.as_deref(),
                     }),
+                    Some(self),
                 );
             }
 

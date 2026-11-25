@@ -66,10 +66,12 @@ interface event {
         cancelled: bool
     }
 
+    /// Fired when the list of available server commands is sent to a player.
+    /// Blocking handlers may remove entries from `commands` to hide them from
+    /// the client's command graph; added entries are ignored.
     record player-command-send-event-data {
         player: player,
-        command: string,
-        cancelled: bool
+        commands: list<string>,
     }
 
     record player-permission-check-event-data {
@@ -1097,6 +1099,8 @@ interface event {
         cancelled: bool
     }
 
+    /// Fired before a player command is executed, allowing a blocking handler
+    /// to modify or cancel it.
     record player-command-preprocess-event-data {
         player: player,
         command: string,

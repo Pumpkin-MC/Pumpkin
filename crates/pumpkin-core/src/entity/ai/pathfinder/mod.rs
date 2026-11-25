@@ -2141,23 +2141,17 @@ impl PathNavigationTrait for WallClimberNavigation {
         } else if let Some(target_pos) = self.path_to_position {
             let current_pos = entity.entity.pos.load();
             let bb = entity.entity.bounding_box.load();
-            let width = bb.max.x - bb.min.x;
-            let target_center = Vector3::new(
-                f64::from(target_pos.0.x) + 0.5,
-                f64::from(target_pos.0.y),
-                f64::from(target_pos.0.z) + 0.5,
-            );
-            let dx = target_center.x - current_pos.x;
-            let dz = target_center.z - current_pos.z;
-            let dist_sq = dx * dx + dz * dz;
-
-            let close_enough = dist_sq < width * width
-                && (current_pos.y > f64::from(target_pos.0.y)
-                    || (current_pos.y - f64::from(target_pos.0.y)).abs() < 1.0);
+            let width_sq = (bb.max.x - bb.min.x).powi(2);
+            let closer_to_center = |pos: BlockPos| {
+                pos.to_centered_f64().squared_distance_to_vec(&current_pos) < width_sq
+            };
+            let column_pos =
+                BlockPos::new(target_pos.0.x, current_pos.y.floor() as i32, target_pos.0.z);
+            let close_enough = closer_to_center(target_pos)
+                || (current_pos.y > f64::from(target_pos.0.y) && closer_to_center(column_pos));
 
             if close_enough {
                 self.path_to_position = None;
-                self.inner.inner.stop();
             } else {
                 return Some(NavigationTarget {
                     position: Vector3::new(
