@@ -16,10 +16,7 @@ pub struct NyliumBlock;
 
 impl NyliumBlock {
     #[must_use]
-    pub(crate) const fn can_be_nylium_with_above(
-        state: &BlockState,
-        above_state: &BlockState,
-    ) -> bool {
+    pub(crate) fn can_be_nylium_with_above(state: &BlockState, above_state: &BlockState) -> bool {
         let dampening = LightEngine::get_light_dampening_into(
             state,
             above_state,

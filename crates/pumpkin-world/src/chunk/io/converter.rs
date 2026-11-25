@@ -466,7 +466,7 @@ mod tests {
         use rustc_hash::FxHashMap;
         use std::sync::{
             Mutex,
-            atomic::{AtomicBool, AtomicU64},
+            atomic::{AtomicBool, AtomicU32, AtomicU64},
         };
 
         let dir = TempDir::new().unwrap();
@@ -495,6 +495,7 @@ mod tests {
             blending_data: None,
             inhabited_time: AtomicU64::new(12345),
             custom_data: Mutex::new(NbtCompound::default()),
+            sky_light_height_cache: AtomicU32::new(0),
         };
         chunk.set_custom_data("test_ns", "flag", NbtTag::Int(99));
 
