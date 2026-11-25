@@ -242,6 +242,8 @@ fn level_data_from_nbt(data: &NbtCompound, seed: i64) -> LevelData {
     }
     if let Some(features) = data.get_list("enabled_features") {
         level_data.enabled_features = strings_from_nbt(features);
+    } else {
+        level_data.enabled_features_missing = true;
     }
     if let Some(data_version) = data.get_int("DataVersion") {
         level_data.data_version = data_version;
@@ -730,9 +732,11 @@ mod test {
             spawn_chance: 35,
             ..data_files::WanderingTraderData::default()
         };
+        let mut level = LevelData::default(Seed(0));
+        level.game_rules = rules.clone();
         data_files::write_game_rules(
             directory.path(),
-            &rules,
+            &level,
             MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
         )?;
         data_files::write_weather(directory.path(), &weather)?;
@@ -1076,6 +1080,7 @@ mod test {
                 enabled: vec!["vanilla".to_string()],
             },
             enabled_features: vec!["minecraft:vanilla".to_string()],
+            enabled_features_missing: false,
             data_version: 4189,
             day_time: 1727,
             difficulty: Difficulty::Normal,

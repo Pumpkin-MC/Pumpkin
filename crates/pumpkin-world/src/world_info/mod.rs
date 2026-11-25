@@ -54,6 +54,9 @@ pub struct LevelData {
     pub data_packs: DataPacks,
     #[serde(rename = "enabled_features", default = "default_enabled_features")]
     pub enabled_features: Vec<String>,
+    /// Set when `level.dat` had no `enabled_features` e.g. older  Pumpkin versions
+    #[serde(skip)]
+    pub enabled_features_missing: bool,
     pub data_version: i32,
     #[serde(with = "serde_enum_as_integer", default = "default_difficulty")]
     pub difficulty: Difficulty,
@@ -575,6 +578,7 @@ impl LevelData {
             border_warning_time: DEFAULT_BORDER_WARNING_TIME,
             data_packs: default_data_packs(),
             enabled_features: default_enabled_features(),
+            enabled_features_missing: false,
             data_version: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
             difficulty: DEFAULT_DIFFICULTY,
             difficulty_locked: false,
