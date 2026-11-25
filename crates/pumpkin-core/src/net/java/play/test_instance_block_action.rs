@@ -9,6 +9,22 @@ use pumpkin_protocol::java::client::play::CTestInstanceBlockStatus;
 use pumpkin_protocol::java::server::play::TestInstanceBlockAction;
 use pumpkin_util::text::color::NamedColor;
 
+fn send_save_error(player: &Player, position: BlockPos) {
+    const MESSAGE: &str = pumpkin_data::translation::java::TEST_INSTANCE_BLOCK_ERROR_UNABLE_TO_SAVE;
+    player.send_system_message(
+        &TextComponent::translate_cross(
+            MESSAGE,
+            MESSAGE,
+            [
+                TextComponent::text(position.0.x.to_string()),
+                TextComponent::text(position.0.y.to_string()),
+                TextComponent::text(position.0.z.to_string()),
+            ],
+        )
+        .color_named(NamedColor::Red),
+    );
+}
+
 fn description_row(key: &'static str, value: TextComponent) -> TextComponent {
     TextComponent::translate_cross(key, key, [value.color_named(NamedColor::Blue)])
         .add_child(TextComponent::text("\n"))
@@ -278,6 +294,7 @@ impl JavaClient {
                         packet.pos.0.z + padding + 1,
                     );
                     let include_entities = !packet.data.ignore_entities;
+                    let position = packet.pos;
                     let player = player.clone();
                     let world = world.clone();
                     server.clone().spawn_task(async move {
@@ -295,8 +312,8 @@ impl JavaClient {
                             };
                         if let Err(error) = result {
                             tracing::warn!("Failed to save test structure '{name}': {error}");
-                        }
-                        if export {
+                            send_save_error(&player, position);
+                        } else if export {
                             player.send_system_message(
                                 &TextComponent::text("Test structure exporting is disabled")
                                     .color_named(NamedColor::Red),
@@ -304,18 +321,7 @@ impl JavaClient {
                         }
                     });
                 } else {
-                    player.send_system_message(
-                        &TextComponent::translate_cross(
-                            pumpkin_data::translation::java::TEST_INSTANCE_BLOCK_ERROR_UNABLE_TO_SAVE,
-                            pumpkin_data::translation::java::TEST_INSTANCE_BLOCK_ERROR_UNABLE_TO_SAVE,
-                            [
-                                TextComponent::text(packet.pos.0.x.to_string()),
-                                TextComponent::text(packet.pos.0.y.to_string()),
-                                TextComponent::text(packet.pos.0.z.to_string()),
-                            ],
-                        )
-                        .color_named(NamedColor::Red),
-                    );
+                    send_save_error(player, packet.pos);
                 }
             }
             TestInstanceBlockAction::Reset => {
