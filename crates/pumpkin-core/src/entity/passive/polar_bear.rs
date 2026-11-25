@@ -202,6 +202,10 @@ impl Animal for PolarBearEntity {
 }
 
 impl NeutralMob for PolarBearEntity {
+    fn updates_anger_in_ai_step(&self) -> bool {
+        true
+    }
+
     fn get_neutral_data(&self) -> &NeutralData {
         &self.neutral_data
     }
@@ -220,6 +224,11 @@ impl Mob for PolarBearEntity {
         if self.warning_sound_ticks.load(Ordering::Relaxed) > 0 {
             self.warning_sound_ticks.fetch_sub(1, Ordering::Relaxed);
         }
+    }
+
+    // Vanilla updates anger at the end of tick(), after the target and melee goals ran.
+    fn post_tick(&self) {
+        self.update_persistent_anger();
     }
 
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
