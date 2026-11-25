@@ -37,7 +37,7 @@ pub(super) async fn test_ban_ip_rejects_simulated_players(
     let before = ban_count();
     let result = player.run_command(&format!("ban-ip {}", player.name()));
     test.assert_true(
-        result.is_err_and(|message| message.contains("no IP address")),
+        matches!(result, Err(GameTestError::World(message)) if message.contains("no IP address")),
         "/ban-ip did not report that the simulated player has no IP address",
     )?;
     test.assert_true(ban_count() == before, "/ban-ip changed the ban list")?;
