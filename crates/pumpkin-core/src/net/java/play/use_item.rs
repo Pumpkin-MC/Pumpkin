@@ -95,7 +95,6 @@ impl JavaClient {
         }
 
         if held.get_data_component::<ConsumableImpl>().is_some()
-            || held.get_data_component::<BlocksAttacksImpl>().is_some()
             || held
                 .get_data_component::<pumpkin_data::data_component_impl::KineticWeaponImpl>()
                 .is_some()

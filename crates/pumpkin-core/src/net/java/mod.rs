@@ -1,4 +1,6 @@
-use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CPlayDisconnect};
+use pumpkin_protocol::java::client::play::{
+    CChunkBatchEnd, CChunkBatchStart, CPlayDisconnect, CPlayerPosition,
+};
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
@@ -27,7 +29,7 @@ use pumpkin_protocol::java::server::play::{
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
-    ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
+    ClientPacket, ConnectionState, PacketDecodeError, PositionFlag, RawPacket, ServerPacket,
     codec::var_int::VarInt,
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
@@ -36,7 +38,7 @@ use pumpkin_protocol::{
     },
     ser::{NetworkReadExt, NetworkWriteExt, WritingError},
 };
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
@@ -137,6 +139,8 @@ pub struct JavaClient {
     /// On `SClientTickEnd` (≥1.21.4), if still `false`, the player's known
     /// movement is zeroed (they stood still). Matches vanilla's `receivedMovementThisTick`.
     pub received_movement_this_tick: AtomicBool,
+    vehicle_movement: AtomicCell<Option<play::move_vehicle::VehicleMovement>>,
+    vehicle_correction_tick: AtomicI32,
     /// The keep alive packet payload we send. The client should respond with the same id.
     pub keep_alive_id: AtomicCell<i64>,
     /// The last time we sent a keep alive packet.
@@ -182,6 +186,8 @@ impl JavaClient {
             player: ArcSwap::from_pointee(None),
             wait_for_keep_alive: AtomicBool::new(false),
             received_movement_this_tick: AtomicBool::new(false),
+            vehicle_movement: AtomicCell::new(None),
+            vehicle_correction_tick: AtomicI32::new(0),
             keep_alive_id: AtomicCell::new(0),
             last_keep_alive_time: AtomicCell::new(Instant::now()),
             last_packet_time: AtomicCell::new(Instant::now()),
@@ -483,7 +489,7 @@ impl JavaClient {
     }
 
     /// Queues packets a `PacketSentEvent` handler added, already in the client's format.
-    fn queue_extra_packets(&self, extras: Vec<Bytes>) {
+    fn queue_extra_packets(&self, extras: impl IntoIterator<Item = Bytes>) {
         for extra in extras {
             let Some(packet_len) = self.reserve_bytes(extra.len()) else {
                 return;
@@ -557,6 +563,77 @@ impl JavaClient {
             self.queue_extra_packets(extras);
         }
         queued
+    }
+
+    /// Validate a packet and its replacements after their observer callbacks.
+    pub(crate) fn try_enqueue_packet_data_if<T>(
+        &self,
+        packet_data: Bytes,
+        replacement_id: i32,
+        matches_replacement: impl Fn(&[u8]) -> bool,
+        lock_if_current: impl FnOnce() -> Option<T>,
+    ) {
+        self.try_enqueue_packet_data_filtering(packet_data, lock_if_current, |data| {
+            let mut payload = data.as_ref();
+            (!payload
+                .get_var_int()
+                .is_ok_and(|id| id.0 == replacement_id && matches_replacement(payload)))
+            .then_some(data)
+        });
+    }
+
+    pub(crate) fn try_enqueue_packet_data_filtering<T>(
+        &self,
+        packet_data: Bytes,
+        lock_if_current: impl FnOnce() -> Option<T>,
+        filter_stale_extra: impl Fn(Bytes) -> Option<Bytes>,
+    ) {
+        self.try_enqueue_packet_data_projecting(
+            packet_data,
+            lock_if_current,
+            |data, primary, guard| {
+                if guard.is_some() {
+                    Some(data)
+                } else if primary {
+                    None
+                } else {
+                    filter_stale_extra(data)
+                }
+            },
+            |_, _| {},
+        );
+    }
+
+    /// Project the observed primary and extras while holding the caller's validation guard.
+    /// The delivery callback runs only for bytes accepted by the send queue.
+    pub(crate) fn try_enqueue_packet_data_projecting<T>(
+        &self,
+        packet_data: Bytes,
+        validate: impl FnOnce() -> T,
+        mut project: impl FnMut(Bytes, bool, &T) -> Option<Bytes>,
+        mut delivered: impl FnMut(&Bytes, &mut T),
+    ) {
+        if self.close_token.is_cancelled() {
+            return;
+        }
+        let (primary, extras) = self.translate_outgoing(packet_data, true);
+        let mut guard = validate();
+        let packets = primary
+            .into_iter()
+            .map(|data| (data, true))
+            .chain(extras.into_iter().map(|data| (data, false)));
+        for (data, is_primary) in packets {
+            let Some(data) = project(data, is_primary, &guard) else {
+                continue;
+            };
+            let Some(length) = self.reserve_bytes(data.len()) else {
+                break;
+            };
+            if !self.queue_outgoing(OutgoingPacket::normal(data.clone()), length) {
+                break;
+            }
+            delivered(&data, &mut guard);
+        }
     }
 
     /// Like [`Self::try_enqueue_packet_data`] but does not fire `PacketSentEvent` for
@@ -762,6 +839,79 @@ impl JavaClient {
     pub fn try_send_packet<P: ClientPacket>(&self, packet: &P) -> bool {
         self.serialize_packet(packet)
             .is_ok_and(|data| self.try_enqueue_packet_data(data))
+    }
+
+    /// Queue a mount or dismount teleport only if it still owns the pending confirmation after
+    /// outgoing packet listeners have finished. Those listeners can request a new teleport.
+    pub(crate) fn try_send_riding_position(
+        &self,
+        packet: &CPlayerPosition,
+        player: &Player,
+        before_teleport: Vector3<f64>,
+        still_current: impl FnOnce() -> bool,
+    ) -> bool {
+        if self.close_token.is_cancelled() {
+            return false;
+        }
+        let Ok(data) = self.serialize_packet(packet) else {
+            return false;
+        };
+        let (primary, extras) = self.translate_outgoing(data, true);
+        let mut awaiting = player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let owns_teleport = awaiting
+            .as_ref()
+            .is_some_and(|(id, _)| *id == packet.teleport_id)
+            && still_current();
+        let version = self.version.load();
+        let has_confirmation = version >= JavaMinecraftVersion::V_1_9;
+        let mut sent = false;
+        let packets = primary
+            .into_iter()
+            .map(|data| (data, true))
+            .chain(extras.into_iter().map(|data| (data, false)));
+        for (data, is_primary) in packets {
+            // A listener can cancel the original and emit a replacement with the same ID.
+            let mut payload = data.as_ref();
+            let position = payload
+                .get_var_int()
+                .is_ok_and(|id| id.0 == CPlayerPosition::to_id(version))
+                .then(|| CPlayerPosition::read(&mut payload, &version).ok())
+                .flatten()
+                .filter(|position| !has_confirmation || position.teleport_id == packet.teleport_id);
+            if (is_primary || position.is_some()) && (!owns_teleport || sent) {
+                continue;
+            }
+            let Some(length) = self.reserve_bytes(data.len()) else {
+                break;
+            };
+            if !self.queue_outgoing(OutgoingPacket::normal(data), length) {
+                break;
+            }
+            if let Some(position) = position {
+                let mut destination = position.position;
+                for relative in position.relatives {
+                    match relative {
+                        PositionFlag::X => destination.x += before_teleport.x,
+                        PositionFlag::Y => destination.y += before_teleport.y,
+                        PositionFlag::Z => destination.z += before_teleport.z,
+                        _ => {}
+                    }
+                }
+                if has_confirmation {
+                    *awaiting = Some((position.teleport_id, destination));
+                    if version >= JavaMinecraftVersion::V_26_3 {
+                        player
+                            .riding_look_confirmation
+                            .store(Some(position.teleport_id));
+                    }
+                }
+                sent = true;
+            }
+        }
+        sent && has_confirmation
     }
 
     pub async fn send_packet<P: ClientPacket>(&self, packet: &P) {
@@ -971,7 +1121,11 @@ impl JavaClient {
                 );
             }
             id if id == SMoveVehicle::to_id(version) => {
-                self.handle_move_vehicle(player, &SMoveVehicle::read(&mut payload, &version)?);
+                self.handle_move_vehicle(
+                    player,
+                    server,
+                    &SMoveVehicle::read(&mut payload, &version)?,
+                );
             }
             id if id == SPaddleBoat::to_id(version) => {
                 self.handle_paddle_boat(player, &SPaddleBoat::read(&mut payload, &version)?);

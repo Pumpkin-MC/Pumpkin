@@ -516,19 +516,9 @@ impl BedrockClient {
                 }
             }
             TransactionData::ReleaseItem(_data) => {
-                let item_in_use = player
-                    .living_entity
-                    .item_in_use
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
-                if let Some(stack) = item_in_use {
-                    let Some(server) = player.world().server.upgrade() else {
-                        return;
-                    };
-                    server.item_registry.on_stopped_using(&stack, player);
+                if let Some(server) = player.world().server.upgrade() {
+                    server.item_registry.release_item(player);
                 }
-                player.living_entity.clear_active_hand();
             }
         }
 

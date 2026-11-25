@@ -24,6 +24,7 @@ use pumpkin_protocol::{
         client::{
             client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
             disconnect::CDisconnect,
+            move_player::CMovePlayer,
         },
         network_stack_latency::NetworkStackLatency,
         packet_decoder::BedrockBatchDecoder,
@@ -53,6 +54,7 @@ use pumpkin_protocol::{
             text::SText,
         },
     },
+    codec::{var_int::VarInt, var_ulong::VarULong},
     packet::Packet,
     serial::{PacketRead, PacketReadSlice, PacketWrite},
 };
@@ -161,6 +163,24 @@ pub fn split_raw_packet(packet_data: &Bytes) -> Option<(u16, Bytes)> {
     Some((packet_id, payload))
 }
 
+fn bedrock_teleport_position(
+    packet: &Bytes,
+    rider: VarULong,
+) -> Option<pumpkin_util::math::vector3::Vector3<f32>> {
+    use pumpkin_util::math::vector3::Vector3;
+
+    let (id, payload) = split_raw_packet(packet)?;
+    let mut payload = payload.as_ref();
+    if i32::from(id) != CMovePlayer::PACKET_ID || VarULong::read(&mut payload).ok()?.0 != rider.0 {
+        return None;
+    }
+    let position = Vector3::<f32>::read(&mut payload).ok()?;
+    for _ in 0..3 {
+        f32::read(&mut payload).ok()?;
+    }
+    (u8::read(&mut payload).ok()? == CMovePlayer::MODE_TELEPORT).then_some(position)
+}
+
 pub struct BedrockClient {
     pub id: u64,
     /// Sub-client slot (`Main` for the primary player, `SubClient0..=2` for split-screen players).
@@ -235,6 +255,29 @@ pub struct BedrockClient {
 }
 
 impl BedrockClient {
+    #[cfg(test)]
+    pub(crate) async fn test_outgoing_queue(
+        server: &Arc<Server>,
+    ) -> Result<(Arc<Self>, UnboundedReceiver<OutgoingPacket>), Box<dyn std::error::Error>> {
+        let address = "127.0.0.1:0".parse()?;
+        let session = nethernet::test_session(address).await?;
+        let client = Self::new(
+            0,
+            session,
+            address,
+            Arc::new(Mutex::new(HashMap::new())),
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(server),
+        );
+        let receiver = client
+            .outgoing_packet_queue_recv
+            .lock()
+            .await
+            .take()
+            .ok_or("Missing outgoing queue")?;
+        Ok((Arc::new(client), receiver))
+    }
+
     #[must_use]
     pub fn new(
         id: u64,
@@ -892,7 +935,7 @@ impl BedrockClient {
         true
     }
 
-    fn queue_extra_packets(&self, extras: Vec<Bytes>) -> bool {
+    fn queue_extra_packets(&self, extras: impl IntoIterator<Item = Bytes>) -> bool {
         for extra in extras {
             let Some(packet_len) = self.reserve_bytes(extra.len()) else {
                 return false;
@@ -944,6 +987,132 @@ impl BedrockClient {
     /// `false` when the packet was dropped instead of queued.
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) -> bool {
         self.try_enqueue_packet_data_inner(packet_data, true, false)
+    }
+
+    /// Validate a packet and its replacements after their observer callbacks.
+    pub(crate) fn try_enqueue_packet_data_if<T>(
+        &self,
+        packet_data: Bytes,
+        replacement_id: i32,
+        matches_replacement: impl Fn(&[u8]) -> bool,
+        lock_if_current: impl FnOnce() -> Option<T>,
+    ) {
+        self.try_enqueue_packet_data_filtering(packet_data, lock_if_current, |data| {
+            let mut payload = data.as_ref();
+            (!VarUInt::read(&mut payload).is_ok_and(|id| {
+                i32::try_from(id.0) == Ok(replacement_id) && matches_replacement(payload)
+            }))
+            .then_some(data)
+        });
+    }
+
+    /// Filter extras belonging to an update invalidated by an observer.
+    pub(crate) fn try_enqueue_packet_data_filtering<T>(
+        &self,
+        packet_data: Bytes,
+        lock_if_current: impl FnOnce() -> Option<T>,
+        filter_stale_extra: impl Fn(Bytes) -> Option<Bytes>,
+    ) {
+        self.try_enqueue_packet_data_projecting(
+            packet_data,
+            lock_if_current,
+            |data, primary, guard| {
+                if guard.is_some() {
+                    Some(data)
+                } else if primary {
+                    None
+                } else {
+                    filter_stale_extra(data)
+                }
+            },
+            |_, _, _| {},
+        );
+    }
+
+    pub(crate) fn try_enqueue_packet_data_projecting<T>(
+        &self,
+        packet_data: Bytes,
+        validate: impl FnOnce() -> T,
+        mut project: impl FnMut(Bytes, bool, &T) -> Option<Bytes>,
+        mut delivered: impl FnMut(&Bytes, bool, &mut T),
+    ) {
+        if self.is_closed() {
+            return;
+        }
+        let (primary, extras) = self.translate_outgoing(packet_data, true);
+        let mut guard = validate();
+        let packets = primary
+            .into_iter()
+            .map(|data| (data, true))
+            .chain(extras.into_iter().map(|data| (data, false)));
+        for (data, is_primary) in packets {
+            let Some(data) = project(data, is_primary, &guard) else {
+                continue;
+            };
+            let Some(length) = self.reserve_bytes(data.len()) else {
+                break;
+            };
+            if !self.queue_outgoing(
+                OutgoingPacket::normal(data.clone(), self.sub_client_id, self.id),
+                length,
+            ) {
+                break;
+            }
+            delivered(&data, is_primary, &mut guard);
+        }
+    }
+
+    /// Track the position actually queued after translation and observer replacements.
+    pub(crate) fn try_send_dismount_position(
+        &self,
+        player: &Player,
+        id: VarInt,
+        still_current: impl FnOnce() -> bool,
+    ) -> bool {
+        if self.is_closed() {
+            return false;
+        }
+        let packet = player.bedrock_move_packet(
+            CMovePlayer::MODE_TELEPORT,
+            false,
+            self.input_tick.load(Ordering::Relaxed),
+        );
+        let Ok(data) = self.serialize_packet(&packet) else {
+            return false;
+        };
+        let (primary, extras) = self.translate_outgoing(data, true);
+        let awaiting = player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let owns_exit =
+            awaiting.as_ref().is_some_and(|(pending, _)| *pending == id) && still_current();
+        let mut sent = false;
+        let packets = primary
+            .into_iter()
+            .map(|data| (data, true))
+            .chain(extras.into_iter().map(|data| (data, false)));
+        for (data, is_primary) in packets {
+            let position = bedrock_teleport_position(&data, packet.player_runtime_id);
+            if (is_primary || position.is_some()) && !owns_exit {
+                continue;
+            }
+            let Some(length) = self.reserve_bytes(data.len()) else {
+                break;
+            };
+            if !self.queue_outgoing(
+                OutgoingPacket::normal(data, self.sub_client_id, self.id),
+                length,
+            ) {
+                break;
+            }
+            if let Some(position) = position {
+                self.teleport_unconfirmed_inputs.store(0, Ordering::Relaxed);
+                self.teleport_sent_pos.store(position);
+                sent = true;
+            }
+        }
+        sent
     }
 
     /// Like [`Self::try_enqueue_packet_data`] without firing `PacketSentEvent` on current-version

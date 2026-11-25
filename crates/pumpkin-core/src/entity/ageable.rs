@@ -115,12 +115,7 @@ pub trait AgeableMob: Mob {
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, is_baby);
             entity.refresh_dimensions();
             self.age_boundary_reached();
-            // Full refresh, so growing up also clears the Bedrock baby flag and scale.
-            let mut actor_data = entity.bedrock_metadata();
-            if let Some(meta) = self.mob_metadata() {
-                actor_data.merge(meta.to_bedrock_actor_data());
-            }
-            entity.send_bedrock_actor_data(&actor_data);
+            entity.send_bedrock_age_metadata(is_baby, || self.mob_metadata());
         }
     }
 

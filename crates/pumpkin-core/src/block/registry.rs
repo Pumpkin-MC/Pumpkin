@@ -1331,6 +1331,15 @@ impl BlockRegistry {
         }
     }
 
+    pub(crate) fn bounce_on(&self, block: &Block, entity: &dyn EntityBase, position: &BlockPos) {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
+            pumpkin_block.bounce_on(
+                UpdateEntityMovementAfterFallOnArgs { block, entity },
+                &position.to_centered_f64(),
+            );
+        }
+    }
+
     pub fn attack(
         &self,
         world: &Arc<World>,

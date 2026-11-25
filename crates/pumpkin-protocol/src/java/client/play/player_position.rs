@@ -32,6 +32,10 @@ pub struct CPlayerPosition {
 }
 
 impl CPlayerPosition {
+    fn has_dismount_flag(version: JavaMinecraftVersion) -> bool {
+        (JavaMinecraftVersion::V_1_17..=JavaMinecraftVersion::V_1_19_3).contains(&version)
+    }
+
     #[must_use]
     pub const fn new(
         teleport_id: VarInt,
@@ -88,9 +92,7 @@ impl ClientPacket for CPlayerPosition {
                 // Teleport confirmation ID added in 1.9
                 write.write_var_int(&self.teleport_id)?;
             }
-            if *version >= JavaMinecraftVersion::V_1_17
-                && *version <= JavaMinecraftVersion::V_1_19_3
-            {
+            if Self::has_dismount_flag(*version) {
                 write.write_bool(false)?;
             }
         }
@@ -140,8 +142,8 @@ impl<'a> ServerPacket<'a> for CPlayerPosition {
             } else {
                 VarInt(0)
             };
-            if version >= &JavaMinecraftVersion::V_1_20_2 {
-                let _ = read.get_bool()?;
+            if Self::has_dismount_flag(*version) {
+                let _dismount = read.get_bool()?;
             }
             Ok(Self {
                 teleport_id,
@@ -152,5 +154,47 @@ impl<'a> ServerPacket<'a> for CPlayerPosition {
                 relatives,
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_position_consumes_the_dismount_flag_only_on_versions_that_send_it()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use JavaMinecraftVersion as Version;
+
+        let position = Vector3::new(1.25, 64.0, -3.5);
+        let id = VarInt(42);
+        let packet = CPlayerPosition::new(
+            id,
+            position,
+            Vector3::default(),
+            90.0,
+            0.0,
+            vec![PositionFlag::YRot],
+        );
+        for (version, length) in [
+            (Version::V_1_19_3, 35),
+            (Version::V_1_19_4, 34),
+            (Version::V_1_20_2, 34),
+            (Version::V_1_20_3, 34),
+            (Version::V_1_20_5, 34),
+            (Version::V_1_21, 34),
+            (Version::V_1_21_2, 61),
+        ] {
+            let mut data = Vec::new();
+            packet.write_packet_data(&mut data, &version)?;
+            assert_eq!(data.len(), length, "{version}");
+            let mut input = data.as_slice();
+            let decoded = CPlayerPosition::read(&mut input, &version)?;
+            assert!(input.is_empty(), "{version}");
+            assert_eq!(decoded.teleport_id, id);
+            assert_eq!(decoded.position, position);
+            assert!(matches!(decoded.relatives.as_slice(), [PositionFlag::YRot]));
+        }
+        Ok(())
     }
 }

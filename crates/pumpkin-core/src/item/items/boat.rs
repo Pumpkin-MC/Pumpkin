@@ -11,7 +11,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_util::Hand;
-use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
 pub struct BoatItem;
@@ -47,15 +47,6 @@ impl BoatItem {
                 &EntityType::OAK_BOAT
             }
         }
-    }
-
-    /// Gets entity dimensions for the boat type
-    const fn get_entity_dimensions(entity_type: &EntityType) -> EntityDimensions {
-        EntityDimensions::new(
-            entity_type.dimension[0],
-            entity_type.dimension[1],
-            entity_type.eye_height,
-        )
     }
 }
 
@@ -141,13 +132,16 @@ impl ItemBehaviour for BoatItem {
             }
         }
 
-        // Create the boat entity
-        let entity_type = Self::item_to_entity(item);
-        let dimensions = Self::get_entity_dimensions(entity_type);
-        let boat_box = BoundingBox::new_from_pos(hit_vec.x, hit_vec.y, hit_vec.z, &dimensions);
+        let entity = Entity::new(world.clone(), hit_vec, Self::item_to_entity(item));
+        let boat_entity = Arc::new(BoatEntity::new(entity));
+        let boat_box = boat_entity.get_entity().bounding_box.load();
 
-        // Vanilla: if (!world.isSpaceEmpty(lv7, lv7.getBoundingBox())) return FAIL
-        if !world.is_space_empty(boat_box) {
+        // A tall collision shape can reach into the hull from the block below it.
+        if !world
+            .get_block_collisions(boat_box, boat_entity.as_ref())
+            .0
+            .is_empty()
+        {
             return;
         }
 
@@ -168,13 +162,7 @@ impl ItemBehaviour for BoatItem {
 
         let mut stack = player.inventory.get_stack_in_hand(hand);
 
-        // Create and spawn the boat
-        let entity = Entity::new(world.clone(), hit_vec, entity_type);
-
-        // Set yaw to player's yaw
-        entity.set_rotation(yaw, 0.0);
-
-        let boat_entity = Arc::new(BoatEntity::new(entity));
+        boat_entity.get_entity().set_rotation(yaw, 0.0);
         crate::item::items::spawn_egg::apply_entity_variant(
             &stack,
             boat_entity.as_ref(),

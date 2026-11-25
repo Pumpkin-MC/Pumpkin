@@ -5,6 +5,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::data_component_impl::{BlocksAttacksImpl, ConsumableImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::Hand;
@@ -56,6 +57,21 @@ impl ItemRegistry {
             return;
         }
 
+        // Blocking starts after interaction acceptance, through one owner for native and
+        // component-only stacks. Repeated input cannot restart an item already in use.
+        if stack.get_data_component::<BlocksAttacksImpl>().is_some()
+            && stack.get_data_component::<ConsumableImpl>().is_none()
+        {
+            let held = player.inventory().get_stack_in_hand(hand);
+            if held.are_equal(stack) {
+                let duration = held.get_max_use_time();
+                player
+                    .living_entity
+                    .start_blocking_if_idle(hand, held, duration);
+            }
+            return;
+        }
+
         if let Some(pumpkin_item) = self.get_pumpkin_item(item.id) {
             pumpkin_item.normal_use_with_hand(item, player, yaw, pitch, hand);
         } else if stack
@@ -90,6 +106,12 @@ impl ItemRegistry {
         if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
             behaviour.on_stopped_using(stack, player);
         }
+    }
+
+    pub(crate) fn release_item(&self, player: &Player) {
+        player
+            .living_entity
+            .release_active_hand(|stack| self.on_stopped_using(stack, player));
     }
 
     pub fn on_spear_jab(&self, stack: &ItemStack, player: &Player) {

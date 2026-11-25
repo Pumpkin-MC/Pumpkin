@@ -58,42 +58,25 @@ impl FurnaceMinecart {
         }
     }
 
-    pub(super) fn velocity(&self, entity: &Entity, velocity: Vector3<f64>) -> Vector3<f64> {
+    pub(super) fn velocity(&self, velocity: Vector3<f64>, in_water: bool) -> Vector3<f64> {
         let mut push = self.push.load();
-        let push_length_squared = push.x.mul_add(push.x, push.z * push.z);
-        let velocity_length_squared = velocity.x.mul_add(velocity.x, velocity.z * velocity.z);
-
-        let mut next = if push_length_squared > 1.0e-7 {
-            if push_length_squared > 1.0e-4 && velocity_length_squared > 0.001 {
-                let velocity_direction = Vector3::new(velocity.x, 0.0, velocity.z).normalize();
-                let push_length = push.length();
-                let push_scale = if velocity_direction.dot(&push) < 0.0 {
-                    -push_length
-                } else {
-                    push_length
-                };
-                push = velocity_direction.multiply(push_scale, 0.0, push_scale);
-                self.push.store(push);
-            }
-            velocity.multiply(0.8, 0.0, 0.8).add(&push)
-        } else {
-            velocity.multiply(0.98, 0.0, 0.98)
-        };
-
-        let in_water = entity.touching_water.load(Ordering::Relaxed);
-        if in_water {
-            next = next.multiply(0.1, 0.0, 0.1);
+        if push.length_squared() <= 1.0e-7 {
+            return velocity.multiply(0.98, 0.0, 0.98);
         }
-        let slowdown = 0.96 * if in_water { 0.95 } else { 1.0 };
-        next = next.multiply(slowdown, 0.0, slowdown);
-
-        let max_speed = if in_water { 0.3 } else { 0.2 };
-        let speed = next.x.hypot(next.z);
-        if speed > max_speed {
-            next.x = next.x / speed * max_speed;
-            next.z = next.z / speed * max_speed;
+        if push.horizontal_length_squared() > 1.0e-4 && velocity.horizontal_length_squared() > 0.001
+        {
+            let projection = velocity * push.dot(&velocity) * velocity.length_squared().recip();
+            let length = projection.length();
+            // Java Vec3.normalize compares against the float cutoff, then divides each axis.
+            push = if length < f64::from(1.0e-5f32) {
+                Vector3::default()
+            } else {
+                (projection / length) * push.length()
+            };
+            self.push.store(push);
         }
-        next
+        let next = velocity.multiply(0.8, 0.0, 0.8) + push;
+        if in_water { next * 0.1 } else { next }
     }
 
     pub(super) fn interact(
@@ -114,9 +97,6 @@ impl FurnaceMinecart {
             if fuel <= 0 {
                 Self::set_fueled(entity, true);
             }
-        }
-
-        if self.fuel.load(Ordering::Relaxed) > 0 {
             let cart_pos = entity.pos.load();
             let player_pos = player.get_entity().pos.load();
             self.push.store(Vector3::new(

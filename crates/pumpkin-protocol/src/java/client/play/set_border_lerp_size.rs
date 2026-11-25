@@ -28,11 +28,17 @@ impl ClientPacket for CSetBorderLerpSize {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_f64_be(self.old_diameter)?;
         write.write_f64_be(self.new_diameter)?;
-        write.write_var_long(&self.speed)?;
+        // Since Java 1.21.11, the interpolation duration is in game ticks.
+        let speed = if *version >= JavaMinecraftVersion::V_1_21_11 {
+            VarLong(self.speed.0 / 50)
+        } else {
+            self.speed
+        };
+        write.write_var_long(&speed)?;
         Ok(())
     }
 }

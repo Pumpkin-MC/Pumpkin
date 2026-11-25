@@ -6,7 +6,7 @@ use pumpkin_data::{
     Rotation,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
@@ -113,12 +113,17 @@ impl BlockBehaviour for ShelfMushroomBlock {
 
     fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
         bounce_entity_after_fall(args.entity, f64::from(args.block.bounce_restitution));
+        let position = args.entity.get_entity().pos.load();
+        self.bounce_on(args, &position);
+    }
+
+    fn bounce_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>, position: &Vector3<f64>) {
         let entity = args.entity.get_entity();
         if entity.entity_type != &EntityType::ITEM && entity.entity_type != &EntityType::TNT {
             entity.world.load().play_sound(
                 Sound::BlockShelfMushroomBounce,
                 SoundCategory::Blocks,
-                &entity.pos.load(),
+                position,
             );
         }
     }

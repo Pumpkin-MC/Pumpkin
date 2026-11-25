@@ -668,6 +668,8 @@ pub struct Player {
     pub teleport_id_count: AtomicI32,
     /// The pending teleport information, including the teleport ID and target location.
     pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
+    /// Java 26.3 riding teleport whose acknowledgement also carries the rider's look.
+    pub(crate) riding_look_confirmation: AtomicCell<Option<VarInt>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
     /// The last time the player performed an action (for idle timeout).
@@ -973,6 +975,7 @@ impl Player {
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
+            riding_look_confirmation: AtomicCell::new(None),
             breath_manager: BreathManager::default(),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
@@ -1509,7 +1512,7 @@ impl Player {
 
         vehicle
             .get_entity()
-            .add_passenger(vehicle.clone(), self.clone());
+            .restore_player_passenger(vehicle.clone(), self.clone());
     }
 
     pub fn clean_up_chunk_tickets(&self, level: &Arc<pumpkin_world::level::Level>) {

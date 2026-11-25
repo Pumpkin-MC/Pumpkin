@@ -7,6 +7,7 @@ impl JavaClient {
             Success,
             WrongId,
             NotTeleporting,
+            InvalidLook,
         }
 
         let result = {
@@ -14,13 +15,43 @@ impl JavaClient {
                 .awaiting_teleport
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // A seat correction can be followed by a dismount before either
+            // acknowledgement arrives. Only the newer teleport owns placement.
+            let latest = awaiting_teleport.as_ref().map_or_else(
+                || {
+                    player
+                        .teleport_id_count
+                        .load(std::sync::atomic::Ordering::Acquire)
+                },
+                |(id, _)| id.0,
+            );
+            if confirm_teleport.teleport_id.0.wrapping_sub(latest) < 0 {
+                return;
+            }
             if let Some((id, position)) = awaiting_teleport.as_ref() {
                 if id == &confirm_teleport.teleport_id {
                     // We should set the position now to what we requested in the teleport packet.
                     // This may fix issues when the client sends the position while being teleported.
-                    player.get_entity().set_pos(*position);
+                    let entity = player.get_entity();
+                    let riding_look = player.riding_look_confirmation.swap(None) == Some(*id);
+                    let position = *position;
                     *awaiting_teleport = None;
-                    TeleportResult::Success
+                    if riding_look
+                        && (!confirm_teleport.yaw.is_finite()
+                            || !confirm_teleport.pitch.is_finite())
+                    {
+                        TeleportResult::InvalidLook
+                    } else {
+                        entity.set_pos(position);
+                        if riding_look {
+                            use pumpkin_util::math::wrap_degrees;
+                            entity.set_rotation(
+                                wrap_degrees(confirm_teleport.yaw),
+                                wrap_degrees(confirm_teleport.pitch),
+                            );
+                        }
+                        TeleportResult::Success
+                    }
                 } else {
                     TeleportResult::WrongId
                 }
@@ -37,6 +68,12 @@ impl JavaClient {
             TeleportResult::NotTeleporting => {
                 self.try_kick(&TextComponent::text(
                     "Send Teleport confirm, but we did not teleport",
+                ));
+            }
+            TeleportResult::InvalidLook => {
+                self.try_kick(&TextComponent::translate(
+                    "multiplayer.disconnect.invalid_player_movement",
+                    [],
                 ));
             }
         }

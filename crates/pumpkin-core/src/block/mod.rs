@@ -152,6 +152,9 @@ pub trait BlockBehaviour: Send + Sync {
         }
     }
 
+    /// Side effects of a resolved bounce, without changing the entity's velocity.
+    fn bounce_on(&self, _args: UpdateEntityMovementAfterFallOnArgs<'_>, _position: &Vector3<f64>) {}
+
     /// Called when a player starts digging this block, except in creative.
     fn attack(&self, _args: AttackArgs<'_>) {}
 

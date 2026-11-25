@@ -9,8 +9,10 @@ impl JavaClient {
         server: &Arc<Server>,
         ground: &SSetPlayerGround,
     ) {
-        self.received_movement_this_tick
-            .store(true, Ordering::Relaxed);
+        if !player.get_entity().has_vehicle() {
+            self.received_movement_this_tick
+                .store(true, Ordering::Relaxed);
+        }
         player.apply_client_move(
             server,
             ClientMove {
