@@ -466,6 +466,17 @@ impl ShulkerEntity {
                     return false;
                 }
             }
+            let passengers = entity
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            for passenger in passengers.iter().rev() {
+                entity.remove_passenger(passenger.get_entity().entity_id);
+            }
+            if entity.has_passengers() {
+                return false;
+            }
             if let Some(vehicle) = entity.get_vehicle() {
                 if self.find_teleport_attachment(&candidate).is_none() {
                     continue;
@@ -492,11 +503,7 @@ impl ShulkerEntity {
             entity.velocity_dirty.store(true, Ordering::Relaxed);
             world.emit_game_event_with_context(
                 GameEvent::Teleport.name(),
-                Vector3::new(
-                    f64::from(old_pos.0.x),
-                    f64::from(old_pos.0.y),
-                    f64::from(old_pos.0.z),
-                ),
+                old_pos.to_centered_f64(),
                 &GameEventContext {
                     source_entity: Some(self),
                 },
@@ -1312,6 +1319,48 @@ mod tests {
         assert_eq!(entity.get_eye_height(), 1.0);
         crate::entity::position_rider(vehicle.as_ref(), shulker.as_ref());
         assert_eq!(entity.pos.load(), restored);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn teleport_ejects_passengers() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        for x in -1..=0 {
+            for z in -1..=0 {
+                world
+                    .level
+                    .loaded_chunks
+                    .insert(Vector2::new(x, z), ChunkData::empty_sync(0, 0));
+            }
+        }
+        let shulker = spawn(&world);
+        let entity = shulker.get_entity();
+        let mut random = LegacyRand::from_seed(42);
+        let candidate = entity.block_pos.load().offset(Vector3::new(
+            random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
+            random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
+            random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
+        ));
+        *shulker.random() = LegacyRand::from_seed(42);
+        world.set_block_state(
+            &candidate.down(),
+            Block::STONE.default_state.id,
+            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
+        let passenger = Arc::new(Entity::new(
+            world.clone(),
+            entity.pos.load(),
+            &EntityType::COW,
+        ));
+        world.spawn_entity(passenger.clone());
+        entity.add_passenger_silently(shulker.clone(), passenger.clone());
+
+        assert!(shulker.teleport_somewhere());
+        assert!(!entity.has_passengers());
+        assert!(!passenger.has_vehicle());
+        assert_eq!(entity.block_pos.load(), candidate);
         world.level.shutdown().await;
         Ok(())
     }
