@@ -30,6 +30,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:bamboo_crimson_warped_doors_redstone" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/bamboo_crimson_warped_doors_redstone.json"
         )),
+        "pumpkin:ban_ip_rejects_simulated_players" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/ban_ip_rejects_simulated_players.json"
+        )),
         "pumpkin:barrel_and_trapped_chest_store_items" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/barrel_and_trapped_chest_store_items.json"
         )),
@@ -675,6 +678,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:arrow_falls_onto_block_below",
         "pumpkin:auto_command_block_executes_without_redstone",
         "pumpkin:bamboo_crimson_warped_doors_redstone",
+        "pumpkin:ban_ip_rejects_simulated_players",
         "pumpkin:barrel_and_trapped_chest_store_items",
         "pumpkin:birch_and_jungle_doors_redstone",
         "pumpkin:blast_furnace_smelts_raw_iron",

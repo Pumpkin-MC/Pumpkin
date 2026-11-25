@@ -5857,12 +5857,18 @@ impl Player {
         kick_matching_players: bool,
         log_to_console: bool,
     ) {
+        let Some(target_ip) = self.client.remote_ip() else {
+            warn!(
+                "Simulated player {} has no IP address to ban",
+                self.gameprofile.name
+            );
+            return;
+        };
         let string_reason = reason.clone().map_or_else(
             || "Banned by an operator.".to_string(),
             pumpkin_util::text::TextComponent::get_text,
         );
         let source_str = source.unwrap_or_else(|| "Plugin".to_string());
-        let target_ip = self.client.address().ip();
 
         if log_to_console {
             tracing::info!(

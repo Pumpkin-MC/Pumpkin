@@ -7,7 +7,7 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use pumpkin_world::level::SyncChunk;
 use std::{
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     num::NonZero,
     sync::{
         Arc,
@@ -182,6 +182,14 @@ impl ClientPlatform {
             Self::Java(java) => java.address,
             Self::Bedrock(bedrock) => bedrock.address,
             Self::SimulatedPlayer(_) => SocketAddr::from(([127, 0, 0, 1], 0)),
+        }
+    }
+
+    /// Returns the client's network IP, if it has a connection.
+    pub(crate) fn remote_ip(&self) -> Option<IpAddr> {
+        match self {
+            Self::SimulatedPlayer(_) => None,
+            Self::Java(_) | Self::Bedrock(_) => Some(self.address().ip()),
         }
     }
 

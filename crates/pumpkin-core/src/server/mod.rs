@@ -1214,7 +1214,7 @@ impl Server {
 
         for world in self.worlds.load().iter() {
             for player in world.players.load().iter() {
-                if player.client.address().ip() == ip {
+                if player.client.remote_ip() == Some(ip) {
                     players.push(player.clone());
                 }
             }

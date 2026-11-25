@@ -61,6 +61,7 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:block_tuning_and_invert", block_tuning_and_invert::test_block_tuning_and_invert);
         register_test_function("pumpkin:commands_gamemode_give_setblock", commands_and_gamemode::test_commands_gamemode_give_setblock);
         register_test_function("pumpkin:list_counts_visible_simulated_players", commands_and_gamemode::test_list_counts_visible_simulated_players);
+        register_test_function("pumpkin:ban_ip_rejects_simulated_players", commands_and_gamemode::test_ban_ip_rejects_simulated_players);
         register_test_function("pumpkin:loot_entity_context_and_nested_tables", loot_tables::test_loot_entity_context_and_nested_tables);
         register_test_function("pumpkin:simulated_player_lifecycle", simulated_player::test_simulated_player_lifecycle);
         register_test_function("pumpkin:simulated_player_actions", simulated_player::test_simulated_player_actions);

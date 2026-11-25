@@ -7,6 +7,44 @@ use pumpkin_util::{
 
 use crate::{command::CommandSender, server::server_test_manager::server_world};
 
+pub(super) async fn test_ban_ip_rejects_simulated_players(
+    test: GameTestContext,
+) -> GameTestResult<()> {
+    test.set_dimensions(3, 3, 3).await?;
+    test.build_floor(3, 3, &Block::STONE).await?;
+    let player = test
+        .spawn_simulated_player(
+            "BanIpTester",
+            Vector3::new(1.5, 1.0, 1.5),
+            GameMode::Survival,
+        )
+        .await?;
+    player.set_permission_level(PermissionLvl::Three)?;
+
+    let server = server_world(&test)?
+        .server
+        .upgrade()
+        .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
+    let ban_count = || {
+        server
+            .data
+            .banned_ip_list
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .banned_ips
+            .len()
+    };
+    let before = ban_count();
+    let result = player.run_command(&format!("ban-ip {}", player.name()));
+    test.assert_true(
+        result.is_err_and(|message| message.contains("no IP address")),
+        "/ban-ip did not report that the simulated player has no IP address",
+    )?;
+    test.assert_true(ban_count() == before, "/ban-ip changed the ban list")?;
+    test.succeed();
+    Ok(())
+}
+
 pub(super) async fn test_commands_gamemode_give_setblock(
     test: GameTestContext,
 ) -> GameTestResult<()> {
