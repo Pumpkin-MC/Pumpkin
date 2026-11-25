@@ -1,6 +1,5 @@
 use std::{
     fs::{File, OpenOptions},
-    io::Read,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -8,16 +7,15 @@ use std::{
 use bytes::{Buf, BufMut, Bytes};
 use pumpkin_util::math::vector2::Vector2;
 use rustc_hash::FxHashMap;
-use ruzstd::{
-    decoding::StreamingDecoder,
-    encoding::{CompressionLevel, compress_to_vec},
-};
 use tracing::warn;
 use xxhash_rust::xxh64::xxh64;
 
 use crate::chunk::{
     ChunkReadingError, ChunkSerializingError, ChunkWritingError,
-    format::anvil::{CHUNK_COUNT, SectorBitmap, SingleChunkDataSerializer},
+    format::{
+        anvil::{CHUNK_COUNT, SectorBitmap, SingleChunkDataSerializer},
+        zstd,
+    },
     io::{RegionFile, read_exact_at, write_all_at},
 };
 
@@ -349,12 +347,9 @@ impl RegionFile for PumpFile {
             )));
         }
 
-        let mut decoder = StreamingDecoder::new(&raw[CHUNK_FRAME_HEADER_BYTES..])
-            .map_err(|e| ChunkReadingError::IoError(std::io::Error::other(e.to_string())))?;
-        let mut decompressed = Vec::with_capacity(uncompressed_len);
-        decoder
-            .read_to_end(&mut decompressed)
-            .map_err(ChunkReadingError::IoError)?;
+        let decompressed =
+            zrip::decompress_with_limit(&raw[CHUNK_FRAME_HEADER_BYTES..], uncompressed_len)
+                .map_err(|e| ChunkReadingError::IoError(std::io::Error::other(e)))?;
         if decompressed.len() != uncompressed_len || xxh64(&decompressed, 0) != expected_checksum {
             return Err(ChunkReadingError::IoError(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -372,11 +367,11 @@ impl RegionFile for PumpFile {
             ))
         })?;
         let checksum = xxh64(&nbt, 0);
-        let compressed = compress_to_vec(&nbt[..], CompressionLevel::Fastest);
-        let mut out = Vec::with_capacity(CHUNK_FRAME_HEADER_BYTES + compressed.len());
+        let mut out = Vec::with_capacity(CHUNK_FRAME_HEADER_BYTES);
         out.put_u32(uncompressed_len);
         out.put_u64(checksum);
-        out.extend_from_slice(&compressed);
+        zstd::compress_append(&nbt, &mut out)
+            .map_err(|e| ChunkWritingError::IoError(std::io::Error::other(e)))?;
         Ok(out.into())
     }
 
@@ -454,6 +449,34 @@ mod tests {
         let mut encoded = PumpFile::encode_chunk(payload, &()).unwrap().to_vec();
         encoded[4] ^= 0xFF;
         assert!(PumpFile::decode_chunk(encoded.into()).is_err());
+    }
+
+    #[test]
+    fn decodes_chunks_written_by_ruzstd() {
+        // Written by ruzstd 0.9.1 `CompressionLevel::Fastest`, which saved
+        // pump chunks before zrip. Its frames have no content size.
+        const RECORD: [u8; 200] = [
+            0x00, 0x00, 0x05, 0x06, 0x6d, 0xdd, 0xa6, 0x90, 0x39, 0x8b, 0x97, 0x10, 0x28, 0xb5,
+            0x2f, 0xfd, 0x00, 0x38, 0x9d, 0x05, 0x00, 0xac, 0x04, 0x00, 0x7b, 0x78, 0x3a, 0x30,
+            0x2c, 0x69, 0x64, 0x3a, 0x22, 0x6d, 0x69, 0x6e, 0x65, 0x63, 0x72, 0x61, 0x66, 0x74,
+            0x3a, 0x73, 0x74, 0x6f, 0x6e, 0x65, 0x22, 0x7d, 0x7b, 0x78, 0x3a, 0x31, 0x32, 0x33,
+            0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x31, 0x31, 0x31, 0x31, 0x35, 0x31, 0x31, 0x31,
+            0x32, 0x32, 0x32, 0x32, 0x32, 0x35, 0x32, 0x32, 0x32, 0x32, 0x33, 0x33, 0x33, 0x33,
+            0x33, 0x35, 0x33, 0x33, 0x33, 0x33, 0x34, 0x34, 0x34, 0x34, 0x34, 0x35, 0x34, 0x34,
+            0x2f, 0xa8, 0xc1, 0xe9, 0xee, 0x7f, 0x07, 0x11, 0x8c, 0x20, 0x0c, 0x06, 0x74, 0x3f,
+            0x11, 0xfc, 0x7f, 0x42, 0x00, 0xb7, 0x1f, 0x39, 0x4c, 0x1c, 0xaa, 0x73, 0x69, 0x36,
+            0x14, 0xd4, 0x50, 0x68, 0xa8, 0x33, 0x34, 0x19, 0xde, 0x92, 0x2c, 0xbf, 0xd2, 0x2a,
+            0x75, 0xab, 0x85, 0x12, 0x4e, 0x02, 0x26, 0x55, 0x52, 0x24, 0xf1, 0xc1, 0x1e, 0xd8,
+            0xc1, 0x1c, 0x8c, 0x4e, 0xd4, 0x80, 0x0c, 0xc2, 0x80, 0x5d, 0x90, 0x05, 0x8c, 0x08,
+            0x88, 0x7d, 0x58, 0x0e, 0xa3, 0xc7, 0x61, 0xd8, 0x85, 0x51, 0x98, 0x84, 0x3d, 0xc2,
+            0xde, 0x96, 0xa6, 0x7c, 0xee, 0xfc, 0x88, 0x02, 0x7b, 0xb5, 0x8c, 0x82, 0xef, 0xaa,
+            0xb7, 0x13, 0xa0, 0x0a,
+        ];
+        let expected: Vec<u8> = (0..48)
+            .flat_map(|i| format!("{{x:{i},id:\"minecraft:stone\"}}").into_bytes())
+            .collect();
+        let decoded = PumpFile::decode_chunk(Bytes::from_static(&RECORD)).unwrap();
+        assert_eq!(decoded, expected);
     }
 
     #[test]
