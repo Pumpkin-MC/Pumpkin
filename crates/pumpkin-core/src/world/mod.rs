@@ -2233,16 +2233,15 @@ impl World {
             (level_time.is_night(), level_time.time_of_day)
         };
 
-        let (should_reset_weather, weather_cycle_enabled) = {
+        let should_reset_weather = {
             let mut weather = self
                 .weather
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             weather.tick_weather(self);
-            (
-                weather.raining || weather.thundering,
-                weather.weather_cycle_enabled,
-            )
+            self.can_have_weather()
+                && weather.should_advance_cycle(self)
+                && (weather.raining || weather.thundering)
         };
 
         if self.should_skip_night() && is_night {
@@ -2261,7 +2260,7 @@ impl World {
                 player.wake_up();
             }
 
-            if weather_cycle_enabled && should_reset_weather {
+            if should_reset_weather {
                 let mut weather = self
                     .weather
                     .lock()
@@ -3199,13 +3198,15 @@ impl World {
             .thundering
     }
 
-    /// Thunder only counts while it rains, in a dimension that has weather.
-    pub fn is_thunderstorm(&self) -> bool {
+    fn can_have_weather(&self) -> bool {
         self.dimension.has_skylight
             && !self.dimension.has_ceiling
             && self.dimension != Dimension::THE_END
-            && self.is_raining()
-            && self.is_thundering()
+    }
+
+    /// Thunder only counts while it rains, in a dimension that has weather.
+    pub fn is_thunderstorm(&self) -> bool {
+        self.can_have_weather() && self.is_raining() && self.is_thundering()
     }
 
     pub fn set_thundering(&self, thundering: bool) {
