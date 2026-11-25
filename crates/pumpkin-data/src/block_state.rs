@@ -308,6 +308,14 @@ impl BlockStateId {
         None
     }
 
+    /// # Safety
+    /// `inner < STATE_COUNT`.
+    #[inline]
+    #[must_use]
+    pub(crate) const unsafe fn new_unchecked(inner: u16) -> Self {
+        Self(inner)
+    }
+
     #[inline]
     #[must_use]
     pub const fn new_or_air(inner: u16) -> Self {
@@ -475,6 +483,44 @@ mod tests {
         let state = BlockState::from_id(stone.default_state.id);
         assert!(std::ptr::eq(state, stone.default_state));
         assert!(std::ptr::eq(state, &stone.states[0]));
+
+        // default is `snowy=false`, the second state
+        let grass = &Block::GRASS_BLOCK;
+        assert!(std::ptr::eq(grass.default_state, &grass.states[1]));
+    }
+
+    #[test]
+    fn property_slots_match_generated_properties() {
+        for raw in 0..BlockStateId::STATE_COUNT {
+            let id = BlockStateId::new(raw).unwrap();
+            let block = Block::from_state_id(id);
+            let decode = |id| {
+                block
+                    .properties(id)
+                    .map(|props| props.to_props())
+                    .unwrap_or_default()
+            };
+            let expected = decode(id);
+            assert_eq!(
+                block.property_values(id).collect::<Vec<_>>(),
+                expected,
+                "{id}"
+            );
+            assert_eq!(
+                block.state_from_properties(&expected).map(|s| s.id),
+                Some(id),
+                "{id}"
+            );
+            for (slot, value) in block.property_slots.iter().zip(&expected) {
+                assert_eq!(block.get_property(id, slot.key), Some(*value), "{id}");
+                for &other in slot.values {
+                    let changed = block.with_property(id, other).unwrap();
+                    let mut props = expected.clone();
+                    *props.iter_mut().find(|p| p.key() == slot.key).unwrap() = other;
+                    assert_eq!(decode(changed), props, "{id} -> {other:?}");
+                }
+            }
+        }
     }
 
     #[test]

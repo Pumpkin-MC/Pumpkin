@@ -198,7 +198,8 @@ impl MangroveRootPlacer {
             return state;
         }
         let (fluid, _) = GenerationCache::get_fluid_and_fluid_state(chunk, &pos.0);
-        if fluid != Fluid::WATER {
+        // TODO: `RootPlacer.getPotentiallyWaterloggedState` checks `FluidTags.WATER`, so flowing water counts too.
+        if *fluid != Fluid::WATER {
             return state;
         }
         state.set_waterlogged(true).unwrap_or(state)

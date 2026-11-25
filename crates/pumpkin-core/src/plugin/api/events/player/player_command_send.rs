@@ -1,40 +1,24 @@
-use pumpkin_macros::{Event, cancellable};
+use pumpkin_macros::Event;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
 
 use super::PlayerEvent;
 
-/// An event that occurs when a player executes a command
+/// Fired when the list of available server commands is sent to a player.
 ///
-/// If the event is cancelled, the command will not be executed.
-///
-/// This event contains information about the player and the command being executed.
-#[cancellable]
+/// Blocking handlers may remove entries from `commands` to hide them from the
+/// client's command graph; added entries are ignored.
 #[derive(Event, Clone)]
 pub struct PlayerCommandSendEvent {
-    /// The player who is executing the command.
     pub player: Arc<Player>,
-
-    /// The command being executed
-    pub command: String,
+    pub commands: Vec<String>,
 }
 
 impl PlayerCommandSendEvent {
-    /// Creates a new instance of `PlayerCommandSendEvent`.
-    ///
-    /// # Arguments
-    /// - `player`: A reference to the player running the command.
-    /// - `command`: The command being executed.
-    ///
-    /// # Returns
-    /// A new instance of `PlayerCommandSendEvent`.
-    pub const fn new(player: Arc<Player>, command: String) -> Self {
-        Self {
-            player,
-            command,
-            cancelled: false,
-        }
+    #[must_use]
+    pub const fn new(player: Arc<Player>, commands: Vec<String>) -> Self {
+        Self { player, commands }
     }
 }
 

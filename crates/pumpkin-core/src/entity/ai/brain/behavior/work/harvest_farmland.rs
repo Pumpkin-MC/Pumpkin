@@ -108,7 +108,7 @@ impl Behavior for HarvestFarmland {
         }
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         tick.state.erase(types::LOOK_TARGET.id());
         tick.state.erase(types::WALK_TARGET.id());
         self.time_worked_so_far = 0;
@@ -239,14 +239,10 @@ pub(super) fn is_max_age(block: &Block, state_id: BlockStateId) -> bool {
 }
 
 fn age_property(block: &Block, state_id: BlockStateId) -> Option<u8> {
-    block
-        .properties(state_id)?
-        .to_props()
-        .into_iter()
-        .find_map(|property| match property {
-            Property::Age(age) => Some(age),
-            _ => None,
-        })
+    match block.get_property(state_id, pumpkin_data::PropertyKey::Age)? {
+        Property::Age(age) => Some(age),
+        _ => None,
+    }
 }
 
 fn max_age(block: &Block) -> Option<u8> {

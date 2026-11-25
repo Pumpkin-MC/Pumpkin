@@ -24,27 +24,22 @@ fn boost_vehicle(
     entity_type_id: u16,
     damage: i32,
 ) {
-    let vehicle_opt = player
-        .get_entity()
-        .vehicle
-        .try_lock()
-        .ok()
-        .and_then(|guard| guard.as_ref().and_then(std::sync::Weak::upgrade));
-    if let Some(vehicle) = vehicle_opt
+    if let Some(vehicle) = player.get_entity().get_vehicle()
+        && vehicle
+            .get_controlling_passenger()
+            .is_some_and(|controller| controller.get_entity().entity_id == player.entity_id())
         && vehicle.get_entity().entity_type.id == entity_type_id
         && let Some(steerable) = vehicle.get_item_steerable()
         && steerable.boost()
     {
-        if player.gamemode.load() == pumpkin_util::GameMode::Creative {
-            return;
-        }
         let mut stack = player.inventory.get_stack_in_hand(hand);
         if !stack.is_empty() {
-            if stack.damage_item(damage) == DamageResult::Broken {
+            if player.damage_held_stack(&mut stack, damage, hand) == DamageResult::Broken {
                 stack = ItemStack::new(1, &Item::FISHING_ROD);
             }
             player.inventory.set_stack_in_hand(hand, stack);
         }
+        return;
     }
     player.increment_stat(StatisticCategory::Used, i32::from(item.id), 1);
 }

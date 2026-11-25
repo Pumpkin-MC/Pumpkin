@@ -972,18 +972,18 @@ fn generate_entity_condition_tokens(val: &serde_json::Value) -> TokenStream {
         .or_else(|| entity_pred.get("flags"))
         .and_then(|f| f.get("is_baby"))
         .and_then(|b| b.as_bool());
-    let dist_h = entity_pred
-        .get("minecraft:distance")
-        .or_else(|| entity_pred.get("distance"))
-        .and_then(|d| d.get("horizontal"))
-        .and_then(|h| h.get("min"))
-        .and_then(|v| v.as_f64());
-    let dist_a = entity_pred
-        .get("minecraft:distance")
-        .or_else(|| entity_pred.get("distance"))
-        .and_then(|d| d.get("absolute"))
-        .and_then(|a| a.get("min"))
-        .and_then(|v| v.as_f64());
+    let distance_bound = |axis: &str, bound: &str| {
+        entity_pred
+            .get("minecraft:distance")
+            .or_else(|| entity_pred.get("distance"))
+            .and_then(|d| d.get(axis))
+            // A plain number is an exact bound, both ends set to it.
+            .and_then(|a| a.as_f64().or_else(|| a.get(bound).and_then(|v| v.as_f64())))
+    };
+    let dist_h = distance_bound("horizontal", "min");
+    let dist_h_max = distance_bound("horizontal", "max");
+    let dist_a = distance_bound("absolute", "min");
+    let dist_a_max = distance_bound("absolute", "max");
 
     let mut vehicle_type = None;
     let mut vehicle_tag = None;
@@ -1047,6 +1047,8 @@ fn generate_entity_condition_tokens(val: &serde_json::Value) -> TokenStream {
     let baby_tok = opt_bool_tokens(is_baby);
     let dh_tok = opt_f64_tokens(dist_h);
     let da_tok = opt_f64_tokens(dist_a);
+    let dh_max_tok = opt_f64_tokens(dist_h_max);
+    let da_max_tok = opt_f64_tokens(dist_a_max);
     let vtype_tok = opt_str_tokens(vehicle_type);
     let vtag_tok = opt_str_tokens(vehicle_tag);
     let ptype_tok = opt_str_tokens(passenger_type);
@@ -1061,7 +1063,9 @@ fn generate_entity_condition_tokens(val: &serde_json::Value) -> TokenStream {
             tag: #tag_tok,
             is_baby: #baby_tok,
             distance_horizontal_min: #dh_tok,
+            distance_horizontal_max: #dh_max_tok,
             distance_absolute_min: #da_tok,
+            distance_absolute_max: #da_max_tok,
             vehicle_type: #vtype_tok,
             vehicle_tag: #vtag_tok,
             passenger_type: #ptype_tok,
@@ -1069,6 +1073,48 @@ fn generate_entity_condition_tokens(val: &serde_json::Value) -> TokenStream {
             looking_at: #look_tok,
             feet_item: #feet_tok,
             safe_armor_disallowed: #safe_arm_tok,
+        }
+    }
+}
+
+fn parse_int_bounds(val: Option<&serde_json::Value>) -> (Option<i32>, Option<i32>) {
+    match val {
+        Some(serde_json::Value::Number(number)) => number.as_i64().map_or((None, None), |value| {
+            let value = value as i32;
+            (Some(value), Some(value))
+        }),
+        Some(serde_json::Value::Object(map)) => (
+            map.get("min")
+                .and_then(serde_json::Value::as_i64)
+                .map(|v| v as i32),
+            map.get("max")
+                .and_then(serde_json::Value::as_i64)
+                .map(|v| v as i32),
+        ),
+        _ => (None, None),
+    }
+}
+
+fn generate_mob_effect_condition_tokens(effect: &str, val: &serde_json::Value) -> TokenStream {
+    let (amplifier_min, amplifier_max) = parse_int_bounds(val.get("amplifier"));
+    let (duration_min, duration_max) = parse_int_bounds(val.get("duration"));
+    let ambient = val.get("ambient").and_then(serde_json::Value::as_bool);
+    let visible = val.get("visible").and_then(serde_json::Value::as_bool);
+    let amin_tok = opt_i32_tokens(amplifier_min);
+    let amax_tok = opt_i32_tokens(amplifier_max);
+    let dmin_tok = opt_i32_tokens(duration_min);
+    let dmax_tok = opt_i32_tokens(duration_max);
+    let ambient_tok = opt_bool_tokens(ambient);
+    let visible_tok = opt_bool_tokens(visible);
+    quote! {
+        MobEffectCondition {
+            effect: #effect,
+            amplifier_min: #amin_tok,
+            amplifier_max: #amax_tok,
+            duration_min: #dmin_tok,
+            duration_max: #dmax_tok,
+            ambient: #ambient_tok,
+            visible: #visible_tok,
         }
     }
 }
@@ -1317,7 +1363,12 @@ fn generate_condition_tokens(trigger: &str, val: &serde_json::Value) -> TokenStr
             }
             "minecraft:hero_of_the_village" => quote! { AdvancementCondition::HeroOfTheVillage },
             "minecraft:started_riding" => quote! { AdvancementCondition::StartedRiding },
-            "minecraft:effects_changed" => quote! { AdvancementCondition::EffectsChanged },
+            "minecraft:effects_changed" => quote! {
+                AdvancementCondition::EffectsChanged {
+                    effects: &[],
+                    source: None,
+                }
+            },
             "minecraft:impossible" => quote! { AdvancementCondition::Impossible },
             _ => quote! { AdvancementCondition::Empty },
         };
@@ -1814,7 +1865,29 @@ fn generate_condition_tokens(trigger: &str, val: &serde_json::Value) -> TokenStr
                 .unwrap_or("");
             quote! { AdvancementCondition::CrafterRecipeCrafted(#r) }
         }
-        "minecraft:effects_changed" => quote! { AdvancementCondition::EffectsChanged },
+        "minecraft:effects_changed" => {
+            let effects: Vec<_> = val
+                .get("effects")
+                .and_then(|effects| effects.as_object())
+                .map_or_else(Vec::new, |effects| {
+                    effects
+                        .iter()
+                        .map(|(effect, predicate)| {
+                            generate_mob_effect_condition_tokens(effect, predicate)
+                        })
+                        .collect()
+                });
+            let source_tok = val
+                .get("source")
+                .map(generate_entity_condition_tokens)
+                .map_or_else(|| quote! { None }, |source| quote! { Some(#source) });
+            quote! {
+                AdvancementCondition::EffectsChanged {
+                    effects: &[#(#effects),*],
+                    source: #source_tok,
+                }
+            }
+        }
         "minecraft:spear_mobs" => {
             let cnt = val.get("count").and_then(|v| v.as_i64()).map(|v| v as i32);
             let c_tok = opt_i32_tokens(cnt);

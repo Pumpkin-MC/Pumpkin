@@ -175,7 +175,7 @@ impl Behavior for MoveToTargetSink {
         !done && walk.is_some_and(|walk| !walk.reached_by(tick.mob)) && !is_spectator
     }
 
-    fn stop(&mut self, tick: &mut BrainTick<'_>) {
+    fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         let steered = tick.mob.get_mob_entity().steered();
         if WalkTargetView::read(tick).is_some_and(|walk| !walk.reached_by(tick.mob))
             && steered.navigator().is_stuck()

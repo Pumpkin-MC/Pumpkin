@@ -83,9 +83,7 @@ impl GeodeFeature {
         let state = codec.get_state();
         // Obtain the block corresponding to this state id
         let block = Block::from_state_id(state.id);
-        block
-            .properties(state.id)
-            .is_some_and(|props| props.to_props().iter().any(|p| p.key() == property))
+        block.property_slot(property).is_some()
     }
 
     #[allow(clippy::too_many_arguments)]

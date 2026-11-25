@@ -593,10 +593,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .is_some_and(|living| !self.is_spectator() && living.is_alive())
     }
 
-    fn can_be_seen_as_enemy(&self) -> bool {
+    fn is_visible_and_vulnerable(&self) -> bool {
         self.get_living_entity()
             .is_some_and(|living| !living.entity.invulnerable.load(Ordering::Relaxed))
             && self.can_be_seen_by_anyone()
+    }
+
+    fn can_be_seen_as_enemy(&self) -> bool {
+        self.is_visible_and_vulnerable()
     }
 
     fn is_stepping_carefully(&self) -> bool {
@@ -3118,16 +3122,14 @@ impl Entity {
 
                         if surface_y >= bounding_box.min.y {
                             let marginal_height = surface_y - entity_box.min.y;
-                            let i = usize::from(
-                                fluid.id == Fluid::FLOWING_LAVA.id || fluid.id == Fluid::LAVA.id,
-                            );
+                            let i = usize::from(fluid.matches_type(&Fluid::LAVA));
 
                             fluid_height[i] = fluid_height[i].max(marginal_height);
 
                             in_fluid[i] = true;
 
                             if !is_pushed {
-                                fluids.insert(fluid.id, fluid);
+                                fluids.insert(fluid.to_flowing().id, fluid.to_flowing());
 
                                 continue;
                             }
@@ -3142,7 +3144,7 @@ impl Entity {
 
                             fluid_n[i] += 1;
 
-                            fluids.insert(fluid.id, fluid);
+                            fluids.insert(fluid.to_flowing().id, fluid.to_flowing());
                         }
                     }
                 }
@@ -5034,11 +5036,16 @@ impl Entity {
         }
     }
 
+    /// Vanilla `Entity.resetAngularLeashMomentum`.
+    pub(crate) fn reset_angular_leash_momentum(&self) {
+        self.leash_angular_momentum.store(0.0);
+    }
+
     /// Resets the leash motion and tells clients about the new holder. Call it without holding
     /// `leashed_to`: sending the packet runs plugin handlers that may lock it again.
     fn send_leash_attached(&self, holder: &Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
-        self.leash_angular_momentum.store(0.0);
+        self.reset_angular_leash_momentum();
         *self
             .delayed_leash
             .lock()
@@ -6022,8 +6029,8 @@ impl Entity {
 
             let below_state_id = world.get_block_state_id(&below_pos);
             // Vanilla: isWater checks specifically for water fluid, not any fluid
-            let is_water = Fluid::from_state_id(below_state_id)
-                .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id);
+            let is_water =
+                Fluid::from_state_id(below_state_id).is_some_and(|f| f.matches_type(&Fluid::WATER));
 
             let fallback_pos =
                 Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);

@@ -102,7 +102,7 @@ pub fn update_position(player: &Arc<Player>) {
     });
 
     let new_sim_level = (!is_spectator || spectators_generate_chunks).then(|| {
-        let sim_dist = world.server.upgrade().map_or(10, |s| {
+        let sim_dist = world.server.upgrade().map_or(16, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         });
         pumpkin_world::chunk_system::ChunkLoading::get_level_from_simulation_distance(sim_dist)
