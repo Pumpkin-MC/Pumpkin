@@ -117,7 +117,7 @@ pub fn try_spawn_mob<T: Mob + 'static>(
             entity_type,
         ));
         if check_collisions
-            && !world.no_entity_collision(mob.as_ref(), mob.get_entity().bounding_box.load())
+            && !world.no_entity_collision(Some(mob.as_ref()), mob.get_entity().bounding_box.load())
         {
             continue;
         }
