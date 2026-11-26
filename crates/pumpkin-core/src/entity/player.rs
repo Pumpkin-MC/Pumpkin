@@ -4673,6 +4673,10 @@ impl Player {
             return;
         }
         let world = other.world();
+        // Only re-pair within one world; the tracker does not check world identity itself.
+        if !Arc::ptr_eq(&world, &self.world()) {
+            return;
+        }
         if let Some(tracked) = world
             .entity_tracker
             .get_tracked_entity(other.get_entity().entity_id)

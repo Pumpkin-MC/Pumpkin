@@ -513,6 +513,12 @@ impl TrackedEntity {
                     .insert(player.gameprofile.id, player.clone())
                     .is_none();
                 if inserted {
+                    // `hide_player` may have run between the visibility check above and the
+                    // insertion (its `remove_player` found nobody to remove), so check again.
+                    if !self.broadcast_to_player(player) {
+                        self.forget_player(player);
+                        return;
+                    }
                     if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
                         self.bedrock_watchers.fetch_add(1, Relaxed);
                     }
