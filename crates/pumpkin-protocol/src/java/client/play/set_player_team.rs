@@ -85,12 +85,9 @@ impl ClientPacket for CSetPlayerTeam<'_> {
                 write
                     .write_var_int(&VarInt(nametag_visibility_to_id(params.nametag_visibility)))?;
                 write.write_var_int(&VarInt(collision_rule_to_id(params.collision_rule)))?;
-                if params.color >= 0 && params.color != 21 {
-                    write.write_bool(true)?;
-                    write.write_var_int(&VarInt(params.color))?;
-                } else {
-                    write.write_bool(false)?;
-                }
+                // Team color is a plain VarInt enum (21 = RESET, i.e. no color), not an optional.
+                let color_id = if params.color < 0 { 21 } else { params.color };
+                write.write_var_int(&VarInt(color_id))?;
                 write.write_i8(params.options)?;
             } else if *version >= JavaMinecraftVersion::V_1_13 {
                 write.write_component(params.display_name, version)?;
@@ -155,5 +152,66 @@ impl ClientPacket for CSetPlayerTeam<'_> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn encode(
+        method: TeamMethod,
+        color: i32,
+        options: i8,
+        players: &[&str],
+        version: &JavaMinecraftVersion,
+    ) -> Vec<u8> {
+        let component = TextComponent::text("");
+        let packet = CSetPlayerTeam {
+            team_name: "T".to_string(),
+            method,
+            parameters: Some(TeamParameters {
+                display_name: &component,
+                options,
+                nametag_visibility: "always",
+                collision_rule: "always",
+                color,
+                player_prefix: &component,
+                player_suffix: &component,
+            }),
+            players: players.iter().map(|p| (*p).to_string()).collect(),
+        };
+        let mut out = Vec::new();
+        packet.write_packet_data(&mut out, version).unwrap();
+        out
+    }
+
+    /// Bytes after the (empty) prefix/suffix components, as the 26.2+ client reads them:
+    /// nametag visibility, collision rule, color (VarInt), friendly flags.
+    fn tail_after_rules(bytes: &[u8]) -> &[u8] {
+        // name(1+1) method(1) then three components; locate by the fixed trailing layout instead.
+        &bytes[bytes.len() - 4..]
+    }
+
+    #[test]
+    fn create_writes_color_as_plain_varint_26_2() {
+        let v = JavaMinecraftVersion::V_26_2;
+        let bytes = encode(TeamMethod::Create, 10, 0x01, &[], &v);
+        // ntv=0, collision=0, color=10, flags=1, then player count (VarInt 0) => 6 bytes tail
+        assert_eq!(&bytes[bytes.len() - 5..], &[0x00, 0x00, 0x0a, 0x01, 0x00]);
+    }
+
+    #[test]
+    fn update_ends_after_flags_without_extra_byte() {
+        let v = JavaMinecraftVersion::V_26_2;
+        let bytes = encode(TeamMethod::Update, 10, 0x01, &[], &v);
+        assert_eq!(tail_after_rules(&bytes), &[0x00, 0x00, 0x0a, 0x01]);
+    }
+
+    #[test]
+    fn negative_color_is_reset() {
+        let v = JavaMinecraftVersion::V_26_2;
+        let bytes = encode(TeamMethod::Update, -1, 0x00, &[], &v);
+        assert_eq!(tail_after_rules(&bytes), &[0x00, 0x00, 21, 0x00]);
     }
 }
