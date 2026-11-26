@@ -52,7 +52,12 @@ fn create_with(
             }
             if let Some(reason) = reason {
                 let reason = reason(target.as_ref());
-                tick.defer_target_change(Some(target), reason);
+                tick.defer_target_change(Some(target), reason, |tick, target| {
+                    if target.is_some() {
+                        tick.state.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+                    }
+                    tick.state.set_optional(types::ATTACK_TARGET, target);
+                });
             } else {
                 tick.state.set(types::ATTACK_TARGET, target);
                 tick.state.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());

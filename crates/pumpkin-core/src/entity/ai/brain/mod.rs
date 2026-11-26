@@ -47,7 +47,7 @@ impl BrainTick<'_> {
         }
     }
 
-    /// Includes pose changes requested earlier in this tick.
+    /// Includes pose changes requested within the current callback.
     #[must_use]
     pub fn pose(&self) -> EntityPose {
         self.pending_pose()
@@ -77,7 +77,7 @@ impl BrainTick<'_> {
         });
     }
 
-    /// Records a pose for later behaviors and defers the complete transition.
+    /// Records a pose for the current callback and defers the complete transition.
     pub(crate) fn defer_pose_change(
         &mut self,
         pose: EntityPose,
@@ -104,6 +104,9 @@ impl BrainTick<'_> {
         &mut self,
         target: Option<Arc<dyn crate::entity::EntityBase>>,
         reason: crate::plugin::api::events::entity::entity_target::TargetReason,
+        apply: impl FnOnce(&mut BrainTick<'_>, Option<Arc<dyn crate::entity::EntityBase>>)
+        + Send
+        + 'static,
     ) {
         let previous_id = self
             .state
@@ -111,9 +114,9 @@ impl BrainTick<'_> {
             .map(|target| target.get_entity().entity_id);
         self.defer_with_update(
             move |mob| crate::entity::mob::resolve_target_change(mob, previous_id, target, reason),
-            |state, decision| {
+            move |tick, decision| {
                 if let Ok(target) = decision {
-                    state.set_attack_target(target);
+                    apply(tick, target);
                 }
             },
         );
@@ -123,7 +126,7 @@ impl BrainTick<'_> {
     pub(crate) fn defer_with_update<T: Send + 'static>(
         &mut self,
         action: impl FnOnce(&dyn Mob) -> T + Send + 'static,
-        update: impl FnOnce(&mut BrainState, T) + Send + 'static,
+        update: impl FnOnce(&mut BrainTick<'_>, T) + Send + 'static,
     ) {
         self.state.effects.push(Box::new(move |mob| {
             let result = action(mob);
@@ -141,7 +144,7 @@ pub struct VisibilityContext<'a> {
 }
 
 type ActivityConditions = Box<[(MemoryModuleId, MemoryStatus)]>;
-pub(crate) type BrainEffectUpdate = Box<dyn FnOnce(&mut BrainState) + Send>;
+pub(crate) type BrainEffectUpdate = Box<dyn FnOnce(&mut BrainTick<'_>) + Send>;
 pub(crate) type BrainEffect = Box<dyn FnOnce(&dyn Mob) -> Option<BrainEffectUpdate> + Send>;
 
 #[derive(Clone, Copy)]
@@ -233,14 +236,6 @@ impl DerefMut for Brain {
 }
 
 impl BrainState {
-    pub(crate) fn set_attack_target(&mut self, target: Option<Arc<dyn crate::entity::EntityBase>>) {
-        let id = |target: &Arc<dyn crate::entity::EntityBase>| target.get_entity().entity_id;
-        if self.get(memory::types::ATTACK_TARGET).map(id) != target.as_ref().map(id) {
-            self.erase(memory::types::CANT_REACH_WALK_TARGET_SINCE.id());
-        }
-        self.set_optional(memory::types::ATTACK_TARGET, target);
-    }
-
     pub fn register_memory(&mut self, id: MemoryModuleId) {
         self.memories.register(id);
     }
@@ -521,7 +516,12 @@ impl Brain {
     ) -> Option<Vec<BrainEffect>> {
         let cursor = self.next_callback.take()?;
         for update in updates {
-            update(&mut self.state);
+            update(&mut BrainTick {
+                state: &mut self.state,
+                world,
+                mob,
+                time,
+            });
         }
         Self::apply_pending_memory_clear(&mut self.state, mob);
         let effects = match cursor {
@@ -796,7 +796,7 @@ mod tests {
                 move |_| {
                     stops.fetch_add(1, Ordering::Relaxed);
                 },
-                |brain, ()| brain.set(types::PACIFIED, true),
+                |tick, ()| tick.state.set(types::PACIFIED, true),
             );
         }
 
@@ -1282,7 +1282,7 @@ mod tests {
                         replacement.set(types::PACIFIED, false);
                         mob.get_mob_entity().set_brain(replacement);
                     },
-                    |brain, ()| brain.set(types::PACIFIED, true),
+                    |tick, ()| tick.state.set(types::PACIFIED, true),
                 );
                 true
             }))],

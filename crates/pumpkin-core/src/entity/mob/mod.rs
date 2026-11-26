@@ -967,7 +967,7 @@ impl MobEntity {
             if !self.living_entity.entity.is_removed()
                 && let Some(brain) = slot.as_mut()
             {
-                brain.set_attack_target(target);
+                brain.set_optional(types::ATTACK_TARGET, target);
             }
         } else {
             *self

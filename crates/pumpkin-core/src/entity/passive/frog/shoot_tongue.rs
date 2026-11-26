@@ -91,9 +91,6 @@ impl ShootTongue {
         };
         let entity = frog.get_entity();
         let world = entity.world.load_full();
-        if !tongue_target_is_current(frog, target, &world) {
-            return;
-        }
         world.play_sound_fine(sound, SoundCategory::Neutral, &entity.pos.load(), 2.0, 1.0);
         if !tongue_target_is_current(frog, target, &world) {
             return;
@@ -201,20 +198,15 @@ impl Behavior for ShootTongue {
                 if target_pos.squared_distance_to_vec(&frog_pos).sqrt() < EATING_DISTANCE {
                     let world = tick.world.clone();
                     let sound_world = world.clone();
-                    let sound_target = target.clone();
                     let sound = self.tongue_sound;
-                    tick.defer(move |mob| {
-                        if let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>()
-                            && tongue_target_is_current(frog, &sound_target, &sound_world)
-                        {
-                            sound_world.play_sound_fine(
-                                sound,
-                                SoundCategory::Neutral,
-                                &frog_pos,
-                                2.0,
-                                1.0,
-                            );
-                        }
+                    tick.defer(move |_| {
+                        sound_world.play_sound_fine(
+                            sound,
+                            SoundCategory::Neutral,
+                            &frog_pos,
+                            2.0,
+                            1.0,
+                        );
                     });
                     tick.set_pose(EntityPose::UsingTongue);
                     tick.defer(move |mob| {
@@ -226,9 +218,7 @@ impl Behavior for ShootTongue {
                         }
                         let prey = target.get_entity();
                         let offset = frog.get_entity().pos.load() - prey.pos.load();
-                        if offset.length() < EATING_DISTANCE {
-                            prey.set_velocity(offset.normalize() * EATING_MOVEMENT_FACTOR);
-                        }
+                        prey.set_velocity(offset.normalize() * EATING_MOVEMENT_FACTOR);
                     });
                     self.eat_animation_timer = 0;
                     self.state = State::CatchAnimation;

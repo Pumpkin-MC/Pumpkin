@@ -20,7 +20,10 @@ const STAND_UP_HEIGHT: f64 = 0.1;
 impl VillagerEntity {
     #[must_use]
     pub fn is_sleeping(&self) -> bool {
-        self.get_entity().pose.load() == EntityPose::Sleeping
+        self.sleeping_pos
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
     }
 
     pub fn start_sleeping(&self, bed_pos: BlockPos) -> bool {
@@ -43,7 +46,7 @@ impl VillagerEntity {
         true
     }
 
-    pub(crate) fn bed_sleep_position(
+    fn bed_sleep_position(
         bed_pos: BlockPos,
         block: &Block,
         state: &BlockState,
