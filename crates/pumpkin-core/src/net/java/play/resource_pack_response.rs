@@ -18,12 +18,12 @@ impl JavaClient {
             player.gameprofile.name, packet.uuid, result
         );
 
-        let mut event = PlayerResourcePackStatusEvent::new(
+        let event = PlayerResourcePackStatusEvent::new(
             player.clone(),
             packet.uuid.to_string(),
             format!("{result:?}"),
         );
-        server.plugin_manager.fire_blocking(server, &mut event);
+        server.plugin_manager.fire_blocking(server, event);
 
         if server.advanced_config.resource_pack.java.force
             && (result == PlayResourcePackResult::Declined

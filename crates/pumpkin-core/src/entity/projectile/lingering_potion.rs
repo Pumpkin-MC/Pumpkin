@@ -191,7 +191,7 @@ impl EntityBase for LingeringPotionEntity {
                 block_pos,
                 stack.item.registry_key.to_string(),
             );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return;
             }

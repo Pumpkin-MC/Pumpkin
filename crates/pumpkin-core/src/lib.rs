@@ -542,7 +542,7 @@ impl PumpkinServer {
 
         self.server
             .plugin_manager
-            .fire(&self.server, &mut ServerLoadEvent::new(LoadType::Startup))
+            .fire(&self.server, ServerLoadEvent::new(LoadType::Startup))
             .await;
 
         self.server.start_telemetry();
@@ -802,10 +802,7 @@ fn setup_stdin_console(server: &Arc<Server>) {
                 break;
             };
             let mut event = ServerCommandEvent::new(command.clone());
-            server_clone
-                .plugin_manager
-                .fire(&server_clone, &mut event)
-                .await;
+            event = server_clone.plugin_manager.fire(&server_clone, event).await;
             if !event.cancelled {
                 server_clone.command_dispatcher.load().handle_command(
                     &command::CommandSender::Console.into_source(&server_clone),
@@ -873,7 +870,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
 
             if let Some(line) = result {
                 let mut event = ServerCommandEvent::new(line.clone());
-                server.plugin_manager.fire(&server, &mut event).await;
+                event = server.plugin_manager.fire(&server, event).await;
                 if !event.cancelled {
                     server.command_dispatcher.load().handle_command(
                         &command::CommandSender::Console.into_source(&server),

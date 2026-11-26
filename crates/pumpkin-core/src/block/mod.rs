@@ -539,7 +539,7 @@ pub fn collect_loot(
         cancelled: false,
     };
     if let Some(server) = world.server.upgrade() {
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
     }
     if event.cancelled {
         return Vec::new();
@@ -586,7 +586,7 @@ pub fn drop_loot(
                 exp: amount,
             };
             if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
             }
             if event.exp > 0 {
                 ExperienceOrbEntity::spawn(world, pos.to_f64(), event.exp as u32);

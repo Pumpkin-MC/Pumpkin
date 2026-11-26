@@ -15,7 +15,7 @@ impl BedrockClient {
         }
         let previous_slot = player.inventory.get_selected_slot();
         let mut event = PlayerItemHeldEvent::new(player.clone(), previous_slot, slot);
-        server.plugin_manager.fire_blocking(server, &mut event);
+        event = server.plugin_manager.fire_blocking(server, event);
         if event.cancelled {
             self.try_enqueue_client_packet(&CPlayerHotbar {
                 selected_slot: VarUInt(u32::from(previous_slot)),

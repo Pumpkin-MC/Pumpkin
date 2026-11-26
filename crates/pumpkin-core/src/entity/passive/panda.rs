@@ -523,9 +523,7 @@ impl PandaEntity {
             stack.item_count,
         );
         if let Some(server) = entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut drop_event);
+            drop_event = server.plugin_manager.fire_blocking(&server, drop_event);
         }
         !drop_event.cancelled
     }

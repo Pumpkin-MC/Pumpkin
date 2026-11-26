@@ -102,7 +102,7 @@ impl BlockBehaviour for FarmlandBlock {
                             args.world.clone(),
                             new_moisture,
                         );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    event = server.plugin_manager.fire_blocking(&server, event);
                     if event.cancelled {
                         return;
                     }
@@ -137,7 +137,7 @@ impl BlockBehaviour for FarmlandBlock {
                         args.world.clone(),
                         new_moisture,
                     );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     return;
                 }

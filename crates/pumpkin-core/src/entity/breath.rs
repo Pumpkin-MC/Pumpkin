@@ -66,7 +66,7 @@ impl BreathManager {
                         player.entity_id(),
                         new_air,
                     );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    event = server.plugin_manager.fire_blocking(&server, event);
                     if event.cancelled {
                         return;
                     }
@@ -95,7 +95,7 @@ impl BreathManager {
                         player.entity_id(),
                         new_air,
                     );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    event = server.plugin_manager.fire_blocking(&server, event);
                     if event.cancelled {
                         return;
                     }
