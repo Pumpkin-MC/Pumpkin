@@ -72,7 +72,7 @@ impl BreathManager {
                         new_air,
                     );
                     server.plugin_manager.fire_blocking(&server, &mut event);
-                    if event.cancelled {
+                    if event.cancelled || player.living_entity.health.load() <= 0.0 {
                         return;
                     }
                     new_air = event.amount.clamp(0, MAX_AIR);
@@ -101,7 +101,7 @@ impl BreathManager {
                         new_air,
                     );
                     server.plugin_manager.fire_blocking(&server, &mut event);
-                    if event.cancelled {
+                    if event.cancelled || player.living_entity.health.load() <= 0.0 {
                         return;
                     }
                     new_air = event.amount.clamp(0, MAX_AIR);
