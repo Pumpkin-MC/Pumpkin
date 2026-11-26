@@ -5,9 +5,18 @@ use std::{
 
 use pumpkin_core::{server::Server, world::BlockFlags};
 use pumpkin_data::{
-    Block, block_properties::OakTrapdoorLikeProperties, dimension::Dimension, item_stack::ItemStack,
+    Block, block_properties::OakTrapdoorLikeProperties, dimension::Dimension,
+    item_stack::ItemStack, packet::CURRENT_MC_VERSION, world::WorldEvent,
 };
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_protocol::{
+    codec::var_int::VarInt,
+    java::{
+        client::play::CLevelEvent,
+        server::play::{SPlayerAction, Status},
+    },
+    packet::MultiVersionJavaPacket,
+};
+use pumpkin_util::{GameMode, math::position::BlockPos};
 
 use crate::bot::{HeadlessBot, MAX_POLL_TICKS};
 
@@ -82,7 +91,94 @@ pub async fn run_world_interaction_tests(
         start.elapsed().as_millis()
     ));
 
+    run_mining_progress_events_test(server, bot1, break_pos, summary_lines).await?;
     run_shulker_box_open_test(server, bot1, summary_lines).await
+}
+
+/// Since 26.3 the client plays the hit sound only when mining starts; vanilla
+/// `ServerPlayerGameMode.tick` keeps it going with world events 2019/2020.
+async fn run_mining_progress_events_test(
+    server: &Arc<Server>,
+    bot: &mut HeadlessBot,
+    pos: BlockPos,
+    summary_lines: &mut Vec<String>,
+) -> Result<(), String> {
+    let start = Instant::now();
+    let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+    let Some(player) = world.get_player_by_name("TestBot1") else {
+        return Err("Could not find 'TestBot1' in Overworld".to_string());
+    };
+    let original_mode = player.gamemode.load();
+    player.set_gamemode(GameMode::Survival);
+    player.inventory.set_held_item(ItemStack::EMPTY.clone());
+    // Bare-handed stone takes seconds, so the block cannot break during the test.
+    world.set_block_state(&pos, Block::STONE.default_state.id, BlockFlags::NOTIFY_ALL);
+
+    bot.start_digging(pos, 5).await?;
+    let mut mining_ticks = 0;
+    for _ in 0..MAX_POLL_TICKS {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        server.tick();
+        if player.mining.load(std::sync::atomic::Ordering::Relaxed) {
+            mining_ticks += 1;
+            if mining_ticks >= 8 {
+                break;
+            }
+        }
+    }
+
+    let level_event_id = CLevelEvent::to_id(CURRENT_MC_VERSION);
+    let pos_long = pos.as_long().to_be_bytes();
+    let mut particles = 0;
+    let mut sounds = 0;
+    let read = tokio::time::timeout(Duration::from_secs(5), async {
+        while sounds < 2 {
+            let pkt = bot.next_packet().await?;
+            let p = &pkt.payload;
+            if pkt.id != level_event_id || p.len() < 16 || p[4..12] != pos_long {
+                continue;
+            }
+            match i32::from_be_bytes([p[0], p[1], p[2], p[3]]) {
+                e if e == WorldEvent::ParticlesDestroyProgress as i32 => particles += 1,
+                e if e == WorldEvent::ParticlesAndSoundDestroyProgress as i32 => sounds += 1,
+                _ => {}
+            }
+        }
+        Ok::<(), String>(())
+    })
+    .await;
+
+    bot.send_packet(&SPlayerAction {
+        status: VarInt(Status::CancelledDigging as i32),
+        position: pos,
+        face: 1,
+        sequence: VarInt(6),
+    })
+    .await?;
+    for _ in 0..10 {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        server.tick();
+    }
+    world.set_block_state(&pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
+    player.set_gamemode(original_mode);
+
+    match read {
+        Ok(result) => result?,
+        Err(_) => {
+            return Err(format!(
+                "Mining stone sent {particles} destroy-progress particle events and {sounds} hit sound events, expected one every 4th mining tick"
+            ));
+        }
+    }
+    if particles == 0 {
+        return Err("Mining stone sent no destroy-progress particle events".to_string());
+    }
+
+    summary_lines.push(format!(
+        "[PASS] bot:mining_progress_events ({}ms)",
+        start.elapsed().as_millis()
+    ));
+    Ok(())
 }
 
 async fn run_shulker_box_open_test(
