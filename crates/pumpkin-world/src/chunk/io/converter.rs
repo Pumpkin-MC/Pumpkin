@@ -495,6 +495,7 @@ mod tests {
             blending_data: None,
             inhabited_time: AtomicU64::new(12345),
             custom_data: Mutex::new(NbtCompound::default()),
+            preserved_tags: Mutex::new(NbtCompound::default()),
         };
         chunk.set_custom_data("test_ns", "flag", NbtTag::Int(99));
 
