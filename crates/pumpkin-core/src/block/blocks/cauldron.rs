@@ -56,12 +56,10 @@ fn fire_cauldron_change(
     reason: CauldronChangeReason,
     entity: Option<Arc<dyn EntityBase>>,
 ) -> bool {
+    let block = world.get_block(&pos);
     let mut event =
         CauldronLevelChangeEvent::new(pos, world.clone(), old_level, new_level, reason, entity);
-    if let Some(server) = world.server.upgrade() {
-        server.plugin_manager.fire_blocking(&server, &mut event);
-    }
-    !event.cancelled
+    world.fire_block_event(&pos, block, &mut event)
 }
 
 fn cauldron_level(block_id: BlockId, state_id: BlockStateId) -> i32 {

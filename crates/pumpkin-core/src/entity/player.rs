@@ -256,7 +256,9 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, Enchantment, screen::WindowType, tag, translation};
+use pumpkin_data::{
+    Block, BlockId, BlockState, BlockStateId, Enchantment, screen::WindowType, tag, translation,
+};
 use pumpkin_inventory::mount_screen_handler::MountScreenHandler;
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
@@ -305,6 +307,7 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{Difficulty, GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block;
 use crate::block::blocks::straw_bed::StrawBedBlock;
@@ -3436,7 +3439,11 @@ impl Player {
                 );
                 if finished && matches!(p.client.as_ref(), ClientPlatform::Bedrock(_)) {
                     p.stop_mining();
-                    p.break_block(&pos);
+                    if !p.break_block(&pos)
+                        && let ClientPlatform::Bedrock(client) = p.client.as_ref()
+                    {
+                        client.sync_block_state_to_client(self, &world, pos);
+                    }
                 }
             }
         }
@@ -3589,11 +3596,11 @@ impl Player {
         let speed = block::calc_block_breaking(self, state, Block::from_state_id(state.id));
         if speed <= 0.0 {
             self.has_delayed_destroy.store(false, Ordering::Relaxed);
-            self.refuse_delayed_destroy(&world, position, state);
+            self.refuse_delayed_destroy(&world, position);
         } else if self.continue_mining(position, &world, state, starting_time) {
             self.has_delayed_destroy.store(false, Ordering::Relaxed);
             if !self.break_block(&position) {
-                self.refuse_delayed_destroy(&world, position, state);
+                self.refuse_delayed_destroy(&world, position);
             }
         } else {
             return;
@@ -3605,15 +3612,19 @@ impl Player {
     }
 
     /// Stops the delayed break animation and resynchronizes the target block.
-    fn refuse_delayed_destroy(&self, world: &Arc<World>, position: BlockPos, state: &BlockState) {
+    fn refuse_delayed_destroy(&self, world: &Arc<World>, position: BlockPos) {
         world.set_block_breaking(
             &self.living_entity.entity,
             position,
             BlockBreakingProgress::Stop,
         );
+        // Events may have moved the player.
+        if !Arc::ptr_eq(&self.world(), world) {
+            return;
+        }
         self.try_send_client_packet(&CBlockUpdate::new(
             position,
-            VarInt(i32::from(state.id.as_u16())),
+            VarInt(i32::from(world.get_block_state_id(&position).as_u16())),
         ));
     }
 
@@ -5183,6 +5194,64 @@ impl Player {
         self.abilities.lock().is_ok_and(|a| a.allow_modify_world)
     }
 
+    /// Vanilla `Player.blockActionRestricted`.
+    #[must_use]
+    pub fn block_action_restricted(&self, block: &Block) -> bool {
+        match self.gamemode.load() {
+            GameMode::Spectator => true,
+            GameMode::Adventure if !self.may_build() => {
+                let held = self.inventory().held_item();
+                held.is_empty()
+                    || !held
+                        .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
+                        .is_some_and(|c| c.matches_block(block))
+            }
+            _ => false,
+        }
+    }
+
+    /// Vanilla `ServerPlayerGameMode.destroyBlock` checks, then breaks the block.
+    pub fn destroy_block(
+        self: &Arc<Self>,
+        server: &Server,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        flags: BlockFlags,
+    ) -> Option<BlockStateId> {
+        let block = world.get_block(pos);
+        let held = self.inventory().held_item();
+        // Item.canDestroyBlock
+        if !server.item_registry.can_mine(held.item, self)
+            || (self.gamemode.load() == GameMode::Creative
+                && held
+                    .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
+                    .is_some_and(|t| !t.can_destroy_blocks_in_creative))
+        {
+            return None;
+        }
+        // GameMasterBlock
+        // TODO: Extractor game_master flag, replace this list
+        let game_master = matches!(
+            block.id,
+            BlockId::COMMAND_BLOCK
+                | BlockId::CHAIN_COMMAND_BLOCK
+                | BlockId::REPEATING_COMMAND_BLOCK
+                | BlockId::STRUCTURE_BLOCK
+                | BlockId::JIGSAW
+                | BlockId::TEST_BLOCK
+                | BlockId::TEST_INSTANCE_BLOCK
+        );
+        if (game_master && !self.can_use_game_master_blocks())
+            || self.block_action_restricted(block)
+        {
+            return None;
+        }
+        if !Arc::ptr_eq(&self.world(), world) {
+            return None;
+        }
+        world.break_block(pos, Some(self), flags)
+    }
+
     /// Requests a transfer and returns the destination if the packet was queued.
     ///
     /// The result does not indicate whether the client reached its destination.
@@ -5968,89 +6037,55 @@ impl Player {
         !state.tool_required() || self.inventory().held_item().is_correct_for_drops(block)
     }
 
+    /// Vanilla `ServerPlayerGameMode.destroyBlock` plus the survival after-break effects.
     pub fn break_block(self: &Arc<Self>, position: &BlockPos) -> bool {
         let world = self.world();
+        let Some(server) = world.server.upgrade() else {
+            return false;
+        };
         let (block, state) = world.get_block_and_state(position);
         if state.is_air() {
             return false;
         }
 
-        let held = self.inventory().held_item();
-        let gamemode = self.gamemode.load();
-        let server = world.server.upgrade();
-        if self.cannot_mine_block(server.as_deref(), block, gamemode) {
-            return false;
-        }
-
-        if gamemode == GameMode::Creative {
-            let new_state = world.break_block(
-                position,
-                Some(self),
-                pumpkin_world::world::BlockFlags::NOTIFY_ALL
-                    | pumpkin_world::world::BlockFlags::SKIP_DROPS,
-            );
-            if new_state.is_some() {
-                if let Some(server) = &server {
-                    server
-                        .block_registry
-                        .broken(&world, block, self, position, server, state);
-                }
-                return true;
-            }
-            return false;
-        }
-
-        let block_drop = self.can_harvest(state, block);
+        let creative = self.gamemode.load() == GameMode::Creative;
+        let block_drop = !creative && self.can_harvest(state, block);
         let flags = if block_drop {
-            pumpkin_world::world::BlockFlags::NOTIFY_ALL
+            BlockFlags::NOTIFY_ALL
         } else {
-            pumpkin_world::world::BlockFlags::SKIP_DROPS
-                | pumpkin_world::world::BlockFlags::NOTIFY_ALL
+            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
         };
-
-        let new_state = world.break_block(position, Some(self), flags);
-        if new_state.is_some() {
-            if let Some(server) = &server {
-                server
-                    .block_registry
-                    .broken(&world, block, self, position, server, state);
-            }
-            self.apply_tool_damage_for_block_break(state);
-            if block_drop {
-                self.add_exhaustion(MINE_BLOCK_EXHAUSTION);
-            }
-            let item_id = held.item.id;
-            self.increment_stat(statistics::StatisticCategory::Used, item_id as i32, 1);
-            self.increment_stat(
-                statistics::StatisticCategory::Mined,
-                block.id.as_u16() as i32,
-                1,
-            );
+        let Some(broken_state_id) = self.destroy_block(&server, &world, position, flags) else {
+            return false;
+        };
+        let (block, state) = BlockState::from_id_with_block(broken_state_id);
+        server
+            .block_registry
+            .broken(&world, block, self, position, &server, state);
+        if creative {
             return true;
         }
-        false
-    }
 
-    /// Checks shared by both dig actions: Pumpkin's item behaviour hook and the vanilla
-    /// spectator, creative tool and adventure `can_break` restrictions.
-    pub(crate) fn cannot_mine_block(
-        &self,
-        server: Option<&Server>,
-        block: &Block,
-        gamemode: GameMode,
-    ) -> bool {
+        // Before tool damage: a broken tool leaves the hand empty.
         let held = self.inventory().held_item();
-        let can_mine_item = server.is_none_or(|s| s.item_registry.can_mine(held.item, self));
-        !can_mine_item
-            || gamemode == GameMode::Spectator
-            || (gamemode == GameMode::Creative
-                && held
-                    .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
-                    .is_some_and(|t| !t.can_destroy_blocks_in_creative))
-            || (gamemode == GameMode::Adventure
-                && !held
-                    .get_data_component::<pumpkin_data::data_component_impl::CanBreakImpl>()
-                    .is_some_and(|c| c.matches_block(block)))
+        let used_item = held
+            .get_data_component::<ToolImpl>()
+            .is_some()
+            .then_some(held.item.id);
+        self.apply_tool_damage_for_block_break(state);
+        if block_drop {
+            self.add_exhaustion(MINE_BLOCK_EXHAUSTION);
+        }
+        // Vanilla `Item.mineBlock`: only tools count as used.
+        if let Some(item_id) = used_item {
+            self.increment_stat(statistics::StatisticCategory::Used, item_id as i32, 1);
+        }
+        self.increment_stat(
+            statistics::StatisticCategory::Mined,
+            block.id.as_u16() as i32,
+            1,
+        );
+        true
     }
 
     /// The id under which Pumpkin will store it's `mining_efficiency` modifier value

@@ -57,31 +57,34 @@ pub(crate) trait PressurePlate {
         output: u8,
     ) {
         let calc_output = self.calculate_redstone_output(world, block, pos);
-        let has_output = calc_output > 0;
+        let mut has_output = calc_output > 0;
         if calc_output != output {
-            let next_output = if let Some(server) = world.server.upgrade() {
-                let mut event = crate::plugin::block::block_redstone::BlockRedstoneEvent::new(
-                    world.clone(),
-                    state.id,
-                    *pos,
-                    i32::from(output),
-                    i32::from(calc_output),
-                );
-                server.plugin_manager.fire_blocking(&server, &mut event);
-                if event.cancelled {
-                    return;
+            let mut event = crate::plugin::block::block_redstone::BlockRedstoneEvent::new(
+                world.clone(),
+                state.id,
+                *pos,
+                i32::from(output),
+                i32::from(calc_output),
+            );
+            if !world.fire_block_event(pos, block, &mut event) {
+                let current_state_id = world.get_block_state_id(pos);
+                if Block::from_state_id(current_state_id) == block
+                    && self.get_redstone_output(block, current_state_id) > 0
+                {
+                    world.schedule_block_tick(block, *pos, self.tick_rate(), TickPriority::Normal);
                 }
-                event.new_current.clamp(0, 15) as u8
-            } else {
-                calc_output
-            };
+                return;
+            }
+            let next_output = event.new_current.clamp(0, 15) as u8;
             let state = self.set_redstone_output(block, state, next_output);
             world.set_block_state(pos, state, BlockFlags::NOTIFY_LISTENERS);
             world.update_neighbors(pos, None);
             world.update_neighbors(&pos.down(), None);
 
             let was_pressed = output > 0;
+            // listener output decides the release tick
             let is_pressed = next_output > 0;
+            has_output = is_pressed;
             if !is_pressed && was_pressed {
                 let (_, click_off) = self.click_sounds(block);
                 world.play_block_sound(click_off, SoundCategory::Blocks, *pos);

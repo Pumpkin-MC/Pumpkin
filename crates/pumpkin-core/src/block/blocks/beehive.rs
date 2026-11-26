@@ -91,10 +91,12 @@ impl BeehiveBlock {
             harvested_items: drops,
             cancelled: false,
         };
-        if let Some(server) = args.world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
+        // handlers may move the player
+        if !args
+            .world
+            .fire_block_event(args.position, args.block, &mut event)
+            || !Arc::ptr_eq(&args.player.world(), args.world)
+        {
             return false;
         }
         drops = event.harvested_items;
@@ -125,10 +127,12 @@ impl BeehiveBlock {
             harvested_items: vec![ItemStack::new(1, &Item::HONEY_BOTTLE)],
             cancelled: false,
         };
-        if let Some(server) = args.world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
+        // handlers may move the player
+        if !args
+            .world
+            .fire_block_event(args.position, args.block, &mut event)
+            || !Arc::ptr_eq(&args.player.world(), args.world)
+        {
             return false;
         }
 
@@ -183,8 +187,7 @@ impl BlockBehaviour for BeehiveBlock {
 
     fn use_with_item(&self, mut args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
-        let mut props = BeeNestLikeProperties::from_state_id(state_id);
-        if props.honey_level < Self::MAX_HONEY_LEVEL {
+        if BeeNestLikeProperties::from_state_id(state_id).honey_level < Self::MAX_HONEY_LEVEL {
             return BlockActionResult::PassToDefaultBlockAction;
         }
 
@@ -204,21 +207,50 @@ impl BlockBehaviour for BeehiveBlock {
         args.player
             .increment_stat(StatisticCategory::Used, i32::from(used_item_id), 1);
 
-        if !CampfireBlock::is_smokey_pos(args.world, args.position)
-            && let Some(entity) = args.world.get_block_entity(args.position)
-            && let Some(hive) = entity.as_any().downcast_ref::<BeehiveBlockEntity>()
-            && !hive.is_empty()
-        {
-            Self::anger_nearby_bees(args.world, args.position);
-            hive.release_occupants(args.world, state_id, true, Some(args.player));
+        // game event and statistic listeners may change the hive
+        let state_id = args.world.get_block_state_id(args.position);
+        if Block::from_state_id(state_id) != args.block {
+            return BlockActionResult::Success;
         }
 
+        let release = !CampfireBlock::is_smokey_pos(args.world, args.position);
+        if release
+            && let Some(entity) = args.world.get_block_entity(args.position)
+            && entity
+                .as_any()
+                .downcast_ref::<BeehiveBlockEntity>()
+                .is_some_and(|hive| !hive.is_empty())
+        {
+            Self::anger_nearby_bees(args.world, args.position);
+        }
+
+        // Vanilla `releaseBeesAndResetHoneyLevel` resets before releasing.
+        // A target listener's change to the hive stands.
+        let mut props = BeeNestLikeProperties::from_state_id(state_id);
         props.honey_level = 0;
-        args.world.set_block_state(
-            args.position,
-            props.to_state_id(args.block),
-            BlockFlags::NOTIFY_ALL,
-        );
+        let reset_state = props.to_state_id(args.block);
+        if args
+            .world
+            .set_block_state_if(
+                args.position,
+                reset_state,
+                BlockFlags::NOTIFY_ALL,
+                |current| current == state_id,
+            )
+            .is_none()
+        {
+            return BlockActionResult::Success;
+        }
+
+        if release
+            && let Some(entity) = args.world.get_block_entity(args.position)
+            && let Some(hive) = entity.as_any().downcast_ref::<BeehiveBlockEntity>()
+        {
+            // The honey is already taken, so the hive resets even if a listener moved the
+            // player. Bees only target a player still in this world.
+            let player = Arc::ptr_eq(&args.player.world(), args.world).then_some(args.player);
+            hive.release_occupants(args.world, reset_state, true, player);
+        }
 
         BlockActionResult::Success
     }
