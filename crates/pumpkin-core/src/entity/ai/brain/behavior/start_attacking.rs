@@ -4,6 +4,7 @@ use super::super::BrainTick;
 use super::super::memory::{MemoryStatus, types};
 use super::OneShot;
 use crate::entity::EntityBase;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 
 /// Sets the attack target from `target_finder` while `can_attack` holds.
 #[must_use]
@@ -11,16 +12,23 @@ pub fn create(
     can_attack: impl Fn(&BrainTick<'_>) -> bool + Send + Sync + 'static,
     target_finder: impl Fn(&BrainTick<'_>) -> Option<Arc<dyn EntityBase>> + Send + Sync + 'static,
 ) -> OneShot {
-    create_with_target_change(can_attack, target_finder, |tick, target| {
-        tick.state.set(types::ATTACK_TARGET, target);
-        tick.state.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
-    })
+    create_with(can_attack, target_finder, None)
 }
 
-pub(crate) fn create_with_target_change(
+/// Starts an attack through the plugin event for mobs whose target is owned by the brain.
+#[must_use]
+pub fn create_with_reason(
     can_attack: impl Fn(&BrainTick<'_>) -> bool + Send + Sync + 'static,
     target_finder: impl Fn(&BrainTick<'_>) -> Option<Arc<dyn EntityBase>> + Send + Sync + 'static,
-    set_target: impl Fn(&mut BrainTick<'_>, Arc<dyn EntityBase>) + Send + Sync + 'static,
+    reason: fn(&dyn EntityBase) -> TargetReason,
+) -> OneShot {
+    create_with(can_attack, target_finder, Some(reason))
+}
+
+fn create_with(
+    can_attack: impl Fn(&BrainTick<'_>) -> bool + Send + Sync + 'static,
+    target_finder: impl Fn(&BrainTick<'_>) -> Option<Arc<dyn EntityBase>> + Send + Sync + 'static,
+    reason: Option<fn(&dyn EntityBase) -> TargetReason>,
 ) -> OneShot {
     OneShot::new(
         "StartAttacking",
@@ -41,7 +49,15 @@ pub(crate) fn create_with_target_change(
             if !tick.mob.can_attack(target.as_ref()) {
                 return false;
             }
-            set_target(tick, target);
+            if let Some(reason) = reason {
+                let reason = reason(target.as_ref());
+                tick.defer(move |mob| {
+                    mob.set_mob_target(Some(target), reason);
+                });
+            } else {
+                tick.state.set(types::ATTACK_TARGET, target);
+                tick.state.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+            }
             true
         },
     )

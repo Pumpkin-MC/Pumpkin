@@ -4,6 +4,7 @@ use super::super::BrainTick;
 use super::super::memory::{MemoryStatus, types};
 use super::OneShot;
 use crate::entity::EntityBase;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 
 const TIMEOUT_TO_GET_WITHIN_ATTACK_RANGE: i64 = 200;
 
@@ -18,18 +19,24 @@ pub fn create() -> OneShot {
 pub fn create_with_callback(
     on_target_erased: impl Fn(&BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
 ) -> OneShot {
-    create_with_condition(
-        |_, _| false,
-        move |tick, target| {
-            on_target_erased(tick, target);
-            tick.state.erase(types::ATTACK_TARGET.id());
-        },
-    )
+    create_with(|_, _| false, on_target_erased, false)
 }
 
-pub(crate) fn create_with_condition(
-    mut should_stop: impl FnMut(&BrainTick<'_>, &dyn EntityBase) -> bool + Send + Sync + 'static,
-    drop_target: impl Fn(&mut BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
+/// Proposes forgetting the target through the plugin event.
+#[must_use]
+pub fn create_with_target_events(
+    is_invalid_target: impl FnMut(&BrainTick<'_>, &Arc<dyn EntityBase>) -> bool + Send + Sync + 'static,
+) -> OneShot {
+    create_with(is_invalid_target, |_, _| {}, true)
+}
+
+fn create_with(
+    mut is_invalid_target: impl FnMut(&BrainTick<'_>, &Arc<dyn EntityBase>) -> bool
+    + Send
+    + Sync
+    + 'static,
+    on_target_erased: impl Fn(&BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
+    fire_target_event: bool,
 ) -> OneShot {
     OneShot::new(
         "StopAttackingIfTargetInvalid",
@@ -54,9 +61,16 @@ pub(crate) fn create_with_condition(
                     .get_living_entity()
                     .is_some_and(crate::entity::living::LivingEntity::is_alive)
                 && Arc::ptr_eq(&target.get_entity().world.load_full(), tick.world)
-                && !should_stop(tick, target.as_ref());
+                && !is_invalid_target(tick, &target);
             if !still_valid {
-                drop_target(tick, &target);
+                if fire_target_event {
+                    tick.defer(|mob| {
+                        mob.set_mob_target(None, TargetReason::ForgotTarget);
+                    });
+                } else {
+                    on_target_erased(tick, &target);
+                    tick.state.erase(types::ATTACK_TARGET.id());
+                }
             }
             true
         },

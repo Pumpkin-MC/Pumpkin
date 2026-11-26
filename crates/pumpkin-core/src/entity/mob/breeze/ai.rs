@@ -53,22 +53,21 @@ fn activities(_mob: &dyn Mob) -> Vec<ActivityData> {
             Activity::Idle,
             0,
             vec![
-                Box::new(start_attacking::create_with_target_change(
+                Box::new(start_attacking::create_with_reason(
                     |_| true,
                     nearest_attackable,
-                    |tick, target| {
-                        let reason = if target.get_entity().entity_type == &EntityType::PLAYER {
+                    |target| {
+                        if target.get_entity().entity_type == &EntityType::PLAYER {
                             TargetReason::ClosestPlayer
                         } else {
                             TargetReason::ClosestEntity
-                        };
-                        acquire_target(tick, target, reason);
+                        }
                     },
                 )),
-                Box::new(start_attacking::create_with_target_change(
+                Box::new(start_attacking::create_with_reason(
                     |_| true,
                     hurt_by,
-                    |tick, target| acquire_target(tick, target, TargetReason::TargetAttackedEntity),
+                    |_| TargetReason::TargetAttackedEntity,
                 )),
                 movement::slide_to_target_sink(),
                 Box::new(run_one(vec![
@@ -107,20 +106,9 @@ fn hurt_by(tick: &BrainTick<'_>) -> Option<Arc<dyn EntityBase>> {
 
 fn stop_attacking() -> OneShot {
     let mut recently_attackable = remember_positives(TICKS_TO_REMEMBER_SEEN_TARGET, |&value| value);
-    stop_attacking_if_target_invalid::create_with_condition(
-        move |tick, target| !recently_attackable(&is_entity_attackable(&tick.visibility(), target)),
-        |tick, _| forget_target(tick),
-    )
-}
-
-fn acquire_target(tick: &mut BrainTick<'_>, target: Arc<dyn EntityBase>, reason: TargetReason) {
-    tick.defer(move |mob| {
-        if mob.set_mob_target(Some(target), reason) {
-            mob.get_mob_entity().with_brain(mob, |brain| {
-                brain.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
-            });
-        }
-    });
+    stop_attacking_if_target_invalid::create_with_target_events(move |tick, target| {
+        !recently_attackable(&is_entity_attackable(&tick.visibility(), target.as_ref()))
+    })
 }
 
 pub(super) fn forget_target(tick: &mut BrainTick<'_>) {

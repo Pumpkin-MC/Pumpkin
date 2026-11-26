@@ -94,16 +94,16 @@ impl Behavior for Shoot {
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
         tick.set_pose(EntityPose::Shooting);
-        tick.defer(|breeze| {
-            breeze.get_mob_entity().with_brain(breeze, |brain| {
+        tick.defer_with_update(
+            |breeze| breeze.play_entity_sound(Sound::EntityBreezeInhale, 1.0, 1.0),
+            |brain, ()| {
                 brain.set_with_expiry(
                     types::BREEZE_SHOOT_CHARGING,
                     (),
                     i64::from(SHOOT_INITIAL_DELAY_TICKS),
                 );
-            });
-            breeze.play_entity_sound(Sound::EntityBreezeInhale, 1.0, 1.0);
-        });
+            },
+        );
     }
 
     fn tick(&mut self, tick: &mut BrainTick<'_>) {
@@ -298,21 +298,18 @@ mod tests {
         );
         let body = &breeze.mob_entity;
         for attempts in 1..=2 {
-            body.set_target(Some(target.clone()));
-            let effects = body.with_brain(breeze.as_ref(), |brain| {
-                brain.set(types::BREEZE_SHOOT, ());
-                brain.erase(types::BREEZE_SHOOT_RECOVERING.id());
-                Shoot.tick(&mut BrainTick {
-                    mob: breeze.as_ref(),
-                    world: &world,
-                    state: brain,
-                    time: 0,
-                });
-                brain.take_effects()
-            });
-            for effect in effects {
-                effect(breeze.as_ref());
-            }
+            let mut brain = Brain::default();
+            let mut behavior = Timed::new(Shoot);
+            behavior.start_at(world.get_world_age(), SHOOT_DURATION_TICKS);
+            brain.add_activity(ActivityData::with_priority_start(
+                Activity::Idle,
+                0,
+                vec![Box::new(behavior)],
+            ));
+            brain.set(types::ATTACK_TARGET, target.clone());
+            brain.set(types::BREEZE_SHOOT, ());
+            body.set_brain(brain);
+            body.tick_brain(breeze.as_ref());
 
             assert_eq!(observer.attempts.load(Relaxed), attempts);
             body.with_brain(breeze.as_ref(), |brain| {
@@ -402,9 +399,12 @@ mod tests {
         brain.set(types::ATTACK_TARGET, target);
         breeze.mob_entity.set_brain(brain);
         let tick = |time| {
-            breeze
-                .mob_entity
-                .tick_brain_at(breeze.as_ref(), &world, time);
+            world
+                .level_time
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .world_age = time;
+            breeze.mob_entity.tick_brain(breeze.as_ref());
         };
 
         let count_charges = || {

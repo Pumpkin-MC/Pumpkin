@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering::Relaxed;
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::environment_attribute::Activity;
 
 use super::CamelEntity;
@@ -152,8 +152,12 @@ impl Behavior for CamelPanic {
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
-        if let Some(camel) = camel(tick) {
-            camel.stand_up_instantly();
+        if camel(tick).is_some() {
+            tick.defer_pose_change(EntityPose::Standing, |mob| {
+                if let Some(camel) = mob.cast_any().downcast_ref::<CamelEntity>() {
+                    camel.stand_up_instantly();
+                }
+            });
         }
         self.0.start(tick);
     }
@@ -199,11 +203,18 @@ impl Behavior for RandomSitting {
         let Some(camel) = camel(tick) else {
             return;
         };
-        if camel.is_camel_sitting() {
-            camel.stand_up();
+        let (pose, transition): (_, fn(&CamelEntity)) = if camel.is_camel_sitting() {
+            (EntityPose::Standing, CamelEntity::stand_up)
         } else if !tick.state.has_memory_value(types::IS_PANICKING.id()) {
-            camel.sit_down();
-        }
+            (EntityPose::Sitting, CamelEntity::sit_down)
+        } else {
+            return;
+        };
+        tick.defer_pose_change(pose, move |mob| {
+            if let Some(camel) = mob.cast_any().downcast_ref::<CamelEntity>() {
+                transition(camel);
+            }
+        });
     }
 
     fn debug_name(&self) -> &'static str {

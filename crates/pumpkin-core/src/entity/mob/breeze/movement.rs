@@ -495,7 +495,7 @@ mod tests {
 
     use super::*;
     use crate::entity::ai::{
-        brain::{Brain, activity::ActivityData, behavior::Status},
+        brain::{Brain, activity::ActivityData},
         test_support,
     };
     use crate::entity::{EntityBase, mob::Mob, r#type::from_type};
@@ -574,6 +574,13 @@ mod tests {
         );
         let body = breeze.get_mob_entity();
         let mut brain = Brain::default();
+        let mut slide = Timed::new(SlideToTargetSink(MoveToTargetSink::new(20, 40)));
+        slide.start_at(world.get_world_age() - 41, 40);
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Idle,
+            0,
+            vec![Box::new(slide)],
+        ));
         brain.register_memory(types::ATTACK_TARGET.id());
         brain.register_memory(types::BREEZE_SHOOT.id());
         brain.set(types::ATTACK_TARGET, target);
@@ -589,22 +596,7 @@ mod tests {
             true,
         );
         breeze.get_entity().set_pose(EntityPose::Sliding);
-        let effects = body.with_brain(breeze.as_ref(), |brain| {
-            assert!(!brain.has_memory_value(types::BREEZE_SHOOT.id()));
-            SlideToTargetSink(MoveToTargetSink::new(20, 40)).stop(
-                &mut BrainTick {
-                    mob: breeze.as_ref(),
-                    world: &world,
-                    state: brain,
-                    time: 0,
-                },
-                false,
-            );
-            brain.take_effects()
-        });
-        for effect in effects {
-            effect(breeze.as_ref());
-        }
+        body.tick_brain(breeze.as_ref());
         assert_eq!(observer.attempts.load(Relaxed), 1);
         assert_eq!(breeze.get_entity().pose.load(), EntityPose::Sliding);
         body.with_brain(breeze.as_ref(), |brain| {
@@ -644,21 +636,16 @@ mod tests {
 
         let mut jump = Timed::new(LongJump::default());
         let duration = jump.inner().max_duration();
-        jump.start_at(0, duration);
-        let effects = body.with_brain(breeze.as_ref(), |brain| {
-            jump.tick_or_stop(&mut BrainTick {
-                mob: breeze.as_ref(),
-                world: &world,
-                state: brain,
-                time: i64::from(duration) + 1,
-            });
-            brain.take_effects()
-        });
-        assert_eq!(jump.status(), Status::Stopped);
+        jump.start_at(world.get_world_age() - i64::from(duration) - 1, duration);
+        let mut brain = Brain::default();
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Idle,
+            0,
+            vec![Box::new(jump)],
+        ));
+        body.set_brain(brain);
+        body.tick_brain(breeze.as_ref());
         assert!(!living.discard_friction.load(Relaxed));
-        for effect in effects {
-            effect(breeze.as_ref());
-        }
         assert_eq!(observer.attempts.load(Relaxed), 1);
         assert_eq!(living.entity.pose.load(), EntityPose::LongJumping);
         breeze.custom_server_ai_step(breeze.as_ref());

@@ -3,9 +3,9 @@ use super::{
 };
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::behavior::temperament::Temperament;
-use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag};
 use crate::entity::ai::brain::memory::{PackedMemories, types};
+use crate::entity::ai::brain::{Brain, BrainEffect, run_brain_effects};
 use crate::entity::ai::control::body_rotation_control::BodyRotationControl;
 use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
@@ -143,7 +143,7 @@ pub struct MobEntity {
     pub navigator: std::sync::Mutex<Navigator>,
     pending_navigation_updates: crossbeam::queue::SegQueue<(BlockPos, Uuid, u64)>,
     pub target: std::sync::Mutex<Option<Weak<dyn EntityBase>>>,
-    // Brain-driven species opt in and initialize their brain before exposing the mob.
+    // Opt-in species initialize their brain before exposing the mob.
     brain_attack_target_filter: Option<fn(&EntityType) -> bool>,
     pub look_control: std::sync::Mutex<Box<dyn LookControlTrait>>,
     pub sensing: std::sync::Mutex<Sensing>,
@@ -746,6 +746,8 @@ impl MobEntity {
                 .swap(false, Ordering::AcqRel)
     }
 
+    /// Accesses the species' brain, building it on first use.
+    /// Neither `make_brain` nor the callback may lock this brain again; Brain callbacks use `BrainTick`.
     /// Reads another mob's brain without building one. A brain busy in its own tick reads as
     /// empty, so a mob checks itself through its `BrainTick` instead.
     pub fn brain_has_memory_value(
@@ -759,8 +761,6 @@ impl MobEntity {
             .unwrap_or(false)
     }
 
-    /// Accesses the species' brain, building it on first use.
-    /// Neither `make_brain` nor the callback may lock this brain again; Brain callbacks use `BrainTick`.
     pub fn with_brain<R>(&self, mob: &dyn Mob, callback: impl FnOnce(&mut Brain) -> R) -> R {
         let result = {
             let mut slot = self
@@ -789,9 +789,11 @@ impl MobEntity {
     /// Vanilla `refreshBrain`: stops running behaviors, then rebuilds the brain from its memories.
     pub fn refresh_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
-        let time = world.get_world_age();
-        for effect in self.with_brain(mob, |brain| brain.rebuild(&world, mob, time)) {
-            effect(mob);
+        if self.run_brain_callbacks(mob, &world, Brain::begin_stop) {
+            self.with_brain(mob, |brain| {
+                let packed = brain.pack();
+                *brain = mob.make_brain(&packed);
+            });
         }
     }
 
@@ -801,32 +803,35 @@ impl MobEntity {
 
     pub fn tick_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
-        let time = world.get_world_age();
-        self.tick_brain_at(mob, &world, time);
+        if self.run_brain_callbacks(mob, &world, Brain::begin_tick)
+            && self.brain_refresh_requested.swap(false, Ordering::AcqRel)
+        {
+            self.refresh_brain(mob);
+        }
     }
 
-    fn tick_brain_at(&self, mob: &dyn Mob, world: &Arc<World>, time: i64) {
-        let mut start = true;
-        loop {
-            let (more, effects) = self.with_brain(mob, |brain| {
-                if start {
-                    brain.begin_tick(world, mob, time);
-                }
-                brain.advance_tick(world, mob, time, true);
-                if self.brain_refresh_requested.swap(false, Ordering::AcqRel) {
-                    (false, brain.rebuild(world, mob, time))
-                } else {
-                    (brain.tick_in_progress(), brain.take_effects())
-                }
+    fn run_brain_callbacks(
+        &self,
+        mob: &dyn Mob,
+        world: &Arc<World>,
+        begin: fn(&mut Brain, &Arc<World>, &dyn Mob, i64) -> Vec<BrainEffect>,
+    ) -> bool {
+        let time = world.get_world_age();
+        let mut effects = self.with_brain(mob, |brain| begin(brain, world, mob, time));
+        while !effects.is_empty() {
+            let Some(updates) = run_brain_effects(effects, mob, world) else {
+                self.with_brain(mob, Brain::cancel_callbacks);
+                return false;
+            };
+            let next = self.with_brain(mob, |brain| {
+                brain.resume_callbacks(world, mob, time, updates)
             });
-            for effect in effects {
-                effect(mob);
-            }
-            if !more {
-                break;
-            }
-            start = false;
+            let Some(next) = next else {
+                return false;
+            };
+            effects = next;
         }
+        true
     }
 
     pub fn write_mob_nbt(&self, mob: &dyn Mob, nbt: &mut NbtCompound) {
@@ -904,15 +909,20 @@ impl MobEntity {
         self.target_selector.add_goal(priority, Box::new(goal));
     }
 
-    /// Updates the target at its source: Brain memory or the goal-driven target slot.
-    /// Brain behaviors must update their borrowed `ATTACK_TARGET` memory directly.
+    /// Updates the target used by this mob's AI. Call outside the Brain lock.
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
         if self.brain_attack_target_filter.is_some() {
             let mut slot = self
                 .brain
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(brain) = slot.as_mut() {
+            if !self.living_entity.entity.is_removed()
+                && let Some(brain) = slot.as_mut()
+            {
+                let id = |target: &Arc<dyn EntityBase>| target.get_entity().entity_id;
+                if brain.get(types::ATTACK_TARGET).map(id) != target.as_ref().map(id) {
+                    brain.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+                }
                 brain.set_optional(types::ATTACK_TARGET, target);
             }
         } else {
@@ -920,12 +930,11 @@ impl MobEntity {
                 .target
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                target.map(|target| Arc::downgrade(&target));
+                target.as_ref().map(Arc::downgrade);
         }
     }
 
     /// The target, checked again on every read so a player who turns creative is dropped.
-    /// Brain behaviors must read their borrowed `ATTACK_TARGET` memory directly.
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
         let target = self.stored_target()?;
         (EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity())
@@ -936,7 +945,8 @@ impl MobEntity {
         .then_some(target)
     }
 
-    fn stored_target(&self) -> Option<Arc<dyn EntityBase>> {
+    /// Reads the target before eligibility filtering. Call outside the Brain lock.
+    pub(crate) fn stored_target(&self) -> Option<Arc<dyn EntityBase>> {
         if self.brain_attack_target_filter.is_some() {
             self.brain
                 .lock()
@@ -2700,12 +2710,12 @@ pub trait Mob: EntityBase + Send + Sync {
         let mut target = self.as_valid_target(target);
         let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
         // Unchanged: refresh the handle, no event.
-        let current = if mob.brain_attack_target_filter.is_some() {
+        let previous = if mob.brain_attack_target_filter.is_some() {
             mob.stored_target()
         } else {
             mob.get_target()
         };
-        if current.map(|t| t.get_entity().entity_id) == target_id {
+        if previous.map(|target| target.get_entity().entity_id) == target_id {
             self.apply_mob_target(target);
             return true;
         }
