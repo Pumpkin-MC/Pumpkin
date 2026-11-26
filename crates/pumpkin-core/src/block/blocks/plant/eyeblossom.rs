@@ -4,7 +4,6 @@ use pumpkin_data::{
     Block, BlockId, BlockStateId,
     effect::StatusEffect,
     entity::EntityType,
-    particle::Particle,
     sound::{Sound, SoundCategory},
     tag::{self, Taggable},
 };
@@ -25,6 +24,10 @@ use crate::{
 
 const EYEBLOSSOM_XZ_RANGE: i32 = 3;
 const EYEBLOSSOM_Y_RANGE: i32 = 2;
+/// Vanilla `EyeblossomBlock.Type.OPEN` trail particle color (`0xFC7812`).
+const OPEN_PARTICLE_COLOR: i32 = 16_545_810;
+/// Vanilla `EyeblossomBlock.Type.CLOSED` trail particle color (`0x5F5F5F`).
+const CLOSED_PARTICLE_COLOR: i32 = 6_250_335;
 
 pub struct EyeblossomBlock;
 
@@ -131,15 +134,9 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
 
     world.set_block_state(pos, new_block.default_state.id, BlockFlags::NOTIFY_ALL);
 
-    world.spawn_particle(
-        pos.to_centered_f64(),
-        Vector3::new(0.0, 0.0, 0.0),
-        0.0,
-        1,
-        Particle::Trail,
-    );
-
     let mut rng = rand::rng();
+    spawn_transform_particle(world, pos, !is_open, &mut rng);
+
     for dx in -EYEBLOSSOM_XZ_RANGE..=EYEBLOSSOM_XZ_RANGE {
         for dy in -EYEBLOSSOM_Y_RANGE..=EYEBLOSSOM_Y_RANGE {
             for dz in -EYEBLOSSOM_XZ_RANGE..=EYEBLOSSOM_XZ_RANGE {
@@ -170,4 +167,40 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
     }
 
     true
+}
+
+/// Mirrors vanilla `EyeblossomBlock.Type.spawnTransformParticle`.
+fn spawn_transform_particle(
+    world: &World,
+    pos: &BlockPos,
+    opening: bool,
+    rng: &mut impl rand::Rng,
+) {
+    let origin = pos.to_centered_f64();
+    let speed = 0.5 + rng.random::<f64>();
+    let direction = Vector3::new(
+        rng.random::<f64>() - 0.5,
+        rng.random::<f64>() + 1.0,
+        rng.random::<f64>() - 0.5,
+    );
+    let target = Vector3::new(
+        origin.x + direction.x * speed,
+        origin.y + direction.y * speed,
+        origin.z + direction.z * speed,
+    );
+    let color = if opening {
+        OPEN_PARTICLE_COLOR
+    } else {
+        CLOSED_PARTICLE_COLOR
+    };
+    let duration = (20.0 * speed) as i32;
+    world.spawn_trail_particle(
+        origin,
+        Vector3::new(0.0, 0.0, 0.0),
+        0.0,
+        1,
+        target,
+        color,
+        duration,
+    );
 }

@@ -1406,6 +1406,34 @@ impl World {
         self.broadcast_packet_all(&packet);
     }
 
+    /// Spawns `minecraft:trail` particles traveling toward `target` with RGB `color` and tick `duration`.
+    #[expect(clippy::too_many_arguments)]
+    pub fn spawn_trail_particle(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        target: Vector3<f64>,
+        color: i32,
+        duration: i32,
+    ) {
+        let Some(data) = encode_trail_particle_data(target, color, duration) else {
+            return;
+        };
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            (pumpkin_data::particle::Particle::Trail.to_id() as i32).into(),
+            &data,
+        );
+        self.broadcast_packet_all(&packet);
+    }
+
     pub fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
         self.play_sound_raw(sound as u16, category, position, 1.0, 1.0);
     }
@@ -8488,6 +8516,22 @@ fn block_entity_nbt(block_entity: &dyn BlockEntity) -> NbtCompound {
     nbt
 }
 
+/// Encodes the wire payload for `minecraft:trail` (`TrailParticleOption`):
+/// `target: Vec3 (3 × f64 BE)`, `color: i32 BE`, and `duration: VarInt` (clamped to `>= 1`).
+pub(crate) fn encode_trail_particle_data(
+    target: Vector3<f64>,
+    color: i32,
+    duration: i32,
+) -> Option<Vec<u8>> {
+    let mut data = Vec::with_capacity(24 + 4 + 5);
+    data.extend_from_slice(&target.x.to_be_bytes());
+    data.extend_from_slice(&target.y.to_be_bytes());
+    data.extend_from_slice(&target.z.to_be_bytes());
+    data.extend_from_slice(&color.to_be_bytes());
+    VarInt(duration.max(1)).encode(&mut data).ok()?;
+    Some(data)
+}
+
 #[cfg(test)]
 mod tests {
     use pumpkin_data::{
@@ -8937,5 +8981,138 @@ mod tests {
 
         world.level.shutdown().await;
         Ok(())
+    }
+
+    #[test]
+    fn encode_trail_particle_data_matches_vanilla_wire_format() {
+        use std::io::Cursor;
+
+        use pumpkin_protocol::VarInt;
+        use pumpkin_util::math::vector3::Vector3;
+
+        let target = Vector3::new(12.5, 65.25, -4.75);
+        let color = 16_545_810i32; // 0xFC7812 (open eyeblossom)
+        let duration = 20;
+
+        let data = super::encode_trail_particle_data(target, color, duration)
+            .expect("trail particle data should encode");
+
+        // 3 * f64 BE (24 bytes) + i32 BE (4 bytes) + VarInt(20) (1 byte) = 29 bytes
+        assert_eq!(data.len(), 29);
+        assert_eq!(f64::from_be_bytes(data[0..8].try_into().unwrap()), target.x);
+        assert_eq!(
+            f64::from_be_bytes(data[8..16].try_into().unwrap()),
+            target.y
+        );
+        assert_eq!(
+            f64::from_be_bytes(data[16..24].try_into().unwrap()),
+            target.z
+        );
+        assert_eq!(i32::from_be_bytes(data[24..28].try_into().unwrap()), color);
+        let mut cursor = Cursor::new(&data[28..]);
+        assert_eq!(VarInt::decode(&mut cursor).unwrap(), VarInt(duration));
+        assert_eq!(cursor.position(), 1);
+    }
+
+    #[test]
+    fn encode_trail_particle_data_clamps_non_positive_duration_and_encodes_multibyte_varint() {
+        use std::io::Cursor;
+
+        use pumpkin_protocol::VarInt;
+        use pumpkin_util::math::vector3::Vector3;
+
+        let clamped =
+            super::encode_trail_particle_data(Vector3::new(0.0, 0.0, 0.0), 0x005F_5F5F, 0)
+                .expect("clamped trail particle data should encode");
+        let mut cursor = Cursor::new(&clamped[28..]);
+        assert_eq!(VarInt::decode(&mut cursor).unwrap(), VarInt(1));
+
+        let long = super::encode_trail_particle_data(Vector3::new(0.0, 0.0, 0.0), 0x005F_5F5F, 300)
+            .expect("multibyte varint duration should encode");
+        assert_eq!(long.len(), 30);
+        let mut cursor = Cursor::new(&long[28..]);
+        assert_eq!(VarInt::decode(&mut cursor).unwrap(), VarInt(300));
+    }
+
+    #[test]
+    fn trail_particle_packet_layout_encodes_id_and_options_at_expected_offsets() {
+        use std::io::{Cursor, Read};
+
+        use pumpkin_protocol::{ClientPacket, VarInt, java::client::play::CParticle};
+        use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+
+        let assert_trail_options =
+            |cursor: &mut Cursor<&[u8]>, target: Vector3<f64>, color: i32, duration: i32| {
+                let mut f64_buf = [0u8; 8];
+                cursor.read_exact(&mut f64_buf).unwrap();
+                assert_eq!(f64::from_be_bytes(f64_buf), target.x);
+                cursor.read_exact(&mut f64_buf).unwrap();
+                assert_eq!(f64::from_be_bytes(f64_buf), target.y);
+                cursor.read_exact(&mut f64_buf).unwrap();
+                assert_eq!(f64::from_be_bytes(f64_buf), target.z);
+
+                let mut i32_buf = [0u8; 4];
+                cursor.read_exact(&mut i32_buf).unwrap();
+                assert_eq!(i32::from_be_bytes(i32_buf), color);
+
+                assert_eq!(VarInt::decode(cursor).unwrap(), VarInt(duration));
+            };
+
+        let target = Vector3::new(1.5, 64.5, 2.5);
+        let color = 6_250_335i32; // 0x5F5F5F (closed eyeblossom)
+        let duration = 25;
+        let data = super::encode_trail_particle_data(target, color, duration).unwrap();
+
+        // Packet-layout coverage for 26.3: particle_id (59) and TrailParticleOption precede
+        // the fixed flags/position/offset/speed/count/randomization fields.
+        let trail_id_26_3 = VarInt(pumpkin_data::particle::Particle::Trail.to_id() as i32);
+        assert_eq!(trail_id_26_3, VarInt(59));
+        let packet_26_3 = CParticle::new(
+            false,
+            false,
+            Vector3::new(1.5, 64.5, 2.5),
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            1,
+            trail_id_26_3,
+            &data,
+        );
+        let mut bytes_26_3 = Vec::new();
+        packet_26_3
+            .write_packet_data(&mut bytes_26_3, &JavaMinecraftVersion::V_26_3)
+            .unwrap();
+        let mut cursor = Cursor::new(bytes_26_3.as_slice());
+        assert_eq!(VarInt::decode(&mut cursor).unwrap(), trail_id_26_3);
+        assert_trail_options(&mut cursor, target, color, duration);
+        // Trailing fields on 26.3: important(1) + force_spawn(1) + pos(24) + offset(12)
+        // + speed_xyz(12) + count VarInt(1) + randomization VarInt(1) = 52 bytes.
+        assert_eq!(bytes_26_3.len() - cursor.position() as usize, 52);
+
+        // Packet-layout coverage for 1.21.4 (Trail ID 47) and 26.2 (Trail ID 56):
+        // fixed header (important(1) + force_spawn(1) + pos(24) + offset(12) + max_speed(4)
+        // + count(4) = 46 bytes) precedes particle_id and TrailParticleOption.
+        for (version, expected_id) in [
+            (JavaMinecraftVersion::V_1_21_4, VarInt(47)),
+            (JavaMinecraftVersion::V_26_2, VarInt(56)),
+        ] {
+            let packet = CParticle::new(
+                false,
+                false,
+                Vector3::new(1.5, 64.5, 2.5),
+                Vector3::new(0.0, 0.0, 0.0),
+                0.0,
+                1,
+                expected_id,
+                &data,
+            );
+            let mut bytes = Vec::new();
+            packet.write_packet_data(&mut bytes, &version).unwrap();
+
+            let mut cursor = Cursor::new(bytes.as_slice());
+            cursor.set_position(46);
+            assert_eq!(VarInt::decode(&mut cursor).unwrap(), expected_id);
+            assert_trail_options(&mut cursor, target, color, duration);
+            assert_eq!(cursor.position() as usize, bytes.len());
+        }
     }
 }
