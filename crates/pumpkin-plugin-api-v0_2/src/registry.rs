@@ -1,6 +1,7 @@
 //! Guest-side handler tables. IDs are stable indices and are never reused.
 
 use std::{
+    collections::BTreeMap,
     future::Future,
     pin::Pin,
     sync::{Arc, Mutex},
@@ -9,44 +10,58 @@ use std::{
 /// A boxed callback future that need not be `Send`.
 pub type LocalBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
+struct RegistryInner<T: ?Sized> {
+    next_id: u32,
+    entries: BTreeMap<u32, Arc<T>>,
+}
+
 /// Stores shared handlers without holding a lock while they execute.
 pub struct Registry<T: ?Sized> {
-    entries: Mutex<Vec<Option<Arc<T>>>>,
+    inner: Mutex<RegistryInner<T>>,
 }
 
 impl<T: ?Sized> Registry<T> {
     pub const fn new() -> Self {
         Self {
-            entries: Mutex::new(Vec::new()),
+            inner: Mutex::new(RegistryInner {
+                next_id: 0,
+                entries: BTreeMap::new(),
+            }),
         }
     }
 
     #[expect(clippy::expect_used, reason = "handler IDs must fit in u32")]
     pub fn register(&self, handler: Arc<T>) -> u32 {
-        let mut entries = self
-            .entries
+        let mut inner = self
+            .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let id = u32::try_from(entries.len()).expect("handler ID space exhausted");
-        entries.push(Some(handler));
+
+        let id = inner.next_id;
+        inner.next_id = inner
+            .next_id
+            .checked_add(1)
+            .expect("handler ID space exhausted");
+        inner.entries.insert(id, handler);
         id
     }
 
     pub fn get(&self, id: u32) -> Option<Arc<T>> {
-        self.entries
+        self.inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(id as usize)
-            .and_then(Clone::clone)
+            .entries
+            .get(&id)
+            .cloned()
     }
 
     /// Removes a handler without making its ID available for another registration.
     pub fn take(&self, id: u32) -> Option<Arc<T>> {
-        self.entries
+        self.inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get_mut(id as usize)
-            .and_then(Option::take)
+            .entries
+            .remove(&id)
     }
 }
 
