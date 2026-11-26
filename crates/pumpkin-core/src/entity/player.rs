@@ -3222,6 +3222,22 @@ impl Player {
         }
         self.tick_shoulders();
 
+        // Vanilla ServerGamePacketListenerImpl#tick: this.lastVehicle = this.player.getRootVehicle()
+        if let ClientPlatform::Java(client) = self.client.as_ref() {
+            let root_id = self
+                .living_entity
+                .entity
+                .get_root_vehicle()
+                .and_then(|vehicle| {
+                    let is_controlling = vehicle
+                        .get_controlling_passenger()
+                        .is_some_and(|p| p.get_entity().entity_id == self.entity_id());
+                    (is_controlling && vehicle.get_entity().entity_id != self.entity_id())
+                        .then_some(vehicle.get_entity().entity_id)
+                });
+            client.last_vehicle_id.store(root_id);
+        }
+
         if self.is_spectator() {
             self.living_entity
                 .entity

@@ -5813,6 +5813,53 @@ impl Entity {
         Some(root)
     }
 
+    pub fn refresh_last_vehicle_id_for_passengers(&self) {
+        let passengers = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for passenger in passengers {
+            if let Some(player) = passenger.get_player() {
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    let root_id = passenger
+                        .get_entity()
+                        .get_root_vehicle()
+                        .and_then(|vehicle| {
+                            let is_controlling =
+                                vehicle.get_controlling_passenger().is_some_and(|p| {
+                                    p.get_entity().entity_id == passenger.get_entity().entity_id
+                                });
+                            (is_controlling
+                                && vehicle.get_entity().entity_id
+                                    != passenger.get_entity().entity_id)
+                                .then_some(vehicle.get_entity().entity_id)
+                        });
+                    client.last_vehicle_id.store(root_id);
+                }
+            }
+            passenger
+                .get_entity()
+                .refresh_last_vehicle_id_for_passengers();
+        }
+    }
+
+    pub fn refresh_last_vehicle_id(&self) {
+        if let Some(player) = self.world.load().get_player_by_id(self.entity_id) {
+            if let ClientPlatform::Java(client) = player.client.as_ref() {
+                let root_id = self.get_root_vehicle().and_then(|vehicle| {
+                    let is_controlling = vehicle
+                        .get_controlling_passenger()
+                        .is_some_and(|p| p.get_entity().entity_id == self.entity_id);
+                    (is_controlling && vehicle.get_entity().entity_id != self.entity_id)
+                        .then_some(vehicle.get_entity().entity_id)
+                });
+                client.last_vehicle_id.store(root_id);
+            }
+        }
+        self.refresh_last_vehicle_id_for_passengers();
+    }
+
     /// Vanilla `isPassengerOfSameVehicle`: same root vehicle, or the same entity.
     #[must_use]
     pub fn is_passenger_of_same_vehicle(&self, other: &Self) -> bool {
@@ -5888,6 +5935,21 @@ impl Entity {
         }
 
         let passenger_entity = passenger.get_entity();
+        let passenger_id = passenger_entity.entity_id;
+
+        // Detach from previous vehicle if currently riding another entity, matching vanilla startRiding
+        if let Some(old_vehicle) = passenger_entity.get_vehicle() {
+            if old_vehicle.get_entity().entity_id == self.entity_id {
+                return false;
+            }
+            old_vehicle
+                .get_entity()
+                .remove_passenger_before_teleport(passenger_id);
+            if passenger_entity.get_vehicle().is_some() {
+                return false;
+            }
+        }
+
         if passenger.get_mob().is_some()
             && passenger_entity.has_leash_data()
             && !passenger_entity.drop_leash()
@@ -5898,9 +5960,6 @@ impl Entity {
             .passengers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        let passenger_entity = passenger.get_entity();
-        let passenger_id = passenger_entity.entity_id;
 
         if !force
             && (passengers.len() >= vehicle.max_passengers()
@@ -5917,9 +5976,6 @@ impl Entity {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&vehicle));
 
         if let Some(player) = passenger.get_player() {
-            if let ClientPlatform::Java(client) = player.client.as_ref() {
-                client.last_vehicle_id.store(Some(self.root_vehicle_id()));
-            }
             let other_passenger_type = passengers
                 .first()
                 .map(|p| format!("minecraft:{}", p.get_entity().entity_type.resource_name));
@@ -5969,6 +6025,12 @@ impl Entity {
             .collect();
         drop(passengers);
 
+        let root = vehicle
+            .get_entity()
+            .get_root_vehicle()
+            .unwrap_or_else(|| vehicle.clone());
+        root.get_entity().refresh_last_vehicle_id();
+
         let be_link = pumpkin_protocol::bedrock::client::CSetActorLink {
             link: pumpkin_protocol::bedrock::client::common::ActorLink {
                 ridden_unique_id: VarLong(i64::from(self.entity_id)),
@@ -6001,8 +6063,16 @@ impl Entity {
         vehicle: Arc<dyn EntityBase>,
         passenger: Arc<dyn EntityBase>,
     ) {
-        *passenger
-            .get_entity()
+        let passenger_entity = passenger.get_entity();
+        if let Some(old_vehicle) = passenger_entity.get_vehicle() {
+            if old_vehicle.get_entity().entity_id == self.entity_id {
+                return;
+            }
+            old_vehicle
+                .get_entity()
+                .remove_passenger_sync(passenger_entity.entity_id);
+        }
+        *passenger_entity
             .vehicle
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&vehicle));
@@ -6010,6 +6080,11 @@ impl Entity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(passenger);
+        let root = vehicle
+            .get_entity()
+            .get_root_vehicle()
+            .unwrap_or_else(|| vehicle.clone());
+        root.get_entity().refresh_last_vehicle_id();
     }
 
     fn write_passengers(&self, nbt: &mut NbtCompound) {
@@ -6076,6 +6151,7 @@ impl Entity {
             &be_unlink,
         );
 
+        self.refresh_last_vehicle_id();
         if let Some(passenger) = removed_passenger
             && let Some(this) = self.world.load().get_entity_by_id(self.entity_id)
         {
@@ -6084,6 +6160,7 @@ impl Entity {
                     client.last_vehicle_id.store(None);
                 }
             }
+            passenger.get_entity().refresh_last_vehicle_id();
             this.on_passenger_removed(passenger.as_ref(), is_last_passenger);
         }
     }
@@ -6152,12 +6229,14 @@ impl Entity {
 
         let chunk_pos = self.chunk_pos.load();
 
+        self.refresh_last_vehicle_id();
         if let Some(passenger) = removed_passenger {
             if let Some(player) = passenger.get_player() {
                 if let ClientPlatform::Java(client) = player.client.as_ref() {
                     client.last_vehicle_id.store(None);
                 }
             }
+            passenger.get_entity().refresh_last_vehicle_id();
             let vehicle = self.world.load().get_entity_by_id(self.entity_id);
             if let Some(this) = &vehicle {
                 this.on_passenger_removed(passenger.as_ref(), is_last_passenger);

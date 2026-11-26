@@ -28,7 +28,7 @@ use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, equipment::equip_on_target},
     passive::animal::Animal,
     player::Player,
 };
@@ -664,17 +664,7 @@ impl Mob for HappyGhastEntity {
             return self.animal_interact(player, item_stack);
         }
 
-        if !item_stack.is_empty()
-            && let Some(server) = self.get_entity().world.load().server.upgrade()
-            && let Some(this_entity) = self
-                .get_entity()
-                .world
-                .load()
-                .get_entity_by_id(self.get_entity().entity_id)
-            && server
-                .item_registry
-                .use_on_entity(item_stack, player, this_entity)
-        {
+        if equip_on_target(self, player, item_stack) {
             return true;
         }
 
