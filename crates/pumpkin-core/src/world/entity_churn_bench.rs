@@ -98,9 +98,9 @@ async fn entity_churn_bench() -> Result<(), Box<dyn std::error::Error>> {
         let world = crate::entity::ai::test_support::world(&folder);
         load_chunks(&world);
         let mut rng = Lcg(0x5eed);
-        for _ in 0..population {
-            spawn(&world, entity_type, &mut rng);
-        }
+        let residents: Vec<_> = (0..population)
+            .map(|_| spawn(&world, entity_type, &mut rng))
+            .collect();
         let _ = world.entities.load().len();
 
         let start = Instant::now();
@@ -135,6 +135,12 @@ async fn entity_churn_bench() -> Result<(), Box<dyn std::error::Error>> {
             "[churn-bench] {:<15} spawn {spawn_ms:>8.1} ms | kill {kill_ms:>8.1} ms | churn {churn_ms:>6.2} ms/tick",
             entity_type.resource_name,
         );
+        // Untimed: release the residents, which hold the world, before the next scenario.
+        for entity in &residents {
+            world.remove_entity(entity.as_ref());
+        }
+        assert!(world.entities.load().is_empty());
+        drop(residents);
         world.level.shutdown().await;
     }
     Ok(())

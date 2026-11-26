@@ -235,30 +235,24 @@ impl Index {
         self.entities[slot].upgrade()
     }
 
-    /// Slots in registry order whose type passes `matches` and whose cells touch `area`.
-    fn candidates(
-        &self,
-        area: &BoundingBox,
-        matches: impl Fn(&'static EntityType) -> bool,
-    ) -> Vec<usize> {
-        let matches = |slot: &usize| matches(self.types[*slot]);
+    /// Slots in registry order whose cells touch `area`.
+    fn candidates(&self, area: &BoundingBox) -> Vec<usize> {
         let Some(range) = CellRange::of(area) else {
             return (0..self.types.len())
                 .filter(|slot| self.alive[*slot])
-                .filter(matches)
                 .collect();
         };
-        let mut slots: Vec<usize> = self.oversized.iter().copied().filter(matches).collect();
+        let mut slots: Vec<usize> = self.oversized.clone();
         if range.count() <= self.cells.len() as u64 {
             for cell in range.cells() {
                 if let Some(members) = self.cells.get(&cell) {
-                    slots.extend(members.iter().copied().filter(matches));
+                    slots.extend_from_slice(members);
                 }
             }
         } else {
             for (&cell, members) in &self.cells {
                 if range.contains(cell) {
-                    slots.extend(members.iter().copied().filter(matches));
+                    slots.extend_from_slice(members);
                 }
             }
         }
@@ -439,15 +433,20 @@ impl EntityIndex {
         area: BoundingBox,
         matches: F,
     ) -> impl Iterator<Item = Arc<dyn EntityBase>> + use<F> {
+        // `matches` runs after the index lock is released: a predicate that reads the world
+        // (and so the entity list) must not wait on a spawn that waits on this lock.
         let entities: Vec<_> = self.with_index(list, |index| {
             index
-                .candidates(&area, matches)
+                .candidates(&area)
                 .into_iter()
                 .filter(|&slot| index.intersects(slot, &area))
-                .filter_map(|slot| index.entity(slot))
+                .filter_map(|slot| Some((index.types[slot], index.entity(slot)?)))
                 .collect()
         });
-        entities.into_iter()
+        entities
+            .into_iter()
+            .filter(move |(entity_type, _)| matches(entity_type))
+            .map(|(_, entity)| entity)
     }
 
     pub fn query_players(
