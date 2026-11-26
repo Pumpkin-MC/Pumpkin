@@ -237,9 +237,9 @@ async fn instantiate(
 
     // Recipe builders use HashMap; a deterministic WASI hash seed keeps the fixture reproducible.
     linker
-        .instance("wasi:random/insecure-seed@0.2.12")
+        .instance("wasi:random/insecure-seed@0.3.0")
         .expect("WASI seed")
-        .func_wrap("insecure-seed", |_, (): ()| Ok(((1u64, 2u64),)))
+        .func_wrap("get-insecure-seed", |_, (): ()| Ok(((1u64, 2u64),)))
         .expect("hash seed");
     install_sdk_host(&mut linker);
 
