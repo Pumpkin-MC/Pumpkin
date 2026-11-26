@@ -25,7 +25,7 @@ use crate::{
         vehicle::{boat::BoatEntity, minecart::MinecartEntity},
     },
     plugin::{
-        BoxFuture, EventHandler, EventPriority,
+        BoxFuture, EventPriority, EventRwHandler,
         api::events::{
             Payload,
             block::{
@@ -162,8 +162,8 @@ impl ExitListener {
     }
 }
 
-impl EventHandler<EntityDismountEvent> for ExitListener {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityDismountEvent> for ExitListener {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityDismountEvent,
@@ -174,8 +174,8 @@ impl EventHandler<EntityDismountEvent> for ExitListener {
     }
 }
 
-impl EventHandler<VehicleExitEvent> for ExitListener {
-    fn handle_blocking<'a>(
+impl EventRwHandler<VehicleExitEvent> for ExitListener {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut VehicleExitEvent,
@@ -194,16 +194,12 @@ async fn destroying_occupied_vehicles_detaches_passengers_despite_vetoes() -> Te
         veto: Mutex::new(Hook::Dismount),
         calls: Mutex::default(),
     });
-    server.plugin_manager.register::<EntityDismountEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<VehicleExitEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityDismountEvent, _>(listener.clone(), EventPriority::Normal, None);
+    server
+        .plugin_manager
+        .register_blocking::<VehicleExitEvent, _>(listener.clone(), EventPriority::Normal, None);
 
     let mut stale_links = Vec::new();
     for (kind, veto, rider_count) in [
@@ -295,8 +291,8 @@ struct RemountDuringExit {
     ran: AtomicBool,
 }
 
-impl EventHandler<EntityDismountEvent> for RemountDuringExit {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityDismountEvent> for RemountDuringExit {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityDismountEvent,
@@ -329,11 +325,9 @@ async fn vehicle_exit_preserves_an_attachment_recreated_by_a_listener() -> TestR
         rider: rider.clone(),
         ran: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<EntityDismountEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityDismountEvent, _>(listener.clone(), EventPriority::Normal, None);
 
     vehicle
         .get_entity()
@@ -361,8 +355,8 @@ impl RelocateRider {
     }
 }
 
-impl EventHandler<EntityPoseChangeEvent> for RelocateRider {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityPoseChangeEvent> for RelocateRider {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityPoseChangeEvent,
@@ -371,8 +365,8 @@ impl EventHandler<EntityPoseChangeEvent> for RelocateRider {
     }
 }
 
-impl EventHandler<EntityDismountEvent> for RelocateRider {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityDismountEvent> for RelocateRider {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityDismountEvent,
@@ -402,11 +396,13 @@ async fn vehicle_exit_preserves_a_relocation_from_the_pose_listener() -> TestRes
         destination: Vector3::new(14.5, 65.0, 14.5),
         ran: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<EntityPoseChangeEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityPoseChangeEvent, _>(
+            listener.clone(),
+            EventPriority::Normal,
+            None,
+        );
 
     cart.get_entity()
         .remove_passenger(rider.get_entity().entity_id);
@@ -439,11 +435,9 @@ async fn vehicle_exit_preserves_a_relocation_from_the_exit_listener() -> TestRes
         destination: Vector3::new(14.5, 65.0, 14.5),
         ran: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<EntityDismountEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityDismountEvent, _>(listener.clone(), EventPriority::Normal, None);
 
     boat.get_entity()
         .remove_passenger(rider.get_entity().entity_id);
@@ -519,8 +513,8 @@ async fn manual_vehicle_mount_preserves_teleport_from_mount_hook() -> TestResult
         destination: Vector3<f64>,
         ran: AtomicBool,
     }
-    impl EventHandler<EntityMountEvent> for TeleportOnMount {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityMountEvent> for TeleportOnMount {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityMountEvent,
@@ -553,11 +547,13 @@ async fn manual_vehicle_mount_preserves_teleport_from_mount_hook() -> TestResult
             destination,
             ran: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<EntityMountEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityMountEvent, _>(
+                listener.clone(),
+                EventPriority::Normal,
+                None,
+            );
         let expected_id = rider
             .teleport_id_count
             .load(Ordering::Relaxed)
@@ -597,8 +593,8 @@ async fn ordinary_vehicle_interaction_switches_mounts_after_an_allowed_exit() ->
     use pumpkin_data::item_stack::ItemStack;
 
     struct VetoExit(AtomicBool);
-    impl EventHandler<EntityDismountEvent> for VetoExit {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityDismountEvent> for VetoExit {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityDismountEvent,
@@ -640,11 +636,9 @@ async fn ordinary_vehicle_interaction_switches_mounts_after_an_allowed_exit() ->
         old.add_passenger(start.clone(), rider.clone());
         assert_mounted(old, player);
         let veto = Arc::new(VetoExit(AtomicBool::new(true)));
-        server.plugin_manager.register::<EntityDismountEvent, _>(
-            veto.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityDismountEvent, _>(veto.clone(), EventPriority::Normal, None);
         let mut hand = ItemStack::EMPTY.clone();
         let old_id = rider.teleport_id_count.load(Ordering::Relaxed);
 
@@ -967,8 +961,8 @@ async fn ride_command_uses_the_vehicle_exit_and_respects_vetoes() -> TestResult 
 
     #[derive(Default)]
     struct DismountEvents(Mutex<Vec<Vector3<f64>>>);
-    impl EventHandler<GenericGameEvent> for DismountEvents {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<GenericGameEvent> for DismountEvents {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut GenericGameEvent,
@@ -1009,17 +1003,13 @@ async fn ride_command_uses_the_vehicle_exit_and_respects_vetoes() -> TestResult 
         veto: Mutex::new(Hook::Exit),
         calls: Mutex::default(),
     });
-    server.plugin_manager.register::<VehicleExitEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<VehicleExitEvent, _>(listener.clone(), EventPriority::Normal, None);
     let events = Arc::new(DismountEvents::default());
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        events.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(events.clone(), EventPriority::Normal, None);
     let source = CommandSender::Console.into_source(&server).with_silent();
     let dismount = || {
         server
@@ -1118,10 +1108,10 @@ struct FillLastSeat {
     original: i32,
 }
 
-impl EventHandler<crate::plugin::api::events::entity::entity_mount::EntityMountEvent>
+impl EventRwHandler<crate::plugin::api::events::entity::entity_mount::EntityMountEvent>
     for FillLastSeat
 {
-    fn handle_blocking<'a>(
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::api::events::entity::entity_mount::EntityMountEvent,
@@ -1163,15 +1153,17 @@ pub(super) async fn verify_mount_capacity_after_callbacks(
     )));
     world.spawn_entity(cart.clone());
     let (rider, _peer) = java_rider(&server, &world, "jeb_")?;
-    server.plugin_manager.register::<EntityMountEvent, _>(
-        Arc::new(FillLastSeat {
-            vehicle: cart.clone(),
-            competitor: competitor.clone(),
-            original: rider.get_entity().entity_id,
-        }),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityMountEvent, _>(
+            Arc::new(FillLastSeat {
+                vehicle: cart.clone(),
+                competitor: competitor.clone(),
+                original: rider.get_entity().entity_id,
+            }),
+            EventPriority::Normal,
+            None,
+        );
     assert!(!cart.get_entity().has_passengers());
 
     assert!(!board(cart.clone(), &rider));
@@ -1197,8 +1189,8 @@ enum ExitPacketAction {
 
 struct TranslateLegacyVehicleExit;
 
-impl EventHandler<crate::plugin::server::packet::PacketSentEvent> for TranslateLegacyVehicleExit {
-    fn handle_blocking<'a>(
+impl EventRwHandler<crate::plugin::server::packet::PacketSentEvent> for TranslateLegacyVehicleExit {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::server::packet::PacketSentEvent,
@@ -1252,10 +1244,10 @@ async fn translated_java_vehicle_exit_retains_its_pending_confirmation() -> Test
     client.version.store(version);
     server
         .plugin_manager
-        .register::<crate::plugin::server::packet::PacketSentEvent, _>(
+        .register_blocking::<crate::plugin::server::packet::PacketSentEvent, _>(
             Arc::new(TranslateLegacyVehicleExit),
             EventPriority::Normal,
-            true,
+            None,
         );
 
     boat.get_entity().remove_passenger(rider.entity_id());
@@ -1307,8 +1299,8 @@ struct ObserveExitPacket {
     ran: AtomicBool,
 }
 
-impl EventHandler<crate::plugin::server::packet::PacketSentEvent> for ObserveExitPacket {
-    fn handle_blocking<'a>(
+impl EventRwHandler<crate::plugin::server::packet::PacketSentEvent> for ObserveExitPacket {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::server::packet::PacketSentEvent,
@@ -1453,10 +1445,10 @@ async fn java_vehicle_exit_acknowledges_observed_position(action: ExitPacketActi
     });
     server
         .plugin_manager
-        .register::<crate::plugin::server::packet::PacketSentEvent, _>(
+        .register_blocking::<crate::plugin::server::packet::PacketSentEvent, _>(
             listener.clone(),
             EventPriority::Normal,
-            true,
+            None,
         );
 
     boat.get_entity().remove_passenger(rider.entity_id());
@@ -1542,10 +1534,10 @@ async fn java_vehicle_exit_cancelled_position_does_not_block_movement() -> TestR
     });
     server
         .plugin_manager
-        .register::<crate::plugin::server::packet::PacketSentEvent, _>(
+        .register_blocking::<crate::plugin::server::packet::PacketSentEvent, _>(
             listener.clone(),
             EventPriority::Normal,
-            true,
+            None,
         );
 
     boat.get_entity().remove_passenger(rider.entity_id());
@@ -1625,10 +1617,10 @@ async fn vehicle_exit_rechecks_outgoing_pose_metadata(obstruct: bool) -> TestRes
     });
     server
         .plugin_manager
-        .register::<crate::plugin::server::packet::PacketSentEvent, _>(
+        .register_blocking::<crate::plugin::server::packet::PacketSentEvent, _>(
             listener.clone(),
             EventPriority::Normal,
-            true,
+            None,
         );
 
     cart.get_entity().remove_passenger(rider.entity_id());
@@ -1769,10 +1761,10 @@ struct InvertMountFromListener {
     mount: Arc<dyn EntityBase>,
 }
 
-impl EventHandler<crate::plugin::api::events::entity::entity_mount::EntityMountEvent>
+impl EventRwHandler<crate::plugin::api::events::entity::entity_mount::EntityMountEvent>
     for InvertMountFromListener
 {
-    fn handle_blocking<'a>(
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::api::events::entity::entity_mount::EntityMountEvent,
@@ -1807,14 +1799,16 @@ async fn vehicle_mount_rechecks_ancestry_after_callbacks() -> TestResult {
     )));
     world.spawn_entity(rider.clone());
     world.spawn_entity(mount.clone());
-    server.plugin_manager.register::<EntityMountEvent, _>(
-        Arc::new(InvertMountFromListener {
-            rider: rider.clone(),
-            mount: mount.clone(),
-        }),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityMountEvent, _>(
+            Arc::new(InvertMountFromListener {
+                rider: rider.clone(),
+                mount: mount.clone(),
+            }),
+            EventPriority::Normal,
+            None,
+        );
 
     mount
         .get_entity()
@@ -1833,8 +1827,8 @@ struct RemountFromPassengerPacket {
     dismounts: Mutex<Vec<(Vector3<f64>, bool)>>,
 }
 
-impl EventHandler<GenericGameEvent> for RemountFromPassengerPacket {
-    fn handle_blocking<'a>(
+impl EventRwHandler<GenericGameEvent> for RemountFromPassengerPacket {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut GenericGameEvent,
@@ -1857,8 +1851,8 @@ impl EventHandler<GenericGameEvent> for RemountFromPassengerPacket {
     }
 }
 
-impl EventHandler<crate::plugin::server::packet::PacketSentEvent> for RemountFromPassengerPacket {
-    fn handle_blocking<'a>(
+impl EventRwHandler<crate::plugin::server::packet::PacketSentEvent> for RemountFromPassengerPacket {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::server::packet::PacketSentEvent,
@@ -1936,17 +1930,13 @@ async fn java_vehicle_remount_wins_over_the_older_passenger_list_for_all_recipie
         ran: AtomicBool::new(false),
         dismounts: Mutex::default(),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
 
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(listener.clone(), EventPriority::Normal, None);
 
     boat.get_entity()
         .remove_passenger(rider.get_entity().entity_id);
@@ -2002,8 +1992,8 @@ async fn automatic_vehicle_boarding_rechecks_rider_eligibility() -> TestResult {
         ran: AtomicBool,
     }
 
-    impl EventHandler<VehicleEnterEvent> for SneakOnEnter {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<VehicleEnterEvent> for SneakOnEnter {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             _event: &'a mut VehicleEnterEvent,
@@ -2046,11 +2036,13 @@ async fn automatic_vehicle_boarding_rechecks_rider_eligibility() -> TestResult {
             rider: pig.clone(),
             ran: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<VehicleEnterEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<VehicleEnterEvent, _>(
+                listener.clone(),
+                EventPriority::Normal,
+                None,
+            );
         let entity = vehicle.get_entity();
         let tick = || {
             entity.set_pos(CENTER);
@@ -2080,15 +2072,12 @@ async fn automatic_vehicle_boarding_rechecks_rider_eligibility() -> TestResult {
 }
 
 struct ObserveVehicleContact;
-impl EventHandler<crate::plugin::api::events::entity::entity_mount::EntityMountEvent>
-    for ObserveVehicleContact
-{
+
+impl<E: crate::plugin::Payload> EventRwHandler<E> for ObserveVehicleContact {
+    fn handle<'a>(&'a self, _server: &'a Arc<Server>, _event: &'a mut E) -> BoxFuture<'a, ()> {
+        Box::pin(async {})
+    }
 }
-impl EventHandler<BlockBreakEvent> for ObserveVehicleContact {}
-impl EventHandler<BlockDropItemEvent> for ObserveVehicleContact {}
-impl EventHandler<BlockPhysicsEvent> for ObserveVehicleContact {}
-impl EventHandler<BlockRedstoneEvent> for ObserveVehicleContact {}
-impl EventHandler<CauldronLevelChangeEvent> for ObserveVehicleContact {}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn vehicle_ticks_with_unbounded_actions_request_serial_execution() -> TestResult {
@@ -2162,12 +2151,12 @@ async fn vehicle_history_reaches_unbounded_cauldron_listeners() -> TestResult {
 fn register_vehicle_contact_listener<E>(server: &Server)
 where
     E: Payload + Send + Sync + 'static,
-    ObserveVehicleContact: EventHandler<E>,
+    ObserveVehicleContact: EventRwHandler<E>,
 {
-    server.plugin_manager.register::<E, _>(
+    server.plugin_manager.register_blocking::<E, _>(
         Arc::new(ObserveVehicleContact),
         EventPriority::Normal,
-        true,
+        None,
     );
 }
 
@@ -2922,8 +2911,10 @@ struct ReplaceVehicleFromCorrection {
     ran: AtomicBool,
 }
 
-impl EventHandler<crate::plugin::server::packet::PacketSentEvent> for ReplaceVehicleFromCorrection {
-    fn handle_blocking<'a>(
+impl EventRwHandler<crate::plugin::server::packet::PacketSentEvent>
+    for ReplaceVehicleFromCorrection
+{
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::server::packet::PacketSentEvent,
@@ -2996,10 +2987,10 @@ async fn java_vehicle_correction_cannot_reach_the_replacement_mount() -> TestRes
     });
     server
         .plugin_manager
-        .register::<crate::plugin::server::packet::PacketSentEvent, _>(
+        .register_blocking::<crate::plugin::server::packet::PacketSentEvent, _>(
             listener.clone(),
             EventPriority::Normal,
-            true,
+            None,
         );
     rider.set_movement_locked(true);
     queue_vehicle_position(&rider, CENTER.add_raw(0.5, 0.0, 0.0), 0.0)?;
@@ -3200,8 +3191,10 @@ struct RemountFromBedrockAttachment {
     ran: AtomicBool,
 }
 
-impl EventHandler<crate::plugin::server::packet::PacketSentEvent> for RemountFromBedrockAttachment {
-    fn handle_blocking<'a>(
+impl EventRwHandler<crate::plugin::server::packet::PacketSentEvent>
+    for RemountFromBedrockAttachment
+{
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::server::packet::PacketSentEvent,
@@ -3297,10 +3290,10 @@ async fn bedrock_remount_suppresses_replayed_attachment(
     });
     server
         .plugin_manager
-        .register::<crate::plugin::server::packet::PacketSentEvent, _>(
+        .register_blocking::<crate::plugin::server::packet::PacketSentEvent, _>(
             listener.clone(),
             EventPriority::Normal,
-            true,
+            None,
         );
 
     boat.get_entity().remove_passenger(rider.entity_id());
@@ -3411,10 +3404,10 @@ async fn bedrock_vehicle_exit_tracks_the_observed_position(replace: bool) -> Tes
     });
     server
         .plugin_manager
-        .register::<crate::plugin::server::packet::PacketSentEvent, _>(
+        .register_blocking::<crate::plugin::server::packet::PacketSentEvent, _>(
             listener.clone(),
             EventPriority::Normal,
-            true,
+            None,
         );
     boat.get_entity().remove_passenger(rider.entity_id());
     assert!(listener.ran.load(Ordering::Relaxed));
@@ -3565,16 +3558,16 @@ impl SplashObserver {
             observations: Mutex::default(),
             teleport_on: AtomicCell::new(None),
         });
-        server.plugin_manager.register::<GenericGameEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<GenericGameEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         observer
     }
 
@@ -3601,8 +3594,8 @@ impl SplashObserver {
     }
 }
 
-impl EventHandler<GenericGameEvent> for SplashObserver {
-    fn handle_blocking<'a>(
+impl EventRwHandler<GenericGameEvent> for SplashObserver {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut GenericGameEvent,
@@ -3625,8 +3618,8 @@ impl EventHandler<GenericGameEvent> for SplashObserver {
     }
 }
 
-impl EventHandler<PacketSentEvent> for SplashObserver {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for SplashObserver {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -3736,8 +3729,8 @@ async fn restored_cart_dispatches_splash_on_its_first_wet_tick() -> TestResult {
 
     struct SplashCount(AtomicUsize);
 
-    impl EventHandler<GenericGameEvent> for SplashCount {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<GenericGameEvent> for SplashCount {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut GenericGameEvent,
@@ -3756,11 +3749,9 @@ async fn restored_cart_dispatches_splash_on_its_first_wet_tick() -> TestResult {
     chunk.set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
     world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
     let observer = Arc::new(SplashCount(AtomicUsize::new(0)));
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     let position = CENTER.add_raw(0.0, 0.25, 0.0);
     let original = MinecartEntity::new(Entity::new(world.clone(), position, &EntityType::MINECART));
@@ -3889,8 +3880,8 @@ async fn java_vehicle_block_use_waits_for_world_and_teleport_eligibility() -> Te
     use std::{num::NonZeroU8, sync::atomic::AtomicUsize};
 
     struct ObservePlacementSwing(AtomicUsize);
-    impl EventHandler<PacketSentEvent> for ObservePlacementSwing {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for ObservePlacementSwing {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -3946,11 +3937,9 @@ async fn java_vehicle_block_use_waits_for_world_and_teleport_eligibility() -> Te
     let tracked: Arc<dyn EntityBase> = placer.clone();
     world.entity_tracker.add_entity(&tracked, &world);
     let swing = Arc::new(ObservePlacementSwing(AtomicUsize::new(0)));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        swing.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(swing.clone(), EventPriority::Normal, None);
     let mut cart = ItemStack::new(1, &Item::MINECART);
     cart.set_data_component(InteractAnimationImpl {
         animation_type: SwingAnimationType::Stab,
@@ -4079,8 +4068,8 @@ async fn classic_minecart_air_pass_does_not_spend_the_following_rail_use() -> Te
     use super::boat_vehicle_tests::bedrock_use_item_transaction;
 
     struct ObserveCartAirUse(AtomicUsize);
-    impl EventHandler<PlayerInteractEvent> for ObserveCartAirUse {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerInteractEvent> for ObserveCartAirUse {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerInteractEvent,
@@ -4098,11 +4087,9 @@ async fn classic_minecart_air_pass_does_not_spend_the_following_rail_use() -> Te
     let (java, _peer) = java_rider(&server, &world, "Notch")?;
     let (bedrock, _packets) = bedrock_rider(&server, &world, "jeb_").await?;
     let events = Arc::new(ObserveCartAirUse(AtomicUsize::new(0)));
-    server.plugin_manager.register::<PlayerInteractEvent, _>(
-        events.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(events.clone(), EventPriority::Normal, None);
     let java_client = java.client.java().ok_or("Java player")?;
     let bedrock_client = bedrock.client.bedrock().ok_or("Bedrock player")?;
     let chunk = ChunkData::empty_sync(0, 0);
@@ -4207,8 +4194,8 @@ async fn java_vehicle_block_hit_and_swing_feedback_follow_the_origin_protocol() 
         swings: Mutex<Vec<(i32, i32, i32)>>,
         block_interactions: AtomicUsize,
     }
-    impl EventHandler<PacketSentEvent> for UseFeedback {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for UseFeedback {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -4233,8 +4220,8 @@ async fn java_vehicle_block_hit_and_swing_feedback_follow_the_origin_protocol() 
             })
         }
     }
-    impl EventHandler<PlayerInteractEvent> for UseFeedback {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerInteractEvent> for UseFeedback {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerInteractEvent,
@@ -4280,16 +4267,12 @@ async fn java_vehicle_block_hit_and_swing_feedback_follow_the_origin_protocol() 
     world.entity_tracker.add_entity(&tracked, &world);
 
     let feedback = Arc::new(UseFeedback::default());
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        feedback.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<PlayerInteractEvent, _>(
-        feedback.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(feedback.clone(), EventPriority::Normal, None);
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(feedback.clone(), EventPriority::Normal, None);
     let take_swings = || {
         std::mem::take(
             &mut *feedback
@@ -4420,8 +4403,8 @@ async fn java_vehicle_block_corrections_keep_their_origin_after_callbacks() -> T
         interaction: AtomicCell<Interaction>,
         changed: AtomicBool,
     }
-    impl EventHandler<PlayerInteractEvent> for ReplaceCorrectionOrigin {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerInteractEvent> for ReplaceCorrectionOrigin {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerInteractEvent,
@@ -4452,8 +4435,8 @@ async fn java_vehicle_block_corrections_keep_their_origin_after_callbacks() -> T
             })
         }
     }
-    impl EventHandler<PacketSentEvent> for ReplaceCorrectionOrigin {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for ReplaceCorrectionOrigin {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -4535,16 +4518,12 @@ async fn java_vehicle_block_corrections_keep_their_origin_after_callbacks() -> T
         interaction: AtomicCell::new(Interaction::Success),
         changed: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<PlayerInteractEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(listener.clone(), EventPriority::Normal, None);
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
     let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
     for (sequence, interaction) in [
         (1, Interaction::Success),
@@ -4808,8 +4787,8 @@ async fn bedrock_equippable_minecart_waits_for_veto_and_commits_one_item() -> Te
     };
 
     struct VetoCartEquip(AtomicBool);
-    impl EventHandler<PlayerInteractEvent> for VetoCartEquip {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerInteractEvent> for VetoCartEquip {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerInteractEvent,
@@ -4843,11 +4822,9 @@ async fn bedrock_equippable_minecart_waits_for_veto_and_commits_one_item() -> Te
     data.put_string("slot", "head".to_owned());
     let equippable = EquippableImpl::read_data(&NbtTag::Compound(data)).ok_or("equippable cart")?;
     let veto = Arc::new(VetoCartEquip(AtomicBool::new(true)));
-    server.plugin_manager.register::<PlayerInteractEvent, _>(
-        veto.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(veto.clone(), EventPriority::Normal, None);
 
     let send = |stack: &ItemStack| {
         inventory.set_held_item(stack.clone());
@@ -4945,8 +4922,8 @@ async fn configured_minecart_air_use_completes_consumption_and_dispatches_kineti
         stops: AtomicUsize,
     }
 
-    impl EventHandler<PacketSentEvent> for ObserveCartFeedback {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for ObserveCartFeedback {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -4982,8 +4959,8 @@ async fn configured_minecart_air_use_completes_consumption_and_dispatches_kineti
         }
     }
 
-    impl EventHandler<GenericGameEvent> for ObserveCartFeedback {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<GenericGameEvent> for ObserveCartFeedback {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut GenericGameEvent,
@@ -5021,16 +4998,12 @@ async fn configured_minecart_air_use_completes_consumption_and_dispatches_kineti
     let java_client = java.client.java().ok_or("Java player")?;
     let bedrock_client = bedrock.client.bedrock().ok_or("Bedrock player")?;
     let feedback = Arc::new(ObserveCartFeedback::default());
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        feedback.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        feedback.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(feedback.clone(), EventPriority::Normal, None);
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(feedback.clone(), EventPriority::Normal, None);
 
     let send = |player: &Arc<crate::entity::player::Player>, stack: &ItemStack, sequence| {
         player.inventory().set_held_item(stack.clone());
@@ -5234,8 +5207,8 @@ async fn configured_cart_tick_does_not_decrement_reentrant_replacement_use() -> 
         pending: AtomicBool,
     }
 
-    impl EventHandler<PacketSentEvent> for ReplaceUse {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for ReplaceUse {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -5294,11 +5267,9 @@ async fn configured_cart_tick_does_not_decrement_reentrant_replacement_use() -> 
         stack: replacement.clone(),
         pending: AtomicBool::new(true),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        restart.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(restart.clone(), EventPriority::Normal, None);
     for _ in 0..6 {
         actor.living_entity.tick(actor.as_ref(), &server);
     }
@@ -5343,8 +5314,8 @@ async fn configured_cart_kinetic_contacts_use_default_range_and_preserve_the_phy
         target_id: i32,
     }
 
-    impl EventHandler<EntityDamageEvent> for SelectOtherSlotOnContact {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityDamageEvent> for SelectOtherSlotOnContact {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut EntityDamageEvent,
@@ -5408,14 +5379,16 @@ async fn configured_cart_kinetic_contacts_use_default_range_and_preserve_the_phy
             .get_mut_or_start_progress(advancement)
             .is_done()
     };
-    server.plugin_manager.register::<EntityDamageEvent, _>(
-        Arc::new(SelectOtherSlotOnContact {
-            player: player.clone(),
-            target_id: far_target.get_entity().entity_id,
-        }),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityDamageEvent, _>(
+            Arc::new(SelectOtherSlotOnContact {
+                player: player.clone(),
+                target_id: far_target.get_entity().entity_id,
+            }),
+            EventPriority::Normal,
+            None,
+        );
 
     let mut cart = ItemStack::new(1, &Item::MINECART);
     cart.set_data_component(KineticWeaponImpl {
@@ -5539,8 +5512,8 @@ async fn configured_cart_completion_keeps_earned_items_after_world_transfer() ->
     use std::{borrow::Cow, sync::atomic::AtomicUsize};
 
     struct TransferDuringConsumption(Arc<World>);
-    impl EventHandler<PlayerStatisticIncrementEvent> for TransferDuringConsumption {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerStatisticIncrementEvent> for TransferDuringConsumption {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerStatisticIncrementEvent,
@@ -5552,8 +5525,8 @@ async fn configured_cart_completion_keeps_earned_items_after_world_transfer() ->
     }
     #[derive(Default)]
     struct DestinationEvents(AtomicUsize);
-    impl EventHandler<GenericGameEvent> for DestinationEvents {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<GenericGameEvent> for DestinationEvents {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut GenericGameEvent,
@@ -5576,14 +5549,14 @@ async fn configured_cart_completion_keeps_earned_items_after_world_transfer() ->
     let events = Arc::new(DestinationEvents::default());
     server
         .plugin_manager
-        .register::<PlayerStatisticIncrementEvent, _>(
+        .register_blocking::<PlayerStatisticIncrementEvent, _>(
             Arc::new(TransferDuringConsumption(destination.clone())),
             EventPriority::Normal,
-            true,
+            None,
         );
     destination_server
         .plugin_manager
-        .register::<GenericGameEvent, _>(events.clone(), EventPriority::Normal, true);
+        .register_blocking::<GenericGameEvent, _>(events.clone(), EventPriority::Normal, None);
     let mut cart = ItemStack::new(1, &Item::MINECART);
     cart.set_data_component(ConsumableImpl::new(
         0.05,

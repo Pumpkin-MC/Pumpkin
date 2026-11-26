@@ -17,7 +17,8 @@ use crate::{
     block::entities::jukebox::JukeboxBlockEntity,
     entity::{EntityBase, player::Player},
     plugin::{
-        BoxFuture, EventHandler, EventPriority, api::events::world::generic_game::GenericGameEvent,
+        BoxFuture, EventPriority, EventRwHandler,
+        api::events::world::generic_game::GenericGameEvent,
     },
     server::Server,
 };
@@ -33,8 +34,8 @@ struct MoveVehicleSource {
     source_was_spent: AtomicBool,
 }
 
-impl EventHandler<GenericGameEvent> for MoveVehicleSource {
-    fn handle_blocking<'a>(
+impl EventRwHandler<GenericGameEvent> for MoveVehicleSource {
+    fn handle<'a>(
         &'a self,
         _: &'a Arc<Server>,
         event: &'a mut GenericGameEvent,
@@ -105,11 +106,9 @@ async fn vehicle_jukebox_commits_before_block_change(bedrock: bool) -> TestResul
         called: AtomicBool::new(false),
         source_was_spent: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     if let Some(client) = player.client.bedrock() {
         let mut click = bedrock_use_item_transaction(0, &cart, 0);

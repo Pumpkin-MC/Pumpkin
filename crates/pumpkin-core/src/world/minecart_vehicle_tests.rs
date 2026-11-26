@@ -27,7 +27,7 @@ use crate::{
     block::{BlockBehaviour, BlockMetadata, OnEntityCollisionArgs, registry::BlockRegistry},
     entity::{Entity, EntityBase, passive::pig::PigEntity, vehicle::minecart::MinecartEntity},
     plugin::{
-        BoxFuture, EventHandler, EventPriority,
+        BoxFuture, EventPriority, EventRwHandler,
         api::events::{
             entity::{
                 entity_dismount::EntityDismountEvent, entity_mount::EntityMountEvent,
@@ -72,8 +72,8 @@ async fn classic_minecart_placement_awards_only_an_allowed_committed_use() -> Te
     use pumpkin_nbt::tag::NbtTag;
 
     struct VetoCart(AtomicBool);
-    impl EventHandler<EntitySpawnEvent> for VetoCart {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for VetoCart {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut EntitySpawnEvent,
@@ -85,8 +85,8 @@ async fn classic_minecart_placement_awards_only_an_allowed_committed_use() -> Te
     }
 
     struct ObserveCartPlacement(Mutex<Vec<Vector3<f64>>>);
-    impl EventHandler<GenericGameEvent> for ObserveCartPlacement {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<GenericGameEvent> for ObserveCartPlacement {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut GenericGameEvent,
@@ -118,18 +118,14 @@ async fn classic_minecart_placement_awards_only_an_allowed_committed_use() -> Te
     chunk.set_block_absolute_y(8, 65, 8, Block::RAIL.default_state.id);
     world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
     let veto = Arc::new(VetoCart(AtomicBool::new(false)));
-    server.plugin_manager.register::<EntitySpawnEvent, _>(
-        veto.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntitySpawnEvent, _>(veto.clone(), EventPriority::Normal, None);
 
     let observer = Arc::new(ObserveCartPlacement(Mutex::new(Vec::new())));
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(observer.clone(), EventPriority::Normal, None);
     let carts = || placed_classic_minecarts(&world);
     let uses = || player.get_stat(StatisticCategory::Used, i32::from(Item::MINECART.id));
     let place = |position, sequence| {
@@ -295,8 +291,8 @@ async fn public_classic_minecart_use_rechecks_rail_and_cooldown_at_commit() -> T
         set_cooldown: AtomicBool,
         player: Arc<crate::entity::player::Player>,
     }
-    impl EventHandler<EntitySpawnEvent> for RemoveRail {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for RemoveRail {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             _: &'a mut EntitySpawnEvent,
@@ -331,11 +327,9 @@ async fn public_classic_minecart_use_rechecks_rail_and_cooldown_at_commit() -> T
         set_cooldown: AtomicBool::new(false),
         player: player.clone(),
     });
-    server.plugin_manager.register::<EntitySpawnEvent, _>(
-        remove.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntitySpawnEvent, _>(remove.clone(), EventPriority::Normal, None);
     let mut supplied = timed_rail_placement_stack(GROUP);
     let uid = supplied.uid;
     let rail = BlockPos::new(8, 65, 8);
@@ -446,8 +440,8 @@ struct RemovePlacedCart {
     id: std::sync::atomic::AtomicI32,
     spent_at_spawn: AtomicBool,
 }
-impl EventHandler<PacketSentEvent> for RemovePlacedCart {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for RemovePlacedCart {
+    fn handle<'a>(
         &'a self,
         _: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -488,12 +482,8 @@ struct SelectOtherSlotBeforeCartSpawn {
     active: AtomicBool,
 }
 
-impl EventHandler<EntitySpawnEvent> for SelectOtherSlotBeforeCartSpawn {
-    fn handle_blocking<'a>(
-        &'a self,
-        _: &'a Arc<Server>,
-        _: &'a mut EntitySpawnEvent,
-    ) -> BoxFuture<'a, ()> {
+impl EventRwHandler<EntitySpawnEvent> for SelectOtherSlotBeforeCartSpawn {
+    fn handle<'a>(&'a self, _: &'a Arc<Server>, _: &'a mut EntitySpawnEvent) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             if self.active.load(Ordering::Relaxed) {
                 self.player.inventory().set_selected_slot(1);
@@ -560,11 +550,9 @@ async fn assert_classic_minecart_placement_publication(placement: CartPlacement)
         id: AtomicI32::new(-1),
         spent_at_spawn: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     if let Some(source) = source {
         let mut props = DispenserLikeProperties::default(&Block::DISPENSER);
@@ -604,11 +592,13 @@ async fn assert_classic_minecart_placement_publication(placement: CartPlacement)
             player: actor.clone(),
             active: AtomicBool::new(true),
         });
-        server.plugin_manager.register::<EntitySpawnEvent, _>(
-            select_other.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntitySpawnEvent, _>(
+                select_other.clone(),
+                EventPriority::Normal,
+                None,
+            );
         place(1)?;
         assert_eq!(actor.inventory().get_selected_slot(), 1);
         assert_eq!(observer.id.load(Ordering::Relaxed), -1);
@@ -646,8 +636,8 @@ async fn assert_classic_minecart_placement_publication(placement: CartPlacement)
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn classic_minecart_speed_and_steps_use_the_rail_state() -> TestResult {
     struct ObserveRailStep(AtomicUsize);
-    impl EventHandler<GenericGameEvent> for ObserveRailStep {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<GenericGameEvent> for ObserveRailStep {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut GenericGameEvent,
@@ -663,11 +653,9 @@ async fn classic_minecart_speed_and_steps_use_the_rail_state() -> TestResult {
     let folder = tempfile::tempdir()?;
     let (server, world) = vehicle_world(&folder).await?;
     let steps = Arc::new(ObserveRailStep(AtomicUsize::new(0)));
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        steps.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(steps.clone(), EventPriority::Normal, None);
     let chunk = ChunkData::empty_sync(0, 0);
     let mut rail = RailLikeProperties::default(&Block::RAIL);
     rail.shape = RailShape::EastWest;
@@ -869,8 +857,8 @@ impl ReplaceCartMotionOnPacket {
     }
 }
 
-impl EventHandler<PacketSentEvent> for ReplaceCartMotionOnPacket {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ReplaceCartMotionOnPacket {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -1005,11 +993,9 @@ async fn check_cart_collision_observer(
             replacement: Vector3::new(0.5, 0.25, -0.75),
             trace: Mutex::default(),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         let (receiver, contact) = if reverse {
             (&right, &left)
         } else {
@@ -1088,8 +1074,8 @@ impl ObserveActivatorAttachment {
     }
 }
 
-impl EventHandler<EntityDismountEvent> for ObserveActivatorAttachment {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityDismountEvent> for ObserveActivatorAttachment {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityDismountEvent,
@@ -1108,8 +1094,8 @@ impl EventHandler<EntityDismountEvent> for ObserveActivatorAttachment {
     }
 }
 
-impl EventHandler<EntityMountEvent> for ObserveActivatorAttachment {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityMountEvent> for ObserveActivatorAttachment {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityMountEvent,
@@ -1181,14 +1167,16 @@ async fn moving_vehicle_activator_ejects_before_cart_pickup() -> TestResult {
         cart: cart.clone(),
         trace: trace.clone(),
     });
-    server.plugin_manager.register::<EntityDismountEvent, _>(
-        attachment.clone(),
-        EventPriority::Normal,
-        true,
-    );
     server
         .plugin_manager
-        .register::<EntityMountEvent, _>(attachment, EventPriority::Normal, true);
+        .register_blocking::<EntityDismountEvent, _>(
+            attachment.clone(),
+            EventPriority::Normal,
+            None,
+        );
+    server
+        .plugin_manager
+        .register_blocking::<EntityMountEvent, _>(attachment, EventPriority::Normal, None);
     // The cart starts facing west and rolls east. Its motion direction flips after activation.
     cart_entity.set_rotation(0.0, 0.0);
     cart_entity.velocity.store(Vector3::new(0.32, 0.0, 0.0));
@@ -1242,8 +1230,8 @@ async fn powered_activator_ejects_last_rider_first_and_keeps_replacement_attachm
         order: Mutex<Vec<i32>>,
     }
 
-    impl EventHandler<EntityDismountEvent> for EjectionObserver {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityDismountEvent> for EjectionObserver {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityDismountEvent,
@@ -1296,11 +1284,13 @@ async fn powered_activator_ejects_last_rider_first_and_keeps_replacement_attachm
             reattach,
             order: Mutex::new(Vec::new()),
         });
-        server.plugin_manager.register::<EntityDismountEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityDismountEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
 
         cart.tick(cart.as_ref(), &server);
         let mut expected = vec![second.get_entity().entity_id];
@@ -1332,8 +1322,8 @@ struct MountEffects {
     mounts: AtomicUsize,
 }
 
-impl EventHandler<EntityMountEvent> for MountEffects {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityMountEvent> for MountEffects {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityMountEvent,
@@ -1342,8 +1332,8 @@ impl EventHandler<EntityMountEvent> for MountEffects {
     }
 }
 
-impl EventHandler<GenericGameEvent> for MountEffects {
-    fn handle_blocking<'a>(
+impl EventRwHandler<GenericGameEvent> for MountEffects {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut GenericGameEvent,
@@ -1404,16 +1394,12 @@ async fn fast_minecart_pickup_runs_mount_effects_only_on_success() -> TestResult
         veto: AtomicBool::new(true),
         mounts: AtomicUsize::new(0),
     });
-    server.plugin_manager.register::<EntityMountEvent, _>(
-        effects.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        effects.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityMountEvent, _>(effects.clone(), EventPriority::Normal, None);
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(effects.clone(), EventPriority::Normal, None);
     let cart_entity = cart.get_entity();
     cart_entity.set_has_no_gravity(true);
     let advance = || {
@@ -2109,8 +2095,8 @@ async fn rideable_minecart_interaction_rechecks_sneaking_after_mount_listener() 
         fired: AtomicBool,
     }
 
-    impl EventHandler<EntityMountEvent> for SneakOnMount {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityMountEvent> for SneakOnMount {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityMountEvent,
@@ -2138,11 +2124,9 @@ async fn rideable_minecart_interaction_rechecks_sneaking_after_mount_listener() 
         rider: rider.clone(),
         fired: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<EntityMountEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityMountEvent, _>(observer.clone(), EventPriority::Normal, None);
     let player_entity = rider.get_entity();
     player_entity.set_pos(CENTER);
     assert!(!player_entity.is_sneaking());

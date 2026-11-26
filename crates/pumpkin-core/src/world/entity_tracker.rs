@@ -2740,7 +2740,9 @@ mod tests {
 
     use super::*;
     use crate::entity::vehicle::{boat::BoatEntity, minecart::MinecartEntity};
-    use crate::plugin::{BoxFuture, EventHandler, EventPriority, server::packet::PacketSentEvent};
+    use crate::plugin::{
+        BoxFuture, EventPriority, EventRwHandler, server::packet::PacketSentEvent,
+    };
     use crate::server::Server;
     use crate::world::vehicle_tests::{CENTER, TestResult, java_rider, vehicle_world};
 
@@ -2816,8 +2818,8 @@ mod tests {
         use pumpkin_protocol::java::client::play::CSpawnEntity;
 
         struct RepairOnRemoval(Arc<TrackedEntity>, Arc<Player>, AtomicBool);
-        impl EventHandler<PacketSentEvent> for RepairOnRemoval {
-            fn handle_blocking<'a>(
+        impl EventRwHandler<PacketSentEvent> for RepairOnRemoval {
+            fn handle<'a>(
                 &'a self,
                 _server: &'a Arc<Server>,
                 event: &'a mut PacketSentEvent,
@@ -2862,11 +2864,9 @@ mod tests {
             viewer.clone(),
             AtomicBool::new(false),
         ));
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
         tracked.remove_pairing(&viewer);
         let changes: Vec<_> = queued_packets(client, &mut decoder)
             .await?
@@ -2896,8 +2896,8 @@ mod tests {
         rider: Arc<Player>,
         called: AtomicBool,
     }
-    impl EventHandler<PacketSentEvent> for SelectStick {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for SelectStick {
+        fn handle<'a>(
             &'a self,
             server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -2953,11 +2953,9 @@ mod tests {
             rider: rider.clone(),
             called: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
         rider
             .client
             .java()
@@ -3002,8 +3000,8 @@ mod tests {
         use pumpkin_data::item::Item;
 
         struct ChangeViewerHand(i32, AtomicBool);
-        impl EventHandler<PacketSentEvent> for ChangeViewerHand {
-            fn handle_blocking<'a>(
+        impl EventRwHandler<PacketSentEvent> for ChangeViewerHand {
+            fn handle<'a>(
                 &'a self,
                 _server: &'a Arc<Server>,
                 event: &'a mut PacketSentEvent,
@@ -3063,11 +3061,9 @@ mod tests {
         );
 
         let observer = Arc::new(ChangeViewerHand(id, AtomicBool::new(false)));
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         mob.set_item_slot(
             &EquipmentSlot::MAIN_HAND,
             ItemStack::new(1, &Item::DIAMOND_SWORD),
@@ -3100,8 +3096,8 @@ mod tests {
         ran: AtomicBool,
     }
 
-    impl EventHandler<PacketSentEvent> for MoveCartFromVelocity {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for MoveCartFromVelocity {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -3134,8 +3130,8 @@ mod tests {
         ran: AtomicBool,
     }
 
-    impl EventHandler<PacketSentEvent> for SupersedeCartTeleport {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for SupersedeCartTeleport {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -3164,8 +3160,8 @@ mod tests {
         ran: AtomicBool,
     }
 
-    impl EventHandler<PacketSentEvent> for DismountCartFromPairing {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for DismountCartFromPairing {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -3245,11 +3241,9 @@ mod tests {
             action: CartObserverAction::Remove,
             ran: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
         let (finished, done) = tokio::sync::oneshot::channel();
         let tracking_world = world.clone();
         let tracker = std::thread::spawn(move || {
@@ -3299,16 +3293,16 @@ mod tests {
             destination,
             ran: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            superseding.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(
+                superseding.clone(),
+                EventPriority::Normal,
+                None,
+            );
         tracked.send_changes(&world);
         assert!(listener.ran.load(Relaxed));
         assert!(superseding.ran.load(Relaxed));
@@ -3382,11 +3376,9 @@ mod tests {
             viewer_id: viewer.gameprofile.id,
             ran: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
 
         for (tracker, counterpart) in [
             (cart_tracker.clone(), &rider_tracker),
@@ -3434,8 +3426,8 @@ mod tests {
         called: AtomicBool,
     }
 
-    impl EventHandler<PacketSentEvent> for ObservePassengerExtra {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for ObservePassengerExtra {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -3480,11 +3472,9 @@ mod tests {
             unpair: None,
             called: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         cart.get_entity()
             .send_passenger_update_to(&world, &viewer, &[], &[]);
         let mut lists = Vec::new();
@@ -3551,11 +3541,13 @@ mod tests {
                 unpair: Some(counterpart.clone()),
                 called: AtomicBool::new(false),
             });
-            server.plugin_manager.register::<PacketSentEvent, _>(
-                observer.clone(),
-                EventPriority::Normal,
-                true,
-            );
+            server
+                .plugin_manager
+                .register_blocking::<PacketSentEvent, _>(
+                    observer.clone(),
+                    EventPriority::Normal,
+                    None,
+                );
             next.add_pairing(&viewer);
             let packets = queued_packets(client, &mut decoder).await?;
             assert!(observer.called.load(Relaxed));
@@ -3583,10 +3575,10 @@ mod tests {
         remaining: AtomicUsize,
     }
 
-    impl<F: Fn(&mut PacketSentEvent, usize) + Send + Sync> EventHandler<PacketSentEvent>
+    impl<F: Fn(&mut PacketSentEvent, usize) + Send + Sync> EventRwHandler<PacketSentEvent>
         for AfterPassengerPublication<F>
     {
-        fn handle_blocking<'a>(
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -3720,11 +3712,9 @@ mod tests {
                 rider_count - 1
             }),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         tracked(carrier_id)?.add_pairing(&viewer);
         assert_eq!(observer.remaining.load(Relaxed), 0);
         assert_passenger_projection_packets(
@@ -3844,11 +3834,9 @@ mod tests {
             },
             remaining: AtomicUsize::new(1),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         cart.get_entity()
             .remove_passenger_on_disconnect(departed_id);
         let packets = queued_packets(client, &mut decoder).await?;
@@ -3952,8 +3940,8 @@ mod tests {
 
         struct WearShield(Arc<PigEntity>, AtomicBool);
 
-        impl EventHandler<PacketSentEvent> for WearShield {
-            fn handle_blocking<'a>(
+        impl EventRwHandler<PacketSentEvent> for WearShield {
+            fn handle<'a>(
                 &'a self,
                 _server: &'a Arc<Server>,
                 event: &'a mut PacketSentEvent,
@@ -3996,11 +3984,9 @@ mod tests {
             .get_tracked_entity(id)
             .ok_or("Pig tracker")?;
         let observer = Arc::new(WearShield(pig, AtomicBool::new(false)));
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         tracked.add_pairing(&viewer);
         assert!(observer.1.load(Relaxed));
 

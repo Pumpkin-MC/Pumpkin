@@ -10,8 +10,8 @@ use crate::{
     data::VanillaData,
     entity::{Entity, EntityBase, passive::pig::PigEntity},
     plugin::{
-        BoxFuture, EventHandler, EventPriority, api::events::world::generic_game::GenericGameEvent,
-        server::packet::PacketSentEvent,
+        BoxFuture, EventPriority, EventRwHandler,
+        api::events::world::generic_game::GenericGameEvent, server::packet::PacketSentEvent,
     },
     server::Server,
 };
@@ -360,8 +360,8 @@ impl ReplaceOnShieldBreak {
     }
 }
 
-impl EventHandler<PacketSentEvent> for ReplaceOnShieldBreak {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ReplaceOnShieldBreak {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -505,11 +505,9 @@ async fn assert_shield_break_replacement(replacement: ShieldBreakReplacement) ->
         called: AtomicBool::new(false),
         equipment_packets: std::sync::atomic::AtomicU8::new(0),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     living.damage_with_context(
         pig.as_ref(),
         10.0,
@@ -808,8 +806,8 @@ fn mob_offhand(
         .get(&pumpkin_data::data_component_impl::EquipmentSlot::OFF_HAND)
 }
 
-impl EventHandler<GenericGameEvent> for ObserveShieldUse {
-    fn handle_blocking<'a>(
+impl EventRwHandler<GenericGameEvent> for ObserveShieldUse {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut GenericGameEvent,
@@ -845,8 +843,8 @@ impl EventHandler<GenericGameEvent> for ObserveShieldUse {
     }
 }
 
-impl EventHandler<PacketSentEvent> for ObserveShieldUse {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ObserveShieldUse {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -906,16 +904,12 @@ async fn watch_shield_use_flags(
         restarted: AtomicBool::new(false),
         finish: Mutex::new(None),
     });
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(observer.clone(), EventPriority::Normal, None);
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     Ok((observer, packets))
 }
 
@@ -978,8 +972,8 @@ struct ReplacePlayerItemUse {
     replace: bool,
 }
 
-impl EventHandler<GenericGameEvent> for ReplacePlayerItemUse {
-    fn handle_blocking<'a>(
+impl EventRwHandler<GenericGameEvent> for ReplacePlayerItemUse {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut GenericGameEvent,
@@ -1061,11 +1055,13 @@ async fn java_shield_input_starts_only_once_and_preserves_a_listener_successor()
             calls: std::sync::atomic::AtomicU32::new(0),
             replace,
         });
-        server.plugin_manager.register::<GenericGameEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<GenericGameEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
         let client = player.client.java().ok_or("Java client")?;
         for sequence in 1..=2 {
             client.handle_use_item(
@@ -1160,11 +1156,13 @@ async fn release_packets_keep_the_use_started_by_the_crossbow_finish_listener() 
             calls: std::sync::atomic::AtomicU32::new(0),
             replace: !replaced_slot,
         });
-        server.plugin_manager.register::<GenericGameEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<GenericGameEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
         if player.client.java().is_some() {
             send_java_item_release(&player, &server)?;
         } else {
@@ -1240,8 +1238,8 @@ async fn java_bow_release_uses_the_current_same_item_components() -> TestResult 
     use pumpkin_util::Hand;
 
     struct ReplaceUseOnShot(Arc<ReplacePlayerItemUse>, AtomicBool);
-    impl EventHandler<ProjectileLaunchEvent> for ReplaceUseOnShot {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<ProjectileLaunchEvent> for ReplaceUseOnShot {
+        fn handle<'a>(
             &'a self,
             server: &'a Arc<Server>,
             event: &'a mut ProjectileLaunchEvent,
@@ -1279,11 +1277,13 @@ async fn java_bow_release_uses_the_current_same_item_components() -> TestResult 
         calls: std::sync::atomic::AtomicU32::new(0),
         replace: true,
     });
-    server.plugin_manager.register::<ProjectileLaunchEvent, _>(
-        Arc::new(ReplaceUseOnShot(observer.clone(), AtomicBool::new(false))),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<ProjectileLaunchEvent, _>(
+            Arc::new(ReplaceUseOnShot(observer.clone(), AtomicBool::new(false))),
+            EventPriority::Normal,
+            None,
+        );
     send_java_item_release(&player, &server)?;
     assert_eq!(player.inventory().get_slot(1).item_count, 1);
     assert_eq!(player.inventory().held_item().get_damage(), 1);
@@ -1299,8 +1299,8 @@ async fn java_trident_release_keeps_the_damage_listeners_replacement() -> TestRe
     use pumpkin_util::Hand;
 
     struct ReplaceTrident(AtomicBool);
-    impl EventHandler<PlayerItemDamageEvent> for ReplaceTrident {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerItemDamageEvent> for ReplaceTrident {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PlayerItemDamageEvent,
@@ -1324,11 +1324,13 @@ async fn java_trident_release_keeps_the_damage_listeners_replacement() -> TestRe
         .living_entity
         .set_active_hand(Hand::Right, trident, 71_980);
     let listener = Arc::new(ReplaceTrident(AtomicBool::new(false)));
-    server.plugin_manager.register::<PlayerItemDamageEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerItemDamageEvent, _>(
+            listener.clone(),
+            EventPriority::Normal,
+            None,
+        );
     send_java_item_release(&player, &server)?;
     assert!(listener.0.load(Ordering::Relaxed));
     assert_eq!(player.inventory().held_item().item, &Item::DIAMOND_SWORD);
@@ -1354,8 +1356,8 @@ async fn java_trident_release_keeps_a_cancelled_riptide_listeners_successor() ->
 
     struct CancelRiptide(ReplacePlayerItemUse);
 
-    impl EventHandler<PlayerRiptideEvent> for CancelRiptide {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerRiptideEvent> for CancelRiptide {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PlayerRiptideEvent,
@@ -1389,11 +1391,9 @@ async fn java_trident_release_keeps_a_cancelled_riptide_listeners_successor() ->
         calls: std::sync::atomic::AtomicU32::new(0),
         replace: true,
     }));
-    server.plugin_manager.register::<PlayerRiptideEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerRiptideEvent, _>(observer.clone(), EventPriority::Normal, None);
     send_java_item_release(&player, &server)?;
     assert_eq!(observer.0.calls.load(Ordering::Relaxed), 1);
     observer.0.assert_successor();
@@ -1413,8 +1413,8 @@ struct ReplaceBedrockAttribute {
     called: AtomicBool,
 }
 
-impl EventHandler<PacketSentEvent> for ReplaceBedrockAttribute {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ReplaceBedrockAttribute {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -1481,11 +1481,9 @@ async fn bedrock_shield_attribute_guard_keeps_an_unrelated_observer_override() -
         pig: pig.clone(),
         called: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     let living = &pig.get_mob_entity().living_entity;
     living.set_attribute_base(&Attributes::ATTACK_DAMAGE, 3.0);
@@ -1538,8 +1536,8 @@ async fn inventory_equipment_seen_by(
 }
 
 struct EquipmentEvents(std::sync::atomic::AtomicUsize);
-impl EventHandler<GenericGameEvent> for EquipmentEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<GenericGameEvent> for EquipmentEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut GenericGameEvent,
@@ -1587,11 +1585,13 @@ async fn java_player_inventory_publishes_committed_armor_and_creative_hand() -> 
         .first_tick
         .store(false, Ordering::Relaxed);
     let equipment_events = Arc::new(EquipmentEvents(AtomicUsize::new(0)));
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        equipment_events.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(
+            equipment_events.clone(),
+            EventPriority::Normal,
+            None,
+        );
     let armor = || player.living_entity.get_attribute_value(&Attributes::ARMOR);
     assert_eq!(armor(), 0.0);
     *player
@@ -1769,11 +1769,9 @@ async fn java_bow_finish_uses_the_current_stack_vibration_setting() -> TestResul
         calls: std::sync::atomic::AtomicU32::new(0),
         replace: false,
     });
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     let bow = ItemStack::new(1, &Item::BOW);
     let mut quiet = bow.clone();
@@ -1908,8 +1906,8 @@ async fn java_creative_equipment_observer_can_close_the_same_screen() -> TestRes
     use pumpkin_protocol::java::server::play::SSetCreativeSlot;
 
     struct CloseOnEquipment(Arc<crate::entity::player::Player>, AtomicBool);
-    impl EventHandler<PacketSentEvent> for CloseOnEquipment {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for CloseOnEquipment {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -1944,11 +1942,9 @@ async fn java_creative_equipment_observer_can_close_the_same_screen() -> TestRes
         .ok_or("Player tracker")?
         .add_pairing(&watcher);
     let close = Arc::new(CloseOnEquipment(player.clone(), AtomicBool::new(false)));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        close.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(close.clone(), EventPriority::Normal, None);
     player.gamemode.store(pumpkin_util::GameMode::Creative);
     player
         .client
@@ -2023,8 +2019,8 @@ struct ObserveDurability {
     awards: AtomicU32,
 }
 
-impl EventHandler<PlayerItemDamageEvent> for ObserveDurability {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerItemDamageEvent> for ObserveDurability {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerItemDamageEvent,
@@ -2042,8 +2038,8 @@ impl EventHandler<PlayerItemDamageEvent> for ObserveDurability {
         })
     }
 }
-impl EventHandler<PlayerItemBreakEvent> for ObserveDurability {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerItemBreakEvent> for ObserveDurability {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         _event: &'a mut PlayerItemBreakEvent,
@@ -2053,8 +2049,8 @@ impl EventHandler<PlayerItemBreakEvent> for ObserveDurability {
         })
     }
 }
-impl EventHandler<PlayerAdvancementDoneEvent> for ObserveDurability {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerAdvancementDoneEvent> for ObserveDurability {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerAdvancementDoneEvent,
@@ -2106,19 +2102,27 @@ async fn rejected_durability_does_not_emit_break_or_award_ride_criterion() -> Te
         breaks: AtomicU32::new(0),
         awards: AtomicU32::new(0),
     });
-    server.plugin_manager.register::<PlayerItemDamageEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<PlayerItemBreakEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
     server
         .plugin_manager
-        .register::<PlayerAdvancementDoneEvent, _>(observer.clone(), EventPriority::Normal, true);
+        .register_blocking::<PlayerItemDamageEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            None,
+        );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerItemBreakEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            None,
+        );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerAdvancementDoneEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            None,
+        );
 
     let mut rod = ItemStack::new(1, &Item::WARPED_FUNGUS_ON_A_STICK);
     rod.set_damage(rod.get_max_damage().ok_or("Rod durability")? - 1);
@@ -2160,8 +2164,8 @@ async fn java_container_resync_observer_can_close_the_screen() -> TestResult {
     struct CloseOnResync(Arc<crate::entity::player::Player>, AtomicBool);
     struct CancelClick(AtomicBool);
 
-    impl EventHandler<InventoryClickEvent> for CancelClick {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<InventoryClickEvent> for CancelClick {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut InventoryClickEvent,
@@ -2171,8 +2175,8 @@ async fn java_container_resync_observer_can_close_the_screen() -> TestResult {
             })
         }
     }
-    impl EventHandler<PacketSentEvent> for CloseOnResync {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for CloseOnResync {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -2198,17 +2202,13 @@ async fn java_container_resync_observer_can_close_the_screen() -> TestResult {
         .unwrap_or_else(PoisonError::into_inner)
         .update_sync_handler(sync);
     let observer = Arc::new(CloseOnResync(player.clone(), AtomicBool::new(false)));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     let cancel = Arc::new(CancelClick(AtomicBool::new(false)));
-    server.plugin_manager.register::<InventoryClickEvent, _>(
-        cancel.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<InventoryClickEvent, _>(cancel.clone(), EventPriority::Normal, None);
     let click = || SClickSlot {
         sync_id: 0.into(),
         revision: 999.into(),
@@ -2247,8 +2247,8 @@ async fn java_container_resync_keeps_the_newest_wire_revision() -> TestResult {
     };
 
     struct ChangeOnContent(Arc<crate::entity::player::Player>, AtomicBool);
-    impl EventHandler<PacketSentEvent> for ChangeOnContent {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for ChangeOnContent {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -2278,11 +2278,9 @@ async fn java_container_resync_keeps_the_newest_wire_revision() -> TestResult {
         .get_behaviour_mut()
         .sync_handler = Some(sync);
     let listener = Arc::new(ChangeOnContent(player.clone(), AtomicBool::new(false)));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
     player.resync_active_inventory_screen();
     assert!(listener.1.load(Ordering::Relaxed));
     assert_eq!(player.inventory().held_item().item, &Item::DIAMOND);
@@ -2360,8 +2358,8 @@ async fn java_nested_menu_open_owns_the_handler_and_the_initial_packets() -> Tes
         ran: AtomicBool,
     }
 
-    impl EventHandler<PacketSentEvent> for OpenAnother {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for OpenAnother {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -2401,11 +2399,9 @@ async fn java_nested_menu_open_owns_the_handler_and_the_initial_packets() -> Tes
             packet_id: trigger,
             ran: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         player.open_handled_screen_direct(create_menu(1), &TextComponent::text("First"));
         assert!(observer.ran.load(Ordering::Relaxed));
         assert!(player.is_active_screen(&second));
@@ -2512,8 +2508,8 @@ async fn bedrock_initial_personal_menu_delivers_the_crafting_input_and_cursor() 
 
 #[derive(Default)]
 struct SeeCraft(AtomicBool);
-impl EventHandler<crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent> for SeeCraft {
-    fn handle_blocking<'a>(
+impl EventRwHandler<crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent> for SeeCraft {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent,
@@ -2535,8 +2531,8 @@ async fn java_container_drop_observer_sees_the_committed_slot() -> TestResult {
     use pumpkin_protocol::java::server::play::SlotActionType;
 
     struct SeeDrop(Arc<crate::entity::player::Player>, AtomicBool, usize);
-    impl EventHandler<EntitySpawnEvent> for SeeDrop {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for SeeDrop {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntitySpawnEvent,
@@ -2561,10 +2557,10 @@ async fn java_container_drop_observer_sees_the_committed_slot() -> TestResult {
         let craft = Arc::new(SeeCraft::default());
         server
             .plugin_manager
-            .register::<PlayerStatisticIncrementEvent, _>(
+            .register_blocking::<PlayerStatisticIncrementEvent, _>(
                 craft.clone(),
                 EventPriority::Normal,
-                true,
+                None,
             );
         let (click_slot, checked_slot, action) = {
             let screen = player
@@ -2600,11 +2596,13 @@ async fn java_container_drop_observer_sees_the_committed_slot() -> TestResult {
             AtomicBool::new(false),
             checked_slot,
         ));
-        server.plugin_manager.register::<EntitySpawnEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntitySpawnEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
         player.on_slot_click(player_inventory_click(click_slot, action), &server);
         assert!(observer.1.load(Ordering::Relaxed));
         assert_eq!(craft.0.load(Ordering::Relaxed), craft_overflow);
@@ -2614,8 +2612,8 @@ async fn java_container_drop_observer_sees_the_committed_slot() -> TestResult {
 }
 
 struct ReplaceAcknowledgedArmor(Arc<crate::entity::player::Player>, AtomicBool);
-impl EventHandler<PacketSentEvent> for ReplaceAcknowledgedArmor {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ReplaceAcknowledgedArmor {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -2718,11 +2716,9 @@ async fn bedrock_player_inventory_rejects_a_superseded_acknowledgement() -> Test
         player.clone(),
         AtomicBool::new(false),
     ));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     player
         .client
         .bedrock()
@@ -2780,8 +2776,8 @@ async fn bedrock_player_inventory_ack_retires_a_pending_slot() -> TestResult {
     };
 
     struct DropOnSlot(Arc<crate::entity::player::Player>, AtomicBool);
-    impl EventHandler<PacketSentEvent> for DropOnSlot {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for DropOnSlot {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -2816,11 +2812,9 @@ async fn bedrock_player_inventory_ack_retires_a_pending_slot() -> TestResult {
     player.resync_active_inventory_screen();
     while packets.try_recv().is_ok() {}
     let observer = Arc::new(DropOnSlot(player.clone(), AtomicBool::new(false)));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     let stick = ItemStack::new(1, &Item::STICK);
     let stale = player
         .client
@@ -2963,8 +2957,8 @@ async fn bedrock_container_resync_covers_appended_inventory_and_owns_cursor() ->
     Ok(())
 }
 
-impl EventHandler<PacketSentEvent> for SupersedeInventoryPacket {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for SupersedeInventoryPacket {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -3090,11 +3084,9 @@ async fn java_container_recovers_a_superseded_slot_batch_and_cursor() -> TestRes
             changed: AtomicBool::new(false),
             cursor,
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
         if cursor {
             let handler = player
                 .player_screen_handler
@@ -3144,8 +3136,8 @@ struct ReplaceDuringHandUpdate {
     called: AtomicBool,
 }
 
-impl EventHandler<PacketSentEvent> for ReplaceDuringHandUpdate {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ReplaceDuringHandUpdate {
+    fn handle<'a>(
         &'a self,
         _: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -3259,11 +3251,9 @@ async fn java_container_and_direct_hand_updates_filter_stale_physical_aliases() 
             direct,
             called: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         let old = ItemStack::new(1, &Item::STONE);
         player.inventory().set_held_item(old.clone());
         if direct {
@@ -3293,8 +3283,8 @@ async fn java_container_and_direct_hand_updates_filter_stale_physical_aliases() 
 }
 
 struct DropOnSharedInventory(Arc<crate::entity::player::Player>, AtomicBool);
-impl EventHandler<PacketSentEvent> for DropOnSharedInventory {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for DropOnSharedInventory {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -3376,11 +3366,9 @@ async fn bedrock_container_ack_retires_a_personal_snapshot() -> TestResult {
         player.clone(),
         AtomicBool::new(false),
     ));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     player.resync_player_inventory_screen();
     assert!(observer.1.load(Ordering::Relaxed));
     assert!(player.inventory().held_item().is_empty());
@@ -3421,10 +3409,10 @@ struct RefillArmor(
     Arc<pumpkin_inventory::player::player_inventory::PlayerInventory>,
     AtomicBool,
 );
-impl EventHandler<crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent>
+impl EventRwHandler<crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent>
     for RefillArmor
 {
-    fn handle_blocking<'a>(
+    fn handle<'a>(
         &'a self,
         _: &'a Arc<Server>,
         event: &'a mut crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent,
@@ -3516,11 +3504,13 @@ async fn bedrock_player_inventory_legacy_drop_checks_armor_and_reentry() -> Test
             AtomicBool::new(false),
         ));
         if refill {
-            server.plugin_manager.register::<EntitySpawnEvent, _>(
-                listener.clone(),
-                EventPriority::Normal,
-                true,
-            );
+            server
+                .plugin_manager
+                .register_blocking::<EntitySpawnEvent, _>(
+                    listener.clone(),
+                    EventPriority::Normal,
+                    None,
+                );
         }
         let sync = player.screen_handler_sync_handler.clone();
         sync.store_player(player.clone());
@@ -3569,8 +3559,8 @@ async fn bedrock_player_inventory_legacy_drop_checks_armor_and_reentry() -> Test
 
 struct ReplaceFallbackSource(AtomicBool);
 
-impl EventHandler<crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent> for ReplaceFallbackSource {
-    fn handle_blocking<'a>(
+impl EventRwHandler<crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent> for ReplaceFallbackSource {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent,
@@ -3646,10 +3636,10 @@ async fn bedrock_block_insertions_reject_a_replaced_source_stack() -> TestResult
     let listener = Arc::new(ReplaceFallbackSource(AtomicBool::new(false)));
     server
         .plugin_manager
-        .register::<PlayerStatisticIncrementEvent, _>(
+        .register_blocking::<PlayerStatisticIncrementEvent, _>(
             listener.clone(),
             EventPriority::Normal,
-            true,
+            None,
         );
     let apple = ItemStack::new(1, &Item::APPLE);
     inventory.set_slot(0, apple.clone());

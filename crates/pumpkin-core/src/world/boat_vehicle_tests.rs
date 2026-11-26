@@ -16,7 +16,7 @@ use pumpkin_world::chunk::ChunkData;
 use crate::{
     entity::{Entity, EntityBase, passive::pig::PigEntity, vehicle::boat::BoatEntity},
     plugin::{
-        BoxFuture, EventHandler, EventPriority,
+        BoxFuture, EventPriority, EventRwHandler,
         api::events::{
             player::player_interact_event::PlayerInteractEvent,
             vehicle::{vehicle_exit::VehicleExitEvent, vehicle_move::VehicleMoveEvent},
@@ -161,8 +161,8 @@ struct BounceObservations {
     teleport: AtomicBool,
 }
 
-impl EventHandler<GenericGameEvent> for BounceObservations {
-    fn handle_blocking<'a>(
+impl EventRwHandler<GenericGameEvent> for BounceObservations {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut GenericGameEvent,
@@ -184,8 +184,8 @@ impl EventHandler<GenericGameEvent> for BounceObservations {
     }
 }
 
-impl EventHandler<PacketSentEvent> for BounceObservations {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for BounceObservations {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -245,16 +245,12 @@ async fn boat_bounce_fires_the_shelf_mushroom_sound_and_game_event_before_veloci
         trace: Mutex::default(),
         teleport: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        observed.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observed.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(observed.clone(), EventPriority::Normal, None);
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observed.clone(), EventPriority::Normal, None);
     let entity = boat.get_entity();
     let air_friction = f64::from(0.9f32);
     let impact = Vector3::new(
@@ -372,8 +368,8 @@ async fn boat_launch_status_precedes_the_impulse_and_a_newer_teleport_wins() -> 
         teleport: bool,
         observed: Mutex<Vec<f64>>,
     }
-    impl EventHandler<PacketSentEvent> for ObserveLaunch {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for ObserveLaunch {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -444,11 +440,9 @@ async fn boat_launch_status_precedes_the_impulse_and_a_newer_teleport_wins() -> 
             teleport,
             observed: Mutex::default(),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observed.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observed.clone(), EventPriority::Normal, None);
         for _ in 0..60 {
             boat.tick(boat.as_ref(), &server);
         }
@@ -660,8 +654,8 @@ async fn vehicle_move_listener_can_replace_boat_movement_with_a_same_position_te
 
     struct TeleportBoat(Arc<BoatEntity>, AtomicBool);
 
-    impl EventHandler<VehicleMoveEvent> for TeleportBoat {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<VehicleMoveEvent> for TeleportBoat {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut VehicleMoveEvent,
@@ -692,11 +686,9 @@ async fn vehicle_move_listener_can_replace_boat_movement_with_a_same_position_te
     entity.record_vehicle_movement(CENTER - movement, movement, movement);
     assert!(entity.vehicle_block_effect_reach() > 0.0);
     let listener = Arc::new(TeleportBoat(boat.clone(), AtomicBool::new(false)));
-    server.plugin_manager.register::<VehicleMoveEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<VehicleMoveEvent, _>(listener.clone(), EventPriority::Normal, None);
 
     boat.tick(boat.as_ref(), &server);
 
@@ -716,8 +708,8 @@ async fn vehicle_enter_relocation_discards_the_old_boat_pickup_contacts() -> Tes
     use std::sync::atomic::AtomicUsize;
 
     struct RelocateOnEnter(Arc<BoatEntity>, AtomicUsize);
-    impl EventHandler<VehicleEnterEvent> for RelocateOnEnter {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<VehicleEnterEvent> for RelocateOnEnter {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut VehicleEnterEvent,
@@ -766,11 +758,9 @@ async fn vehicle_enter_relocation_discards_the_old_boat_pickup_contacts() -> Tes
         pig
     });
     let listener = Arc::new(RelocateOnEnter(boat.clone(), AtomicUsize::new(0)));
-    server.plugin_manager.register::<VehicleEnterEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<VehicleEnterEvent, _>(listener.clone(), EventPriority::Normal, None);
     for _ in 0..2 {
         boat.tick(boat.as_ref(), &server);
         assert_eq!(listener.1.load(Ordering::Relaxed), 1);
@@ -810,8 +800,8 @@ struct ChangeSurface {
     change: SurfaceChange,
 }
 
-impl EventHandler<VehicleMoveEvent> for ChangeSurface {
-    fn handle_blocking<'a>(
+impl EventRwHandler<VehicleMoveEvent> for ChangeSurface {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut VehicleMoveEvent,
@@ -884,11 +874,9 @@ async fn assert_surface_snap_rechecks_listener_changes(change: SurfaceChange) ->
         fired: AtomicBool::new(false),
         change,
     });
-    server.plugin_manager.register::<VehicleMoveEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<VehicleMoveEvent, _>(listener.clone(), EventPriority::Normal, None);
 
     boat.tick(&boat, &server);
 
@@ -970,8 +958,8 @@ async fn boat_dismount_uses_the_rider_heading() -> TestResult {
 }
 
 struct ReplaceBoat(AtomicBool);
-impl EventHandler<PlayerInteractEvent> for ReplaceBoat {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerInteractEvent> for ReplaceBoat {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerInteractEvent,
@@ -1065,11 +1053,9 @@ async fn boat_placement_checks_fences_rooted_below_the_hull() -> TestResult {
     blocker.get_entity().set_pos(CENTER.add_raw(8.0, 0.0, 0.0));
 
     let listener = Arc::new(ReplaceBoat(AtomicBool::new(false)));
-    server.plugin_manager.register::<PlayerInteractEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(listener.clone(), EventPriority::Normal, None);
     air_use(3, 45.0);
     assert!(listener.0.load(Ordering::Relaxed));
     assert!(boat_placement_actors(&world).is_empty());
@@ -1289,10 +1275,10 @@ async fn boat_vehicle_extinguishes_after_lava_and_water_contact_in_the_same_step
     // the order of effects independently of the damage threshold.
     server
         .plugin_manager
-        .register::<crate::plugin::api::events::vehicle::vehicle_damage::VehicleDamageEvent, _>(
+        .register_blocking::<crate::plugin::api::events::vehicle::vehicle_damage::VehicleDamageEvent, _>(
             Arc::new(PreventVehicleDamage),
             EventPriority::Normal,
-            true,
+            None,
         );
     let chunk = ChunkData::empty_sync(0, 0);
     world
@@ -1342,8 +1328,8 @@ async fn ride_command_uses_the_boat_exit_when_the_seat_is_below_the_floor() -> T
 
     struct VetoExit(AtomicBool);
 
-    impl EventHandler<VehicleExitEvent> for VetoExit {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<VehicleExitEvent> for VetoExit {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut VehicleExitEvent,
@@ -1368,11 +1354,9 @@ async fn ride_command_uses_the_boat_exit_when_the_seat_is_below_the_floor() -> T
     let seated_position = player.pos.load();
     assert!(seated_position.y < CENTER.y);
     let listener = Arc::new(VetoExit(AtomicBool::new(true)));
-    server.plugin_manager.register::<VehicleExitEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<VehicleExitEvent, _>(listener.clone(), EventPriority::Normal, None);
     let source = CommandSender::Console.into_source(&server).with_silent();
     let dismount = || {
         server
@@ -1412,8 +1396,8 @@ struct ObserveBoatMount {
     mount_packet_seen: AtomicBool,
 }
 
-impl EventHandler<GenericGameEvent> for ObserveBoatMount {
-    fn handle_blocking<'a>(
+impl EventRwHandler<GenericGameEvent> for ObserveBoatMount {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut GenericGameEvent,
@@ -1433,8 +1417,8 @@ impl EventHandler<GenericGameEvent> for ObserveBoatMount {
     }
 }
 
-impl EventHandler<PacketSentEvent> for ObserveBoatMount {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ObserveBoatMount {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -1545,16 +1529,12 @@ async fn assert_boat_mount_packet_order(pickup: bool) -> TestResult {
         mount_event_seen: AtomicBool::new(false),
         mount_packet_seen: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(listener.clone(), EventPriority::Normal, None);
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
 
     if pickup {
         boat.tick(boat.as_ref(), &server);
@@ -1859,8 +1839,8 @@ async fn saved_vehicle_reattachment_sends_seat_without_mount_effects() -> TestRe
 
     struct MountObserver(AtomicBool);
 
-    impl EventHandler<GenericGameEvent> for MountObserver {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<GenericGameEvent> for MountObserver {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut GenericGameEvent,
@@ -1876,11 +1856,9 @@ async fn saved_vehicle_reattachment_sends_seat_without_mount_effects() -> TestRe
     let directory = tempfile::tempdir()?;
     let (server, world) = vehicle_world(&directory).await?;
     let observer = Arc::new(MountObserver(AtomicBool::new(false)));
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(observer.clone(), EventPriority::Normal, None);
     let boat = Arc::new(BoatEntity::new(Entity::new(
         world.clone(),
         CENTER,
@@ -1985,8 +1963,8 @@ struct ReplaceStandingPose {
     fired: AtomicBool,
 }
 
-impl EventHandler<PacketSentEvent> for ReplaceStandingPose {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ReplaceStandingPose {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -2021,8 +1999,8 @@ async fn assert_bedrock_pose_after_mount_callback(replace_pose: bool) -> TestRes
         rider_id: i32,
     }
 
-    impl EventHandler<GenericGameEvent> for DismountOnMount {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<GenericGameEvent> for DismountOnMount {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut GenericGameEvent,
@@ -2068,24 +2046,24 @@ async fn assert_bedrock_pose_after_mount_callback(replace_pose: bool) -> TestRes
             .is_some_and(|tracked| tracked.is_seen_by(&viewer.gameprofile.id))
     );
     while packets.try_recv().is_ok() {}
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        Arc::new(DismountOnMount {
-            boat: boat.clone(),
-            rider_id: rider.entity_id,
-        }),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(
+            Arc::new(DismountOnMount {
+                boat: boat.clone(),
+                rider_id: rider.entity_id,
+            }),
+            EventPriority::Normal,
+            None,
+        );
     let observer = Arc::new(ReplaceStandingPose {
         rider: player.clone(),
         fired: AtomicBool::new(false),
     });
     if replace_pose {
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     }
 
     boat.get_entity()
@@ -2256,8 +2234,8 @@ struct ResizeOnPose {
     acted_on_age: AtomicBool,
 }
 
-impl EventHandler<PacketSentEvent> for ResizeOnPose {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ResizeOnPose {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -2349,11 +2327,9 @@ async fn assert_bedrock_metadata_after_mount_resize(resize: MountResize) -> Test
         resize,
         acted_on_age: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     boat.get_entity().add_passenger(boat.clone(), pig.clone());
 
@@ -2498,8 +2474,8 @@ struct ExpireAngerOnMountFlags {
     expired: AtomicBool,
 }
 
-impl EventHandler<PacketSentEvent> for ExpireAngerOnMountFlags {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ExpireAngerOnMountFlags {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -2578,11 +2554,9 @@ async fn bedrock_viewer_gets_current_mount_flags_when_wolf_anger_expires() -> Te
         rider_id: rider.entity_id,
         expired: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     boat.get_entity().add_passenger(boat.clone(), wolf.clone());
     assert_mounted(boat.get_entity(), rider);
     assert!(observer.expired.load(Ordering::Relaxed));
@@ -2869,8 +2843,8 @@ impl DetachOnPairingEquipment {
     }
 }
 
-impl EventHandler<PacketSentEvent> for DetachOnPairingEquipment {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for DetachOnPairingEquipment {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -3004,11 +2978,9 @@ async fn assert_bedrock_pairing_equipment(change: PairingEquipmentChange) -> Tes
         called: AtomicBool::new(false),
         observations: std::sync::atomic::AtomicU32::new(0),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     if change == PairingEquipmentChange::Retry {
         tracked.last_section_pos.store(Vector3::new(32, 0, 32));
         world.entity_tracker.update_all(&world);
@@ -3235,11 +3207,9 @@ async fn assert_java_pairing_equipment(change: PairingEquipmentChange) -> TestRe
         called: AtomicBool::new(false),
         observations: std::sync::atomic::AtomicU32::new(0),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     if change == PairingEquipmentChange::Retry {
         tracked.last_section_pos.store(Vector3::new(32, 0, 32));
         world.entity_tracker.update_all(&world);
@@ -3362,8 +3332,8 @@ async fn bedrock_viewer_keeps_baby_scale_after_nested_age_callbacks() -> TestRes
     };
     use std::sync::atomic::AtomicU8;
     struct ChangeAge(Arc<PigEntity>, AtomicU8);
-    impl EventHandler<PacketSentEvent> for ChangeAge {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for ChangeAge {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -3427,11 +3397,9 @@ async fn bedrock_viewer_keeps_baby_scale_after_nested_age_callbacks() -> TestRes
     boat.get_entity().add_passenger(boat.clone(), pig.clone());
     while packets.try_recv().is_ok() {}
     let observer = Arc::new(ChangeAge(pig.clone(), AtomicU8::new(0)));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     pig.set_baby(true);
     let rider = pig.get_entity();
     assert_mounted(boat.get_entity(), rider);
@@ -3470,8 +3438,8 @@ struct ChangeAiOnDismountFlags {
     observed: std::sync::atomic::AtomicU8,
 }
 
-impl EventHandler<PacketSentEvent> for ChangeAiOnDismountFlags {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ChangeAiOnDismountFlags {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -3565,11 +3533,9 @@ async fn assert_bedrock_dismount_flags_after_observer_changes(changes: u8) -> Te
         late_viewer: late.as_ref().map(|(viewer, _)| viewer.clone()),
         observed: AtomicU8::new(0),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     boat.get_entity().remove_passenger(rider.entity_id);
     assert!(!rider.has_vehicle());
     assert!(!boat.get_entity().has_passenger(rider.entity_id));
@@ -3665,10 +3631,10 @@ async fn second_boat_mount_evaluates_riding_criteria_for_both_players() -> TestR
 
 struct PreventVehicleDamage;
 
-impl EventHandler<crate::plugin::api::events::vehicle::vehicle_damage::VehicleDamageEvent>
+impl EventRwHandler<crate::plugin::api::events::vehicle::vehicle_damage::VehicleDamageEvent>
     for PreventVehicleDamage
 {
-    fn handle_blocking<'a>(
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut crate::plugin::api::events::vehicle::vehicle_damage::VehicleDamageEvent,
@@ -3692,8 +3658,8 @@ async fn boat_hands_authority_to_java_rider_mounted_by_paddle_observer() -> Test
         ran: AtomicBool,
     }
 
-    impl EventHandler<PacketSentEvent> for MountWhenPaddlesClear {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for MountWhenPaddlesClear {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -3766,11 +3732,9 @@ async fn boat_hands_authority_to_java_rider_mounted_by_paddle_observer() -> Test
         cleared_metadata,
         ran: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        listener.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
 
     boat.tick(boat.as_ref(), &server);
 
@@ -3798,8 +3762,8 @@ async fn boat_interaction_rechecks_submersion_after_mount_listener() -> TestResu
         flooded: AtomicBool,
     }
 
-    impl EventHandler<EntityMountEvent> for FloodOnMount {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityMountEvent> for FloodOnMount {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityMountEvent,
@@ -3836,11 +3800,9 @@ async fn boat_interaction_rechecks_submersion_after_mount_listener() -> TestResu
         boat_id: hull.entity_id,
         flooded: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<EntityMountEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityMountEvent, _>(observer.clone(), EventPriority::Normal, None);
     assert!(!hull.is_submerged_in_water());
     let mut hand = ItemStack::EMPTY.clone();
 
@@ -3866,8 +3828,8 @@ async fn ride_mount_reports_failure_if_mount_listener_vetoes_attachment() -> Tes
 
     struct VetoMount(AtomicBool);
 
-    impl EventHandler<EntityMountEvent> for VetoMount {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityMountEvent> for VetoMount {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityMountEvent,
@@ -3888,11 +3850,9 @@ async fn ride_mount_reports_failure_if_mount_listener_vetoes_attachment() -> Tes
     )));
     world.spawn_entity(boat.clone());
     let observer = Arc::new(VetoMount(AtomicBool::new(true)));
-    server.plugin_manager.register::<EntityMountEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityMountEvent, _>(observer.clone(), EventPriority::Normal, None);
     let source = CommandSender::Console.into_source(&server).with_silent();
     let mount = || {
         server.command_dispatcher.load().execute_input(
@@ -3948,8 +3908,8 @@ struct ObserveCooldown {
     called: AtomicBool,
     version: pumpkin_util::version::JavaMinecraftVersion,
 }
-impl EventHandler<PacketSentEvent> for ObserveCooldown {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ObserveCooldown {
+    fn handle<'a>(
         &'a self,
         _: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -4028,11 +3988,9 @@ async fn assert_placement_cooldown_publication(
         called: AtomicBool::new(false),
         version,
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     server
         .item_registry
         .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
@@ -4152,8 +4110,8 @@ async fn assert_reentrant_boat_placement(second_platform: bool) -> TestResult {
         called: AtomicBool,
         second_platform: bool,
     }
-    impl EventHandler<PacketSentEvent> for PlaceAgain {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for PlaceAgain {
+        fn handle<'a>(
             &'a self,
             server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -4207,11 +4165,9 @@ async fn assert_reentrant_boat_placement(second_platform: bool) -> TestResult {
         called: AtomicBool::new(false),
         second_platform,
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     server
         .item_registry
         .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
@@ -4241,8 +4197,8 @@ async fn boat_placement_removed_during_initial_metadata_is_not_tracked() -> Test
     use std::sync::atomic::AtomicI32;
 
     struct RemoveDuringMetadata(AtomicI32);
-    impl EventHandler<PacketSentEvent> for RemoveDuringMetadata {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for RemoveDuringMetadata {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -4271,11 +4227,9 @@ async fn boat_placement_removed_during_initial_metadata_is_not_tracked() -> Test
     let stack = ItemStack::new(1, &Item::OAK_BOAT);
     player.inventory().set_held_item(stack.clone());
     let observer = Arc::new(RemoveDuringMetadata(AtomicI32::new(-1)));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     server
         .item_registry
         .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
@@ -4292,8 +4246,8 @@ struct ObserveDispense {
     id: std::sync::atomic::AtomicI32,
     dispenser: Arc<crate::block::entities::dispenser::DispenserBlockEntity>,
 }
-impl EventHandler<PacketSentEvent> for ObserveDispense {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ObserveDispense {
+    fn handle<'a>(
         &'a self,
         server: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -4387,11 +4341,9 @@ async fn assert_dispensed_boat_registration(remove: bool) -> TestResult {
         id: AtomicI32::new(-1),
         dispenser: dispenser.clone(),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     let dispense = || {
         dispenser.set_stack(0, item.copy_with_count(1));
         DispenserBlock.on_scheduled_tick(OnScheduledTickArgs {
@@ -4443,8 +4395,8 @@ struct ObserveDispenserEffects {
     excluded_player: i32,
     excluded_packets: std::sync::atomic::AtomicUsize,
 }
-impl EventHandler<PacketSentEvent> for ObserveDispenserEffects {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ObserveDispenserEffects {
+    fn handle<'a>(
         &'a self,
         _: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -4525,11 +4477,9 @@ async fn dispensed_boat_preserves_stack_pitch_and_plays_java_effects() -> TestRe
         excluded_player: far_watcher.entity_id(),
         excluded_packets: std::sync::atomic::AtomicUsize::new(0),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     let mut rotation = NbtCompound::new();
     rotation.put_list("Rotation", vec![NbtTag::Float(70.0), NbtTag::Float(27.0)]);
     let mut stack = ItemStack::new(1, &Item::OAK_BOAT);
@@ -4642,8 +4592,8 @@ async fn dispensed_boat_removed_during_dry_ejection_stays_removed() -> TestResul
     use std::sync::atomic::AtomicI32;
 
     struct RemoveEjection(AtomicI32);
-    impl EventHandler<PacketSentEvent> for RemoveEjection {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for RemoveEjection {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -4680,11 +4630,9 @@ async fn dispensed_boat_removed_during_dry_ejection_stays_removed() -> TestResul
     world.add_block_entity(dispenser.clone());
 
     let observer = Arc::new(RemoveEjection(AtomicI32::new(-1)));
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     DispenserBlock.on_scheduled_tick(OnScheduledTickArgs {
         world: &world,
         block: &Block::DISPENSER,
@@ -4732,8 +4680,8 @@ async fn assert_dispensed_boat_rejects_replaced_source(replace_dispenser: bool) 
         replacement: Arc<DispenserBlockEntity>,
         stack: ItemStack,
     }
-    impl EventHandler<EntitySpawnEvent> for ReplaceSource {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for ReplaceSource {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             _: &'a mut EntitySpawnEvent,
@@ -4767,16 +4715,18 @@ async fn assert_dispensed_boat_rejects_replaced_source(replace_dispenser: bool) 
     } else {
         dispenser.clone()
     };
-    server.plugin_manager.register::<EntitySpawnEvent, _>(
-        Arc::new(ReplaceSource {
-            world: world.clone(),
-            original: dispenser.clone(),
-            replacement: current.clone(),
-            stack: replacement.clone(),
-        }),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntitySpawnEvent, _>(
+            Arc::new(ReplaceSource {
+                world: world.clone(),
+                original: dispenser.clone(),
+                replacement: current.clone(),
+                stack: replacement.clone(),
+            }),
+            EventPriority::Normal,
+            None,
+        );
     DispenserBlock.on_scheduled_tick(OnScheduledTickArgs {
         world: &world,
         block: &Block::DISPENSER,
@@ -4800,8 +4750,8 @@ async fn concurrent_boat_placements_commit_only_one_overlapping_hull() -> TestRe
     use pumpkin_util::Hand;
 
     struct WaitForBothPlacements(tokio::sync::Barrier);
-    impl EventHandler<EntitySpawnEvent> for WaitForBothPlacements {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for WaitForBothPlacements {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntitySpawnEvent,
@@ -4828,11 +4778,13 @@ async fn concurrent_boat_placements_commit_only_one_overlapping_hull() -> TestRe
     second
         .get_entity()
         .set_pos(BOAT_PLACEMENT_OFFSET.add_raw(-0.75, 0.0, 0.0));
-    server.plugin_manager.register::<EntitySpawnEvent, _>(
-        Arc::new(WaitForBothPlacements(tokio::sync::Barrier::new(2))),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntitySpawnEvent, _>(
+            Arc::new(WaitForBothPlacements(tokio::sync::Barrier::new(2))),
+            EventPriority::Normal,
+            None,
+        );
     let place = |player: Arc<crate::entity::player::Player>| {
         let stack = ItemStack::new(1, &Item::OAK_BOAT);
         player.inventory().set_held_item(stack.clone());
@@ -4868,8 +4820,8 @@ async fn bedrock_boat_placement_uses_the_selected_hotbar_slot() -> TestResult {
     use std::sync::atomic::AtomicUsize;
 
     struct KeepSelected;
-    impl EventHandler<PlayerItemHeldEvent> for KeepSelected {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerItemHeldEvent> for KeepSelected {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerItemHeldEvent,
@@ -4881,8 +4833,8 @@ async fn bedrock_boat_placement_uses_the_selected_hotbar_slot() -> TestResult {
         enabled: AtomicBool,
         calls: AtomicUsize,
     }
-    impl EventHandler<PlayerInteractEvent> for MoveOnUse {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerInteractEvent> for MoveOnUse {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerInteractEvent,
@@ -4910,11 +4862,13 @@ async fn bedrock_boat_placement_uses_the_selected_hotbar_slot() -> TestResult {
     player.inventory().set_slot(0, boat.clone());
     let other = boat.copy_with_count(1);
     player.inventory().set_slot(1, other.clone());
-    server.plugin_manager.register::<PlayerItemHeldEvent, _>(
-        Arc::new(KeepSelected),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerItemHeldEvent, _>(
+            Arc::new(KeepSelected),
+            EventPriority::Normal,
+            None,
+        );
     let client = player.client.bedrock().ok_or("Bedrock player")?;
     client.select_hotbar_slot(&server, &player, 1, 0);
     assert_eq!(player.inventory().get_selected_slot(), 0);
@@ -4922,11 +4876,9 @@ async fn bedrock_boat_placement_uses_the_selected_hotbar_slot() -> TestResult {
         enabled: AtomicBool::new(false),
         calls: AtomicUsize::new(0),
     });
-    server.plugin_manager.register::<PlayerInteractEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     bedrock_boat_click(&player, 1, &other)?;
     assert_eq!(observer.calls.load(Ordering::Relaxed), 0);
@@ -5024,8 +4976,8 @@ async fn bedrock_boat_block_click_debits_the_original_slot() -> TestResult {
     use pumpkin_util::math::position::BlockPos;
 
     struct MoveOriginalAndSelectOtherSlot;
-    impl EventHandler<PlayerStatisticIncrementEvent> for MoveOriginalAndSelectOtherSlot {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerStatisticIncrementEvent> for MoveOriginalAndSelectOtherSlot {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerStatisticIncrementEvent,
@@ -5078,10 +5030,10 @@ async fn bedrock_boat_block_click_debits_the_original_slot() -> TestResult {
 
     server
         .plugin_manager
-        .register::<PlayerStatisticIncrementEvent, _>(
+        .register_blocking::<PlayerStatisticIncrementEvent, _>(
             Arc::new(MoveOriginalAndSelectOtherSlot),
             EventPriority::Normal,
-            true,
+            None,
         );
     predicted_deposit(1, &second, -3)?;
     assert_eq!(inventory.get_selected_slot(), 0);
@@ -5124,8 +5076,8 @@ async fn bedrock_boat_in_main_hand_preserves_offhand_block_and_item_actions() ->
     use pumpkin_protocol::bedrock::server::inventory_transaction::{HandSlot, TransactionData};
 
     struct MoveOffhandAtInsertion;
-    impl EventHandler<PlayerStatisticIncrementEvent> for MoveOffhandAtInsertion {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerStatisticIncrementEvent> for MoveOffhandAtInsertion {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerStatisticIncrementEvent,
@@ -5193,10 +5145,10 @@ async fn bedrock_boat_in_main_hand_preserves_offhand_block_and_item_actions() ->
     world.add_block_entity(pot.clone());
     server
         .plugin_manager
-        .register::<PlayerStatisticIncrementEvent, _>(
+        .register_blocking::<PlayerStatisticIncrementEvent, _>(
             Arc::new(MoveOffhandAtInsertion),
             EventPriority::Normal,
-            true,
+            None,
         );
     player
         .inventory()
@@ -5256,8 +5208,8 @@ async fn boat_pot_transfer_rejects_a_retiring_or_detached_pot() -> TestResult {
         called: AtomicBool,
     }
 
-    impl EventHandler<EntitySpawnEvent> for TransferDuringScatter {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for TransferDuringScatter {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut EntitySpawnEvent,
@@ -5295,11 +5247,9 @@ async fn boat_pot_transfer_rejects_a_retiring_or_detached_pot() -> TestResult {
         player: player.clone(),
         called: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<EntitySpawnEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntitySpawnEvent, _>(observer.clone(), EventPriority::Normal, None);
     world.set_block_state(
         &position,
         Block::AIR.default_state.id,
@@ -5336,8 +5286,8 @@ async fn bedrock_boat_pot_uses_the_live_hand_and_leaves_canonical_air() -> TestR
     use pumpkin_util::math::position::BlockPos;
 
     struct VetoPot(AtomicBool);
-    impl EventHandler<PlayerInteractEvent> for VetoPot {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerInteractEvent> for VetoPot {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerInteractEvent,
@@ -5364,11 +5314,9 @@ async fn bedrock_boat_pot_uses_the_live_hand_and_leaves_canonical_air() -> TestR
     let current = earlier.copy_with_count(1);
     player.inventory().set_held_item(current.clone());
     let veto = Arc::new(VetoPot(AtomicBool::new(false)));
-    server.plugin_manager.register::<PlayerInteractEvent, _>(
-        veto.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(veto.clone(), EventPriority::Normal, None);
 
     let deposit = |id| {
         let mut packet = bedrock_use_item_transaction(0, &current, 0);
@@ -5422,8 +5370,8 @@ async fn java_boat_shelf_click_rechecks_the_addressed_hand_after_interaction() -
     use pumpkin_util::math::position::BlockPos;
 
     struct SelectOtherSlot(AtomicBool);
-    impl EventHandler<PlayerInteractEvent> for SelectOtherSlot {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerInteractEvent> for SelectOtherSlot {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerInteractEvent,
@@ -5452,11 +5400,13 @@ async fn java_boat_shelf_click_rechecks_the_addressed_hand_after_interaction() -
     let stick = ItemStack::new(1, &Item::STICK);
     player.inventory().set_slot(0, boat.clone());
     player.inventory().set_slot(1, stick.clone());
-    server.plugin_manager.register::<PlayerInteractEvent, _>(
-        Arc::new(SelectOtherSlot(AtomicBool::new(true))),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(
+            Arc::new(SelectOtherSlot(AtomicBool::new(true))),
+            EventPriority::Normal,
+            None,
+        );
     let click = |sequence| {
         client.handle_use_item_on(
             &player,
@@ -5582,8 +5532,8 @@ async fn boat_placement_requires_the_survival_debit_after_the_spawn_observer() -
         obstruction: Option<Arc<ChunkData>>,
         called: AtomicBool,
     }
-    impl EventHandler<EntitySpawnEvent> for InvalidatePlacement {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for InvalidatePlacement {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntitySpawnEvent,
@@ -5625,11 +5575,13 @@ async fn boat_placement_requires_the_survival_debit_after_the_spawn_observer() -
             obstruction: obstructed.then_some(chunk),
             called: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<EntitySpawnEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntitySpawnEvent, _>(
+                listener.clone(),
+                EventPriority::Normal,
+                None,
+            );
         server
             .item_registry
             .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
@@ -5721,8 +5673,8 @@ async fn boat_placement_delivers_earned_remainder_after_stat_observer_moves_the_
         remaining_boats: u8,
         called: AtomicBool,
     }
-    impl EventHandler<PlayerStatisticIncrementEvent> for MoveDebitedStack {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerStatisticIncrementEvent> for MoveDebitedStack {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PlayerStatisticIncrementEvent,
@@ -5763,10 +5715,10 @@ async fn boat_placement_delivers_earned_remainder_after_stat_observer_moves_the_
         });
         server
             .plugin_manager
-            .register::<PlayerStatisticIncrementEvent, _>(
+            .register_blocking::<PlayerStatisticIncrementEvent, _>(
                 listener.clone(),
                 EventPriority::Normal,
-                true,
+                None,
             );
         server
             .item_registry
@@ -5824,8 +5776,8 @@ struct ReplaceDuringHandUpdate {
     called: AtomicBool,
 }
 
-impl EventHandler<PacketSentEvent> for ReplaceDuringHandUpdate {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PacketSentEvent> for ReplaceDuringHandUpdate {
+    fn handle<'a>(
         &'a self,
         _: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
@@ -5931,8 +5883,8 @@ async fn java_boat_hand_sync_filters_stale_physical_aliases() -> TestResult {
     use pumpkin_util::Hand;
 
     struct OpenPlacedChestBoat(AtomicBool);
-    impl EventHandler<PlayerStatisticIncrementEvent> for OpenPlacedChestBoat {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerStatisticIncrementEvent> for OpenPlacedChestBoat {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerStatisticIncrementEvent,
@@ -5966,16 +5918,18 @@ async fn java_boat_hand_sync_filters_stale_physical_aliases() -> TestResult {
     let open = Arc::new(OpenPlacedChestBoat(AtomicBool::new(false)));
     server
         .plugin_manager
-        .register::<PlayerStatisticIncrementEvent, _>(open.clone(), EventPriority::Normal, true);
+        .register_blocking::<PlayerStatisticIncrementEvent, _>(
+            open.clone(),
+            EventPriority::Normal,
+            None,
+        );
     let observer = Arc::new(ReplaceDuringHandUpdate {
         player: player.clone(),
         called: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     let old = ItemStack::new(1, &Item::OAK_CHEST_BOAT);
     player.inventory().set_held_item(old.clone());
@@ -6070,8 +6024,8 @@ async fn boat_placement_rechecks_ray_reach_after_a_same_world_move() -> TestResu
         player: Arc<crate::entity::player::Player>,
         enabled: AtomicBool,
     }
-    impl EventHandler<EntitySpawnEvent> for MoveDuringSpawn {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for MoveDuringSpawn {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             _: &'a mut EntitySpawnEvent,
@@ -6101,11 +6055,9 @@ async fn boat_placement_rechecks_ray_reach_after_a_same_world_move() -> TestResu
         player: player.clone(),
         enabled: AtomicBool::new(true),
     });
-    server.plugin_manager.register::<EntitySpawnEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntitySpawnEvent, _>(observer.clone(), EventPriority::Normal, None);
     assert!(!boat.place_from_hand(&stack, &player, 0.0, 45.0, Hand::Right));
     assert_eq!(player.inventory().held_item().uid, stack.uid);
     assert_eq!(
@@ -6160,8 +6112,8 @@ async fn check_boat_spawn_revalidation(obstructs_eye: bool) -> TestResult {
         change: SpawnChange,
         ran: AtomicBool,
     }
-    impl EventHandler<EntitySpawnEvent> for ChangeBoatTarget {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for ChangeBoatTarget {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut EntitySpawnEvent,
@@ -6208,11 +6160,9 @@ async fn check_boat_spawn_revalidation(obstructs_eye: bool) -> TestResult {
         change,
         ran: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<EntitySpawnEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntitySpawnEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     let boat = server
         .item_registry
@@ -6247,8 +6197,8 @@ async fn java_boat_air_swing_stays_in_the_placement_world() -> TestResult {
     use pumpkin_protocol::java::server::play::SUseItem;
 
     struct DepartAfterPlacement(Arc<World>);
-    impl EventHandler<PlayerStatisticIncrementEvent> for DepartAfterPlacement {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerStatisticIncrementEvent> for DepartAfterPlacement {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerStatisticIncrementEvent,
@@ -6272,10 +6222,10 @@ async fn java_boat_air_swing_stays_in_the_placement_world() -> TestResult {
     placer.last_attacked_ticks.store(20, Ordering::Relaxed);
     server
         .plugin_manager
-        .register::<PlayerStatisticIncrementEvent, _>(
+        .register_blocking::<PlayerStatisticIncrementEvent, _>(
             Arc::new(DepartAfterPlacement(destination.clone())),
             EventPriority::Normal,
-            true,
+            None,
         );
     placer.client.java().ok_or("Java placer")?.handle_use_item(
         &placer,
@@ -6307,8 +6257,8 @@ async fn boat_air_use_cannot_place_in_a_world_selected_by_the_interact_callback(
     use pumpkin_protocol::java::server::play::SUseItem;
 
     struct MoveBoatPlacer(Arc<World>);
-    impl EventHandler<PlayerInteractEvent> for MoveBoatPlacer {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerInteractEvent> for MoveBoatPlacer {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerInteractEvent,
@@ -6332,10 +6282,10 @@ async fn boat_air_use_cannot_place_in_a_world_selected_by_the_interact_callback(
     );
     origin_server
         .plugin_manager
-        .register::<PlayerInteractEvent, _>(
+        .register_blocking::<PlayerInteractEvent, _>(
             Arc::new(MoveBoatPlacer(destination.clone())),
             EventPriority::Normal,
-            true,
+            None,
         );
     let (java, _peer) = java_rider(&origin_server, &origin, "Notch")?;
     let (bedrock, _packets) = bedrock_rider(&origin_server, &origin, "jeb_").await?;
@@ -6403,8 +6353,8 @@ async fn vehicle_spectator_block_use_observes_the_veto_and_current_mode() -> Tes
         veto: AtomicBool,
         pot: BlockPos,
     }
-    impl EventHandler<PlayerInteractEvent> for SpectatorClick {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerInteractEvent> for SpectatorClick {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PlayerInteractEvent,
@@ -6444,11 +6394,9 @@ async fn vehicle_spectator_block_use_observes_the_veto_and_current_mode() -> Tes
         veto: AtomicBool::new(true),
         pot: pot_pos,
     });
-    server.plugin_manager.register::<PlayerInteractEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(observer.clone(), EventPriority::Normal, None);
 
     java_client.handle_use_item_on(
         &java,
@@ -6524,8 +6472,8 @@ async fn bedrock_boat_offhand_firework_commits_before_spawn_observers() -> TestR
         saw_empty_source: AtomicBool,
         saw_cooldown: AtomicBool,
     }
-    impl EventHandler<PacketSentEvent> for MoveRocketSource {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for MoveRocketSource {
+        fn handle<'a>(
             &'a self,
             _: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -6582,11 +6530,9 @@ async fn bedrock_boat_offhand_firework_commits_before_spawn_observers() -> TestR
         saw_empty_source: AtomicBool::new(false),
         saw_cooldown: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
     let client = player.client.bedrock().ok_or("Bedrock rider")?;
     let click = || -> TestResult {
         let mut packet = bedrock_use_item_transaction(0, &rocket, 0);
