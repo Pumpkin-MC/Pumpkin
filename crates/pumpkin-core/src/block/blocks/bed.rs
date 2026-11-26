@@ -10,6 +10,7 @@ use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -266,15 +267,29 @@ impl BedBlock {
 
         // Make sure the bed is not occupied
         if bed_props.occupied {
-            // TODO: Wake up villager
-
-            player.send_system_message_raw(
-                &pumpkin_macros::translate_cross!(
-                    translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
-                    translation::bedrock::TILE_BED_OCCUPIED
-                ),
-                true,
-            );
+            // Mirror `AbstractBedBlock#kickVillagerOutOfBed()` by waking a sleeping
+            // villager from an occupied bed.
+            //
+            // PARITY BUG: wakes the first villager within the registry order inside
+            // the bounding box; even if that village is sleep in the adjecent bed.
+            let bed_box = BoundingBox::from_block(&bed_head_pos);
+            let entities =
+                world.get_entities_of_type_at_box(&bed_box, |e| e == &EntityType::VILLAGER);
+            let villager = entities
+                .iter()
+                .filter_map(|e| e.cast_any().downcast_ref::<VillagerEntity>())
+                .find(|v| v.is_sleeping());
+            if let Some(villager) = villager {
+                villager.wake_up();
+            } else {
+                player.send_system_message_raw(
+                    &pumpkin_macros::translate_cross!(
+                        translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
+                        translation::bedrock::TILE_BED_OCCUPIED
+                    ),
+                    true,
+                );
+            }
             return BlockActionResult::SuccessServer;
         }
 
