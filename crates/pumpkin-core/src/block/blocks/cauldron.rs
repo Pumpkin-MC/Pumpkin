@@ -59,7 +59,7 @@ fn fire_cauldron_change(
     let mut event =
         CauldronLevelChangeEvent::new(pos, world.clone(), old_level, new_level, reason, entity);
     if let Some(server) = world.server.upgrade() {
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
     }
     !event.cancelled
 }

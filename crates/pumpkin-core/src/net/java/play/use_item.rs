@@ -32,9 +32,7 @@ impl JavaClient {
                 player.clone(),
                 item_in_hand.item.registry_key.to_string(),
             );
-        server
-            .plugin_manager
-            .fire_blocking(server, &mut consume_event);
+        consume_event = server.plugin_manager.fire_blocking(server, consume_event);
         if consume_event.cancelled {
             return;
         }
@@ -179,7 +177,7 @@ impl JavaClient {
             hand,
             0,
         );
-        server.plugin_manager.fire_blocking(server, &mut fish_event);
+        fish_event = server.plugin_manager.fire_blocking(server, fish_event);
         !fish_event.cancelled
     }
 }
