@@ -46,6 +46,7 @@ impl IntoItemKey for &String {
 }
 
 /// Extension trait providing typed helper constructors and utilities on `ItemStack`.
+#[allow(async_fn_in_trait)]
 pub trait ItemStackExt {
     /// Creates a new `ItemStack` from any valid item key (e.g. `Item::Diamond`, `"minecraft:diamond"`, or `"custom:item"`).
     #[must_use]
@@ -54,15 +55,15 @@ pub trait ItemStackExt {
     /// Returns the typed `Item` enum if this item stack corresponds to a known vanilla item,
     /// or `None` if it is a custom, modded, or newer unknown item.
     #[must_use]
-    fn get_item(&self) -> Option<Item>;
+    async fn get_item(&self) -> Option<Item>;
 
     /// Returns whether this item matches the specified typed `Item` enum.
     #[must_use]
-    fn is_item(&self, item: Item) -> bool;
+    async fn is_item(&self, item: Item) -> bool;
 
     /// Checks if this item stack matches a given item (either `Item` enum or string identifier).
     #[must_use]
-    fn matches_item(&self, item: impl IntoItemKey) -> bool;
+    async fn matches_item(&self, item: impl IntoItemKey) -> bool;
 }
 
 impl ItemStackExt for ItemStack {
@@ -70,17 +71,17 @@ impl ItemStackExt for ItemStack {
         Self::new(&item.into_item_key(), count)
     }
 
-    fn get_item(&self) -> Option<Item> {
-        Item::from_registry_key(&self.get_registry_key())
+    async fn get_item(&self) -> Option<Item> {
+        Item::from_registry_key(&self.get_registry_key().await)
     }
 
-    fn is_item(&self, item: Item) -> bool {
-        self.get_item() == Some(item)
+    async fn is_item(&self, item: Item) -> bool {
+        self.get_item().await == Some(item)
     }
 
-    fn matches_item(&self, item: impl IntoItemKey) -> bool {
+    async fn matches_item(&self, item: impl IntoItemKey) -> bool {
         let expected = item.into_item_key();
-        let actual = self.get_registry_key();
+        let actual = self.get_registry_key().await;
         let expected_clean = expected.strip_prefix("minecraft:").unwrap_or(&expected);
         let actual_clean = actual.strip_prefix("minecraft:").unwrap_or(&actual);
         expected_clean == actual_clean

@@ -4,7 +4,6 @@ use pumpkin_util::resource_location::ResourceLocation;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the server to retrieve a previously stored cookie from the client.
 ///
@@ -27,7 +26,6 @@ impl ClientPacket for CLoginCookieRequest<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(self.key)?;
         Ok(())

@@ -6,7 +6,7 @@ use crate::{
     codec::{var_int::VarInt, var_long::VarLong},
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
-use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+use pumpkin_util::math::position::BlockPos;
 
 #[java_packet(SET_STRUCTURE_BLOCK)]
 pub struct SSetStructureBlock<'a> {
@@ -66,8 +66,8 @@ impl SSetStructureBlock<'_> {
 }
 
 impl<'a> ServerPacket<'a> for SSetStructureBlock<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let location = bytebuf.get_block_pos(version)?;
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let location = bytebuf.get_block_pos()?;
         let action = bytebuf.get_var_int()?;
         let mode = bytebuf.get_var_int()?;
         let name = bytebuf.get_str_borrowed()?;
@@ -114,10 +114,9 @@ impl crate::ClientPacket for SSetStructureBlock<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.location, version)?;
+        write.write_block_pos(&self.location)?;
         write.write_var_int(&self.action)?;
         write.write_var_int(&self.mode)?;
         write.write_string(self.name)?;
@@ -141,7 +140,7 @@ impl crate::ClientPacket for SSetStructureBlock<'_> {
 mod tests {
     use super::SSetStructureBlock;
     use crate::{ClientPacket, ServerPacket, codec::var_int::VarInt, codec::var_long::VarLong};
-    use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+    use pumpkin_util::math::position::BlockPos;
 
     #[test]
     fn set_structure_block_clamps_bounds_and_decodes_strict_flag() {
@@ -165,11 +164,10 @@ mod tests {
         };
 
         let mut buf = Vec::new();
-        raw.write_packet_data(&mut buf, &JavaMinecraftVersion::V_26_3)
-            .unwrap();
+        raw.write_packet_data(&mut buf).unwrap();
 
         let mut slice = buf.as_slice();
-        let decoded = SSetStructureBlock::read(&mut slice, &JavaMinecraftVersion::V_26_3).unwrap();
+        let decoded = SSetStructureBlock::read(&mut slice).unwrap();
         assert!(slice.is_empty());
         assert_eq!(decoded.location, BlockPos::new(10, 64, -5));
         assert_eq!(decoded.offset_x, -48);

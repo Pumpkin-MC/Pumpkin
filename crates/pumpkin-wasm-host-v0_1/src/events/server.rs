@@ -19,6 +19,7 @@ use pumpkin_core::plugin::server::{
     server_tick_end::ServerTickEndEvent,
     server_tick_start::ServerTickStartEvent,
 };
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::ConnectionState;
 use pumpkin_wasm_host_common::state::PluginHostState;
 
@@ -29,15 +30,18 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             .expect("failed to add player resource");
 
         let packet = match self.player.client.as_ref() {
-            // Typed view is 26.3
-            // for older clients only valid after the multiversion plugin ran.
-            ClientPlatform::Java(_) => generated_packets::deserialize_java_serverbound_packet(
-                ConnectionState::Play,
-                self.packet_id,
-                &self.payload,
-                pumpkin_data::packet::CURRENT_MC_VERSION,
-            )
-            .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java),
+            ClientPlatform::Java(client) => {
+                if client.version.load() == CURRENT_MC_VERSION {
+                    generated_packets::deserialize_java_serverbound_packet(
+                        ConnectionState::Play,
+                        self.packet_id,
+                        &self.payload,
+                    )
+                    .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java)
+                } else {
+                    ServerboundPacket::Unknown
+                }
+            }
             ClientPlatform::Bedrock(_) => {
                 generated_packets::deserialize_bedrock_serverbound_packet(
                     self.packet_id,
@@ -295,7 +299,7 @@ impl ToFromWasmEvent for MapInitializeEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_protocol::packet::MultiVersionJavaPacket;
+    use pumpkin_protocol::packet::JavaPacket;
     use pumpkin_util::text::TextComponent;
     use wasmtime::component::Resource;
 
@@ -354,14 +358,12 @@ mod tests {
 
     #[test]
     fn play_packet_is_not_decoded_as_config_packet_with_the_same_id() {
-        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-        let id = pumpkin_protocol::java::server::play::SConfirmTeleport::to_id(version);
+        let id = pumpkin_protocol::java::server::play::SConfirmTeleport::PACKET_ID;
 
         let packet = generated_packets::deserialize_java_serverbound_packet(
             ConnectionState::Play,
             id,
             &ACCEPT_TELEPORTATION_26_3,
-            version,
         );
 
         assert!(packet.is_none());
@@ -369,15 +371,13 @@ mod tests {
 
     #[test]
     fn out_of_range_field_leaves_packet_undecoded() {
-        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-        let id = pumpkin_protocol::java::server::play::SClientInformationPlay::to_id(version);
+        let id = pumpkin_protocol::java::server::play::SClientInformationPlay::PACKET_ID;
         let view_distance_minus_one = [5, b'e', b'n', b'_', b'u', b's', 0xFF, 0, 1, 0x7F, 1, 0, 1];
 
         let packet = generated_packets::deserialize_java_serverbound_packet(
             ConnectionState::Play,
             id,
             &view_distance_minus_one,
-            version,
         );
 
         assert!(packet.is_none());

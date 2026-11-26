@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fs};
 
 use crate::version::JavaMinecraftVersion;
 
-/// The newest protocol version used as the fallback for unknown versions in `PacketId::to_id`.
+/// The protocol version `packets.json` wants to describe.
 const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 /// Represents the protocol_id object within the JSON.
@@ -23,11 +23,11 @@ pub struct PhaseData {
     pub clientbound: BTreeMap<String, PacketInfo>,
 }
 
-/// Raw deserialization shape for a single versioned packet mapping file.
+/// Raw deserialization shape for the packet mapping file.
 #[derive(Deserialize)]
 pub struct Packets(pub BTreeMap<String, PhaseData>);
 
-/// Compact dump used by `assets/packets.json` / `26_3_packets.json`.
+/// Compact dump used by `assets/packets.json`.
 #[derive(Deserialize)]
 struct CompactPackets {
     #[serde(default)]
@@ -52,7 +52,7 @@ fn canonicalize_packet_name(name: String) -> String {
     }
 }
 
-fn parse_packets(path: &str, content: &str) -> Packets {
+pub(crate) fn parse_packets(path: &str, content: &str) -> Packets {
     if let Ok(parsed) = serde_json::from_str::<Packets>(content) {
         return parsed;
     }
@@ -94,30 +94,19 @@ fn parse_packets(path: &str, content: &str) -> Packets {
 /// Generates the `TokenStream` for the `PacketId` struct, `CURRENT_MC_VERSION`, and
 /// all `serverbound`/`clientbound` packet ID constants.
 pub(crate) fn build() -> TokenStream {
-    let assets = [(JavaMinecraftVersion::V_26_3, "26_3_packets.json")];
+    let path = "../../assets/packets.json";
+    let content = fs::read_to_string(path)
+        .unwrap_or_else(|_| panic!("Failed to read packet JSON file: {path}"));
+    let packets = parse_packets(path, &content);
 
-    // Parse available packet files into a BTreeMap keyed by JavaMinecraftVersion
-    let mut versions = BTreeMap::new();
-    for (ver, file) in assets {
-        let path = "../../assets/packets.json".to_string();
-
-        let content = fs::read_to_string(&path)
-            .unwrap_or_else(|_| panic!("Failed to read packet JSON file: {path}"));
-        let parsed = parse_packets(&path, &content);
-
-        versions.insert(ver, parsed);
-    }
-
-    // Generate PacketId struct definition and impl blocks dynamically based on versions
-    let packet_id_struct = generate_struct(&versions);
-    let serverbound_modules = generate_phase_modules(&versions, true);
-    let clientbound_modules = generate_phase_modules(&versions, false);
+    let packet_id_struct = generate_struct();
+    let serverbound_modules = generate_phase_modules(&packets, true);
+    let clientbound_modules = generate_phase_modules(&packets, false);
 
     quote!(
         use pumpkin_util::version::JavaMinecraftVersion;
 
         pub const CURRENT_MC_VERSION: JavaMinecraftVersion = #LATEST_VERSION;
-        pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = #LATEST_VERSION;
 
         #packet_id_struct
 
@@ -133,15 +122,14 @@ pub(crate) fn build() -> TokenStream {
 }
 
 /// Generate the `PacketId` struct and impls.
-fn generate_struct<T>(_versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStream {
+fn generate_struct() -> TokenStream {
     quote! {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub struct PacketId(pub i32);
 
         impl PacketId {
-            /// Converts the requested protocol version into the corresponding packet ID.
             #[must_use]
-            pub const fn to_id(&self, _version: JavaMinecraftVersion) -> i32 {
+            pub const fn to_id(&self) -> i32 {
                 self.0
             }
         }
@@ -173,40 +161,76 @@ fn generate_struct<T>(_versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStr
 }
 
 /// Generates modular phase submodules and `PacketId` constants for each phase.
-fn generate_phase_modules(
-    versions: &BTreeMap<JavaMinecraftVersion, Packets>,
-    is_serverbound: bool,
-) -> TokenStream {
-    // phase -> const_name -> (ver -> id)
-    let mut phase_packets =
-        BTreeMap::<String, BTreeMap<String, BTreeMap<&JavaMinecraftVersion, i32>>>::new();
+fn generate_phase_modules(Packets(phases): &Packets, is_serverbound: bool) -> TokenStream {
+    // phase -> const_name -> id
+    let mut phase_packets = BTreeMap::<String, BTreeMap<String, i32>>::new();
 
-    for (ver, Packets(phases)) in versions {
-        for (phase, phase_data) in phases {
-            let packets = if is_serverbound {
-                &phase_data.serverbound
-            } else {
-                &phase_data.clientbound
-            };
-            let phase_module = if phase == "configuration" {
-                "config"
-            } else {
-                phase.as_str()
-            };
-            for (full_name, info) in packets {
-                let name = full_name.strip_prefix("minecraft:").unwrap_or(full_name);
-                let sanitized_name = name.replace(['/', '-'], "_").to_uppercase();
-                phase_packets
-                    .entry(phase_module.to_string())
-                    .or_default()
-                    .entry(sanitized_name)
-                    .or_default()
-                    .insert(ver, info.protocol_id);
-            }
+    for (phase, phase_data) in phases {
+        let packets = if is_serverbound {
+            &phase_data.serverbound
+        } else {
+            &phase_data.clientbound
+        };
+        let phase_module = if phase == "configuration" {
+            "config"
+        } else {
+            phase.as_str()
+        };
+        for (full_name, info) in packets {
+            let name = full_name.strip_prefix("minecraft:").unwrap_or(full_name);
+            let sanitized_name = name.replace(['/', '-'], "_").to_uppercase();
+            phase_packets
+                .entry(phase_module.to_string())
+                .or_default()
+                .insert(sanitized_name, info.protocol_id);
         }
     }
 
-    // Define aliases per phase for backwards compatibility and PacketEvents parity
+    let aliases = aliases(is_serverbound);
+    let mut output = TokenStream::new();
+    let expected_phases = vec!["handshake", "status", "login", "config", "play"];
+
+    for phase_name in expected_phases {
+        let phase_ident = format_ident!("{}", phase_name);
+        let mut consts_ts = TokenStream::new();
+        let empty_map = BTreeMap::new();
+        let packets_in_phase = phase_packets.get(phase_name).unwrap_or(&empty_map);
+
+        for (name, id) in packets_in_phase {
+            let const_name = format_ident!("{}", name);
+            consts_ts.extend(quote! {
+                pub const #const_name: super::super::PacketId = super::super::PacketId(#id);
+            });
+        }
+
+        // Add aliases for this phase
+        if let Some(alias_list) = aliases.get(phase_name) {
+            for (alias, target) in alias_list {
+                let alias_ident = format_ident!("{}", alias);
+                let target_ident = format_ident!("{}", target);
+                if packets_in_phase.contains_key(*target) && !packets_in_phase.contains_key(*alias)
+                {
+                    consts_ts.extend(quote! {
+                        pub const #alias_ident: super::super::PacketId = #target_ident;
+                    });
+                }
+            }
+        }
+
+        output.extend(quote! {
+            pub mod #phase_ident {
+                #consts_ts
+            }
+        });
+    }
+
+    output
+}
+
+/// Older and PacketEvents names per phase, as `(alias, packet)`.
+pub(crate) fn aliases(
+    is_serverbound: bool,
+) -> BTreeMap<&'static str, Vec<(&'static str, &'static str)>> {
     let mut aliases: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
     if is_serverbound {
         aliases.insert(
@@ -349,44 +373,5 @@ fn generate_phase_modules(
             ],
         );
     }
-
-    let mut output = TokenStream::new();
-    let expected_phases = vec!["handshake", "status", "login", "config", "play"];
-
-    for phase_name in expected_phases {
-        let phase_ident = format_ident!("{}", phase_name);
-        let mut consts_ts = TokenStream::new();
-        let empty_map = BTreeMap::new();
-        let packets_in_phase = phase_packets.get(phase_name).unwrap_or(&empty_map);
-
-        for (name, values) in packets_in_phase {
-            let id = values.get(&LATEST_VERSION).copied().unwrap_or(-1);
-            let const_name = format_ident!("{}", name);
-            consts_ts.extend(quote! {
-                pub const #const_name: super::super::PacketId = super::super::PacketId(#id);
-            });
-        }
-
-        // Add aliases for this phase
-        if let Some(alias_list) = aliases.get(phase_name) {
-            for (alias, target) in alias_list {
-                let alias_ident = format_ident!("{}", alias);
-                let target_ident = format_ident!("{}", target);
-                if packets_in_phase.contains_key(*target) && !packets_in_phase.contains_key(*alias)
-                {
-                    consts_ts.extend(quote! {
-                        pub const #alias_ident: super::super::PacketId = #target_ident;
-                    });
-                }
-            }
-        }
-
-        output.extend(quote! {
-            pub mod #phase_ident {
-                #consts_ts
-            }
-        });
-    }
-
-    output
+    aliases
 }

@@ -6,7 +6,6 @@ use std::sync::{
 use super::BlockEntity;
 use crate::entity::player::Player;
 use crate::world::World;
-use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
@@ -61,7 +60,7 @@ impl Default for SignText {
 }
 
 fn component_to_json(component: &TextComponent) -> Box<str> {
-    Box::from(component.to_json_for_version(&CURRENT_MC_VERSION))
+    Box::from(component.to_json())
 }
 
 /// Converts a stored NBT message to JSON.
@@ -88,7 +87,7 @@ fn nbt_message_to_json(tag: &NbtTag, allow_op_features: bool) -> Box<str> {
 fn json_message_to_nbt(message: &str) -> NbtTag {
     serde_json::from_str::<TextComponent>(message).map_or_else(
         |_| NbtTag::String(Box::from(message)),
-        |component| NbtTag::Compound(component.to_nbt_compound_for_version(&CURRENT_MC_VERSION)),
+        |component| NbtTag::Compound(component.to_nbt_compound()),
     )
 }
 

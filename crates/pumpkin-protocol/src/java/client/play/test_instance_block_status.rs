@@ -4,7 +4,7 @@ use crate::{
 };
 use pumpkin_data::packet::clientbound::play::TEST_INSTANCE_BLOCK_STATUS;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::text::TextComponent;
 
 #[java_packet(TEST_INSTANCE_BLOCK_STATUS)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -21,12 +21,8 @@ impl CTestInstanceBlockStatus {
 }
 
 impl ClientPacket for CTestInstanceBlockStatus {
-    fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        write.write_component(&self.status, version)?;
+    fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
+        write.write_component(&self.status)?;
         write.write_option(&self.size, |w, s| {
             w.write_var_int(&s[0])?;
             w.write_var_int(&s[1])?;
@@ -37,9 +33,9 @@ impl ClientPacket for CTestInstanceBlockStatus {
 }
 
 impl ServerPacket<'_> for CTestInstanceBlockStatus {
-    fn read(bytebuf: &mut &[u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &[u8]) -> Result<Self, ReadingError> {
         Ok(Self {
-            status: bytebuf.get_component_borrowed(version)?,
+            status: bytebuf.get_component_borrowed()?,
             size: bytebuf
                 .get_option(|b| Ok([b.get_var_int()?, b.get_var_int()?, b.get_var_int()?]))?,
         })
@@ -57,13 +53,10 @@ mod tests {
             Some([VarInt(5), VarInt(6), VarInt(7)]),
         );
         let mut buf = Vec::new();
-        packet
-            .write_packet_data(&mut buf, &JavaMinecraftVersion::V_26_3)
-            .unwrap();
+        packet.write_packet_data(&mut buf).unwrap();
 
         let mut slice = buf.as_slice();
-        let decoded =
-            CTestInstanceBlockStatus::read(&mut slice, &JavaMinecraftVersion::V_26_3).unwrap();
+        let decoded = CTestInstanceBlockStatus::read(&mut slice).unwrap();
         assert!(slice.is_empty());
         assert_eq!(decoded, packet);
     }

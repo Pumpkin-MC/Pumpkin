@@ -11,6 +11,12 @@ pub use lifecycle::{DriverError, DriverJoin, DriverState};
 pub use policy::{LegacySyncReentry, StorePolicy};
 pub use spawn::{RuntimeSpawner, SpawnError, SpawnFuture};
 
+/// Whether the caller runs inside a plugin call's synchronous chain.
+#[must_use]
+pub fn in_plugin_call() -> bool {
+    chain::ReentryContext::current().is_some()
+}
+
 #[cfg(test)]
 pub(crate) use chain::MAX_SYNC_REENTRY_DEPTH;
 
@@ -865,6 +871,85 @@ mod tests {
             .expect("shut down test store");
     }
 
+    /// A synchronous host import that fires a blocking event into another
+    /// plugin must join the active chain, not wait for a new root admission.
+    async fn sync_host_import_into_another_store_joins_the_chain() {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_async(true);
+        config.concurrency_support(true);
+        let engine = Engine::new(&config).expect("test engine");
+        let component = Component::new(&engine, sync_reentry_component()).expect("test component");
+
+        let policy = LegacySyncReentry::new();
+        let other = legacy_store(
+            test_store(StoreMode::Concurrent),
+            &policy,
+            StoreMode::Concurrent,
+        )
+        .await;
+        let other_calls = Arc::new(AtomicUsize::new(0));
+
+        let mut linker = Linker::<TestHostState>::new(&engine);
+        let other_for_host = other.clone();
+        let calls_for_host = Arc::clone(&other_calls);
+        linker
+            .root()
+            .func_wrap("host", move |_store, ()| {
+                let other = other_for_host.clone();
+                let calls = Arc::clone(&calls_for_host);
+                let runtime = tokio::runtime::Handle::current();
+                // Bounded so a regression fails instead of hanging the runtime.
+                tokio::task::block_in_place(|| {
+                    runtime.block_on(timeout(
+                        Duration::from_secs(1),
+                        other.call_guest(move |_| {
+                            Box::pin(async move {
+                                calls.fetch_add(1, Ordering::SeqCst);
+                                Ok(())
+                            })
+                        }),
+                    ))
+                })
+                .map_err(|_| wasmtime::Error::msg("waited for a new root admission"))?
+            })
+            .expect("link host function");
+
+        let mut store = Store::new(&engine, TestHostState);
+        let instance = linker
+            .instantiate_async(&mut store, &component)
+            .await
+            .expect("instantiate test component");
+        let run = instance
+            .get_typed_func::<(), ()>(&mut store, "run")
+            .expect("run export");
+        let driver = legacy_store(store, &policy, StoreMode::Concurrent).await;
+
+        timeout(
+            Duration::from_secs(2),
+            driver.call_guest(move |mut context| {
+                Box::pin(async move { context.call(run, ()).await })
+            }),
+        )
+        .await
+        .expect("sync host import into another store deadlocked")
+        .expect("sync host import into another store failed");
+        assert_eq!(other_calls.load(Ordering::SeqCst), 1);
+
+        // Outside any guest call the next root still takes the admission normally.
+        other
+            .call_guest(|_| Box::pin(async move { Ok(()) }))
+            .await
+            .expect("root call after the chain ended");
+
+        for store in [driver, other] {
+            store
+                .shutdown(|_| Box::pin(async move { Ok(()) }))
+                .await
+                .expect("shut down test store");
+        }
+    }
+
     async fn unrelated_guest_call_waits_for_the_active_chain() {
         let engine = test_engine(StoreMode::Sequential);
         let component = Component::new(&engine, sync_reentry_component()).expect("test component");
@@ -1303,6 +1388,7 @@ mod tests {
         timeout(Duration::from_secs(10), async {
             sync_lifted_same_instance_reentry_completes().await;
             blocking_host_operation_propagates_the_reentry_chain().await;
+            sync_host_import_into_another_store_joins_the_chain().await;
             unrelated_guest_call_waits_for_the_active_chain().await;
             opposing_plugin_roots_scenario().await;
         })

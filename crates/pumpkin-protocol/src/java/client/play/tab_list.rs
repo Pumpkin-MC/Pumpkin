@@ -4,7 +4,6 @@ use pumpkin_util::text::TextComponent;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the header and footer of the player list (Tab List).
 #[java_packet(TAB_LIST)]
@@ -26,10 +25,9 @@ impl ClientPacket for CTabList<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_component(self.header, version)?;
-        write.write_component(self.footer, version)?;
+        write.write_component(self.header)?;
+        write.write_component(self.footer)?;
         Ok(())
     }
 }

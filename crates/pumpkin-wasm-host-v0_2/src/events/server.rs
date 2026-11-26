@@ -42,7 +42,6 @@ impl ToFromWasmEvent for PacketReceivedEvent {
                 ProtoConnectionState::Play,
                 self.packet_id,
                 &self.payload,
-                pumpkin_data::packet::CURRENT_MC_VERSION,
             )
             .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java),
             ClientPlatform::Bedrock(_) => {
@@ -483,7 +482,7 @@ impl ToFromWasmEvent for MapInitializeEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_protocol::packet::MultiVersionJavaPacket;
+    use pumpkin_protocol::packet::JavaPacket;
     use pumpkin_util::text::TextComponent;
     use wasmtime::component::Resource;
 
@@ -542,14 +541,12 @@ mod tests {
 
     #[test]
     fn play_packet_is_not_decoded_as_config_packet_with_the_same_id() {
-        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
-        let id = pumpkin_protocol::java::server::play::SConfirmTeleport::to_id(version);
+        let id = pumpkin_protocol::java::server::play::SConfirmTeleport::PACKET_ID;
 
         let packet = generated_packets::deserialize_java_serverbound_packet(
             ProtoConnectionState::Play,
             id,
             &ACCEPT_TELEPORTATION_26_3,
-            version,
         );
 
         assert!(packet.is_none());

@@ -1,7 +1,5 @@
 use pumpkin_data::dimension::Dimension;
-use pumpkin_util::{
-    math::position::BlockPos, resource_location::ResourceLocation, version::JavaMinecraftVersion,
-};
+use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
 
 use crate::{
     codec::var_int::VarInt,
@@ -14,9 +12,8 @@ pub(super) fn write_game_modes(
     mut write: impl std::io::Write,
     game_mode: u8,
     previous_gamemode: i8,
-    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    if version >= JavaMinecraftVersion::V_26_3 {
+    {
         write.write_var_int(&VarInt(i32::from(game_mode)))?;
         let previous = if previous_gamemode < 0 {
             0
@@ -24,18 +21,12 @@ pub(super) fn write_game_modes(
             i32::from(previous_gamemode) + 1
         };
         write.write_var_int(&VarInt(previous))
-    } else {
-        write.write_u8(game_mode)?;
-        write.write_i8(previous_gamemode)
     }
 }
 
 /// Reads the current and previous game mode written by [`write_game_modes`].
-pub(super) fn read_game_modes(
-    read: &mut &[u8],
-    version: JavaMinecraftVersion,
-) -> Result<(u8, i8), ReadingError> {
-    if version >= JavaMinecraftVersion::V_26_3 {
+pub(super) fn read_game_modes(read: &mut &[u8]) -> Result<(u8, i8), ReadingError> {
+    {
         let game_mode = read.get_var_int()?.0 as u8;
         let previous = read.get_var_int()?.0;
         let previous_gamemode = if previous <= 0 {
@@ -44,8 +35,6 @@ pub(super) fn read_game_modes(
             (previous - 1) as i8
         };
         Ok((game_mode, previous_gamemode))
-    } else {
-        Ok((read.get_u8()?, read.get_i8()?))
     }
 }
 
@@ -97,43 +86,25 @@ impl PlayerSpawnData {
         }
     }
 
-    pub fn write_packet_data(
-        &self,
-        mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        if version >= &JavaMinecraftVersion::V_1_20_5 {
-            write.write_var_int(&VarInt(self.dimension.id as i32))?;
-        } else if version >= &JavaMinecraftVersion::V_1_16 {
-            write.write_string(self.dimension.minecraft_name)?;
-        } else if version >= &JavaMinecraftVersion::V_1_9 {
-            write.write_i32_be(self.dimension.id as i32)?;
-        } else {
-            write.write_i8(self.dimension.id as i8)?;
-        }
+    pub fn write_packet_data(&self, mut write: impl std::io::Write) -> Result<(), WritingError> {
+        write.write_var_int(&VarInt(self.dimension.id as i32))?;
         write.write_string(self.dimension.minecraft_name)?;
         write.write_i64_be(self.hashed_seed)?;
-        write_game_modes(&mut write, self.game_mode, self.previous_gamemode, *version)?;
+        write_game_modes(&mut write, self.game_mode, self.previous_gamemode)?;
         write.write_bool(self.debug)?;
         write.write_bool(self.is_flat)?;
-        if version >= &JavaMinecraftVersion::V_1_19 {
-            write.write_option(&self.death_dimension_name, |write, (dim, pos)| {
-                write.write_string(dim)?;
-                write.write_block_pos(pos, version)?;
-                Ok(())
-            })?;
-        }
-        if version >= &JavaMinecraftVersion::V_1_20 {
-            write.write_var_int(&self.portal_cooldown)?;
-        }
-        if version >= &JavaMinecraftVersion::V_1_21_2 {
-            write.write_var_int(&self.sealevel)?;
-        }
+        write.write_option(&self.death_dimension_name, |write, (dim, pos)| {
+            write.write_string(dim)?;
+            write.write_block_pos(pos)?;
+            Ok(())
+        })?;
+        write.write_var_int(&self.portal_cooldown)?;
+        write.write_var_int(&self.sealevel)?;
         Ok(())
     }
 
-    pub fn read(read: &mut &[u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let dimension = if version >= &JavaMinecraftVersion::V_1_20_5 {
+    pub fn read(read: &mut &[u8]) -> Result<Self, ReadingError> {
+        let dimension = {
             let id = read.get_var_int()?.0 as u8;
             match id {
                 1 => Dimension::OVERWORLD_CAVES,
@@ -141,56 +112,25 @@ impl PlayerSpawnData {
                 3 => Dimension::THE_NETHER,
                 _ => Dimension::OVERWORLD,
             }
-        } else if version >= &JavaMinecraftVersion::V_1_16 {
-            let dim_name = read.get_str()?;
-            Dimension::from_name(&dim_name)
-                .cloned()
-                .unwrap_or(Dimension::OVERWORLD)
-        } else if version >= &JavaMinecraftVersion::V_1_9 {
-            let legacy_id = read.get_i32_be()?;
-            match legacy_id {
-                -1 => Dimension::THE_NETHER,
-                1 => Dimension::THE_END,
-                _ => Dimension::OVERWORLD,
-            }
-        } else {
-            let legacy_id = read.get_i8()?;
-            match legacy_id {
-                -1 => Dimension::THE_NETHER,
-                1 => Dimension::THE_END,
-                _ => Dimension::OVERWORLD,
-            }
         };
 
         let _world_name = read.get_str()?;
         let hashed_seed = read.get_i64_be()?;
-        let (game_mode, previous_gamemode) = read_game_modes(read, *version)?;
+        let (game_mode, previous_gamemode) = read_game_modes(read)?;
         let debug = read.get_bool()?;
         let is_flat = read.get_bool()?;
 
-        let death_dimension_name = if version >= &JavaMinecraftVersion::V_1_19 {
-            if read.get_bool()? {
-                let dim = read.get_str()?.into();
-                let pos = read.get_block_pos(version)?;
-                Some((dim, pos))
-            } else {
-                None
-            }
+        let death_dimension_name = if read.get_bool()? {
+            let dim = read.get_str()?.into();
+            let pos = read.get_block_pos()?;
+            Some((dim, pos))
         } else {
             None
         };
 
-        let portal_cooldown = if version >= &JavaMinecraftVersion::V_1_20 {
-            read.get_var_int()?
-        } else {
-            VarInt(0)
-        };
+        let portal_cooldown = read.get_var_int()?;
 
-        let sealevel = if version >= &JavaMinecraftVersion::V_1_21_2 {
-            read.get_var_int()?
-        } else {
-            VarInt(63)
-        };
+        let sealevel = read.get_var_int()?;
 
         Ok(Self {
             dimension,

@@ -4,7 +4,6 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Opens the sign text input screen for the client.
 ///
@@ -34,43 +33,20 @@ impl ClientPacket for COpenSignEditor {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        if *version <= JavaMinecraftVersion::V_1_7_6 {
-            write.write_i32_be(self.location.0.x)?;
-            write.write_i32_be(self.location.0.y)?;
-            write.write_i32_be(self.location.0.z)?;
-        } else {
-            write.write_block_pos(&self.location, version)?;
-        }
+        write.write_block_pos(&self.location)?;
 
-        if *version >= JavaMinecraftVersion::V_1_20 {
-            write.write_bool(self.is_front_text)?;
-        }
+        write.write_bool(self.is_front_text)?;
         Ok(())
     }
 }
 
 impl<'a> crate::ServerPacket<'a> for COpenSignEditor {
-    fn read(
-        bytebuf: &mut &'a [u8],
-        version: &JavaMinecraftVersion,
-    ) -> Result<Self, crate::ser::ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, crate::ser::ReadingError> {
         use crate::ser::NetworkReadExt;
-        let location = if *version <= JavaMinecraftVersion::V_1_7_6 {
-            let x = bytebuf.get_i32_be()?;
-            let y = bytebuf.get_i32_be()?;
-            let z = bytebuf.get_i32_be()?;
-            BlockPos::new(x, y, z)
-        } else {
-            bytebuf.get_block_pos(version)?
-        };
+        let location = bytebuf.get_block_pos()?;
 
-        let is_front_text = if *version >= JavaMinecraftVersion::V_1_20 {
-            bytebuf.get_bool()?
-        } else {
-            true
-        };
+        let is_front_text = bytebuf.get_bool()?;
 
         Ok(Self {
             location,

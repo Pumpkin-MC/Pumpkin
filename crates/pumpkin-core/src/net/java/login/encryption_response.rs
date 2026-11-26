@@ -13,6 +13,14 @@ impl PendingConnection {
             return Err(EncryptionError::NoPendingVerifyToken);
         };
 
+        // 1.19 - 1.19.2 sign the nonce instead of sending a verify token.
+        if token.is_empty()
+            && (JavaMinecraftVersion::V_1_19..JavaMinecraftVersion::V_1_19_3)
+                .contains(&self.version.load())
+        {
+            return Ok(());
+        }
+
         let decrypted = server.decrypt(token).await?;
         if decrypted.as_slice() == expected.as_slice() {
             Ok(())
@@ -123,9 +131,6 @@ impl PendingConnection {
 
     /// Tells the client to enable compression and applies it to the connection.
     pub(super) async fn enable_compression(&mut self, server: &Server) {
-        if self.version.load() < JavaMinecraftVersion::V_1_8 {
-            return;
-        }
         let compression = server
             .advanced_config
             .networking
@@ -133,11 +138,14 @@ impl PendingConnection {
             .compression
             .info
             .clone();
-        self.send_packet_now(&CSetCompression::new(
-            pumpkin_protocol::codec::var_int::VarInt(compression.threshold as i32),
-        ))
-        .await;
-        self.set_compression(&compression);
+        if self
+            .send_packet_now(&CSetCompression::new(
+                pumpkin_protocol::codec::var_int::VarInt(compression.threshold as i32),
+            ))
+            .await
+        {
+            self.set_compression(&compression);
+        }
     }
 
     /// Fires the pre login event and sends the login success packet.

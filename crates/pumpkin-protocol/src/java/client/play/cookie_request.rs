@@ -3,7 +3,6 @@ use crate::ser::NetworkWriteExt;
 use pumpkin_data::packet::clientbound::play::COOKIE_REQUEST;
 use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the server to request a "cookie" (stored data) from the client.
 ///
@@ -27,7 +26,6 @@ impl ClientPacket for CPlayCookieRequest<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(self.key)?;
         Ok(())

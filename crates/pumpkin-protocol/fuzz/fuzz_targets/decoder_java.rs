@@ -38,11 +38,8 @@ use pumpkin_protocol::java::{
         status::{SStatusPingRequest, SStatusRequest},
     },
 };
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Cursor;
 use tokio::runtime::Runtime;
-
-const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
 
 // ---------------------------------------------------------------------------
 // Helper: run every known ServerPacket::read against the same payload.
@@ -53,7 +50,7 @@ fn fuzz_all_deserializers(payload: &[u8]) {
         ($($packet:ty),* $(,)?) => {
             $(
                 let mut slice = payload;
-                let _ = <$packet>::read(&mut slice, &TARGET_VERSION);
+                let _ = <$packet>::read(&mut slice);
             )*
         };
     }

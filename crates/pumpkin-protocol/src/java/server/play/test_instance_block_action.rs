@@ -2,7 +2,6 @@ use pumpkin_data::packet::serverbound::play::TEST_INSTANCE_BLOCK_ACTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 use crate::{
@@ -20,11 +19,11 @@ pub struct STestInstanceBlockAction<'a> {
 }
 
 impl<'a> ServerPacket<'a> for STestInstanceBlockAction<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
-            pos: bytebuf.get_block_pos(version)?,
+            pos: bytebuf.get_block_pos()?,
             action: TestInstanceBlockAction::read(bytebuf)?,
-            data: TestInstanceBlockData::read(bytebuf, *version)?,
+            data: TestInstanceBlockData::read(bytebuf)?,
         })
     }
 }
@@ -33,12 +32,11 @@ impl crate::ClientPacket for STestInstanceBlockAction<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        write.write_block_pos(&self.pos, version)?;
+        write.write_block_pos(&self.pos)?;
         self.action.write(&mut write)?;
-        self.data.write(&mut write, *version)?;
+        self.data.write(&mut write)?;
         Ok(())
     }
 }
@@ -125,7 +123,7 @@ pub struct TestInstanceBlockData<'a> {
 }
 
 impl<'a> TestInstanceBlockData<'a> {
-    fn read(bytebuf: &mut &'a [u8], version: JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         let test = bytebuf.get_option(|b| b.get_str_bounded_borrowed(MAX_TEST_ID_LENGTH))?;
         let size = VarIntVector3::read(bytebuf)?;
         let rotation = match bytebuf.get_var_int()?.0.rem_euclid(4) {
@@ -140,7 +138,7 @@ impl<'a> TestInstanceBlockData<'a> {
             2 => TestInstanceBlockStatus::Finished,
             _ => TestInstanceBlockStatus::Cleared,
         };
-        let error_message = bytebuf.get_option(|b| b.get_component_borrowed(&version))?;
+        let error_message = bytebuf.get_option(NetworkReadSliceExt::get_component_borrowed)?;
 
         Ok(Self {
             test,
@@ -155,7 +153,6 @@ impl<'a> TestInstanceBlockData<'a> {
     fn write(
         &self,
         write: &mut impl crate::ser::NetworkWriteExt,
-        version: JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_option(&self.test, |w, t| {
             w.write_string_bounded(t, MAX_TEST_ID_LENGTH)
@@ -175,9 +172,10 @@ impl<'a> TestInstanceBlockData<'a> {
             TestInstanceBlockStatus::Finished => 2,
         };
         write.write_var_int(&VarInt(status_val))?;
-        write.write_option(&self.error_message, |w, msg| {
-            w.write_component(msg, &version)
-        })?;
+        write.write_option(
+            &self.error_message,
+            crate::ser::NetworkWriteExt::write_component,
+        )?;
         Ok(())
     }
 }
@@ -215,13 +213,10 @@ mod tests {
         };
 
         let mut buf = Vec::new();
-        packet
-            .write_packet_data(&mut buf, &JavaMinecraftVersion::V_26_3)
-            .unwrap();
+        packet.write_packet_data(&mut buf).unwrap();
 
         let mut slice = buf.as_slice();
-        let decoded =
-            STestInstanceBlockAction::read(&mut slice, &JavaMinecraftVersion::V_26_3).unwrap();
+        let decoded = STestInstanceBlockAction::read(&mut slice).unwrap();
         assert!(slice.is_empty());
         assert_eq!(decoded.pos, packet.pos);
         assert_eq!(decoded.action, packet.action);

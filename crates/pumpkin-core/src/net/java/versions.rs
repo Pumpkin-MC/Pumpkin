@@ -69,6 +69,16 @@ impl JavaVersions {
         self.is_registered(version)
     }
 
+    /// Oldest admitted version.
+    #[must_use]
+    pub fn oldest(&self) -> JavaMinecraftVersion {
+        let guard = self.versions.read().unwrap_or_else(PoisonError::into_inner);
+        guard
+            .values()
+            .filter_map(|set| set.first().copied())
+            .fold(CURRENT_MC_VERSION, Ord::min)
+    }
+
     /// Checks if a client protocol number is admitted by either the server's current version
     /// or any loaded translation plugin.
     #[must_use]
@@ -124,6 +134,16 @@ mod tests {
         assert!(!registry.admits(JavaMinecraftVersion::V_1_20_2));
         assert!(!registry.admits(JavaMinecraftVersion::V_1_8));
         assert!(registry.admits(CURRENT_MC_VERSION));
+    }
+
+    #[test]
+    fn oldest_follows_registrations() {
+        let registry = JavaVersions::new();
+        assert_eq!(registry.oldest(), CURRENT_MC_VERSION);
+        registry.register("multiversion", vec![JavaMinecraftVersion::V_1_8]);
+        assert_eq!(registry.oldest(), JavaMinecraftVersion::V_1_8);
+        registry.unregister("multiversion");
+        assert_eq!(registry.oldest(), CURRENT_MC_VERSION);
     }
 
     #[test]

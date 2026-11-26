@@ -316,6 +316,19 @@ pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
 /// # Arguments
 /// - `new_code` – The formatted source code string to write.
 /// - `out_file` – The filename (relative to [`OUT_DIR`]) to write into.
+/// Formats generated code and writes it to `path` when it changed.
+fn write_formatted(raw_code: &str, path: &Path) {
+    let header = "/* This file is generated. Do not edit manually. */\n";
+    let code = format_code(raw_code).map_or_else(
+        |_| format!("{header}{raw_code}"),
+        |formatted| format!("{header}{formatted}"),
+    );
+    if fs::read_to_string(path).is_ok_and(|existing| existing == code) {
+        return;
+    }
+    fs::write(path, code).unwrap_or_else(|_| panic!("Failed to write to file: {}", path.display()));
+}
+
 pub fn write_generated_file(new_code: &str, out_file: &str) {
     let path = Path::new(OUT_DIR).join(out_file);
 

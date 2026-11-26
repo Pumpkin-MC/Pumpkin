@@ -452,9 +452,9 @@ impl ShapedRecipeBuilder {
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
+    pub async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
         let (id, recipe) = self.build()?;
-        manager.register_shaped(&id, recipe);
+        manager.register_shaped(id, recipe).await;
         Ok(())
     }
 
@@ -462,18 +462,18 @@ impl ShapedRecipeBuilder {
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_to_server(self, server: &Server) -> Result<(), RecipeError> {
+    pub async fn register_to_server(self, server: &Server) -> Result<(), RecipeError> {
         let manager = server.get_recipe_manager();
-        self.register(&manager)
+        self.register(&manager).await
     }
 
     /// Registers this shaped recipe with the plugin context.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_to_context(self, context: &Context) -> Result<(), RecipeError> {
+    pub async fn register_to_context(self, context: &Context) -> Result<(), RecipeError> {
         let manager = context.get_recipe_manager();
-        self.register(&manager)
+        self.register(&manager).await
     }
 }
 
@@ -588,9 +588,9 @@ impl ShapelessRecipeBuilder {
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
+    pub async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
         let (id, recipe) = self.build()?;
-        manager.register_shapeless(&id, recipe);
+        manager.register_shapeless(id, recipe).await;
         Ok(())
     }
 
@@ -598,18 +598,18 @@ impl ShapelessRecipeBuilder {
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_to_server(self, server: &Server) -> Result<(), RecipeError> {
+    pub async fn register_to_server(self, server: &Server) -> Result<(), RecipeError> {
         let manager = server.get_recipe_manager();
-        self.register(&manager)
+        self.register(&manager).await
     }
 
     /// Registers this shapeless recipe with the plugin context.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_to_context(self, context: &Context) -> Result<(), RecipeError> {
+    pub async fn register_to_context(self, context: &Context) -> Result<(), RecipeError> {
         let manager = context.get_recipe_manager();
-        self.register(&manager)
+        self.register(&manager).await
     }
 }
 
@@ -786,9 +786,9 @@ impl CookingRecipeBuilder {
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
+    pub async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
         let (id, cooking_type, recipe) = self.build()?;
-        manager.register_cooking(&id, cooking_type, recipe);
+        manager.register_cooking(id, cooking_type, recipe).await;
         Ok(())
     }
 
@@ -796,50 +796,51 @@ impl CookingRecipeBuilder {
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_to_server(self, server: &Server) -> Result<(), RecipeError> {
+    pub async fn register_to_server(self, server: &Server) -> Result<(), RecipeError> {
         let manager = server.get_recipe_manager();
-        self.register(&manager)
+        self.register(&manager).await
     }
 
     /// Registers this cooking recipe with the plugin context.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_to_context(self, context: &Context) -> Result<(), RecipeError> {
+    pub async fn register_to_context(self, context: &Context) -> Result<(), RecipeError> {
         let manager = context.get_recipe_manager();
-        self.register(&manager)
+        self.register(&manager).await
     }
 }
 
 /// Trait for recipe types that can be registered with a [`RecipeManager`].
+#[allow(async_fn_in_trait)]
 pub trait RegistrableRecipe {
     /// Registers this recipe with the provided recipe manager.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation or registration fails.
-    fn register(self, manager: &RecipeManager) -> Result<(), RecipeError>;
+    async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError>;
 }
 
 impl RegistrableRecipe for ShapedRecipeBuilder {
-    fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
+    async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
         let (id, recipe) = self.build()?;
-        manager.register_shaped(&id, recipe);
+        manager.register_shaped(id, recipe).await;
         Ok(())
     }
 }
 
 impl RegistrableRecipe for ShapelessRecipeBuilder {
-    fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
+    async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
         let (id, recipe) = self.build()?;
-        manager.register_shapeless(&id, recipe);
+        manager.register_shapeless(id, recipe).await;
         Ok(())
     }
 }
 
 impl RegistrableRecipe for CookingRecipeBuilder {
-    fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
+    async fn register(self, manager: &RecipeManager) -> Result<(), RecipeError> {
         let (id, cooking_type, recipe) = self.build()?;
-        manager.register_cooking(&id, cooking_type, recipe);
+        manager.register_cooking(id, cooking_type, recipe).await;
         Ok(())
     }
 }
@@ -857,38 +858,41 @@ impl Context {
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_recipe(&self, recipe: impl RegistrableRecipe) -> Result<(), RecipeError> {
-        self.get_recipe_manager().register(recipe)
+    pub async fn register_recipe(&self, recipe: impl RegistrableRecipe) -> Result<(), RecipeError> {
+        self.get_recipe_manager().register(recipe).await
     }
 
     /// Registers a shaped crafting recipe.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_shaped_recipe(&self, builder: ShapedRecipeBuilder) -> Result<(), RecipeError> {
-        self.register_recipe(builder)
+    pub async fn register_shaped_recipe(
+        &self,
+        builder: ShapedRecipeBuilder,
+    ) -> Result<(), RecipeError> {
+        self.register_recipe(builder).await
     }
 
     /// Registers a shapeless crafting recipe.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_shapeless_recipe(
+    pub async fn register_shapeless_recipe(
         &self,
         builder: ShapelessRecipeBuilder,
     ) -> Result<(), RecipeError> {
-        self.register_recipe(builder)
+        self.register_recipe(builder).await
     }
 
     /// Registers a cooking recipe.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_cooking_recipe(
+    pub async fn register_cooking_recipe(
         &self,
         builder: CookingRecipeBuilder,
     ) -> Result<(), RecipeError> {
-        self.register_recipe(builder)
+        self.register_recipe(builder).await
     }
 }
 
@@ -899,38 +903,41 @@ impl Server {
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_recipe(&self, recipe: impl RegistrableRecipe) -> Result<(), RecipeError> {
-        self.get_recipe_manager().register(recipe)
+    pub async fn register_recipe(&self, recipe: impl RegistrableRecipe) -> Result<(), RecipeError> {
+        self.get_recipe_manager().register(recipe).await
     }
 
     /// Registers a shaped crafting recipe.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_shaped_recipe(&self, builder: ShapedRecipeBuilder) -> Result<(), RecipeError> {
-        self.register_recipe(builder)
+    pub async fn register_shaped_recipe(
+        &self,
+        builder: ShapedRecipeBuilder,
+    ) -> Result<(), RecipeError> {
+        self.register_recipe(builder).await
     }
 
     /// Registers a shapeless crafting recipe.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_shapeless_recipe(
+    pub async fn register_shapeless_recipe(
         &self,
         builder: ShapelessRecipeBuilder,
     ) -> Result<(), RecipeError> {
-        self.register_recipe(builder)
+        self.register_recipe(builder).await
     }
 
     /// Registers a cooking recipe.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_cooking_recipe(
+    pub async fn register_cooking_recipe(
         &self,
         builder: CookingRecipeBuilder,
     ) -> Result<(), RecipeError> {
-        self.register_recipe(builder)
+        self.register_recipe(builder).await
     }
 }
 
@@ -951,38 +958,41 @@ impl RecipeManager {
     ///
     /// # Errors
     /// Returns [`RecipeError`] if recipe validation fails.
-    pub fn register(&self, recipe: impl RegistrableRecipe) -> Result<(), RecipeError> {
-        recipe.register(self)
+    pub async fn register(&self, recipe: impl RegistrableRecipe) -> Result<(), RecipeError> {
+        recipe.register(self).await
     }
 
     /// Registers a shaped crafting recipe from a builder.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_shaped_recipe(&self, builder: ShapedRecipeBuilder) -> Result<(), RecipeError> {
-        self.register(builder)
+    pub async fn register_shaped_recipe(
+        &self,
+        builder: ShapedRecipeBuilder,
+    ) -> Result<(), RecipeError> {
+        self.register(builder).await
     }
 
     /// Registers a shapeless crafting recipe from a builder.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_shapeless_recipe(
+    pub async fn register_shapeless_recipe(
         &self,
         builder: ShapelessRecipeBuilder,
     ) -> Result<(), RecipeError> {
-        self.register(builder)
+        self.register(builder).await
     }
 
     /// Registers a cooking recipe from a builder.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
-    pub fn register_cooking_recipe(
+    pub async fn register_cooking_recipe(
         &self,
         builder: CookingRecipeBuilder,
     ) -> Result<(), RecipeError> {
-        self.register(builder)
+        self.register(builder).await
     }
 }
 

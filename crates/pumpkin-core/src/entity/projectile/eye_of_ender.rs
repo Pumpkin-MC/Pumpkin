@@ -228,10 +228,7 @@ impl EntityBase for EyeOfEnder {
             ),
         );
         let mut data = Vec::new();
-        if metadata
-            .write(&mut data, &pumpkin_data::packet::CURRENT_MC_VERSION)
-            .is_ok()
-        {
+        if metadata.write(&mut data).is_ok() {
             data.push(255);
             let meta_packet = pumpkin_protocol::java::client::play::CSetEntityMetadata::new(
                 self.entity.entity_id.into(),

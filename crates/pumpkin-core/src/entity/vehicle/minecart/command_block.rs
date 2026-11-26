@@ -5,9 +5,7 @@ use std::sync::{
 
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::{
-    PermissionLvl, math::vector2::Vector2, text::TextComponent, version::JavaMinecraftVersion,
-};
+use pumpkin_util::{PermissionLvl, math::vector2::Vector2, text::TextComponent};
 
 use crate::{
     block::entities::command_block::CommandBlockEntity,
@@ -236,10 +234,7 @@ impl CommandBlockMinecart {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
         {
-            nbt.put(
-                "CustomName",
-                custom_name.to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_3),
-            );
+            nbt.put("CustomName", custom_name.to_nbt_tag());
         }
         let track_output = self.is_track_output();
         nbt.put_bool("TrackOutput", track_output);
@@ -250,10 +245,7 @@ impl CommandBlockMinecart {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .as_ref()
         {
-            nbt.put(
-                "LastOutput",
-                last_output.to_nbt_tag_for_version(&JavaMinecraftVersion::V_26_3),
-            );
+            nbt.put("LastOutput", last_output.to_nbt_tag());
         }
         let update_last = self.update_last_execution.load(Ordering::Relaxed);
         nbt.put_bool("UpdateLastExecution", update_last);

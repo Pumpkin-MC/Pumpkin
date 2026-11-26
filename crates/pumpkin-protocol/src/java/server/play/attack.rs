@@ -4,7 +4,6 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::play::ATTACK;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
@@ -14,10 +13,7 @@ pub struct SAttack {
 }
 
 impl<'a> ServerPacket<'a> for SAttack {
-    fn read(
-        bytebuf: &mut &'a [u8],
-        _protocol_version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
         Ok(Self {
             entity_id: bytebuf.get_var_int()?,
         })
@@ -28,7 +24,6 @@ impl crate::ClientPacket for SAttack {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_var_int(&self.entity_id)?;
