@@ -1,9 +1,6 @@
 mod ai;
 mod shoot_tongue;
 
-#[cfg(test)]
-pub(crate) use shoot_tongue::prepare_test_tongue_bite;
-
 use std::sync::{
     Arc,
     atomic::{AtomicI32, Ordering},
@@ -128,13 +125,6 @@ impl FrogEntity {
         self.get_entity().world.load().get_entity_by_id(id)
     }
 
-    pub(crate) fn may_bite_with_tongue(&self) -> bool {
-        self.tongue_target_id.load(Ordering::Relaxed) != NO_TONGUE_TARGET
-            || self
-                .mob_entity
-                .brain_may_have_memory_value(types::ATTACK_TARGET.id())
-    }
-
     pub fn set_tongue_target(&self, target: &dyn EntityBase) {
         self.store_tongue_target(target.get_entity().entity_id);
     }
@@ -205,14 +195,6 @@ impl Animal for FrogEntity {
 }
 
 impl Mob for FrogEntity {
-    fn tick_links(&self) -> Vec<i32> {
-        let target = self.tongue_target_id.load(Ordering::Relaxed);
-        (target != NO_TONGUE_TARGET)
-            .then_some(target)
-            .into_iter()
-            .collect()
-    }
-
     fn make_brain(&self, packed: &PackedMemories) -> Brain {
         ai::make_brain(self, packed)
     }

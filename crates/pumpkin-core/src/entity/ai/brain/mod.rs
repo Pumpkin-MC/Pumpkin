@@ -47,64 +47,13 @@ impl BrainTick<'_> {
         }
     }
 
-    /// Includes pose changes requested earlier in this tick.
     #[must_use]
     pub fn pose(&self) -> EntityPose {
-        self.pending_pose()
-            .unwrap_or_else(|| self.mob.get_entity().pose.load())
-    }
-
-    pub(crate) const fn pending_pose(&self) -> Option<EntityPose> {
-        self.state.pending_pose
+        self.mob.get_entity().pose.load()
     }
 
     pub fn set_pose(&mut self, pose: EntityPose) {
-        self.set_pose_then(pose, |_| {});
-    }
-
-    /// Runs the action if the pose change is accepted and the mob is still alive.
-    pub fn set_pose_then(
-        &mut self,
-        pose: EntityPose,
-        action: impl FnOnce(&dyn Mob) + Send + 'static,
-    ) {
-        self.set_pose_then_if(pose, |_| true, |_| {}, move |mob, _| action(mob));
-    }
-
-    pub(crate) fn set_pose_then_if(
-        &mut self,
-        pose: EntityPose,
-        should_apply: impl Fn(&dyn Mob) -> bool + Send + 'static,
-        commit: impl FnOnce(&dyn Mob) + Send + 'static,
-        action: impl FnOnce(&dyn Mob, &dyn Fn() -> bool) + Send + 'static,
-    ) {
-        self.defer_pose_change(pose, move |mob| {
-            let entity = mob.get_entity();
-            if !should_apply(mob) {
-                return;
-            }
-            let living = &mob.get_mob_entity().living_entity;
-            let eligible = || living.is_alive() && should_apply(mob);
-            let applied = entity.set_pose_if(pose, eligible, || commit(mob));
-            let current = || eligible() && entity.pose.load() == pose;
-            if applied && current() {
-                action(mob, &current);
-            }
-        });
-    }
-
-    /// Records a pose for later behaviors and defers the complete transition.
-    pub(crate) fn defer_pose_change(
-        &mut self,
-        pose: EntityPose,
-        action: impl FnOnce(&dyn Mob) + Send + 'static,
-    ) {
-        self.state.pending_pose = Some(pose);
-        self.defer(move |mob| {
-            if mob.get_mob_entity().living_entity.is_alive() {
-                action(mob);
-            }
-        });
+        self.defer(move |mob| mob.get_entity().set_pose(pose));
     }
 
     /// Runs an action after releasing the brain lock so plugin callbacks can reenter it.
@@ -129,6 +78,12 @@ pub struct Brain {
     state: BrainState,
     sensors: Vec<SensorEntry>,
     behaviors: BTreeMap<i32, Vec<ActivityBehaviors>>,
+    tick_position: Option<BehaviorPass>,
+}
+
+enum BehaviorPass {
+    Start { group: usize, behavior: usize },
+    Run(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -146,7 +101,6 @@ pub struct BrainState {
     default_activity: Activity,
     schedule: Option<Schedule>,
     last_schedule_update: i64,
-    pending_pose: Option<EntityPose>,
     effects: Vec<BrainEffect>,
 }
 
@@ -161,7 +115,6 @@ impl Default for BrainState {
             default_activity: Activity::Idle,
             schedule: None,
             last_schedule_update: -9999,
-            pending_pose: None,
             effects: Vec::new(),
         };
         state.use_default_activity();
@@ -358,7 +311,6 @@ impl BrainState {
 
 impl Brain {
     pub(crate) fn take_effects(&mut self) -> Vec<BrainEffect> {
-        self.state.pending_pose = None;
         std::mem::take(&mut self.state.effects)
     }
 
@@ -416,6 +368,11 @@ impl Brain {
     }
 
     pub fn tick(&mut self, world: &Arc<World>, mob: &dyn Mob, time: i64) {
+        self.begin_tick(world, mob, time);
+        self.advance_tick(world, mob, time, false);
+    }
+
+    pub(crate) fn begin_tick(&mut self, world: &Arc<World>, mob: &dyn Mob, time: i64) {
         Self::apply_pending_memory_clear(&mut self.state, mob);
         self.state.memories.tick();
 
@@ -428,40 +385,92 @@ impl Brain {
             });
             Self::apply_pending_memory_clear(&mut self.state, mob);
         }
+        self.tick_position = Some(BehaviorPass::Start {
+            group: 0,
+            behavior: 0,
+        });
+    }
 
-        for group in self.behaviors.values_mut().flatten() {
-            if !self.state.is_active(group.activity) {
-                continue;
-            }
-            for behavior in &mut group.behaviors {
-                if behavior.status() != Status::Stopped {
-                    continue;
+    /// Yields at a behavior boundary so a plugin can inspect the Brain and the
+    /// following behavior sees the state the plugin actually approved.
+    pub(crate) fn advance_tick(
+        &mut self,
+        world: &Arc<World>,
+        mob: &dyn Mob,
+        time: i64,
+        yield_for_effects: bool,
+    ) {
+        let Some(position) = self.tick_position.take() else {
+            return;
+        };
+        let run_from = match position {
+            BehaviorPass::Start {
+                group: start_group,
+                behavior: start_behavior,
+            } => {
+                let groups = self.behaviors.values_mut().flatten();
+                for (group_index, group) in groups.enumerate().skip(start_group) {
+                    let behavior_from = if group_index == start_group {
+                        start_behavior
+                    } else {
+                        0
+                    };
+                    // Activity is tested on entry to a group, including when a
+                    // behavior in that group changes activity during its start.
+                    if behavior_from == 0 && !self.state.is_active(group.activity) {
+                        continue;
+                    }
+                    for (index, behavior) in
+                        group.behaviors.iter_mut().enumerate().skip(behavior_from)
+                    {
+                        if behavior.status() != Status::Stopped {
+                            continue;
+                        }
+                        behavior.try_start(&mut BrainTick {
+                            state: &mut self.state,
+                            world,
+                            mob,
+                            time,
+                        });
+                        Self::apply_pending_memory_clear(&mut self.state, mob);
+                        if yield_for_effects && !self.state.effects.is_empty() {
+                            self.tick_position = Some(BehaviorPass::Start {
+                                group: group_index,
+                                behavior: index + 1,
+                            });
+                            return;
+                        }
+                    }
                 }
-                behavior.try_start(&mut BrainTick {
-                    state: &mut self.state,
-                    world,
-                    mob,
-                    time,
-                });
-                Self::apply_pending_memory_clear(&mut self.state, mob);
+                0
             }
-        }
-        for behavior in self
+            BehaviorPass::Run(run_from) => run_from,
+        };
+        let behaviors = self
             .behaviors
             .values_mut()
             .flatten()
-            .flat_map(|group| &mut group.behaviors)
-        {
-            if behavior.status() == Status::Running {
-                behavior.tick_or_stop(&mut BrainTick {
-                    state: &mut self.state,
-                    world,
-                    mob,
-                    time,
-                });
-                Self::apply_pending_memory_clear(&mut self.state, mob);
+            .flat_map(|group| &mut group.behaviors);
+        for (index, behavior) in behaviors.enumerate().skip(run_from) {
+            if behavior.status() != Status::Running {
+                continue;
+            }
+            behavior.tick_or_stop(&mut BrainTick {
+                state: &mut self.state,
+                world,
+                mob,
+                time,
+            });
+            Self::apply_pending_memory_clear(&mut self.state, mob);
+            if yield_for_effects && !self.state.effects.is_empty() {
+                self.tick_position = Some(BehaviorPass::Run(index + 1));
+                return;
             }
         }
+    }
+
+    pub(crate) const fn tick_in_progress(&self) -> bool {
+        self.tick_position.is_some()
     }
 
     pub fn stop_all(&mut self, world: &Arc<World>, mob: &dyn Mob, time: i64) {
@@ -584,6 +593,7 @@ impl BrainProvider {
             },
             sensors: Vec::new(),
             behaviors: BTreeMap::new(),
+            tick_position: None,
         }
     }
 }

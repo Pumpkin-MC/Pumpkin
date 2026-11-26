@@ -11,6 +11,17 @@ pub fn create(
     can_attack: impl Fn(&BrainTick<'_>) -> bool + Send + Sync + 'static,
     target_finder: impl Fn(&BrainTick<'_>) -> Option<Arc<dyn EntityBase>> + Send + Sync + 'static,
 ) -> OneShot {
+    create_with_target_change(can_attack, target_finder, |tick, target| {
+        tick.state.set(types::ATTACK_TARGET, target);
+        tick.state.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+    })
+}
+
+pub(crate) fn create_with_target_change(
+    can_attack: impl Fn(&BrainTick<'_>) -> bool + Send + Sync + 'static,
+    target_finder: impl Fn(&BrainTick<'_>) -> Option<Arc<dyn EntityBase>> + Send + Sync + 'static,
+    set_target: impl Fn(&mut BrainTick<'_>, Arc<dyn EntityBase>) + Send + Sync + 'static,
+) -> OneShot {
     OneShot::new(
         "StartAttacking",
         vec![
@@ -30,8 +41,7 @@ pub fn create(
             if !tick.mob.can_attack(target.as_ref()) {
                 return false;
             }
-            tick.state.set(types::ATTACK_TARGET, target);
-            tick.state.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+            set_target(tick, target);
             true
         },
     )

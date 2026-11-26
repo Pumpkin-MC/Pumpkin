@@ -28,7 +28,7 @@ impl Behavior for Croak {
     }
 
     fn check_extra_start_conditions(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        tick.pose() == EntityPose::Standing
+        tick.mob.get_entity().pose.load() == EntityPose::Standing
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
@@ -38,7 +38,7 @@ impl Behavior for Croak {
                 .touching_lava
                 .load(std::sync::atomic::Ordering::Relaxed)
         {
-            tick.set_pose(EntityPose::Croaking);
+            entity.set_pose(EntityPose::Croaking);
             self.croak_counter = 0;
         }
     }
@@ -48,7 +48,7 @@ impl Behavior for Croak {
     }
 
     fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
-        tick.set_pose(EntityPose::Standing);
+        tick.mob.get_entity().set_pose(EntityPose::Standing);
     }
 
     fn can_still_use(&mut self, _tick: &mut BrainTick<'_>) -> bool {

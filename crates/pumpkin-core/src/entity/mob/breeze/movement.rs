@@ -1,7 +1,4 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering::Relaxed},
-};
+use std::sync::atomic::Ordering::Relaxed;
 
 use pumpkin_data::{
     Block, attributes::Attributes, effect::StatusEffect, entity::EntityPose, sound::Sound, tag,
@@ -29,7 +26,6 @@ use crate::{
         },
         dismount_helper::is_block_dangerous,
         living::LivingEntity,
-        mob::Mob,
     },
     world::World,
 };
@@ -133,34 +129,10 @@ fn snap_to_surface(world: &World, target: Vector3<f64>) -> Option<BlockPos> {
 
 #[derive(Default)]
 struct LongJump {
-    pending_transition: Option<Arc<AtomicBool>>,
+    took_off: bool,
 }
 
 impl LongJump {
-    fn transition(
-        &mut self,
-        tick: &mut BrainTick<'_>,
-        pose: EntityPose,
-        commit: impl FnOnce(&dyn Mob) + Send + 'static,
-        action: impl FnOnce(&dyn Mob, &dyn Fn() -> bool) + Send + 'static,
-    ) {
-        let active = Arc::new(AtomicBool::new(true));
-        self.pending_transition = Some(active.clone());
-        let world = tick.world.clone();
-        let position = tick.mob.get_entity().pos.load();
-        tick.set_pose_then_if(
-            pose,
-            move |mob| {
-                let entity = mob.get_entity();
-                active.load(Relaxed)
-                    && Arc::ptr_eq(&world, &entity.world.load())
-                    && entity.pos.load() == position
-            },
-            commit,
-            action,
-        );
-    }
-
     fn clear_jump_memories(state: &mut BrainState) {
         state.erase(types::BREEZE_JUMP_TARGET.id());
         state.erase(types::BREEZE_JUMP_INHALING.id());
@@ -248,7 +220,7 @@ impl Behavior for LongJump {
         let range = follow_range(tick);
         let offset = target.pos.load() - entity.pos.load();
         if offset.length_squared() >= range * range {
-            tick.state.erase(types::ATTACK_TARGET.id());
+            super::ai::forget_target(tick);
             return false;
         }
         let distance = Vector3::new(offset.x as f32, offset.y as f32, offset.z as f32).length();
@@ -294,24 +266,19 @@ impl Behavior for LongJump {
             tick.state
                 .set_with_expiry(types::BREEZE_JUMP_INHALING, (), INHALING_DURATION_TICKS);
         }
+        tick.set_pose(EntityPose::Inhaling);
         let target = tick.state.get(types::BREEZE_JUMP_TARGET).copied();
-        self.transition(
-            tick,
-            EntityPose::Inhaling,
-            |_| {},
-            move |breeze, current| {
-                let entity = breeze.get_entity();
-                entity
-                    .world
-                    .load()
-                    .play_sound_from_entity(breeze, Sound::EntityBreezeCharge);
-                if current()
-                    && let Some(target) = target
-                {
-                    look_from_eyes(entity, target.to_centered_f64());
-                }
-            },
-        );
+        tick.defer(move |breeze| {
+            let entity = breeze.get_entity();
+            entity.world.load().play_sound(
+                Sound::EntityBreezeCharge,
+                breeze.sound_source(),
+                &entity.pos.load(),
+            );
+            if let Some(target) = target {
+                look_from_eyes(entity, target.to_centered_f64());
+            }
+        });
     }
 
     fn tick(&mut self, tick: &mut BrainTick<'_>) {
@@ -322,7 +289,8 @@ impl Behavior for LongJump {
         }
 
         let pose = tick.pose();
-        if pose == EntityPose::Inhaling
+        if !self.took_off
+            && pose == EntityPose::Inhaling
             && !tick
                 .state
                 .has_memory_value(types::BREEZE_JUMP_INHALING.id())
@@ -335,70 +303,55 @@ impl Behavior for LongJump {
                 tick.set_pose(EntityPose::Standing);
                 return;
             };
-            self.transition(
-                tick,
-                EntityPose::LongJumping,
-                move |breeze| {
-                    let body = breeze.get_mob_entity();
-                    if in_water {
-                        body.with_brain(breeze, |brain| {
-                            brain.set(types::BREEZE_LEAVING_WATER, ());
-                        });
-                    }
-                    let living = &body.living_entity;
-                    living.entity.yaw.store(living.entity.body_yaw.load());
-                    living.discard_friction.store(true, Relaxed);
-                    living.entity.velocity.store(velocity);
-                },
-                |breeze, _| breeze.play_entity_sound(Sound::EntityBreezeJump, 1.0, 1.0),
-            );
-        } else if pose == EntityPose::LongJumping
+            if in_water {
+                tick.state.set(types::BREEZE_LEAVING_WATER, ());
+            }
+            self.took_off = true;
+            tick.defer(|breeze| breeze.play_entity_sound(Sound::EntityBreezeJump, 1.0, 1.0));
+            tick.set_pose(EntityPose::LongJumping);
+            tick.defer(move |mob| {
+                let living = &mob.get_mob_entity().living_entity;
+                let entity = &living.entity;
+                entity.yaw.store(entity.body_yaw.load());
+                living.discard_friction.store(true, Relaxed);
+                entity.velocity.store(velocity);
+            });
+        } else if (self.took_off || pose == EntityPose::LongJumping)
             && (entity.on_ground.load(Relaxed)
                 || in_water
                     && !tick
                         .state
                         .has_memory_value(types::BREEZE_LEAVING_WATER.id()))
         {
+            tick.defer(|breeze| breeze.play_entity_sound(Sound::EntityBreezeLand, 1.0, 1.0));
+            tick.set_pose(EntityPose::Standing);
+            tick.mob
+                .get_mob_entity()
+                .living_entity
+                .discard_friction
+                .store(false, Relaxed);
             let cooldown = if tick.state.has_memory_value(types::HURT_BY.id()) {
                 JUMP_COOLDOWN_WHEN_HURT_TICKS
             } else {
                 JUMP_COOLDOWN_TICKS
             };
-            self.transition(
-                tick,
-                EntityPose::Standing,
-                move |breeze| {
-                    let body = breeze.get_mob_entity();
-                    body.living_entity.discard_friction.store(false, Relaxed);
-                    body.with_brain(breeze, |brain| {
-                        brain.set_with_expiry(types::BREEZE_JUMP_COOLDOWN, (), cooldown);
-                        brain.set_with_expiry(types::BREEZE_SHOOT, (), 100);
-                    });
-                },
-                |breeze, _| breeze.play_entity_sound(Sound::EntityBreezeLand, 1.0, 1.0),
-            );
+            tick.state
+                .set_with_expiry(types::BREEZE_JUMP_COOLDOWN, (), cooldown);
+            tick.state.set_with_expiry(types::BREEZE_SHOOT, (), 100);
         }
     }
 
     fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
-        // An interrupted jump may never run the landing callback.
-        if let Some(pending) = self.pending_transition.take() {
-            pending.store(false, Relaxed);
+        self.took_off = false;
+        if matches!(tick.pose(), EntityPose::LongJumping | EntityPose::Inhaling) {
+            tick.set_pose(EntityPose::Standing);
         }
+        // An interrupted jump may never land.
         tick.mob
             .get_mob_entity()
             .living_entity
             .discard_friction
             .store(false, Relaxed);
-        let actual_pose = tick.mob.get_entity().pose.load();
-        let pose = if matches!(actual_pose, EntityPose::LongJumping | EntityPose::Inhaling) {
-            actual_pose
-        } else {
-            tick.pose()
-        };
-        if matches!(pose, EntityPose::LongJumping | EntityPose::Inhaling) {
-            BreezeEntity::finish_pose(tick, pose, None);
-        }
         Self::clear_jump_memories(tick.state);
     }
 
@@ -481,16 +434,8 @@ struct SlideToTargetSink(MoveToTargetSink);
 
 impl SlideToTargetSink {
     fn begin_sliding(tick: &mut BrainTick<'_>) {
-        tick.set_pose_then_if(
-            EntityPose::Sliding,
-            |_| true,
-            |breeze| {
-                if let Some(breeze) = breeze.cast_any().downcast_ref::<BreezeEntity>() {
-                    breeze.pose_cleanup.store(None);
-                }
-            },
-            |breeze, _| breeze.play_entity_sound(Sound::EntityBreezeSlide, 1.0, 1.0),
-        );
+        tick.defer(|breeze| breeze.play_entity_sound(Sound::EntityBreezeSlide, 1.0, 1.0));
+        tick.set_pose(EntityPose::Sliding);
     }
 }
 
@@ -528,8 +473,10 @@ impl Behavior for SlideToTargetSink {
 
     fn stop(&mut self, tick: &mut BrainTick<'_>, timed_out: bool) {
         self.0.stop(tick, timed_out);
-        let target = tick.state.get(types::ATTACK_TARGET).map(Arc::downgrade);
-        BreezeEntity::finish_pose(tick, EntityPose::Sliding, target);
+        tick.set_pose(EntityPose::Standing);
+        if tick.state.has_memory_value(types::ATTACK_TARGET.id()) {
+            tick.state.set_with_expiry(types::BREEZE_SHOOT, (), 60);
+        }
     }
 
     fn debug_name(&self) -> &'static str {
@@ -539,7 +486,7 @@ impl Behavior for SlideToTargetSink {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicUsize;
+    use std::sync::{Arc, atomic::AtomicUsize};
 
     use futures::future::BoxFuture;
     use pumpkin_data::dimension::Dimension;
@@ -551,27 +498,27 @@ mod tests {
         brain::{Brain, activity::ActivityData, behavior::Status},
         test_support,
     };
-    use crate::entity::{EntityBase, r#type::from_type};
+    use crate::entity::{EntityBase, mob::Mob, r#type::from_type};
     use crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent;
     use crate::plugin::{EventHandler, EventPriority};
     use crate::server::Server;
 
-    struct VetoStandingOnce {
+    struct VetoPose {
         entity_id: i32,
+        pose: EntityPose,
         attempts: AtomicUsize,
     }
 
-    impl EventHandler<EntityPoseChangeEvent> for VetoStandingOnce {
+    impl EventHandler<EntityPoseChangeEvent> for VetoPose {
         fn handle_blocking<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityPoseChangeEvent,
         ) -> BoxFuture<'a, ()> {
             Box::pin(async {
-                if event.entity_id == self.entity_id
-                    && event.pose.parse() == Ok(EntityPose::Standing as u8)
-                {
-                    event.cancelled = self.attempts.fetch_add(1, Relaxed) == 0;
+                if event.entity_id == self.entity_id && event.pose.parse() == Ok(self.pose as u8) {
+                    self.attempts.fetch_add(1, Relaxed);
+                    event.cancelled = true;
                 }
             })
         }
@@ -612,7 +559,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn slide_stop_retries_a_veto_without_arming_a_shot_for_a_replacement_target()
+    async fn slide_stop_arms_a_shot_even_when_standing_is_vetoed()
     -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
         let server = test_support::server(&folder).await?;
@@ -625,19 +572,15 @@ mod tests {
             &world,
             uuid::Uuid::new_v4(),
         );
-        let replacement = from_type(
-            &EntityType::IRON_GOLEM,
-            position,
-            &world,
-            uuid::Uuid::new_v4(),
-        );
         let body = breeze.get_mob_entity();
         let mut brain = Brain::default();
         brain.register_memory(types::ATTACK_TARGET.id());
         brain.register_memory(types::BREEZE_SHOOT.id());
+        brain.set(types::ATTACK_TARGET, target);
         body.set_brain(brain);
-        let observer = Arc::new(VetoStandingOnce {
+        let observer = Arc::new(VetoPose {
             entity_id: breeze.get_entity().entity_id,
+            pose: EntityPose::Standing,
             attempts: AtomicUsize::new(0),
         });
         server.plugin_manager.register::<EntityPoseChangeEvent, _>(
@@ -645,47 +588,28 @@ mod tests {
             EventPriority::Normal,
             true,
         );
-        for (current, can_shoot) in [
-            (Some(target.clone()), true),
-            (Some(replacement.clone()), false),
-            (None, false),
-        ] {
-            observer.attempts.store(0, Relaxed);
-            breeze.get_entity().set_pose(EntityPose::Sliding);
-            body.set_target(Some(target.clone()));
-            let effects = body.with_brain(breeze.as_ref(), |brain| {
-                brain.erase(types::BREEZE_SHOOT.id());
-                brain.set(types::ATTACK_TARGET, target.clone());
-                SlideToTargetSink(MoveToTargetSink::new(20, 40)).stop(
-                    &mut BrainTick {
-                        mob: breeze.as_ref(),
-                        world: &world,
-                        state: brain,
-                        time: 0,
-                    },
-                    false,
-                );
-                brain.take_effects()
-            });
-            for effect in effects {
-                effect(breeze.as_ref());
-            }
-            assert_eq!(observer.attempts.load(Relaxed), 1);
-            assert_eq!(breeze.get_entity().pose.load(), EntityPose::Sliding);
-            assert!(!body.brain_has_memory_value(types::BREEZE_SHOOT.id()));
-
-            body.set_target(current.clone());
-            body.with_brain(breeze.as_ref(), |brain| {
-                brain.set_optional(types::ATTACK_TARGET, current);
-            });
-            breeze.custom_server_ai_step(breeze.as_ref());
-            assert_eq!(observer.attempts.load(Relaxed), 2);
-            assert_eq!(breeze.get_entity().pose.load(), EntityPose::Standing);
-            assert_eq!(
-                body.brain_has_memory_value(types::BREEZE_SHOOT.id()),
-                can_shoot
+        breeze.get_entity().set_pose(EntityPose::Sliding);
+        let effects = body.with_brain(breeze.as_ref(), |brain| {
+            assert!(!brain.has_memory_value(types::BREEZE_SHOOT.id()));
+            SlideToTargetSink(MoveToTargetSink::new(20, 40)).stop(
+                &mut BrainTick {
+                    mob: breeze.as_ref(),
+                    world: &world,
+                    state: brain,
+                    time: 0,
+                },
+                false,
             );
+            brain.take_effects()
+        });
+        for effect in effects {
+            effect(breeze.as_ref());
         }
+        assert_eq!(observer.attempts.load(Relaxed), 1);
+        assert_eq!(breeze.get_entity().pose.load(), EntityPose::Sliding);
+        body.with_brain(breeze.as_ref(), |brain| {
+            assert_eq!(brain.time_until_expiry(types::BREEZE_SHOOT.id()), Some(60));
+        });
         server.stop();
         server.shutdown().await;
         Ok(())
@@ -702,8 +626,9 @@ mod tests {
             Vector3::new(0.0, 64.0, 0.0),
             &EntityType::BREEZE,
         ));
-        let observer = Arc::new(VetoStandingOnce {
+        let observer = Arc::new(VetoPose {
             entity_id: breeze.get_entity().entity_id,
+            pose: EntityPose::Standing,
             attempts: AtomicUsize::new(0),
         });
         server.plugin_manager.register::<EntityPoseChangeEvent, _>(
@@ -737,19 +662,71 @@ mod tests {
         assert_eq!(observer.attempts.load(Relaxed), 1);
         assert_eq!(living.entity.pose.load(), EntityPose::LongJumping);
         breeze.custom_server_ai_step(breeze.as_ref());
-        assert_eq!(observer.attempts.load(Relaxed), 2);
-        assert_eq!(living.entity.pose.load(), EntityPose::Standing);
+        assert_eq!(observer.attempts.load(Relaxed), 1);
+        assert_eq!(living.entity.pose.load(), EntityPose::LongJumping);
         assert!(!body.brain_has_memory_value(types::BREEZE_SHOOT.id()));
         server.stop();
         server.shutdown().await;
         Ok(())
     }
 
-    #[tokio::test]
-    async fn rebuilding_the_brain_cancels_queued_breeze_takeoff()
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn slide_sees_the_pose_after_the_jump_charge_is_vetoed()
     -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
-        let world = test_support::world(&folder);
+        let server = test_support::server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let breeze = BreezeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 300.0, 0.5),
+            &EntityType::BREEZE,
+        ));
+        let body = &breeze.mob_entity;
+        let entity = breeze.get_entity();
+        entity.on_ground.store(true, Relaxed);
+        let target = from_type(
+            &EntityType::IRON_GOLEM,
+            Vector3::new(8.5, 300.0, 0.5),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        let observer = Arc::new(VetoPose {
+            entity_id: entity.entity_id,
+            pose: EntityPose::Inhaling,
+            attempts: AtomicUsize::new(0),
+        });
+        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        let mut brain = Brain::default();
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Idle,
+            0,
+            vec![long_jump(), slide()],
+        ));
+        brain.set(types::ATTACK_TARGET, target);
+        brain.set(types::BREEZE_JUMP_TARGET, BlockPos::new(8, 300, 0));
+        body.set_brain(brain);
+        assert!(!body.brain_has_memory_value(types::WALK_TARGET.id()));
+
+        body.tick_brain(breeze.as_ref());
+
+        assert_eq!(observer.attempts.load(Relaxed), 1);
+        assert_eq!(entity.pose.load(), EntityPose::Standing);
+        assert!(body.brain_has_memory_value(types::WALK_TARGET.id()));
+        server.stop();
+        server.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_breeze_takes_off_even_when_its_jumping_pose_is_vetoed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let server = test_support::server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
         let breeze = BreezeEntity::new(Entity::new(
             world.clone(),
             Vector3::new(0.5, 300.0, 0.5),
@@ -757,37 +734,50 @@ mod tests {
         ));
         let body = &breeze.mob_entity;
         let entity = &body.living_entity.entity;
-        for refresh in [false, true] {
-            entity.set_pose(EntityPose::Inhaling);
-            entity.velocity.store(Vector3::default());
-            body.living_entity.discard_friction.store(false, Relaxed);
-            body.with_brain(breeze.as_ref(), |brain| {
-                *brain = Brain::default();
-                let mut jump = Timed::new(LongJump::default());
-                jump.start_at(world.get_world_age(), jump.inner().max_duration());
-                brain.add_activity(ActivityData::with_priority_start(
-                    Activity::Idle,
-                    0,
-                    vec![Box::new(jump)],
-                ));
-                brain.set(types::BREEZE_JUMP_TARGET, BlockPos::new(8, 300, 0));
-            });
-            if refresh {
-                body.request_refresh_brain();
-            }
-            body.tick_brain(breeze.as_ref());
-            assert_eq!(
-                entity.pose.load(),
-                if refresh {
-                    EntityPose::Standing
-                } else {
-                    EntityPose::LongJumping
-                }
-            );
-            assert_eq!(entity.velocity.load() == Vector3::default(), refresh);
-            assert_eq!(body.living_entity.discard_friction.load(Relaxed), !refresh);
-        }
-        world.level.shutdown().await;
+        entity.set_pose(EntityPose::Inhaling);
+        assert_eq!(entity.velocity.load(), Vector3::default());
+        assert!(!body.living_entity.discard_friction.load(Relaxed));
+        let observer = Arc::new(VetoPose {
+            entity_id: entity.entity_id,
+            pose: EntityPose::LongJumping,
+            attempts: AtomicUsize::new(0),
+        });
+        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        let mut brain = Brain::default();
+        let mut jump = Timed::new(LongJump::default());
+        jump.start_at(world.get_world_age(), jump.inner().max_duration());
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Idle,
+            0,
+            vec![Box::new(jump)],
+        ));
+        brain.set(types::BREEZE_JUMP_TARGET, BlockPos::new(8, 300, 0));
+        body.set_brain(brain);
+        body.tick_brain(breeze.as_ref());
+
+        assert_eq!(observer.attempts.load(Relaxed), 1);
+        assert_eq!(entity.pose.load(), EntityPose::Inhaling);
+        assert!(entity.velocity.load().y > 0.0);
+        assert!(body.living_entity.discard_friction.load(Relaxed));
+
+        let falling_velocity = Vector3::new(0.0, -0.1, 0.0);
+        entity.on_ground.store(false, Relaxed);
+        entity.velocity.store(falling_velocity);
+        body.tick_brain(breeze.as_ref());
+        assert_eq!(observer.attempts.load(Relaxed), 1);
+        assert_eq!(entity.velocity.load(), falling_velocity);
+
+        entity.on_ground.store(true, Relaxed);
+        body.tick_brain(breeze.as_ref());
+        assert_eq!(entity.pose.load(), EntityPose::Standing);
+        assert!(!body.living_entity.discard_friction.load(Relaxed));
+        assert!(body.brain_has_memory_value(types::BREEZE_SHOOT.id()));
+        server.stop();
+        server.shutdown().await;
         Ok(())
     }
 }

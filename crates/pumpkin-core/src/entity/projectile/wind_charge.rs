@@ -65,10 +65,6 @@ pub static BREEZE_WIND_CHARGE_EXPLOSION_DAMAGE_CALCULATOR: LazyLock<
 });
 
 impl WindChargeEntity {
-    pub(crate) fn acceleration_power(&self) -> f64 {
-        self.thrown_item_entity.acceleration_power()
-    }
-
     #[must_use]
     pub const fn new_normal(thrown_item_entity: ThrownItemEntity) -> Self {
         Self {

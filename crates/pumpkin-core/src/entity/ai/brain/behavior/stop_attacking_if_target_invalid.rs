@@ -18,12 +18,18 @@ pub fn create() -> OneShot {
 pub fn create_with_callback(
     on_target_erased: impl Fn(&BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
 ) -> OneShot {
-    create_with_condition(|_, _| false, on_target_erased)
+    create_with_condition(
+        |_, _| false,
+        move |tick, target| {
+            on_target_erased(tick, target);
+            tick.state.erase(types::ATTACK_TARGET.id());
+        },
+    )
 }
 
 pub(crate) fn create_with_condition(
     mut should_stop: impl FnMut(&BrainTick<'_>, &dyn EntityBase) -> bool + Send + Sync + 'static,
-    on_target_erased: impl Fn(&BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
+    drop_target: impl Fn(&mut BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
 ) -> OneShot {
     OneShot::new(
         "StopAttackingIfTargetInvalid",
@@ -50,8 +56,7 @@ pub(crate) fn create_with_condition(
                 && Arc::ptr_eq(&target.get_entity().world.load_full(), tick.world)
                 && !should_stop(tick, target.as_ref());
             if !still_valid {
-                on_target_erased(tick, &target);
-                tick.state.erase(types::ATTACK_TARGET.id());
+                drop_target(tick, &target);
             }
             true
         },

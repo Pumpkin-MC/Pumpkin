@@ -2,35 +2,21 @@ mod ai;
 mod movement;
 mod shoot;
 
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 
-use arc_swap::ArcSwapOption;
-use pumpkin_data::{
-    damage::DamageType,
-    entity::{EntityPose, EntityType},
-    sound::Sound,
-};
+use pumpkin_data::{damage::DamageType, entity::EntityType, sound::Sound};
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{get_seed, legacy_rand::LegacyRand};
 
 use crate::entity::{
     Entity, EntityBase,
     ai::{
-        brain::{
-            Brain, BrainTick,
-            memory::{PackedMemories, types},
-        },
+        brain::{Brain, memory::PackedMemories},
         pathfinder::node::PathType,
     },
     mob::{Mob, MobEntity},
     projectile_deflection::{ProjectileDeflection, default_deflection},
 };
-use crate::plugin::api::events::entity::{
-    entity_pose_change::EntityPoseChangeEvent, entity_spawn::EntitySpawnEvent,
-    entity_target::TargetReason,
-};
-use crate::plugin::api::events::world::GenericGameEvent;
-use crate::plugin::server::packet::PacketSentEvent;
 
 const MAX_HEAD_Y_ROT: f32 = 30.0;
 const HEAD_ROT_SPEED: f32 = 25.0;
@@ -45,29 +31,25 @@ fn look_from_eyes(entity: &Entity, target: Vector3<f64>) {
 
 pub struct BreezeEntity {
     pub mob_entity: MobEntity,
-    pose_cleanup: ArcSwapOption<PoseCleanup>,
     movement_random: Mutex<LegacyRand>,
-}
-
-struct PoseCleanup {
-    previous: EntityPose,
-    target: Option<Weak<dyn EntityBase>>,
 }
 
 impl BreezeEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mut mob_entity = MobEntity::new(entity);
+        mob_entity.brain_attack_target_filter = Some(is_breeze_target_type);
         let navigator = mob_entity
             .navigator
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         navigator.set_pathfinding_malus(PathType::DangerTrapdoor, -1.0);
         navigator.set_pathfinding_malus(PathType::DamageFire, -1.0);
-        Arc::new(Self {
+        let breeze = Arc::new(Self {
             mob_entity,
-            pose_cleanup: ArcSwapOption::empty(),
             movement_random: Mutex::new(LegacyRand::from_seed(get_seed())),
-        })
+        });
+        breeze.mob_entity.with_brain(breeze.as_ref(), |_| {});
+        breeze
     }
 
     fn with_movement_random<T>(&self, sample: impl FnOnce(&mut LegacyRand) -> T) -> T {
@@ -77,77 +59,10 @@ impl BreezeEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         sample(&mut random)
     }
+}
 
-    fn finish_pose(
-        tick: &mut BrainTick<'_>,
-        previous: EntityPose,
-        target: Option<Weak<dyn EntityBase>>,
-    ) {
-        tick.defer_pose_change(EntityPose::Standing, move |mob| {
-            let Some(breeze) = mob.cast_any().downcast_ref::<Self>() else {
-                return;
-            };
-            let pose = breeze.get_entity().pose.load();
-            if pose != previous && pose != EntityPose::Standing {
-                return;
-            }
-            let cleanup = Arc::new(PoseCleanup { previous, target });
-            breeze.pose_cleanup.store(Some(cleanup.clone()));
-            breeze.restore_standing(&cleanup, true);
-        });
-    }
-
-    fn clear_pose_cleanup(&self, cleanup: &Arc<PoseCleanup>) -> bool {
-        self.pose_cleanup
-            .compare_and_swap(&Some(cleanup.clone()), None)
-            .as_ref()
-            .is_some_and(|active| Arc::ptr_eq(active, cleanup))
-    }
-
-    fn restore_standing(&self, cleanup: &Arc<PoseCleanup>, allow_standing: bool) {
-        let entity = self.get_entity();
-        let living = &self.mob_entity.living_entity;
-        let previous = entity.pose.load();
-        if !living.is_alive()
-            || !(previous == cleanup.previous || allow_standing && previous == EntityPose::Standing)
-        {
-            self.clear_pose_cleanup(cleanup);
-            return;
-        }
-
-        let restored = entity.set_pose_if(
-            EntityPose::Standing,
-            || {
-                living.is_alive()
-                    && entity.pose.load() == previous
-                    && self
-                        .pose_cleanup
-                        .load()
-                        .as_ref()
-                        .is_some_and(|active| Arc::ptr_eq(active, cleanup))
-            },
-            || {},
-        );
-        if restored
-            && self.clear_pose_cleanup(cleanup)
-            && living.is_alive()
-            && entity.pose.load() == EntityPose::Standing
-            && let Some(target) = cleanup.target.as_ref().and_then(Weak::upgrade)
-            && self
-                .mob_entity
-                .stored_target()
-                .is_some_and(|current| Arc::ptr_eq(&current, &target))
-        {
-            self.mob_entity.with_brain(self, |brain| {
-                if brain
-                    .get(types::ATTACK_TARGET)
-                    .is_some_and(|current| Arc::ptr_eq(current, &target))
-                {
-                    brain.set_with_expiry(types::BREEZE_SHOOT, (), 60);
-                }
-            });
-        }
-    }
+fn is_breeze_target_type(entity_type: &EntityType) -> bool {
+    entity_type == &EntityType::PLAYER || entity_type == &EntityType::IRON_GOLEM
 }
 
 impl Mob for BreezeEntity {
@@ -156,56 +71,9 @@ impl Mob for BreezeEntity {
     }
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
-        // A veto leaves the old pose in place. Retry before the next Brain tick.
-        if let Some(cleanup) = self.pose_cleanup.load_full() {
-            self.restore_standing(&cleanup, false);
-            if !self.mob_entity.living_entity.is_alive() {
-                return;
-            }
-        }
-
-        // Plugins can set the mob's target between Brain ticks.
-        let current = self.mob_entity.stored_target();
-        let target_id = |target: &Arc<dyn EntityBase>| target.get_entity().entity_id;
-        self.mob_entity.with_brain(self, |brain| {
-            if brain.get(types::ATTACK_TARGET).map(target_id) != current.as_ref().map(target_id) {
-                brain.set_optional(types::ATTACK_TARGET, current.clone());
-            }
-        });
-        let effects = self.mob_entity.tick_brain_effects(self);
-        let (proposed, nearest_id) = self.mob_entity.with_brain(self, |brain| {
-            (
-                brain.get(types::ATTACK_TARGET).cloned(),
-                brain.get(types::NEAREST_ATTACKABLE).map(target_id),
-            )
-        });
-
-        // A plugin callback can inspect the mob's Brain. Dispatch outside its lock.
-        let proposed_id = proposed.as_ref().map(target_id);
-        if proposed_id != current.as_ref().map(target_id) {
-            let reason = proposed
-                .as_ref()
-                .map_or(TargetReason::ForgotTarget, |target| {
-                    if proposed_id != nearest_id {
-                        TargetReason::TargetAttackedEntity
-                    } else if target.get_player().is_some() {
-                        TargetReason::ClosestPlayer
-                    } else {
-                        TargetReason::ClosestEntity
-                    }
-                });
-            self.set_mob_target(proposed, reason);
-        }
-        let target = self.mob_entity.stored_target();
-        self.mob_entity.with_brain(self, |brain| {
-            if target.as_ref().map(target_id) != proposed_id {
-                brain.set_optional(types::ATTACK_TARGET, target);
-            }
-            ai::update_activity(brain);
-        });
-        for effect in effects {
-            effect(self);
-        }
+        self.mob_entity.tick_brain(self);
+        self.mob_entity
+            .with_brain(self, |brain| ai::update_activity(brain));
     }
 
     fn additional_tick_movement(&self) -> f64 {
@@ -216,24 +84,8 @@ impl Mob for BreezeEntity {
         movement::block_read_radius(&self.mob_entity.living_entity)
     }
 
-    fn has_global_tick_reach(&self) -> bool {
-        let entity = self.get_entity();
-        let world = entity.world.load();
-        let Some(server) = world.server.upgrade() else {
-            return false;
-        };
-        let plugins = &server.plugin_manager;
-        plugins.has_handlers::<EntitySpawnEvent>()
-            || plugins.has_handlers::<EntityPoseChangeEvent>()
-            || plugins.has_handlers::<GenericGameEvent>()
-            // Brain sounds use a live audience: a viewer can arrive after tick planning.
-            || plugins.has_handlers::<PacketSentEvent>()
-    }
-
     fn can_attack(&self, target: &dyn EntityBase) -> bool {
-        let entity_type = target.get_entity().entity_type;
-        (entity_type == &EntityType::PLAYER || entity_type == &EntityType::IRON_GOLEM)
-            && self.can_attack_base(target)
+        is_breeze_target_type(target.get_entity().entity_type) && self.can_attack_base(target)
     }
 
     fn cause_fall_damage(
@@ -299,7 +151,9 @@ mod tests {
 
     use super::*;
     use crate::entity::ai::brain::{
-        activity::ActivityData, behavior::OneShot, memory::MemoryStatus,
+        activity::ActivityData,
+        behavior::OneShot,
+        memory::{MemoryStatus, types},
     };
     use crate::entity::ai::test_support;
 
@@ -330,6 +184,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mob_target_access_reads_and_writes_breeze_brain_memory()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = test_support::world(&folder);
+        let position = Vector3::new(0.0, 64.0, 0.0);
+        let breeze = BreezeEntity::new(Entity::new(world.clone(), position, &EntityType::BREEZE));
+        let target = crate::entity::r#type::from_type(
+            &EntityType::IRON_GOLEM,
+            position,
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        let mob = breeze.get_mob_entity();
+
+        assert!(mob.get_target().is_none());
+        mob.set_target(Some(target.clone()));
+        assert!(mob.with_brain(breeze.as_ref(), |brain| {
+            brain
+                .get(types::ATTACK_TARGET)
+                .is_some_and(|current| Arc::ptr_eq(current, &target))
+        }));
+
+        mob.with_brain(breeze.as_ref(), |brain| {
+            brain.erase(types::ATTACK_TARGET.id());
+        });
+        assert!(mob.get_target().is_none());
+
+        mob.with_brain(breeze.as_ref(), |brain| {
+            brain.set(types::ATTACK_TARGET, target.clone());
+        });
+        assert!(
+            mob.get_target()
+                .is_some_and(|current| Arc::ptr_eq(&current, &target))
+        );
+
+        let cow = crate::entity::r#type::from_type(
+            &EntityType::COW,
+            position,
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        mob.set_target(Some(cow));
+        assert!(mob.brain_has_memory_value(types::ATTACK_TARGET.id()));
+        assert!(mob.get_target().is_none());
+
+        mob.set_target(None);
+        assert!(!mob.brain_has_memory_value(types::ATTACK_TARGET.id()));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn pose_effect_can_read_the_brain_after_the_ai_step()
     -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
@@ -351,7 +257,8 @@ mod tests {
                 move |tick| {
                     tick.state.set(types::BREEZE_SHOOT, ());
                     let probe = probe.clone();
-                    tick.set_pose_then(EntityPose::Inhaling, move |breeze| {
+                    tick.set_pose(EntityPose::Inhaling);
+                    tick.defer(move |breeze| {
                         probe.store(
                             breeze
                                 .get_mob_entity()

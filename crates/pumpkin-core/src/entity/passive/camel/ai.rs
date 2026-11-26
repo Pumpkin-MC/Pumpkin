@@ -1,9 +1,9 @@
 use std::sync::atomic::Ordering::Relaxed;
 
-use pumpkin_data::entity::{EntityPose, EntityType};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::environment_attribute::Activity;
 
-use super::{CamelEntity, STANDUP_DURATION_TICKS};
+use super::CamelEntity;
 use crate::entity::EntityBase;
 use crate::entity::ai::brain::{
     Brain, BrainProvider, BrainTick,
@@ -126,14 +126,7 @@ fn camel<'a>(tick: &BrainTick<'a>) -> Option<&'a CamelEntity> {
 fn when_able_to_move(behavior: OneShot) -> OneShot {
     sequence(
         "TriggerIf",
-        |tick| {
-            camel(tick).is_some_and(|camel| match tick.pending_pose() {
-                // An instant stand can't backdate its transition before world tick zero.
-                Some(EntityPose::Standing) => tick.time >= STANDUP_DURATION_TICKS,
-                Some(EntityPose::Sitting) => false,
-                _ => !camel.refuse_to_move(),
-            })
-        },
+        |tick| camel(tick).is_some_and(|camel| !camel.refuse_to_move()),
         behavior,
     )
 }
@@ -159,12 +152,8 @@ impl Behavior for CamelPanic {
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
-        if camel(tick).is_some() {
-            tick.defer_pose_change(EntityPose::Standing, |mob| {
-                if let Some(camel) = mob.cast_any().downcast_ref::<CamelEntity>() {
-                    camel.stand_up_instantly();
-                }
-            });
+        if let Some(camel) = camel(tick) {
+            camel.stand_up_instantly();
         }
         self.0.start(tick);
     }
@@ -198,8 +187,7 @@ impl Behavior for RandomSitting {
             return false;
         };
         let entity = camel.get_entity();
-        tick.pending_pose().is_none()
-            && !entity.is_in_water()
+        !entity.is_in_water()
             && camel.get_pose_time() >= RANDOM_SITTING_MINIMAL_POSE_SECONDS * 20
             && !entity.is_leashed()
             && entity.on_ground.load(Relaxed)
@@ -211,18 +199,11 @@ impl Behavior for RandomSitting {
         let Some(camel) = camel(tick) else {
             return;
         };
-        let (pose, transition): (_, fn(&CamelEntity)) = if camel.is_camel_sitting() {
-            (EntityPose::Standing, CamelEntity::stand_up)
+        if camel.is_camel_sitting() {
+            camel.stand_up();
         } else if !tick.state.has_memory_value(types::IS_PANICKING.id()) {
-            (EntityPose::Sitting, CamelEntity::sit_down)
-        } else {
-            return;
-        };
-        tick.defer_pose_change(pose, move |mob| {
-            if let Some(camel) = mob.cast_any().downcast_ref::<CamelEntity>() {
-                transition(camel);
-            }
-        });
+            camel.sit_down();
+        }
     }
 
     fn debug_name(&self) -> &'static str {

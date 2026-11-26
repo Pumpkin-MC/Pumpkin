@@ -79,32 +79,32 @@ impl Behavior for LongJumpMidJump {
             .living_entity
             .discard_friction
             .store(true, Relaxed);
-        tick.set_pose(EntityPose::LongJumping);
+        tick.mob.get_entity().set_pose(EntityPose::LongJumping);
     }
 
     fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         let entity = tick.mob.get_entity();
         if entity.on_ground.load(Relaxed) {
             let velocity = entity.velocity.load();
-            entity.velocity.store(Vector3::new(
+            entity.set_velocity(Vector3::new(
                 velocity.x * f64::from(0.1f32),
                 velocity.y,
                 velocity.z * f64::from(0.1f32),
             ));
-            let sound = self.landing_sound;
-            let position = entity.pos.load();
-            let world = tick.world.clone();
-            tick.defer(move |mob| {
-                mob.get_entity().send_velocity();
-                world.play_sound_fine(sound, SoundCategory::Neutral, &position, 2.0, 1.0);
-            });
+            tick.world.play_sound_fine(
+                self.landing_sound,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                2.0,
+                1.0,
+            );
         }
         tick.mob
             .get_mob_entity()
             .living_entity
             .discard_friction
             .store(false, Relaxed);
-        tick.set_pose(EntityPose::Standing);
+        entity.set_pose(EntityPose::Standing);
         tick.state.erase(types::LONG_JUMP_MID_JUMP.id());
         let cooldown = sample(tick, self.time_between_long_jumps);
         tick.state.set(types::LONG_JUMP_COOLDOWN_TICKS, cooldown);
@@ -366,17 +366,15 @@ impl Behavior for LongJumpToRandomPos {
             living.discard_friction.store(true, Relaxed);
             let length = chosen_jump.length();
             let length_with_jump_boost = length + f64::from(living.get_jump_boost_power());
-            entity
-                .velocity
-                .store(chosen_jump * (length_with_jump_boost / length));
+            entity.set_velocity(chosen_jump * (length_with_jump_boost / length));
             tick.state.set(types::LONG_JUMP_MID_JUMP, true);
-            let sound = self.jump_sound;
-            let position = entity.pos.load();
-            let world = tick.world.clone();
-            tick.defer(move |mob| {
-                mob.get_entity().send_velocity();
-                world.play_sound_fine(sound, SoundCategory::Neutral, &position, 1.0, 1.0);
-            });
+            tick.world.play_sound_fine(
+                self.jump_sound,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+                1.0,
+                1.0,
+            );
         }
     }
 

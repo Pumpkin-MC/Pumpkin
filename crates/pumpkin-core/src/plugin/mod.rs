@@ -1228,14 +1228,6 @@ impl PluginManager {
             .is_some_and(|handlers| !handlers.is_empty())
     }
 
-    #[must_use]
-    pub(crate) fn has_handlers_for(&self, event_names: &[&'static str]) -> bool {
-        self.handlers
-            .load()
-            .iter()
-            .any(|(name, handlers)| !handlers.is_empty() && event_names.contains(name))
-    }
-
     /// Fire an event to all registered handlers
     pub async fn fire<E: Payload + Send + Sync + 'static>(
         &self,
