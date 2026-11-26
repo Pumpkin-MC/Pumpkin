@@ -744,9 +744,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         pitch: f32,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get(&world)?;
-        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+        let sound_data = from_wit_sound(sound)?;
 
         let internal_category = from_wit_sound_category(category);
 
@@ -2218,6 +2216,21 @@ impl pumpkin_world::generation::generator::CustomChunkGenerator for WasmChunkGen
     }
 }
 
+/// Converts a WIT sound to `pumpkin_data`'s sound.
+///
+/// `sounds.wit` is generated from the same registry as `pumpkin_data::sound::Sound`, so the
+/// variants share order and index (see the `wit_sounds_match_registry` test). Building the name
+/// from `{:?}` instead yields e.g. `Sound::BlockNoteBlockPling`, which never resolves.
+pub fn from_wit_sound(
+    sound: pumpkin::plugin::sounds::Sound,
+) -> wasmtime::Result<pumpkin_data::sound::Sound> {
+    let index = sound as usize;
+    pumpkin_data::sound::Sound::NAMES
+        .get(index)
+        .and_then(|name| pumpkin_data::sound::Sound::from_name(name))
+        .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound index: {index}")))
+}
+
 #[must_use]
 pub const fn from_wit_sound_category(
     category: pumpkin::plugin::sounds::SoundCategory,
@@ -2271,6 +2284,45 @@ pub(crate) fn to_wit_biome(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wit_sounds_resolve_to_internal_sounds() {
+        use pumpkin::plugin::sounds::Sound as WitSound;
+        let cases = [
+            (
+                WitSound::EntityAllayAmbientWithItem,
+                "entity.allay.ambient_with_item",
+            ),
+            (WitSound::BlockNoteBlockPling, "block.note_block.pling"),
+        ];
+        for (wit, name) in cases {
+            assert_eq!(from_wit_sound(wit).unwrap().to_name(), name);
+        }
+    }
+
+    /// Every variant of `sounds.wit` must sit at the index of the same registry name.
+    #[test]
+    fn wit_sounds_match_registry() {
+        let wit = include_str!("../../pumpkin-plugin-wit/v0.1/sounds.wit");
+        let variants: Vec<&str> = wit
+            .split("enum sound {")
+            .nth(1)
+            .and_then(|rest| rest.split('}').next())
+            .expect("sound enum in sounds.wit")
+            .split(',')
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .collect();
+        let names = pumpkin_data::sound::Sound::NAMES;
+        assert_eq!(variants.len(), names.len());
+        for (i, (variant, name)) in variants.iter().zip(names).enumerate() {
+            assert_eq!(
+                *variant,
+                name.replace(['.', '_'], "-"),
+                "sound index {i} mismatch"
+            );
+        }
+    }
 
     #[test]
     fn wit_particle_ids_match_internal_particle_ids() {
