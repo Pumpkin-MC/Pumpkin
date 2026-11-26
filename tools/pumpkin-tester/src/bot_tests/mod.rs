@@ -26,10 +26,11 @@ pub async fn run_bot_tests(
 ) -> Result<(), String> {
     status_ping::run_bot_status_ping_test(addr, summary_lines).await?;
 
-    let (mut bot1, bot2) =
+    let (mut bot1, mut bot2) =
         login_and_movement::run_login_and_movement_tests(server, addr, summary_lines).await?;
 
-    explosion_knockback::run_explosion_knockback_test(server, &mut bot1, summary_lines).await?;
+    explosion_knockback::run_explosion_knockback_test(server, &mut bot1, &mut bot2, summary_lines)
+        .await?;
 
     commands_and_gamemode::run_commands_and_gamemode_tests(
         server,

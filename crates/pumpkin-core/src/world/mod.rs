@@ -76,6 +76,7 @@ pub use explosion::{
     BlockInteraction, DefaultExplosionDamageCalculator, Explosion, ExplosionDamageCalculator,
     ExplosionInteraction, SimpleExplosionDamageCalculator,
 };
+pub(crate) const EXPLOSION_PACKET_RANGE_SQUARED: f64 = 64.0 * 64.0;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
@@ -4361,14 +4362,24 @@ impl World {
         let particle = explosion.particle();
         let sound = IdOr::<SoundEvent>::Id(explosion.sound() as u16);
         for player in self.players.load().iter() {
-            if player.position().squared_distance_to_vec(&position) > 4096.0 {
+            let knockback = explosion.player_knockback(player.entity_id());
+            if player.position().squared_distance_to_vec(&position) > EXPLOSION_PACKET_RANGE_SQUARED
+            {
+                // Vanilla only sends CExplosion within 64 blocks; preserve hurt-motion
+                // delivery for hit Java players outside it unless a send is already pending.
+                if knockback.is_some()
+                    && player.as_java().is_some()
+                    && !player.get_entity().sync_velocity.load(Ordering::SeqCst)
+                {
+                    player.send_hurt_velocity();
+                }
                 continue;
             }
             player.try_send_client_packet(&CExplosion::new(
                 position,
                 power,
                 block_count as i32,
-                explosion.player_knockback(player.entity_id()),
+                knockback,
                 VarInt(particle as i32),
                 sound.clone(),
             ));
