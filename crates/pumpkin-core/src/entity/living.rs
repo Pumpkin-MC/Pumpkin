@@ -1353,6 +1353,20 @@ impl LivingEntity {
             for attribute in updated {
                 mob.get_mob_entity().on_attribute_updated(attribute);
             }
+        } else if updated.iter().any(|id| {
+            *id == Attributes::WAYPOINT_TRANSMIT_RANGE.id
+                || *id == Attributes::WAYPOINT_RECEIVE_RANGE.id
+        }) && let Some(player) = caller.get_player()
+        {
+            let world = self.entity.world.load();
+            // hmm, the manager keeps an Arc, and `caller` only hands us a borrow
+            if let Some(player) = world.get_player_by_id(player.entity_id()) {
+                world.with_waypoints(|waypoints, locator_bar| {
+                    for attribute in updated {
+                        waypoints.on_attribute_updated(&player, attribute, locator_bar);
+                    }
+                });
+            }
         }
     }
 

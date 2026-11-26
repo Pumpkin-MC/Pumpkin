@@ -97,6 +97,8 @@ impl CommandExecutor for SetBoolExecutor {
                     }
                 }
             }
+        } else if self.0 == GameRule::LocatorBar {
+            crate::world::waypoint::on_locator_bar_changed(context.server());
         }
 
         let value_component = TextComponent::text(arg_value.to_string());
