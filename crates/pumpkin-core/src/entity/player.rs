@@ -6676,10 +6676,18 @@ impl Player {
     }
 
     /// Add experience levels to the player.
+    ///
+    /// Vanilla `Player.giveExperienceLevels` clamps a level that would go below
+    /// zero and resets the progress and points with it, so the player ends up on
+    /// a clean level 0 instead of keeping the progress they had.
     pub fn add_experience_levels(&self, added_levels: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);
-        let new_level = current_level + added_levels;
-        self.set_experience_level(new_level, true);
+        let new_level = current_level.saturating_add(added_levels);
+        if new_level < 0 {
+            self.set_experience(0, 0.0, 0);
+        } else {
+            self.set_experience_level(new_level, true);
+        }
     }
 
     /// Set the player's experience points directly. Returns `true` if successful.
