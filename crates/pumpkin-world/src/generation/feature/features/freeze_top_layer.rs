@@ -4,7 +4,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, GrassBlockLikeProperties, SnowLikeProperties,
 };
 use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockId, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 
@@ -58,7 +58,7 @@ impl FreezeTopLayerFeature {
                         && !below.to_state().is_air()
                         && !below_block.has_tag(tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
                         && (below_block.has_tag(tag::Block::MINECRAFT_SUPPORT_OVERRIDE_SNOW_LAYER)
-                            || below.to_state().has_full_top_collision_face()
+                            || below.to_state().is_collision_face_full(BlockDirection::Up)
                             || is_full_snow_layer(below))
                         && block_light_at(chunk, x, y, z) < 10
                     {

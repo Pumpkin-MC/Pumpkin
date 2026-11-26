@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState,
     entity::EntityType,
     tag::{Block as BlockTag, Taggable},
 };
@@ -30,7 +30,7 @@ impl SpawnStrategy {
                 above_state.get_block_collision_shapes().next().is_none()
                     && (!matches!(self, Self::OnTopOfColliderNoLeaves)
                         || !state.id.to_block().has_tag(&BlockTag::MINECRAFT_LEAVES))
-                    && (state.is_full_cube() || state.has_full_top_collision_face())
+                    && state.is_collision_face_full(BlockDirection::Up)
             }
             Self::LegacyIronGolem => {
                 let block = Block::from_state_id(state.id);

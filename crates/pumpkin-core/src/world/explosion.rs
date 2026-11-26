@@ -17,7 +17,7 @@ use rand::seq::SliceRandom;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    block::{ExplodeArgs, collect_loot},
+    block::{BeforeExplosionDestroyArgs, ExplodeArgs, collect_loot},
     entity::{Entity, EntityBase, item::ItemEntity, projectile::is_redirectable, tnt::TNTEntity},
     world::loot::LootContextParameters,
 };
@@ -738,10 +738,13 @@ impl<'a> Explosion<'a> {
                     }
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
 
-                    if block == &Block::CREAKING_HEART {
-                        crate::block::blocks::creaking_heart::CreakingHeartBlock::will_explode(
-                            world, pos, state.id, self,
-                        );
+                    if let Some(pumpkin_block) = pumpkin_block {
+                        pumpkin_block.before_explosion_destroy(BeforeExplosionDestroyArgs {
+                            world,
+                            state,
+                            position: pos,
+                            explosion: self,
+                        });
                     }
 
                     // TODO vanilla `onExplosionHit`: blocks drop XP (`spawnAfterBreak`) when the indirect source is a player.
@@ -803,14 +806,71 @@ fn add_or_append_stack(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::{
         BlockInteraction, Explosion, ExplosionDamageCalculator, SimpleExplosionDamageCalculator,
         add_or_append_stack,
     };
+    use crate::block::entities::creaking_heart::CreakingHeartBlockEntity;
+    use crate::entity::{Entity, EntityBase, mob::creaking::CreakingEntity};
+    use pumpkin_data::entity::EntityType;
     use pumpkin_data::item::Item;
     use pumpkin_data::item_stack::ItemStack;
     use pumpkin_data::{Block, fluid::Fluid, particle::Particle, sound::Sound, tag};
     use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+    use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+
+    #[tokio::test]
+    async fn destructive_explosion_starts_teardown_while_the_creaking_heart_exists()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk_pos, ChunkData::empty_sync(chunk_pos.x, chunk_pos.y));
+        let heart_state = Block::CREAKING_HEART.default_state.id;
+        world.set_block_state(&position, heart_state, BlockFlags::NOTIFY_ALL);
+        let block_entity = world.get_block_entity(&position).ok_or("missing heart")?;
+        let heart = block_entity
+            .as_any()
+            .downcast_ref::<CreakingHeartBlockEntity>()
+            .ok_or("wrong heart type")?;
+        let protector = CreakingEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(11.5, 64.0, 8.5),
+            &EntityType::CREAKING,
+        ));
+        protector.set_transient(position);
+        assert!(world.spawn_entity(protector.clone()));
+        assert!(heart.try_adopt_legacy_protector(&world, &protector));
+        assert!(heart.is_protector(protector.get_entity().entity_uuid));
+        assert!(!protector.is_tearing_down());
+
+        let explode = |interaction| {
+            Explosion::new(6.0, position.to_centered_f64(), interaction)
+                .with_damage_calculator(Arc::new(SimpleExplosionDamageCalculator::new(
+                    true, false, None, None,
+                )))
+                .explode(&world)
+        };
+        assert!(explode(BlockInteraction::TriggerBlock) > 0);
+        assert_eq!(world.get_block_state_id(&position), heart_state);
+        assert!(!protector.is_tearing_down());
+
+        assert!(explode(BlockInteraction::Destroy) > 0);
+        assert_eq!(
+            world.get_block_state_id(&position),
+            Block::AIR.default_state.id
+        );
+        assert!(protector.is_tearing_down());
+        assert!(!protector.get_entity().is_removed());
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[test]
     fn tnt_minecart_rail_protection_covers_every_rail_type() {

@@ -50,7 +50,7 @@ fn activities(_mob: &dyn Mob) -> Vec<ActivityData> {
             Activity::Idle,
             10,
             vec![
-                Box::new(start_attacking::create(
+                Box::new(start_attacking::create_with_reason(
                     |tick| {
                         tick.mob
                             .cast_any()
@@ -64,6 +64,7 @@ fn activities(_mob: &dyn Mob) -> Vec<ActivityData> {
                             .clone();
                         Some(target)
                     },
+                    |_| TargetReason::ClosestPlayer,
                 )),
                 Box::new(set_entity_look_target_sometimes::create(8.0, 30, 60)),
                 Box::new(run_one(vec![
@@ -90,7 +91,7 @@ fn activities(_mob: &dyn Mob) -> Vec<ActivityData> {
                     set_walk_target_from_attack_target_if_target_out_of_reach::create(|_| 1.0),
                 ),
                 Box::new(melee_attack::create_with(can_move, ATTACK_INTERVAL)),
-                Box::new(stop_attacking_if_target_invalid::create_with_filter(
+                Box::new(stop_attacking_if_target_invalid::create_with_target_events(
                     is_target_unreachable,
                 )),
             ],
@@ -127,7 +128,7 @@ pub(super) fn nearest_players(creaking: &CreakingEntity) -> Vec<Arc<Player>> {
 
 pub(super) fn tick(creaking: &CreakingEntity) {
     let mob = &creaking.mob_entity;
-    mob.tick_brain_with_target_events(creaking, TargetReason::ClosestPlayer);
+    mob.tick_brain(creaking);
     if creaking.get_entity().is_removed() {
         return;
     }
@@ -140,14 +141,8 @@ pub(super) fn tick(creaking: &CreakingEntity) {
     });
 }
 
-fn entity_id(entity: &dyn EntityBase) -> i32 {
-    entity.get_entity().entity_id
-}
-
 pub(super) fn tick_links(creaking: &CreakingEntity) -> Vec<i32> {
     let mut links = Vec::new();
-    let stored = creaking.mob_entity.stored_target();
-    links.extend(stored.as_deref().map(entity_id));
     creaking.mob_entity.with_brain(creaking, |brain| {
         if let Some(players) = brain.get(types::NEAREST_PLAYERS) {
             links.extend(players.iter().map(|player| player.entity_id()));
@@ -172,68 +167,167 @@ pub(super) fn tick_links(creaking: &CreakingEntity) -> Vec<i32> {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::mpsc, time::Duration};
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering::Relaxed},
+        mpsc,
+    };
+    use std::time::Duration;
 
-    use pumpkin_data::entity::EntityType;
+    use pumpkin_data::{dimension::Dimension, entity::EntityType};
     use pumpkin_util::math::vector3::Vector3;
 
     use super::*;
-    use crate::entity::{Entity, ai::test_support::world, passive::cow::CowEntity};
+    use crate::{
+        entity::{Entity, ai::test_support::server, passive::cow::CowEntity},
+        plugin::{
+            BoxFuture, EventHandler,
+            api::events::{EventPriority, entity::entity_target::EntityTargetEvent},
+        },
+        server::Server,
+    };
 
-    #[tokio::test]
-    async fn target_setter_completes_while_the_brain_is_locked()
+    struct ReviewTarget {
+        replacement: i32,
+        candidate: i32,
+        calls: Mutex<Vec<(TargetReason, Option<i32>)>>,
+        read_completed: AtomicBool,
+    }
+
+    impl EventHandler<EntityTargetEvent> for ReviewTarget {
+        fn handle_blocking<'a>(
+            &'a self,
+            server: &'a Arc<Server>,
+            event: &'a mut EntityTargetEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+                let Some(creaking) = world.get_entity_by_id(event.entity_id) else {
+                    return;
+                };
+                let (tx, rx) = mpsc::channel();
+                // Bound the read so a callback under the Brain mutex fails this test cleanly.
+                let _reader = std::thread::spawn(move || {
+                    let from_brain = creaking
+                        .get_mob()
+                        .and_then(|mob| mob.get_mob_entity().get_target())
+                        .map(|target| target.get_entity().entity_id);
+                    let _ = tx.send(from_brain);
+                });
+                let Ok(target) = rx.recv_timeout(Duration::from_secs(2)) else {
+                    return;
+                };
+                self.read_completed.store(true, Relaxed);
+                let mut calls = self
+                    .calls
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                match calls.len() {
+                    0 | 2 => event.cancelled = true,
+                    1 => event.target_id = Some(self.replacement),
+                    3 => event.target_id = Some(self.candidate),
+                    _ => {}
+                }
+                calls.push((event.reason, target));
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn brain_target_events_see_the_previous_target_and_honor_veto_and_redirection()
     -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        let creaking = CreakingEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(0.0, 64.0, 0.0),
-            &EntityType::CREAKING,
-        ));
-        let previous = CowEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(3.0, 64.0, 0.0),
-            &EntityType::COW,
-        ));
-        creaking.mob_entity.set_target(Some(previous.clone()));
-        creaking.mob_entity.with_brain(creaking.as_ref(), |brain| {
-            brain.set(types::ATTACK_TARGET, previous);
-            brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 123);
+        let server = server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let entity = |x, kind| Entity::new(world.clone(), Vector3::new(x, 64.0, 0.0), kind);
+        let creaking = CreakingEntity::new(entity(0.0, &EntityType::CREAKING));
+        let candidate = CowEntity::new(entity(2.0, &EntityType::COW));
+        let replacement = CowEntity::new(entity(3.0, &EntityType::COW));
+        world.add_entity_silent(creaking.clone());
+        world.add_entity_silent(candidate.clone());
+        world.add_entity_silent(replacement.clone());
+        let replacement_id = replacement.get_entity().entity_id;
+        let candidate_id = candidate.get_entity().entity_id;
+        let review = Arc::new(ReviewTarget {
+            replacement: replacement_id,
+            candidate: candidate_id,
+            calls: Mutex::new(Vec::new()),
+            read_completed: AtomicBool::new(false),
         });
-        let cow = CowEntity::new(Entity::new(
-            world.clone(),
-            Vector3::new(2.0, 64.0, 0.0),
-            &EntityType::COW,
+        server.plugin_manager.register::<EntityTargetEvent, _>(
+            review.clone(),
+            EventPriority::Normal,
+            true,
+        );
+
+        let forget = Arc::new(AtomicBool::new(false));
+        let mut brain = Brain::default();
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Core,
+            0,
+            vec![
+                Box::new(start_attacking::create_with_reason(
+                    |_| true,
+                    move |_| Some(candidate.clone()),
+                    |_| TargetReason::ClosestEntity,
+                )),
+                Box::new(stop_attacking_if_target_invalid::create_with_target_events(
+                    {
+                        let forget = forget.clone();
+                        move |_, _| forget.load(Relaxed)
+                    },
+                )),
+            ],
         ));
-        let (sender, result) = mpsc::channel();
-        let completed = std::thread::scope(|scope| {
-            creaking.mob_entity.with_brain(creaking.as_ref(), |_| {
-                scope.spawn(|| {
-                    let updated =
-                        creaking.set_mob_target(Some(cow.clone()), TargetReason::ClosestPlayer);
-                    sender.send(updated)
-                });
-                result.recv_timeout(Duration::from_secs(2))
+        brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 123);
+        let mob = &creaking.mob_entity;
+        mob.set_brain(brain);
+        let visible_target = || mob.get_target().map(|target| target.get_entity().entity_id);
+        let unreachable_since = || {
+            mob.with_brain(creaking.as_ref(), |brain| {
+                brain.get(types::CANT_REACH_WALK_TARGET_SINCE).copied()
             })
-        });
-        assert!(completed?);
-        creaking.set_can_move(false);
-        tick(&creaking);
-        creaking.mob_entity.with_brain(creaking.as_ref(), |brain| {
-            assert_eq!(
-                brain
-                    .get(types::ATTACK_TARGET)
-                    .map(|target| entity_id(target.as_ref())),
-                Some(cow.get_entity().entity_id),
-            );
-            assert!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE).is_none());
+        };
+
+        mob.tick_brain(creaking.as_ref());
+        assert_eq!(visible_target(), None);
+        assert_eq!(unreachable_since(), Some(123));
+        mob.tick_brain(creaking.as_ref());
+        assert_eq!(visible_target(), Some(replacement_id));
+        assert_eq!(unreachable_since(), None);
+
+        replacement.get_entity().invulnerable.store(true, Relaxed);
+        assert_eq!(visible_target(), None);
+        forget.store(true, Relaxed);
+        mob.with_brain(creaking.as_ref(), |brain| {
             brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 456);
         });
-        tick(&creaking);
-        creaking.mob_entity.with_brain(creaking.as_ref(), |brain| {
-            assert_eq!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE), Some(&456));
-        });
-        world.level.shutdown().await;
+        mob.tick_brain(creaking.as_ref());
+        assert_eq!(
+            mob.stored_target()
+                .map(|target| target.get_entity().entity_id),
+            Some(replacement_id)
+        );
+        assert_eq!(unreachable_since(), Some(456));
+        mob.tick_brain(creaking.as_ref());
+        assert_eq!(visible_target(), Some(candidate_id));
+        assert_eq!(unreachable_since(), None);
+        server.shutdown().await;
+
+        assert!(review.read_completed.load(Relaxed));
+        let calls = review
+            .calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(
+            *calls,
+            [
+                (TargetReason::ClosestEntity, None),
+                (TargetReason::ClosestEntity, None),
+                (TargetReason::ForgotTarget, None),
+                (TargetReason::ForgotTarget, None),
+            ],
+        );
         Ok(())
     }
 }

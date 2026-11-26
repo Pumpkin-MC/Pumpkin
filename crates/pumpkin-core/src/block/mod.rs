@@ -107,6 +107,9 @@ pub trait BlockBehaviour: Send + Sync {
         true
     }
 
+    /// Runs before an explosion collects loot and destroys this block.
+    fn before_explosion_destroy(&self, _args: BeforeExplosionDestroyArgs<'_>) {}
+
     fn explode(&self, _args: ExplodeArgs<'_>) {}
 
     /// Handles the block event, which is an event specific to a block with an integer ID and data.
@@ -322,6 +325,13 @@ pub struct OnEntityStepArgs<'a> {
     pub position: &'a BlockPos,
     pub entity: &'a dyn EntityBase,
     pub below_supporting_block: bool,
+}
+
+pub struct BeforeExplosionDestroyArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub explosion: &'a crate::world::Explosion<'a>,
 }
 
 pub struct ExplodeArgs<'a> {

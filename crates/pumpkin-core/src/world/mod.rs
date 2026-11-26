@@ -48,14 +48,12 @@ use crate::world::chunker::is_within_chebyshev_distance;
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
     block::{
-        entities::creaking_heart::CreakingHeartBlockEntity,
         registry::BlockRegistry,
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
     entity::{
         Entity, EntityBase, RemovalReason,
-        mob::creaking::CreakingEntity,
         player::Player,
         r#type::{load_entity_from_nbt, load_static_entity_from_nbt, self_and_passengers},
     },
@@ -297,7 +295,6 @@ pub struct World {
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
     pending_block_entity_migrations: crossbeam::queue::SegQueue<Vector2<i32>>,
-    pending_creaking_heart_hits: crossbeam::queue::SegQueue<i32>,
     /// Persistent custom data for the world (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: std::sync::Mutex<NbtCompound>,
     /// Persistent custom data for block entities at specific positions
@@ -460,7 +457,6 @@ impl World {
             server,
             block_entities: DashMap::new(),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
-            pending_creaking_heart_hits: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
             encoded_chunk_cache: DashMap::new(),
@@ -1848,7 +1844,6 @@ impl World {
             player.send_velocity_changes();
         }
         self.entity_tracker.update_all(self);
-        self.flush_pending_creaking_heart_hits(&active_chunks);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
         if self.block_entities.len() < active_chunks.len() {
@@ -1910,12 +1905,12 @@ impl World {
         tickable: &[&Arc<dyn EntityBase>],
         players: &[Arc<Player>],
     ) -> Option<entity_islands::Islands> {
-        let plugins_require_serial = entity_islands::plugins_observe_entity_ticks(plugins)
-            || (entity_islands::plugins_observe_creaking_feedback(plugins)
-                && tickable
-                    .iter()
-                    .any(|entity| entity.get_entity().entity_type == &EntityType::CREAKING));
-        let plan_islands = !plugins_require_serial
+        let plan_islands = !entity_islands::plugins_observe_entity_ticks(plugins)
+            && !tickable.iter().any(|entity| {
+                entity
+                    .get_mob()
+                    .is_some_and(|mob| mob.requires_serial_tick(plugins))
+            })
             && self
                 .island_schedule
                 .lock()
@@ -1923,6 +1918,19 @@ impl World {
                 .should_plan(tickable.len());
         if plan_islands {
             let islands = (|| {
+                let mut passive_writes = Vec::new();
+                let observes_block_writes =
+                    entity_islands::plugins_observe_passive_block_writes(plugins);
+                for entity in entities_to_tick {
+                    if let Some(mob) = entity.get_mob()
+                        && let Some(reach) = mob.passive_block_writes()
+                    {
+                        if observes_block_writes || mob.requires_serial_tick(plugins) {
+                            return None;
+                        }
+                        passive_writes.push((entity.get_entity().entity_id, reach));
+                    }
+                }
                 let reports: Vec<_> = tickable
                     .par_iter()
                     .map(|entity| entity_islands::EntityReach::of(entity.as_ref(), islands_config))
@@ -1933,25 +1941,6 @@ impl World {
                     .map(|(report, entity)| report.block_write_check(entity.as_ref()))
                     .collect();
                 let mut reaches = entity_islands::resolve(reports, islands_config)?;
-                let passive_writes: Vec<_> = entities_to_tick
-                    .iter()
-                    .filter_map(|entity| {
-                        if entity.get_entity().entity_type != &EntityType::CREAKING {
-                            return None;
-                        }
-                        let creaking = entity.cast_any().downcast_ref::<CreakingEntity>()?;
-                        let home = creaking
-                            .get_home_pos()
-                            .filter(|home| self.is_in_build_limit(*home))?;
-                        let reach = CreakingHeartBlockEntity::resin_write_reach(home);
-                        Some((entity.get_entity().entity_id, reach))
-                    })
-                    .collect();
-                if !passive_writes.is_empty()
-                    && entity_islands::plugins_observe_passive_block_writes(plugins)
-                {
-                    return None;
-                }
                 entity_islands::prune_block_writes(
                     self,
                     &mut reaches,
@@ -1997,33 +1986,6 @@ impl World {
             islands.filter(|_| parallel)
         } else {
             None
-        }
-    }
-
-    pub(crate) fn defer_creaking_heart_hit(&self, entity_id: i32) {
-        self.pending_creaking_heart_hits.push(entity_id);
-    }
-
-    fn flush_pending_creaking_heart_hits(
-        self: &Arc<Self>,
-        active_chunks: &FxHashSet<Vector2<i32>>,
-    ) {
-        // Pending resin can change blocks. Apply it before block entities tick, outside the islands.
-        for _ in 0..self.pending_creaking_heart_hits.len() {
-            let Some(id) = self.pending_creaking_heart_hits.pop() else {
-                break;
-            };
-            let Some(entity) = self.get_entity_by_id(id) else {
-                continue;
-            };
-            if let Some(creaking) = entity.cast_any().downcast_ref::<CreakingEntity>()
-                && !creaking.finish_pending_heart_hit(
-                    self,
-                    active_chunks.contains(&entity.get_entity().chunk_pos.load()),
-                )
-            {
-                self.defer_creaking_heart_hit(id);
-            }
         }
     }
 
@@ -8840,6 +8802,59 @@ mod tests {
                 .plan_entity_islands(&relevant, &config, &entities, &tickable, &[])
                 .is_none()
         );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn idle_linked_creaking_connects_attackers_to_remote_heart_readers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, EntityBase, mob::creaking::CreakingEntity};
+        use crate::plugin::PluginManager;
+        use pumpkin_config::world::EntityIslandsConfig;
+        use pumpkin_data::entity::EntityType;
+        use pumpkin_util::math::vector3::Vector3;
+        use std::sync::Arc;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = Vector3::new(0.5, 64.0, 0.5);
+        let creaking =
+            CreakingEntity::new(Entity::new(world.clone(), position, &EntityType::CREAKING));
+        let mut entities = (0..16)
+            .map(|index| {
+                let x = match index {
+                    0 => position.x,
+                    1 => 50.5,
+                    _ => f64::from(index) * 256.0,
+                };
+                Arc::new(Entity::new(
+                    world.clone(),
+                    Vector3::new(x, position.y, position.z),
+                    &EntityType::PIG,
+                )) as Arc<dyn EntityBase>
+            })
+            .collect::<Vec<_>>();
+        entities.push(creaking.clone());
+        // An idle protector can still be hit by the first ticking entity.
+        let tickable: Vec<_> = entities[..16].iter().collect();
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            ..EntityIslandsConfig::default()
+        };
+        let plugins = PluginManager::new(Vec::new());
+        let joined = || -> Result<bool, &'static str> {
+            let plan = world
+                .plan_entity_islands(&plugins, &config, &entities, &tickable, &[])
+                .ok_or("fixture should have parallel islands")?;
+            Ok(plan
+                .islands
+                .iter()
+                .any(|island| island.contains(&0) && island.contains(&1)))
+        };
+        assert!(!joined()?);
+        creaking.set_transient(BlockPos::new(30, 64, 0));
+        assert!(joined()?);
         world.level.shutdown().await;
         Ok(())
     }

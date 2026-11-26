@@ -5,32 +5,24 @@ use super::{OneShot, utils};
 use crate::entity::{EntityBase, mob::Mob};
 use crate::world::World;
 
-pub(crate) struct PendingMeleeAttack {
-    target: Arc<dyn EntityBase>,
-    cooldown: i64,
-}
-
-impl PendingMeleeAttack {
-    pub(crate) fn perform(self, world: &Arc<World>, mob: &dyn Mob) -> i64 {
-        let attacker = mob.get_entity();
-        let target = self.target.get_entity();
-        let still_present = || {
-            !attacker.is_removed()
-                && !target.is_removed()
-                && Arc::ptr_eq(&attacker.world.load(), world)
-                && Arc::ptr_eq(&target.world.load(), world)
-        };
-        if still_present() {
-            mob.get_mob_entity().living_entity.swing_hand();
-            if still_present()
-                && mob.do_hurt_target(self.target.as_ref())
-                && !attacker.is_removed()
-                && Arc::ptr_eq(&attacker.world.load(), world)
-            {
-                mob.on_attack(self.target.as_ref());
-            }
+fn perform(world: &Arc<World>, mob: &dyn Mob, target: &dyn EntityBase) {
+    let attacker = mob.get_entity();
+    let victim = target.get_entity();
+    let still_present = || {
+        !attacker.is_removed()
+            && !victim.is_removed()
+            && Arc::ptr_eq(&attacker.world.load(), world)
+            && Arc::ptr_eq(&victim.world.load(), world)
+    };
+    if still_present() {
+        mob.get_mob_entity().living_entity.swing_hand();
+        if still_present()
+            && mob.do_hurt_target(target)
+            && !attacker.is_removed()
+            && Arc::ptr_eq(&attacker.world.load(), world)
+        {
+            mob.on_attack(target);
         }
-        self.cooldown
     }
 }
 
@@ -68,10 +60,17 @@ pub fn create_with(
                 return false;
             }
             utils::look_at_entity(tick.state, target.clone());
-            tick.state.pending_melee_attack = Some(PendingMeleeAttack {
-                target,
-                cooldown: i64::from(cooldown_between_attacks),
-            });
+            let world = tick.world.clone();
+            tick.defer_with_update(
+                move |mob| perform(&world, mob, target.as_ref()),
+                move |state, ()| {
+                    state.set_with_expiry(
+                        types::ATTACK_COOLING_DOWN,
+                        true,
+                        i64::from(cooldown_between_attacks),
+                    );
+                },
+            );
             true
         },
     )

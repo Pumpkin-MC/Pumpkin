@@ -14,13 +14,13 @@ use rand::RngExt;
 
 use crate::block::entities::creaking_heart::CreakingHeartBlockEntity;
 use crate::block::{
-    BlockBehaviour, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs, OnStateReplacedArgs,
+    BeforeExplosionDestroyArgs, BlockBehaviour, GetComparatorOutputArgs,
+    GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
 };
 use crate::entity::{
     EntityBase, experience_orb::ExperienceOrbEntity, player::Player, tnt::TNTEntity,
 };
-use crate::world::{World, explosion::Explosion};
+use crate::world::World;
 
 #[pumpkin_block("minecraft:creaking_heart")]
 pub struct CreakingHeartBlock;
@@ -88,28 +88,6 @@ impl CreakingHeartBlock {
         }
     }
 
-    pub fn will_explode(
-        world: &Arc<World>,
-        pos: &BlockPos,
-        state: BlockStateId,
-        explosion: &Explosion<'_>,
-    ) {
-        let Some(entity) = world.get_block_entity(pos) else {
-            return;
-        };
-        if let Some(heart) = entity.as_any().downcast_ref::<CreakingHeartBlockEntity>()
-            && heart.destroy_protector(
-                world,
-                Some(explosion.damage_type()),
-                explosion.source(),
-                explosion.indirect_source(),
-            )
-            && let Some(source) = explosion.source()
-        {
-            Self::award_explosion_experience(world, pos, state, source);
-        }
-    }
-
     fn award_explosion_experience(
         world: &Arc<World>,
         pos: &BlockPos,
@@ -155,6 +133,23 @@ impl CreakingHeartBlock {
 }
 
 impl BlockBehaviour for CreakingHeartBlock {
+    fn before_explosion_destroy(&self, args: BeforeExplosionDestroyArgs<'_>) {
+        let Some(entity) = args.world.get_block_entity(args.position) else {
+            return;
+        };
+        if let Some(heart) = entity.as_any().downcast_ref::<CreakingHeartBlockEntity>()
+            && heart.destroy_protector(
+                args.world,
+                Some(args.explosion.damage_type()),
+                args.explosion.source(),
+                args.explosion.indirect_source(),
+            )
+            && let Some(source) = args.explosion.source()
+        {
+            Self::award_explosion_experience(args.world, args.position, args.state.id, source);
+        }
+    }
+
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let mut props = CreakingHeartLikeProperties::from_state_id(args.block.default_state.id);
         props.axis = match args.direction {

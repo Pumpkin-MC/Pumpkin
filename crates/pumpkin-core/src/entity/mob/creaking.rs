@@ -11,12 +11,14 @@ use std::sync::{
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
-    BlockState, damage::DamageType, sound::Sound, tracked_data::creaking as tracked_data,
+    BlockState, damage::DamageType, game_event::GameEvent, sound::Sound,
+    tracked_data::creaking as tracked_data,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::{
+    block::entities::creaking_heart::CreakingHeartBlockEntity,
     entity::{
         Entity, EntityBase,
         ai::{
@@ -32,7 +34,18 @@ use crate::{
         custom_sound::CustomSound,
         mob::{Mob, MobEntity},
     },
-    world::World,
+    plugin::{
+        PluginManager,
+        api::events::{
+            entity::{
+                entity_damage::EntityDamageEvent, entity_damage_by_block::EntityDamageByBlockEvent,
+                entity_damage_by_entity::EntityDamageByEntityEvent,
+            },
+            world::generic_game::GenericGameEvent,
+        },
+        server::packet::PacketSentEvent,
+    },
+    world::{World, entity_islands::PassiveBlockWrites},
 };
 
 const ATTACK_ANIMATION_DURATION: i32 = 15;
@@ -57,12 +70,13 @@ pub struct CreakingEntity {
 impl CreakingEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mut mob_entity = MobEntity::new(entity);
+        mob_entity.use_brain_attack_target = true;
         mob_entity
             .navigator
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .set_can_float(true);
-        Arc::new(Self {
+        let creaking = Arc::new(Self {
             mob_entity,
             can_move: AtomicBool::new(true),
             is_active: AtomicBool::new(false),
@@ -73,7 +87,9 @@ impl CreakingEntity {
             attack_animation_remaining_ticks: AtomicI32::new(0),
             invulnerability_animation_remaining_ticks: AtomicI32::new(0),
             player_stuck_counter: AtomicI32::new(0),
-        })
+        });
+        creaking.mob_entity.with_brain(creaking.as_ref(), |_| {});
+        creaking
     }
 
     pub fn set_transient(&self, pos: BlockPos) {
@@ -164,15 +180,26 @@ impl Mob for CreakingEntity {
         ai::tick(self);
     }
 
-    fn apply_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
-        if !self.get_entity().is_removed() {
-            // A native damage handler may call the setter during a Brain tick.
-            self.mob_entity.set_target(target);
-        }
-    }
-
     fn tick_links(&self) -> Vec<i32> {
         ai::tick_links(self)
+    }
+
+    fn passive_block_writes(&self) -> Option<PassiveBlockWrites> {
+        let home = self.get_home_pos()?;
+        let world = self.get_entity().world.load();
+        world.is_in_build_limit(home).then(|| PassiveBlockWrites {
+            blocks: CreakingHeartBlockEntity::resin_write_reach(home),
+            // Use the moving body when accounting for the hit vibration.
+            notification_radius: f64::from(GameEvent::EntityAction.notification_radius()) + 1.0,
+        })
+    }
+
+    fn requires_serial_tick(&self, plugins: &PluginManager) -> bool {
+        plugins.has_handlers::<EntityDamageEvent>()
+            || plugins.has_handlers::<EntityDamageByEntityEvent>()
+            || plugins.has_handlers::<EntityDamageByBlockEvent>()
+            || plugins.has_handlers::<GenericGameEvent>()
+            || plugins.has_handlers::<PacketSentEvent>()
     }
 
     fn before_mob_ai_step(&self) {

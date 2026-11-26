@@ -142,7 +142,8 @@ impl CreakingEntity {
         let hit_by_player = credit.resolves_to_player(living);
         match world.get_block_entity_if_chunk_loaded(&home_pos) {
             BlockEntityLookup::Unloaded => {
-                self.request_home_chunk(&world, home_pos, Some(hit_by_player));
+                self.pending_home_feedback
+                    .store(Some((home_pos, hit_by_player)));
             }
             BlockEntityLookup::Loaded(block_entity) => {
                 if let Some(heart) = block_entity

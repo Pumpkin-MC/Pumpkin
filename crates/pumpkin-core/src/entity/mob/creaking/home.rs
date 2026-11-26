@@ -62,12 +62,7 @@ impl CreakingEntity {
             .take();
     }
 
-    pub(super) fn request_home_chunk(
-        &self,
-        world: &World,
-        home: BlockPos,
-        hit_by_player: Option<bool>,
-    ) {
+    fn request_home_chunk(&self, world: &World, home: BlockPos) {
         let chunk = home.chunk_position();
         let mut ticket = self
             .home_chunk_ticket
@@ -82,14 +77,6 @@ impl CreakingEntity {
         {
             *ticket = Some(HeartChunkTicket::new(world.level.clone(), chunk));
         }
-        if let Some(hit_by_player) = hit_by_player
-            && self
-                .pending_home_feedback
-                .swap(Some((home, hit_by_player)))
-                .is_none()
-        {
-            world.defer_creaking_heart_hit(self.get_entity().entity_id);
-        }
     }
 
     pub(super) fn check_home(&self) -> bool {
@@ -102,77 +89,48 @@ impl CreakingEntity {
             return true;
         }
         let entity = self.get_entity();
-        let world = entity.world.load();
+        let world = entity.world.load_full();
         let BlockEntityLookup::Loaded(block_entity) = world.get_block_entity_if_chunk_loaded(&home)
         else {
-            self.request_home_chunk(&world, home, None);
+            self.request_home_chunk(&world, home);
             return false;
         };
         if self.home_pos.load() != Some(link) {
             return false;
         }
         let legacy = matches!(link, HeartHome::Legacy(_));
-        let linked = block_entity
+        let heart = block_entity
             .as_deref()
             .and_then(|block_entity| {
                 block_entity
                     .as_any()
                     .downcast_ref::<CreakingHeartBlockEntity>()
             })
-            .is_some_and(|heart| {
+            .filter(|heart| {
                 heart.is_protector(entity.entity_uuid)
                     || legacy && heart.try_adopt_legacy_protector(&world, self)
             });
-        if !linked {
+        let Some(heart) = heart else {
             living.set_health(0.0);
             self.pending_home_feedback.store(None);
             self.release_home_ticket();
-        } else if legacy {
+            return true;
+        };
+        if legacy {
             let _ = self
                 .home_pos
                 .compare_exchange(Some(link), Some(HeartHome::Current(home)));
         }
-        true
-    }
-
-    pub(crate) fn finish_pending_heart_hit(&self, world: &Arc<World>, active: bool) -> bool {
-        let Some((home, hit_by_player)) = self.pending_home_feedback.load() else {
-            return true;
-        };
-        let BlockEntityLookup::Loaded(block_entity) = world.get_block_entity_if_chunk_loaded(&home)
-        else {
-            return false;
-        };
-        if self
-            .pending_home_feedback
-            .compare_exchange(Some((home, hit_by_player)), None)
-            .is_err()
+        if let Some((pending_home, hit_by_player)) = self.pending_home_feedback.load()
+            && pending_home == home
+            && self
+                .pending_home_feedback
+                .compare_exchange(Some((pending_home, hit_by_player)), None)
+                .is_ok()
         {
-            return self.pending_home_feedback.load().is_none();
+            self.play_heart_feedback(&world, heart, hit_by_player);
         }
-        if self.get_home_pos() == Some(home)
-            && !self.get_entity().is_removed()
-            && !self.mob_entity.living_entity.is_dead_or_dying()
-            && let Some(block_entity) = block_entity
-            && let Some(heart) = self.linked_heart(block_entity.as_ref())
-        {
-            self.play_heart_feedback(world, heart, hit_by_player);
-        }
-        if !active {
-            let mut ticket = self
-                .home_chunk_ticket
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner);
-            if self.pending_home_feedback.load().is_none()
-                && ticket.as_ref().is_some_and(|ticket| {
-                    ticket.chunk == home.chunk_position()
-                        && Arc::ptr_eq(&ticket.level, &world.level)
-                })
-            {
-                *ticket = None;
-            }
-        }
-        true
+        !entity.is_removed()
     }
 
     pub(super) fn linked_heart<'a>(
@@ -188,6 +146,8 @@ impl CreakingEntity {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::Ordering::Relaxed;
+
     use pumpkin_data::{Block, entity::EntityType};
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::vector3::Vector3;
@@ -200,11 +160,12 @@ mod tests {
             Entity,
             ai::{brain::memory::codec::block_pos_from_tag, test_support::world},
             mob::Mob,
+            passive::iron_golem::IronGolemEntity,
         },
     };
 
     #[tokio::test]
-    async fn protector_waits_for_the_home_chunk_then_checks_its_link()
+    async fn protector_replays_an_unloaded_home_hit_during_its_next_eligible_tick()
     -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
@@ -217,11 +178,25 @@ mod tests {
         let chunk_pos = home.chunk_position();
         creaking.set_transient(home);
         assert!(!world.level.is_chunk_loaded(&chunk_pos));
+        let attacker = IronGolemEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(1.5, 64.0, 0.5),
+            &EntityType::IRON_GOLEM,
+        ));
+        assert!(attacker.do_hurt_target(creaking.as_ref()));
+        assert!(creaking.pending_home_feedback.load().is_some());
+        assert!(
+            creaking
+                .home_chunk_ticket
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_none()
+        );
+        let ambient = &creaking.mob_entity.ambient_sound_time;
+        assert_eq!(ambient.load(Relaxed), 0);
         assert!(!creaking.prepare_mob_tick());
         assert!(creaking.mob_entity.living_entity.is_alive());
-        creaking.request_home_chunk(&world, home, Some(false));
         assert!(creaking.pending_home_feedback.load().is_some());
-        assert!(!creaking.finish_pending_heart_hit(&world, false));
 
         let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
         world.level.loaded_chunks.insert(chunk_pos, chunk);
@@ -233,16 +208,15 @@ mod tests {
         let mut nbt = NbtCompound::new();
         nbt.put_uuid("creaking", creaking.get_entity().entity_uuid);
         world.add_block_entity(Arc::new(CreakingHeartBlockEntity::from_nbt(&nbt, home)));
-        assert!(creaking.finish_pending_heart_hit(&world, false));
-        assert!(creaking.pending_home_feedback.load().is_none());
-        assert!(
-            creaking
-                .home_chunk_ticket
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .is_none()
-        );
         assert!(creaking.prepare_mob_tick());
+        assert!(creaking.pending_home_feedback.load().is_none());
+        assert_eq!(
+            ambient.load(Relaxed),
+            -creaking.get_ambient_sound_interval()
+        );
+        ambient.store(17, Relaxed);
+        assert!(creaking.prepare_mob_tick());
+        assert_eq!(ambient.load(Relaxed), 17);
         assert!(creaking.mob_entity.living_entity.is_alive());
 
         world.set_block_state(&home, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);

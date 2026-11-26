@@ -6,9 +6,7 @@ use std::collections::VecDeque;
 #[cfg(debug_assertions)]
 use std::sync::Arc;
 
-use pumpkin_data::{
-    Block, attributes::Attributes, entity::EntityType, game_event::GameEvent, tag, tag::Taggable,
-};
+use pumpkin_data::{Block, attributes::Attributes, entity::EntityType, tag, tag::Taggable};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, get_section_cord, position::BlockPos, vector2::Vector2,
     vector3::Vector3,
@@ -24,12 +22,9 @@ use crate::plugin::api::events::block::{
     block_physics::BlockPhysicsEvent, entity_block_form::EntityBlockFormEvent,
 };
 use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_damage::EntityDamageEvent,
-    entity_damage_by_block::EntityDamageByBlockEvent,
-    entity_damage_by_entity::EntityDamageByEntityEvent, entity_target::EntityTargetEvent,
+    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
     entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
 };
-use crate::plugin::api::events::world::generic_game::GenericGameEvent;
 use crate::plugin::{
     PluginManager, api::events::vehicle::vehicle_update::VehicleUpdateEvent,
     server::packet::PacketSentEvent,
@@ -145,16 +140,14 @@ pub(super) fn plugins_observe_entity_ticks(plugins: &PluginManager) -> bool {
         || plugins.has_handlers::<EntityBlockFormEvent>()
 }
 
-pub(super) fn plugins_observe_creaking_feedback(plugins: &PluginManager) -> bool {
-    plugins.has_handlers::<EntityDamageEvent>()
-        || plugins.has_handlers::<EntityDamageByEntityEvent>()
-        || plugins.has_handlers::<EntityDamageByBlockEvent>()
-        || plugins.has_handlers::<GenericGameEvent>()
-        || plugins.has_handlers::<PacketSentEvent>()
+pub(super) fn plugins_observe_passive_block_writes(plugins: &PluginManager) -> bool {
+    plugins.has_handlers::<BlockPhysicsEvent>()
 }
 
-pub(super) fn plugins_observe_passive_block_writes(plugins: &PluginManager) -> bool {
-    plugins_observe_creaking_feedback(plugins) || plugins.has_handlers::<BlockPhysicsEvent>()
+/// Block effects another entity can trigger, and any notifications around the owner.
+pub struct PassiveBlockWrites {
+    pub blocks: BoundingBox,
+    pub notification_radius: f64,
 }
 
 /// What one entity can read or change next tick.
@@ -496,7 +489,7 @@ pub(crate) fn prune_block_writes(
     world: &World,
     reaches: &mut [TickReach],
     checks: &[BlockWriteCheck],
-    passive_writes: &[(i32, BoundingBox)],
+    passive_writes: &[(i32, PassiveBlockWrites)],
 ) -> Option<()> {
     if reaches.iter().any(|reach| reach.global) {
         return Some(());
@@ -552,7 +545,7 @@ pub(crate) fn prune_block_writes(
         .collect();
     let mut query = Query::new(candidates.len());
     for (_, writes) in passive_writes {
-        contacts.for_each_overlapping(&mut query, writes, &mut budget, |candidate| {
+        contacts.for_each_overlapping(&mut query, &writes.blocks, &mut budget, |candidate| {
             let slot = candidates[candidate];
             if !active[slot] {
                 active[slot] = true;
@@ -736,11 +729,15 @@ pub fn partition(
     partition_with_passive_writes(nodes, idle_entities, players, &[])
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the partition shares one budget across its spatial passes"
+)]
 pub(crate) fn partition_with_passive_writes(
     nodes: &[(i32, TickReach)],
     idle_entities: &[(i32, BoundingBox)],
     players: &[(i32, BoundingBox)],
-    passive_writes: &[(i32, BoundingBox)],
+    passive_writes: &[(i32, PassiveBlockWrites)],
 ) -> Option<Islands> {
     if nodes.iter().any(|(_, reach)| reach.global) {
         return None;
@@ -802,21 +799,40 @@ pub(crate) fn partition_with_passive_writes(
         let mut passive_query = Query::new(passive_writes.len());
         for (id, writes) in passive_writes {
             let slot = *slots.get(id)?;
-            block_grid.union_overlapping(&mut sets, &mut query, slot, writes, &mut budget)?;
-            // Resin placement notifies nearby listeners. The hit also emits a vibration at the mob.
-            entity_grid.union_overlapping(&mut sets, &mut query, slot, writes, &mut budget)?;
-            let event_radius = f64::from(GameEvent::EntityAction.notification_radius()) + 1.0;
-            let hit = entity_grid.boxes.get(slot)?.expand_all(event_radius);
-            entity_grid.union_overlapping(&mut sets, &mut query, slot, &hit, &mut budget)?;
+            block_grid.union_overlapping(
+                &mut sets,
+                &mut query,
+                slot,
+                &writes.blocks,
+                &mut budget,
+            )?;
+            entity_grid.union_overlapping(
+                &mut sets,
+                &mut query,
+                slot,
+                &writes.blocks,
+                &mut budget,
+            )?;
+            let notifications = entity_grid
+                .boxes
+                .get(slot)?
+                .expand_all(writes.notification_radius);
+            entity_grid.union_overlapping(
+                &mut sets,
+                &mut query,
+                slot,
+                &notifications,
+                &mut budget,
+            )?;
             passive_grid.for_each_overlapping(
                 &mut passive_query,
-                writes,
+                &writes.blocks,
                 &mut budget,
                 |other| {
                     sets.union(slot, owners[other]);
                 },
             )?;
-            passive_grid.insert(owners.len(), *writes, &mut budget)?;
+            passive_grid.insert(owners.len(), writes.blocks, &mut budget)?;
             owners.push(slot);
         }
     }
@@ -1531,7 +1547,15 @@ mod tests {
             node(13, 900.0, 1.0),
         ];
         let idle = [(20, cube(0.0, 1.0)), (21, cube(901.0, 1.0))];
-        let writes = [(20, cube(100.0, 2.0)), (21, cube(102.0, 1.0))];
+        let writes = [(20, cube(100.0, 2.0)), (21, cube(102.0, 1.0))].map(|(id, blocks)| {
+            (
+                id,
+                PassiveBlockWrites {
+                    blocks,
+                    notification_radius: 0.0,
+                },
+            )
+        });
         assert_eq!(
             islands(&nodes, &idle, &[]),
             [vec![0], vec![1], vec![2], vec![3]]

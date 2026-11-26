@@ -3,9 +3,9 @@ use super::{
 };
 use crate::block::blocks::bubble_column::SURFACE_UPWARD_ACCELERATION;
 use crate::entity::ai::behavior::temperament::Temperament;
-use crate::entity::ai::brain::Brain;
 use crate::entity::ai::brain::memory::codec::{block_pos_from_tag, block_pos_to_tag};
 use crate::entity::ai::brain::memory::{PackedMemories, types};
+use crate::entity::ai::brain::{Brain, BrainEffect, run_brain_effects};
 use crate::entity::ai::control::body_rotation_control::BodyRotationControl;
 use crate::entity::ai::control::jump_control::JumpControl;
 use crate::entity::ai::control::look_control::LookControl;
@@ -143,6 +143,8 @@ pub struct MobEntity {
     pub navigator: std::sync::Mutex<Navigator>,
     pending_navigation_updates: crossbeam::queue::SegQueue<(BlockPos, Uuid, u64)>,
     pub target: std::sync::Mutex<Option<Weak<dyn EntityBase>>>,
+    // Opt-in species initialize their brain before exposing the mob.
+    use_brain_attack_target: bool,
     pub look_control: std::sync::Mutex<Box<dyn LookControlTrait>>,
     pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
@@ -304,6 +306,7 @@ impl MobEntity {
             navigator: std::sync::Mutex::new(Navigator::default()),
             pending_navigation_updates: crossbeam::queue::SegQueue::new(),
             target: std::sync::Mutex::new(None),
+            use_brain_attack_target: false,
             look_control: std::sync::Mutex::new(Box::new(LookControl::default())),
             sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
@@ -790,12 +793,12 @@ impl MobEntity {
     /// Vanilla `refreshBrain`: stops running behaviors, then rebuilds the brain from its memories.
     pub fn refresh_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
-        let time = world.get_world_age();
-        self.with_brain(mob, |brain| {
-            brain.stop_all(&world, mob, time);
-            let packed = brain.pack();
-            *brain = mob.make_brain(&packed);
-        });
+        if self.run_brain_callbacks(mob, &world, Brain::begin_stop) {
+            self.with_brain(mob, |brain| {
+                let packed = brain.pack();
+                *brain = mob.make_brain(&packed);
+            });
+        }
     }
 
     pub fn request_refresh_brain(&self) {
@@ -804,83 +807,35 @@ impl MobEntity {
 
     pub fn tick_brain(&self, mob: &dyn Mob) {
         let world = self.living_entity.entity.world.load_full();
-        let time = world.get_world_age();
-        let mut attack = self.with_brain(mob, |brain| brain.begin_tick(&world, mob, time));
-        while let Some(pending) = attack {
-            let cooldown = pending.perform(&world, mob);
-            if mob.get_entity().is_removed() || !Arc::ptr_eq(&mob.get_entity().world.load(), &world)
-            {
-                return;
-            }
-            attack = self.with_brain(mob, |brain| brain.resume_tick(&world, mob, time, cooldown));
-        }
-        if self.brain_refresh_requested.swap(false, Ordering::AcqRel) {
+        if self.run_brain_callbacks(mob, &world, Brain::begin_tick)
+            && self.brain_refresh_requested.swap(false, Ordering::AcqRel)
+        {
             self.refresh_brain(mob);
         }
     }
 
-    /// Ticks a brain that reconciles its attack target with the plugin-visible target.
-    pub(crate) fn tick_brain_with_target_events(&self, mob: &dyn Mob, start_reason: TargetReason) {
-        let id = |entity: &dyn EntityBase| entity.get_entity().entity_id;
-        let previous = self.stored_target();
-        let previous_id = previous.as_deref().map(id);
-        let unreachable_since = self.with_brain(mob, |brain| {
-            // Plugin setters can update the stored target without re-locking the brain.
-            if brain
-                .get(types::ATTACK_TARGET)
-                .map(|target| id(target.as_ref()))
-                != previous_id
-            {
-                brain.set_optional(types::ATTACK_TARGET, previous.clone());
-                brain.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
-            }
-            brain.get(types::CANT_REACH_WALK_TARGET_SINCE).copied()
-        });
-        self.tick_brain(mob);
-        if mob.get_entity().is_removed() {
-            return;
+    fn run_brain_callbacks(
+        &self,
+        mob: &dyn Mob,
+        world: &Arc<World>,
+        begin: fn(&mut Brain, &Arc<World>, &dyn Mob, i64) -> Vec<BrainEffect>,
+    ) -> bool {
+        let time = world.get_world_age();
+        let mut effects = self.with_brain(mob, |brain| begin(brain, world, mob, time));
+        while !effects.is_empty() {
+            let Some(updates) = run_brain_effects(effects, mob, world) else {
+                self.with_brain(mob, Brain::cancel_callbacks);
+                return false;
+            };
+            let next = self.with_brain(mob, |brain| {
+                brain.resume_callbacks(world, mob, time, updates)
+            });
+            let Some(next) = next else {
+                return false;
+            };
+            effects = next;
         }
-
-        let stored = self.stored_target();
-        let proposed = self.with_brain(mob, |brain| {
-            if stored.as_deref().map(id) != previous_id {
-                brain.set_optional(types::ATTACK_TARGET, stored);
-                brain.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
-                return None;
-            }
-            let candidate = brain.get(types::ATTACK_TARGET).cloned();
-            if candidate.as_deref().map(id) == previous_id {
-                return None;
-            }
-            brain.set_optional(types::ATTACK_TARGET, previous);
-            Some(candidate)
-        });
-        let Some(candidate) = proposed else {
-            return;
-        };
-
-        // Let the synchronous event observe the previous target, outside the brain lock.
-        let installing_target = candidate.is_some();
-        let reason = if installing_target {
-            start_reason
-        } else {
-            TargetReason::ForgotTarget
-        };
-        mob.set_mob_target(candidate, reason);
-        if mob.get_entity().is_removed() {
-            return;
-        }
-        let approved = self.stored_target();
-        self.with_brain(mob, |brain| {
-            let changed = approved.as_deref().map(id) != previous_id;
-            brain.set_optional(types::ATTACK_TARGET, approved);
-            if changed {
-                brain.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
-            } else if installing_target {
-                // The proposal may have cleared this before a plugin kept the old target.
-                brain.set_optional(types::CANT_REACH_WALK_TARGET_SINCE, unreachable_since);
-            }
-        });
+        true
     }
 
     pub fn write_mob_nbt(&self, mob: &dyn Mob, nbt: &mut NbtCompound) {
@@ -958,16 +913,29 @@ impl MobEntity {
         self.target_selector.add_goal(priority, Box::new(goal));
     }
 
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "matches Mob::apply_mob_target and Wasm host callers"
-    )]
+    /// Updates the target used by this mob's AI. Call outside the Brain lock.
     pub fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
-        let mut t = self
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *t = target.as_ref().map(Arc::downgrade);
+        if self.use_brain_attack_target {
+            let mut slot = self
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !self.living_entity.entity.is_removed()
+                && let Some(brain) = slot.as_mut()
+            {
+                let id = |target: &Arc<dyn EntityBase>| target.get_entity().entity_id;
+                if brain.get(types::ATTACK_TARGET).map(id) != target.as_ref().map(id) {
+                    brain.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+                }
+                brain.set_optional(types::ATTACK_TARGET, target);
+            }
+        } else {
+            *self
+                .target
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                target.as_ref().map(Arc::downgrade);
+        }
     }
 
     /// The target, checked again on every read so a player who turns creative is dropped.
@@ -978,12 +946,21 @@ impl MobEntity {
         .then_some(target)
     }
 
+    /// Reads the target before eligibility filtering. Call outside the Brain lock.
     pub(crate) fn stored_target(&self) -> Option<Arc<dyn EntityBase>> {
-        self.target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-            .and_then(Weak::upgrade)
+        if self.use_brain_attack_target {
+            self.brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .and_then(|brain| brain.get(types::ATTACK_TARGET).cloned())
+        } else {
+            self.target
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .and_then(Weak::upgrade)
+        }
     }
 
     fn set_mob_flag(&self, flag: u8, value: bool) {
@@ -2213,6 +2190,16 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 
+    /// Remote writes another entity can trigger, even while this mob is idle.
+    fn passive_block_writes(&self) -> Option<crate::world::entity_islands::PassiveBlockWrites> {
+        None
+    }
+
+    /// Plugin listeners that can act outside this mob's planned reach.
+    fn requires_serial_tick(&self, _plugins: &crate::plugin::PluginManager) -> bool {
+        false
+    }
+
     /// Retained entities accessed regardless of their distance from the mob.
     fn tick_links(&self) -> Vec<i32> {
         Vec::new()
@@ -2775,7 +2762,12 @@ pub trait Mob: EntityBase + Send + Sync {
         let mut target = self.as_valid_target(target);
         let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
         // Unchanged: refresh the handle, no event.
-        if mob.get_target().map(|t| t.get_entity().entity_id) == target_id {
+        let previous = if mob.use_brain_attack_target {
+            mob.stored_target()
+        } else {
+            mob.get_target()
+        };
+        if previous.map(|target| target.get_entity().entity_id) == target_id {
             self.apply_mob_target(target);
             return true;
         }
