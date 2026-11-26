@@ -28,6 +28,11 @@ impl Default for BreathManager {
 
 impl BreathManager {
     pub fn tick(&self, player: &Player) {
+        // Preserve the air restored on death while the player waits to respawn underwater.
+        if player.living_entity.health.load() <= 0.0 {
+            return;
+        }
+
         let mode = player.gamemode.load();
 
         if matches!(mode, GameMode::Creative | GameMode::Spectator) {
