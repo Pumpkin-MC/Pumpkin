@@ -12,7 +12,7 @@ use wasmtime::component::Resource;
 use crate::pumpkin;
 use pumpkin_core::{
     entity::player::Player,
-    plugin::{BoxFuture, EventHandler, Payload},
+    plugin::{BoxFuture, EventRoHandler, EventRwHandler, Payload},
     server::Server,
     world::World,
 };
@@ -313,7 +313,7 @@ impl WasmPluginEventHandler {
     }
 }
 
-impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPluginEventHandler {
+impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventRoHandler<E> for WasmPluginEventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
             let pending = Box::new(NotifiedEvent(event.clone()));
@@ -322,12 +322,10 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
             }
         })
     }
+}
 
-    fn handle_blocking<'a>(
-        &'a self,
-        server: &'a Arc<Server>,
-        event: &'a mut E,
-    ) -> BoxFuture<'a, ()> {
+impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventRwHandler<E> for WasmPluginEventHandler {
+    fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a mut E) -> BoxFuture<'a, ()> {
         Box::pin(async {
             let pending = Box::new(BlockingEvent(event.clone()));
             match self.dispatch(server.clone(), pending).await {

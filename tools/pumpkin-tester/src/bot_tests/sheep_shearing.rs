@@ -8,7 +8,7 @@ use pumpkin_core::{
     entity::{Entity, EntityBase, passive::sheep::SheepEntity},
     net::ClientPlatform,
     plugin::{
-        BoxFuture, EventHandler,
+        BoxFuture, EventRwHandler,
         api::events::{
             EventPriority,
             player::{
@@ -38,8 +38,8 @@ struct ItemEvents {
     cancel: AtomicBool,
 }
 
-impl EventHandler<PlayerItemDamageEvent> for ItemEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerItemDamageEvent> for ItemEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerItemDamageEvent,
@@ -53,8 +53,8 @@ impl EventHandler<PlayerItemDamageEvent> for ItemEvents {
     }
 }
 
-impl EventHandler<PlayerItemBreakEvent> for ItemEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerItemBreakEvent> for ItemEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerItemBreakEvent,
@@ -86,16 +86,12 @@ pub fn run_sheep_shearing_test(
         .datapack_manager
         .insert_loot_table("minecraft:shearing/sheep/red".into(), Arc::new(table));
     let hooks = Arc::new(ItemEvents::default());
-    server.plugin_manager.register::<PlayerItemDamageEvent, _>(
-        hooks.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<PlayerItemBreakEvent, _>(
-        hooks.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerItemDamageEvent, _>(hooks.clone(), EventPriority::Normal, None);
+    server
+        .plugin_manager
+        .register_blocking::<PlayerItemBreakEvent, _>(hooks.clone(), EventPriority::Normal, None);
     player.set_gamemode(GameMode::Survival);
     let pos = player.position().add_raw(2.0, 0.0, 0.0);
     let sheep = SheepEntity::new(Entity::new(world.clone(), pos, &EntityType::SHEEP));

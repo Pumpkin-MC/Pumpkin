@@ -13,7 +13,7 @@ use pumpkin_core::{
     },
     net::ClientPlatform,
     plugin::{
-        BoxFuture, EventHandler,
+        BoxFuture, EventRwHandler,
         api::events::{EventPriority, entity::entity_unleash::EntityUnleashEvent},
     },
     server::Server,
@@ -31,8 +31,8 @@ struct UnleashEvents {
     cancel: AtomicBool,
 }
 
-impl EventHandler<EntityUnleashEvent> for UnleashEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityUnleashEvent> for UnleashEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityUnleashEvent,
@@ -125,11 +125,9 @@ fn check_leashed_pickup(
         entity_id: axolotl.get_entity().entity_id,
         cancel: AtomicBool::new(true),
     });
-    server.plugin_manager.register::<EntityUnleashEvent, _>(
-        hooks.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityUnleashEvent, _>(hooks.clone(), EventPriority::Normal, None);
 
     let leads_before = lead_drops(world);
     let result = scoop(server, player, &axolotl).and_then(|()| {
