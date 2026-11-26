@@ -2519,9 +2519,16 @@ impl World {
 
         let min = BlockPos::floored_v(bounding_box.min.add_raw(0.0, -0.50001, 0.0));
         let max = bounding_box.max_block_pos();
-        let pos_iter = BlockPos::iterate(min, max);
-
-        for pos in pos_iter {
+        // A moving block's shape is drawn up to a block away from its `moving_piston`, so
+        // vanilla also looks one block further out for those (`BlockCollisions`).
+        let outer_min = BlockPos(min.0.add_raw(-1, -1, -1));
+        let outer_max = BlockPos(max.0.add_raw(1, 1, 1));
+        for pos in BlockPos::iterate(outer_min, outer_max) {
+            // Like vanilla, the shell's corners are skipped.
+            let outside = axes_outside(min, max, pos);
+            if outside == 3 {
+                continue;
+            }
             let state = self.get_block_state(&pos);
 
             if state.is_air() {
@@ -2529,9 +2536,19 @@ impl World {
             }
 
             let block = Block::from_state_id(state.id);
+            if block != &Block::MOVING_PISTON && outside > 0 {
+                continue;
+            }
             let mut collided = false;
 
-            if block == &Block::POWDER_SNOW {
+            if block == &Block::MOVING_PISTON {
+                for shape in self.moving_piston_collisions(&pos) {
+                    if shape.intersects(&bounding_box) {
+                        collided = true;
+                        collisions.push(shape);
+                    }
+                }
+            } else if block == &Block::POWDER_SNOW {
                 if let Some(shape) =
                     crate::block::blocks::powder_snow::collision_shape_for_entity(entity, &pos)
                 {
@@ -2599,12 +2616,46 @@ impl World {
             })
     }
 
+    /// The collision boxes of the block a piston is moving through `pos`, in world
+    /// coordinates. The `moving_piston` state itself has no shape: vanilla asks its block
+    /// entity, which places the moved block where the animation currently has it.
+    pub fn moving_piston_collisions(&self, pos: &BlockPos) -> Vec<BoundingBox> {
+        self.get_block_entity(pos)
+            .and_then(|entity| {
+                entity
+                    .as_any()
+                    .downcast_ref::<crate::block::entities::piston::PistonBlockEntity>()
+                    .map(crate::block::entities::piston::PistonBlockEntity::collision_shapes)
+            })
+            .unwrap_or_default()
+    }
+
     pub fn is_space_empty(&self, bounding_box: BoundingBox) -> bool {
         let min = bounding_box.min_block_pos();
         let max = bounding_box.max_block_pos();
 
-        for pos in BlockPos::iterate(min, max) {
+        for pos in BlockPos::iterate(
+            BlockPos(min.0.add_raw(-1, -1, -1)),
+            BlockPos(max.0.add_raw(1, 1, 1)),
+        ) {
+            let outside = axes_outside(min, max, pos);
+            if outside == 3 {
+                continue;
+            }
             let state = self.get_block_state(&pos);
+            if Block::from_state_id(state.id) == &Block::MOVING_PISTON {
+                if self
+                    .moving_piston_collisions(&pos)
+                    .iter()
+                    .any(|shape| shape.intersects(&bounding_box))
+                {
+                    return false;
+                }
+                continue;
+            }
+            if outside > 0 {
+                continue;
+            }
             let collided = Self::check_collision(&bounding_box, pos, state, false, |_| ());
 
             if collided {
@@ -8461,6 +8512,13 @@ fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtC
         }
         data.push(record);
     }
+}
+
+/// On how many axes `pos` lies outside the block range `min..=max`.
+fn axes_outside(min: BlockPos, max: BlockPos, pos: BlockPos) -> u8 {
+    u8::from(!(min.0.x..=max.0.x).contains(&pos.0.x))
+        + u8::from(!(min.0.y..=max.0.y).contains(&pos.0.y))
+        + u8::from(!(min.0.z..=max.0.z).contains(&pos.0.z))
 }
 
 fn block_entity_nbt(block_entity: &dyn BlockEntity) -> NbtCompound {
