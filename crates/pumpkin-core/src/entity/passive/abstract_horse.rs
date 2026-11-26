@@ -535,18 +535,12 @@ pub trait AbstractHorse: Animal + AgeableMob {
         start_riding(self, player);
     }
 
-    /// Leads, name tags and spawn eggs, which come before any horse-specific handling.
+    /// Name tags and spawn eggs, which come before any horse-specific handling.
     fn handle_important_interactions(
         &self,
-        player: &Arc<Player>,
+        _player: &Arc<Player>,
         stack: &mut ItemStack,
     ) -> Option<bool> {
-        if self
-            .get_mob_entity()
-            .mob_interact(player, stack, self.can_be_leashed())
-        {
-            return Some(true);
-        }
         (stack.item == &Item::NAME_TAG || stack.item.registry_key.ends_with("_spawn_egg"))
             .then_some(false)
     }

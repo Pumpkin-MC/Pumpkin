@@ -20,6 +20,7 @@ use pumpkin_data::suspicious_effects::get_suspicious_effects;
 use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::CParticle;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -48,6 +49,9 @@ use crate::world::loot::{LootContextParameters, generate_loot_from_handle};
 const MUTATE_CHANCE: i32 = 1024;
 const SOUND_VOLUME: f32 = 0.4;
 const SHEAR_MOOSHROOM_LOOT_TABLE: &str = "minecraft:shearing/mooshroom";
+/// Vanilla `SpellParticleOption.create(ParticleTypes.EFFECT, -1, 1.0F)`.
+const SPELL_PARTICLE_COLOR: i32 = -1;
+const SPELL_PARTICLE_POWER: f32 = 1.0;
 
 pub struct MooshroomEntity {
     pub mob_entity: MobEntity,
@@ -157,14 +161,16 @@ impl MooshroomEntity {
         }
     }
 
-    fn spawn_feeding_particles(&self, particle: Particle, count: usize) {
+    fn spawn_feeding_particles(&self, particle: Particle, data: &[u8], count: usize) {
         let entity = self.get_entity();
         let world = entity.world.load();
         let pos = entity.pos.load();
         let y = entity.get_y(0.5);
         let mut rng = self.get_random();
         for _ in 0..count {
-            world.spawn_particle(
+            let packet = CParticle::new(
+                false,
+                false,
                 Vector3::new(
                     pos.x + rng.random::<f64>() / 2.0,
                     y,
@@ -173,8 +179,10 @@ impl MooshroomEntity {
                 Vector3::new(0.0, (rng.random::<f64>() / 5.0) as f32, 0.0),
                 1.0,
                 0,
-                particle,
+                VarInt(i32::from(particle.to_id())),
+                data,
             );
+            world.broadcast_packet_all(&packet);
         }
     }
 
@@ -202,9 +210,13 @@ impl MooshroomEntity {
             return false;
         };
         if self.has_stew_effects() {
-            self.spawn_feeding_particles(Particle::Smoke, 2);
+            self.spawn_feeding_particles(Particle::Smoke, &[], 2);
         } else {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            let mut effect_data = Vec::with_capacity(8);
+            effect_data.extend_from_slice(&SPELL_PARTICLE_COLOR.to_be_bytes());
+            effect_data.extend_from_slice(&SPELL_PARTICLE_POWER.to_be_bytes());
+            self.spawn_feeding_particles(Particle::Effect, &effect_data, 4);
             *self
                 .stew_effects
                 .lock()

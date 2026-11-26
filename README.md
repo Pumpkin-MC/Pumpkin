@@ -33,6 +33,8 @@ curl -sSfL https://pumpkinmc.org/install.sh | sh
 
 Or grab a prebuilt binary from the [Download page](https://pumpkinmc.org/download/) (also available on [GitHub Releases](https://github.com/Pumpkin-MC/Pumpkin/releases)). See the [Quick Start guide](https://docs.pumpkinmc.org/#quick-start) and [Documentation](https://docs.pumpkinmc.org/) for setup details.
 
+Prebuilt Linux binaries require glibc. Alpine Linux uses musl, so the binaries do not run on a standard Alpine installation. On an Alpine host with Docker, use the [official Pumpkin container image](https://docs.pumpkinmc.org/#docker), which includes a glibc-based userspace.
+
 ## Goals
 
 - **Performance**: Leveraging multi-threading for maximum speed and efficiency.

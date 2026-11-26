@@ -213,9 +213,8 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
         match computation_type {
-            PathComputationType::Water => {
-                World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
-            }
+            PathComputationType::Water => pumpkin_data::fluid::Fluid::of_block_state(state.id)
+                .has_tag(&tag::Fluid::MINECRAFT_WATER),
             PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
         }
     }
