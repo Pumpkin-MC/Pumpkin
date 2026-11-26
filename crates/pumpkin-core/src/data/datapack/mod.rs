@@ -310,14 +310,21 @@ impl DatapackManager {
             tags: &mut all_tags,
         };
 
+        let mut discovered_packs = Vec::new();
         scan_datapacks_dir(
             &datapacks_dir,
             enabled_packs,
             &mut acc,
             &mut loaded_packs_vec,
+            &mut discovered_packs,
         );
 
-        load_bundled_datapacks(enabled_packs, &mut acc, &mut loaded_packs_vec);
+        load_bundled_datapacks(
+            enabled_packs,
+            &discovered_packs,
+            &mut acc,
+            &mut loaded_packs_vec,
+        );
 
         {
             let reload = pumpkin_world::generation::structure::DYNAMIC_WORLDGEN_RELOAD
@@ -1846,6 +1853,7 @@ fn find_bundled_datapack_dir(pack_name: &str) -> Option<PathBuf> {
 
 fn load_bundled_datapacks(
     enabled_packs: &[String],
+    discovered_packs: &[String],
     acc: &mut PackContentAccumulators<'_>,
     loaded_packs_vec: &mut Vec<LoadedDatapack>,
 ) {
@@ -1863,9 +1871,7 @@ fn load_bundled_datapacks(
                 || p.strip_prefix("file/") == Some(bundled)
                 || p.strip_prefix("minecraft:") == Some(bundled)
         });
-        let already_loaded = loaded_packs_vec.iter().any(|p| {
-            p.id == bundled || p.id == format!("minecraft:{bundled}") || p.name == bundled
-        });
+        let already_loaded = discovered_packs.iter().any(|name| name == bundled);
         if is_enabled
             && !already_loaded
             && let Some(pack_path) = find_bundled_datapack_dir(bundled)
@@ -1923,6 +1929,7 @@ fn scan_datapacks_dir(
     enabled_packs: &[String],
     acc: &mut PackContentAccumulators<'_>,
     loaded_packs_vec: &mut Vec<LoadedDatapack>,
+    discovered_packs: &mut Vec<String>,
 ) {
     if !datapacks_dir.is_dir() {
         return;
@@ -1965,6 +1972,7 @@ fn scan_datapacks_dir(
                 return None;
             }
 
+            discovered_packs.push(file_name.clone());
             Some((pack_path, file_name, pack_id))
         })
         .collect();
@@ -2665,6 +2673,43 @@ mod tests {
             merged.functions["custom:shared"],
             [format!("say {}", expected.last().unwrap())]
         );
+    }
+
+    #[test]
+    fn broken_world_pack_claim_blocks_bundled_substitution() {
+        use super::*;
+        let dir = tempfile::tempdir().unwrap();
+        let pack = dir.path().join("trade_rebalance");
+        fs::create_dir(&pack).unwrap();
+        fs::write(pack.join("data"), "not a directory").unwrap();
+        let mut merged = PreparedPack::default();
+        let mut loaded = Vec::new();
+        let mut discovered = Vec::new();
+        scan_datapacks_dir(
+            dir.path(),
+            &["file/trade_rebalance".into()],
+            &mut merged.accumulators(),
+            &mut loaded,
+            &mut discovered,
+        );
+        assert_eq!(discovered, ["trade_rebalance"]);
+        assert!(loaded.is_empty());
+        load_bundled_datapacks(
+            &["file/trade_rebalance".into()],
+            &discovered,
+            &mut merged.accumulators(),
+            &mut loaded,
+        );
+        assert!(loaded.is_empty());
+        discovered.clear();
+        scan_datapacks_dir(
+            dir.path(),
+            &["minecraft:trade_rebalance".into()],
+            &mut merged.accumulators(),
+            &mut loaded,
+            &mut discovered,
+        );
+        assert!(discovered.is_empty());
     }
 
     #[test]

@@ -682,7 +682,8 @@ impl World {
         &self,
         entities: &[Arc<dyn EntityBase>],
         snapshot_chunks: impl IntoIterator<Item = Vector2<i32>>,
-    ) {
+    ) -> FxHashSet<Vector2<i32>> {
+        let mut failed_chunks = FxHashSet::default();
         let mut groups: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
         for entity in entities {
             let base_entity = entity.get_entity();
@@ -708,6 +709,7 @@ impl World {
                 chunk
             } else {
                 let Some(chunk) = self.level.get_entity_chunk(pos).await else {
+                    failed_chunks.insert(pos);
                     continue;
                 };
                 chunk
@@ -724,6 +726,7 @@ impl World {
             drop(data);
             chunk.mark_dirty(true);
         }
+        failed_chunks
     }
 
     /// Serializes the live block entities of a chunk back into that chunk's block
@@ -2115,8 +2118,13 @@ impl World {
                     let world_clone = self.clone();
                     if let Some(server) = self.server.upgrade() {
                         server.spawn_task(async move {
-                            world_clone.remove_entities_in_chunks(&cleaned_chunks).await;
-                            world_clone.level.clean_entity_chunks(&cleaned_chunks);
+                            let failed =
+                                world_clone.remove_entities_in_chunks(&cleaned_chunks).await;
+                            world_clone.level.clean_entity_chunks(
+                                cleaned_chunks
+                                    .into_iter()
+                                    .filter(|pos| !failed.contains(pos)),
+                            );
                         });
                     }
                 }
@@ -5622,30 +5630,32 @@ impl World {
     pub async fn remove_entities_in_chunks(
         &self,
         chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
-    ) {
-        let chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
+    ) -> FxHashSet<Vector2<i32>> {
+        let mut chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
         if chunks_set.is_empty() {
-            return;
+            return FxHashSet::default();
         }
-        let mut entities_to_remove = Vec::new();
-
+        let mut entities_to_remove: Vec<_> = self
+            .entities
+            .load()
+            .iter()
+            .filter(|entity| chunks_set.contains(&saved_chunk_pos(entity.as_ref())))
+            .cloned()
+            .collect();
+        let failed = self
+            .save_entities_by_chunk(&entities_to_remove, chunks_set.iter().copied())
+            .await;
+        chunks_set.retain(|pos| !failed.contains(pos));
+        entities_to_remove.retain(|entity| !failed.contains(&saved_chunk_pos(entity.as_ref())));
+        let removed_ids: FxHashSet<_> = entities_to_remove
+            .iter()
+            .map(|entity| entity.get_entity().entity_uuid)
+            .collect();
         self.entities.rcu(|current_entities| {
-            entities_to_remove.clear();
             let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|entity| {
-                let pos = saved_chunk_pos(entity.as_ref());
-                if chunks_set.contains(&pos) {
-                    entities_to_remove.push(entity.clone());
-                    false
-                } else {
-                    true
-                }
-            });
+            new_entities.retain(|entity| !removed_ids.contains(&entity.get_entity().entity_uuid));
             new_entities
         });
-
-        self.save_entities_by_chunk(&entities_to_remove, chunks_set.iter().copied())
-            .await;
 
         for entity in entities_to_remove {
             let base = entity.get_entity();
@@ -5667,6 +5677,7 @@ impl World {
             self.save_block_entities(*chunk_pos);
             self.block_entities.remove(chunk_pos);
         }
+        failed
     }
 
     pub(crate) fn set_block_breaking(
@@ -8780,6 +8791,39 @@ mod tests {
         assert!(cow.mob_entity.is_no_ai());
         Ok(())
     }
+    #[tokio::test]
+    async fn failed_entity_read_preserves_entities_until_retry()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, EntityBase, ai::test_support::world, passive::cow::CowEntity};
+        use pumpkin_data::entity::EntityType;
+        use pumpkin_util::math::vector3::Vector3;
+        use std::sync::Arc;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let pos = Vector2::new(0, 0);
+        let region = world.level.level_folder.entities_folder.join("r.0.0.pump");
+        std::fs::create_dir(&region)?;
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::COW,
+        ));
+        world.entities.store(Arc::new(vec![cow.clone()]));
+        let failed = world.remove_entities_in_chunks([pos]).await;
+        assert!(failed.contains(&pos));
+        assert_eq!(world.entities.load().len(), 1);
+        assert!(!cow.get_entity().is_removed());
+        assert!(world.level.get_entity_chunk_sync(&pos).is_none());
+        std::fs::remove_dir(region)?;
+        assert!(world.remove_entities_in_chunks([pos]).await.is_empty());
+        assert!(world.entities.load().is_empty());
+        assert!(cow.get_entity().is_removed());
+        let chunk = world.level.get_entity_chunk_sync(&pos).unwrap();
+        assert_eq!(chunk.data.lock().unwrap().len(), 1);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
     #[tokio::test]
     async fn removal_clears_brain_memories_after_unload_serialization()
     -> Result<(), Box<dyn std::error::Error>> {
