@@ -1,7 +1,7 @@
 //! Builds the fixture in `tests/fixture` into a component and runs it on Wasmtime
 //!
-//! The fixture is compiled for `wasm32-wasip2`, so the first run needs
-//! `rustup target add wasm32-wasip2`
+//! The fixture is compiled for `wasm32-wasip3`, so the first run needs
+//! `rustup target add wasm32-wasip3`
 
 // The Android emulator job has no cargo to build the fixture with
 #![cfg(not(target_os = "android"))]
@@ -61,7 +61,7 @@ fn fixture_path() -> &'static PathBuf {
                 "--example",
                 "component_fixture",
                 "--target",
-                "wasm32-wasip2",
+                "wasm32-wasip3",
                 "--target-dir",
             ])
             .arg(&target_dir)
@@ -69,7 +69,7 @@ fn fixture_path() -> &'static PathBuf {
             .status()
             .expect("failed to run cargo to build the fixture");
         assert!(status.success(), "building the fixture component failed");
-        target_dir.join("wasm32-wasip2/debug/examples/component_fixture.wasm")
+        target_dir.join("wasm32-wasip3/debug/examples/component_fixture.wasm")
     })
 }
 

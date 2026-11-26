@@ -15,7 +15,7 @@
 //!
 //! ## Early Development Warning
 //! This SDK is in preview. Event-resource integration and the complete event catalogue
-//! are still pending. Build components for `wasm32-wasip2` with release mode or at least
+//! are still pending. Build components for `wasm32-wasip3` with release mode or at least
 //! optimization level 1; the current event variant fails validation without optimization.
 //!
 
