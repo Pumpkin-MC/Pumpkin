@@ -3104,6 +3104,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         plugin
             .store
             .pump_blocking(&mut host, move || {
+                inventory.add_viewer(&player);
                 player.increment_screen_handler_sync_id();
                 let sync_id = player.screen_handler_sync_id.load(Ordering::Relaxed);
                 let screen_handler: Arc<

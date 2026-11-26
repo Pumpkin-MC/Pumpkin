@@ -1,6 +1,5 @@
 use std::any::Any;
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Arc, Mutex, RwLock, Weak};
 
 use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
 use pumpkin_inventory::inventory::SimpleInventory;
@@ -9,6 +8,8 @@ use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHa
 use pumpkin_inventory::slot::{NormalSlot, Slot};
 use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_util::text::TextComponent;
+
+use crate::entity::player::Player;
 
 pub struct PluginGui {
     pub window_type: WindowType,
@@ -47,6 +48,8 @@ impl PluginGui {
 
 pub struct PluginInventory {
     pub slots: RwLock<Vec<ItemStack>>,
+    /// Players that opened a screen backed by this inventory.
+    viewers: Mutex<Vec<Weak<Player>>>,
 }
 
 impl PluginInventory {
@@ -54,6 +57,40 @@ impl PluginInventory {
     pub fn new(size: usize) -> Self {
         Self {
             slots: RwLock::new(vec![ItemStack::EMPTY.clone(); size]),
+            viewers: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Remembers `player` so [`Self::sync_viewers`] can refresh their open window.
+    pub fn add_viewer(&self, player: &Arc<Player>) {
+        let mut viewers = self
+            .viewers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        viewers.retain(|viewer| viewer.strong_count() > 0);
+        if !viewers
+            .iter()
+            .any(|viewer| std::ptr::eq(viewer.as_ptr(), Arc::as_ptr(player)))
+        {
+            viewers.push(Arc::downgrade(player));
+        }
+    }
+
+    /// Pushes slot changes to the viewers' open windows.
+    ///
+    /// Slots written by a plugin do not reach the client on their own: the screen handler only
+    /// diffs against what the client has when it is asked to.
+    pub fn sync_viewers(&self) {
+        let viewers: Vec<Arc<Player>> = {
+            let mut viewers = self
+                .viewers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            viewers.retain(|viewer| viewer.strong_count() > 0);
+            viewers.iter().filter_map(Weak::upgrade).collect()
+        };
+        for viewer in viewers {
+            viewer.sync_inventory_to_client();
         }
     }
 }
@@ -553,5 +590,125 @@ mod tests {
                 .get_selected_item_index(),
             BundleContentsImpl::NO_SELECTED_ITEM_INDEX
         );
+    }
+}
+
+#[cfg(test)]
+mod viewer_sync_tests {
+    use super::*;
+    use crate::{
+        data::VanillaData,
+        net::{
+            ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
+            java::{JavaClient, pending::PendingConnection},
+        },
+        server::Server,
+    };
+    use arc_swap::ArcSwap;
+    use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+    use pumpkin_data::{item::Item, packet::CURRENT_MC_VERSION};
+    use pumpkin_protocol::{
+        ConnectionState,
+        java::{client::play::CSetContainerSlot, packet_decoder::TCPNetworkDecoder},
+        packet::MultiVersionJavaPacket,
+    };
+    use pumpkin_util::GameMode;
+    use std::time::Duration;
+    use uuid::Uuid;
+
+    /// Slots written by a plugin reach a player who already has the window open, but only once
+    /// the viewers are synced (`gui.set-item` does that).
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sync_viewers_pushes_changed_slots_to_an_open_window()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let basic = BasicConfiguration {
+            default_level_name: directory
+                .path()
+                .join("world")
+                .to_string_lossy()
+                .into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..Default::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.bedrock.online_mode = false;
+        let server = Server::new(
+            basic,
+            advanced,
+            TelemetryConfig::default(),
+            VanillaData::default(),
+            vec![],
+        )
+        .await?;
+        let world = server.worlds.load().first().cloned().ok_or("No world")?;
+        let (transport, peer) = tokio::io::duplex(65536);
+        let (read, write) = tokio::io::split(transport);
+        let pending = PendingConnection::from_transport(
+            Box::new(read),
+            Box::new(write),
+            "127.0.0.1:25565".parse()?,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(&server),
+        );
+        let profile = GameProfile {
+            id: Uuid::new_v4(),
+            name: "GuiViewer".into(),
+            properties: ArcSwap::from_pointee(vec![]),
+            profile_actions: None,
+        };
+        let mut client =
+            JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+        client.connection_state.store(ConnectionState::Play);
+        client.start_outgoing_packet_task();
+        let player = Arc::new(Player::new(
+            Arc::new(ClientPlatform::Java(client)),
+            profile,
+            PlayerConfig::default(),
+            &world,
+            GameMode::Survival,
+        ));
+
+        let inventory = Arc::new(PluginInventory::new(PluginGui::inventory_size(
+            WindowType::Generic9x3,
+        )));
+        inventory.add_viewer(&player);
+        inventory.add_viewer(&player);
+        assert_eq!(inventory.viewers.lock().unwrap().len(), 1);
+
+        player
+            .screen_handler_sync_handler
+            .store_player(player.clone());
+        player.increment_screen_handler_sync_id();
+        let sync_id = player
+            .screen_handler_sync_id
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let handler: Arc<std::sync::Mutex<dyn ScreenHandler>> =
+            Arc::new(std::sync::Mutex::new(PluginScreenHandler::new(
+                sync_id,
+                WindowType::Generic9x3,
+                player.inventory(),
+                &inventory,
+                true,
+                true,
+            )));
+        player.open_handled_screen_direct(handler, &TextComponent::text("menu"));
+
+        let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
+        // Drain the open-screen and initial content packets.
+        // (COpenScreen, then CSetContainerContent; read exactly these two so no read is cancelled
+        // half-way through a frame.)
+        for _ in 0..2 {
+            tokio::time::timeout(Duration::from_secs(10), decoder.get_raw_packet()).await??;
+        }
+
+        inventory.set_stack(4, ItemStack::new(1, &Item::DIAMOND));
+        inventory.sync_viewers();
+        let packet =
+            tokio::time::timeout(Duration::from_secs(10), decoder.get_raw_packet()).await??;
+        assert_eq!(packet.id, CSetContainerSlot::to_id(CURRENT_MC_VERSION));
+        Ok(())
     }
 }

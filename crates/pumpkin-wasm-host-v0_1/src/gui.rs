@@ -126,6 +126,9 @@ impl gui::HostGui for PluginHostState {
         if (slot as usize) < slots.len() {
             slots[slot as usize] = item_stack;
         }
+        drop(slots);
+        // Players with the window already open would otherwise keep seeing the old item.
+        gui.inventory.sync_viewers();
         Ok(())
     }
 
@@ -187,6 +190,7 @@ impl gui::HostGui for PluginHostState {
         use pumpkin_inventory::Clearable;
         let gui = self.get(&res)?.lock().await;
         gui.inventory.clear();
+        gui.inventory.sync_viewers();
         Ok(())
     }
 
