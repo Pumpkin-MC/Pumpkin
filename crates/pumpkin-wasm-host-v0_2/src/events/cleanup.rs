@@ -40,6 +40,9 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
             cleanup_player(state, &data.player);
             cleanup_text_component(state, &data.leave_message);
         }
+        Event::PlayerTransferEvent(data) => {
+            cleanup_player(state, &data.player);
+        }
         Event::PlayerLoginEvent(data) => {
             cleanup_player(state, &data.player);
             cleanup_text_component(state, &data.kick_message);

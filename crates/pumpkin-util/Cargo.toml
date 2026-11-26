@@ -9,7 +9,9 @@ license.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-codecs.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+# Native plugins share `Style` with the server, and the `serde_json::Value` in `ItemComponents`
+# changes layout with `preserve_order`. Enable it here so it doesn't depend on the rest of the build.
+serde_json = { workspace = true, features = ["preserve_order"] }
 bytes.workspace = true
 
 num-traits.workspace = true

@@ -245,6 +245,7 @@ impl Mob for WitchEntity {
                         1.0,
                         crate::item::potion::PotionApplicationSource::Normal,
                         None,
+                        None,
                     );
                 }
             }

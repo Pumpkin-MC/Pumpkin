@@ -103,6 +103,9 @@ pub fn bucket_mob_pickup(
             return Some(true);
         }
     }
+    if entity.has_leash_data() && !entity.drop_leash() {
+        return Some(true);
+    }
     if !entity.is_silent() {
         world.play_sound(
             mob.pickup_sound(),
@@ -113,10 +116,6 @@ pub fn bucket_mob_pickup(
     let mut bucket = ItemStack::new(1, mob.bucket_item());
     mob.save_to_bucket_tag(&mut bucket);
     crate::item::items::bucket::give_filled_mob_bucket(stack, player, bucket);
-    let leashed = entity.is_leashed();
-    if leashed && entity.unleash() {
-        world.drop_stack(&entity.block_pos.load(), ItemStack::new(1, &Item::LEAD));
-    }
     entity.remove();
     Some(true)
 }

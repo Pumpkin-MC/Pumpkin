@@ -90,6 +90,19 @@ fn scalar(value: &Value) -> Option<f64> {
         .or_else(|| value.get("value").and_then(Value::as_f64))
 }
 
+fn level_based_chance(value: &Value) -> Option<(f32, f32)> {
+    if let Some(value) = value.as_f64() {
+        return Some((value as f32, 0.0));
+    }
+    if kind(value) == "linear" {
+        return Some((
+            value.get("base")?.as_f64()? as f32,
+            value.get("per_level_above_first")?.as_f64()? as f32,
+        ));
+    }
+    None
+}
+
 fn provider(value: &Value) -> Option<LootNumberProvider> {
     if let Some(value) = scalar(value) {
         return Some(LootNumberProvider::Constant(value));
@@ -228,8 +241,20 @@ impl<R: Fn(&str) -> Option<Value>> Parser<'_, R> {
         Some(match kind(value) {
             "survives_explosion" => Condition::SurvivesExplosion,
             "killed_by_player" => Condition::KilledByPlayer,
-            "random_chance" => Condition::RandomChance {
-                chance: value.get("chance").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+            "random_chance" => match value.get("chance") {
+                Some(chance) if kind(chance) == "enchantment_level" => {
+                    let (base, per_level_above_first) =
+                        chance.get("amount").and_then(level_based_chance)?;
+                    Condition::RandomChanceWithEnchantmentLevel {
+                        base,
+                        per_level_above_first,
+                    }
+                }
+                // Other number providers can't be rolled here, so the condition is rejected.
+                Some(chance) => Condition::RandomChance {
+                    chance: scalar(chance)? as f32,
+                },
+                None => return None,
             },
             "random_chance_with_enchanted_bonus" => {
                 let unenchanted_chance = value
@@ -443,6 +468,11 @@ impl<R: Fn(&str) -> Option<Value>> Parser<'_, R> {
                     expected,
                 });
             }
+        }
+        // Enchantment post-attack requirements use `is_direct` (Fire Aspect, Bane of
+        // Arthropods); the other damage-source flags above map to dedicated tags.
+        if predicate.get("is_direct").is_some() {
+            conditions.push(Condition::DamageSourceProperties(predicate.clone()));
         }
         all(conditions)
     }

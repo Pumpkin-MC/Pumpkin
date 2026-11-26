@@ -217,6 +217,16 @@ impl MobEntity {
             .store(Vector3::new(input.x, input.y, f64::from(speed)));
     }
 
+    /// Vanilla `Mob.stopInPlace`.
+    pub fn stop_in_place(&self) {
+        self.steered().navigator().stop();
+        // Sideways and upward input; `set_speed` clears the forward input.
+        self.living_entity.movement_input.store(Vector3::default());
+        self.set_speed(0.0);
+        self.living_entity.entity.velocity.store(Vector3::default());
+        self.living_entity.entity.reset_angular_leash_momentum();
+    }
+
     const CONTROL_FLAGS_UPDATE_INTERVAL: i32 = 5;
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
@@ -335,12 +345,12 @@ impl MobEntity {
             LeashTick::NotLeashed => {}
             LeashTick::Snapped => self.goals_selector.disable_control(Controls::MOVE),
             LeashTick::Elastic(holder) => {
-                self.when_leashed_to(&*holder);
+                self.when_leashed_to(mob, &*holder);
                 entity.check_fall_distance_accumulation(&self.living_entity);
                 mob.on_elastic_leash_pull();
             }
             LeashTick::CloseRange(holder) => {
-                self.when_leashed_to(&*holder);
+                self.when_leashed_to(mob, &*holder);
                 self.close_range_leash_behaviour(mob, &*holder);
             }
         }
@@ -349,11 +359,11 @@ impl MobEntity {
         }
     }
 
-    fn when_leashed_to(&self, holder: &dyn EntityBase) {
+    fn when_leashed_to(&self, mob: &dyn Mob, holder: &dyn EntityBase) {
         self.was_leashed.store(true, Relaxed);
         self.set_home_to(
             holder.get_entity().block_pos.load(),
-            Entity::LEASH_ELASTIC_DISTANCE as i32 - 1,
+            mob.mob_leash_elastic_distance() as i32 - 1,
         );
     }
 
@@ -595,6 +605,23 @@ impl MobEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(slot.clone(), Self::GUARANTEED_DROP_CHANCE);
+    }
+
+    pub fn drop_preserved_equipment(&self) {
+        let preserved_slots: Vec<EquipmentSlot> = self
+            .living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|(_, chance)| **chance > 1.0)
+            .map(|(slot, _)| slot.clone())
+            .collect();
+
+        for slot in preserved_slots {
+            let item = self.set_item_slot(&slot, ItemStack::EMPTY.clone());
+            self.living_entity.entity.spawn_at_location(item);
+        }
     }
 
     /// Equips `stack` and tells tracking clients, returning what was in the slot.
@@ -1110,14 +1137,39 @@ impl MobEntity {
             >= DAYLIGHT_BRIGHTNESS
     }
 
-    pub fn mob_interact(
-        &self,
-        player: &Arc<Player>,
-        item_stack: &mut ItemStack,
-        can_be_leashed: bool,
-    ) -> bool {
-        self.interact_leash(player, item_stack, can_be_leashed)
-            .unwrap_or(false)
+    fn transfer_player_leashes(&self, player: &Arc<Player>, can_be_leashed: bool) -> bool {
+        let entity = &self.living_entity.entity;
+        let player_entity = player.get_entity();
+        if !player_entity.is_sneaking() || !can_be_leashed || self.living_entity.is_baby() {
+            return false;
+        }
+        let world = entity.world.load();
+        let Some(this) = world.get_entity_by_id(entity.entity_id) else {
+            return false;
+        };
+        let mut any_leashed = false;
+        for mob in crate::entity::leashable_in_area(
+            &world,
+            entity.bounding_box.load().get_center(),
+            player_entity.entity_id,
+        ) {
+            if crate::entity::can_have_a_leash_attached_to(mob.as_ref(), this.as_ref())
+                && mob
+                    .get_entity()
+                    .leash_to_if_held_by(player_entity.entity_id, &this)
+            {
+                any_leashed = true;
+            }
+        }
+        if any_leashed {
+            world.emit_game_event(GameEvent::EntityAction.name(), entity.pos.load());
+            world.play_sound(
+                Sound::ItemLeadTied,
+                SoundCategory::Neutral,
+                &entity.pos.load(),
+            );
+        }
+        any_leashed
     }
 
     fn interact_leash(
@@ -1148,29 +1200,27 @@ impl MobEntity {
             return Some(true);
         }
 
-        if item_stack.item == &Item::LEAD
+        if item_stack.get_item() == &Item::LEAD
             && can_be_leashed
             && holder
                 .as_ref()
                 .is_none_or(|holder| holder.get_player().is_none())
         {
-            let diff = entity.pos.load() - player.get_entity().pos.load();
-            if diff.length_squared() <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
+            let world = entity.world.load();
+            if world
+                .get_entity_by_id(entity.entity_id)
+                .is_some_and(|this| {
+                    crate::entity::can_have_a_leash_attached_to(this.as_ref(), player.as_ref())
+                })
+            {
                 let new_holder: Arc<dyn EntityBase> = player.clone();
                 if !entity.fire_leash_event(&new_holder) {
                     return Some(false);
                 }
-                if holder.is_some() {
-                    if !entity.unleash() {
-                        return Some(false);
-                    }
-                    entity.spawn_at_location(ItemStack::new(1, &Item::LEAD));
+                if entity.has_leash_data() && !entity.drop_leash() {
+                    return Some(false);
                 }
-                entity.attach_leash(&new_holder);
-                if entity
-                    .get_leash_holder()
-                    .is_none_or(|holder| holder.get_entity().entity_id != player.entity_id())
-                {
+                if !entity.attach_leash_if_free(&new_holder) {
                     return Some(false);
                 }
                 if player.gamemode.load() != pumpkin_util::GameMode::Creative {
@@ -1602,7 +1652,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn can_be_leashed(&self) -> bool {
-        true
+        !crate::entity::ai::target_match::TargetMatch::Enemy.matches(self.get_entity().entity_type)
     }
 
     fn should_stay_close_to_leash_holder(&self) -> bool {
@@ -1615,6 +1665,14 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_support_quad_leash_as_holder(&self) -> bool {
         false
+    }
+
+    fn mob_leash_snap_distance(&self) -> f64 {
+        Entity::LEASH_SNAP_DISTANCE
+    }
+
+    fn mob_leash_elastic_distance(&self) -> f64 {
+        Entity::LEASH_ELASTIC_DISTANCE
     }
 
     fn on_elastic_leash_pull(&self) {}
@@ -2166,6 +2224,29 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    /// Vanilla `LivingEntity.actuallyHurt`: armor, absorption and health. A mob that overrides it
+    /// calls `LivingEntity::actually_hurt` first, like `super.actuallyHurt` in vanilla. Animals lose
+    /// their love mode first, as in vanilla `Animal.actuallyHurt`.
+    fn actually_hurt(
+        &self,
+        caller: &dyn EntityBase,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+        damage: f32,
+    ) {
+        if self.as_animal().is_some() {
+            self.get_mob_entity().reset_love_ticks();
+        }
+        self.get_mob_entity().living_entity.actually_hurt(
+            caller,
+            damage_type,
+            source,
+            cause,
+            damage,
+        );
+    }
+
     /// Called after the base damage attempt, whether or not it applied damage.
     fn post_damage_with_context(
         &self,
@@ -2603,9 +2684,8 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_mob_entity().set_target(target);
     }
 
-    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        self.get_mob_entity()
-            .mob_interact(player, item_stack, self.can_be_leashed())
+    fn mob_interact(&self, _player: &Arc<Player>, _item_stack: &mut ItemStack) -> bool {
+        false
     }
 
     fn mob_interact_with_hand(
@@ -2946,6 +3026,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_support_quad_leash_as_holder()
     }
 
+    fn leash_snap_distance(&self) -> f64 {
+        self.mob_leash_snap_distance()
+    }
+
+    fn leash_elastic_distance(&self) -> f64 {
+        self.mob_leash_elastic_distance()
+    }
+
     fn on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
@@ -3120,6 +3208,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 .get_pumpkin_item(item_stack.item.id)?
                 .use_on_entity(item_stack, player, target);
             emit_entity_interact(entity, player);
+            return Some(true);
+        }
+        if self
+            .get_mob_entity()
+            .transfer_player_leashes(player, self.can_be_leashed())
+        {
             return Some(true);
         }
         if let Some(handled) = super::interact_with_shears(self, player, item_stack, hand) {

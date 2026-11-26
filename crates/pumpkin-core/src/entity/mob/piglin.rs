@@ -1037,8 +1037,7 @@ impl Mob for PiglinEntity {
             self.start_admiring(taken);
             return true;
         }
-        self.mob_entity
-            .mob_interact(player, item_stack, self.can_be_leashed())
+        false
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
