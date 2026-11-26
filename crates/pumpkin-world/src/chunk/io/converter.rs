@@ -453,6 +453,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines)]
     fn transcodes_chunk_data_between_nbt_and_pump_binary() {
         use crate::{
             chunk::{
@@ -498,6 +499,13 @@ mod tests {
             preserved_tags: Mutex::new(NbtCompound::default()),
         };
         chunk.set_custom_data("test_ns", "flag", NbtTag::Int(99));
+        // A root tag Pumpkin does not model, like vanilla's `carving_mask`.
+        let carving_mask = NbtTag::ByteArray(vec![1i8, 2, 3].into_boxed_slice());
+        chunk
+            .preserved_tags
+            .lock()
+            .unwrap()
+            .put("carving_mask", carving_mask.clone());
 
         let mca_path = region_dir.join(AnvilRegion::file_name(region_coords));
         let anvil_cfg = AnvilChunkConfig::default();
@@ -531,6 +539,14 @@ mod tests {
             parsed_pump.get_custom_data("test_ns", "flag"),
             Some(NbtTag::Int(99))
         );
+        assert_eq!(
+            parsed_pump
+                .preserved_tags
+                .lock()
+                .unwrap()
+                .get("carving_mask"),
+            Some(&carving_mask)
+        );
         drop(pump);
 
         // Convert Pump (.pump with PCHK binary) -> Anvil (.mca with Java NBT)
@@ -552,5 +568,9 @@ mod tests {
             parsed_anvil.get_custom_data("test_ns", "flag"),
             Some(NbtTag::Int(99))
         );
+        let mut cursor = std::io::Cursor::new(anvil_decoded.as_ref());
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let root = pumpkin_nbt::Nbt::read(&mut reader).unwrap().root_tag;
+        assert_eq!(root.get("carving_mask"), Some(&carving_mask));
     }
 }

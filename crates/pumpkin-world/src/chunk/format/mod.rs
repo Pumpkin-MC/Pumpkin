@@ -775,6 +775,10 @@ impl ChunkData {
             .custom_data
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let preserved_tags = self
+            .preserved_tags
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let ws = heightmap_lock
             .world_surface
@@ -789,6 +793,7 @@ impl ChunkData {
             .as_deref()
             .filter(|a| a.len() == ChunkHeightmaps::LONGS);
         let has_custom = !custom_data.is_empty();
+        let has_preserved = !preserved_tags.is_empty();
 
         let mut flags = u8::from(is_light_correct);
         if ws.is_some() {
@@ -802,6 +807,10 @@ impl ChunkData {
         }
         if has_custom {
             flags |= 1 << 4;
+        }
+        // Unmodeled Anvil root tags, so Anvil -> Pump -> Anvil keeps them.
+        if has_preserved {
+            flags |= 1 << 5;
         }
 
         let status_u8 = match self.status {
@@ -898,6 +907,13 @@ impl ChunkData {
 
         if has_custom {
             let bytes = pumpkin_nbt::Nbt::new(String::new(), custom_data.clone()).write_unnamed();
+            out.put_u32(bytes.len() as u32);
+            out.extend_from_slice(&bytes);
+        }
+
+        if has_preserved {
+            let bytes =
+                pumpkin_nbt::Nbt::new(String::new(), preserved_tags.clone()).write_unnamed();
             out.put_u32(bytes.len() as u32);
             out.extend_from_slice(&bytes);
         }
@@ -1151,17 +1167,17 @@ impl ChunkData {
             }
         }
 
-        let custom_data = if (flags & (1 << 4)) != 0 {
+        let read_nbt = |buf: &mut &[u8], what: &str| -> Result<NbtCompound, ChunkParsingError> {
             if buf.remaining() < 4 {
-                return Err(ChunkParsingError::ErrorDeserializingChunk(
-                    "Unexpected EOF reading custom data length".into(),
-                ));
+                return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                    "Unexpected EOF reading {what} length"
+                )));
             }
             let len = buf.get_u32() as usize;
             if buf.remaining() < len {
-                return Err(ChunkParsingError::ErrorDeserializingChunk(
-                    "Unexpected EOF reading custom data payload".into(),
-                ));
+                return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                    "Unexpected EOF reading {what} payload"
+                )));
             }
             let mut cursor = std::io::Cursor::new(&buf[..len]);
             let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
@@ -1169,7 +1185,16 @@ impl ChunkData {
                 .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?
                 .root_tag;
             buf.advance(len);
-            nbt
+            Ok(nbt)
+        };
+
+        let custom_data = if (flags & (1 << 4)) != 0 {
+            read_nbt(&mut buf, "custom data")?
+        } else {
+            NbtCompound::default()
+        };
+        let preserved_tags = if (flags & (1 << 5)) != 0 {
+            read_nbt(&mut buf, "preserved tags")?
         } else {
             NbtCompound::default()
         };
@@ -1189,7 +1214,7 @@ impl ChunkData {
             blending_data: None,
             inhabited_time: AtomicU64::new(inhabited_time),
             custom_data: std::sync::Mutex::new(custom_data),
-            preserved_tags: std::sync::Mutex::new(NbtCompound::new()),
+            preserved_tags: std::sync::Mutex::new(preserved_tags),
         })
     }
 
