@@ -3204,6 +3204,7 @@ impl World {
             .unwrap_or(self.min_y)
     }
 
+    /// Runs the join sequence that places a connected Bedrock player into this world.
     #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
@@ -3255,6 +3256,7 @@ impl World {
         player.living_entity.entity.set_pos(position);
         player.living_entity.entity.set_rotation(yaw, pitch);
         player.living_entity.entity.last_pos.store(position);
+        player.has_played_before.store(true, Ordering::Release);
 
         // Todo make the data less spread
         let level_settings = LevelSettings {
@@ -3665,8 +3667,6 @@ impl World {
         // Actors come from the tracker, in range only.
         self.pair_new_player_with_tracked_entities(&player);
 
-        player.has_played_before.store(true, Ordering::Relaxed);
-
         // 3. Trigger Join Event and Broadcast Join Message
         let msg_comp = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_PLAYER_JOINED,
@@ -3685,6 +3685,7 @@ impl World {
         server.notify_update_if_op(&player);
     }
 
+    /// Runs the join sequence that places a connected Java player into this world.
     #[expect(clippy::too_many_lines)]
     pub async fn spawn_java_player(
         &self,
@@ -3979,6 +3980,7 @@ impl World {
         player.living_entity.entity.set_pos(position);
         player.living_entity.entity.set_rotation(yaw, pitch);
         player.living_entity.entity.last_pos.store(position);
+        player.has_played_before.store(true, Ordering::Release);
         chunker::update_position(player);
         self.send_center_chunk(player).await;
 
@@ -4176,7 +4178,6 @@ impl World {
             }
         }
 
-        player.has_played_before.store(true, Ordering::Relaxed);
         player.on_screen_handler_opened(&player.player_screen_handler);
 
         player.send_active_effects();
@@ -4406,6 +4407,7 @@ impl World {
         }
     }
 
+    /// Resends a Java player to the Bedrock clients tracking it, after a world transfer.
     async fn refresh_java_player_for_bedrock(&self, subject: &Player) {
         if !matches!(subject.client.as_ref(), ClientPlatform::Java(_)) {
             return;
@@ -4428,6 +4430,8 @@ impl World {
         }
     }
 
+    /// Respawns the player at their respawn point, or at the world spawn when that point is missing
+    /// or in a disabled dimension.
     #[allow(clippy::too_many_lines)]
     pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
         let last_death_location = player
@@ -4562,10 +4566,16 @@ impl World {
                 if event.cancelled {
                     (None, position, yaw, pitch)
                 } else {
-                    let destination = event.new_world;
-                    let position = event.position;
-                    let yaw = event.yaw;
-                    let pitch = event.pitch;
+                    let (destination, position, yaw, pitch) =
+                        if s.is_dimension_enabled(&event.new_world.dimension) {
+                            (event.new_world, event.position, event.yaw, event.pitch)
+                        } else {
+                            warn!(
+                                "Cannot respawn in disabled dimension {}",
+                                event.new_world.dimension.minecraft_name
+                            );
+                            (new_world, position, yaw, pitch)
+                        };
 
                     // Skip the transfer if redirected back to the current world.
                     if destination.uuid != self.uuid {

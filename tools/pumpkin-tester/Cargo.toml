@@ -11,6 +11,7 @@ pumpkin-config.workspace = true
 pumpkin-core.workspace = true
 pumpkin-data.workspace = true
 pumpkin-gametest.workspace = true
+pumpkin-nbt.workspace = true
 pumpkin-protocol.workspace = true
 pumpkin-util.workspace = true
 rayon.workspace = true

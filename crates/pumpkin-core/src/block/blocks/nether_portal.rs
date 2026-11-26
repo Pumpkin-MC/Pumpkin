@@ -68,6 +68,7 @@ impl BlockBehaviour for NetherPortalBlock {
         Block::AIR.default_state.id
     }
 
+    /// Spawns a zombified piglin near the portal on vanilla's random tick chance.
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         let level_info = args.world.level_info.load();
         let difficulty = level_info.difficulty;
@@ -120,7 +121,13 @@ impl BlockBehaviour for NetherPortalBlock {
         }
     }
 
+    /// Teleports a colliding entity between the Overworld and the Nether; does nothing when the
+    /// Nether is disabled.
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        if !args.server.basic_config.allow_nether {
+            return;
+        }
+
         let target_world =
             if args.world.dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name {
                 args.server.get_world_from_dimension(&Dimension::OVERWORLD)
