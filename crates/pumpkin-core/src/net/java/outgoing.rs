@@ -3,6 +3,8 @@
 //! then `Connection.flushChannel` once so `CBlockEvent` and entity motion share a tick.
 
 use std::collections::VecDeque;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -22,7 +24,7 @@ use tokio::time::{Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use crate::net::decrement_pending_bytes;
+use crate::net::{MAX_PENDING_BYTES, decrement_pending_bytes};
 
 /// Max wait for the disconnect flush (`kick_explicit`, writer drain on close).
 pub const DISCONNECT_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
@@ -58,17 +60,39 @@ impl FlushRequest {
     }
 }
 
+/// Each completion gets `true` once the packet is written, or `false` at once when a
+/// [`Transform`] dropped it (a cancelled `PacketSentEvent`).
 pub enum Completion {
     /// After `write_frame` into the `BufWriter`.
-    Framed(oneshot::Sender<()>),
+    Framed(oneshot::Sender<bool>),
     /// After the TCP flush. Disconnect: `close()` follows, so the flush must be done.
     /// Flushes also while suspended, else a kick awaited inside the tick waits on its own barrier.
-    Flushed(oneshot::Sender<()>),
+    Flushed(oneshot::Sender<bool>),
 }
+
+/// What a [`Transform`] decided for its packet.
+pub struct Transformed {
+    /// The packet to send; `None` drops it.
+    pub packet: Option<Bytes>,
+    /// Packets to send right after it, already in the client's format. Sent even
+    /// when the packet itself is dropped.
+    pub extras: Vec<Bytes>,
+}
+
+/// Rewrites a queued packet just before it is framed.
+///
+/// Built where the packet is queued and run here, on the writer task, so a
+/// plugin call (`PacketSentEvent`) never blocks the code that queued the
+/// packet. That code is often the tick, holding world locks.
+pub type Transform = Pin<Box<dyn Future<Output = Transformed> + Send>>;
 
 pub enum OutgoingPacket {
     Data {
         data: Bytes,
+        /// Bytes counted in `pending_bytes` when the packet was queued. Released
+        /// once it is written or dropped, whatever size a `Transform` gives it.
+        reserved: usize,
+        transform: Option<Transform>,
         completion: Option<Completion>,
     },
     /// End-of-tick barrier (`Connection.flushChannel`).
@@ -77,44 +101,177 @@ pub enum OutgoingPacket {
 
 struct FramePacket {
     data: Bytes,
+    reserved: usize,
+    transform: Option<Transform>,
     completion: Option<Completion>,
 }
 
 impl OutgoingPacket {
-    pub const fn normal(data: Bytes) -> Self {
+    pub fn normal(data: Bytes) -> Self {
         Self::Data {
+            reserved: data.len(),
             data,
+            transform: None,
             completion: None,
         }
     }
 
-    pub const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
+    pub fn high_priority(data: Bytes, completion: oneshot::Sender<bool>) -> Self {
         Self::Data {
+            reserved: data.len(),
             data,
+            transform: None,
             completion: Some(Completion::Framed(completion)),
         }
     }
 
-    pub const fn flushed(data: Bytes, completion: oneshot::Sender<()>) -> Self {
+    pub fn flushed(data: Bytes, completion: oneshot::Sender<bool>) -> Self {
         Self::Data {
+            reserved: data.len(),
             data,
+            transform: None,
             completion: Some(Completion::Flushed(completion)),
         }
+    }
+
+    /// Runs `transform` on the writer before the packet is framed.
+    #[must_use]
+    pub fn with_transform(mut self, transform: Option<Transform>) -> Self {
+        if let Self::Data {
+            transform: slot, ..
+        } = &mut self
+        {
+            *slot = transform;
+        }
+        self
     }
 
     fn ingest(self, flush_request: &mut FlushRequest, packets: &mut VecDeque<FramePacket>) {
         match self {
             Self::Flush => *flush_request = flush_request.merge(FlushRequest::Always),
-            Self::Data { data, completion } => {
+            Self::Data {
+                data,
+                reserved,
+                transform,
+                completion,
+            } => {
                 *flush_request = flush_request.merge(match completion {
                     Some(Completion::Flushed(_)) => FlushRequest::Always,
                     // off-tick sends flush at once -> mid-tick ones wait for `Flush`.
                     Some(Completion::Framed(_)) | None => FlushRequest::IfNotSuspended,
                 });
-                packets.push_back(FramePacket { data, completion });
+                packets.push_back(FramePacket {
+                    data,
+                    reserved,
+                    transform,
+                    completion,
+                });
             }
         }
     }
+}
+
+/// The writer's answer for a packet queued with a completion. `reentrant`: the
+/// writer was already running a `Transform` when the packet was queued, so this is
+/// that transform's handler sending to its own player. The writer only gets to the
+/// packet after the handler returns, so it counts as written once queued.
+pub async fn wait_for_write(
+    reentrant: bool,
+    completion: oneshot::Receiver<bool>,
+) -> Result<bool, oneshot::error::RecvError> {
+    if reentrant {
+        return Ok(true);
+    }
+    completion.await
+}
+
+/// Written: `Framed` releases now, `Flushed` waits for the TCP flush.
+fn complete(completion: Option<Completion>, on_flush: &mut Vec<oneshot::Sender<bool>>) {
+    match completion {
+        Some(Completion::Framed(completion)) => {
+            let _ = completion.send(true);
+        }
+        Some(Completion::Flushed(completion)) => on_flush.push(completion),
+        None => {}
+    }
+}
+
+/// Dropped: nothing to write or flush, so both release now.
+fn complete_dropped(completion: Option<Completion>) {
+    if let Some(Completion::Framed(completion) | Completion::Flushed(completion)) = completion {
+        let _ = completion.send(false);
+    }
+}
+
+/// Runs each packet's `Transform`, in queue order, and puts its extra packets
+/// right after it. A dropped packet still releases its bytes and completes (with
+/// `false`), so nobody waits on it forever.
+async fn apply_transforms(
+    packets: VecDeque<FramePacket>,
+    ctx: &WriterCtx,
+) -> VecDeque<FramePacket> {
+    let mut ready = VecDeque::with_capacity(packets.len());
+    for mut packet in packets {
+        let Some(transform) = packet.transform.take() else {
+            ready.push_back(packet);
+            continue;
+        };
+        // A handler that sends to this client must not wait on this writer (see `send_and_wait`).
+        ctx.in_transform.store(true, Ordering::Release);
+        let Transformed {
+            packet: data,
+            extras,
+        } = transform.await;
+        ctx.in_transform.store(false, Ordering::Release);
+        if let Some(data) = data {
+            // A bigger replacement counts its growth, under the same limit.
+            let growth = data.len().saturating_sub(packet.reserved);
+            if growth > 0 && reserve(growth, ctx).is_none() {
+                decrement_pending_bytes(&ctx.pending_bytes, packet.reserved);
+                complete_dropped(packet.completion);
+                continue;
+            }
+            packet.reserved += growth;
+            packet.data = data;
+            ready.push_back(packet);
+        } else {
+            decrement_pending_bytes(&ctx.pending_bytes, packet.reserved);
+            complete_dropped(packet.completion);
+        }
+        for extra in extras {
+            let Some(reserved) = reserve(extra.len(), ctx) else {
+                break;
+            };
+            ready.push_back(FramePacket {
+                data: extra,
+                reserved,
+                transform: None,
+                completion: None,
+            });
+        }
+    }
+    ready
+}
+
+/// Counts bytes a `Transform` added in `pending_bytes` like any queued packet, under
+/// the same `MAX_PENDING_BYTES` limit. `None` (and the connection closed) on overflow.
+fn reserve(len: usize, ctx: &WriterCtx) -> Option<usize> {
+    let new_bytes = ctx
+        .pending_bytes
+        .fetch_add(len, Ordering::AcqRel)
+        .saturating_add(len);
+    if new_bytes <= MAX_PENDING_BYTES {
+        return Some(len);
+    }
+    decrement_pending_bytes(&ctx.pending_bytes, len);
+    if !ctx.close_token.is_cancelled() {
+        warn!(
+            "Client {} outbound packet buffer overflow ({} bytes > {} bytes). Closing connection.",
+            ctx.id, new_bytes, MAX_PENDING_BYTES
+        );
+        ctx.close_token.cancel();
+    }
+    None
 }
 
 /// A single oversized packet is framed alone.
@@ -185,6 +342,8 @@ struct WriterCtx {
     close_token: CancellationToken,
     suspend_flushing: Arc<AtomicBool>,
     pending_bytes: Arc<AtomicUsize>,
+    /// Set while a `Transform` runs. Shared with the client's `send_and_wait`.
+    in_transform: Arc<AtomicBool>,
     id: u64,
 }
 
@@ -218,7 +377,7 @@ struct FlushState {
     /// Tokio clock so paused-time tests drive the 50ms fallback.
     last_tcp_flush: Instant,
     /// `Completion::Flushed` of written frames. Sent after the next successful flush.
-    on_flush: Vec<oneshot::Sender<()>>,
+    on_flush: Vec<oneshot::Sender<bool>>,
 }
 
 impl FlushState {
@@ -254,7 +413,7 @@ impl FlushState {
             }
             self.unflushed = false;
             for completion in self.on_flush.drain(..) {
-                let _ = completion.send(());
+                let _ = completion.send(true);
             }
         }
         Ok(did_flush)
@@ -341,10 +500,11 @@ fn drain_until_barrier(
 async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
     mut writer: TCPNetworkEncoder<W>,
     mut packets_to_frame: VecDeque<FramePacket>,
-    on_flush: &mut Vec<oneshot::Sender<()>>,
+    on_flush: &mut Vec<oneshot::Sender<bool>>,
     ctx: &WriterCtx,
 ) -> Option<TCPNetworkEncoder<W>> {
     let (close_token, id) = (&ctx.close_token, ctx.id);
+    packets_to_frame = apply_transforms(packets_to_frame, ctx).await;
     while !packets_to_frame.is_empty() {
         let frame_batch = take_frame_batch(&mut packets_to_frame);
         let (returned_writer, returned_batch, mut frame, frame_err) =
@@ -373,20 +533,12 @@ async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
             return None;
         }
 
-        let written_bytes: usize = returned_batch.iter().map(|packet| packet.data.len()).sum();
+        let written_bytes: usize = returned_batch.iter().map(|packet| packet.reserved).sum();
         decrement_pending_bytes(&ctx.pending_bytes, written_bytes);
 
         // The frame is in the `BufWriter`
-        // `Framed` releases now
-        // `Flushed` waits for the TCP flush
         for packet in returned_batch {
-            match packet.completion {
-                Some(Completion::Framed(completion)) => {
-                    let _ = completion.send(());
-                }
-                Some(Completion::Flushed(completion)) => on_flush.push(completion),
-                None => {}
-            }
+            complete(packet.completion, on_flush);
         }
     }
 
@@ -405,7 +557,7 @@ enum WriteOutcome<W: AsyncWrite + Unpin> {
 async fn write_or_close<W: AsyncWrite + Unpin + Send + 'static>(
     writer: TCPNetworkEncoder<W>,
     packets: VecDeque<FramePacket>,
-    on_flush: &mut Vec<oneshot::Sender<()>>,
+    on_flush: &mut Vec<oneshot::Sender<bool>>,
     ctx: &WriterCtx,
 ) -> WriteOutcome<W> {
     let write = write_queued_frames(writer, packets, on_flush, ctx);
@@ -431,11 +583,13 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
     suspend_flushing: Arc<AtomicBool>,
     pending_bytes: Arc<AtomicUsize>,
     id: u64,
+    in_transform: Arc<AtomicBool>,
 ) {
     let ctx = WriterCtx {
         close_token,
         suspend_flushing,
         pending_bytes,
+        in_transform,
         id,
     };
     let mut state = FlushState::new();
@@ -518,7 +672,7 @@ async fn drain_on_close<W: AsyncWrite + Unpin + Send + 'static>(
         }
         if state.unflushed && writer.flush().await.is_ok() {
             for completion in state.on_flush.drain(..) {
-                let _ = completion.send(());
+                let _ = completion.send(true);
             }
         }
         Some(())
@@ -678,6 +832,7 @@ mod tests {
             suspend,
             Arc::new(AtomicUsize::new(0)),
             0,
+            Arc::new(AtomicBool::new(false)),
         )
         .await;
     }
@@ -695,6 +850,7 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicUsize::new(0)),
             0,
+            Arc::new(AtomicBool::new(false)),
         ))
     }
 
@@ -706,6 +862,320 @@ mod tests {
         close: CancellationToken,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(run_writer(rx, writes, flushes, suspend, close))
+    }
+
+    fn transform(packet: Option<&'static [u8]>, extras: &'static [&'static [u8]]) -> Transform {
+        Box::pin(async move {
+            // A plugin call yields to the runtime before it answers.
+            tokio::task::yield_now().await;
+            Transformed {
+                packet: packet.map(Bytes::from_static),
+                extras: extras
+                    .iter()
+                    .map(|extra| Bytes::from_static(extra))
+                    .collect(),
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn transforms_rewrite_packets_in_queue_order_before_framing() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let pending = Arc::new(AtomicUsize::new(3));
+
+        tx.send(packet(1).with_transform(Some(transform(Some(&[9]), &[]))))
+            .unwrap();
+        tx.send(packet(2)).unwrap();
+        tx.send(packet(3).with_transform(Some(transform(Some(&[7]), &[]))))
+            .unwrap();
+        drop(tx);
+
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: writes.clone(),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            CancellationToken::new(),
+            Arc::new(AtomicBool::new(false)),
+            pending.clone(),
+            0,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await;
+
+        // Each frame is a length prefix and the packet.
+        assert_eq!(*writes.lock().unwrap(), vec![1, 9, 1, 2, 1, 7]);
+        assert_eq!(pending.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn dropped_packet_releases_its_bytes_and_completes() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let pending = Arc::new(AtomicUsize::new(3));
+        let (done_tx, done_rx) = oneshot::channel();
+
+        tx.send(packet(1)).unwrap();
+        let cancelled = transform(None, &[]);
+        tx.send(
+            OutgoingPacket::flushed(Bytes::from_static(&[2]), done_tx)
+                .with_transform(Some(cancelled)),
+        )
+        .unwrap();
+        tx.send(packet(3)).unwrap();
+        drop(tx);
+
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: writes.clone(),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            CancellationToken::new(),
+            Arc::new(AtomicBool::new(false)),
+            pending.clone(),
+            0,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await;
+
+        assert_eq!(*writes.lock().unwrap(), vec![1, 1, 1, 3]);
+        assert_eq!(pending.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            done_rx.await,
+            Ok(false),
+            "a dropped packet must still complete, as not written"
+        );
+    }
+
+    #[tokio::test]
+    async fn extra_packets_follow_their_packet_even_when_it_is_dropped() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let pending = Arc::new(AtomicUsize::new(3));
+
+        tx.send(packet(1).with_transform(Some(transform(Some(&[1]), &[&[5]]))))
+            .unwrap();
+        tx.send(packet(2).with_transform(Some(transform(None, &[&[6]]))))
+            .unwrap();
+        tx.send(packet(3)).unwrap();
+        drop(tx);
+
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: writes.clone(),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            CancellationToken::new(),
+            Arc::new(AtomicBool::new(false)),
+            pending.clone(),
+            0,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await;
+
+        assert_eq!(*writes.lock().unwrap(), vec![1, 1, 1, 5, 1, 6, 1, 3]);
+        assert_eq!(pending.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn extra_packets_over_the_buffer_limit_close_the_connection() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        // The queued packet's byte fills the buffer.
+        let pending = Arc::new(AtomicUsize::new(MAX_PENDING_BYTES));
+        let close = CancellationToken::new();
+        let (done_tx, done_rx) = oneshot::channel();
+
+        tx.send(
+            OutgoingPacket::high_priority(Bytes::from_static(&[1]), done_tx)
+                .with_transform(Some(transform(Some(&[1]), &[&[5], &[6]]))),
+        )
+        .unwrap();
+        drop(tx);
+
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: writes.clone(),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            close.clone(),
+            Arc::new(AtomicBool::new(false)),
+            pending.clone(),
+            0,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await;
+
+        assert!(close.is_cancelled(), "overflow closes the connection");
+        assert_eq!(*writes.lock().unwrap(), vec![1, 1]);
+        assert_eq!(pending.load(Ordering::SeqCst), MAX_PENDING_BYTES - 1);
+        assert_eq!(done_rx.await, Ok(true));
+    }
+
+    #[tokio::test]
+    async fn bigger_replacement_over_the_buffer_limit_closes_the_connection() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        // The queued packet's byte fills the buffer; its replacement is two bytes.
+        let pending = Arc::new(AtomicUsize::new(MAX_PENDING_BYTES));
+        let close = CancellationToken::new();
+        let (done_tx, done_rx) = oneshot::channel();
+
+        tx.send(
+            OutgoingPacket::high_priority(Bytes::from_static(&[1]), done_tx)
+                .with_transform(Some(transform(Some(&[1, 2]), &[]))),
+        )
+        .unwrap();
+        drop(tx);
+
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: writes.clone(),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            close.clone(),
+            Arc::new(AtomicBool::new(false)),
+            pending.clone(),
+            0,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await;
+
+        assert!(close.is_cancelled(), "overflow closes the connection");
+        assert!(writes.lock().unwrap().is_empty());
+        assert_eq!(pending.load(Ordering::SeqCst), MAX_PENDING_BYTES - 1);
+        assert_eq!(done_rx.await, Ok(false));
+    }
+
+    #[tokio::test]
+    async fn bigger_replacement_is_counted_until_written() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let pending = Arc::new(AtomicUsize::new(1));
+
+        tx.send(packet(1).with_transform(Some(transform(Some(&[1, 2, 3]), &[]))))
+            .unwrap();
+        drop(tx);
+
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: writes.clone(),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            CancellationToken::new(),
+            Arc::new(AtomicBool::new(false)),
+            pending.clone(),
+            0,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await;
+
+        assert_eq!(*writes.lock().unwrap(), vec![3, 1, 2, 3]);
+        assert_eq!(pending.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_send_sees_its_own_packet_cancelled_while_the_writer_runs_it() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let in_transform = Arc::new(AtomicBool::new(false));
+        let (started_tx, started_rx) = oneshot::channel::<()>();
+        let (release_tx, release_rx) = oneshot::channel::<()>();
+
+        // Read before queueing, as `send_and_wait` does.
+        let reentrant = in_transform.load(Ordering::Acquire);
+        let (done_tx, done_rx) = oneshot::channel();
+        tx.send(
+            OutgoingPacket::high_priority(Bytes::from_static(&[1]), done_tx).with_transform(Some(
+                Box::pin(async move {
+                    let _ = started_tx.send(());
+                    let _ = release_rx.await;
+                    Transformed {
+                        packet: None,
+                        extras: Vec::new(),
+                    }
+                }),
+            )),
+        )
+        .unwrap();
+        drop(tx);
+
+        let writer = tokio::spawn(run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: Arc::new(std::sync::Mutex::new(Vec::new())),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            CancellationToken::new(),
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicUsize::new(1)),
+            0,
+            in_transform.clone(),
+        ));
+
+        // The writer is now running this packet's own transform.
+        started_rx.await.unwrap();
+        assert!(in_transform.load(Ordering::Acquire));
+        let wait = tokio::spawn(wait_for_write(reentrant, done_rx));
+        release_tx.send(()).unwrap();
+
+        assert_eq!(
+            wait.await.unwrap(),
+            Ok(false),
+            "the cancel reaches the caller"
+        );
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_send_from_a_running_handler_does_not_wait_on_the_writer() {
+        let (_done_tx, done_rx) = oneshot::channel();
+        // Queued while the writer runs a transform: never completed until it returns.
+        let written = tokio::time::timeout(Duration::from_secs(1), wait_for_write(true, done_rx))
+            .await
+            .expect("must not wait on the writer");
+        assert_eq!(written, Ok(true));
+    }
+
+    #[tokio::test]
+    async fn writer_flags_a_running_transform() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let in_transform = Arc::new(AtomicBool::new(false));
+        let seen = Arc::new(AtomicBool::new(false));
+
+        let (flag, seen_in) = (in_transform.clone(), seen.clone());
+        tx.send(packet(1).with_transform(Some(Box::pin(async move {
+            seen_in.store(flag.load(Ordering::Acquire), Ordering::Release);
+            Transformed {
+                packet: Some(Bytes::from_static(&[1])),
+                extras: Vec::new(),
+            }
+        }))))
+        .unwrap();
+        drop(tx);
+
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter {
+                writes: Arc::new(std::sync::Mutex::new(Vec::new())),
+                flushes: Arc::new(AtomicUsize::new(0)),
+            }),
+            CancellationToken::new(),
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicUsize::new(1)),
+            0,
+            in_transform.clone(),
+        )
+        .await;
+
+        assert!(seen.load(Ordering::Acquire), "set while the transform runs");
+        assert!(!in_transform.load(Ordering::Acquire), "cleared after it");
     }
 
     #[tokio::test(start_paused = true)]
@@ -840,6 +1310,7 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicUsize::new(0)),
             0,
+            Arc::new(AtomicBool::new(false)),
         ));
 
         let (done_tx, done_rx) = oneshot::channel();
@@ -881,6 +1352,7 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicUsize::new(0)),
             0,
+            Arc::new(AtomicBool::new(false)),
         ));
 
         let (done_tx, mut done_rx) = oneshot::channel();
