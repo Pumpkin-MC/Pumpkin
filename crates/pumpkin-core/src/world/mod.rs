@@ -58,12 +58,17 @@ use crate::{
         r#type::{load_entity_from_nbt, load_static_entity_from_nbt, self_and_passengers},
     },
     error::PumpkinError,
-    net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
+    net::{
+        ClientPlatform,
+        bedrock::BedrockClient,
+        java::{JavaClient, PacketSink},
+    },
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{
             player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
             player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent,
+            player_velocity::PlayerVelocityEvent,
         },
     },
     server::Server,
@@ -96,7 +101,6 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, HorizontalFacingExt, translation};
-use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
@@ -184,6 +188,7 @@ pub mod end_podium;
 pub mod entity_tracker;
 pub mod environment;
 pub mod natural_spawner;
+mod player_push;
 mod player_touch;
 pub(crate) use player_touch::pickup_area;
 pub mod scoreboard;
@@ -297,6 +302,8 @@ pub struct World {
     pub(crate) encoded_chunk_cache: DashMap<Vector2<i32>, crate::net::chunk_sender::EncodedChunk>,
     /// Entity tracker responsible for tracking entity visibility and sending delta/status packets to watchers.
     pub entity_tracker: entity_tracker::EntityTracker,
+    /// `collisions.player_collisions`: whether players push each other.
+    pub(crate) player_collisions: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -408,6 +415,13 @@ impl World {
         if let Some(server_arc) = server.upgrade() {
             let _ = level.rt_handle.set(server_arc.runtime.clone());
         }
+        let entity_tracking = server
+            .upgrade()
+            .map(|server| server.advanced_config.entity_tracking)
+            .unwrap_or_default();
+        let player_collisions = server
+            .upgrade()
+            .is_none_or(|server| server.advanced_config.collisions.player_collisions);
 
         Self {
             uuid: Uuid::new_v4(),
@@ -455,7 +469,8 @@ impl World {
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
             encoded_chunk_cache: DashMap::new(),
-            entity_tracker: entity_tracker::EntityTracker::new(),
+            entity_tracker: entity_tracker::EntityTracker::new(entity_tracking),
+            player_collisions,
         }
     }
 
@@ -1109,6 +1124,17 @@ impl World {
         );
     }
 
+    /// [`Player::send_system_message`] to each of `players`. The Java packet is the same
+    /// for all of them and serialized once; the Bedrock text follows each player's locale.
+    pub fn send_system_message_to(players: &[Arc<Player>], message: &TextComponent) {
+        Self::broadcast_java_players(&CSystemChatMessage::new(message, false), players.iter());
+        for player in players {
+            if player.client.bedrock().is_some() {
+                player.send_system_message(message);
+            }
+        }
+    }
+
     pub fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
         let je_packet = CSystemChatMessage::new(message, overlay);
         let be_packet = Self::component_to_bedrock_text(message);
@@ -1638,6 +1664,31 @@ impl World {
         self.play_sound_expect(player, sound, category, &new_vec);
     }
 
+    /// The inbound packets of every player, then every player's tick.
+    ///
+    /// Not inside a [`PacketSink`]: a sink sends in no fixed order, but a handler here can
+    /// queue packets for another player that must follow earlier ones.
+    pub(crate) fn tick_players(players: &[Arc<Player>], server: &Server) {
+        players
+            .par_iter()
+            .for_each(|player| player.process_inbound_packets());
+        players.par_iter().for_each(|player| player.tick(server));
+    }
+
+    /// [`Player::send_velocity_changes`] for every player.
+    pub(crate) fn send_velocity_changes(players: &[Arc<Player>], server: &Server) {
+        if server.plugin_manager.has_handlers::<PlayerVelocityEvent>() {
+            // A plugin gets the event for one player after another.
+            let sink = PacketSink::new(players);
+            let _runs = sink.collect();
+            for player in players {
+                player.send_velocity_changes();
+            }
+        } else {
+            PacketSink::for_each(players, players, |player| player.send_velocity_changes());
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn tick(self: &Arc<Self>, server: &Arc<Server>) {
         let start = std::time::Instant::now();
@@ -1676,18 +1727,11 @@ impl World {
 
         let t_players = std::time::Instant::now();
         // Vanilla handles all packets before any player ticks
-        players.par_iter().for_each(|player| {
-            player.process_inbound_packets();
-        });
-        players.par_iter().for_each(|player| {
-            player.tick(server);
-        });
+        Self::tick_players(&players, server);
         self.encoded_chunk_cache.clear();
         // Vanilla `ServerPlayer.pushEntities`: one player after another, not while frozen
         if server.tick_rate_manager.runs_normally() {
-            for player in players.iter() {
-                player.push_entities();
-            }
+            player_push::push_entities(self, &players);
         }
         // One player after another, before entities move, like vanilla `doTick` after the
         // level tick
@@ -1826,9 +1870,7 @@ impl World {
         let entity_elapsed = t_entities.elapsed();
 
         // Like vanilla `sendChanges`: before the next tick's packets
-        for player in players.iter() {
-            player.send_velocity_changes();
-        }
+        Self::send_velocity_changes(&players, server);
         self.entity_tracker.update_all(self);
 
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
@@ -4194,9 +4236,12 @@ impl World {
             if let Ok(data) = java_client.serialize_packet(&settings_packet) {
                 java_client.send_packet_now(data).await;
             }
-            let dynamic_recipes = server.recipe_manager.get_dynamic_recipes();
-            let add_packet = CRecipeBookAdd::new(true, &dynamic_recipes);
-            if let Ok(data) = java_client.serialize_packet(&add_packet) {
+            let book = server.recipe_manager.book_packet(|recipes| {
+                java_client
+                    .serialize_packet(&CRecipeBookAdd::new(true, recipes))
+                    .ok()
+            });
+            if let Some(data) = book {
                 java_client.send_packet_now(data).await;
             }
         }
@@ -5395,9 +5440,7 @@ impl World {
                     server.plugin_manager.fire(&server, &mut event).await;
 
                     if !event.cancelled {
-                        for player in self.players.load().iter() {
-                            player.send_system_message(&event.leave_message);
-                        }
+                        Self::send_system_message_to(&self.players.load(), &event.leave_message);
                         info!("{}", event.leave_message.to_pretty_console());
                     }
                 }
@@ -5410,7 +5453,7 @@ impl World {
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
         let _base_entity = entity.get_entity();
         self.entity_tracker.add_entity(&entity, self);
-        self.spawn_state.load().add_entity(self, entity.as_ref());
+        self.spawn_state.load().add_entity(entity.as_ref());
 
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
@@ -5564,7 +5607,7 @@ impl World {
         // The entity stays live-only: it is written to its chunk's saved data on
         // unload (see `save_entities_by_chunk`), never at spawn, so it can't be both live and
         // serialized at once (which would double it on the next reload).
-        self.spawn_state.load().add_entity(self, entity.as_ref());
+        self.spawn_state.load().add_entity(entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
 
         self.entities.rcu(|current_entities| {
@@ -5604,7 +5647,7 @@ impl World {
             base_entity.remove_passenger(passenger.get_entity().entity_id);
         }
 
-        self.spawn_state.load().remove_entity(self, entity);
+        self.spawn_state.load().remove_entity(entity);
         self.entity_tracker.remove_entity(entity, self);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
@@ -5654,7 +5697,7 @@ impl World {
                 base.removed.store(true, Ordering::Release);
             }
             self.entity_tracker.remove_entity(entity.as_ref(), self);
-            self.spawn_state.load().remove_entity(self, entity.as_ref());
+            self.spawn_state.load().remove_entity(entity.as_ref());
             if let Some(mob) = entity.get_mob() {
                 mob.get_mob_entity().finish_removal(mob);
             }

@@ -341,6 +341,7 @@ impl Context {
                 .push(typed_handler.clone());
             Arc::new(new_handlers)
         });
+        crate::plugin::refresh_packet_sent_observed(&self.handlers);
     }
 
     /// Registers a custom plugin loader that can load additional plugin types.

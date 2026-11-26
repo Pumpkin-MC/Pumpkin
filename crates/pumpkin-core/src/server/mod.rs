@@ -194,6 +194,20 @@ impl Server {
             advanced_config.commands.broadcast_console_to_ops,
         );
 
+        let entity_tracking = &advanced_config.entity_tracking;
+        if let Some(warning) = entity_tracking.far_player_update_interval_warning() {
+            warn!("{warning}");
+        }
+        if let Some(note) = entity_tracking.far_player_distance_note() {
+            info!("{note}");
+        }
+        if !entity_tracking.is_vanilla() {
+            info!(
+                "Entity tracking: far_player_distance = {}, far_player_update_interval = {}",
+                entity_tracking.far_player_distance, entity_tracking.far_player_update_interval
+            );
+        }
+
         let world_path = basic_config.get_world_path();
 
         let block_registry = super::block::registry::default_registry();
@@ -557,6 +571,18 @@ impl Server {
             new_worlds.push(world.clone());
             new_worlds
         });
+        // Listed first and under the lock of the request that sets the range, so the world
+        // has the range of the setting whichever of the two comes first.
+        let setting = crate::net::management::handlers::SETTING_BROADCAST_RANGE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let range = self
+            .management_hub
+            .settings
+            .entity_broadcast_range
+            .load(Ordering::Relaxed);
+        world.entity_tracker.set_entity_broadcast_range(range);
+        drop(setting);
         let mut event =
             crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
         self.plugin_manager.fire_blocking(self, &mut event);
@@ -613,14 +639,14 @@ impl Server {
             .datapack_manager
             .execute_function(server, &source, "#minecraft:load");
 
-        let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal();
         for player in self.get_all_players() {
             if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
-                let add_packet = pumpkin_protocol::java::client::play::CRecipeBookAdd::new(
-                    true,
-                    &dynamic_recipes,
-                );
-                if let Ok(data) = java_client.serialize_packet(&add_packet) {
+                let book = self.recipe_manager.book_packet(|recipes| {
+                    let add_packet =
+                        pumpkin_protocol::java::client::play::CRecipeBookAdd::new(true, recipes);
+                    java_client.serialize_packet(&add_packet).ok()
+                });
+                if let Some(data) = book {
                     java_client.try_enqueue_packet(data);
                 }
             }
@@ -1295,12 +1321,10 @@ impl Server {
             world.flush_synced_block_events();
 
             let players = world.players.load();
-            players.par_iter().for_each(|player| {
-                player.process_inbound_packets();
-            });
-            players.par_iter().for_each(|player| {
-                player.tick(self);
-            });
+            World::tick_players(&players, self);
+            // Vanilla `ServerChunkCache.tick` runs `ChunkMap.tick` while frozen too.
+            World::send_velocity_changes(&players, self);
+            world.entity_tracker.update_all(world);
         }
     }
 

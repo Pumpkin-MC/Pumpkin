@@ -133,6 +133,22 @@ pub fn decrement_pending_bytes(pending_bytes: &AtomicUsize, bytes: usize) {
     });
 }
 
+/// Locks a mutex that is held for a moment at a time and that many tick threads take at
+/// once: retrying briefly is far cheaper than parking the thread.
+pub(crate) fn lock_briefly<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    const SPINS: u32 = 64;
+    for _ in 0..SPINS {
+        match mutex.try_lock() {
+            Ok(guard) => return guard,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => return poisoned.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => std::hint::spin_loop(),
+        }
+    }
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// This is just a Wrapper for both Java & Bedrock connections
 #[expect(clippy::large_enum_variant)]
 #[repr(C)]
