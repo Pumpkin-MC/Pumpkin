@@ -134,10 +134,22 @@ impl BlockHitResult {
     }
 }
 
+const INSIDE_PROBE_SCALE: f64 = 0.001;
+
+// Vanilla's voxel membership includes the minimum face and excludes the maximum.
+fn point_inside_aabb(point: Vector3<f64>, min: Vector3<f64>, max: Vector3<f64>) -> bool {
+    point.x >= min.x
+        && point.x < max.x
+        && point.y >= min.y
+        && point.y < max.y
+        && point.z >= min.z
+        && point.z < max.z
+}
+
 /// Intersects a ray segment from `from` to `to` with an AABB defined by `min` and `max`.
 ///
-/// Returns `Some((t, hit_direction, hit_pos, is_inside))` where `t` is in `[0.0, 1.0]`,
-/// or `None` if the ray does not intersect the box.
+/// Returns `Some((t, hit_direction, hit_pos, is_inside))` where `t` is strictly between
+/// `0.0` and `1.0`, or `None` if the ray does not intersect the box.
 #[must_use]
 pub fn intersects_aabb_with_hit(
     from: Vector3<f64>,
@@ -146,18 +158,31 @@ pub fn intersects_aabb_with_hit(
     max: Vector3<f64>,
 ) -> Option<(f64, BlockDirection, Vector3<f64>, bool)> {
     let dir = to.sub(&from);
+    if dir.length_squared() < 1.0e-7 {
+        return None;
+    }
+
+    // Vanilla probes slightly ahead so an origin on a face is inside only when entering it.
+    let test_point = from + dir * INSIDE_PROBE_SCALE;
+    if point_inside_aabb(test_point, min, max) {
+        let direction = BlockDirection::get_nearest(-dir.x, -dir.y, -dir.z);
+        return Some((INSIDE_PROBE_SCALE, direction, test_point, true));
+    }
+
+    intersects_aabb_face(from, dir, min, max)
+}
+
+fn intersects_aabb_face(
+    from: Vector3<f64>,
+    dir: Vector3<f64>,
+    min: Vector3<f64>,
+    max: Vector3<f64>,
+) -> Option<(f64, BlockDirection, Vector3<f64>, bool)> {
     let mut tmin: f64 = 0.0;
     let mut tmax: f64 = 1.0;
 
     let mut hit_axis = None;
     let mut hit_is_min = false;
-
-    let is_inside = from.x >= min.x
-        && from.x <= max.x
-        && from.y >= min.y
-        && from.y <= max.y
-        && from.z >= min.z
-        && from.z <= max.z;
 
     macro_rules! check_axis {
         ($axis:ident, $dir_axis:ident, $min_axis:ident, $max_axis:ident) => {{
@@ -193,27 +218,23 @@ pub fn intersects_aabb_with_hit(
     check_axis!(y, y, y, y);
     check_axis!(z, z, z, z);
 
-    if tmax < 0.0 || tmin > 1.0 {
+    // Vanilla AABB.clip accepts intersections only strictly between both endpoints.
+    if tmax < 0.0 || tmin <= 0.0 || tmin >= 1.0 {
         return None;
     }
 
-    let direction = if is_inside {
-        BlockDirection::get_nearest(-dir.x, -dir.y, -dir.z)
-    } else {
-        match (hit_axis, hit_is_min) {
-            (Some("x"), true) => BlockDirection::West,
-            (Some("x"), false) => BlockDirection::East,
-            (Some("y"), true) => BlockDirection::Down,
-            (Some("y"), false) => BlockDirection::Up,
-            (Some("z"), true) => BlockDirection::North,
-            (Some("z"), false) => BlockDirection::South,
-            _ => BlockDirection::get_nearest(-dir.x, -dir.y, -dir.z),
-        }
+    let direction = match (hit_axis, hit_is_min) {
+        (Some("x"), true) => BlockDirection::West,
+        (Some("x"), false) => BlockDirection::East,
+        (Some("y"), true) => BlockDirection::Down,
+        (Some("y"), false) => BlockDirection::Up,
+        (Some("z"), true) => BlockDirection::North,
+        (Some("z"), false) => BlockDirection::South,
+        _ => BlockDirection::get_nearest(-dir.x, -dir.y, -dir.z),
     };
 
-    let t_hit = tmin.max(0.0);
-    let hit_pos = from + dir * t_hit;
-    Some((t_hit, direction, hit_pos, is_inside))
+    let hit_pos = from + dir * tmin;
+    Some((tmin, direction, hit_pos, false))
 }
 
 fn clip_block_shapes(
@@ -223,14 +244,28 @@ fn clip_block_shapes(
     from: Vector3<f64>,
     to: Vector3<f64>,
 ) -> Option<(f64, BlockDirection, Vector3<f64>, bool)> {
+    let mut shapes = shapes.peekable();
+    shapes.peek()?;
+
+    let dir = to.sub(&from);
+    if dir.length_squared() < 1.0e-7 {
+        return None;
+    }
+    let test_point = from + dir * INSIDE_PROBE_SCALE;
+    let inside_direction = BlockDirection::get_nearest(-dir.x, -dir.y, -dir.z);
     let mut closest_hit: Option<(f64, BlockDirection, Vector3<f64>, bool)> = None;
 
     for shape in shapes {
         let world_min = shape.min.add(&block_pos.0.to_f64());
         let world_max = shape.max.add(&block_pos.0.to_f64());
 
+        // Vanilla tests the whole voxel before looking for individual AABB faces.
+        if point_inside_aabb(test_point, world_min, world_max) {
+            return Some((INSIDE_PROBE_SCALE, inside_direction, test_point, true));
+        }
+
         if let Some((t, dir, hit_pos, is_inside)) =
-            intersects_aabb_with_hit(from, to, world_min, world_max)
+            intersects_aabb_face(from, dir, world_min, world_max)
             && closest_hit
                 .as_ref()
                 .is_none_or(|(closest_t, _, _, _)| t < *closest_t)
@@ -578,6 +613,108 @@ mod tests {
         assert!(hit.is_hit());
         assert!(hit.is_inside);
         assert_eq!(hit.block_pos, BlockPos::new(0, 0, 0));
+    }
+
+    #[test]
+    fn ray_misses_block_at_exact_end_position() {
+        let mut world = TestWorld::new();
+        world.set_block(BlockPos::new(0, 0, 0), &Block::OBSIDIAN);
+
+        let hit = world.clip(&ClipContext::new(
+            Vector3::new(0.5, 2.0, 0.5),
+            Vector3::new(0.5, 1.0, 0.5),
+            ClipBlock::Collider,
+            ClipFluid::None,
+        ));
+        assert!(hit.is_miss());
+    }
+
+    #[test]
+    fn ray_leaving_block_at_boundary_is_not_inside() {
+        let mut world = TestWorld::new();
+        world.set_block(BlockPos::new(0, 0, 0), &Block::GRASS_BLOCK);
+
+        let hit = world.clip(&ClipContext::new(
+            Vector3::new(0.5, 1.0, 0.5),
+            Vector3::new(0.5, 2.0, 0.5),
+            ClipBlock::Collider,
+            ClipFluid::None,
+        ));
+        assert!(hit.is_miss());
+    }
+
+    #[test]
+    fn ray_entering_block_at_boundary_is_inside() {
+        let mut world = TestWorld::new();
+        world.set_block(BlockPos::new(0, 0, 0), &Block::GRASS_BLOCK);
+
+        let hit = world.clip(&ClipContext::new(
+            Vector3::new(0.5, 1.0, 0.5),
+            Vector3::new(0.5, 0.5, 0.5),
+            ClipBlock::Collider,
+            ClipFluid::None,
+        ));
+        assert!(hit.is_hit());
+        assert!(hit.is_inside);
+        assert!((hit.location.y - 0.9995).abs() < 1.0e-9);
+    }
+
+    #[test]
+    fn ray_along_partial_shape_max_face_is_not_inside() {
+        let mut world = TestWorld::new();
+        world.set_block(BlockPos::new(0, 0, 0), &Block::OAK_SLAB);
+
+        let hit = world.clip(&ClipContext::new(
+            Vector3::new(0.25, 0.5, 0.5),
+            Vector3::new(0.75, 0.5, 0.5),
+            ClipBlock::Collider,
+            ClipFluid::None,
+        ));
+        assert!(hit.is_miss());
+    }
+
+    #[test]
+    fn ray_ending_inside_block_hits_before_endpoint() -> Result<(), Box<dyn std::error::Error>> {
+        let hit = intersects_aabb_with_hit(
+            Vector3::new(0.5, 2.0, 0.5),
+            Vector3::new(0.5, 0.999, 0.5),
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(1.0, 1.0, 1.0),
+        );
+        let (_, _, location, is_inside) = hit.ok_or("penetrating ray should hit")?;
+        assert!(!is_inside);
+        assert!((location.y - 1.0).abs() < 1.0e-9);
+        Ok(())
+    }
+
+    #[test]
+    fn short_ray_inside_block_is_ignored() {
+        let mut world = TestWorld::new();
+        world.set_block(BlockPos::new(0, 0, 0), &Block::STONE);
+
+        let hit = world.clip(&ClipContext::new(
+            Vector3::new(0.5, 0.5, 0.5),
+            Vector3::new(0.5, 0.5001, 0.5),
+            ClipBlock::Collider,
+            ClipFluid::None,
+        ));
+        assert!(hit.is_miss());
+    }
+
+    #[test]
+    fn whole_shape_inside_precedes_individual_face_hits() {
+        let mut world = TestWorld::new();
+        world.set_block(BlockPos::new(0, 0, 0), &Block::HOPPER);
+
+        let hit = world.clip(&ClipContext::new(
+            Vector3::new(-0.0005, 0.65, 0.5),
+            Vector3::new(1.5, 0.65, 0.5),
+            ClipBlock::Collider,
+            ClipFluid::None,
+        ));
+        assert!(hit.is_hit());
+        assert!(hit.is_inside);
+        assert!((hit.location.x - 0.0010005).abs() < 1.0e-9);
     }
 
     #[test]
