@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::block::entities::bed::BedBlockEntity;
+use crate::entity::passive::villager::VillagerEntity;
 use crate::world::{Explosion, ExplosionInteraction};
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::damage::DamageType;
