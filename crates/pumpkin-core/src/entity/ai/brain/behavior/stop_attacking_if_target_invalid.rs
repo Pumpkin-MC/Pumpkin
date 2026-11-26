@@ -23,6 +23,7 @@ pub fn create_with_callback(
 }
 
 /// Proposes forgetting the target through the plugin event.
+/// The mob must opt into Brain-owned targets. This bypasses `Mob::apply_mob_target`.
 #[must_use]
 pub fn create_with_target_events(
     is_invalid_target: impl FnMut(&BrainTick<'_>, &Arc<dyn EntityBase>) -> bool + Send + Sync + 'static,
@@ -64,9 +65,7 @@ fn create_with(
                 && !is_invalid_target(tick, &target);
             if !still_valid {
                 if fire_target_event {
-                    tick.defer(|mob| {
-                        mob.set_mob_target(None, TargetReason::ForgotTarget);
-                    });
+                    tick.defer_target_change(None, TargetReason::ForgotTarget);
                 } else {
                     on_target_erased(tick, &target);
                     tick.state.erase(types::ATTACK_TARGET.id());

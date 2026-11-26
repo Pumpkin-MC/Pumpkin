@@ -99,6 +99,26 @@ impl BrainTick<'_> {
         }));
     }
 
+    /// Queues an event and updates the originating Brain's target on approval.
+    pub(crate) fn defer_target_change(
+        &mut self,
+        target: Option<Arc<dyn crate::entity::EntityBase>>,
+        reason: crate::plugin::api::events::entity::entity_target::TargetReason,
+    ) {
+        let previous_id = self
+            .state
+            .get(memory::types::ATTACK_TARGET)
+            .map(|target| target.get_entity().entity_id);
+        self.defer_with_update(
+            move |mob| crate::entity::mob::resolve_target_change(mob, previous_id, target, reason),
+            |state, decision| {
+                if let Ok(target) = decision {
+                    state.set_attack_target(target);
+                }
+            },
+        );
+    }
+
     /// Applies the memory update after the action and before the next Brain callback.
     pub(crate) fn defer_with_update<T: Send + 'static>(
         &mut self,
@@ -213,6 +233,14 @@ impl DerefMut for Brain {
 }
 
 impl BrainState {
+    pub(crate) fn set_attack_target(&mut self, target: Option<Arc<dyn crate::entity::EntityBase>>) {
+        let id = |target: &Arc<dyn crate::entity::EntityBase>| target.get_entity().entity_id;
+        if self.get(memory::types::ATTACK_TARGET).map(id) != target.as_ref().map(id) {
+            self.erase(memory::types::CANT_REACH_WALK_TARGET_SINCE.id());
+        }
+        self.set_optional(memory::types::ATTACK_TARGET, target);
+    }
+
     pub fn register_memory(&mut self, id: MemoryModuleId) {
         self.memories.register(id);
     }
@@ -457,8 +485,8 @@ impl Brain {
         }
     }
 
-    pub(crate) const fn cancel_callbacks(&mut self) {
-        self.next_callback = None;
+    pub(crate) const fn cancel_callbacks(&mut self) -> bool {
+        self.next_callback.take().is_some()
     }
 
     pub(crate) fn begin_tick(
@@ -548,7 +576,7 @@ impl Brain {
         for group in self.behaviors.values_mut().flatten() {
             let start = offset;
             offset += group.behaviors.len();
-            if !self.state.is_active(group.activity) {
+            if offset <= first || (first <= start && !self.state.is_active(group.activity)) {
                 continue;
             }
             let skip = first.saturating_sub(start);
@@ -949,6 +977,7 @@ mod tests {
                             .push("switch");
                         tick.state.set(types::PACIFIED, true);
                         tick.state.set_active_activity_if_possible(Activity::Fight);
+                        tick.defer(|_| {});
                         true
                     })),
                 ),
@@ -1167,6 +1196,72 @@ mod tests {
         assert_eq!(stops.load(Ordering::Relaxed), 2);
         assert!(kept_home);
         assert!(running_after.is_empty());
+        Ok(())
+    }
+
+    struct ChangeWorldOnStop(Arc<World>);
+
+    impl Behavior for ChangeWorldOnStop {
+        fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
+            &[]
+        }
+
+        fn can_still_use(&mut self, _tick: &mut BrainTick<'_>) -> bool {
+            true
+        }
+
+        fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
+            let destination = self.0.clone();
+            tick.defer(move |mob| mob.get_entity().world.store(destination));
+        }
+
+        fn debug_name(&self) -> &'static str {
+            "ChangeWorldOnStop"
+        }
+    }
+
+    #[tokio::test]
+    async fn interrupted_brain_refresh_retries_after_a_world_change()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let origin_dir = tempfile::tempdir()?;
+        let destination_dir = tempfile::tempdir()?;
+        let origin = world(&origin_dir);
+        let destination = world(&destination_dir);
+        for direct in [false, true] {
+            let mob = ProviderMob(
+                MobEntity::new(Entity::new(
+                    origin.clone(),
+                    Vector3::new(0.0, 64.0, 0.0),
+                    &EntityType::PIGLIN,
+                )),
+                Arc::default(),
+            );
+            let rebuilt = || {
+                mob.0
+                    .with_brain(&mob, |brain| brain.get(types::HOME).is_some())
+            };
+            let mut brain = Brain::default();
+            brain.add_activity(ActivityData::with_priority_start(
+                Activity::Idle,
+                0,
+                vec![Box::new(Timed::new(ChangeWorldOnStop(destination.clone())))],
+            ));
+            mob.0.set_brain(brain);
+            mob.0.tick_brain(&mob);
+            assert!(!rebuilt());
+            if direct {
+                mob.0.refresh_brain(&mob);
+            } else {
+                mob.0.request_refresh_brain();
+                mob.0.tick_brain(&mob);
+            }
+            assert!(Arc::ptr_eq(&mob.get_entity().world.load(), &destination));
+            assert!(!rebuilt());
+            mob.0.tick_brain(&mob);
+            assert!(rebuilt(), "refresh should retry in the destination world");
+        }
+        origin.level.shutdown().await;
+        destination.level.shutdown().await;
         Ok(())
     }
 
