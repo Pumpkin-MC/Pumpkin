@@ -23,11 +23,13 @@ pub fn create_with_callback(
 }
 
 /// Proposes forgetting the target through the plugin event.
+/// The mob must opt into Brain-owned targets. This bypasses `Mob::apply_mob_target`.
 #[must_use]
 pub fn create_with_target_events(
     is_invalid_target: impl FnMut(&BrainTick<'_>, &Arc<dyn EntityBase>) -> bool + Send + Sync + 'static,
+    on_target_erased: impl Fn(&BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
 ) -> OneShot {
-    create_with(is_invalid_target, |_, _| {}, true)
+    create_with(is_invalid_target, on_target_erased, true)
 }
 
 fn create_with(
@@ -38,6 +40,7 @@ fn create_with(
     on_target_erased: impl Fn(&BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
     fire_target_event: bool,
 ) -> OneShot {
+    let on_target_erased = Arc::new(on_target_erased);
     OneShot::new(
         "StopAttackingIfTargetInvalid",
         vec![
@@ -64,9 +67,24 @@ fn create_with(
                 && !is_invalid_target(tick, &target);
             if !still_valid {
                 if fire_target_event {
-                    tick.defer(|mob| {
-                        mob.set_mob_target(None, TargetReason::ForgotTarget);
-                    });
+                    let on_target_erased = on_target_erased.clone();
+                    tick.defer_target_change(
+                        None,
+                        TargetReason::ForgotTarget,
+                        move |tick, approved| {
+                            if !tick
+                                .state
+                                .get(types::ATTACK_TARGET)
+                                .is_some_and(|current| Arc::ptr_eq(current, &target))
+                            {
+                                return;
+                            }
+                            if approved.is_none() {
+                                on_target_erased(tick, &target);
+                            }
+                            tick.state.set_optional(types::ATTACK_TARGET, approved);
+                        },
+                    );
                 } else {
                     on_target_erased(tick, &target);
                     tick.state.erase(types::ATTACK_TARGET.id());
@@ -90,9 +108,15 @@ mod tests {
     use crate::entity::Entity;
     use crate::entity::ai::brain::Brain;
     use crate::entity::ai::brain::activity::ActivityData;
-    use crate::entity::ai::test_support::world;
+    use crate::entity::ai::test_support::{server, world};
     use crate::entity::passive::cow::CowEntity;
+    use crate::plugin::{
+        BoxFuture, EventHandler,
+        api::events::{EventPriority, entity::entity_target::EntityTargetEvent},
+    };
+    use crate::server::Server;
     use crate::world::World;
+    use pumpkin_data::dimension::Dimension;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
     type Erased = Arc<Mutex<Vec<i32>>>;
@@ -105,24 +129,28 @@ mod tests {
         ))
     }
 
-    fn attacking(target: Arc<dyn EntityBase>) -> (Brain, Erased) {
+    fn attacking(target: Arc<dyn EntityBase>, fire_target_event: bool) -> (Brain, Erased) {
         let erased = Erased::default();
         let record = erased.clone();
         let mut brain = Brain::default();
         brain.add_activity(ActivityData::with_priority_start(
             Activity::Core,
             0,
-            vec![Box::new(create_with_callback(move |tick, target| {
-                let in_memory = tick
-                    .state
-                    .get(types::ATTACK_TARGET)
-                    .map(|held| held.get_entity().entity_id);
-                assert_eq!(in_memory, Some(target.get_entity().entity_id));
-                record
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push(target.get_entity().entity_id);
-            }))],
+            vec![Box::new(create_with(
+                |_, _| false,
+                move |tick, target| {
+                    let in_memory = tick
+                        .state
+                        .get(types::ATTACK_TARGET)
+                        .map(|held| held.get_entity().entity_id);
+                    assert_eq!(in_memory, Some(target.get_entity().entity_id));
+                    record
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .push(target.get_entity().entity_id);
+                },
+                fire_target_event,
+            ))],
         ));
         brain.set(types::ATTACK_TARGET, target);
         (brain, erased)
@@ -141,7 +169,7 @@ mod tests {
         let world = world(&folder);
         let body = cow(&world, 0.0);
         let prey = cow(&world, 2.0);
-        let (mut brain, erased) = attacking(prey.clone());
+        let (mut brain, erased) = attacking(prey.clone(), false);
 
         brain.tick(&world, &*body, 1);
         let kept = brain.has_memory_value(types::ATTACK_TARGET.id());
@@ -168,6 +196,87 @@ mod tests {
         assert!(dropped_when_dead);
         let id = prey.get_entity().entity_id;
         assert_eq!(erased_ids(&erased), vec![id, id]);
+        Ok(())
+    }
+
+    struct ReplaceTarget {
+        body: Arc<CowEntity>,
+        replacement: Arc<dyn EntityBase>,
+    }
+
+    impl EventHandler<EntityTargetEvent> for ReplaceTarget {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntityTargetEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                assert_eq!(event.reason, TargetReason::ForgotTarget);
+                assert_eq!(event.target_id, None);
+                self.body
+                    .mob_entity
+                    .with_brain(self.body.as_ref(), |brain| {
+                        brain.set(types::ATTACK_TARGET, self.replacement.clone());
+                    });
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn forget_does_not_erase_target_installed_by_the_listener() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let body = cow(&world, 0.0);
+        let prey = cow(&world, 2.0);
+        let replacement = cow(&world, 3.0);
+        let (brain, erased) = attacking(prey.clone(), true);
+        body.mob_entity.set_brain(brain);
+        prey.get_entity()
+            .invulnerable
+            .store(true, Ordering::Relaxed);
+        server.plugin_manager.register(
+            Arc::new(ReplaceTarget {
+                body: body.clone(),
+                replacement: replacement.clone(),
+            }),
+            EventPriority::Normal,
+            true,
+        );
+
+        body.mob_entity.tick_brain(body.as_ref());
+
+        assert!(erased_ids(&erased).is_empty());
+        assert_eq!(
+            body.mob_entity.with_brain(body.as_ref(), |brain| {
+                brain
+                    .get(types::ATTACK_TARGET)
+                    .map(|target| target.get_entity().entity_id)
+            }),
+            Some(replacement.get_entity().entity_id),
+        );
+        server.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn approved_forget_runs_callback_before_erasing_and_keeps_reach_timer() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let body = cow(&world, 0.0);
+        let prey = cow(&world, 2.0);
+        let (mut brain, erased) = attacking(prey.clone(), true);
+        brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 1);
+        prey.get_entity()
+            .invulnerable
+            .store(true, Ordering::Relaxed);
+
+        brain.tick(&world, body.as_ref(), 2);
+
+        assert_eq!(erased_ids(&erased), vec![prey.get_entity().entity_id]);
+        assert!(brain.get(types::ATTACK_TARGET).is_none());
+        assert_eq!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE), Some(&1));
+        world.level.shutdown().await;
         Ok(())
     }
 }

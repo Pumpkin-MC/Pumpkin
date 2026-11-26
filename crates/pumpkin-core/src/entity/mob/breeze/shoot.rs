@@ -95,13 +95,14 @@ impl Behavior for Shoot {
     fn start(&mut self, tick: &mut BrainTick<'_>) {
         tick.set_pose(EntityPose::Shooting);
         tick.defer_with_update(
-            |breeze| breeze.play_entity_sound(Sound::EntityBreezeInhale, 1.0, 1.0),
-            |brain, ()| {
-                brain.set_with_expiry(
+            |_| (),
+            |tick, ()| {
+                tick.state.set_with_expiry(
                     types::BREEZE_SHOOT_CHARGING,
                     (),
                     i64::from(SHOOT_INITIAL_DELAY_TICKS),
                 );
+                tick.defer(|breeze| breeze.play_entity_sound(Sound::EntityBreezeInhale, 1.0, 1.0));
             },
         );
     }
@@ -225,21 +226,59 @@ mod tests {
     use futures::future::BoxFuture;
     use pumpkin_data::dimension::Dimension;
     use pumpkin_data::environment_attribute::Activity;
+    use pumpkin_data::packet::clientbound::play::SOUND;
+    use pumpkin_protocol::ser::NetworkReadExt;
 
     use super::super::BreezeEntity;
     use super::*;
     use crate::entity::{
         ai::{
             brain::{Brain, activity::ActivityData},
-            test_support::server,
+            test_support::{java_sound_recipient, server},
         },
         passive::iron_golem::IronGolemEntity,
     };
     use crate::plugin::api::events::entity::{
         entity_pose_change::EntityPoseChangeEvent, entity_spawn::EntitySpawnEvent,
     };
-    use crate::plugin::{EventHandler, EventPriority};
+    use crate::plugin::{EventHandler, EventPriority, server::packet::PacketSentEvent};
     use crate::server::Server;
+
+    struct ShotSounds {
+        breeze: Arc<BreezeEntity>,
+        pose_vetoes: AtomicUsize,
+        inhales: AtomicUsize,
+        shots: AtomicUsize,
+    }
+
+    impl EventHandler<PacketSentEvent> for ShotSounds {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async {
+                if event.packet_id != SOUND.0 {
+                    return;
+                }
+                let Ok(id) = event.payload.as_ref().get_var_int() else {
+                    return;
+                };
+                // Registry sound holders use the sound ID plus one on the wire.
+                if id.0 == i32::from(Sound::EntityBreezeInhale as u16) + 1 {
+                    assert_eq!(self.pose_vetoes.load(Relaxed), 1);
+                    assert!(
+                        self.breeze
+                            .mob_entity
+                            .brain_has_memory_value(types::BREEZE_SHOOT_CHARGING.id())
+                    );
+                    self.inhales.fetch_add(1, Relaxed);
+                } else if id.0 == i32::from(Sound::EntityBreezeShoot as u16) + 1 {
+                    self.shots.fetch_add(1, Relaxed);
+                }
+            })
+        }
+    }
 
     struct RetargetOnChargeSpawn {
         breeze: Arc<BreezeEntity>,
@@ -274,9 +313,21 @@ mod tests {
         let folder = tempfile::tempdir()?;
         let server = server(&folder).await?;
         let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
-        let position = Vector3::new(0.5, 220.0, 0.5);
+        let (player, _peer) = java_sound_recipient(&server, &world, "BreezeTest")?;
+        let position = player.get_entity().pos.load();
         let target_position = position.add_raw(8.0, 0.0, 0.0);
         let breeze = BreezeEntity::new(Entity::new(world.clone(), position, &EntityType::BREEZE));
+        let sounds = Arc::new(ShotSounds {
+            breeze: breeze.clone(),
+            pose_vetoes: AtomicUsize::new(0),
+            inhales: AtomicUsize::new(0),
+            shots: AtomicUsize::new(0),
+        });
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            sounds.clone(),
+            EventPriority::Normal,
+            true,
+        );
         let target: Arc<dyn EntityBase> = IronGolemEntity::new(Entity::new(
             world.clone(),
             target_position,
@@ -312,6 +363,7 @@ mod tests {
             body.tick_brain(breeze.as_ref());
 
             assert_eq!(observer.attempts.load(Relaxed), attempts);
+            assert_eq!(sounds.shots.load(Relaxed), attempts);
             body.with_brain(breeze.as_ref(), |brain| {
                 assert_eq!(
                     brain.time_until_expiry(types::BREEZE_SHOOT_RECOVERING.id()),
@@ -341,22 +393,20 @@ mod tests {
         Ok(())
     }
 
-    struct VetoShooting {
-        entity_id: i32,
-        attempts: AtomicUsize,
-    }
-
-    impl EventHandler<EntityPoseChangeEvent> for VetoShooting {
+    impl EventHandler<EntityPoseChangeEvent> for ShotSounds {
         fn handle_blocking<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityPoseChangeEvent,
         ) -> BoxFuture<'a, ()> {
             Box::pin(async {
-                if event.entity_id == self.entity_id
+                if event.entity_id == self.breeze.get_entity().entity_id
                     && event.pose.parse() == Ok(EntityPose::Shooting as u8)
                 {
-                    self.attempts.fetch_add(1, Relaxed);
+                    let body = &self.breeze.mob_entity;
+                    assert!(body.brain_has_memory_value(types::ATTACK_TARGET.id()));
+                    assert!(!body.brain_has_memory_value(types::BREEZE_SHOOT_CHARGING.id()));
+                    self.pose_vetoes.fetch_add(1, Relaxed);
                     event.cancelled = true;
                 }
             })
@@ -369,22 +419,30 @@ mod tests {
         let folder = tempfile::tempdir()?;
         let server = server(&folder).await?;
         let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let (player, _peer) = java_sound_recipient(&server, &world, "BreezeTest")?;
         let breeze = BreezeEntity::new(Entity::new(
             world.clone(),
-            Vector3::new(0.5, 64.0, 0.5),
+            player.get_entity().pos.load(),
             &EntityType::BREEZE,
         ));
+        let sounds = Arc::new(ShotSounds {
+            breeze: breeze.clone(),
+            pose_vetoes: AtomicUsize::new(0),
+            inhales: AtomicUsize::new(0),
+            shots: AtomicUsize::new(0),
+        });
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            sounds.clone(),
+            EventPriority::Normal,
+            true,
+        );
         let target = IronGolemEntity::new(Entity::new(
             world.clone(),
-            Vector3::new(8.5, 64.0, 0.5),
+            player.get_entity().pos.load().add_raw(8.0, 0.0, 0.0),
             &EntityType::IRON_GOLEM,
         ));
-        let observer = Arc::new(VetoShooting {
-            entity_id: breeze.get_entity().entity_id,
-            attempts: AtomicUsize::new(0),
-        });
         server.plugin_manager.register::<EntityPoseChangeEvent, _>(
-            observer.clone(),
+            sounds.clone(),
             EventPriority::Normal,
             true,
         );
@@ -417,7 +475,8 @@ mod tests {
         };
         tick(0);
         tick(1);
-        assert_eq!(observer.attempts.load(Relaxed), 1);
+        assert_eq!(sounds.pose_vetoes.load(Relaxed), 1);
+        assert_eq!(sounds.inhales.load(Relaxed), 1);
         assert_eq!(breeze.get_entity().pose.load(), EntityPose::Standing);
         breeze.mob_entity.with_brain(breeze.as_ref(), |brain| {
             assert_eq!(
@@ -442,6 +501,8 @@ mod tests {
         }
         assert_eq!(breeze.get_entity().pose.load(), EntityPose::Standing);
         assert_eq!(count_charges(), 1);
+        assert_eq!(sounds.inhales.load(Relaxed), 1);
+        assert_eq!(sounds.shots.load(Relaxed), 1);
         breeze.mob_entity.with_brain(breeze.as_ref(), |brain| {
             assert!(!brain.has_memory_value(types::BREEZE_SHOOT.id()));
             assert_eq!(

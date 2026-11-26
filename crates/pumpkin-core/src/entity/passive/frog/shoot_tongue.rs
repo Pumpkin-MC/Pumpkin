@@ -85,17 +85,11 @@ impl ShootTongue {
         );
     }
 
-    fn eat_entity(mob: &dyn Mob, target: &Arc<dyn EntityBase>, sound: Sound) {
+    fn eat_entity(mob: &dyn Mob, target: &Arc<dyn EntityBase>, world: &Arc<World>) {
         let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>() else {
             return;
         };
-        let entity = frog.get_entity();
-        let world = entity.world.load_full();
-        if !tongue_target_is_current(frog, target, &world) {
-            return;
-        }
-        world.play_sound_fine(sound, SoundCategory::Neutral, &entity.pos.load(), 2.0, 1.0);
-        if !tongue_target_is_current(frog, target, &world) {
+        if !tongue_target_is_current(frog, target, world) {
             return;
         }
         mob.do_hurt_target(target.as_ref());
@@ -201,20 +195,15 @@ impl Behavior for ShootTongue {
                 if target_pos.squared_distance_to_vec(&frog_pos).sqrt() < EATING_DISTANCE {
                     let world = tick.world.clone();
                     let sound_world = world.clone();
-                    let sound_target = target.clone();
                     let sound = self.tongue_sound;
-                    tick.defer(move |mob| {
-                        if let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>()
-                            && tongue_target_is_current(frog, &sound_target, &sound_world)
-                        {
-                            sound_world.play_sound_fine(
-                                sound,
-                                SoundCategory::Neutral,
-                                &frog_pos,
-                                2.0,
-                                1.0,
-                            );
-                        }
+                    tick.defer(move |_| {
+                        sound_world.play_sound_fine(
+                            sound,
+                            SoundCategory::Neutral,
+                            &frog_pos,
+                            2.0,
+                            1.0,
+                        );
                     });
                     tick.set_pose(EntityPose::UsingTongue);
                     tick.defer(move |mob| {
@@ -226,9 +215,7 @@ impl Behavior for ShootTongue {
                         }
                         let prey = target.get_entity();
                         let offset = frog.get_entity().pos.load() - prey.pos.load();
-                        if offset.length() < EATING_DISTANCE {
-                            prey.set_velocity(offset.normalize() * EATING_MOVEMENT_FACTOR);
-                        }
+                        prey.set_velocity(offset.normalize() * EATING_MOVEMENT_FACTOR);
                     });
                     self.eat_animation_timer = 0;
                     self.state = State::CatchAnimation;
@@ -244,8 +231,19 @@ impl Behavior for ShootTongue {
                 self.eat_animation_timer += 1;
                 if elapsed >= CATCH_ANIMATION_DURATION {
                     self.state = State::EatAnimation;
+                    let world = tick.world.clone();
+                    let sound_world = world.clone();
                     let sound = self.eat_sound;
-                    tick.defer(move |mob| Self::eat_entity(mob, &target, sound));
+                    tick.defer(move |mob| {
+                        sound_world.play_sound_fine(
+                            sound,
+                            SoundCategory::Neutral,
+                            &mob.get_entity().pos.load(),
+                            2.0,
+                            1.0,
+                        );
+                    });
+                    tick.defer(move |mob| Self::eat_entity(mob, &target, &world));
                 }
             }
             State::EatAnimation => {
@@ -269,5 +267,158 @@ impl Behavior for ShootTongue {
 
     fn debug_name(&self) -> &'static str {
         "ShootTongue"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_data::environment_attribute::Activity;
+    use pumpkin_data::packet::clientbound::play::SOUND;
+    use pumpkin_util::math::vector3::Vector3;
+
+    use super::*;
+    use crate::entity::{
+        Entity,
+        ai::brain::{Brain, activity::ActivityData, behavior::OneShot},
+        ai::test_support::{java_sound_recipient, server},
+        passive::cow::CowEntity,
+    };
+    use crate::plugin::{
+        BoxFuture, EventHandler, api::events::EventPriority, server::packet::PacketSentEvent,
+    };
+    use crate::server::Server;
+
+    struct TongueSoundListener {
+        frog: Arc<FrogEntity>,
+        replace_brain: AtomicBool,
+        prey: Arc<CowEntity>,
+        observations: Mutex<Vec<(EntityPose, f32)>>,
+    }
+
+    impl EventHandler<PacketSentEvent> for TongueSoundListener {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.packet_id == SOUND.0 {
+                    let mut observations = self
+                        .observations
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if !observations.is_empty() {
+                        return;
+                    }
+                    observations.push((
+                        self.frog.get_entity().pose.load(),
+                        self.prey.mob_entity.living_entity.health.load(),
+                    ));
+                    drop(observations);
+                    if self.replace_brain.load(Relaxed) {
+                        self.frog.get_mob_entity().set_brain(Brain::default());
+                    }
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn tongue_sounds_precede_and_guard_follow_up_effects()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let (player, _peer) = java_sound_recipient(&server, &world, "TongueTest")?;
+        let origin = player.get_entity().pos.load();
+        let frog = FrogEntity::new(Entity::new(world.clone(), origin, &EntityType::FROG));
+        let prey = CowEntity::new(Entity::new(
+            world.clone(),
+            origin + Vector3::new(1.0, 0.0, 0.0),
+            &EntityType::COW,
+        ));
+        world.add_entity_silent(prey.clone());
+
+        let listener = Arc::new(TongueSoundListener {
+            frog: frog.clone(),
+            replace_brain: AtomicBool::new(false),
+            prey: prey.clone(),
+            observations: Mutex::new(Vec::new()),
+        });
+        server
+            .plugin_manager
+            .register(listener.clone(), EventPriority::Normal, true);
+        let body = frog.get_mob_entity();
+        let health = &prey.mob_entity.living_entity.health;
+        let full_health = health.load();
+        for (state, replace, initial_health) in [
+            (State::MoveToTarget, false, full_health),
+            (State::MoveToTarget, true, full_health),
+            (State::CatchAnimation, true, full_health),
+            (State::CatchAnimation, false, 0.0),
+            (State::CatchAnimation, false, full_health),
+        ] {
+            let mut tongue = ShootTongue::new(Sound::EntityFrogTongue, Sound::EntityFrogEat);
+            // Enter the relevant tick directly so this fixture need not pathfind.
+            tongue.state = state;
+            tongue.eat_animation_timer = CATCH_ANIMATION_DURATION;
+            let mut brain = Brain::default();
+            brain.add_activity(ActivityData::with_priority_start(
+                Activity::Core,
+                0,
+                vec![Box::new(OneShot::new(
+                    "CatchPrey",
+                    vec![(types::ATTACK_TARGET.id(), MemoryStatus::ValuePresent)],
+                    move |tick| {
+                        tongue.tick(tick);
+                        true
+                    },
+                ))],
+            ));
+            brain.set(types::ATTACK_TARGET, prey.clone());
+            let initial_pose = if state == State::MoveToTarget {
+                EntityPose::Standing
+            } else {
+                EntityPose::UsingTongue
+            };
+            frog.get_entity().set_pose(initial_pose);
+            health.store(initial_health);
+            prey.get_entity().velocity.store(Vector3::default());
+            listener.replace_brain.store(replace, Relaxed);
+            body.set_brain(brain);
+            body.tick_brain(frog.as_ref());
+
+            let observations = std::mem::take(
+                &mut *listener
+                    .observations
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+            assert_eq!(observations, [(initial_pose, initial_health)]);
+
+            let pulled = state == State::MoveToTarget && !replace;
+            let (pose, velocity) = if pulled {
+                (
+                    EntityPose::UsingTongue,
+                    Vector3::new(-EATING_MOVEMENT_FACTOR, 0.0, 0.0),
+                )
+            } else {
+                (initial_pose, Vector3::default())
+            };
+            assert_eq!(frog.get_entity().pose.load(), pose);
+            if state == State::CatchAnimation && !replace && initial_health > 0.0 {
+                assert!(health.load() < initial_health);
+            } else {
+                assert_eq!(prey.get_entity().velocity.load(), velocity);
+                assert_eq!(health.load().to_bits(), initial_health.to_bits());
+            }
+        }
+        server.shutdown().await;
+        Ok(())
     }
 }

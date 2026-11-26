@@ -1,4 +1,4 @@
-use std::sync::atomic::Ordering::Relaxed;
+use std::sync::{Arc, atomic::Ordering::Relaxed};
 
 use pumpkin_data::{
     Block, attributes::Attributes, effect::StatusEffect, entity::EntityPose, sound::Sound, tag,
@@ -8,6 +8,8 @@ use pumpkin_util::{
     random::RandomImpl,
 };
 use pumpkin_world::clip::{ClipBlock, ClipContext, ClipFluid};
+
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 
 use super::{BreezeEntity, look_from_eyes};
 use crate::{
@@ -216,11 +218,19 @@ impl Behavior for LongJump {
         let Some(target) = tick.state.get(types::ATTACK_TARGET) else {
             return false;
         };
-        let target = target.get_entity();
         let range = follow_range(tick);
-        let offset = target.pos.load() - entity.pos.load();
+        let offset = target.get_entity().pos.load() - entity.pos.load();
         if offset.length_squared() >= range * range {
-            super::ai::forget_target(tick);
+            let previous = target.clone();
+            tick.defer_target_change(None, TargetReason::ForgotTarget, move |tick, target| {
+                if tick
+                    .state
+                    .get(types::ATTACK_TARGET)
+                    .is_some_and(|current| Arc::ptr_eq(current, &previous))
+                {
+                    tick.state.set_optional(types::ATTACK_TARGET, target);
+                }
+            });
             return false;
         }
         let distance = Vector3::new(offset.x as f32, offset.y as f32, offset.z as f32).length();
@@ -233,8 +243,8 @@ impl Behavior for LongJump {
         let Some(breeze) = tick.mob.cast_any().downcast_ref::<BreezeEntity>() else {
             return false;
         };
-        let candidate =
-            breeze.with_movement_random(|random| random_point_behind_target(target, random));
+        let candidate = breeze
+            .with_movement_random(|random| random_point_behind_target(target.get_entity(), random));
         let Some(landing) = snap_to_surface(tick.world, candidate) else {
             return false;
         };

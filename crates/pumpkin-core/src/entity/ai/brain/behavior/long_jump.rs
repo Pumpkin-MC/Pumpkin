@@ -84,30 +84,37 @@ impl Behavior for LongJumpMidJump {
 
     fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
         let entity = tick.mob.get_entity();
-        if entity.on_ground.load(Relaxed) {
+        let landing = entity.on_ground.load(Relaxed).then(|| {
             let velocity = entity.velocity.load();
             entity.velocity.store(Vector3::new(
                 velocity.x * f64::from(0.1f32),
                 velocity.y,
                 velocity.z * f64::from(0.1f32),
             ));
-            let sound = self.landing_sound;
-            let position = entity.pos.load();
-            let world = tick.world.clone();
-            tick.defer(move |mob| {
-                mob.get_entity().send_velocity();
-                world.play_sound_fine(sound, SoundCategory::Neutral, &position, 2.0, 1.0);
-            });
-        }
-        tick.mob
-            .get_mob_entity()
-            .living_entity
-            .discard_friction
-            .store(false, Relaxed);
-        tick.set_pose(EntityPose::Standing);
-        tick.state.erase(types::LONG_JUMP_MID_JUMP.id());
-        let cooldown = sample(tick, self.time_between_long_jumps);
-        tick.state.set(types::LONG_JUMP_COOLDOWN_TICKS, cooldown);
+            (self.landing_sound, entity.pos.load())
+        });
+        let world = tick.world.clone();
+        let cooldown_range = self.time_between_long_jumps;
+        tick.defer_with_update(
+            move |mob| {
+                let entity = mob.get_entity();
+                if let Some((sound, position)) = landing {
+                    // Both sends can synchronously call packet listeners.
+                    entity.send_velocity();
+                    world.play_sound_fine(sound, SoundCategory::Neutral, &position, 2.0, 1.0);
+                }
+                let living = &mob.get_mob_entity().living_entity;
+                living.discard_friction.store(false, Relaxed);
+                if living.is_alive() && Arc::ptr_eq(&entity.world.load(), &world) {
+                    entity.set_pose(EntityPose::Standing);
+                }
+            },
+            move |tick, ()| {
+                tick.state.erase(types::LONG_JUMP_MID_JUMP.id());
+                let cooldown = sample(tick, cooldown_range);
+                tick.state.set(types::LONG_JUMP_COOLDOWN_TICKS, cooldown);
+            },
+        );
     }
 
     fn debug_name(&self) -> &'static str {
@@ -494,4 +501,143 @@ fn is_clear_transition(
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Mutex, mpsc};
+    use std::time::Duration;
+
+    use pumpkin_data::packet::clientbound::play::{SET_ENTITY_MOTION, SOUND};
+    use pumpkin_data::{dimension::Dimension, entity::EntityType, environment_attribute::Activity};
+
+    use super::*;
+    use crate::entity::ai::test_support::{java_sound_recipient, server};
+    use crate::entity::passive::cow::CowEntity;
+    use crate::entity::{
+        Entity, EntityBase,
+        ai::brain::{Brain, activity::ActivityData, behavior::Timed},
+    };
+    use crate::plugin::{
+        BoxFuture, EventHandler, api::events::EventPriority, server::packet::PacketSentEvent,
+    };
+    use crate::server::Server;
+
+    struct LandingPackets {
+        mob: Arc<CowEntity>,
+        observations: Mutex<Vec<(i32, bool, bool, EntityPose)>>,
+    }
+
+    impl EventHandler<PacketSentEvent> for LandingPackets {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.packet_id != SET_ENTITY_MOTION.0 && event.packet_id != SOUND.0 {
+                    return;
+                }
+                let (send, receive) = mpsc::channel();
+                let mob = self.mob.clone();
+                std::thread::spawn(move || {
+                    let mid_jump = mob.mob_entity.with_brain(mob.as_ref(), |brain| {
+                        brain.get(types::LONG_JUMP_MID_JUMP) == Some(&true)
+                    });
+                    let _ = send.send(mid_jump);
+                });
+                let mid_jump = receive.recv_timeout(Duration::from_secs(3));
+                let friction_discarded = self
+                    .mob
+                    .mob_entity
+                    .living_entity
+                    .discard_friction
+                    .load(Relaxed);
+                self.observations
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push((
+                        event.packet_id,
+                        mid_jump == Ok(true),
+                        friction_discarded,
+                        self.mob.get_entity().pose.load(),
+                    ));
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn landing_packets_allow_brain_reads_before_cleanup()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let (player, _peer) = java_sound_recipient(&server, &world, "LandingTest")?;
+
+        let mob = CowEntity::new(Entity::new(
+            world.clone(),
+            player.get_entity().pos.load(),
+            &EntityType::COW,
+        ));
+        let entity = mob.get_entity();
+        let chunk = entity.chunk_pos.load();
+        player
+            .watched_section
+            .store(pumpkin_world::cylindrical_chunk_iterator::Cylindrical::new(
+                chunk,
+                std::num::NonZeroU8::new(8).ok_or("Expected nonzero view distance")?,
+            ));
+        player
+            .chunk_sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .mark_sent_out_of_band(chunk);
+        world.add_entity_silent(mob.clone());
+        assert!(world.is_tracked_by_any_player(entity));
+        let mut brain = Brain::default();
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Core,
+            0,
+            vec![Box::new(Timed::new(LongJumpMidJump::new(
+                (40, 40),
+                Sound::EntityGoatStep,
+            )))],
+        ));
+        brain.register_memory(types::LONG_JUMP_COOLDOWN_TICKS.id());
+        brain.set(types::LONG_JUMP_MID_JUMP, true);
+        mob.mob_entity.set_brain(brain);
+        entity.on_ground.store(false, Relaxed);
+        mob.mob_entity.tick_brain(mob.as_ref());
+        assert_eq!(entity.pose.load(), EntityPose::LongJumping);
+
+        let listener = Arc::new(LandingPackets {
+            mob: mob.clone(),
+            observations: Mutex::new(Vec::new()),
+        });
+        server
+            .plugin_manager
+            .register(listener.clone(), EventPriority::Normal, true);
+        entity.velocity.store(Vector3::new(1.0, 0.0, 0.0));
+        entity.on_ground.store(true, Relaxed);
+        mob.mob_entity.tick_brain(mob.as_ref());
+
+        assert_eq!(
+            *listener
+                .observations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            [
+                (SET_ENTITY_MOTION.0, true, true, EntityPose::LongJumping),
+                (SOUND.0, true, true, EntityPose::LongJumping)
+            ],
+        );
+        assert_eq!(entity.pose.load(), EntityPose::Standing);
+        assert!(!mob.mob_entity.living_entity.discard_friction.load(Relaxed));
+        mob.mob_entity.with_brain(mob.as_ref(), |brain| {
+            assert!(brain.get(types::LONG_JUMP_MID_JUMP).is_none());
+            assert_eq!(brain.get(types::LONG_JUMP_COOLDOWN_TICKS), Some(&40));
+        });
+        server.shutdown().await;
+        Ok(())
+    }
 }

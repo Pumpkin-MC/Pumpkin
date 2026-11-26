@@ -1,5 +1,4 @@
 use pumpkin_data::block_properties::WhiteBedLikeProperties as BedProperties;
-use pumpkin_data::entity::EntityPose;
 use pumpkin_data::environment_attribute::Activity;
 use pumpkin_data::tag::{Block as BlockTag, Taggable};
 
@@ -7,7 +6,7 @@ use super::super::super::BrainTick;
 use super::super::super::memory::{MemoryModuleId, MemoryStatus, types};
 use super::super::door::close_doors_that_i_have_opened_or_passed_through;
 use super::super::timed::Behavior;
-use super::wake_up::defer_wake_up;
+use super::wake_up::{defer_wake_up, is_sleeping};
 use crate::entity::passive::villager::VillagerEntity;
 
 pub const COOLDOWN_AFTER_BEING_WOKEN: i32 = 100;
@@ -114,24 +113,21 @@ impl Behavior for SleepInBed {
             }
 
             if let Some(home) = tick.state.get(types::HOME).copied() {
-                let (block, state) = tick.world.get_block_and_state(&home.pos);
-                if VillagerEntity::bed_sleep_position(home.pos, block, state).is_some() {
-                    let time = tick.time;
-                    tick.defer_with_update(
-                        move |mob| {
-                            mob.get_mob_entity().living_entity.is_alive()
-                                && mob
-                                    .cast_any()
-                                    .downcast_ref::<VillagerEntity>()
-                                    .is_some_and(|villager| villager.start_sleeping(home.pos))
-                        },
-                        move |brain, slept| {
-                            if slept {
-                                brain.set(types::LAST_SLEPT, time);
-                            }
-                        },
-                    );
-                }
+                let time = tick.time;
+                tick.defer_with_update(
+                    move |mob| {
+                        mob.get_mob_entity().living_entity.is_alive()
+                            && mob
+                                .cast_any()
+                                .downcast_ref::<VillagerEntity>()
+                                .is_some_and(|villager| villager.start_sleeping(home.pos))
+                    },
+                    move |tick, slept| {
+                        if slept {
+                            tick.state.set(types::LAST_SLEPT, time);
+                        }
+                    },
+                );
             }
 
             tick.state.erase(types::WALK_TARGET.id());
@@ -140,7 +136,7 @@ impl Behavior for SleepInBed {
     }
 
     fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
-        if tick.pose() == EntityPose::Sleeping {
+        if is_sleeping(tick) {
             defer_wake_up(tick);
             self.next_ok_start_time = tick.time + 40;
         }

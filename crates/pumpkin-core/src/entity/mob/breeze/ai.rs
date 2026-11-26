@@ -106,15 +106,12 @@ fn hurt_by(tick: &BrainTick<'_>) -> Option<Arc<dyn EntityBase>> {
 
 fn stop_attacking() -> OneShot {
     let mut recently_attackable = remember_positives(TICKS_TO_REMEMBER_SEEN_TARGET, |&value| value);
-    stop_attacking_if_target_invalid::create_with_target_events(move |tick, target| {
-        !recently_attackable(&is_entity_attackable(&tick.visibility(), target.as_ref()))
-    })
-}
-
-pub(super) fn forget_target(tick: &mut BrainTick<'_>) {
-    tick.defer(|mob| {
-        mob.set_mob_target(None, TargetReason::ForgotTarget);
-    });
+    stop_attacking_if_target_invalid::create_with_target_events(
+        move |tick, target| {
+            !recently_attackable(&is_entity_attackable(&tick.visibility(), target.as_ref()))
+        },
+        |_, _| {},
+    )
 }
 
 #[cfg(test)]
@@ -133,7 +130,7 @@ mod tests {
 
     struct TargetListener {
         breeze: Arc<BreezeEntity>,
-        replacement: i32,
+        replacement: Arc<dyn EntityBase>,
         acquisitions: AtomicUsize,
         clears: AtomicUsize,
     }
@@ -159,15 +156,22 @@ mod tests {
                 match event.reason {
                     TargetReason::ClosestEntity => {
                         assert!(!has_target);
-                        if self.acquisitions.fetch_add(1, Relaxed) == 0 {
-                            event.cancelled = true;
-                        } else {
-                            event.target_id = Some(self.replacement);
+                        match self.acquisitions.fetch_add(1, Relaxed) {
+                            0 => event.cancelled = true,
+                            1 => event.target_id = Some(self.replacement.get_entity().entity_id),
+                            _ => self
+                                .breeze
+                                .mob_entity
+                                .set_target(Some(self.replacement.clone())),
                         }
                     }
                     TargetReason::ForgotTarget => {
                         assert!(has_target);
-                        event.cancelled = self.clears.fetch_add(1, Relaxed) == 0;
+                        match self.clears.fetch_add(1, Relaxed) {
+                            0 => event.cancelled = true,
+                            3 => event.target_id = Some(self.replacement.get_entity().entity_id),
+                            _ => (),
+                        }
                     }
                     _ => (),
                 }
@@ -199,7 +203,7 @@ mod tests {
         assert!(world.spawn_entity(replacement.clone()));
         let listener = Arc::new(TargetListener {
             breeze: breeze.clone(),
-            replacement: replacement.get_entity().entity_id,
+            replacement: replacement.clone(),
             acquisitions: AtomicUsize::new(0),
             clears: AtomicUsize::new(0),
         });
@@ -217,11 +221,13 @@ mod tests {
         }
         brain.register_memory(types::NEAREST_ATTACKABLE.id());
         brain.set(types::NEAREST_ATTACKABLE, candidate);
+        brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 1);
         body.set_brain(brain);
 
         breeze.custom_server_ai_step(breeze.as_ref());
         assert_eq!(listener.acquisitions.load(Relaxed), 1);
         assert!(!body.brain_has_memory_value(types::ATTACK_TARGET.id()));
+        assert!(body.brain_has_memory_value(types::CANT_REACH_WALK_TARGET_SINCE.id()));
 
         breeze.custom_server_ai_step(breeze.as_ref());
         assert_eq!(listener.acquisitions.load(Relaxed), 2);
@@ -230,6 +236,10 @@ mod tests {
                 .is_some_and(|target| Arc::ptr_eq(&target, &replacement))
         );
 
+        assert!(!body.brain_has_memory_value(types::CANT_REACH_WALK_TARGET_SINCE.id()));
+        body.with_brain(breeze.as_ref(), |brain| {
+            brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 2);
+        });
         replacement.get_entity().invulnerable.store(true, Relaxed);
         assert!(body.get_target().is_none());
         breeze.custom_server_ai_step(breeze.as_ref());
@@ -239,9 +249,61 @@ mod tests {
         breeze.custom_server_ai_step(breeze.as_ref());
         assert_eq!(listener.clears.load(Relaxed), 2);
         assert!(!body.brain_has_memory_value(types::ATTACK_TARGET.id()));
+        body.with_brain(breeze.as_ref(), |brain| {
+            assert_eq!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE), Some(&2));
+        });
+
+        replacement.get_entity().invulnerable.store(false, Relaxed);
+        breeze.custom_server_ai_step(breeze.as_ref());
+        assert_eq!(listener.acquisitions.load(Relaxed), 3);
+        assert!(
+            body.get_target()
+                .is_some_and(|target| Arc::ptr_eq(&target, &replacement))
+        );
+        body.with_brain(breeze.as_ref(), |brain| {
+            assert_eq!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE), Some(&2));
+        });
+
+        check_jump_range_loss(&listener, &iron_golem(256.5));
 
         server.stop();
         server.shutdown().await;
         Ok(())
+    }
+
+    fn check_jump_range_loss(listener: &TargetListener, distant: &Arc<dyn EntityBase>) {
+        let breeze = &listener.breeze;
+        let body = &breeze.mob_entity;
+        // Exercise the range clear at jump start without the earlier invalid-target behavior.
+        for attempts in 3..=4 {
+            let mut brain = Brain::default();
+            brain.add_activity(ActivityData::with_priority_start(
+                Activity::Idle,
+                0,
+                vec![movement::long_jump()],
+            ));
+            brain.register_memory(types::CANT_REACH_WALK_TARGET_SINCE.id());
+            brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 3);
+            brain.set(types::ATTACK_TARGET, distant.clone());
+            breeze.get_entity().on_ground.store(true, Relaxed);
+            body.set_brain(brain);
+            assert!(
+                body.get_target()
+                    .is_some_and(|target| Arc::ptr_eq(&target, distant))
+            );
+            body.tick_brain(breeze.as_ref());
+            assert_eq!(listener.clears.load(Relaxed), attempts);
+            if attempts == 3 {
+                assert!(!body.brain_has_memory_value(types::ATTACK_TARGET.id()));
+            } else {
+                assert!(
+                    body.get_target()
+                        .is_some_and(|target| Arc::ptr_eq(&target, &listener.replacement))
+                );
+            }
+            body.with_brain(breeze.as_ref(), |brain| {
+                assert_eq!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE), Some(&3));
+            });
+        }
     }
 }
