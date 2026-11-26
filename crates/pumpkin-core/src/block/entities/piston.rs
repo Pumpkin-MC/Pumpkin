@@ -347,7 +347,9 @@ mod tests {
     use std::sync::Arc;
 
     use pumpkin_data::{Block, BlockDirection, BlockState, entity::EntityType};
-    use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
+    use pumpkin_util::math::{
+        boundingbox::BoundingBox, position::BlockPos, vector2::Vector2, vector3::Vector3,
+    };
 
     use super::{PistonBlockEntity, PistonProps};
     use crate::entity::{Entity, EntityBase, decoration::armor_stand::ArmorStandEntity};
@@ -371,7 +373,7 @@ mod tests {
         }
     }
 
-    fn top(shapes: &[pumpkin_util::math::boundingbox::BoundingBox]) -> f64 {
+    fn top(shapes: &[BoundingBox]) -> f64 {
         shapes
             .iter()
             .map(|s| s.max.y)
@@ -496,6 +498,45 @@ mod tests {
         block_entity.tick(&world);
         assert_eq!(world.get_block(&target), &Block::STONE);
         assert_eq!(fall(&stand), 66.0, "on the stone at its new place");
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// A pulled fence is 1.5 blocks tall, so at the start of its move it reaches two blocks
+    /// above its `moving_piston`: every collision query must still find it.
+    #[tokio::test]
+    async fn a_tall_moving_shape_is_found_two_blocks_above_its_piston()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        load_chunk(&world);
+        let target = BlockPos::new(0, 64, 0);
+        world.set_block_state(
+            &target,
+            Block::MOVING_PISTON.default_state.id,
+            BlockFlags::FORCE_STATE,
+        );
+        world.add_block_entity(Arc::new(moving(
+            target,
+            Block::OAK_FENCE.default_state,
+            BlockDirection::Up,
+            false,
+            false,
+        )));
+        // The fence is drawn from y = 65 to 66.5; this box sits in its top half.
+        let query = BoundingBox::new(Vector3::new(0.4, 66.1, 0.4), Vector3::new(0.6, 66.3, 0.6));
+        assert!(!world.is_space_empty(query));
+        assert!(!world.no_block_collision(query));
+        let stand = ArmorStandEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 66.2, 0.5),
+            &EntityType::ARMOR_STAND,
+        ));
+        assert!(!world.get_block_collisions(query, &stand).0.is_empty());
+        // Beside the fence's post there is room.
+        let beside = BoundingBox::new(Vector3::new(0.8, 66.1, 0.8), Vector3::new(0.9, 66.3, 0.9));
+        assert!(world.is_space_empty(beside));
+        assert!(world.no_block_collision(beside));
         world.level.shutdown().await;
         Ok(())
     }
