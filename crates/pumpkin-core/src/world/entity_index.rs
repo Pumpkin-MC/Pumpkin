@@ -5,12 +5,12 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use rustc_hash::FxHashMap;
 use uuid::Uuid;
 
+use super::entity_list::{EntityList, Registry};
 use crate::entity::EntityBase;
 use crate::entity::mob::has_game_event_listener;
 use crate::entity::player::Player;
 use crossbeam::atomic::AtomicCell;
 
-type Registry = Vec<Arc<dyn EntityBase>>;
 type PlayerRegistry = Vec<Arc<Player>>;
 type Cell = [i32; 3];
 
@@ -62,9 +62,20 @@ impl CellRange {
     }
 }
 
+/// Non-player entities by key. Keys grow with registry order: a push appends one, a removal
+/// leaves a hole, so key order is registry order and a spawn or removal updates the index in
+/// place instead of rebuilding it. Any other change to the registry rebuilds it.
 #[derive(Default)]
 struct Index {
-    registry: Weak<Registry>,
+    /// The [`EntityList`] version this index describes; `None` until the next rebuild.
+    version: Option<u64>,
+    entities: Vec<Weak<dyn EntityBase>>,
+    alive: Vec<bool>,
+    ids: Vec<i32>,
+    entity_uuids: Vec<Uuid>,
+    live: usize,
+    /// An id or UUID is registered twice: removals then rebuild, to keep the lookup rules.
+    duplicates: bool,
     slots: FxHashMap<i32, usize>,
     uuids: FxHashMap<Uuid, usize>,
     ranges: Vec<Option<CellRange>>,
@@ -73,16 +84,22 @@ struct Index {
     types: Vec<&'static EntityType>,
     /// Mobs with game event listeners, in list order.
     listeners: Vec<usize>,
+    /// Mobs, in list order.
+    mobs: Vec<usize>,
     cells: FxHashMap<Cell, Vec<usize>>,
     oversized: Vec<usize>,
+    #[cfg(test)]
+    rebuilds: usize,
 }
 
 impl Index {
-    fn matches(&self, registry: &Arc<Registry>) -> bool {
-        self.registry.as_ptr() == Arc::as_ptr(registry)
-    }
-
-    fn rebuild(&mut self, registry: &Arc<Registry>) {
+    fn rebuild(&mut self, registry: &Registry, version: u64) {
+        self.entities.clear();
+        self.alive.clear();
+        self.ids.clear();
+        self.entity_uuids.clear();
+        self.live = 0;
+        self.duplicates = false;
         self.slots.clear();
         self.uuids.clear();
         self.ranges.clear();
@@ -91,22 +108,77 @@ impl Index {
         self.types.clear();
         self.bounds.clear();
         self.listeners.clear();
-        for (slot, registered) in registry.iter().enumerate() {
-            let entity = registered.get_entity();
-            self.slots.insert(entity.entity_id, slot);
-            // The first in list order wins, like a linear search.
-            self.uuids.entry(entity.entity_uuid).or_insert(slot);
-            self.types.push(entity.entity_type);
-            if registered.get_mob().is_some_and(has_game_event_listener) {
-                self.listeners.push(slot);
-            }
-            let bounds = entity.bounding_box.load();
-            self.bounds.push(AtomicCell::new(bounds));
-            let range = Self::entity_range(&bounds);
-            self.ranges.push(range);
-            self.insert(slot, range);
+        self.mobs.clear();
+        for registered in registry {
+            self.push(registered);
         }
-        self.registry = Arc::downgrade(registry);
+        self.version = Some(version);
+        #[cfg(test)]
+        {
+            self.rebuilds += 1;
+        }
+    }
+
+    /// Appends `registered` as the last entity in registry order.
+    fn push(&mut self, registered: &Arc<dyn EntityBase>) {
+        let key = self.entities.len();
+        let entity = registered.get_entity();
+        // The last id wins and the first UUID, like the rebuild always did.
+        if self.slots.insert(entity.entity_id, key).is_some() {
+            self.duplicates = true;
+        }
+        match self.uuids.entry(entity.entity_uuid) {
+            std::collections::hash_map::Entry::Occupied(_) => self.duplicates = true,
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(key);
+            }
+        }
+        self.entities.push(Arc::downgrade(registered));
+        self.alive.push(true);
+        self.ids.push(entity.entity_id);
+        self.entity_uuids.push(entity.entity_uuid);
+        self.types.push(entity.entity_type);
+        if let Some(mob) = registered.get_mob() {
+            self.mobs.push(key);
+            if has_game_event_listener(mob) {
+                self.listeners.push(key);
+            }
+        }
+        let bounds = entity.bounding_box.load();
+        self.bounds.push(AtomicCell::new(bounds));
+        let range = Self::entity_range(&bounds);
+        self.ranges.push(range);
+        self.insert(key, range);
+        self.live += 1;
+    }
+
+    /// Takes the entity with `key` out, leaving a hole so later keys keep their order.
+    fn remove(&mut self, key: usize) {
+        if !self.alive[key] {
+            return;
+        }
+        self.alive[key] = false;
+        self.live -= 1;
+        let released: Weak<dyn EntityBase> = Weak::<crate::entity::marker::MarkerEntity>::new();
+        self.entities[key] = released;
+        if self.slots.get(&self.ids[key]) == Some(&key) {
+            self.slots.remove(&self.ids[key]);
+        }
+        if self.uuids.get(&self.entity_uuids[key]) == Some(&key) {
+            self.uuids.remove(&self.entity_uuids[key]);
+        }
+        self.unlink(key, self.ranges[key]);
+        self.ranges[key] = None;
+        for list in [&mut self.listeners, &mut self.mobs] {
+            if let Ok(position) = list.binary_search(&key) {
+                list.remove(position);
+            }
+        }
+    }
+
+    /// Holes left by removals, past which a removal compacts the keys with a rebuild.
+    fn too_sparse(&self) -> bool {
+        self.entities.len() - self.live > self.live.max(1024)
     }
 
     fn entity_range(area: &BoundingBox) -> Option<CellRange> {
@@ -123,18 +195,9 @@ impl Index {
         }
     }
 
-    fn update(&mut self, entity_id: i32, area: &BoundingBox) {
-        let Some(&slot) = self.slots.get(&entity_id) else {
-            return;
-        };
-        self.bounds[slot].store(*area);
-        let next = Self::entity_range(area);
-        let previous = self.ranges[slot];
-        if previous == next {
-            return;
-        }
-        if let Some(previous) = previous {
-            for cell in previous.cells() {
+    fn unlink(&mut self, slot: usize, range: Option<CellRange>) {
+        if let Some(range) = range {
+            for cell in range.cells() {
                 if let std::collections::hash_map::Entry::Occupied(mut entry) =
                     self.cells.entry(cell)
                 {
@@ -147,12 +210,29 @@ impl Index {
         } else {
             self.oversized.retain(|member| *member != slot);
         }
+    }
+
+    fn update(&mut self, entity_id: i32, area: &BoundingBox) {
+        let Some(&slot) = self.slots.get(&entity_id) else {
+            return;
+        };
+        self.bounds[slot].store(*area);
+        let next = Self::entity_range(area);
+        let previous = self.ranges[slot];
+        if previous == next {
+            return;
+        }
+        self.unlink(slot, previous);
         self.ranges[slot] = next;
         self.insert(slot, next);
     }
 
     fn intersects(&self, slot: usize, area: &BoundingBox) -> bool {
         area.intersects(&self.bounds[slot].load())
+    }
+
+    fn entity(&self, slot: usize) -> Option<Arc<dyn EntityBase>> {
+        self.entities[slot].upgrade()
     }
 
     /// Slots in registry order whose type passes `matches` and whose cells touch `area`.
@@ -163,7 +243,10 @@ impl Index {
     ) -> Vec<usize> {
         let matches = |slot: &usize| matches(self.types[*slot]);
         let Some(range) = CellRange::of(area) else {
-            return (0..self.types.len()).filter(matches).collect();
+            return (0..self.types.len())
+                .filter(|slot| self.alive[*slot])
+                .filter(matches)
+                .collect();
         };
         let mut slots: Vec<usize> = self.oversized.iter().copied().filter(matches).collect();
         if range.count() <= self.cells.len() as u64 {
@@ -296,21 +379,24 @@ pub struct EntityIndex {
 }
 
 impl EntityIndex {
-    fn with_index<T>(&self, registry: &Arc<Registry>, query: impl FnOnce(&Index) -> T) -> T {
+    /// Runs `query` on an index that describes `list`, rebuilding it first if it does not.
+    fn with_index<T>(&self, list: &EntityList, query: impl FnOnce(&Index) -> T) -> T {
         let index = self
             .inner
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if index.matches(registry) {
+        if index.version == Some(list.version()) {
             return query(&index);
         }
         drop(index);
+        // Read before locking the index: a spawn holds the list's lock, then the index's.
+        let (registry, version) = list.snapshot();
         let mut index = self
             .inner
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !index.matches(registry) {
-            index.rebuild(registry);
+        if index.version != Some(list.version()) {
+            index.rebuild(&registry, version);
         }
         query(&index)
     }
@@ -340,25 +426,28 @@ impl EntityIndex {
 
     pub fn query(
         &self,
-        registry: Arc<Registry>,
+        list: &EntityList,
         area: BoundingBox,
     ) -> impl Iterator<Item = Arc<dyn EntityBase>> + use<> {
-        self.query_types(registry, area, |_| true)
+        self.query_types(list, area, |_| true)
     }
 
     /// Like [`Self::query`], limited to entity types that pass `matches`.
     pub fn query_types<F: Fn(&'static EntityType) -> bool>(
         &self,
-        registry: Arc<Registry>,
+        list: &EntityList,
         area: BoundingBox,
         matches: F,
     ) -> impl Iterator<Item = Arc<dyn EntityBase>> + use<F> {
-        let slots = self.with_index(&registry, |index| {
-            let mut slots = index.candidates(&area, matches);
-            slots.retain(|&slot| index.intersects(slot, &area));
-            slots
+        let entities: Vec<_> = self.with_index(list, |index| {
+            index
+                .candidates(&area, matches)
+                .into_iter()
+                .filter(|&slot| index.intersects(slot, &area))
+                .filter_map(|slot| index.entity(slot))
+                .collect()
         });
-        slots.into_iter().map(move |slot| registry[slot].clone())
+        entities.into_iter()
     }
 
     pub fn query_players(
@@ -377,29 +466,90 @@ impl EntityIndex {
     /// Mobs with game event listeners whose body overlaps `area`, in list order.
     pub fn listeners(
         &self,
-        registry: Arc<Registry>,
+        list: &EntityList,
         area: BoundingBox,
     ) -> impl Iterator<Item = Arc<dyn EntityBase>> + use<> {
-        let slots: Vec<usize> = self.with_index(&registry, |index| {
+        let entities: Vec<_> = self.with_index(list, |index| {
             index
                 .listeners
                 .iter()
                 .copied()
                 .filter(|&slot| index.intersects(slot, &area))
+                .filter_map(|slot| index.entity(slot))
                 .collect()
         });
-        slots.into_iter().map(move |slot| registry[slot].clone())
+        entities.into_iter()
     }
 
-    pub fn by_id(&self, registry: &Arc<Registry>, id: i32) -> Option<Arc<dyn EntityBase>> {
-        let slot = self.with_index(registry, |index| index.slots.get(&id).copied())?;
-        Some(registry[slot].clone())
+    /// Every mob, in list order, without walking the other entities.
+    pub fn mobs(&self, list: &EntityList) -> Vec<Arc<dyn EntityBase>> {
+        self.with_index(list, |index| {
+            index
+                .mobs
+                .iter()
+                .filter_map(|&slot| index.entity(slot))
+                .collect()
+        })
+    }
+
+    pub fn by_id(&self, list: &EntityList, id: i32) -> Option<Arc<dyn EntityBase>> {
+        self.with_index(list, |index| {
+            index.slots.get(&id).and_then(|&slot| index.entity(slot))
+        })
     }
 
     /// The first entity with `uuid` in registry order, without a scan.
-    pub fn by_uuid(&self, registry: &Arc<Registry>, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
-        let slot = self.with_index(registry, |index| index.uuids.get(&uuid).copied())?;
-        Some(registry[slot].clone())
+    pub fn by_uuid(&self, list: &EntityList, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
+        self.with_index(list, |index| {
+            index.uuids.get(&uuid).and_then(|&slot| index.entity(slot))
+        })
+    }
+
+    /// The list at `version` gets `entity` appended: indexes it in place when the index
+    /// describes that version, otherwise leaves the next query to rebuild it.
+    pub(super) fn pushed(&self, version: u64, entity: &Arc<dyn EntityBase>) {
+        let mut index = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if index.version != Some(version) {
+            return;
+        }
+        index.push(entity);
+        index.version = Some(version + 1);
+    }
+
+    /// The list at `version` loses the entities with `uuid`: updates the index in place when
+    /// it describes that version, otherwise leaves the next query to rebuild it. Duplicate
+    /// registrations and too many holes also leave it to a rebuild.
+    pub(super) fn removed(&self, version: u64, uuid: Uuid) {
+        let mut index = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if index.version != Some(version) {
+            return;
+        }
+        if index.duplicates {
+            index.version = None;
+            return;
+        }
+        if let Some(&slot) = index.uuids.get(&uuid) {
+            index.remove(slot);
+        }
+        index.version = if index.too_sparse() {
+            None
+        } else {
+            Some(version + 1)
+        };
+    }
+
+    #[cfg(test)]
+    fn rebuilds(&self) -> usize {
+        self.inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .rebuilds
     }
 
     pub fn player_by_id(&self, registry: &Arc<PlayerRegistry>, id: i32) -> Option<Arc<Player>> {
@@ -641,6 +791,156 @@ mod tests {
         );
         source.level.shutdown().await;
         destination.level.shutdown().await;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod incremental_tests {
+    use std::sync::Arc;
+
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::{boundingbox::BoundingBox, vector3::Vector3};
+
+    use crate::entity::{
+        Entity, EntityBase, ai::test_support::world, interaction::InteractionEntity,
+        passive::cow::CowEntity,
+    };
+    use crate::world::World;
+
+    /// Small deterministic generator, so a failure replays.
+    struct Lcg(u64);
+    impl Lcg {
+        fn next(&mut self) -> u64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            self.0 >> 33
+        }
+        fn coord(&mut self) -> f64 {
+            (self.next() % 6400) as f64 / 100.0 - 32.0
+        }
+    }
+
+    fn ids(entities: &[Arc<dyn EntityBase>]) -> Vec<i32> {
+        entities.iter().map(|e| e.get_entity().entity_id).collect()
+    }
+
+    /// The index's answers against a linear scan of the entity list.
+    fn assert_matches_scan(world: &World, rng: &mut Lcg) {
+        let list = world.entities.load_full();
+        for _ in 0..8 {
+            let (x, z) = (rng.coord(), rng.coord());
+            let area = BoundingBox::new(
+                Vector3::new(x - 6.0, 60.0, z - 6.0),
+                Vector3::new(x + 6.0, 70.0, z + 6.0),
+            );
+            let expected: Vec<i32> = list
+                .iter()
+                .filter(|e| area.intersects(&e.get_entity().bounding_box.load()))
+                .map(|e| e.get_entity().entity_id)
+                .collect();
+            assert_eq!(ids(&world.get_entities_at_box(&area)), expected);
+        }
+        let mobs: Vec<i32> = list
+            .iter()
+            .filter(|e| e.get_mob().is_some())
+            .map(|e| e.get_entity().entity_id)
+            .collect();
+        assert_eq!(ids(&world.entity_index.mobs(&world.entities)), mobs);
+        for entity in list.iter() {
+            let base = entity.get_entity();
+            let by_id = world
+                .get_entity_by_id(base.entity_id)
+                .map(|e| e.get_entity().entity_id);
+            assert_eq!(by_id, Some(base.entity_id));
+            let by_uuid = world
+                .get_entity_by_uuid(base.entity_uuid)
+                .map(|e| e.get_entity().entity_uuid);
+            assert_eq!(by_uuid, Some(base.entity_uuid));
+        }
+    }
+
+    fn spawn(world: &Arc<World>, rng: &mut Lcg) -> Arc<dyn EntityBase> {
+        let pos = Vector3::new(rng.coord(), 64.0, rng.coord());
+        let entity: Arc<dyn EntityBase> = if rng.next().is_multiple_of(2) {
+            CowEntity::new(Entity::new(world.clone(), pos, &EntityType::COW))
+        } else {
+            InteractionEntity::new(Entity::new(world.clone(), pos, &EntityType::INTERACTION))
+        };
+        world.spawn_entity(entity.clone());
+        entity
+    }
+
+    /// Spawns and removals update the index in place: answers stay those of a linear scan,
+    /// in list order, and the index is not rebuilt for each change.
+    #[tokio::test]
+    async fn spawns_and_removals_update_the_index_in_place()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mut rng = Lcg(42);
+        let mut live: Vec<Arc<dyn EntityBase>> = Vec::new();
+        for _ in 0..50 {
+            live.push(spawn(&world, &mut rng));
+        }
+        assert_matches_scan(&world, &mut rng);
+        let rebuilds = world.entity_index.rebuilds();
+
+        for step in 0..600 {
+            if live.is_empty() || !rng.next().is_multiple_of(3) {
+                live.push(spawn(&world, &mut rng));
+            } else {
+                let victim = live.swap_remove((rng.next() as usize) % live.len());
+                world.remove_entity(victim.as_ref());
+                assert!(
+                    world
+                        .get_entity_by_id(victim.get_entity().entity_id)
+                        .is_none()
+                );
+            }
+            // Entities move between queries, too.
+            if let Some(mover) = live.get((rng.next() as usize) % live.len().max(1)) {
+                mover
+                    .get_entity()
+                    .set_pos(Vector3::new(rng.coord(), 64.0, rng.coord()));
+            }
+            if step % 25 == 0 {
+                assert_matches_scan(&world, &mut rng);
+            }
+        }
+        assert_matches_scan(&world, &mut rng);
+        assert_eq!(
+            world.entity_index.rebuilds(),
+            rebuilds,
+            "spawning and removing must not rebuild the index"
+        );
+
+        // Enough removals compact the keys with one rebuild, and answers stay right.
+        for _ in 0..1500 {
+            live.push(spawn(&world, &mut rng));
+        }
+        while live.len() > 100 {
+            let victim = live.pop().ok_or("empty")?;
+            world.remove_entity(victim.as_ref());
+        }
+        assert_matches_scan(&world, &mut rng);
+        assert!(world.entity_index.rebuilds() > rebuilds);
+
+        // The same entity registered twice: a removal takes both out, like the list's retain.
+        let twice = spawn(&world, &mut rng);
+        world.spawn_entity_non_save(twice.clone());
+        assert_matches_scan(&world, &mut rng);
+        world.remove_entity(twice.as_ref());
+        assert!(
+            world
+                .get_entity_by_id(twice.get_entity().entity_id)
+                .is_none()
+        );
+        assert_matches_scan(&world, &mut rng);
+
+        world.level.shutdown().await;
         Ok(())
     }
 }
