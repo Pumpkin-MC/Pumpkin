@@ -149,6 +149,8 @@ pub struct JavaClient {
     pub packet_sequence: AtomicI32,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
+    /// ID of the last vehicle ridden by this player.
+    pub last_vehicle_id: AtomicCell<Option<i32>>,
     /// Vanilla `suspendFlushingOnServerThread`.
     suspend_flushing: Arc<AtomicBool>,
 }
@@ -188,6 +190,7 @@ impl JavaClient {
             pending_keep_alives: std::sync::Mutex::new(Vec::new()),
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
+            last_vehicle_id: AtomicCell::new(None),
             suspend_flushing: Arc::new(AtomicBool::new(false)),
         }
     }

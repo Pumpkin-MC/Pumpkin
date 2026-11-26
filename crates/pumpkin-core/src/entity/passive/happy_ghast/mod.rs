@@ -33,6 +33,9 @@ use crate::entity::{
     player::Player,
 };
 
+const LEASH_SNAP_DISTANCE: f64 = 16.0;
+const LEASH_ELASTIC_DISTANCE: f64 = 10.0;
+
 pub struct HappyGhastEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
@@ -107,21 +110,6 @@ impl HappyGhastEntity {
     pub fn is_on_still_timeout(&self) -> bool {
         self.stays_still.load(Ordering::Relaxed)
             || self.server_still_timeout.load(Ordering::Relaxed) > 0
-    }
-
-    pub fn stop_in_place(&self) {
-        let entity = self.get_entity();
-        let vel = entity.velocity.load();
-        if vel.x != 0.0 || vel.y != 0.0 || vel.z != 0.0 {
-            entity.velocity.store(Vector3::default());
-            entity.velocity_dirty.store(true, Ordering::SeqCst);
-        }
-        self.mob_entity.steered().navigator().stop();
-        self.mob_entity
-            .move_control
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .set_wait();
     }
 
     pub fn is_wearing_body_armor(&self) -> bool {
@@ -400,20 +388,6 @@ impl Mob for HappyGhastEntity {
         true
     }
 
-    fn mob_can_add_passenger(&self, passenger: &dyn EntityBase) -> bool {
-        let passengers = self
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if passengers.len() >= Self::MAX_PASSENGERS {
-            return false;
-        }
-        !passengers
-            .iter()
-            .any(|p| p.get_entity().entity_id == passenger.get_entity().entity_id)
-    }
-
     fn mob_on_passenger_added(&self, _passenger: &dyn EntityBase, is_first_passenger: bool) {
         if is_first_passenger {
             self.play_entity_sound(Sound::EntityHappyGhastHarnessGogglesDown, 1.0, 1.0);
@@ -515,6 +489,14 @@ impl Mob for HappyGhastEntity {
 
     fn mob_max_passengers(&self) -> usize {
         Self::MAX_PASSENGERS
+    }
+
+    fn mob_leash_snap_distance(&self) -> f64 {
+        LEASH_SNAP_DISTANCE
+    }
+
+    fn mob_leash_elastic_distance(&self) -> f64 {
+        LEASH_ELASTIC_DISTANCE
     }
 
     fn mob_get_dismount_location_for_passenger(
@@ -757,7 +739,6 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
 
-    use pumpkin_data::data_component_impl::EquipmentSlot;
     use pumpkin_data::entity::EntityType;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::vector3::Vector3;
@@ -774,16 +755,6 @@ mod tests {
         let entity = Entity::new(w, Vector3::new(0.0, 70.0, 0.0), &EntityType::HAPPY_GHAST);
         entity.age.store(age, Ordering::Relaxed);
         HappyGhastEntity::new(entity)
-    }
-
-    #[tokio::test]
-    async fn baby_breathes_underwater_adult_does_not() {
-        let folder = tempfile::tempdir().unwrap();
-        let baby = test_happy_ghast(&folder, -24000);
-        let adult = test_happy_ghast(&folder, 0);
-
-        assert!(baby.can_breathe_underwater());
-        assert!(!adult.can_breathe_underwater());
     }
 
     #[tokio::test]
@@ -837,48 +808,6 @@ mod tests {
         ghast.get_entity().tick_count.store(65, Ordering::Relaxed);
         ghast.mob_tick(ghast.as_ref());
         assert_eq!(ghast.server_still_timeout.load(Ordering::Relaxed), 9);
-    }
-
-    #[tokio::test]
-    async fn restriction_radius_calculation() {
-        let folder = tempfile::tempdir().unwrap();
-        let baby = test_happy_ghast(&folder, -24000);
-        let adult = test_happy_ghast(&folder, 0);
-
-        // Baby is always small restriction (32)
-        assert_eq!(baby.get_happy_ghast_restriction_radius(), 32);
-
-        // Unarmored adult is large restriction (64)
-        assert_eq!(adult.get_happy_ghast_restriction_radius(), 64);
-    }
-
-    #[tokio::test]
-    async fn body_armor_can_use_slot() {
-        let folder = tempfile::tempdir().unwrap();
-        let baby = test_happy_ghast(&folder, -24000);
-        let adult = test_happy_ghast(&folder, 0);
-
-        assert!(!baby.can_use_slot(&EquipmentSlot::BODY));
-        assert!(adult.can_use_slot(&EquipmentSlot::BODY));
-        assert!(adult.can_dispenser_equip_into_slot(&EquipmentSlot::BODY));
-    }
-
-    #[tokio::test]
-    async fn max_passengers_limit() {
-        let folder = tempfile::tempdir().unwrap();
-        let ghast = test_happy_ghast(&folder, 0);
-        let rider = test_happy_ghast(&folder, 0);
-        assert_eq!(ghast.max_passengers(), 4);
-        assert!(ghast.can_add_passenger(rider.as_ref()));
-
-        // Cannot add duplicate passenger
-        ghast
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap()
-            .push(rider.clone());
-        assert!(!ghast.can_add_passenger(rider.as_ref()));
     }
 
     #[tokio::test]

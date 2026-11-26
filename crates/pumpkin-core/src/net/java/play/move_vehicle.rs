@@ -13,6 +13,11 @@ impl JavaClient {
             && packet.yaw.is_finite()
             && packet.pitch.is_finite())
         {
+            self.try_kick(&TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_VEHICLE_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_VEHICLE_MOVEMENT,
+                [],
+            ));
             return;
         }
 
@@ -26,7 +31,7 @@ impl JavaClient {
         }
 
         let entity = player.get_entity();
-        let Some(vehicle) = entity.get_vehicle() else {
+        let Some(vehicle) = entity.get_root_vehicle() else {
             player.entered_lava_pos.store(None);
             return;
         };
@@ -36,6 +41,10 @@ impl JavaClient {
             .map(|p| p.get_entity().entity_id)
             != Some(entity.entity_id)
         {
+            return;
+        }
+
+        if self.last_vehicle_id.load() != Some(vehicle.get_entity().entity_id) {
             return;
         }
 

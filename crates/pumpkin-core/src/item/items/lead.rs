@@ -1,23 +1,62 @@
 use std::sync::Arc;
 
 use crate::block::registry::BlockActionResult;
-use crate::entity::EntityBase;
 use crate::entity::decoration::leash_knot::LeashKnotEntity;
 use crate::entity::player::Player;
+use crate::entity::{can_have_a_leash_attached_to, leashable_in_area};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
-use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 pub struct LeadItem;
+
+impl LeadItem {
+    pub fn bind_player_mobs(
+        player: &Player,
+        world: &Arc<World>,
+        pos: BlockPos,
+    ) -> BlockActionResult {
+        let center = pos.to_centered_f64();
+        let entities_to_leash = leashable_in_area(world, center, player.entity_id());
+        if entities_to_leash.is_empty() {
+            return BlockActionResult::Pass;
+        }
+
+        let existing_knot = LeashKnotEntity::get_knot(world, pos);
+        let active_knot = existing_knot
+            .clone()
+            .unwrap_or_else(|| LeashKnotEntity::create_knot(world, pos));
+        let mut any_leashed = false;
+        for leashable in entities_to_leash {
+            if can_have_a_leash_attached_to(leashable.as_ref(), active_knot.as_ref())
+                && leashable
+                    .get_entity()
+                    .leash_to_if_held_by(player.entity_id(), &active_knot)
+            {
+                any_leashed = true;
+            }
+        }
+
+        if any_leashed {
+            LeashKnotEntity::play_placement_sound(active_knot.get_entity());
+            world.emit_game_event(GameEvent::BlockAttach.name(), center);
+            return BlockActionResult::SuccessServer;
+        }
+
+        if existing_knot.is_none() {
+            active_knot.get_entity().remove();
+        }
+        BlockActionResult::Pass
+    }
+}
 
 impl ItemMetadata for LeadItem {
     fn ids() -> Box<[u16]> {
@@ -39,61 +78,7 @@ impl ItemBehaviour for LeadItem {
         if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
             return BlockActionResult::Pass;
         }
-
-        let world = player.world();
-        let center = Vector3::new(
-            f64::from(location.0.x) + 0.5,
-            f64::from(location.0.y) + 0.5,
-            f64::from(location.0.z) + 0.5,
-        );
-
-        let search_dim = EntityDimensions {
-            width: 32.0,
-            height: 32.0,
-            eye_height: 16.0,
-        };
-
-        let search_box =
-            BoundingBox::new_from_pos(center.x, center.y - 16.0, center.z, &search_dim);
-
-        let player_id = player.entity_id();
-        let entities = world.get_entities_at_box(&search_box);
-
-        let mut any_leashed = false;
-        let mut knot: Option<Arc<dyn EntityBase>> = None;
-
-        for entity_base in entities {
-            let ent = entity_base.get_entity();
-            let is_leashed_to_player = ent
-                .leashed_to
-                .try_lock()
-                .ok()
-                .and_then(|guard| {
-                    guard
-                        .as_ref()
-                        .and_then(std::sync::Weak::upgrade)
-                        .map(|holder| holder.get_entity().entity_id == player_id)
-                })
-                .unwrap_or(false);
-
-            if is_leashed_to_player {
-                if knot.is_none() {
-                    knot = Some(LeashKnotEntity::get_or_create(&world, location));
-                }
-                if let Some(k) = &knot {
-                    ent.leash_to(k.clone());
-                    any_leashed = true;
-                }
-            }
-        }
-
-        if any_leashed {
-            world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &center);
-            world.emit_game_event(GameEvent::BlockAttach.name(), center);
-            BlockActionResult::SuccessServer
-        } else {
-            BlockActionResult::Pass
-        }
+        Self::bind_player_mobs(player, &player.world(), location)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

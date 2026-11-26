@@ -192,11 +192,9 @@ impl ItemRegistry {
             return true;
         }
 
-        let before = stack.clone();
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            let handled = pumpkin_item.use_on_entity(stack, player, entity);
-            return handled || !stack.are_equal(&before);
+            return pumpkin_item.use_on_entity(stack, player, entity);
         }
         false
     }

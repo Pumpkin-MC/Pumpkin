@@ -364,12 +364,7 @@ impl MoveControlTrait for GhastMoveControl {
     fn tick(&mut self, mob: &dyn Mob) {
         if self.is_still.is_some_and(|check| check(mob)) {
             self.operation = Operation::Wait;
-            let entity = mob.get_entity();
-            let vel = entity.velocity.load();
-            if vel.x != 0.0 || vel.y != 0.0 || vel.z != 0.0 {
-                entity.velocity.store(Vector3::default());
-                entity.velocity_dirty.store(true, Ordering::SeqCst);
-            }
+            mob.get_mob_entity().stop_in_place();
             mob.get_mob_entity().steered().navigator().stop();
             return;
         }

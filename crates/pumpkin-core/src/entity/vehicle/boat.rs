@@ -225,7 +225,7 @@ impl EntityBase for BoatEntity {
     }
 
     fn max_passengers(&self) -> usize {
-        2
+        self.max_passengers()
     }
 
     fn damage_with_context(
