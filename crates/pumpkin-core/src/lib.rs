@@ -264,13 +264,15 @@ pub async fn serve_java_connection(server: Arc<Server>, mut pending: PendingConn
                     client.await_tasks().await;
                 }
                 player.remove().await;
-                server.remove_player(&player);
                 if let Err(e) = server.player_data_storage.handle_player_leave(&player) {
                     error!("Failed to save player data on disconnect: {e}");
                 }
                 if let Err(e) = server.advancement_manager.save_player(&player).await {
                     error!("Failed to save player advancement on disconnect: {e}");
                 }
+                // Unregister last: a login that waits for this player to disappear (see
+                // `receive_velocity_plugin_response`) must then read the final saved data.
+                server.remove_player(&player);
             }
         }
     }
@@ -757,11 +759,11 @@ impl PumpkinServer {
                         client.close().await;
                         client.await_tasks().await;
                         player.remove().await;
-                        server.remove_player(&player);
                         if let Err(error) = server.player_data_storage.handle_player_leave(&player)
                         {
                             error!("Failed to save player data on disconnect: {error}");
                         }
+                        server.remove_player(&player);
                     }
                 }
             }

@@ -25,6 +25,13 @@ impl PendingConnection {
                 Ok((profile, new_address)) => {
                     self.gameprofile = Some(profile.clone());
                     self.address = new_address;
+                    if !Self::evict_previous_session(server, &profile).await {
+                        self.kick(TextComponent::text(
+                            "Your previous session is still closing, please try again",
+                        ))
+                        .await;
+                        return Some(PacketHandlerResult::Stop);
+                    }
                     self.finish_login(server, &profile).await
                 }
                 Err(error) => {
@@ -42,6 +49,13 @@ impl PendingConnection {
                 Ok((profile, new_address)) => {
                     self.gameprofile = Some(profile.clone());
                     self.address = new_address;
+                    if !Self::evict_previous_session(server, &profile).await {
+                        self.kick(TextComponent::text(
+                            "Your previous session is still closing, please try again",
+                        ))
+                        .await;
+                        return Some(PacketHandlerResult::Stop);
+                    }
                     self.finish_login(server, &profile).await
                 }
                 Err(error) => {
@@ -52,5 +66,38 @@ impl PendingConnection {
         } else {
             None
         }
+    }
+}
+
+impl PendingConnection {
+    /// How long a new login waits for the previous session of the same UUID to be removed.
+    const SESSION_EVICTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+    /// Kicks a still-registered session with this UUID and waits until it has been removed and
+    /// saved, so the new session cannot load stale player data or run next to a ghost.
+    ///
+    /// Returns `false` when the old session is still there after the timeout (for example when a
+    /// plugin cancelled the kick); the caller must then reject the new login.
+    async fn evict_previous_session(server: &Arc<Server>, profile: &GameProfile) -> bool {
+        let Some(old_player) = server.get_player_by_uuid(profile.id) else {
+            return true;
+        };
+        tracing::warn!(
+            "Disconnecting stale session for {} ({}) on new login",
+            profile.name,
+            profile.id
+        );
+        old_player.kick(
+            crate::DisconnectReason::Kicked,
+            &TextComponent::text("Logged in from another location"),
+        );
+        let deadline = tokio::time::Instant::now() + Self::SESSION_EVICTION_TIMEOUT;
+        while server.get_player_by_uuid(profile.id).is_some() {
+            if tokio::time::Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        true
     }
 }
