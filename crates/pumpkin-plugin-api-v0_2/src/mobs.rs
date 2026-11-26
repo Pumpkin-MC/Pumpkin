@@ -668,6 +668,23 @@ define_mob_wrapper!(
     AgeableData
 );
 
+impl AgeableData {
+    const fn update_age(&mut self, age: i32) {
+        self.age = age;
+        self.is_baby = age < 0;
+    }
+
+    const fn update_baby(&mut self, baby: bool) {
+        const BABY_START_AGE: i32 = -24_000;
+        let age = match (baby, self.age) {
+            (true, 0..) => BABY_START_AGE,
+            (false, ..0) => 0,
+            (_, age) => age,
+        };
+        self.update_age(age);
+    }
+}
+
 impl Ageable<'_> {
     /// Returns whether this animal is a baby.
     #[must_use]
@@ -678,7 +695,7 @@ impl Ageable<'_> {
     /// Sets whether this animal is a baby.
     pub fn set_baby(&self, baby: bool) {
         if let Some(mut data) = self.get_data() {
-            data.is_baby = baby;
+            data.update_baby(baby);
             self.set_data(data);
         }
     }
@@ -692,7 +709,7 @@ impl Ageable<'_> {
     /// Sets the age of this animal in ticks.
     pub fn set_age(&self, age: i32) {
         if let Some(mut data) = self.get_data() {
-            data.age = age;
+            data.update_age(age);
             self.set_data(data);
         }
     }
@@ -719,5 +736,38 @@ impl EntityCastExt for Entity {
 impl EntityCastExt for LivingEntity {
     fn cast<'a, T: MobCast<'a>>(&'a self) -> Option<T> {
         T::from_living(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AgeableData;
+
+    #[test]
+    fn age_and_baby_flag_stay_in_sync() {
+        let mut data = AgeableData {
+            is_baby: true,
+            age: -100,
+            in_love_ticks: 20,
+        };
+
+        data.update_baby(true);
+        assert_eq!((data.is_baby, data.age), (true, -100));
+        data.update_baby(false);
+        assert_eq!((data.is_baby, data.age), (false, 0));
+
+        data.update_baby(true);
+        assert_eq!((data.is_baby, data.age), (true, -24_000));
+        data.update_age(0);
+        assert_eq!((data.is_baby, data.age), (false, 0));
+        data.update_age(-5);
+        assert_eq!((data.is_baby, data.age), (true, -5));
+
+        data.update_age(20);
+        data.update_baby(false);
+        assert_eq!(
+            (data.is_baby, data.age, data.in_love_ticks),
+            (false, 20, 20)
+        );
     }
 }
