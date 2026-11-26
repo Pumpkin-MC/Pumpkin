@@ -2121,7 +2121,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let other = self.take(other)?;
         let player = self.get(&player)?;
-        player.hide_player(other.gameprofile.id);
+        player.hide_player(&other);
         Ok(())
     }
 
@@ -2132,7 +2132,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let other = self.take(other)?;
         let player = self.get(&player)?;
-        player.show_player(other.gameprofile.id);
+        player.show_player(&other);
         Ok(())
     }
 

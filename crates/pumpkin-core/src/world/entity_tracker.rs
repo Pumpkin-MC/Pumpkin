@@ -153,6 +153,15 @@ impl TrackedEntity {
             .is_empty()
     }
 
+    /// Test helper: records `player` as a viewer without going through chunk readiness.
+    #[cfg(test)]
+    pub(crate) fn mark_seen_for_test(&self, player: &Arc<Player>) {
+        self.seen_by
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(player.gameprofile.id, player.clone());
+    }
+
     #[must_use]
     pub fn is_seen_by(&self, uuid: &Uuid) -> bool {
         self.seen_by
@@ -420,8 +429,9 @@ impl TrackedEntity {
 
     fn broadcast_to_player(&self, player: &Player) -> bool {
         self.entity.get_player().is_none_or(|target_player| {
-            player.gamemode.load() == GameMode::Spectator
-                || target_player.gamemode.load() != GameMode::Spectator
+            player.can_see(&target_player.gameprofile.id)
+                && (player.gamemode.load() == GameMode::Spectator
+                    || target_player.gamemode.load() != GameMode::Spectator)
         })
     }
 
