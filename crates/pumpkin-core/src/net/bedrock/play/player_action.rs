@@ -102,6 +102,12 @@ impl BedrockClient {
                             );
                         }
                     } else {
+                        // Bedrock faces use the same order as Java's `Direction`; Continue
+                        // packets carry the current face, like Java's direction change.
+                        player.mining_face.store(
+                            u8::try_from(packet.face.0).unwrap_or_default(),
+                            Ordering::Relaxed,
+                        );
                         let mut mining_pos = player
                             .mining_pos
                             .lock()
