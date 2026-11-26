@@ -271,7 +271,7 @@ impl BedBlock {
             // villager from an occupied bed.
             //
             // PARITY BUG: wakes the first villager within the registry order inside
-            // the bounding box; even if that village is sleep in the adjecent bed.
+            // the bounding box; even if that village is sleep in the adjacent bed.
             let bed_box = BoundingBox::from_block(&bed_head_pos);
             let entities =
                 world.get_entities_of_type_at_box(&bed_box, |e| e == &EntityType::VILLAGER);
