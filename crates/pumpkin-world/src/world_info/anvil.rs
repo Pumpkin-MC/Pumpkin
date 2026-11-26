@@ -423,10 +423,7 @@ impl WorldInfoReader for AnvilLevelInfo {
             level_data.clear_weather_time = weather.clear_weather_time;
         }
 
-        if minecraft_data_dir(level_folder)
-            .join("wandering_trader.dat")
-            .exists()
-        {
+        if find_overworld_data_file(level_folder, "wandering_trader.dat").is_some() {
             let wandering_trader = read_wandering_trader(level_folder);
             level_data.wandering_trader_spawn_delay = wandering_trader.spawn_delay;
             level_data.wandering_trader_spawn_chance = wandering_trader.spawn_chance;
