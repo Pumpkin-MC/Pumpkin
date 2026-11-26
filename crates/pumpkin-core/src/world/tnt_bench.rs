@@ -118,6 +118,11 @@ async fn tnt_chain_bench() -> Result<(), Box<dyn std::error::Error>> {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(22);
+    // A side of 1 makes a 1x0x1 cube: no TNT, no tick to time.
+    assert!(
+        side >= 2,
+        "PUMPKIN_TNT_BENCH_SIDE must be at least 2, got {side}"
+    );
     let server_dir = tempfile::tempdir()?;
     let server = test_server(server_dir.path()).await;
     let folder = tempfile::tempdir()?;
@@ -148,6 +153,11 @@ async fn tnt_chain_bench() -> Result<(), Box<dyn std::error::Error>> {
         peak_live = peak_live.max(live_tnt(&world));
     }
     let total = start.elapsed();
+    if tick_ms.is_empty() {
+        eprintln!("[tnt-bench] first explosion {first:.2?}; no primed TNT left to tick");
+        world.level.shutdown().await;
+        return Ok(());
+    }
     let mut sorted = tick_ms.clone();
     sorted.sort_by(f64::total_cmp);
     let p = |q: f64| sorted[((sorted.len() - 1) as f64 * q).round() as usize];
