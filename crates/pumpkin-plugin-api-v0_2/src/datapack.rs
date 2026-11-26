@@ -23,7 +23,7 @@
 //!
 //! async fn enable_custom_pack(server: &Server) -> Result<(), String> {
 //!     let manager = server.get_datapack_manager();
-//!     manager.enable_pack("my_custom_pack", EnablePosition::Last).await?;
+//!     manager.enable_pack("my_custom_pack".into(), EnablePosition::Last).await?;
 //!     Ok(())
 //! }
 //! ```
