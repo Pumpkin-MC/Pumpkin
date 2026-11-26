@@ -53,6 +53,9 @@ fn create_with(
             if let Some(reason) = reason {
                 let reason = reason(target.as_ref());
                 tick.defer_target_change(Some(target), reason, |tick, target| {
+                    if tick.state.has_memory_value(types::ATTACK_TARGET.id()) {
+                        return;
+                    }
                     if target.is_some() {
                         tick.state.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
                     }

@@ -508,24 +508,15 @@ mod tests {
     use std::sync::{Mutex, mpsc};
     use std::time::Duration;
 
-    use arc_swap::ArcSwap;
     use pumpkin_data::packet::clientbound::play::{SET_ENTITY_MOTION, SOUND};
     use pumpkin_data::{dimension::Dimension, entity::EntityType, environment_attribute::Activity};
-    use pumpkin_protocol::ConnectionState;
-    use pumpkin_util::GameMode;
-    use uuid::Uuid;
 
     use super::*;
-    use crate::entity::ai::test_support::server;
+    use crate::entity::ai::test_support::{java_sound_recipient, server};
     use crate::entity::passive::cow::CowEntity;
-    use crate::entity::player::Player;
     use crate::entity::{
         Entity, EntityBase,
         ai::brain::{Brain, activity::ActivityData, behavior::Timed},
-    };
-    use crate::net::{
-        ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
-        java::{JavaClient, pending::PendingConnection},
     };
     use crate::plugin::{
         BoxFuture, EventHandler, api::events::EventPriority, server::packet::PacketSentEvent,
@@ -581,39 +572,7 @@ mod tests {
         let folder = tempfile::tempdir()?;
         let server = server(&folder).await?;
         let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
-        let (transport, _peer) = tokio::io::duplex(65536);
-        let (read, write) = tokio::io::split(transport);
-        let pending = PendingConnection::from_transport(
-            Box::new(read),
-            Box::new(write),
-            "127.0.0.1:25565".parse()?,
-            0,
-            PacketRateLimiter::new(false, 0.0, 0.0),
-            Arc::downgrade(&server),
-        );
-        let profile = GameProfile {
-            id: Uuid::new_v4(),
-            name: "LandingTest".into(),
-            properties: ArcSwap::from_pointee(vec![]),
-            profile_actions: None,
-        };
-        let mut client =
-            JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
-        client.connection_state.store(ConnectionState::Play);
-        client.start_outgoing_packet_task();
-        let player = Arc::new(Player::new(
-            Arc::new(ClientPlatform::Java(client)),
-            profile,
-            PlayerConfig::default(),
-            &world,
-            GameMode::Survival,
-        ));
-        player
-            .client
-            .java()
-            .ok_or("Expected Java client")?
-            .set_player(player.clone());
-        world.add_player(&player)?;
+        let (player, _peer) = java_sound_recipient(&server, &world, "LandingTest")?;
 
         let mob = CowEntity::new(Entity::new(
             world.clone(),

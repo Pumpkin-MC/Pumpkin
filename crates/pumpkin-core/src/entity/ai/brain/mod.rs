@@ -159,6 +159,7 @@ pub(crate) fn run_brain_effects(
     effects: Vec<BrainEffect>,
     mob: &dyn Mob,
     world: &Arc<World>,
+    is_current: impl Fn() -> bool,
 ) -> Option<Vec<BrainEffectUpdate>> {
     let still_present = || {
         let entity = mob.get_entity();
@@ -167,7 +168,7 @@ pub(crate) fn run_brain_effects(
 
     let mut updates = Vec::new();
     for effect in effects {
-        if !still_present() {
+        if !still_present() || !is_current() {
             return None;
         }
         updates.extend(effect(mob));
@@ -180,7 +181,7 @@ pub struct Brain {
     state: BrainState,
     sensors: Vec<SensorEntry>,
     behaviors: BTreeMap<i32, Vec<ActivityBehaviors>>,
-    next_callback: Option<BrainCursor>,
+    next_callback: Option<(BrainCursor, Arc<()>)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -469,7 +470,7 @@ impl Brain {
         mut effects: Vec<BrainEffect>,
     ) {
         while !effects.is_empty() {
-            let Some(updates) = run_brain_effects(effects, mob, world) else {
+            let Some(updates) = run_brain_effects(effects, mob, world, || true) else {
                 self.cancel_callbacks();
                 return;
             };
@@ -480,7 +481,12 @@ impl Brain {
         }
     }
 
-    pub(crate) const fn cancel_callbacks(&mut self) -> bool {
+    /// Identity of the suspended callback that owns the current effect batch.
+    pub(crate) fn effect_owner(&self) -> Option<&Arc<()>> {
+        self.next_callback.as_ref().map(|(_, owner)| owner)
+    }
+
+    pub(crate) fn cancel_callbacks(&mut self) -> bool {
         self.next_callback.take().is_some()
     }
 
@@ -514,7 +520,7 @@ impl Brain {
         time: i64,
         updates: Vec<BrainEffectUpdate>,
     ) -> Option<Vec<BrainEffect>> {
-        let cursor = self.next_callback.take()?;
+        let (cursor, _) = self.next_callback.take()?;
         for update in updates {
             update(&mut BrainTick {
                 state: &mut self.state,
@@ -538,7 +544,7 @@ impl Brain {
     }
 
     fn take_effects_at(&mut self, cursor: BrainCursor) -> Vec<BrainEffect> {
-        self.next_callback = Some(cursor);
+        self.next_callback = Some((cursor, Arc::new(())));
         self.state.pending_pose = None;
         std::mem::take(&mut self.state.effects)
     }

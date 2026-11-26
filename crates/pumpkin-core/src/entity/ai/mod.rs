@@ -50,6 +50,59 @@ pub(crate) mod test_support {
         .await
     }
 
+    pub fn java_sound_recipient(
+        server: &Arc<Server>,
+        world: &Arc<World>,
+        name: &str,
+    ) -> Result<
+        (Arc<crate::entity::player::Player>, tokio::io::DuplexStream),
+        Box<dyn std::error::Error>,
+    > {
+        use crate::entity::player::Player;
+        use crate::net::{
+            ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
+            java::{JavaClient, pending::PendingConnection},
+        };
+        use pumpkin_protocol::ConnectionState;
+        use pumpkin_util::GameMode;
+
+        let (transport, peer) = tokio::io::duplex(65536);
+        let (read, write) = tokio::io::split(transport);
+        let pending = PendingConnection::from_transport(
+            Box::new(read),
+            Box::new(write),
+            "127.0.0.1:25565".parse()?,
+            0,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+            Arc::downgrade(server),
+        );
+        let profile = GameProfile {
+            id: uuid::Uuid::new_v4(),
+            name: name.into(),
+            properties: ArcSwap::from_pointee(vec![]),
+            profile_actions: None,
+        };
+        let mut client =
+            JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+        client.connection_state.store(ConnectionState::Play);
+        client.start_outgoing_packet_task();
+        let player = Arc::new(Player::new(
+            Arc::new(ClientPlatform::Java(client)),
+            profile,
+            PlayerConfig::default(),
+            world,
+            GameMode::Survival,
+        ));
+        player
+            .client
+            .java()
+            .ok_or("Expected Java client")?
+            .set_player(player.clone());
+        world.add_player(&player)?;
+
+        Ok((player, peer))
+    }
+
     pub fn world(folder: &tempfile::TempDir) -> Arc<World> {
         world_in_dimension(folder, Dimension::OVERWORLD.clone())
     }

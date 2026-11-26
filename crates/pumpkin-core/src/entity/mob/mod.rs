@@ -862,22 +862,40 @@ impl MobEntity {
         begin: fn(&mut Brain, &Arc<World>, &dyn Mob, i64) -> Vec<BrainEffect>,
     ) -> BrainCallbackResult {
         let time = world.get_world_age();
-        let mut effects = self.with_brain(mob, |brain| begin(brain, world, mob, time));
-        while !effects.is_empty() {
-            let Some(updates) = run_brain_effects(effects, mob, world) else {
-                return if self.with_brain(mob, Brain::cancel_callbacks) {
-                    BrainCallbackResult::Interrupted
-                } else {
-                    BrainCallbackResult::Superseded
-                };
+        let (mut effects, mut owner) = self.with_brain(mob, |brain| {
+            let effects = begin(brain, world, mob, time);
+            (effects, brain.effect_owner().cloned())
+        });
+        while let Some(current) = owner {
+            let owns_effects = |brain: &Brain| {
+                brain
+                    .effect_owner()
+                    .is_some_and(|owner| Arc::ptr_eq(owner, &current))
             };
-            let next = self.with_brain(mob, |brain| {
-                brain.resume_callbacks(world, mob, time, updates)
+            let updates = run_brain_effects(effects, mob, world, || {
+                self.brain
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .as_ref()
+                    .is_some_and(owns_effects)
             });
-            let Some(next) = next else {
-                return BrainCallbackResult::Superseded;
-            };
-            effects = next;
+            let next = self.with_brain(mob, |brain| {
+                if !owns_effects(brain) {
+                    return Err(BrainCallbackResult::Superseded);
+                }
+                let Some(updates) = updates else {
+                    brain.cancel_callbacks();
+                    return Err(BrainCallbackResult::Interrupted);
+                };
+                let effects = brain
+                    .resume_callbacks(world, mob, time, updates)
+                    .ok_or(BrainCallbackResult::Superseded)?;
+                Ok((effects, brain.effect_owner().cloned()))
+            });
+            match next {
+                Ok(batch) => (effects, owner) = batch,
+                Err(result) => return result,
+            }
         }
         BrainCallbackResult::Complete
     }
@@ -3544,7 +3562,7 @@ mod tests {
     struct ReviewTarget {
         actor: Arc<BrainMob>,
         candidate_id: i32,
-        redirect_to: i32,
+        redirect_to: Arc<dyn EntityBase>,
         calls: AtomicUsize,
     }
     impl EventHandler<EntityTargetEvent> for ReviewTarget {
@@ -3558,7 +3576,8 @@ mod tests {
                 assert_eq!(event.target_id, Some(self.candidate_id));
                 match self.calls.fetch_add(1, Ordering::Relaxed) {
                     0 => event.cancelled = true,
-                    1 => event.target_id = Some(self.redirect_to),
+                    1 => event.target_id = Some(self.redirect_to.get_entity().entity_id),
+                    2 => self.actor.0.set_target(Some(self.redirect_to.clone())),
                     _ => {
                         let mut replacement = Brain::default();
                         replacement.register_memory(types::ATTACK_TARGET.id());
@@ -3587,7 +3606,7 @@ mod tests {
         let candidate_id = candidate.get_entity().entity_id;
         let redirected = zombie(&world, 64.0);
         let redirect_to = redirected.get_entity().entity_id;
-        world.add_entity_silent(redirected);
+        world.add_entity_silent(redirected.clone());
         let mut brain = Brain::default();
         brain.add_activity(ActivityData::with_priority_start(
             Activity::Core,
@@ -3603,7 +3622,7 @@ mod tests {
         let listener = Arc::new(ReviewTarget {
             actor: actor.clone(),
             candidate_id,
-            redirect_to,
+            redirect_to: redirected,
             calls: AtomicUsize::new(0),
         });
         server.plugin_manager.register::<EntityTargetEvent, _>(
@@ -3627,9 +3646,23 @@ mod tests {
             );
             assert!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE).is_none());
         });
+        actor.0.with_brain(actor.as_ref(), |brain| {
+            brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 9);
+        });
         actor.0.set_target(None);
         actor.0.tick_brain(actor.as_ref());
-        assert_eq!(listener.calls.load(Ordering::Relaxed), 3);
+        actor.0.with_brain(actor.as_ref(), |brain| {
+            assert_eq!(
+                brain
+                    .get(types::ATTACK_TARGET)
+                    .map(|target| target.get_entity().entity_id),
+                Some(redirect_to),
+            );
+            assert_eq!(brain.get(types::CANT_REACH_WALK_TARGET_SINCE), Some(&9));
+        });
+        actor.0.set_target(None);
+        actor.0.tick_brain(actor.as_ref());
+        assert_eq!(listener.calls.load(Ordering::Relaxed), 4);
         actor.0.with_brain(actor.as_ref(), |brain| {
             assert_eq!(brain.get(types::LAST_SLEPT), Some(&123));
             assert!(brain.get(types::ATTACK_TARGET).is_none());
