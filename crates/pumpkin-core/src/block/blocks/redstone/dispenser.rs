@@ -46,7 +46,7 @@ use crate::item::items::minecart::MinecartItem;
 use crate::item::items::spawn_egg::prepare_egg_mob;
 use crate::plugin::api::events::block::block_shear_entity::BlockShearEntityEvent;
 use crate::plugin::api::events::entity::creature_spawn::CreatureSpawnReason;
-use crate::world::World;
+use crate::world::{VehiclePlacementError, World};
 
 use crate::block::entities::dispenser::DispenserBlockEntity;
 use pumpkin_data::block_properties::{
@@ -269,8 +269,13 @@ impl BlockBehaviour for DispenserBlock {
                     position: args.position,
                     facing: props.facing,
                 };
-                Self::dispense(&ctx, dispenser, &mut item);
-                dispenser.set_stack(slot_index, item);
+                let is_boat = BoatItem::ids().contains(&item.item.id);
+                if is_boat || MinecartItem::ids().contains(&item.item.id) {
+                    Self::dispense_vehicle(&ctx, dispenser, slot_index, &item, is_boat);
+                } else {
+                    Self::dispense(&ctx, dispenser, &mut item);
+                    dispenser.set_stack(slot_index, item);
+                }
             } else {
                 args.world
                     .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0);
@@ -299,7 +304,7 @@ impl DispenserBlock {
     const FIREWORK_PROJECTILE_POWER: f64 = 0.5;
     const FIREWORK_PROJECTILE_UNCERTAINTY: f64 = 1.0;
 
-    fn dispense(ctx: &DispenseContext<'_>, dispenser: &DispenserBlockEntity, item: &mut ItemStack) {
+    fn allow_dispense(ctx: &DispenseContext<'_>, item: &ItemStack) -> bool {
         let mut event = crate::plugin::api::events::block::block_dispense::BlockDispenseEvent::new(
             *ctx.position,
             item.item.registry_key.to_string(),
@@ -310,27 +315,21 @@ impl DispenserBlock {
         if event.cancelled {
             ctx.world
                 .sync_world_event(WorldEvent::SoundDispenserFail, *ctx.position, 0);
+        }
+        !event.cancelled
+    }
+
+    fn dispense(ctx: &DispenseContext<'_>, dispenser: &DispenserBlockEntity, item: &mut ItemStack) {
+        if !Self::allow_dispense(ctx, item) {
             return;
         }
-
         // Still missing some specific dispenser behavior that you can find here:
         // https://minecraft.wiki/w/Dispenser#Usage
         if Self::try_dispense_projectile(ctx, item) {
             return;
         }
 
-        let boats = BoatItem::ids();
-        if boats.contains(&item.item.id) {
-            // Boats
-            if !Self::dispense_boat(ctx, item) {
-                Self::drop_item(ctx, item);
-            }
-        } else if MinecartItem::ids().contains(&item.item.id) {
-            // Minecarts
-            if !Self::dispense_minecart(ctx, item) {
-                Self::drop_item(ctx, item);
-            }
-        } else if item.item.id == Item::ARMOR_STAND.id {
+        if item.item.id == Item::ARMOR_STAND.id {
             // Armor stands
             if !Self::dispense_armor_stand(ctx, item) {
                 Self::drop_item(ctx, item);
@@ -522,41 +521,173 @@ impl DispenserBlock {
             && ctx.world.get_entities_at_box(&bounding_box).is_empty()
     }
 
-    fn dispense_boat(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
+    fn dispense_vehicle(
+        ctx: &DispenseContext<'_>,
+        dispenser: &DispenserBlockEntity,
+        slot: usize,
+        item: &ItemStack,
+        is_boat: bool,
+    ) {
+        if !Self::allow_dispense(ctx, item) {
+            return;
+        }
+        let debit = || {
+            let Some(entities) = ctx.world.block_entities.get(&ctx.position.chunk_position())
+            else {
+                return false;
+            };
+            let live = entities
+                .get(ctx.position)
+                .and_then(|entity| entity.as_any().downcast_ref::<DispenserBlockEntity>());
+            if !live.is_some_and(|live| std::ptr::eq(live, dispenser)) {
+                return false;
+            }
+            let consumed = dispenser.update_stack(slot, &mut |current| {
+                if current.uid != item.uid || !current.are_equal(item) {
+                    return false;
+                }
+                current.decrement(1);
+                if current.is_empty() {
+                    current.clear();
+                }
+                true
+            });
+            if consumed {
+                dispenser.mark_dirty();
+            }
+            consumed
+        };
+
+        let entity = if is_boat {
+            Self::create_dispensed_boat(ctx, item)
+        } else {
+            Self::create_dispensed_minecart(ctx, item)
+        };
+        let ejected = entity.is_none();
+        let entity =
+            entity.unwrap_or_else(|| Self::create_ejected_item(ctx, item.copy_with_count(1), 0));
+        let consumed = match ctx
+            .world
+            .spawn_placed_vehicle(&entity, || debit().then_some(()))
+        {
+            Ok(()) => true,
+            // A spawn veto consumes the unchanged source stack.
+            Err(VehiclePlacementError::SpawnVetoed) => debit(),
+            Err(VehiclePlacementError::UuidUnavailable | VehiclePlacementError::CommitRejected) => {
+                false
+            }
+        };
+        if consumed {
+            if ejected {
+                // The fallback dispense runs its own effects before the outer behavior's effects.
+                Self::play_vehicle_dispense_effects(ctx);
+            }
+            Self::play_vehicle_dispense_effects(ctx);
+        }
+    }
+
+    fn play_vehicle_dispense_effects(ctx: &DispenseContext<'_>) {
+        use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
+        use pumpkin_protocol::java::client::play::CWorldEvent;
+
+        const RANGE: f64 = 64.0;
+        let java_origin = ctx.position.0.to_f64();
+        let center = ctx.position.to_centered_f64();
+        let sound = CWorldEvent::new(
+            WorldEvent::SoundDispenserDispense as i32,
+            *ctx.position,
+            0,
+            false,
+        );
+        let smoke = CWorldEvent::new(
+            WorldEvent::ParticlesShootSmoke as i32,
+            *ctx.position,
+            to_data3d(ctx.facing),
+            false,
+        );
+        let (dx, dy, dz, smoke_direction) = match ctx.facing {
+            Facing::Down => (0.0, -0.9, 0.0, 4),
+            Facing::Up => (0.0, 0.5, 0.0, 4),
+            Facing::North => (0.0, -0.2, -0.7, 1),
+            Facing::South => (0.0, -0.2, 0.7, 7),
+            Facing::West => (-0.7, -0.2, 0.0, 3),
+            Facing::East => (0.7, -0.2, 0.0, 5),
+        };
+        let bedrock_sound = CLevelEvent {
+            event_id: (LevelEvent::SoundClick as i32).into(),
+            position: center.to_f32_lossy(),
+            data: 0.into(),
+        };
+        let bedrock_smoke = CLevelEvent {
+            event_id: (LevelEvent::ParticlesShoot as i32).into(),
+            position: center.add_raw(dx, dy, dz).to_f32_lossy(),
+            data: smoke_direction.into(),
+        };
+        // Level events use a spherical range for each edition's origin.
+        for player in ctx.world.players.load_full().iter() {
+            let bedrock = player.client.bedrock();
+            let origin = if bedrock.is_some() {
+                &center
+            } else {
+                &java_origin
+            };
+            if player
+                .get_entity()
+                .pos
+                .load()
+                .squared_distance_to_vec(origin)
+                < RANGE * RANGE
+            {
+                crate::world::entity_islands::check_reached(player.entity_id());
+                if let Some(client) = bedrock {
+                    World::broadcast_bedrock_grouped(&bedrock_sound, std::iter::once(client));
+                    World::broadcast_bedrock_grouped(&bedrock_smoke, std::iter::once(client));
+                } else {
+                    World::broadcast_java_players(&sound, std::iter::once(player));
+                    World::broadcast_java_players(&smoke, std::iter::once(player));
+                }
+            }
+        }
+    }
+
+    fn create_dispensed_boat(
+        ctx: &DispenseContext<'_>,
+        item: &ItemStack,
+    ) -> Option<Arc<dyn EntityBase>> {
         let target = Self::target_position(ctx);
         let is_water = |id: u16| Fluid::same_fluid_type(id, Fluid::WATER.id);
-
-        let spawn_pos = if is_water(ctx.world.get_fluid(&target).id) {
-            target.to_f64()
+        let water_offset = if is_water(ctx.world.get_fluid(&target).id) {
+            1.0
         } else if ctx.world.get_block_state(&target).is_air()
             && is_water(ctx.world.get_fluid(&target.down()).id)
         {
-            target.down().to_f64()
+            0.0
         } else {
-            return false;
+            return None;
         };
 
         let entity_type = BoatItem::item_to_entity(item.item);
-        let dimensions = EntityDimensions::new(
-            entity_type.dimension[0],
-            entity_type.dimension[1],
-            entity_type.eye_height,
-        );
-        if !Self::has_room_for(ctx, spawn_pos, &dimensions) {
-            return false;
-        }
-
-        let dispensed = item.split(1);
+        // Vanilla BoatDispenseItemBehavior offsets the hull from the dispenser center.
+        let horizontal = f64::from(entity_type.dimension[0]) / 2.0 + 0.5625;
         let facing = to_normal(ctx.facing);
+        let spawn_pos = ctx.position.to_centered_f64().add_raw(
+            facing.x * horizontal,
+            facing.y.mul_add(1.125, water_offset),
+            facing.z * horizontal,
+        );
         let entity = Entity::new(ctx.world.clone(), spawn_pos, entity_type);
-        entity.set_rotation(facing.x.atan2(facing.z) as f32 * 57.295_776, 0.0);
         let boat = Arc::new(BoatEntity::new(entity));
-        crate::item::items::spawn_egg::apply_entity_variant(&dispensed, boat.as_ref(), None);
-        ctx.world.spawn_entity(boat);
-
-        ctx.world
-            .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
-        true
+        crate::item::items::spawn_egg::apply_entity_variant(item, boat.as_ref(), None);
+        // Java Direction.toYRot uses 270 degrees for both vertical directions.
+        let yaw = match ctx.facing {
+            Facing::North => 180.0,
+            Facing::South => 0.0,
+            Facing::West => 90.0,
+            Facing::East | Facing::Up | Facing::Down => 270.0,
+        };
+        let entity = boat.get_entity();
+        entity.set_rotation(yaw, entity.pitch.load());
+        Some(boat)
     }
 
     fn dispense_armor_stand(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
@@ -985,7 +1116,10 @@ impl DispenserBlock {
         }
     }
 
-    fn dispense_minecart(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
+    fn create_dispensed_minecart(
+        ctx: &DispenseContext<'_>,
+        item: &ItemStack,
+    ) -> Option<Arc<dyn EntityBase>> {
         fn rail_is_ascending(world: &Arc<World>, pos: &BlockPos) -> Option<bool> {
             let (block, state_id) = world.get_block_and_state_id(pos);
             if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
@@ -1014,11 +1148,10 @@ impl DispenserBlock {
                 -0.9
             }
         } else {
-            return false;
+            return None;
         };
 
         let entity_type = MinecartItem::item_to_entity(item.item);
-        let dispensed = item.split(1);
 
         let normal = to_normal(ctx.facing);
         let center = ctx.position.to_centered_f64();
@@ -1030,12 +1163,8 @@ impl DispenserBlock {
 
         let entity = Entity::new(ctx.world.clone(), spawn_pos, entity_type);
         let minecart = Arc::new(MinecartEntity::new(entity));
-        crate::item::items::spawn_egg::apply_entity_variant(&dispensed, minecart.as_ref(), None);
-        ctx.world.spawn_entity(minecart);
-
-        ctx.world
-            .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
-        true
+        crate::item::items::spawn_egg::apply_entity_variant(item, minecart.as_ref(), None);
+        Some(minecart)
     }
 
     fn dispense_shears(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
@@ -1431,6 +1560,15 @@ impl DispenserBlock {
     }
 
     fn eject_item(ctx: &DispenseContext<'_>, stack: ItemStack) {
+        ctx.world
+            .spawn_entity(Self::create_ejected_item(ctx, stack, 40));
+    }
+
+    fn create_ejected_item(
+        ctx: &DispenseContext<'_>,
+        stack: ItemStack,
+        pickup_delay: u8,
+    ) -> Arc<ItemEntity> {
         let facing = to_normal(ctx.facing);
         let mut position = ctx.position.to_centered_f64().add(&(facing * 0.7));
 
@@ -1448,8 +1586,12 @@ impl DispenserBlock {
             triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
         );
 
-        let item_entity = Arc::new(ItemEntity::new_with_velocity(entity, stack, velocity, 40));
-        ctx.world.spawn_entity(item_entity);
+        Arc::new(ItemEntity::new_with_velocity(
+            entity,
+            stack,
+            velocity,
+            pickup_delay,
+        ))
     }
 }
 

@@ -18,6 +18,7 @@ use crate::{
     plugin::{
         BoxFuture, EventHandler, EventPriority,
         api::events::{
+            player::player_interact_event::PlayerInteractEvent,
             vehicle::{vehicle_exit::VehicleExitEvent, vehicle_move::VehicleMoveEvent},
             world::generic_game::GenericGameEvent,
         },
@@ -33,6 +34,73 @@ use super::{
         mounted_java_boat, queue_vehicle_position, vehicle_world,
     },
 };
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn duplicate_vehicle_uuid_does_not_commit_placement() -> TestResult {
+    let folder = tempfile::tempdir()?;
+    let (_, world) = vehicle_world(&folder).await?;
+    let boat: Arc<dyn EntityBase> = Arc::new(BoatEntity::new(Entity::new(
+        world.clone(),
+        CENTER,
+        &EntityType::OAK_BOAT,
+    )));
+    let uuid = boat.get_entity().entity_uuid;
+    let duplicate: Arc<dyn EntityBase> = Arc::new(BoatEntity::new(Entity::from_uuid(
+        uuid,
+        world.clone(),
+        CENTER,
+        &EntityType::OAK_BOAT,
+    )));
+    assert_ne!(
+        boat.get_entity().entity_id,
+        duplicate.get_entity().entity_id
+    );
+    assert!(
+        world
+            .entity_registrations
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(uuid)
+    );
+    assert!(
+        world
+            .get_entity_by_id(boat.get_entity().entity_id)
+            .is_none()
+    );
+    let mut debited = false;
+    let mut debit = || {
+        debited = true;
+        Some(())
+    };
+    assert!(matches!(
+        world.spawn_placed_vehicle(&duplicate, &mut debit),
+        Err(super::VehiclePlacementError::UuidUnavailable)
+    ));
+    assert!(
+        world
+            .entity_registrations
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&uuid)
+    );
+    world.add_entity_silent(boat.clone());
+    let id = boat.get_entity().entity_id;
+    assert!(world.get_entity_by_id(id).is_some());
+
+    let placed = world.spawn_placed_vehicle(&duplicate, debit);
+    assert!(matches!(
+        placed,
+        Err(super::VehiclePlacementError::UuidUnavailable)
+    ));
+    assert!(!debited);
+    assert!(
+        world
+            .get_entity_by_id(id)
+            .is_some_and(|live| Arc::ptr_eq(&live, &boat))
+    );
+    world.level.shutdown().await;
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn autonomous_boat_rebounds_from_slime_after_a_partial_clip() -> TestResult {
@@ -901,47 +969,193 @@ async fn boat_dismount_uses_the_rider_heading() -> TestResult {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn boat_placement_checks_fences_rooted_below_the_hull() -> TestResult {
-    use crate::item::{ItemBehaviour, items::boat::BoatItem};
-    use pumpkin_data::{item::Item, item_stack::ItemStack};
-    use pumpkin_util::Hand;
+struct ReplaceBoat(AtomicBool);
+impl EventHandler<PlayerInteractEvent> for ReplaceBoat {
+    fn handle_blocking<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        event: &'a mut PlayerInteractEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if !self.0.swap(true, Ordering::Relaxed) {
+                event
+                    .player
+                    .inventory()
+                    .set_held_item(pumpkin_data::item_stack::ItemStack::new(
+                        1,
+                        &pumpkin_data::item::Item::STICK,
+                    ));
+            }
+        })
+    }
+}
 
-    let folder = tempfile::tempdir()?;
-    let (server, world) = vehicle_world(&folder).await?;
+const BOAT_PLACEMENT_OFFSET: Vector3<f64> = Vector3::new(8.9, 64.0, 7.0);
+
+fn boat_placement_platform(world: &World) -> Arc<ChunkData> {
     let chunk = ChunkData::empty_sync(0, 0);
     chunk.set_block_absolute_y(8, 63, 8, Block::STONE.default_state.id);
-    chunk.set_block_absolute_y(9, 63, 8, Block::OAK_FENCE.default_state.id);
     world
         .level
         .loaded_chunks
         .insert(Vector2::new(0, 0), chunk.clone());
-    let (player, _peer) = java_rider(&server, &world, "Notch")?;
-    let position = Vector3::new(8.9, 64.0, 8.5);
-    player.get_entity().set_pos(position);
-    player
-        .inventory
-        .set_stack_in_hand(Hand::Right, ItemStack::new(1, &Item::OAK_BOAT));
-    let boats = || {
-        world
-            .entities
-            .load()
-            .iter()
-            .filter(|entity| entity.get_entity().entity_type == &EntityType::OAK_BOAT)
-            .count()
+    chunk
+}
+
+fn boat_placement_actors(world: &World) -> Vec<Arc<dyn EntityBase>> {
+    world
+        .entities
+        .load()
+        .iter()
+        .filter(|entity| entity.get_entity().entity_type == &EntityType::OAK_BOAT)
+        .cloned()
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_checks_fences_rooted_below_the_hull() -> TestResult {
+    use pumpkin_data::{
+        data_component_impl::BlocksAttacksImpl, item::Item, item_stack::ItemStack,
+        statistic::StatisticCategory,
     };
+    use pumpkin_protocol::java::server::play::SUseItem;
+    use pumpkin_util::Hand;
 
-    BoatItem.normal_use_with_hand(&Item::OAK_BOAT, &player, 0.0, 90.0, Hand::Right);
-    assert_eq!(boats(), 0);
-    assert_eq!(
-        player.inventory.get_stack_in_hand(Hand::Right).item_count,
-        1
-    );
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let chunk = boat_placement_platform(&world);
+    chunk.set_block_absolute_y(9, 63, 8, Block::OAK_FENCE.default_state.id);
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let mut stack = ItemStack::new(1, &Item::OAK_BOAT);
+    stack.set_data_component(BlocksAttacksImpl::DEFAULT);
+    player.inventory.set_stack_in_hand(Hand::Right, stack);
+    let uses = || player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id));
 
+    let client = player.client.java().ok_or("Java client")?;
+    let air_use = |sequence: i32, pitch| {
+        client.handle_use_item(
+            &player,
+            &SUseItem {
+                hand: 0.into(),
+                sequence: sequence.into(),
+                yaw: 0.0,
+                pitch,
+            },
+            &server,
+        );
+    };
+    let rejects_placement = || {
+        assert!(boat_placement_actors(&world).is_empty());
+        assert_eq!(uses(), 0);
+        assert_eq!(player.inventory().held_item().item, &Item::OAK_BOAT);
+    };
+    air_use(0, 45.0);
+    rejects_placement();
     chunk.set_block_absolute_y(9, 63, 8, Block::AIR.default_state.id);
-    BoatItem.normal_use_with_hand(&Item::OAK_BOAT, &player, 0.0, 90.0, Hand::Right);
-    assert_eq!(boats(), 1);
-    assert!(player.inventory.get_stack_in_hand(Hand::Right).is_empty());
+
+    player.get_entity().set_pos(Vector3::new(8.9, 64.0, 8.5));
+    air_use(1, 90.0);
+    rejects_placement();
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let (blocker, _blocker_peer) = java_rider(&server, &world, "jeb_")?;
+    blocker.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    air_use(2, 45.0);
+    rejects_placement();
+    blocker.get_entity().set_pos(CENTER.add_raw(8.0, 0.0, 0.0));
+
+    let listener = Arc::new(ReplaceBoat(AtomicBool::new(false)));
+    server.plugin_manager.register::<PlayerInteractEvent, _>(
+        listener.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    air_use(3, 45.0);
+    assert!(listener.0.load(Ordering::Relaxed));
+    assert!(boat_placement_actors(&world).is_empty());
+    assert_eq!(uses(), 0);
+    assert_eq!(player.inventory().held_item().item, &Item::STICK);
+    player
+        .inventory()
+        .set_held_item(ItemStack::new(1, &Item::OAK_BOAT));
+    air_use(4, 45.0);
+    assert_eq!(boat_placement_actors(&world).len(), 1);
+    assert_eq!(uses(), 1);
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_applies_placer_yaw_and_materializes_fresh_remainders() -> TestResult {
+    use pumpkin_data::{
+        data_component_impl::{EntityDataImpl, UseRemainderImpl},
+        item::Item,
+        item_stack::ItemStack,
+        statistic::StatisticCategory,
+    };
+    use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+    use pumpkin_protocol::java::server::play::{SUseItem, SUseItemOn};
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    boat_placement_platform(&world);
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let client = player.client.java().ok_or("Java client")?;
+    let uses = || player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id));
+
+    let mut placing = ItemStack::new(1, &Item::OAK_BOAT);
+    let template = ItemStack::new(1, &Item::STICK);
+    placing.set_data_component(UseRemainderImpl {
+        remainder: Some(template.clone()),
+    });
+    let mut nbt = NbtCompound::new();
+    nbt.put_list("Rotation", vec![NbtTag::Float(70.0), NbtTag::Float(27.0)]);
+    placing.set_data_component(EntityDataImpl {
+        entity_type: Some(&EntityType::OAK_BOAT),
+        nbt: Some(nbt),
+    });
+    player.inventory().set_held_item(placing.clone());
+    client.handle_use_item_on(
+        &player,
+        &SUseItemOn {
+            hand: 0.into(),
+            position: pumpkin_util::math::position::BlockPos::new(8, 63, 8),
+            face: 1.into(),
+            cursor_pos: Vector3::new(0.9, 1.0, 0.5),
+            inside_block: false,
+            is_against_world_border: false,
+            sequence: 1.into(),
+        },
+        &server,
+    )?;
+    assert_eq!(uses(), 0);
+    let placer_yaw = 12.0;
+    let mut prior_remainder = template.uid;
+    for (sequence, expected_uses) in [(2i32, 1), (3, 2)] {
+        player.inventory().set_held_item(placing.clone());
+        client.handle_use_item(
+            &player,
+            &SUseItem {
+                hand: 0.into(),
+                sequence: sequence.into(),
+                yaw: placer_yaw,
+                pitch: 45.0,
+            },
+            &server,
+        );
+        let boats = boat_placement_actors(&world);
+        assert_eq!(boats.len(), 1);
+        let boat = boats.first().ok_or("Placed boat")?;
+        assert_eq!(boat.get_entity().yaw.load(), placer_yaw);
+        assert_eq!(boat.get_entity().pitch.load(), 27.0);
+        assert_eq!(uses(), expected_uses);
+        let remainder = player.inventory().held_item();
+        assert_eq!(remainder.item, &Item::STICK);
+        assert_ne!(remainder.uid, prior_remainder);
+        prior_remainder = remainder.uid;
+        world.remove_entity(boat.as_ref());
+    }
     world.level.shutdown().await;
     Ok(())
 }
@@ -1066,8 +1280,11 @@ async fn boat_vehicle_visits_an_accepted_bent_path_in_the_first_effect_pass() ->
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn boat_vehicle_extinguishes_after_lava_and_water_contact_in_the_same_step() -> TestResult {
+    use pumpkin_protocol::{bedrock::client::CPlaySound, packet::Packet};
+
     let directory = tempfile::tempdir()?;
     let (server, world) = vehicle_world(&directory).await?;
+    let (watcher, mut packets) = bedrock_rider(&server, &world, "jeb_").await?;
     // Keep the boat alive for both inside-block passes so the assertion tests
     // the order of effects independently of the damage threshold.
     server
@@ -1090,13 +1307,31 @@ async fn boat_vehicle_extinguishes_after_lava_and_water_contact_in_the_same_step
             CENTER.add_raw(0.5, 0.0, 0.0),
             &EntityType::OAK_BOAT,
         ));
+        boat.get_entity().set_silent(true);
         boat.get_entity().fire_ticks.store(10, Ordering::Relaxed);
         boat.get_entity().set_frozen_ticks(40);
         boat.tick(&boat, &server);
         assert!(!boat.get_entity().is_removed());
         assert!(!boat.get_entity().is_on_fire());
         assert_eq!(boat.get_entity().get_frozen_ticks(), 0);
+
+        let mut fizz = 0;
+        while let Ok(packet) = packets.try_recv() {
+            if let Some((id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data)
+                && i32::from(id) == CPlaySound::PACKET_ID
+                && payload
+                    .as_ref()
+                    .get_str()
+                    .is_ok_and(|name| name.as_ref() == "random.fizz")
+            {
+                fizz += 1;
+            }
+        }
+        assert_eq!(fizz, 1, "A silent hull still emits its extinguish sound");
     }
+    let client = watcher.client.bedrock().ok_or("Bedrock watcher")?;
+    client.clear_player();
+    client.close().await;
     world.level.shutdown().await;
     Ok(())
 }
@@ -1876,6 +2111,8 @@ async fn assert_bedrock_pose_after_mount_callback(replace_pose: bool) -> TestRes
 
 #[derive(Default)]
 struct BedrockSeatMetadata {
+    spawned: bool,
+    pairing_marker: bool,
     pose: Option<i32>,
     width: Option<f32>,
     height: Option<f32>,
@@ -1885,6 +2122,7 @@ struct BedrockSeatMetadata {
     name: Option<String>,
     last_equipment_id: Option<i16>,
     last_equipment_uid: Option<std::num::NonZeroI32>,
+    empty_equipment_updates: usize,
     armor_updates: usize,
     last_head_equipment: Option<(i16, Option<std::num::NonZeroI32>)>,
 }
@@ -1897,7 +2135,7 @@ fn read_bedrock_seat_metadata(
     use pumpkin_protocol::{
         bedrock::{
             client::{
-                CMobEquipment,
+                CAddActor, CMobEquipment, CSetActorMotion,
                 set_actor_data::{CSetActorData, entity_data_key},
             },
             network_item::NetworkItemStackDescriptor,
@@ -1912,6 +2150,14 @@ fn read_bedrock_seat_metadata(
         let Some((id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data) else {
             continue;
         };
+        if i32::from(id) == CAddActor::PACKET_ID {
+            metadata.spawned |= VarLong::read(&mut payload.as_ref())?.0 == i64::from(actor_id);
+            continue;
+        }
+        if i32::from(id) == CSetActorMotion::PACKET_ID {
+            metadata.pairing_marker |= VarULong::read(&mut payload.as_ref())?.0 == u64::MAX;
+            continue;
+        }
         if ![
             CSetActorData::PACKET_ID,
             CMobEquipment::PACKET_ID,
@@ -1929,6 +2175,7 @@ fn read_bedrock_seat_metadata(
             let stack = NetworkItemStackDescriptor::read(&mut data)?;
             metadata.last_equipment_id = Some(stack.id);
             metadata.last_equipment_uid = stack.net_id;
+            metadata.empty_equipment_updates += usize::from(stack.id == 0);
             continue;
         }
         if i32::from(id) == CMobArmorEquipment::PACKET_ID {
@@ -2349,438 +2596,6 @@ async fn bedrock_viewer_gets_current_mount_flags_when_wolf_anger_expires() -> Te
     Ok(())
 }
 
-#[derive(Clone, Copy)]
-enum ShieldBreakReplacement {
-    Sword,
-    SwordDuringClear,
-    SwordDuringAttribute,
-    Bow,
-    RestartOnClear,
-    RestartAtFinish,
-    Shield(pumpkin_util::Hand),
-}
-
-struct DetachOnShieldBreak {
-    pig: Arc<PigEntity>,
-    boat: Arc<BoatEntity>,
-    replacement: ShieldBreakReplacement,
-    detached: AtomicBool,
-    equipment_packets: std::sync::atomic::AtomicU8,
-}
-
-impl DetachOnShieldBreak {
-    fn assert_replacement(&self) {
-        use crate::entity::mob::Mob;
-        use pumpkin_data::{
-            attributes::Attributes, data_component_impl::EquipmentSlot, item::Item,
-        };
-
-        let living = &self.pig.get_mob_entity().living_entity;
-        assert!(self.detached.load(Ordering::Relaxed));
-        assert!(!self.pig.get_entity().has_vehicle());
-        assert!(
-            !self
-                .boat
-                .get_entity()
-                .has_passenger(self.pig.get_entity().entity_id)
-        );
-        match self.replacement {
-            ShieldBreakReplacement::Sword
-            | ShieldBreakReplacement::SwordDuringClear
-            | ShieldBreakReplacement::SwordDuringAttribute => {
-                let active_slot = living
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .get(&EquipmentSlot::MAIN_HAND);
-                let attack_damage = living.get_attribute_value(&Attributes::ATTACK_DAMAGE);
-                let base_damage = living.get_attribute_base(&Attributes::ATTACK_DAMAGE);
-                if active_slot.item == &Item::STICK {
-                    assert_eq!(
-                        attack_damage.to_bits(),
-                        base_damage.to_bits(),
-                        "A stick cannot retain sword damage"
-                    );
-                }
-                assert_eq!(active_slot.item, &Item::DIAMOND_SWORD);
-                assert!(attack_damage > base_damage);
-                assert!(!living.is_blocking());
-                let expected_packets =
-                    if matches!(self.replacement, ShieldBreakReplacement::SwordDuringClear) {
-                        2
-                    } else {
-                        1
-                    };
-                assert_eq!(
-                    self.equipment_packets.load(Ordering::Relaxed),
-                    expected_packets
-                );
-            }
-            ShieldBreakReplacement::Shield(hand) => {
-                let equipment = living
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner);
-                let slot = shield_test_slot(hand);
-                assert_eq!(equipment.get(&slot).item, &Item::SHIELD);
-                if hand == pumpkin_util::Hand::Left {
-                    assert!(equipment.get(&EquipmentSlot::MAIN_HAND).is_empty());
-                }
-                drop(equipment);
-                assert!(living.is_blocking());
-                assert_eq!(
-                    *living
-                        .active_hand
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner),
-                    Some(hand)
-                );
-            }
-            ShieldBreakReplacement::Bow => {
-                assert!(!living.is_blocking());
-                assert_eq!(
-                    *living
-                        .active_hand
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner),
-                    Some(pumpkin_util::Hand::Right)
-                );
-            }
-            ShieldBreakReplacement::RestartOnClear | ShieldBreakReplacement::RestartAtFinish => {
-                assert!(living.is_blocking());
-            }
-        }
-    }
-}
-
-fn shield_test_slot(hand: pumpkin_util::Hand) -> pumpkin_data::data_component_impl::EquipmentSlot {
-    use pumpkin_data::data_component_impl::EquipmentSlot;
-    match hand {
-        pumpkin_util::Hand::Left => EquipmentSlot::OFF_HAND,
-        pumpkin_util::Hand::Right => EquipmentSlot::MAIN_HAND,
-    }
-}
-
-impl DetachOnShieldBreak {
-    fn append_attribute_extra(event: &mut PacketSentEvent, rider_id: i32) {
-        use pumpkin_protocol::java::client::play::CUpdateAttributes;
-        let properties = [
-            (pumpkin_data::attributes::Attributes::ATTACK_SPEED, 77.0),
-            (pumpkin_data::attributes::Attributes::MOVEMENT_SPEED, 0.75),
-        ]
-        .into_iter()
-        .map(|(attribute, value)| {
-            pumpkin_protocol::java::client::play::Property::new(
-                i32::from(attribute.id).into(),
-                value,
-                Vec::new(),
-            )
-        })
-        .collect();
-        let extra = CUpdateAttributes::new(rider_id.into(), properties);
-        let mut payload = Vec::new();
-        assert!(
-            pumpkin_protocol::ClientPacket::write_packet_data(
-                &extra,
-                &mut payload,
-                &CURRENT_MC_VERSION
-            )
-            .is_ok()
-        );
-        event.extra_packets.push((event.packet_id, payload.into()));
-    }
-
-    fn replace_shield_from_break_status(&self) {
-        use crate::entity::mob::Mob;
-        use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item, item_stack::ItemStack};
-
-        let mob = self.pig.get_mob_entity();
-        match self.replacement {
-            ShieldBreakReplacement::Sword => {
-                mob.set_item_slot(
-                    &EquipmentSlot::MAIN_HAND,
-                    ItemStack::new(1, &Item::DIAMOND_SWORD),
-                );
-            }
-            ShieldBreakReplacement::Shield(hand) => {
-                let shield = ItemStack::new(1, &Item::SHIELD);
-                mob.set_item_slot(&shield_test_slot(hand), shield.clone());
-                let use_time = shield.get_max_use_time() - 20;
-                mob.living_entity.set_active_hand(hand, shield, use_time);
-            }
-            ShieldBreakReplacement::Bow => {
-                let bow = ItemStack::new(1, &Item::BOW);
-                mob.set_item_slot(&EquipmentSlot::MAIN_HAND, bow.clone());
-                let duration = bow.get_max_use_time();
-                mob.living_entity
-                    .set_active_hand(pumpkin_util::Hand::Right, bow, duration);
-            }
-            ShieldBreakReplacement::SwordDuringClear
-            | ShieldBreakReplacement::SwordDuringAttribute
-            | ShieldBreakReplacement::RestartOnClear
-            | ShieldBreakReplacement::RestartAtFinish => {}
-        }
-    }
-}
-
-impl EventHandler<PacketSentEvent> for DetachOnShieldBreak {
-    fn handle_blocking<'a>(
-        &'a self,
-        _server: &'a Arc<Server>,
-        event: &'a mut PacketSentEvent,
-    ) -> BoxFuture<'a, ()> {
-        use crate::entity::mob::Mob;
-        use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item, item_stack::ItemStack};
-        use pumpkin_protocol::java::client::play::{
-            CEntityStatus, CSetEquipment, CUpdateAttributes,
-        };
-
-        use pumpkin_protocol::ServerPacket;
-        Box::pin(async move {
-            if event.player.client.java().is_none() {
-                return;
-            }
-            let rider = self.pig.get_entity();
-            let mob = self.pig.get_mob_entity();
-            if matches!(
-                self.replacement,
-                ShieldBreakReplacement::SwordDuringAttribute
-            ) && event.packet_id == CUpdateAttributes::to_id(CURRENT_MC_VERSION)
-                && self.detached.load(Ordering::Relaxed)
-                && CUpdateAttributes::read(&mut event.payload.as_ref(), &CURRENT_MC_VERSION)
-                    .is_ok_and(|packet| {
-                        packet.entity_id.0 == rider.entity_id
-                            && packet.properties.iter().any(|property| {
-                                property.id.0
-                                    == i32::from(
-                                        pumpkin_data::attributes::Attributes::ATTACK_SPEED.id,
-                                    )
-                            })
-                    })
-                && self.equipment_packets.fetch_add(1, Ordering::Relaxed) == 0
-            {
-                mob.set_item_slot(
-                    &EquipmentSlot::MAIN_HAND,
-                    ItemStack::new(1, &Item::DIAMOND_SWORD),
-                );
-                Self::append_attribute_extra(event, rider.entity_id);
-            }
-            if event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
-                && self.detached.load(Ordering::Relaxed)
-                && event
-                    .payload
-                    .as_ref()
-                    .get_var_int()
-                    .is_ok_and(|id| id.0 == rider.entity_id)
-            {
-                if matches!(
-                    self.replacement,
-                    ShieldBreakReplacement::SwordDuringAttribute
-                ) {
-                    return;
-                }
-                let previous = self.equipment_packets.fetch_add(1, Ordering::Relaxed);
-                if matches!(self.replacement, ShieldBreakReplacement::SwordDuringClear)
-                    && previous == 0
-                {
-                    mob.set_item_slot(
-                        &EquipmentSlot::MAIN_HAND,
-                        ItemStack::new(1, &Item::DIAMOND_SWORD),
-                    );
-                } else if matches!(self.replacement, ShieldBreakReplacement::Sword) && previous == 1
-                {
-                    // A replay gives observers another chance to change the slot.
-                    mob.set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::STICK));
-                }
-                return;
-            }
-            if event.packet_id == CEntityStatus::to_id(CURRENT_MC_VERSION)
-                && event
-                    .payload
-                    .get(..4)
-                    .is_some_and(|id| id == rider.entity_id.to_be_bytes())
-                && event.payload.get(4)
-                    == Some(
-                        &(crate::entity::equipment_break_status(&EquipmentSlot::MAIN_HAND) as u8),
-                    )
-                && !self.detached.swap(true, Ordering::Relaxed)
-            {
-                assert!(mob.living_entity.entity_equipment.try_lock().is_ok());
-                self.boat.get_entity().remove_passenger(rider.entity_id);
-                self.replace_shield_from_break_status();
-            }
-        })
-    }
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn shield_break_observer_can_dismount_and_replace_the_active_item() -> TestResult {
-    use pumpkin_util::Hand;
-    for replacement in [
-        ShieldBreakReplacement::Sword,
-        ShieldBreakReplacement::SwordDuringClear,
-        ShieldBreakReplacement::SwordDuringAttribute,
-        ShieldBreakReplacement::Bow,
-        ShieldBreakReplacement::RestartOnClear,
-        ShieldBreakReplacement::RestartAtFinish,
-        ShieldBreakReplacement::Shield(Hand::Left),
-        ShieldBreakReplacement::Shield(Hand::Right),
-    ] {
-        assert_shield_break_replacement(replacement).await?;
-    }
-    Ok(())
-}
-
-async fn assert_shield_break_replacement(replacement: ShieldBreakReplacement) -> TestResult {
-    use crate::entity::mob::Mob;
-    use pumpkin_data::damage::DamageType;
-    use pumpkin_protocol::java::client::play::CKeepAlive;
-    use pumpkin_util::Hand;
-
-    let folder = tempfile::tempdir()?;
-    let (server, world) = vehicle_world(&folder).await?;
-    let (watcher, peer) = java_equipment_watcher(&server, &world)?;
-    watcher
-        .chunk_sender
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .mark_sent_out_of_band(Vector2::new(0, 0));
-    let client = watcher.client.java().ok_or("Java watcher")?;
-    let boat = Arc::new(BoatEntity::new(Entity::new(
-        world.clone(),
-        CENTER,
-        &EntityType::OAK_BOAT,
-    )));
-    let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
-    world.spawn_entity(boat.clone());
-    world.spawn_entity(pig.clone());
-    boat.get_entity().add_passenger(boat.clone(), pig.clone());
-    assert_mounted(boat.get_entity(), pig.get_entity());
-    let living = &pig.get_mob_entity().living_entity;
-    let shield = test_breaking_shield(&pig, replacement)?;
-    let elapsed = shield.get_max_use_time() - 20;
-    let flags_check = if matches!(
-        replacement,
-        ShieldBreakReplacement::Bow
-            | ShieldBreakReplacement::RestartOnClear
-            | ShieldBreakReplacement::RestartAtFinish
-    ) {
-        Some(watch_shield_use_flags(&server, &world, &pig, replacement).await?)
-    } else {
-        None
-    };
-    living.set_active_hand(Hand::Right, shield, elapsed);
-    assert!(living.is_blocking());
-    let observer = Arc::new(DetachOnShieldBreak {
-        pig: pig.clone(),
-        boat: boat.clone(),
-        replacement,
-        detached: AtomicBool::new(false),
-        equipment_packets: std::sync::atomic::AtomicU8::new(0),
-    });
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    living.damage_with_context(
-        pig.as_ref(),
-        10.0,
-        DamageType::MOB_ATTACK,
-        Some(CENTER.add_raw(0.0, 0.0, 1.0)),
-        None,
-        None,
-    );
-    if matches!(replacement, ShieldBreakReplacement::SwordDuringAttribute) {
-        use pumpkin_data::attributes::Attributes;
-        assert!(observer.detached.load(Ordering::Relaxed));
-        let speed = living.get_attribute_value(&Attributes::ATTACK_SPEED);
-        assert!(speed < living.get_attribute_base(&Attributes::ATTACK_SPEED));
-        assert!(client.try_send_packet(&CKeepAlive::new(73)));
-        let (attack, movement) =
-            read_rider_attribute_updates(peer, pig.get_entity().entity_id).await?;
-        assert_eq!(attack.map(f64::to_bits), Some(speed.to_bits()));
-        assert_eq!(movement, Some(0.75));
-        world.level.shutdown().await;
-        return Ok(());
-    }
-    observer.assert_replacement();
-    if let Some((restart, mut packets)) = flags_check {
-        restart.assert_outcome(&mut packets, elapsed)?;
-    }
-    assert!(client.try_send_packet(&CKeepAlive::new(73)));
-    assert_shield_replacement_packets(peer, pig.get_entity().entity_id, replacement).await?;
-    world.level.shutdown().await;
-    Ok(())
-}
-
-fn test_breaking_shield(
-    pig: &PigEntity,
-    replacement: ShieldBreakReplacement,
-) -> Result<pumpkin_data::item_stack::ItemStack, Box<dyn std::error::Error>> {
-    use crate::entity::mob::Mob;
-    use pumpkin_data::{
-        data_component_impl::{AttributeModifiersImpl, EquipmentSlot},
-        item::Item,
-        item_stack::ItemStack,
-    };
-
-    let mob = pig.get_mob_entity();
-    let mut shield = ItemStack::new(1, &Item::SHIELD);
-    shield.set_damage(shield.get_max_damage().ok_or("no durability")? - 1);
-    if matches!(replacement, ShieldBreakReplacement::SwordDuringAttribute) {
-        let sword = ItemStack::new(1, &Item::DIAMOND_SWORD);
-        shield.set_data_component(
-            sword
-                .get_data_component::<AttributeModifiersImpl>()
-                .ok_or("sword modifiers")?
-                .clone(),
-        );
-        mob.set_item_slot(&EquipmentSlot::MAIN_HAND, shield.clone());
-    } else {
-        mob.living_entity
-            .entity_equipment
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .put(&EquipmentSlot::MAIN_HAND, shield.clone());
-    }
-    Ok(shield)
-}
-
-async fn assert_shield_replacement_packets(
-    peer: tokio::io::DuplexStream,
-    rider_id: i32,
-    replacement: ShieldBreakReplacement,
-) -> TestResult {
-    use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item};
-    use pumpkin_util::Hand;
-
-    let (equipment, _) = read_rider_equipment_updates(peer, rider_id).await?;
-    let main = EquipmentSlot::MAIN_HAND.discriminant();
-    let off = EquipmentSlot::OFF_HAND.discriminant();
-    let expected = match replacement {
-        ShieldBreakReplacement::Sword
-        | ShieldBreakReplacement::SwordDuringClear
-        | ShieldBreakReplacement::SwordDuringAttribute => {
-            vec![(main, Some(&Item::DIAMOND_SWORD))]
-        }
-        ShieldBreakReplacement::Bow => vec![(main, Some(&Item::BOW))],
-        ShieldBreakReplacement::RestartOnClear | ShieldBreakReplacement::RestartAtFinish => {
-            vec![(main, None), (off, Some(&Item::SHIELD))]
-        }
-        ShieldBreakReplacement::Shield(Hand::Left) => {
-            vec![(off, Some(&Item::SHIELD)), (main, None)]
-        }
-        ShieldBreakReplacement::Shield(Hand::Right) => vec![(main, Some(&Item::SHIELD))],
-    };
-    let items = equipment
-        .iter()
-        .map(|(slot, stack)| (*slot, (!stack.is_empty()).then_some(stack.item)))
-        .collect::<Vec<_>>();
-    assert_eq!(items, expected);
-    Ok(())
-}
-
 fn java_equipment_watcher(
     server: &Arc<Server>,
     world: &Arc<World>,
@@ -2801,6 +2616,16 @@ fn java_equipment_watcher(
         std::num::NonZeroU8::new(4).ok_or("distance")?,
     ));
     Ok((watcher, peer))
+}
+
+fn mob_offhand(
+    living: &crate::entity::living::LivingEntity,
+) -> pumpkin_data::item_stack::ItemStack {
+    living
+        .entity_equipment
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&pumpkin_data::data_component_impl::EquipmentSlot::OFF_HAND)
 }
 
 async fn read_rider_equipment_updates(
@@ -2848,316 +2673,18 @@ async fn read_rider_equipment_updates(
     .await?
 }
 
-async fn read_rider_attribute_updates(
-    peer: tokio::io::DuplexStream,
-    rider_id: i32,
-) -> Result<(Option<f64>, Option<f64>), Box<dyn std::error::Error>> {
-    use pumpkin_data::attributes::Attributes;
-    use pumpkin_protocol::{
-        ServerPacket,
-        java::{
-            client::play::{CKeepAlive, CUpdateAttributes},
-            packet_decoder::TCPNetworkDecoder,
-        },
-    };
-    let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        let mut speed = None;
-        let mut movement = None;
-        loop {
-            let packet = decoder.get_raw_packet().await?;
-            if packet.id == CKeepAlive::to_id(CURRENT_MC_VERSION) {
-                return Ok((speed, movement));
-            }
-            if packet.id == CUpdateAttributes::to_id(CURRENT_MC_VERSION) {
-                let packet =
-                    CUpdateAttributes::read(&mut packet.payload.as_ref(), &CURRENT_MC_VERSION)?;
-                if packet.entity_id.0 == rider_id {
-                    for property in packet.properties {
-                        if property.id.0 == i32::from(Attributes::MOVEMENT_SPEED.id) {
-                            movement = Some(property.value);
-                        }
-                        if property.id.0 == i32::from(Attributes::ATTACK_SPEED.id) {
-                            speed = Some(
-                                property.value
-                                    + property
-                                        .modifiers
-                                        .iter()
-                                        .map(|modifier| modifier.amount)
-                                        .sum::<f64>(),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    })
-    .await?
-}
-
-struct ObserveShieldUse {
-    pig: Arc<PigEntity>,
-    replacement: ShieldBreakReplacement,
-    start: Mutex<Option<(Option<pumpkin_util::Hand>, i32, bool)>>,
-    restarted: AtomicBool,
-    finish: Mutex<Option<(Option<pumpkin_util::Hand>, i32, bool)>>,
-}
-
-impl ObserveShieldUse {
-    const SUCCESSOR_DURATION: i32 = 71_927;
-    const SUCCESSOR_DAMAGE: i32 = 7;
-    fn assert_outcome(
-        &self,
-        packets: &mut super::vehicle_tests::BedrockQueue,
-        elapsed: i32,
-    ) -> TestResult {
-        use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::{
-            BLOCKING, USING_ITEM,
-        };
-        use pumpkin_util::Hand;
-        let restart = !matches!(self.replacement, ShieldBreakReplacement::Bow);
-        let metadata = read_bedrock_seat_metadata(packets, self.pig.get_entity().entity_id)?;
-        assert_ne!(
-            metadata.flags.ok_or("Missing use flags")? & (1i64 << USING_ITEM),
-            0
-        );
-        assert_eq!(
-            metadata.flags_two.ok_or("Missing blocking flags")? & (1i64 << (BLOCKING - 64)) != 0,
-            restart,
-        );
-        assert_eq!(self.restarted.load(Ordering::Relaxed), restart);
-        let finish = *self.finish.lock().unwrap_or_else(PoisonError::into_inner);
-        assert_eq!(
-            finish,
-            restart.then_some((Some(Hand::Right), elapsed, false))
-        );
-        assert_eq!(
-            *self.start.lock().unwrap_or_else(PoisonError::into_inner),
-            Some((Some(Hand::Right), elapsed, true)),
-        );
-        if restart {
-            use crate::entity::mob::Mob;
-            let living = &self.pig.get_mob_entity().living_entity;
-            assert_eq!(
-                *living
-                    .active_hand
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner),
-                Some(Hand::Left)
-            );
-            assert_ne!(elapsed, Self::SUCCESSOR_DURATION);
-            assert_eq!(
-                living.item_use_time.load(Ordering::Relaxed),
-                Self::SUCCESSOR_DURATION
-            );
-            let off = mob_offhand(living);
-            assert_eq!(off.get_damage(), Self::SUCCESSOR_DAMAGE);
-            let active = living
-                .item_in_use
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner);
-            assert!(active.as_ref().is_some_and(|stack| stack.are_equal(&off)));
-        }
-        Ok(())
-    }
-
-    fn restart_shield_use(&self) {
-        use crate::entity::mob::Mob;
-        use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item, item_stack::ItemStack};
-        let mob = self.pig.get_mob_entity();
-        let mut shield = ItemStack::new(1, &Item::SHIELD);
-        shield.set_damage(Self::SUCCESSOR_DAMAGE);
-        mob.set_item_slot(&EquipmentSlot::OFF_HAND, shield.clone());
-        mob.living_entity.set_active_hand(
-            pumpkin_util::Hand::Left,
-            shield,
-            Self::SUCCESSOR_DURATION,
-        );
-    }
-}
-
-fn mob_offhand(
-    living: &crate::entity::living::LivingEntity,
-) -> pumpkin_data::item_stack::ItemStack {
-    living
-        .entity_equipment
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get(&pumpkin_data::data_component_impl::EquipmentSlot::OFF_HAND)
-}
-
-impl EventHandler<GenericGameEvent> for ObserveShieldUse {
-    fn handle_blocking<'a>(
-        &'a self,
-        _server: &'a Arc<Server>,
-        event: &'a mut GenericGameEvent,
-    ) -> BoxFuture<'a, ()> {
-        use crate::entity::mob::Mob;
-        use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM;
-        Box::pin(async move {
-            let start = event.event_key == GameEvent::ItemInteractStart.name();
-            if start || event.event_key == GameEvent::ItemInteractFinish.name() {
-                let living = &self.pig.get_mob_entity().living_entity;
-                let hand = *living
-                    .active_hand
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner);
-                let using =
-                    living.entity.bedrock_flags.load(Ordering::Relaxed) & (1i64 << USING_ITEM) != 0;
-                let state = (hand, living.item_use_time.load(Ordering::Relaxed), using);
-                if start {
-                    self.start
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .get_or_insert(state);
-                } else {
-                    *self.finish.lock().unwrap_or_else(PoisonError::into_inner) = Some(state);
-                    if matches!(self.replacement, ShieldBreakReplacement::RestartAtFinish)
-                        && !self.restarted.swap(true, Ordering::Relaxed)
-                    {
-                        self.restart_shield_use();
-                    }
-                }
-            }
-        })
-    }
-}
-
-impl EventHandler<PacketSentEvent> for ObserveShieldUse {
-    fn handle_blocking<'a>(
-        &'a self,
-        _server: &'a Arc<Server>,
-        event: &'a mut PacketSentEvent,
-    ) -> BoxFuture<'a, ()> {
-        use crate::entity::mob::Mob;
-        use pumpkin_protocol::{
-            bedrock::client::set_actor_data::{CSetActorData, entity_data_key},
-            codec::var_ulong::VarULong,
-            packet::Packet,
-        };
-        Box::pin(async move {
-            let mob = self.pig.get_mob_entity();
-            let living = &mob.living_entity;
-            if matches!(self.replacement, ShieldBreakReplacement::RestartOnClear)
-                && event.player.client.bedrock().is_some()
-                && event.packet_id == CSetActorData::PACKET_ID
-                && !living.is_auto_spin_attack()
-                && living.item_use_time.load(Ordering::Relaxed) == 0
-                && CSetActorData::updates_key(
-                    &event.payload,
-                    VarULong(self.pig.get_entity().entity_id as u64),
-                    pumpkin_world::CURRENT_BEDROCK_MC_PROTOCOL,
-                    entity_data_key::FLAGS,
-                )
-                .unwrap_or(false)
-                && !self.restarted.swap(true, Ordering::Relaxed)
-            {
-                self.restart_shield_use();
-            }
-        })
-    }
-}
-
-async fn watch_shield_use_flags(
-    server: &Arc<Server>,
-    world: &Arc<World>,
-    pig: &Arc<PigEntity>,
-    replacement: ShieldBreakReplacement,
-) -> Result<(Arc<ObserveShieldUse>, super::vehicle_tests::BedrockQueue), Box<dyn std::error::Error>>
-{
-    let (viewer, mut packets) = bedrock_rider(server, world, "jeb_").await?;
-    viewer
-        .chunk_sender
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .mark_sent_out_of_band(Vector2::new(0, 0));
-    let tracked = world
-        .entity_tracker
-        .get_tracked_entity(pig.get_entity().entity_id)
-        .ok_or("tracker")?;
-    tracked.update_player(&viewer, world);
-    assert!(tracked.is_seen_by(&viewer.gameprofile.id));
-    while packets.try_recv().is_ok() {}
-    let observer = Arc::new(ObserveShieldUse {
-        pig: pig.clone(),
-        replacement,
-        start: Mutex::new(None),
-        restarted: AtomicBool::new(false),
-        finish: Mutex::new(None),
-    });
-    server.plugin_manager.register::<GenericGameEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    server.plugin_manager.register::<PacketSentEvent, _>(
-        observer.clone(),
-        EventPriority::Normal,
-        true,
-    );
-    Ok((observer, packets))
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bedrock_riptide_stop_keeps_item_use_started_by_its_observer() -> TestResult {
-    use crate::entity::mob::Mob;
-    use pumpkin_data::{item::Item, item_stack::ItemStack};
-    use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::{
-        BLOCKING, DAMAGE_NEARBY_MOBS, USING_ITEM,
-    };
-    let directory = tempfile::tempdir()?;
-    let (server, world) = vehicle_world(&directory).await?;
-    world
-        .level
-        .loaded_chunks
-        .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
-    let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
-    world.spawn_entity(pig.clone());
-    let living = &pig.get_mob_entity().living_entity;
-    let (observer, mut packets) = watch_shield_use_flags(
-        &server,
-        &world,
-        &pig,
-        ShieldBreakReplacement::RestartOnClear,
-    )
-    .await?;
-
-    living.start_auto_spin_attack(20, 1.0, ItemStack::new(1, &Item::TRIDENT), None);
-    assert!(living.is_auto_spin_attack());
-    let start = read_bedrock_seat_metadata(&mut packets, pig.get_entity().entity_id)?;
-    assert_ne!(
-        start.flags.ok_or("Missing Riptide start flags")? & (1 << DAMAGE_NEARBY_MOBS),
-        0
-    );
-    assert!(!observer.restarted.load(Ordering::Relaxed));
-
-    living.stop_auto_spin_attack();
-
-    assert!(observer.restarted.load(Ordering::Relaxed));
-    assert!(!living.is_auto_spin_attack());
-    assert!(living.is_blocking());
-    let metadata = read_bedrock_seat_metadata(&mut packets, pig.get_entity().entity_id)?;
-    assert_eq!(
-        metadata.flags.ok_or("Missing use flags")?
-            & ((1 << USING_ITEM) | (1 << DAMAGE_NEARBY_MOBS)),
-        1 << USING_ITEM,
-    );
-    assert_ne!(
-        metadata.flags_two.ok_or("Missing blocking flags")? & (1 << (BLOCKING - 64)),
-        0
-    );
-    world.level.shutdown().await;
-    Ok(())
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PairingEquipmentChange {
     Replace,
+    NestedReplace,
+    ViewerOverride,
     Wear,
     Break,
     Retry,
     RePair,
     Armor,
+    Remove,
+    RemoveOnSpawn,
 }
 
 struct DetachOnPairingEquipment {
@@ -3193,6 +2720,16 @@ impl DetachOnPairingEquipment {
                 );
             }
             PairingEquipmentChange::Retry => {}
+            PairingEquipmentChange::Remove | PairingEquipmentChange::RemoveOnSpawn => {
+                if event.player.client.bedrock().is_some() {
+                    Self::append_bedrock_removal_extras(event, rider.entity_id);
+                } else {
+                    event
+                        .extra_packets
+                        .push((event.packet_id, event.payload.clone()));
+                }
+                rider.remove();
+            }
             PairingEquipmentChange::RePair => {
                 mob.set_item_slot(
                     &EquipmentSlot::MAIN_HAND,
@@ -3200,35 +2737,120 @@ impl DetachOnPairingEquipment {
                 );
                 let world = rider.world.load_full();
                 if let Some(tracked) = world.entity_tracker.get_tracked_entity(rider.entity_id) {
+                    self.observations.store(1, Ordering::Relaxed);
                     tracked.remove_player(&event.player);
                     tracked.update_player(&event.player, &world);
                 }
             }
-            PairingEquipmentChange::Replace => {
+            PairingEquipmentChange::Replace
+            | PairingEquipmentChange::NestedReplace
+            | PairingEquipmentChange::ViewerOverride => {
                 mob.set_item_slot(
                     &EquipmentSlot::MAIN_HAND,
                     ItemStack::new(1, &Item::DIAMOND_SWORD),
                 );
-                if event.player.client.java().is_some() {
-                    Self::append_viewer_equipment(event, rider.entity_id);
+                if self.change == PairingEquipmentChange::Replace
+                    && event.player.client.java().is_some()
+                {
+                    Self::append_viewer_equipment(
+                        event,
+                        rider.entity_id,
+                        &[
+                            (EquipmentSlot::MAIN_HAND, &Item::STICK),
+                            (EquipmentSlot::OFF_HAND, &Item::CARROT),
+                            (EquipmentSlot::HEAD, &Item::GOLDEN_HELMET),
+                        ],
+                    );
                 }
             }
         }
     }
 
-    fn append_viewer_equipment(event: &mut PacketSentEvent, rider_id: i32) {
-        use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item, item_stack::ItemStack};
+    fn append_bedrock_removal_extras(event: &mut PacketSentEvent, actor_id: i32) {
+        use pumpkin_protocol::{
+            bedrock::client::{CSetActorMotion, mob_armor_equipment::CMobArmorEquipment},
+            bedrock::network_item::NetworkItemStackDescriptor,
+            packet::Packet,
+            serial::PacketWrite,
+        };
+        let armor = CMobArmorEquipment {
+            target_runtime_id: (actor_id as u64).into(),
+            head: NetworkItemStackDescriptor::default(),
+            chest: NetworkItemStackDescriptor::default(),
+            legs: NetworkItemStackDescriptor::default(),
+            feet: NetworkItemStackDescriptor::default(),
+            body: NetworkItemStackDescriptor::default(),
+        };
+        let marker = CSetActorMotion {
+            target_runtime_id: u64::MAX.into(),
+            motion: Vector3::default(),
+            tick: 0u64.into(),
+        };
+        let mut stale = Vec::new();
+        let mut unrelated = Vec::new();
+        assert!(armor.write(&mut stale).is_ok());
+        assert!(marker.write(&mut unrelated).is_ok());
+        event
+            .extra_packets
+            .push((CMobArmorEquipment::PACKET_ID, stale.into()));
+        event
+            .extra_packets
+            .push((CSetActorMotion::PACKET_ID, unrelated.into()));
+    }
+
+    fn is_target(&self, event: &PacketSentEvent, rider_id: i32) -> bool {
+        use pumpkin_protocol::{
+            bedrock::client::{CAddActor, CMobEquipment, mob_armor_equipment::CMobArmorEquipment},
+            codec::{var_long::VarLong, var_ulong::VarULong},
+            java::client::play::{CHeadRot, CSetEquipment, CSpawnEntity},
+            packet::Packet,
+            serial::PacketRead,
+        };
+        if event.player.client.bedrock().is_some() {
+            if self.change == PairingEquipmentChange::RemoveOnSpawn {
+                event.packet_id == CAddActor::PACKET_ID
+                    && VarLong::read(&mut event.payload.as_ref())
+                        .is_ok_and(|id| id.0 == i64::from(rider_id))
+            } else {
+                event.packet_id
+                    == if self.change == PairingEquipmentChange::Armor {
+                        CMobArmorEquipment::PACKET_ID
+                    } else {
+                        CMobEquipment::PACKET_ID
+                    }
+                    && VarULong::read(&mut event.payload.as_ref())
+                        .is_ok_and(|id| id.0 == rider_id as u64)
+            }
+        } else {
+            let packet = match self.change {
+                PairingEquipmentChange::RePair => CHeadRot::to_id(CURRENT_MC_VERSION),
+                PairingEquipmentChange::RemoveOnSpawn => CSpawnEntity::to_id(CURRENT_MC_VERSION),
+                _ => CSetEquipment::to_id(CURRENT_MC_VERSION),
+            };
+            event.packet_id == packet
+                && event
+                    .payload
+                    .as_ref()
+                    .get_var_int()
+                    .is_ok_and(|id| id.0 == rider_id)
+        }
+    }
+
+    fn append_viewer_equipment(
+        event: &mut PacketSentEvent,
+        rider_id: i32,
+        slots: &[(
+            pumpkin_data::data_component_impl::EquipmentSlot,
+            &'static pumpkin_data::item::Item,
+        )],
+    ) {
+        use pumpkin_data::item_stack::ItemStack;
         use pumpkin_protocol::java::client::play::CSetEquipment;
         use pumpkin_protocol::{ClientPacket, codec::item_stack_seralizer::ItemStackSerializer};
-        let slots = [
-            (EquipmentSlot::MAIN_HAND, &Item::STICK),
-            (EquipmentSlot::OFF_HAND, &Item::CARROT),
-            (EquipmentSlot::HEAD, &Item::GOLDEN_HELMET),
-        ];
         let extra = CSetEquipment::new(
             rider_id.into(),
             slots
-                .into_iter()
+                .iter()
                 .map(|(slot, item)| {
                     (
                         slot.discriminant(),
@@ -3255,34 +2877,30 @@ impl EventHandler<PacketSentEvent> for DetachOnPairingEquipment {
     ) -> BoxFuture<'a, ()> {
         use crate::entity::mob::Mob;
         use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item, item_stack::ItemStack};
-        use pumpkin_protocol::{
-            bedrock::client::{CMobEquipment, mob_armor_equipment::CMobArmorEquipment},
-            codec::var_ulong::VarULong,
-            java::client::play::CSetEquipment,
-            packet::Packet,
-            serial::PacketRead,
-        };
+        use pumpkin_protocol::java::client::play::CSetEquipment;
 
         Box::pin(async move {
             let rider = self.pig.get_entity();
-            let target = if event.player.client.bedrock().is_some() {
-                event.packet_id
-                    == if self.change == PairingEquipmentChange::Armor {
-                        CMobArmorEquipment::PACKET_ID
-                    } else {
-                        CMobEquipment::PACKET_ID
-                    }
-                    && VarULong::read(&mut event.payload.as_ref())
-                        .is_ok_and(|id| id.0 == rider.entity_id as u64)
-            } else {
-                event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
-                    && event
-                        .payload
-                        .as_ref()
-                        .get_var_int()
-                        .is_ok_and(|id| id.0 == rider.entity_id)
-            };
-            if !target {
+            if self.change == PairingEquipmentChange::RePair
+                && event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
+                && event
+                    .payload
+                    .as_ref()
+                    .get_var_int()
+                    .is_ok_and(|id| id.0 == rider.entity_id)
+                && self
+                    .observations
+                    .compare_exchange(1, 2, Ordering::Relaxed, Ordering::Relaxed)
+                    .is_ok()
+            {
+                Self::append_viewer_equipment(
+                    event,
+                    rider.entity_id,
+                    &[(EquipmentSlot::MAIN_HAND, &Item::CARROT)],
+                );
+                return;
+            }
+            if !self.is_target(event, rider.entity_id) {
                 return;
             }
             if self.change == PairingEquipmentChange::Retry {
@@ -3309,6 +2927,23 @@ impl EventHandler<PacketSentEvent> for DetachOnPairingEquipment {
                 );
                 self.boat.get_entity().remove_passenger(rider.entity_id);
                 self.change_equipment(event);
+            } else if matches!(
+                self.change,
+                PairingEquipmentChange::NestedReplace | PairingEquipmentChange::ViewerOverride
+            ) && self.observations.fetch_add(1, Ordering::Relaxed) == 0
+            {
+                if self.change == PairingEquipmentChange::NestedReplace {
+                    self.pig
+                        .get_mob_entity()
+                        .set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::CARROT));
+                } else {
+                    event.cancelled = true;
+                    Self::append_viewer_equipment(
+                        event,
+                        rider.entity_id,
+                        &[(EquipmentSlot::MAIN_HAND, &Item::CARROT)],
+                    );
+                }
             }
         })
     }
@@ -3318,8 +2953,12 @@ impl EventHandler<PacketSentEvent> for DetachOnPairingEquipment {
 async fn bedrock_pairing_equipment_observer_can_dismount_the_rider() -> TestResult {
     for change in [
         PairingEquipmentChange::Replace,
+        PairingEquipmentChange::NestedReplace,
         PairingEquipmentChange::Armor,
         PairingEquipmentChange::Retry,
+        PairingEquipmentChange::Break,
+        PairingEquipmentChange::Remove,
+        PairingEquipmentChange::RemoveOnSpawn,
     ] {
         assert_bedrock_pairing_equipment(change).await?;
     }
@@ -3328,7 +2967,6 @@ async fn bedrock_pairing_equipment_observer_can_dismount_the_rider() -> TestResu
 
 async fn assert_bedrock_pairing_equipment(change: PairingEquipmentChange) -> TestResult {
     use crate::entity::mob::Mob;
-    use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item, item_stack::ItemStack};
 
     let directory = tempfile::tempdir()?;
     let (server, world) = vehicle_world(&directory).await?;
@@ -3348,14 +2986,7 @@ async fn assert_bedrock_pairing_equipment(change: PairingEquipmentChange) -> Tes
     world.spawn_entity(pig.clone());
     let rider = pig.get_entity();
     boat.get_entity().add_passenger(boat.clone(), pig.clone());
-    let (slot, item) = if change == PairingEquipmentChange::Armor {
-        (EquipmentSlot::HEAD, &Item::GOLDEN_HELMET)
-    } else {
-        (EquipmentSlot::MAIN_HAND, &Item::DIAMOND_SWORD)
-    };
-    let initial = ItemStack::new(1, item);
-    let initial_uid = initial.uid;
-    pig.get_mob_entity().set_item_slot(&slot, initial);
+    let (slot, initial_uid) = equip_bedrock_pairing_rider(&pig, change)?;
     let tracked = world
         .entity_tracker
         .get_tracked_entity(rider.entity_id)
@@ -3384,6 +3015,25 @@ async fn assert_bedrock_pairing_equipment(change: PairingEquipmentChange) -> Tes
         assert_eq!(observer.observations.load(Ordering::Relaxed), 2);
         world.entity_tracker.update_all(&world);
         assert_eq!(observer.observations.load(Ordering::Relaxed), 3);
+    } else if matches!(
+        change,
+        PairingEquipmentChange::Remove | PairingEquipmentChange::RemoveOnSpawn
+    ) {
+        run_chunk_pairing(world.clone(), viewer, chunk).await?;
+        assert!(rider.is_removed() && observer.called.load(Ordering::Relaxed));
+        assert!(
+            world
+                .entity_tracker
+                .get_tracked_entity(rider.entity_id)
+                .is_none()
+        );
+        let wire = read_bedrock_seat_metadata(&mut packets, rider.entity_id)?;
+        assert_eq!(wire.spawned, change == PairingEquipmentChange::Remove);
+        assert_eq!(wire.last_equipment_id, None);
+        assert_eq!(wire.armor_updates, 0);
+        assert!(wire.pairing_marker);
+        world.level.shutdown().await;
+        return Ok(());
     } else {
         tracked.update_player(&viewer, &world);
     }
@@ -3391,10 +3041,6 @@ async fn assert_bedrock_pairing_equipment(change: PairingEquipmentChange) -> Tes
     assert!(!rider.has_vehicle());
     assert!(!boat.get_entity().has_passenger(rider.entity_id));
     let metadata = read_bedrock_seat_metadata(&mut packets, rider.entity_id)?;
-    let flags = metadata.flags.ok_or("detached flags")?;
-    let riding =
-        1i64 << pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::RIDING;
-    assert_eq!(flags & riding, 0);
     let equipped = pig
         .get_mob_entity()
         .living_entity
@@ -3402,29 +3048,113 @@ async fn assert_bedrock_pairing_equipment(change: PairingEquipmentChange) -> Tes
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .get(&slot);
-    if change == PairingEquipmentChange::Armor {
+    if change == PairingEquipmentChange::NestedReplace {
+        use pumpkin_data::attributes::Attributes;
+        let living = &pig.get_mob_entity().living_entity;
+        assert_eq!(
+            living
+                .get_attribute_value(&Attributes::ATTACK_DAMAGE)
+                .to_bits(),
+            living
+                .get_attribute_base(&Attributes::ATTACK_DAMAGE)
+                .to_bits()
+        );
+    }
+    assert_bedrock_pairing_equipment_wire(&metadata, &equipped, initial_uid, change)?;
+    world.level.shutdown().await;
+    Ok(())
+}
+
+fn equip_bedrock_pairing_rider(
+    pig: &PigEntity,
+    change: PairingEquipmentChange,
+) -> Result<
+    (
+        pumpkin_data::data_component_impl::EquipmentSlot,
+        std::num::NonZeroI32,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    use crate::entity::mob::Mob;
+    use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item, item_stack::ItemStack};
+
+    let (slot, item) = match change {
+        PairingEquipmentChange::Armor => (EquipmentSlot::HEAD, &Item::GOLDEN_HELMET),
+        PairingEquipmentChange::Break => (EquipmentSlot::MAIN_HAND, &Item::SHIELD),
+        _ => (EquipmentSlot::MAIN_HAND, &Item::DIAMOND_SWORD),
+    };
+    let mut initial = ItemStack::new(1, item);
+    let mob = pig.get_mob_entity();
+    if change == PairingEquipmentChange::Break {
+        initial.set_damage(initial.get_max_damage().ok_or("shield durability")? - 1);
+        mob.living_entity.set_active_hand(
+            pumpkin_util::Hand::Right,
+            initial.clone(),
+            initial.get_max_use_time() - 20,
+        );
+    }
+    let uid = initial.uid;
+    mob.set_item_slot(&slot, initial);
+    Ok((slot, uid))
+}
+
+async fn run_chunk_pairing(
+    world: Arc<World>,
+    viewer: Arc<crate::entity::player::Player>,
+    chunk: Vector2<i32>,
+) -> TestResult {
+    let (finished, done) = tokio::sync::oneshot::channel();
+    let pairing = std::thread::spawn(move || {
+        world
+            .entity_tracker
+            .update_player_chunks(&viewer, &world, &[chunk]);
+        let _ = finished.send(());
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), done).await??;
+    pairing.join().map_err(|_| "Chunk pairing panicked")?;
+    Ok(())
+}
+
+fn assert_bedrock_pairing_equipment_wire(
+    metadata: &BedrockSeatMetadata,
+    equipped: &pumpkin_data::item_stack::ItemStack,
+    initial_uid: std::num::NonZeroI32,
+    change: PairingEquipmentChange,
+) -> TestResult {
+    use pumpkin_data::item::Item;
+    use pumpkin_protocol::bedrock::{
+        client::set_actor_data::entity_data_flag::RIDING, network_item::NetworkItemStackDescriptor,
+    };
+
+    let flags = metadata.flags.ok_or("detached flags")?;
+    assert_eq!(flags & (1i64 << RIDING), 0);
+    if change == PairingEquipmentChange::Break {
+        assert!(equipped.is_empty());
+        assert_eq!(metadata.last_equipment_id, Some(0));
+        assert_eq!(metadata.empty_equipment_updates, 1);
+    } else if change == PairingEquipmentChange::Armor {
         assert_eq!(equipped.item, &Item::DIAMOND_HELMET);
         assert_eq!(metadata.armor_updates, 1);
-        let expected =
-            pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::from(&equipped);
+        let expected = NetworkItemStackDescriptor::from(equipped);
         assert_eq!(
             metadata.last_head_equipment,
             Some((expected.id, expected.net_id))
         );
     } else {
-        let expected_item = if change == PairingEquipmentChange::Retry {
+        let expected_item = if matches!(
+            change,
+            PairingEquipmentChange::Retry | PairingEquipmentChange::NestedReplace
+        ) {
             &Item::CARROT
         } else {
             &Item::DIAMOND_SWORD
         };
         assert_eq!(equipped.item, expected_item);
         assert_ne!(initial_uid, equipped.uid);
-        let expected =
-            pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::from(&equipped);
+        let expected = NetworkItemStackDescriptor::from(equipped);
         assert_eq!(metadata.last_equipment_id, Some(expected.id));
         assert_eq!(metadata.last_equipment_uid, expected.net_id);
     }
-    world.level.shutdown().await;
     Ok(())
 }
 
@@ -3432,10 +3162,13 @@ async fn assert_bedrock_pairing_equipment(change: PairingEquipmentChange) -> Tes
 async fn java_pairing_keeps_the_replacement_and_the_unchanged_equipment() -> TestResult {
     for change in [
         PairingEquipmentChange::Replace,
+        PairingEquipmentChange::NestedReplace,
+        PairingEquipmentChange::ViewerOverride,
         PairingEquipmentChange::Wear,
         PairingEquipmentChange::Break,
         PairingEquipmentChange::Retry,
         PairingEquipmentChange::RePair,
+        PairingEquipmentChange::RemoveOnSpawn,
     ] {
         assert_java_pairing_equipment(change).await?;
     }
@@ -3521,6 +3254,13 @@ async fn assert_java_pairing_equipment(change: PairingEquipmentChange) -> TestRe
     assert!(!boat.get_entity().has_passenger(rider.entity_id));
     assert!(client.try_send_packet(&CKeepAlive::new(73)));
     let (wire, spawns) = read_rider_equipment_updates(peer, rider.entity_id).await?;
+    if change == PairingEquipmentChange::RemoveOnSpawn {
+        assert!(rider.is_removed());
+        assert_eq!(spawns, 0);
+        assert!(wire.is_empty());
+        world.level.shutdown().await;
+        return Ok(());
+    }
     assert_eq!(
         spawns,
         if change == PairingEquipmentChange::RePair {
@@ -3539,7 +3279,7 @@ fn assert_java_equipment_wire(
     living: &crate::entity::living::LivingEntity,
     change: PairingEquipmentChange,
 ) -> TestResult {
-    use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item};
+    use pumpkin_data::{attributes::Attributes, data_component_impl::EquipmentSlot, item::Item};
     let last_stack = |slot: &EquipmentSlot| {
         wire.iter()
             .rev()
@@ -3572,12 +3312,36 @@ fn assert_java_equipment_wire(
             .count();
         assert_eq!(clears, 1);
     } else {
-        let main = if change == PairingEquipmentChange::Retry {
+        let main = if matches!(
+            change,
+            PairingEquipmentChange::Retry
+                | PairingEquipmentChange::NestedReplace
+                | PairingEquipmentChange::ViewerOverride
+                | PairingEquipmentChange::RePair
+        ) {
             &Item::CARROT
         } else {
             &Item::DIAMOND_SWORD
         };
         assert_eq!(last_item(&EquipmentSlot::MAIN_HAND), Some(main));
+        if change == PairingEquipmentChange::NestedReplace
+            || change == PairingEquipmentChange::ViewerOverride
+        {
+            let equipped = living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .get(&EquipmentSlot::MAIN_HAND);
+            let damage = living.get_attribute_value(&Attributes::ATTACK_DAMAGE);
+            let base = living.get_attribute_base(&Attributes::ATTACK_DAMAGE);
+            if change == PairingEquipmentChange::NestedReplace {
+                assert_eq!(equipped.item, &Item::CARROT);
+                assert_eq!(damage.to_bits(), base.to_bits());
+            } else {
+                assert_eq!(equipped.item, &Item::DIAMOND_SWORD);
+                assert!(damage > base);
+            }
+        }
         if matches!(
             change,
             PairingEquipmentChange::Retry | PairingEquipmentChange::Replace
@@ -4148,259 +3912,2063 @@ async fn ride_mount_reports_failure_if_mount_listener_vetoes_attachment() -> Tes
     Ok(())
 }
 
-struct ReplacePlayerItemUse {
-    player: Arc<crate::entity::player::Player>,
-    trigger: GameEvent,
-    calls: std::sync::atomic::AtomicU32,
-    replace: bool,
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_is_visible_to_a_nested_spawn_packet_observer() -> TestResult {
+    assert_reentrant_boat_placement(false).await
 }
 
-impl EventHandler<GenericGameEvent> for ReplacePlayerItemUse {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_commits_cooldown_before_pairing_observers() -> TestResult {
+    assert_reentrant_boat_placement(true).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_publishes_remaining_cooldown_after_observers() -> TestResult {
+    assert_placement_cooldown_publication(false, CURRENT_MC_VERSION).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_does_not_republish_cleared_cooldown() -> TestResult {
+    assert_placement_cooldown_publication(true, CURRENT_MC_VERSION).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_projects_translated_cooldown_packets() -> TestResult {
+    assert_placement_cooldown_publication(
+        false,
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_4,
+    )
+    .await
+}
+
+const BOAT_PLACEMENT_COOLDOWN_GROUP: &str = "minecraft:test_boat";
+const BOAT_PLACEMENT_UNRELATED_COOLDOWN: &str = "minecraft:unrelated";
+struct ObserveCooldown {
+    clear: bool,
+    called: AtomicBool,
+    version: pumpkin_util::version::JavaMinecraftVersion,
+}
+impl EventHandler<PacketSentEvent> for ObserveCooldown {
     fn handle_blocking<'a>(
         &'a self,
-        _server: &'a Arc<Server>,
-        event: &'a mut GenericGameEvent,
+        _: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
     ) -> BoxFuture<'a, ()> {
-        use pumpkin_data::{item::Item, item_stack::ItemStack};
-        use pumpkin_util::Hand;
+        use pumpkin_protocol::{ClientPacket, java::client::play::CItemCooldown};
         Box::pin(async move {
-            if event.event_key == self.trigger.name()
-                && self.calls.fetch_add(1, Ordering::Relaxed) == 0
-                && self.replace
+            let packet_id = if self.version == CURRENT_MC_VERSION {
+                CItemCooldown::to_id(self.version)
+            } else {
+                23 // Java 1.21.4 packet registry.
+            };
+            if (event.packet_id == CItemCooldown::to_id(CURRENT_MC_VERSION)
+                || event.packet_id == packet_id)
+                && !self.called.swap(true, Ordering::Relaxed)
             {
-                let mut shield = ItemStack::new(1, &Item::SHIELD);
-                shield.set_damage(7);
-                self.player
-                    .inventory()
-                    .set_stack_in_hand(Hand::Left, shield.clone());
-                self.player
-                    .living_entity
-                    .set_active_hand(Hand::Left, shield, 61_200);
+                let encode = |group: &str, ticks: i32| {
+                    let mut payload = Vec::new();
+                    assert!(
+                        CItemCooldown::new(group.to_owned(), ticks.into())
+                            .write_packet_data(&mut payload, &self.version)
+                            .is_ok()
+                    );
+                    payload.into()
+                };
+                if self.clear {
+                    event.player.set_item_cooldown("test_boat", 0);
+                } else {
+                    event.player.tick_counter.fetch_add(5, Ordering::Relaxed);
+                    if self.version != CURRENT_MC_VERSION {
+                        event.packet_id = packet_id;
+                        event.payload = encode(BOAT_PLACEMENT_COOLDOWN_GROUP, 19);
+                    }
+                }
+                event
+                    .extra_packets
+                    .push((packet_id, encode("test_boat", 20)));
+                event
+                    .extra_packets
+                    .push((packet_id, encode(BOAT_PLACEMENT_UNRELATED_COOLDOWN, 7)));
             }
         })
     }
 }
 
-impl ReplacePlayerItemUse {
-    fn assert_successor(&self) {
+async fn assert_placement_cooldown_publication(
+    clear: bool,
+    version: pumpkin_util::version::JavaMinecraftVersion,
+) -> TestResult {
+    use pumpkin_data::{data_component_impl::UseCooldownImpl, item::Item, item_stack::ItemStack};
+    use pumpkin_protocol::java::{
+        client::play::{CItemCooldown, CKeepAlive, CSpawnEntity},
+        packet_decoder::TCPNetworkDecoder,
+    };
+    use pumpkin_util::Hand;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (player, peer) = java_equipment_watcher(&server, &world)?;
+    let client = player.client.java().ok_or("Java player")?;
+    client.version.store(version);
+    boat_placement_platform(&world);
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    player
+        .chunk_sender
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .mark_sent_out_of_band(Vector2::new(0, 0));
+    let mut stack = ItemStack::new(1, &Item::OAK_BOAT);
+    stack.set_data_component(UseCooldownImpl {
+        seconds: 1.0,
+        cooldown_group: Some(BOAT_PLACEMENT_COOLDOWN_GROUP.to_owned()),
+    });
+    player.inventory().set_held_item(stack.clone());
+    let observer = Arc::new(ObserveCooldown {
+        clear,
+        called: AtomicBool::new(false),
+        version,
+    });
+    server.plugin_manager.register::<PacketSentEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    server
+        .item_registry
+        .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
+    assert!(observer.called.load(Ordering::Relaxed));
+    assert_eq!(boat_placement_actors(&world).len(), 1);
+    let expected = if clear { 0 } else { 15 };
+    assert_eq!(
+        player
+            .get_item_cooldown(BOAT_PLACEMENT_COOLDOWN_GROUP)
+            .unwrap_or_default(),
+        expected
+    );
+    assert!(client.try_send_packet(&CKeepAlive::new(73)));
+    let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
+    let updates = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let mut updates = Vec::new();
+        let mut unrelated = Vec::new();
+        let mut spawned = false;
+        loop {
+            let packet = decoder.get_raw_packet().await?;
+            if [
+                CKeepAlive::to_id(CURRENT_MC_VERSION),
+                CKeepAlive::to_id(version),
+            ]
+            .contains(&packet.id)
+            {
+                return Ok::<_, Box<dyn std::error::Error>>((updates, unrelated));
+            }
+            if [
+                CSpawnEntity::to_id(CURRENT_MC_VERSION),
+                CSpawnEntity::to_id(version),
+            ]
+            .contains(&packet.id)
+            {
+                spawned = true;
+            }
+            let cooldown_packet_id = if version == CURRENT_MC_VERSION {
+                CItemCooldown::to_id(version)
+            } else {
+                23
+            };
+            if packet.id == cooldown_packet_id {
+                assert!(spawned);
+                let mut payload = packet.payload.as_ref();
+                let length = usize::try_from(payload.get_var_int()?.0)?;
+                let (group, mut duration) = payload.split_at(length);
+                if matches!(group, b"test_boat" | b"minecraft:test_boat") {
+                    updates.push(duration.get_var_int()?.0);
+                } else {
+                    assert_eq!(group, BOAT_PLACEMENT_UNRELATED_COOLDOWN.as_bytes());
+                    unrelated.push(duration.get_var_int()?.0);
+                }
+            }
+        }
+    })
+    .await??;
+    if clear {
+        assert_eq!(updates, (vec![0], vec![7]));
+    } else {
+        assert_eq!(updates, (vec![15, 15], vec![7]));
+    }
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_uses_the_same_implicit_and_explicit_cooldown_group() -> TestResult {
+    use pumpkin_data::{data_component_impl::UseCooldownImpl, item::Item, item_stack::ItemStack};
+    use pumpkin_util::Hand;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (player, _peer) = java_equipment_watcher(&server, &world)?;
+    let chunk = boat_placement_platform(&world);
+    chunk.set_block_absolute_y(12, 63, 8, Block::STONE.default_state.id);
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let mut implicit = ItemStack::new(1, &Item::OAK_BOAT);
+    implicit.set_data_component(UseCooldownImpl::new(1.0, None));
+    let mut explicit = implicit.copy_with_count(1);
+    explicit.set_data_component(UseCooldownImpl::new(1.0, Some("minecraft:oak_boat".into())));
+    let place = |stack: &ItemStack| {
+        server
+            .item_registry
+            .on_use_with_rotation(stack, &player, 0.0, 45.0, Hand::Right);
+    };
+
+    player.inventory().set_held_item(implicit.clone());
+    place(&implicit);
+    assert_eq!(boat_placement_actors(&world).len(), 1);
+    assert!(player.inventory().held_item().is_empty());
+
+    player
+        .get_entity()
+        .set_pos(BOAT_PLACEMENT_OFFSET.add_raw(4.0, 0.0, 0.0));
+    player.inventory().set_held_item(explicit.clone());
+    place(&explicit);
+    assert_eq!(boat_placement_actors(&world).len(), 1);
+    assert_eq!(player.inventory().held_item().uid, explicit.uid);
+
+    player.tick_counter.fetch_add(20, Ordering::Relaxed);
+    place(&explicit);
+    assert_eq!(boat_placement_actors(&world).len(), 2);
+    assert!(player.inventory().held_item().is_empty());
+    world.level.shutdown().await;
+    Ok(())
+}
+
+async fn assert_reentrant_boat_placement(second_platform: bool) -> TestResult {
+    use pumpkin_data::{
+        data_component_impl::UseCooldownImpl, item::Item, item_stack::ItemStack,
+        statistic::StatisticCategory,
+    };
+    use pumpkin_protocol::java::client::play::CSpawnEntity;
+    use pumpkin_util::{GameMode, Hand};
+
+    struct PlaceAgain {
+        called: AtomicBool,
+        second_platform: bool,
+    }
+    impl EventHandler<PacketSentEvent> for PlaceAgain {
+        fn handle_blocking<'a>(
+            &'a self,
+            server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.packet_id == CSpawnEntity::to_id(CURRENT_MC_VERSION)
+                    && !self.called.swap(true, Ordering::Relaxed)
+                {
+                    if self.second_platform {
+                        event
+                            .player
+                            .get_entity()
+                            .set_pos(BOAT_PLACEMENT_OFFSET.add_raw(4.0, 0.0, 0.0));
+                    }
+                    let stack = event.player.inventory().held_item();
+                    server.item_registry.on_use_with_rotation(
+                        &stack,
+                        &event.player,
+                        0.0,
+                        45.0,
+                        Hand::Right,
+                    );
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (player, _peer) = java_equipment_watcher(&server, &world)?;
+    let chunk = boat_placement_platform(&world);
+    if second_platform {
+        chunk.set_block_absolute_y(12, 63, 8, Block::STONE.default_state.id);
+    }
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    player
+        .chunk_sender
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .mark_sent_out_of_band(Vector2::new(0, 0));
+    player.gamemode.store(GameMode::Creative);
+    let mut stack = ItemStack::new(1, &Item::OAK_BOAT);
+    if second_platform {
+        stack.set_data_component(UseCooldownImpl {
+            seconds: 1.0,
+            cooldown_group: Some("minecraft:test_boat".to_owned()),
+        });
+    }
+    player.inventory().set_held_item(stack.clone());
+    let observer = Arc::new(PlaceAgain {
+        called: AtomicBool::new(false),
+        second_platform,
+    });
+    server.plugin_manager.register::<PacketSentEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    server
+        .item_registry
+        .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
+    assert!(observer.called.load(Ordering::Relaxed));
+    assert_eq!(boat_placement_actors(&world).len(), 1);
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
+        1
+    );
+    if second_platform {
+        assert!(player.is_on_cooldown("minecraft:test_boat"));
+        player.tick_counter.fetch_add(20, Ordering::Relaxed);
+        server
+            .item_registry
+            .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
+        assert_eq!(boat_placement_actors(&world).len(), 2);
+    }
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_removed_during_initial_metadata_is_not_tracked() -> TestResult {
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_protocol::java::client::play::CSetEntityMetadata;
+    use pumpkin_util::Hand;
+    use std::sync::atomic::AtomicI32;
+
+    struct RemoveDuringMetadata(AtomicI32);
+    impl EventHandler<PacketSentEvent> for RemoveDuringMetadata {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.packet_id != CSetEntityMetadata::to_id(CURRENT_MC_VERSION) {
+                    return;
+                }
+                let world = event.player.world();
+                if let Ok(id) = event.payload.as_ref().get_var_int()
+                    && let Some(boat) = world.get_entity_by_id(id.0)
+                    && boat.get_entity().entity_type == &EntityType::OAK_BOAT
+                {
+                    self.0.store(id.0, Ordering::Relaxed);
+                    world.remove_entity(boat.as_ref());
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (player, _peer) = java_equipment_watcher(&server, &world)?;
+    boat_placement_platform(&world);
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let stack = ItemStack::new(1, &Item::OAK_BOAT);
+    player.inventory().set_held_item(stack.clone());
+    let observer = Arc::new(RemoveDuringMetadata(AtomicI32::new(-1)));
+    server.plugin_manager.register::<PacketSentEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    server
+        .item_registry
+        .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
+    let id = observer.0.load(Ordering::Relaxed);
+    assert_ne!(id, -1);
+    assert!(world.get_entity_by_id(id).is_none());
+    assert!(!world.entity_tracker.has_entity_with_id(id));
+    world.level.shutdown().await;
+    Ok(())
+}
+
+struct ObserveDispense {
+    remove: bool,
+    id: std::sync::atomic::AtomicI32,
+    dispenser: Arc<crate::block::entities::dispenser::DispenserBlockEntity>,
+}
+impl EventHandler<PacketSentEvent> for ObserveDispense {
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
+    ) -> BoxFuture<'a, ()> {
+        use pumpkin_inventory::inventory::Inventory;
+        use pumpkin_protocol::java::client::play::CSpawnEntity;
         use pumpkin_util::Hand;
-        let living = &self.player.living_entity;
-        let equipped = self.player.inventory().get_stack_in_hand(Hand::Left);
-        assert_eq!(equipped.get_damage(), 7);
-        assert_eq!(living.item_use_time.load(Ordering::Relaxed), 61_200);
-        assert_eq!(
-            *living
-                .active_hand
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner),
-            Some(Hand::Left)
-        );
-        assert!(
-            living
-                .item_in_use
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .as_ref()
-                .is_some_and(|stack| stack.are_equal(&equipped))
-        );
+
+        Box::pin(async move {
+            if event.packet_id != CSpawnEntity::to_id(CURRENT_MC_VERSION)
+                || self.id.load(Ordering::Relaxed) != -1
+            {
+                return;
+            }
+            let world = event.player.world();
+            if let Ok(id) = event.payload.as_ref().get_var_int()
+                && let Some(tracked) = world.entity_tracker.get_tracked_entity(id.0)
+                && tracked.entity.get_entity().entity_type == &EntityType::OAK_BOAT
+            {
+                self.id.store(id.0, Ordering::Relaxed);
+                assert!(self.dispenser.get_stack(0).is_empty());
+                self.dispenser.set_stack(
+                    0,
+                    pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::STICK),
+                );
+                if self.remove {
+                    world.remove_entity(tracked.entity.as_ref());
+                } else {
+                    let held = event.player.inventory().held_item();
+                    server.item_registry.on_use_with_rotation(
+                        &held,
+                        &event.player,
+                        0.0,
+                        45.0,
+                        Hand::Right,
+                    );
+                }
+            }
+        })
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn java_shield_input_starts_only_once_and_preserves_a_listener_successor() -> TestResult {
-    use pumpkin_data::{item::Item, item_stack::ItemStack};
-    use pumpkin_protocol::java::server::play::SUseItem;
-    for replace in [false, true] {
-        let folder = tempfile::tempdir()?;
-        let (server, world) = vehicle_world(&folder).await?;
-        let (player, _peer) = java_equipment_watcher(&server, &world)?;
+async fn dispensed_boat_is_live_during_its_spawn_packet_observer() -> TestResult {
+    assert_dispensed_boat_registration(false).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dispensed_boat_removed_from_its_spawn_observer_is_not_reregistered() -> TestResult {
+    assert_dispensed_boat_registration(true).await
+}
+
+async fn assert_dispensed_boat_registration(remove: bool) -> TestResult {
+    use crate::block::{
+        BlockBehaviour, OnScheduledTickArgs, blocks::redstone::dispenser::DispenserBlock,
+        entities::dispenser::DispenserBlockEntity,
+    };
+    use pumpkin_data::{
+        block_properties::{DispenserLikeProperties, Facing},
+        item::Item,
+        item_stack::ItemStack,
+    };
+    use pumpkin_inventory::inventory::Inventory;
+    use pumpkin_util::{Hand, math::position::BlockPos};
+    use std::sync::atomic::AtomicI32;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (player, _peer) = java_equipment_watcher(&server, &world)?;
+    let chunk = boat_placement_platform(&world);
+    let position = BlockPos::new(8, 65, 9);
+    let mut props = DispenserLikeProperties::default(&Block::DISPENSER);
+    props.facing = Facing::North;
+    chunk.set_block_absolute_y(8, 65, 9, props.to_state_id(&Block::DISPENSER));
+    chunk.set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+    chunk.set_block_absolute_y(9, 65, 8, Block::WATER.default_state.id);
+    let dispenser = Arc::new(DispenserBlockEntity::new(position));
+    world.add_block_entity(dispenser.clone());
+    let item = ItemStack::new(1, &Item::OAK_BOAT);
+    player.inventory().set_held_item(item.clone());
+    player
+        .get_entity()
+        .set_pos(BOAT_PLACEMENT_OFFSET.add_raw(0.2, 1.0, 0.0));
+    player
+        .chunk_sender
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .mark_sent_out_of_band(Vector2::new(0, 0));
+    let observer = Arc::new(ObserveDispense {
+        remove,
+        id: AtomicI32::new(-1),
+        dispenser: dispenser.clone(),
+    });
+    server.plugin_manager.register::<PacketSentEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    let dispense = || {
+        dispenser.set_stack(0, item.copy_with_count(1));
+        DispenserBlock.on_scheduled_tick(OnScheduledTickArgs {
+            world: &world,
+            block: &Block::DISPENSER,
+            position: &position,
+        });
+    };
+    let place = || {
+        server
+            .item_registry
+            .on_use_with_rotation(&item, &player, 0.0, 45.0, Hand::Right);
+    };
+    dispense();
+    let id = observer.id.load(Ordering::Relaxed);
+    assert_ne!(id, -1);
+    assert_eq!(dispenser.get_stack(0).item, &Item::STICK);
+    if remove {
+        assert!(world.get_entity_by_id(id).is_none());
+        assert!(!world.entity_tracker.has_entity_with_id(id));
+        dispense();
+        assert_eq!(boat_placement_actors(&world).len(), 1);
+    } else {
+        let first = world.get_entity_by_id(id).ok_or("Missing dispensed hull")?;
+        assert_eq!(first.get_entity().pos.load(), Vector3::new(8.5, 65.5, 8.25));
+        let bounds = first.get_entity().bounding_box.load();
+        assert_eq!(boat_placement_actors(&world).len(), 1);
+        assert_eq!(player.inventory().held_item().uid, item.uid);
+        place();
+        assert_eq!(boat_placement_actors(&world).len(), 1);
+        assert_eq!(player.inventory().held_item().uid, item.uid);
+        world.remove_entity(first.as_ref());
+        place();
+        let boats = boat_placement_actors(&world);
+        assert_eq!(boats.len(), 1);
+        assert!(bounds.intersects(&boats[0].get_entity().bounding_box.load()));
+        assert!(player.inventory().held_item().is_empty());
+        dispense();
+        assert_eq!(boat_placement_actors(&world).len(), 2);
+        assert!(dispenser.get_stack(0).is_empty());
+    }
+    world.level.shutdown().await;
+    Ok(())
+}
+
+struct ObserveDispenserEffects {
+    position: pumpkin_util::math::position::BlockPos,
+    effects: Mutex<Vec<(i32, i32)>>,
+    excluded_player: i32,
+    excluded_packets: std::sync::atomic::AtomicUsize,
+}
+impl EventHandler<PacketSentEvent> for ObserveDispenserEffects {
+    fn handle_blocking<'a>(
+        &'a self,
+        _: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
+    ) -> BoxFuture<'a, ()> {
+        use pumpkin_protocol::java::client::play::CWorldEvent;
+
+        Box::pin(async move {
+            let mut payload = event.payload.as_ref();
+            if event.packet_id == CWorldEvent::to_id(CURRENT_MC_VERSION)
+                && let Ok(code) = payload.get_i32_be()
+                && payload
+                    .get_block_pos(&CURRENT_MC_VERSION)
+                    .is_ok_and(|pos| pos == self.position)
+                && let Ok(data) = payload.get_i32_be()
+            {
+                if event.player.entity_id() == self.excluded_player {
+                    self.excluded_packets.fetch_add(1, Ordering::Relaxed);
+                } else {
+                    self.effects
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .push((code, data));
+                }
+            }
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "One fixture compares dispense effects across both client protocols."
+)]
+async fn dispensed_boat_preserves_stack_pitch_and_plays_java_effects() -> TestResult {
+    use crate::block::{
+        BlockBehaviour, OnScheduledTickArgs, blocks::redstone::dispenser::DispenserBlock,
+        entities::dispenser::DispenserBlockEntity,
+    };
+    use pumpkin_data::{
+        block_properties::{DispenserLikeProperties, Facing},
+        data_component_impl::EntityDataImpl,
+        item::Item,
+        item_stack::ItemStack,
+    };
+    use pumpkin_inventory::inventory::Inventory;
+    use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+    use pumpkin_protocol::{
+        bedrock::client::level_event::CLevelEvent, codec::var_int::VarInt, packet::Packet,
+        serial::PacketRead,
+    };
+    use pumpkin_util::math::position::BlockPos;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (watcher, _peer) = java_equipment_watcher(&server, &world)?;
+    watcher
+        .chunk_sender
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .mark_sent_out_of_band(Vector2::new(0, 0));
+    let chunk = boat_placement_platform(&world);
+    let position = BlockPos::new(8, 65, 9);
+    watcher
+        .get_entity()
+        .set_pos(Vector3::new(-55.75, 65.0, 9.0));
+    let (far_watcher, _far_peer) = java_rider(&server, &world, "deadmau5")?;
+    let far_client = far_watcher.client.java().ok_or("Java watcher")?;
+    far_client.player.store(Arc::new(Some(far_watcher.clone())));
+    far_watcher
+        .get_entity()
+        .set_pos(Vector3::new(72.0, 65.0, 9.0));
+    let (bedrock, mut bedrock_packets) = bedrock_rider(&server, &world, "jeb_").await?;
+    let dispenser = Arc::new(DispenserBlockEntity::new(position));
+    world.add_block_entity(dispenser.clone());
+    let observer = Arc::new(ObserveDispenserEffects {
+        position,
+        effects: Mutex::new(Vec::new()),
+        excluded_player: far_watcher.entity_id(),
+        excluded_packets: std::sync::atomic::AtomicUsize::new(0),
+    });
+    server.plugin_manager.register::<PacketSentEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    let mut rotation = NbtCompound::new();
+    rotation.put_list("Rotation", vec![NbtTag::Float(70.0), NbtTag::Float(27.0)]);
+    let mut stack = ItemStack::new(1, &Item::OAK_BOAT);
+    stack.set_data_component(EntityDataImpl {
+        entity_type: Some(&EntityType::OAK_BOAT),
+        nbt: Some(rotation),
+    });
+
+    let dispense = |facing| {
+        observer
+            .effects
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+        let mut props = DispenserLikeProperties::default(&Block::DISPENSER);
+        props.facing = facing;
+        chunk.set_block_absolute_y(8, 65, 9, props.to_state_id(&Block::DISPENSER));
+        dispenser.set_stack(0, stack.copy_with_count(1));
+        DispenserBlock.on_scheduled_tick(OnScheduledTickArgs {
+            world: &world,
+            block: &Block::DISPENSER,
+            position: &position,
+        });
+        assert!(dispenser.get_stack(0).is_empty());
+        observer
+            .effects
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    };
+
+    chunk.set_block_absolute_y(9, 64, 9, Block::WATER.default_state.id);
+    chunk.set_block_absolute_y(8, 64, 9, Block::WATER.default_state.id);
+    for (facing, event_data) in [(Facing::East, 5), (Facing::Down, 0)] {
+        let effects = dispense(facing);
+        assert_eq!(observer.excluded_packets.load(Ordering::Relaxed), 0);
+        assert_eq!(effects, [(1000, 0), (2000, event_data)]);
+        let boats = boat_placement_actors(&world);
+        assert_eq!(boats.len(), 1);
+        let hull = boats[0].get_entity();
+        assert_eq!((hull.yaw.load(), hull.pitch.load()), (270.0, 27.0));
+        world.remove_entity(boats[0].as_ref());
+    }
+    assert_eq!(
+        dispense(Facing::North),
+        [(1000, 0), (2000, 2), (1000, 0), (2000, 2)]
+    );
+    assert!(boat_placement_actors(&world).is_empty());
+    assert_eq!(
+        world
+            .entities
+            .load()
+            .iter()
+            .filter_map(|entity| entity
+                .cast_any()
+                .downcast_ref::<crate::entity::item::ItemEntity>())
+            .map(crate::entity::item::ItemEntity::get_pickup_delay)
+            .collect::<Vec<_>>(),
+        [0]
+    );
+    assert_eq!(observer.excluded_packets.load(Ordering::Relaxed), 0);
+    let mut bedrock_effects = Vec::new();
+    while let Ok(packet) = bedrock_packets.try_recv() {
+        if let Some((id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data)
+            && i32::from(id) == CLevelEvent::PACKET_ID
+        {
+            let mut input = payload.as_ref();
+            let code = VarInt::read(&mut input)?.0;
+            let _position = Vector3::<f32>::read(&mut input)?;
+            let data = VarInt::read(&mut input)?.0;
+            bedrock_effects.push((code, data));
+        }
+    }
+    assert_eq!(
+        bedrock_effects,
+        [
+            (1000, 0),
+            (2000, 5),
+            (1000, 0),
+            (2000, 4),
+            (1000, 0),
+            (2000, 1),
+            (1000, 0),
+            (2000, 1)
+        ]
+    );
+    let bedrock_client = bedrock.client.bedrock().ok_or("Bedrock watcher")?;
+    bedrock_client.clear_player();
+    bedrock_client.close().await;
+    far_client.close();
+    far_client.player.store(Arc::new(None));
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dispensed_boat_removed_during_dry_ejection_stays_removed() -> TestResult {
+    use crate::block::{
+        BlockBehaviour, OnScheduledTickArgs, blocks::redstone::dispenser::DispenserBlock,
+        entities::dispenser::DispenserBlockEntity,
+    };
+    use pumpkin_data::{
+        block_properties::{DispenserLikeProperties, Facing},
+        item::Item,
+        item_stack::ItemStack,
+    };
+    use pumpkin_inventory::inventory::Inventory;
+    use pumpkin_protocol::java::client::play::CSpawnEntity;
+    use pumpkin_util::math::position::BlockPos;
+    use std::sync::atomic::AtomicI32;
+
+    struct RemoveEjection(AtomicI32);
+    impl EventHandler<PacketSentEvent> for RemoveEjection {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                let world = event.player.world();
+                if event.packet_id == CSpawnEntity::to_id(CURRENT_MC_VERSION)
+                    && let Ok(id) = event.payload.as_ref().get_var_int()
+                    && let Some(tracked) = world.entity_tracker.get_tracked_entity(id.0)
+                    && tracked.entity.get_entity().entity_type == &EntityType::ITEM
+                {
+                    world.remove_entity(tracked.entity.as_ref());
+                    self.0.store(id.0, Ordering::Relaxed);
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (watcher, _peer) = java_equipment_watcher(&server, &world)?;
+    watcher
+        .chunk_sender
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .mark_sent_out_of_band(Vector2::new(0, 0));
+    let chunk = boat_placement_platform(&world);
+    let position = BlockPos::new(8, 65, 9);
+    let mut properties = DispenserLikeProperties::default(&Block::DISPENSER);
+    properties.facing = Facing::North;
+    chunk.set_block_absolute_y(8, 65, 9, properties.to_state_id(&Block::DISPENSER));
+    let dispenser = Arc::new(DispenserBlockEntity::new(position));
+    dispenser.set_stack(0, ItemStack::new(1, &Item::OAK_BOAT));
+    world.add_block_entity(dispenser.clone());
+
+    let observer = Arc::new(RemoveEjection(AtomicI32::new(-1)));
+    server.plugin_manager.register::<PacketSentEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    DispenserBlock.on_scheduled_tick(OnScheduledTickArgs {
+        world: &world,
+        block: &Block::DISPENSER,
+        position: &position,
+    });
+
+    let id = observer.0.load(Ordering::Relaxed);
+    assert_ne!(id, -1);
+    assert!(dispenser.get_stack(0).is_empty());
+    assert!(world.get_entity_by_id(id).is_none());
+    assert!(!world.entity_tracker.has_entity_with_id(id));
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dispensed_boat_rejects_equal_stack_replaced_by_spawn_observer() -> TestResult {
+    assert_dispensed_boat_rejects_replaced_source(false).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dispensed_boat_rejects_dispenser_replaced_by_spawn_observer() -> TestResult {
+    assert_dispensed_boat_rejects_replaced_source(true).await
+}
+
+async fn assert_dispensed_boat_rejects_replaced_source(replace_dispenser: bool) -> TestResult {
+    use crate::{
+        block::{
+            BlockBehaviour, OnScheduledTickArgs, blocks::redstone::dispenser::DispenserBlock,
+            entities::dispenser::DispenserBlockEntity,
+        },
+        plugin::api::events::entity::entity_spawn::EntitySpawnEvent,
+    };
+    use pumpkin_data::{
+        block_properties::{DispenserLikeProperties, Facing},
+        item::Item,
+        item_stack::ItemStack,
+    };
+    use pumpkin_inventory::inventory::Inventory;
+    use pumpkin_util::math::position::BlockPos;
+
+    struct ReplaceSource {
+        world: Arc<World>,
+        original: Arc<DispenserBlockEntity>,
+        replacement: Arc<DispenserBlockEntity>,
+        stack: ItemStack,
+    }
+    impl EventHandler<EntitySpawnEvent> for ReplaceSource {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            _: &'a mut EntitySpawnEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                self.replacement.set_stack(0, self.stack.clone());
+                if !Arc::ptr_eq(&self.original, &self.replacement) {
+                    self.world.add_block_entity(self.replacement.clone());
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let chunk = boat_placement_platform(&world);
+    let position = BlockPos::new(8, 65, 9);
+    let mut props = DispenserLikeProperties::default(&Block::DISPENSER);
+    props.facing = Facing::North;
+    chunk.set_block_absolute_y(8, 65, 9, props.to_state_id(&Block::DISPENSER));
+    chunk.set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+    let dispenser = Arc::new(DispenserBlockEntity::new(position));
+    world.add_block_entity(dispenser.clone());
+    let stack = ItemStack::new(1, &Item::OAK_BOAT);
+    let replacement = stack.copy_with_count(1);
+    assert_ne!(replacement.uid, stack.uid);
+    let original_uid = stack.uid;
+    dispenser.set_stack(0, stack);
+    let current = if replace_dispenser {
+        Arc::new(DispenserBlockEntity::new(position))
+    } else {
+        dispenser.clone()
+    };
+    server.plugin_manager.register::<EntitySpawnEvent, _>(
+        Arc::new(ReplaceSource {
+            world: world.clone(),
+            original: dispenser.clone(),
+            replacement: current.clone(),
+            stack: replacement.clone(),
+        }),
+        EventPriority::Normal,
+        true,
+    );
+    DispenserBlock.on_scheduled_tick(OnScheduledTickArgs {
+        world: &world,
+        block: &Block::DISPENSER,
+        position: &position,
+    });
+    assert!(boat_placement_actors(&world).is_empty());
+    assert_eq!(current.get_stack(0).uid, replacement.uid);
+    assert_eq!(current.get_stack(0).item_count, 1);
+    if replace_dispenser {
+        assert_eq!(dispenser.get_stack(0).uid, original_uid);
+        assert_eq!(dispenser.get_stack(0).item_count, 1);
+    }
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn concurrent_boat_placements_commit_only_one_overlapping_hull() -> TestResult {
+    use crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent;
+    use pumpkin_data::{item::Item, item_stack::ItemStack, statistic::StatisticCategory};
+    use pumpkin_util::Hand;
+
+    struct WaitForBothPlacements(tokio::sync::Barrier);
+    impl EventHandler<EntitySpawnEvent> for WaitForBothPlacements {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntitySpawnEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.entity_type == EntityType::OAK_BOAT.id.to_string() {
+                    assert!(
+                        tokio::time::timeout(std::time::Duration::from_secs(5), self.0.wait())
+                            .await
+                            .is_ok(),
+                        "Both placement attempts should reach the spawn event"
+                    );
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (first, _first_peer) = java_rider(&server, &world, "Notch")?;
+    let (second, _second_peer) = java_rider(&server, &world, "jeb_")?;
+    boat_placement_platform(&world);
+    first.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    second
+        .get_entity()
+        .set_pos(BOAT_PLACEMENT_OFFSET.add_raw(-0.75, 0.0, 0.0));
+    server.plugin_manager.register::<EntitySpawnEvent, _>(
+        Arc::new(WaitForBothPlacements(tokio::sync::Barrier::new(2))),
+        EventPriority::Normal,
+        true,
+    );
+    let place = |player: Arc<crate::entity::player::Player>| {
+        let stack = ItemStack::new(1, &Item::OAK_BOAT);
+        player.inventory().set_held_item(stack.clone());
+        let server = server.clone();
+        tokio::task::spawn_blocking(move || {
+            server
+                .item_registry
+                .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
+        })
+    };
+    let first_request = place(first.clone());
+    let second_request = place(second.clone());
+    first_request.await?;
+    second_request.await?;
+
+    assert_eq!(boat_placement_actors(&world).len(), 1);
+    let mut outcomes = [first, second].map(|player| {
+        (
+            player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
+            player.inventory().held_item().item_count,
+        )
+    });
+    outcomes.sort_unstable();
+    assert_eq!(outcomes, [(0, 1), (1, 0)]);
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bedrock_boat_placement_uses_the_selected_hotbar_slot() -> TestResult {
+    use crate::plugin::api::events::player::item_held::PlayerItemHeldEvent;
+    use pumpkin_data::{item::Item, item_stack::ItemStack, statistic::StatisticCategory};
+    use std::sync::atomic::AtomicUsize;
+
+    struct KeepSelected;
+    impl EventHandler<PlayerItemHeldEvent> for KeepSelected {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerItemHeldEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move { event.cancelled = true })
+        }
+    }
+    struct MoveOnUse {
+        enabled: AtomicBool,
+        calls: AtomicUsize,
+    }
+    impl EventHandler<PlayerInteractEvent> for MoveOnUse {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerInteractEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                self.calls.fetch_add(1, Ordering::Relaxed);
+                if self.enabled.swap(false, Ordering::Relaxed) {
+                    let inventory = event.player.inventory();
+                    let same_boat = inventory.held_item();
+                    inventory.set_slot(0, ItemStack::EMPTY.clone());
+                    inventory.set_slot(2, same_boat);
+                    inventory.set_selected_slot(2);
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    boat_placement_platform(&world);
+    let (player, mut packets) = bedrock_rider(&server, &world, "jeb_").await?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    player.get_entity().set_rotation(0.0, 45.0);
+    let boat = ItemStack::new(1, &Item::OAK_BOAT);
+    player.inventory().set_slot(0, boat.clone());
+    let other = boat.copy_with_count(1);
+    player.inventory().set_slot(1, other.clone());
+    server.plugin_manager.register::<PlayerItemHeldEvent, _>(
+        Arc::new(KeepSelected),
+        EventPriority::Normal,
+        true,
+    );
+    let client = player.client.bedrock().ok_or("Bedrock player")?;
+    client.select_hotbar_slot(&server, &player, 1, 0);
+    assert_eq!(player.inventory().get_selected_slot(), 0);
+    let observer = Arc::new(MoveOnUse {
+        enabled: AtomicBool::new(false),
+        calls: AtomicUsize::new(0),
+    });
+    server.plugin_manager.register::<PlayerInteractEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+
+    bedrock_boat_click(&player, 1, &other)?;
+    assert_eq!(observer.calls.load(Ordering::Relaxed), 0);
+    assert!(boat_placement_actors(&world).is_empty());
+    assert_eq!(player.inventory().get_slot(0).uid, boat.uid);
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
+        0
+    );
+    observer.enabled.store(true, Ordering::Relaxed);
+    bedrock_boat_click(&player, 0, &boat)?;
+    assert_eq!(observer.calls.load(Ordering::Relaxed), 1);
+    assert_eq!(player.inventory().get_selected_slot(), 2);
+    assert_eq!(player.inventory().held_item().uid, boat.uid);
+    assert!(boat_placement_actors(&world).is_empty());
+
+    let mut packet = bedrock_use_item_transaction(2, &boat, 1);
+    packet.legacy_request_id = pumpkin_protocol::codec::var_int::VarInt(-5);
+    client.handle_inventory_action(&player, packet);
+    assert_eq!(bedrock_boat_legacy_responses(&mut packets)?, [(-5, 0)]);
+    assert_eq!(boat_placement_actors(&world).len(), 1);
+    assert!(player.inventory().held_item().is_empty());
+    assert_eq!(player.inventory().get_slot(1).uid, other.uid);
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
+        1
+    );
+    client.clear_player();
+    client.close().await;
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bedrock_boat_placement_rejects_a_different_boat_in_the_same_slot() -> TestResult {
+    use pumpkin_data::{item::Item, item_stack::ItemStack, statistic::StatisticCategory};
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    boat_placement_platform(&world);
+    let (player, _packets) = bedrock_rider(&server, &world, "jeb_").await?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    player.get_entity().set_rotation(0.0, 45.0);
+    let old = ItemStack::new(1, &Item::OAK_BOAT);
+    let chest_boat = ItemStack::new(1, &Item::OAK_CHEST_BOAT);
+    player.inventory().set_held_item(old.clone());
+    player.inventory().set_held_item(chest_boat.clone());
+    let placed = || {
+        world
+            .entities
+            .load()
+            .iter()
+            .filter(|entity| {
+                let kind = entity.get_entity().entity_type;
+                kind == &EntityType::OAK_CHEST_BOAT || kind == &EntityType::OAK_BOAT
+            })
+            .count()
+    };
+    bedrock_boat_click(&player, 0, &old)?;
+    assert_eq!(placed(), 0);
+    assert_eq!(player.inventory().held_item().uid, chest_boat.uid);
+    bedrock_boat_interaction(&player, 0, &old, 0)?;
+    assert_eq!(placed(), 0);
+    assert_eq!(player.inventory().held_item().item, &Item::OAK_CHEST_BOAT);
+    assert_eq!(player.inventory().held_item().uid, chest_boat.uid);
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
+        0
+    );
+    bedrock_boat_click(&player, 0, &chest_boat)?;
+    assert_eq!(placed(), 1);
+    assert!(player.inventory().held_item().is_empty());
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_CHEST_BOAT.id)),
+        1
+    );
+    let client = player.client.bedrock().ok_or("Bedrock player")?;
+    client.clear_player();
+    client.close().await;
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bedrock_boat_block_click_debits_the_original_slot() -> TestResult {
+    use crate::{
+        block::entities::decorated_pot::DecoratedPotBlockEntity,
+        plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent,
+    };
+    use pumpkin_data::{item::Item, item_stack::ItemStack, statistic::StatisticCategory};
+    use pumpkin_inventory::player::player_inventory::PlayerInventory;
+    use pumpkin_protocol::bedrock::{
+        network_item::NetworkItemDescriptor, server::inventory_transaction::InventoryAction,
+    };
+    use pumpkin_util::math::position::BlockPos;
+
+    struct MoveOriginalAndSelectOtherSlot;
+    impl EventHandler<PlayerStatisticIncrementEvent> for MoveOriginalAndSelectOtherSlot {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerStatisticIncrementEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                let inventory = event.player.inventory();
+                let original = inventory.get_slot(1);
+                inventory.set_slot(1, ItemStack::EMPTY.clone());
+                inventory.set_slot(PlayerInventory::OFF_HAND_SLOT, original);
+                inventory.set_selected_slot(0);
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let chunk = boat_placement_platform(&world);
+    chunk.set_block_absolute_y(8, 63, 8, Block::DECORATED_POT.default_state.id);
+    let pot = Arc::new(DecoratedPotBlockEntity::new(BlockPos::new(8, 63, 8)));
+    world.add_block_entity(pot.clone());
+    let (player, mut packets) = bedrock_rider(&server, &world, "jeb_").await?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let first = ItemStack::new(1, &Item::OAK_BOAT);
+    let second = first.copy_with_count(1);
+    let inventory = player.inventory();
+    inventory.set_slot(0, first.clone());
+    inventory.set_slot(1, second.clone());
+    inventory.set_selected_slot(1);
+
+    let client = player.client.bedrock().ok_or("Bedrock player")?;
+    let predicted_deposit = |slot, stack: &ItemStack, request| {
+        let mut packet = bedrock_use_item_transaction(slot, stack, 0);
+        packet.legacy_request_id = pumpkin_protocol::codec::var_int::VarInt(request);
+        packet.actions.push(InventoryAction {
+            source_type: 0,
+            window_id: Some(0),
+            source_flags: None,
+            inventory_slot: u32::try_from(slot)?,
+            old_item: NetworkItemDescriptor::from(stack),
+            new_item: NetworkItemDescriptor::from(ItemStack::EMPTY),
+        });
+        client.handle_inventory_action(&player, packet);
+        Ok::<_, Box<dyn std::error::Error>>(())
+    };
+    predicted_deposit(0, &first, -1)?;
+    assert!(pot.get_item().is_none_or(|stack| stack.is_empty()));
+    assert_eq!(inventory.get_slot(0).uid, first.uid);
+    assert_eq!(inventory.get_slot(1).uid, second.uid);
+    assert!(boat_placement_actors(&world).is_empty());
+
+    server
+        .plugin_manager
+        .register::<PlayerStatisticIncrementEvent, _>(
+            Arc::new(MoveOriginalAndSelectOtherSlot),
+            EventPriority::Normal,
+            true,
+        );
+    predicted_deposit(1, &second, -3)?;
+    assert_eq!(inventory.get_selected_slot(), 0);
+    assert_eq!(inventory.get_slot(0).uid, first.uid);
+    assert!(inventory.get_slot(1).is_empty());
+    assert!(
+        inventory
+            .get_slot(PlayerInventory::OFF_HAND_SLOT)
+            .is_empty()
+    );
+    let contained = pot.get_item().ok_or("The pot should contain the boat")?;
+    assert_eq!(contained.item, &Item::OAK_BOAT);
+    assert_eq!(contained.item_count, 1);
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
+        1,
+    );
+    assert_eq!(
+        bedrock_boat_legacy_responses(&mut packets)?,
+        [(-1, 1), (-3, 0)]
+    );
+    client.clear_player();
+    client.close().await;
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "The lever, item and pot share one addressed offhand."
+)]
+async fn bedrock_boat_in_main_hand_preserves_offhand_block_and_item_actions() -> TestResult {
+    use crate::{
+        block::entities::decorated_pot::DecoratedPotBlockEntity,
+        plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent,
+    };
+    use pumpkin_data::{block_properties::LeverLikeProperties, item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::player::player_inventory::PlayerInventory;
+    use pumpkin_protocol::bedrock::server::inventory_transaction::{HandSlot, TransactionData};
+
+    struct MoveOffhandAtInsertion;
+    impl EventHandler<PlayerStatisticIncrementEvent> for MoveOffhandAtInsertion {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerStatisticIncrementEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                let inventory = event.player.inventory();
+                let offhand = inventory.get_slot(PlayerInventory::OFF_HAND_SLOT);
+                inventory.set_slot(PlayerInventory::OFF_HAND_SLOT, ItemStack::EMPTY.clone());
+                inventory.set_slot(2, offhand);
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let chunk = boat_placement_platform(&world);
+    chunk.set_block_absolute_y(8, 63, 8, Block::LEVER.default_state.id);
+    let (player, _packets) = bedrock_rider(&server, &world, "jeb_").await?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let boat = ItemStack::new(1, &Item::OAK_BOAT);
+    player.inventory().set_held_item(boat.clone());
+
+    let mut packet = bedrock_use_item_transaction(0, ItemStack::EMPTY, 0);
+    let TransactionData::UseItem(data) = &mut packet.transaction_data else {
+        return Err("Expected an item-use transaction".into());
+    };
+    data.hand = HandSlot::Offhand;
+    let position = data.block_position;
+    let powered =
+        || LeverLikeProperties::from_state_id(world.get_block_state_id(&position)).powered;
+    let client = player.client.bedrock().ok_or("Bedrock player")?;
+    assert!(!powered());
+    client.handle_inventory_action(&player, packet);
+    assert!(powered());
+    assert_eq!(player.inventory().held_item().uid, boat.uid);
+
+    chunk.set_block_absolute_y(8, 63, 8, Block::STONE.default_state.id);
+    let rocket = ItemStack::new(1, &Item::FIREWORK_ROCKET);
+    player
+        .inventory()
+        .set_slot(PlayerInventory::OFF_HAND_SLOT, rocket.clone());
+    let mut packet = bedrock_use_item_transaction(0, &rocket, 0);
+    if let TransactionData::UseItem(data) = &mut packet.transaction_data {
+        data.hand = HandSlot::Offhand;
+    }
+    client.handle_inventory_action(&player, packet);
+    assert_eq!(player.inventory().held_item().uid, boat.uid);
+    assert!(
         player
             .inventory()
-            .set_held_item(ItemStack::new(1, &Item::SHIELD));
-        let observer = Arc::new(ReplacePlayerItemUse {
-            player: player.clone(),
-            trigger: GameEvent::ItemInteractStart,
-            calls: std::sync::atomic::AtomicU32::new(0),
-            replace,
-        });
-        server.plugin_manager.register::<GenericGameEvent, _>(
-            observer.clone(),
+            .get_slot(PlayerInventory::OFF_HAND_SLOT)
+            .is_empty()
+    );
+    assert_eq!(
+        world
+            .entities
+            .load()
+            .iter()
+            .filter(|entity| entity.get_entity().entity_type == &EntityType::FIREWORK_ROCKET)
+            .count(),
+        1
+    );
+    chunk.set_block_absolute_y(8, 63, 8, Block::DECORATED_POT.default_state.id);
+    let pot = Arc::new(DecoratedPotBlockEntity::new(position));
+    world.add_block_entity(pot.clone());
+    server
+        .plugin_manager
+        .register::<PlayerStatisticIncrementEvent, _>(
+            Arc::new(MoveOffhandAtInsertion),
             EventPriority::Normal,
             true,
         );
-        let client = player.client.java().ok_or("Java client")?;
-        for sequence in 1..=2 {
-            client.handle_use_item(
-                &player,
-                &SUseItem {
-                    hand: 0.into(),
-                    sequence: sequence.into(),
-                    yaw: 0.0,
-                    pitch: 0.0,
-                },
-                &server,
-            );
+    player
+        .inventory()
+        .set_slot(PlayerInventory::OFF_HAND_SLOT, rocket.clone());
+    let mut deposit = bedrock_use_item_transaction(0, &rocket, 0);
+    if let TransactionData::UseItem(data) = &mut deposit.transaction_data {
+        data.hand = HandSlot::Offhand;
+        data.item_in_hand_network_id = Some(rocket.uid);
+    }
+    client.handle_inventory_action(&player, deposit);
+    assert_eq!(player.inventory().held_item().uid, boat.uid);
+    assert!(player.inventory().get_slot(2).is_empty());
+    assert!(
+        player
+            .inventory()
+            .get_slot(PlayerInventory::OFF_HAND_SLOT)
+            .is_empty()
+    );
+    assert!(
+        pot.get_item().is_some_and(
+            |stack| stack.get_item() == &Item::FIREWORK_ROCKET && stack.item_count == 1
+        )
+    );
+    client.clear_player();
+    client.close().await;
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_pot_transfer_rejects_a_retiring_or_detached_pot() -> TestResult {
+    use crate::{
+        block::entities::{BlockEntity, decorated_pot::DecoratedPotBlockEntity},
+        entity::player::Player,
+        plugin::api::events::entity::entity_spawn::EntitySpawnEvent,
+    };
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::Inventory;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_world::world::BlockFlags;
+
+    fn transfer(world: &World, pot: &DecoratedPotBlockEntity, player: &Player) -> bool {
+        let source = player.inventory().get_slot(0);
+        let mut awarded = source.copy_with_count(1);
+        pot.try_insert_item_from_slot(world, &mut awarded, 1, || {
+            player
+                .inventory()
+                .replace_slot_if_same(0, &source, ItemStack::EMPTY.clone())
+        })
+        .is_some()
+    }
+
+    struct TransferDuringScatter {
+        pot: Arc<DecoratedPotBlockEntity>,
+        chunk: Arc<ChunkData>,
+        player: Arc<Player>,
+        called: AtomicBool,
+    }
+
+    impl EventHandler<EntitySpawnEvent> for TransferDuringScatter {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut EntitySpawnEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.entity_type == EntityType::ITEM.id.to_string() {
+                    self.called.store(true, Ordering::Relaxed);
+                    let current: Arc<dyn BlockEntity> = self.pot.clone();
+                    let mapped = event.world.get_block_entity(&self.pot.position);
+                    assert!(mapped.is_some_and(|entity| Arc::ptr_eq(&current, &entity)));
+                    assert!(self.pot.get_item().is_none());
+                    // A second block write can restore the state before the old entity is detached.
+                    let state = Block::DECORATED_POT.default_state.id;
+                    self.chunk.set_block_absolute_y(8, 63, 8, state);
+                    assert!(!transfer(&event.world, &self.pot, &self.player));
+                }
+            })
         }
-        assert_eq!(
-            observer.calls.load(Ordering::Relaxed),
-            if replace { 2 } else { 1 }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let chunk = boat_placement_platform(&world);
+    let position = BlockPos::new(8, 63, 8);
+    chunk.set_block_absolute_y(8, 63, 8, Block::DECORATED_POT.default_state.id);
+    let pot = Arc::new(DecoratedPotBlockEntity::new(position));
+    pot.set_stack(0, ItemStack::new(1, &Item::STICK));
+    world.add_block_entity(pot.clone());
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    let boat = ItemStack::new(1, &Item::OAK_BOAT);
+    player.inventory().set_held_item(boat.clone());
+    let observer = Arc::new(TransferDuringScatter {
+        pot: pot.clone(),
+        chunk,
+        player: player.clone(),
+        called: AtomicBool::new(false),
+    });
+    server.plugin_manager.register::<EntitySpawnEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    world.set_block_state(
+        &position,
+        Block::AIR.default_state.id,
+        BlockFlags::UPDATE_KNOWN_SHAPE,
+    );
+    assert!(observer.called.load(Ordering::Relaxed));
+    assert!(pot.get_item().is_none());
+    assert_eq!(player.inventory().held_item().uid, boat.uid);
+
+    let detached = Arc::new(DecoratedPotBlockEntity::new(position));
+    world.add_block_entity(detached.clone());
+    let replacement = Arc::new(DecoratedPotBlockEntity::new(position));
+    world.add_block_entity(replacement.clone());
+    assert!(!transfer(&world, &detached, &player));
+    assert_eq!(player.inventory().held_item().uid, boat.uid);
+    assert!(detached.get_item().is_none());
+    assert!(replacement.get_item().is_none());
+    assert!(transfer(&world, &replacement, &player));
+    assert!(player.inventory().held_item().is_empty());
+    assert!(
+        replacement
+            .get_item()
+            .is_some_and(|item| item.item == &Item::OAK_BOAT && item.item_count == 1)
+    );
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bedrock_boat_pot_uses_the_live_hand_and_leaves_canonical_air() -> TestResult {
+    use crate::block::entities::decorated_pot::DecoratedPotBlockEntity;
+    use pumpkin_data::{block_properties::LeverLikeProperties, item::Item, item_stack::ItemStack};
+    use pumpkin_protocol::bedrock::server::inventory_transaction::TransactionData;
+    use pumpkin_util::math::position::BlockPos;
+
+    struct VetoPot(AtomicBool);
+    impl EventHandler<PlayerInteractEvent> for VetoPot {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerInteractEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                event.cancelled = self.0.load(Ordering::Relaxed);
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let chunk = boat_placement_platform(&world);
+    let pot_pos = BlockPos::new(8, 63, 8);
+    let lever = BlockPos::new(9, 63, 8);
+    chunk.set_block_absolute_y(8, 63, 8, Block::DECORATED_POT.default_state.id);
+    chunk.set_block_absolute_y(9, 63, 8, Block::LEVER.default_state.id);
+    let pot = Arc::new(DecoratedPotBlockEntity::new(pot_pos));
+    world.add_block_entity(pot.clone());
+    let (player, _packets) = bedrock_rider(&server, &world, "jeb_").await?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let client = player.client.bedrock().ok_or("Bedrock client")?;
+    let earlier = ItemStack::new(1, &Item::OAK_BOAT);
+    let current = earlier.copy_with_count(1);
+    player.inventory().set_held_item(current.clone());
+    let veto = Arc::new(VetoPot(AtomicBool::new(false)));
+    server.plugin_manager.register::<PlayerInteractEvent, _>(
+        veto.clone(),
+        EventPriority::Normal,
+        true,
+    );
+
+    let deposit = |id| {
+        let mut packet = bedrock_use_item_transaction(0, &current, 0);
+        if let TransactionData::UseItem(data) = &mut packet.transaction_data {
+            data.item_in_hand_network_id = Some(id);
+        }
+        client.handle_inventory_action(&player, packet);
+    };
+    deposit(earlier.uid);
+    assert!(pot.get_item().is_none_or(|item| item.is_empty()));
+    veto.0.store(true, Ordering::Relaxed);
+    deposit(current.uid);
+    assert!(pot.get_item().is_none_or(|item| item.is_empty()));
+    veto.0.store(false, Ordering::Relaxed);
+    player
+        .get_entity()
+        .set_pos(BOAT_PLACEMENT_OFFSET.add_raw(20.0, 0.0, 0.0));
+    deposit(current.uid);
+    assert!(pot.get_item().is_none_or(|item| item.is_empty()));
+    assert_eq!(player.inventory().held_item().uid, current.uid);
+
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    deposit(current.uid);
+    assert!(
+        pot.get_item()
+            .is_some_and(|item| item.get_item() == &Item::OAK_BOAT)
+    );
+    assert_eq!(player.inventory().held_item().item, &Item::AIR);
+    let mut packet = bedrock_use_item_transaction(0, ItemStack::EMPTY, 0);
+    if let TransactionData::UseItem(data) = &mut packet.transaction_data {
+        data.block_position = lever;
+    }
+    client.handle_inventory_action(&player, packet);
+    assert!(LeverLikeProperties::from_state_id(world.get_block_state_id(&lever)).powered);
+    client.clear_player();
+    client.close().await;
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn java_boat_shelf_click_rechecks_the_addressed_hand_after_interaction() -> TestResult {
+    use crate::block::entities::shelf::ShelfBlockEntity;
+    use pumpkin_data::{
+        block_properties::{AcaciaShelfLikeProperties, HorizontalFacing},
+        item::Item,
+        item_stack::ItemStack,
+    };
+    use pumpkin_inventory::inventory::Inventory;
+    use pumpkin_protocol::java::server::play::SUseItemOn;
+    use pumpkin_util::math::position::BlockPos;
+
+    struct SelectOtherSlot(AtomicBool);
+    impl EventHandler<PlayerInteractEvent> for SelectOtherSlot {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerInteractEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if self.0.swap(false, Ordering::Relaxed) {
+                    event.player.inventory().set_selected_slot(1);
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let chunk = boat_placement_platform(&world);
+    let position = BlockPos::new(8, 63, 8);
+    let mut properties = AcaciaShelfLikeProperties::default(&Block::OAK_SHELF);
+    properties.facing = HorizontalFacing::North;
+    chunk.set_block_absolute_y(8, 63, 8, properties.to_state_id(&Block::OAK_SHELF));
+    let shelf = Arc::new(ShelfBlockEntity::new(position));
+    world.add_block_entity(shelf.clone());
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let client = player.client.java().ok_or("Java player")?;
+    let boat = ItemStack::new(1, &Item::OAK_BOAT);
+    let stick = ItemStack::new(1, &Item::STICK);
+    player.inventory().set_slot(0, boat.clone());
+    player.inventory().set_slot(1, stick.clone());
+    server.plugin_manager.register::<PlayerInteractEvent, _>(
+        Arc::new(SelectOtherSlot(AtomicBool::new(true))),
+        EventPriority::Normal,
+        true,
+    );
+    let click = |sequence| {
+        client.handle_use_item_on(
+            &player,
+            &SUseItemOn {
+                hand: 0.into(),
+                position,
+                face: 2.into(),
+                cursor_pos: Vector3::new(0.5, 0.5, 0.0),
+                inside_block: false,
+                is_against_world_border: false,
+                sequence,
+            },
+            &server,
+        )
+    };
+
+    click(1.into())?;
+    assert!(shelf.get_stack(1).is_empty());
+    assert_eq!(player.inventory().get_slot(0).uid, boat.uid);
+    assert_eq!(player.inventory().get_slot(1).uid, stick.uid);
+    player.inventory().set_selected_slot(0);
+    click(2.into())?;
+    assert_eq!(shelf.get_stack(1).uid, boat.uid);
+    assert!(player.inventory().get_slot(0).is_empty());
+    assert_eq!(player.inventory().get_slot(1).uid, stick.uid);
+    world.level.shutdown().await;
+    Ok(())
+}
+
+fn bedrock_boat_click(
+    player: &Arc<crate::entity::player::Player>,
+    slot: i32,
+    stack: &pumpkin_data::item_stack::ItemStack,
+) -> TestResult {
+    bedrock_boat_interaction(player, slot, stack, 1)
+}
+
+fn bedrock_boat_interaction(
+    player: &Arc<crate::entity::player::Player>,
+    slot: i32,
+    stack: &pumpkin_data::item_stack::ItemStack,
+    action: i32,
+) -> TestResult {
+    let client = player.client.bedrock().ok_or("Bedrock player")?;
+    client.handle_inventory_action(player, bedrock_use_item_transaction(slot, stack, action));
+    Ok(())
+}
+
+pub(super) fn bedrock_use_item_transaction(
+    slot: i32,
+    stack: &pumpkin_data::item_stack::ItemStack,
+    action: i32,
+) -> pumpkin_protocol::bedrock::server::inventory_transaction::SInventoryTransaction {
+    use pumpkin_protocol::bedrock::{
+        network_item::NetworkItemDescriptor,
+        server::inventory_transaction::{
+            HandSlot, SInventoryTransaction, TransactionData, UseItemTransactionData,
+        },
+    };
+    use pumpkin_util::math::position::BlockPos;
+
+    SInventoryTransaction {
+        legacy_request_id: 0.into(),
+        legacy_set_item_slots: Vec::new(),
+        has_value: false,
+        actions: Vec::new(),
+        transaction_type: 2u32.into(),
+        transaction_data: TransactionData::UseItem(UseItemTransactionData {
+            action_type: action.into(),
+            trigger_type: 0,
+            block_position: BlockPos::new(8, 63, 8),
+            block_face: 1,
+            hot_bar_slot: slot.into(),
+            hand: HandSlot::Mainhand,
+            item_in_hand: NetworkItemDescriptor::from(stack),
+            item_in_hand_network_id: None,
+            player_position: BOAT_PLACEMENT_OFFSET.to_f32_lossy(),
+            click_position: Vector3::default(),
+            block_runtime_id: 0u32.into(),
+            client_prediction: 0,
+            client_cooldown_state: 0,
+        }),
+    }
+}
+
+fn bedrock_boat_legacy_responses(
+    packets: &mut super::vehicle_tests::BedrockQueue,
+) -> Result<Vec<(i32, u8)>, Box<dyn std::error::Error>> {
+    use pumpkin_protocol::{
+        Packet,
+        bedrock::client::item_stack_response::CItemStackResponse,
+        codec::{var_int::VarInt, var_uint::VarUInt},
+        serial::PacketRead,
+    };
+    let mut responses = Vec::new();
+    while let Ok(packet) = packets.try_recv() {
+        if let Some((id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data)
+            && i32::from(id) == CItemStackResponse::PACKET_ID
+        {
+            let mut payload = payload.as_ref();
+            assert_eq!(VarUInt::read(&mut payload)?.0, 1);
+            let status = u8::read(&mut payload)?;
+            responses.push((VarInt::read(&mut payload)?.0, status));
+        }
+    }
+    Ok(responses)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_requires_the_survival_debit_after_the_spawn_observer() -> TestResult {
+    use crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent;
+    use pumpkin_data::{
+        data_component_impl::{UseCooldownImpl, UseRemainderImpl},
+        item::Item,
+        item_stack::ItemStack,
+        statistic::StatisticCategory,
+    };
+    use pumpkin_inventory::player::player_inventory::PlayerInventory;
+    use pumpkin_util::Hand;
+
+    struct InvalidatePlacement {
+        player: Arc<crate::entity::player::Player>,
+        obstruction: Option<Arc<ChunkData>>,
+        called: AtomicBool,
+    }
+    impl EventHandler<EntitySpawnEvent> for InvalidatePlacement {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntitySpawnEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.entity_type == EntityType::OAK_BOAT.id.to_string() {
+                    if let Some(chunk) = &self.obstruction {
+                        chunk.set_block_absolute_y(8, 64, 8, Block::OAK_FENCE.default_state.id);
+                    } else {
+                        let stack = self.player.inventory().held_item();
+                        self.player
+                            .inventory()
+                            .set_held_item(ItemStack::EMPTY.clone());
+                        self.player.inventory().set_stack_in_hand(Hand::Left, stack);
+                    }
+                    self.called.store(true, Ordering::Relaxed);
+                }
+            })
+        }
+    }
+
+    for obstructed in [false, true] {
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let chunk = boat_placement_platform(&world);
+        let (player, _peer) = java_rider(&server, &world, "Notch")?;
+        player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+        let mut stack = ItemStack::new(1, &Item::OAK_BOAT);
+        stack.set_data_component(UseRemainderImpl {
+            remainder: Some(ItemStack::new(1, &Item::STICK)),
+        });
+        stack.set_data_component(UseCooldownImpl {
+            seconds: 5.0,
+            cooldown_group: Some("minecraft:test_boat".to_owned()),
+        });
+        player.inventory().set_held_item(stack.clone());
+        let listener = Arc::new(InvalidatePlacement {
+            player: player.clone(),
+            obstruction: obstructed.then_some(chunk),
+            called: AtomicBool::new(false),
+        });
+        server.plugin_manager.register::<EntitySpawnEvent, _>(
+            listener.clone(),
+            EventPriority::Normal,
+            true,
         );
-        if replace {
-            observer.assert_successor();
-        }
+        server
+            .item_registry
+            .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
+        assert!(listener.called.load(Ordering::Relaxed));
+        let survivor = if obstructed {
+            assert!(player.inventory().get_stack_in_hand(Hand::Left).is_empty());
+            player.inventory().held_item()
+        } else {
+            assert!(player.inventory().held_item().is_empty());
+            player.inventory().get_stack_in_hand(Hand::Left)
+        };
+        assert_eq!(survivor.uid, stack.uid);
+        assert_eq!(survivor.item_count, 1);
+        assert!(boat_placement_actors(&world).is_empty());
+        assert_eq!(
+            player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
+            0
+        );
+        assert!(!player.is_on_cooldown("minecraft:test_boat"));
+        assert!(
+            (0..PlayerInventory::MAIN_SIZE)
+                .all(|slot| player.inventory().get_slot(slot).item != &Item::STICK)
+        );
+        assert_eq!(dropped_boat_remainders(&world), 0);
         world.level.shutdown().await;
     }
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn release_packets_keep_the_use_started_by_the_crossbow_finish_listener() -> TestResult {
-    use pumpkin_data::{item::Item, item_stack::ItemStack};
-    use pumpkin_protocol::{
-        bedrock::server::inventory_transaction::{
-            HandSlot, ReleaseItemTransactionData, SInventoryTransaction, TransactionData,
-        },
-        java::server::play::{SPlayerAction, Status},
+async fn boat_placement_rejects_a_replaced_stack_of_the_same_item() -> TestResult {
+    use pumpkin_data::{
+        data_component_impl::UseCooldownImpl, item::Item, item_stack::ItemStack,
+        statistic::StatisticCategory,
     };
-    use pumpkin_util::{Hand, math::position::BlockPos};
+    use pumpkin_util::Hand;
 
-    for bedrock in [false, true] {
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    boat_placement_platform(&world);
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let mut captured = ItemStack::new(1, &Item::OAK_BOAT);
+    captured.set_data_component(UseCooldownImpl {
+        seconds: 5.0,
+        cooldown_group: Some("minecraft:test_boat".to_owned()),
+    });
+    player.inventory().set_held_item(captured.clone());
+    let replacement = captured.copy_with_count(1);
+    assert!(replacement.are_equal(&captured));
+    assert_ne!(replacement.uid, captured.uid);
+    player.inventory().set_held_item(replacement.clone());
+
+    let place = |stack: &ItemStack| {
+        server
+            .item_registry
+            .on_use_with_rotation(stack, &player, 0.0, 45.0, Hand::Right);
+    };
+    place(&captured);
+    assert!(boat_placement_actors(&world).is_empty());
+    assert_eq!(player.inventory().held_item().uid, replacement.uid);
+    let uses = || player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id));
+    assert_eq!(uses(), 0);
+    assert!(!player.is_on_cooldown("minecraft:test_boat"));
+
+    place(&replacement);
+    assert_eq!(boat_placement_actors(&world).len(), 1);
+    assert!(player.inventory().held_item().is_empty());
+    assert_eq!(uses(), 1);
+    assert!(player.is_on_cooldown("minecraft:test_boat"));
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_delivers_earned_remainder_after_stat_observer_moves_the_stack() -> TestResult
+{
+    use crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent;
+    use pumpkin_data::{
+        data_component_impl::{MaxStackSizeImpl, UseRemainderImpl},
+        item::Item,
+        item_stack::ItemStack,
+        statistic::StatisticCategory,
+    };
+    use pumpkin_inventory::player::player_inventory::PlayerInventory;
+    use pumpkin_util::Hand;
+
+    struct MoveDebitedStack {
+        remaining_boats: u8,
+        called: AtomicBool,
+    }
+    impl EventHandler<PlayerStatisticIncrementEvent> for MoveDebitedStack {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PlayerStatisticIncrementEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                let inventory = event.player.inventory();
+                let reduced = inventory.held_item();
+                if !self.called.swap(true, Ordering::Relaxed) {
+                    assert_eq!(reduced.item_count, self.remaining_boats);
+                    if self.remaining_boats == 0 {
+                        assert!(reduced.is_empty());
+                        inventory.set_slot(1, ItemStack::new(1, &Item::DIRT));
+                    } else {
+                        assert_eq!(reduced.item, &Item::OAK_BOAT);
+                        inventory.set_stack_in_hand(Hand::Left, reduced);
+                    }
+                    inventory.set_held_item(ItemStack::new(1, &Item::DIRT));
+                }
+            })
+        }
+    }
+
+    for count in [2, 1] {
         let folder = tempfile::tempdir()?;
         let (server, world) = vehicle_world(&folder).await?;
-        let (player, _java_peer, _bedrock_queue) = if bedrock {
-            let (player, queue) = bedrock_rider(&server, &world, "jeb_").await?;
-            (player, None, Some(queue))
-        } else {
-            let (player, peer) = java_equipment_watcher(&server, &world)?;
-            (player, Some(peer), None)
-        };
-        let crossbow = ItemStack::new(1, &Item::CROSSBOW);
-        player.inventory().set_held_item(crossbow.clone());
-        player
-            .living_entity
-            .set_active_hand(Hand::Right, crossbow, 72_000);
-        let observer = Arc::new(ReplacePlayerItemUse {
-            player: player.clone(),
-            trigger: GameEvent::ItemInteractFinish,
-            calls: std::sync::atomic::AtomicU32::new(0),
-            replace: true,
+        boat_placement_platform(&world);
+        let (player, _peer) = java_rider(&server, &world, "Notch")?;
+        player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+        let mut stack = ItemStack::new(count, &Item::OAK_BOAT);
+        stack.set_data_component(MaxStackSizeImpl { size: 2 });
+        stack.set_data_component(UseRemainderImpl {
+            remainder: Some(ItemStack::new(1, &Item::STICK)),
         });
-        server.plugin_manager.register::<GenericGameEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
-        if let Some(client) = player.client.java() {
-            client.handle_player_action(
-                &player,
-                &SPlayerAction {
-                    status: (Status::ReleaseItemInUse as i32).into(),
-                    position: BlockPos::new(0, 0, 0),
-                    face: 0,
-                    sequence: 0.into(),
-                },
-                &server,
+        player.inventory().set_held_item(stack.clone());
+        let listener = Arc::new(MoveDebitedStack {
+            remaining_boats: count - 1,
+            called: AtomicBool::new(false),
+        });
+        server
+            .plugin_manager
+            .register::<PlayerStatisticIncrementEvent, _>(
+                listener.clone(),
+                EventPriority::Normal,
+                true,
             );
+        server
+            .item_registry
+            .on_use_with_rotation(&stack, &player, 0.0, 45.0, Hand::Right);
+        assert!(listener.called.load(Ordering::Relaxed));
+        assert_eq!(player.inventory().held_item().item, &Item::DIRT);
+        let remaining = player.inventory().get_stack_in_hand(Hand::Left);
+        if count == 1 {
+            assert!(remaining.is_empty());
+            assert_eq!(player.inventory().get_slot(1).item, &Item::DIRT);
         } else {
-            let client = player.client.bedrock().ok_or("Bedrock client")?;
-            client.handle_inventory_action(
-                &player,
-                SInventoryTransaction {
-                    legacy_request_id: 0.into(),
-                    legacy_set_item_slots: Vec::new(),
-                    has_value: false,
-                    actions: Vec::new(),
-                    transaction_type: 4u32.into(),
-                    transaction_data: TransactionData::ReleaseItem(ReleaseItemTransactionData {
-                        action_type: 0.into(),
-                        hot_bar_slot: 0.into(),
-                        item_in_hand:
-                            pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor::default(
-                            ),
-                        head_position: Vector3::default(),
-                        hand: HandSlot::Mainhand,
-                    }),
-                },
-            );
+            assert_eq!(remaining.item, &Item::OAK_BOAT);
+            assert_eq!(remaining.item_count, 1);
         }
-        assert_eq!(observer.calls.load(Ordering::Relaxed), 1);
-        observer.assert_successor();
+        assert_eq!(boat_placement_actors(&world).len(), 1);
+        assert_eq!(
+            (0..PlayerInventory::MAIN_SIZE)
+                .map(|slot| player.inventory().get_slot(slot))
+                .filter(|stack| stack.item == &Item::STICK)
+                .map(|stack| usize::from(stack.item_count))
+                .sum::<usize>(),
+            1,
+        );
+        assert_eq!(dropped_boat_remainders(&world), 0);
+        assert_eq!(
+            player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
+            1
+        );
         world.level.shutdown().await;
     }
     Ok(())
 }
 
-struct ReplaceBedrockAttribute {
-    pig: Arc<PigEntity>,
+fn dropped_boat_remainders(world: &World) -> usize {
+    world
+        .entities
+        .load()
+        .iter()
+        .filter_map(|entity| {
+            let item = entity
+                .cast_any()
+                .downcast_ref::<crate::entity::item::ItemEntity>()?;
+            let stack = item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            (stack.item == &pumpkin_data::item::Item::STICK)
+                .then_some(usize::from(stack.item_count))
+        })
+        .sum()
+}
+
+struct ReplaceDuringHandUpdate {
+    player: Arc<crate::entity::player::Player>,
     called: AtomicBool,
 }
 
-impl EventHandler<PacketSentEvent> for ReplaceBedrockAttribute {
+impl EventHandler<PacketSentEvent> for ReplaceDuringHandUpdate {
     fn handle_blocking<'a>(
         &'a self,
-        _server: &'a Arc<Server>,
+        _: &'a Arc<Server>,
         event: &'a mut PacketSentEvent,
     ) -> BoxFuture<'a, ()> {
-        use crate::entity::{attributes::send_attribute_updates_for_living, mob::Mob};
-        use pumpkin_data::attributes::Attributes;
+        use pumpkin_data::{item::Item, item_stack::ItemStack};
+        use pumpkin_inventory::inventory::Inventory;
         use pumpkin_protocol::{
-            bedrock::client::update_attributes::CUpdateAttributes,
-            packet::Packet,
-            serial::{PacketRead, PacketWrite},
+            ClientPacket,
+            codec::item_stack_seralizer::ItemStackSerializer,
+            java::client::play::{CSetContainerContent, CSetContainerSlot, CSetPlayerInventory},
         };
         Box::pin(async move {
-            if event.player.client.bedrock().is_none()
-                || event.packet_id != CUpdateAttributes::PACKET_ID
-            {
+            let targeted = event.packet_id == CSetPlayerInventory::to_id(CURRENT_MC_VERSION);
+            if !targeted || self.called.swap(true, Ordering::Relaxed) {
                 return;
             }
-            let Ok(mut original) = CUpdateAttributes::read(&mut event.payload.as_ref()) else {
-                return;
+            let new = ItemStack::new(1, &Item::DIAMOND);
+            self.player.inventory().set_held_item(new.clone());
+            self.player.sync_hand_slot(0, new);
+            let marker = ItemStackSerializer::from(ItemStack::new(1, &Item::DIRT));
+            let mut physical = Vec::new();
+            let mut personal = Vec::new();
+            let mut active = Vec::new();
+            let mut unrelated = Vec::new();
+            let mut snapshot = Vec::new();
+            let window = {
+                let screen = self
+                    .player
+                    .current_screen_handler
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner);
+                let screen = screen.lock().unwrap_or_else(PoisonError::into_inner);
+                let inventory: Arc<dyn Inventory> = self.player.inventory().clone();
+                let slot = screen.get_slot_index(&inventory, 0);
+                assert_eq!(slot, Some(54));
+                assert_ne!(screen.sync_id(), 0);
+                screen.sync_id() as i8
             };
-            if original.target_runtime_id.0 != self.pig.get_entity().entity_id as u64
-                || self.called.swap(true, Ordering::Relaxed)
-            {
-                return;
-            }
-            let living = &self.pig.get_mob_entity().living_entity;
-            living.set_attribute_base(&Attributes::ATTACK_DAMAGE, 13.0);
-            send_attribute_updates_for_living(living, vec![Attributes::ATTACK_DAMAGE]);
-            // Include the superseded attack value alongside an unrelated override.
-            if let Some(attack) = original.attribute_list.first() {
-                original.attribute_list.push(
-                    pumpkin_protocol::bedrock::client::update_attributes::AttributeData {
-                        min_value: attack.min_value,
-                        max_value: 20.0,
-                        current_value: 19.0,
-                        default_min_value: attack.default_min_value,
-                        default_max_value: 20.0,
-                        default_value: 20.0,
-                        name: "minecraft:health".into(),
-                        modifiers: Vec::new(),
-                    },
-                );
-            }
-            let mut extra = Vec::new();
-            assert!(original.write(&mut extra).is_ok());
-            event.extra_packets.push((event.packet_id, extra.into()));
+            assert!(
+                CSetContainerSlot::new(window, 1, 54, &marker)
+                    .write_packet_data(&mut active, &CURRENT_MC_VERSION)
+                    .is_ok()
+            );
+            assert!(
+                CSetPlayerInventory::new(0.into(), &marker)
+                    .write_packet_data(&mut physical, &CURRENT_MC_VERSION)
+                    .is_ok()
+            );
+            assert!(
+                CSetContainerSlot::new(0, 1, 36, &marker)
+                    .write_packet_data(&mut personal, &CURRENT_MC_VERSION)
+                    .is_ok()
+            );
+            assert!(
+                CSetPlayerInventory::new(
+                    1.into(),
+                    &ItemStackSerializer::from(ItemStack::new(1, &Item::STICK))
+                )
+                .write_packet_data(&mut unrelated, &CURRENT_MC_VERSION)
+                .is_ok()
+            );
+            let empty = ItemStackSerializer::from(ItemStack::EMPTY.clone());
+            let personal_slots: [_; 46] = std::array::from_fn(|slot| {
+                ItemStackSerializer::from(if slot == 36 {
+                    ItemStack::new(1, &Item::DIRT)
+                } else {
+                    ItemStack::EMPTY.clone()
+                })
+            });
+            assert!(
+                CSetContainerContent::new(0.into(), 1.into(), &personal_slots, &empty)
+                    .write_packet_data(&mut snapshot, &CURRENT_MC_VERSION)
+                    .is_ok()
+            );
+            event.extra_packets.extend([
+                (
+                    CSetPlayerInventory::to_id(CURRENT_MC_VERSION),
+                    physical.into(),
+                ),
+                (
+                    CSetContainerSlot::to_id(CURRENT_MC_VERSION),
+                    personal.into(),
+                ),
+                (CSetContainerSlot::to_id(CURRENT_MC_VERSION), active.into()),
+                (
+                    CSetContainerContent::to_id(CURRENT_MC_VERSION),
+                    snapshot.into(),
+                ),
+                (
+                    CSetPlayerInventory::to_id(CURRENT_MC_VERSION),
+                    unrelated.into(),
+                ),
+            ]);
         })
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bedrock_shield_attribute_guard_keeps_an_unrelated_observer_override() -> TestResult {
-    use crate::entity::{attributes::send_shield_attribute_updates, mob::Mob};
-    use pumpkin_data::attributes::Attributes;
-    use pumpkin_protocol::{
-        bedrock::client::update_attributes::CUpdateAttributes, packet::Packet, serial::PacketRead,
-    };
+async fn java_boat_hand_sync_filters_stale_physical_aliases() -> TestResult {
+    use crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent;
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_protocol::java::client::play::CKeepAlive;
+    use pumpkin_util::Hand;
+
+    struct OpenPlacedChestBoat(AtomicBool);
+    impl EventHandler<PlayerStatisticIncrementEvent> for OpenPlacedChestBoat {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerStatisticIncrementEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if self.0.load(Ordering::Relaxed) {
+                    return;
+                }
+                let world = event.player.world();
+                let entities = world.entities.load();
+                let boat = entities.iter().find_map(|entity| {
+                    (entity.get_entity().entity_type == &EntityType::OAK_CHEST_BOAT)
+                        .then(|| entity.cast_any().downcast_ref::<BoatEntity>())
+                        .flatten()
+                });
+                if let Some(boat) = boat {
+                    self.0.store(
+                        boat.open_custom_inventory_screen(&event.player),
+                        Ordering::Relaxed,
+                    );
+                }
+            })
+        }
+    }
+
     let folder = tempfile::tempdir()?;
     let (server, world) = vehicle_world(&folder).await?;
-    let (_viewer, mut packets) = bedrock_rider(&server, &world, "jeb_").await?;
-    let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
-    world.spawn_entity(pig.clone());
-    let observer = Arc::new(ReplaceBedrockAttribute {
-        pig: pig.clone(),
+    let (player, peer) = java_equipment_watcher(&server, &world)?;
+    boat_placement_platform(&world);
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let open = Arc::new(OpenPlacedChestBoat(AtomicBool::new(false)));
+    server
+        .plugin_manager
+        .register::<PlayerStatisticIncrementEvent, _>(open.clone(), EventPriority::Normal, true);
+    let observer = Arc::new(ReplaceDuringHandUpdate {
+        player: player.clone(),
         called: AtomicBool::new(false),
     });
     server.plugin_manager.register::<PacketSentEvent, _>(
@@ -4409,32 +5977,664 @@ async fn bedrock_shield_attribute_guard_keeps_an_unrelated_observer_override() -
         true,
     );
 
-    let living = &pig.get_mob_entity().living_entity;
-    living.set_attribute_base(&Attributes::ATTACK_DAMAGE, 3.0);
-    send_shield_attribute_updates(living, &[Attributes::ATTACK_DAMAGE]);
+    let old = ItemStack::new(1, &Item::OAK_CHEST_BOAT);
+    player.inventory().set_held_item(old.clone());
+    server
+        .item_registry
+        .on_use_with_rotation(&old, &player, 0.0, 45.0, Hand::Right);
+    assert!(open.0.load(Ordering::Relaxed));
+    assert!(observer.called.load(Ordering::Relaxed));
+    assert_eq!(player.inventory().held_item().item, &Item::DIAMOND);
+    let client = player.client.java().ok_or("Java player")?;
+    assert!(client.try_send_packet(&CKeepAlive::new(73)));
+    let updates = read_boat_hand_updates(peer).await?;
+    assert_eq!(updates.hand, Some(&Item::DIAMOND));
+    assert!(updates.items.contains(&&Item::STICK));
+    assert!(!updates.items.contains(&&Item::DIRT));
+    assert!(!updates.items.contains(&&Item::OAK_CHEST_BOAT));
+    world.level.shutdown().await;
+    Ok(())
+}
 
-    let mut attack = None;
-    let mut health = None;
-    while let Ok(packet) = packets.try_recv() {
-        let Some((id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data) else {
-            continue;
-        };
-        if i32::from(id) == CUpdateAttributes::PACKET_ID {
-            let update = CUpdateAttributes::read(&mut payload.as_ref())?;
-            if update.target_runtime_id.0 == pig.get_entity().entity_id as u64 {
-                for attribute in update.attribute_list {
-                    match attribute.name.as_str() {
-                        "minecraft:attack_damage" => attack = Some(attribute.current_value),
-                        "minecraft:health" => health = Some(attribute.current_value),
-                        _ => {}
+#[derive(Default)]
+struct BoatHandUpdates {
+    items: Vec<&'static pumpkin_data::item::Item>,
+    hand: Option<&'static pumpkin_data::item::Item>,
+}
+
+async fn read_boat_hand_updates(
+    peer: tokio::io::DuplexStream,
+) -> Result<BoatHandUpdates, Box<dyn std::error::Error>> {
+    use pumpkin_protocol::{
+        codec::item_stack_seralizer::ItemStackSerializer,
+        java::{
+            client::play::{
+                CKeepAlive, CSetContainerContent, CSetContainerSlot, CSetPlayerInventory,
+            },
+            packet_decoder::TCPNetworkDecoder,
+        },
+    };
+
+    let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let mut updates = BoatHandUpdates::default();
+        loop {
+            let packet = decoder.get_raw_packet().await?;
+            let mut payload = packet.payload.as_ref();
+            if packet.id == CKeepAlive::to_id(CURRENT_MC_VERSION) {
+                return Ok(updates);
+            }
+            let targets_hand = if packet.id == CSetPlayerInventory::to_id(CURRENT_MC_VERSION) {
+                payload.get_var_int()?.0 == 0
+            } else if packet.id == CSetContainerSlot::to_id(CURRENT_MC_VERSION) {
+                let window = payload.get_container_id(&CURRENT_MC_VERSION)?.0;
+                payload.get_var_int()?;
+                let slot = payload.get_i16_be()?;
+                (window == 0 && slot == 36) || (window > 0 && slot == 54)
+            } else if packet.id == CSetContainerContent::to_id(CURRENT_MC_VERSION) {
+                let window = payload.get_container_id(&CURRENT_MC_VERSION)?.0;
+                if window != 0 {
+                    continue;
+                }
+                payload.get_var_int()?;
+                let count = payload.get_var_int()?.0;
+                for slot in 0..count.min(37) {
+                    let stack =
+                        ItemStackSerializer::read_with_version(&mut payload, &CURRENT_MC_VERSION)?;
+                    if slot == 36 {
+                        updates.hand = Some(stack.0.item);
+                        updates.items.push(stack.0.item);
                     }
                 }
+                continue;
+            } else {
+                continue;
+            };
+            let stack = ItemStackSerializer::read_with_version(&mut payload, &CURRENT_MC_VERSION)?;
+            if targets_hand {
+                updates.hand = Some(stack.0.item);
             }
+            updates.items.push(stack.0.item);
+        }
+    })
+    .await?
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_rechecks_ray_reach_after_a_same_world_move() -> TestResult {
+    use crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent;
+    use pumpkin_data::{item::Item, item_stack::ItemStack, statistic::StatisticCategory};
+    use pumpkin_util::Hand;
+
+    struct MoveDuringSpawn {
+        player: Arc<crate::entity::player::Player>,
+        enabled: AtomicBool,
+    }
+    impl EventHandler<EntitySpawnEvent> for MoveDuringSpawn {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            _: &'a mut EntitySpawnEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if self.enabled.load(Ordering::Relaxed) {
+                    self.player
+                        .get_entity()
+                        .set_pos(BOAT_PLACEMENT_OFFSET.add_raw(32.0, 0.0, 0.0));
+                }
+            })
         }
     }
-    assert!(observer.called.load(Ordering::Relaxed));
-    assert_eq!(attack, Some(13.0));
-    assert_eq!(health, Some(19.0));
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    boat_placement_platform(&world);
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    let boat = server
+        .item_registry
+        .boat_item(Item::BAMBOO_RAFT.id)
+        .ok_or("bamboo raft")?;
+    let stack = ItemStack::new(1, &Item::BAMBOO_RAFT);
+    player.inventory().set_held_item(stack.clone());
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let observer = Arc::new(MoveDuringSpawn {
+        player: player.clone(),
+        enabled: AtomicBool::new(true),
+    });
+    server.plugin_manager.register::<EntitySpawnEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    assert!(!boat.place_from_hand(&stack, &player, 0.0, 45.0, Hand::Right));
+    assert_eq!(player.inventory().held_item().uid, stack.uid);
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::BAMBOO_RAFT.id)),
+        0
+    );
+    assert!(
+        world
+            .entities
+            .load()
+            .iter()
+            .all(|entity| entity.get_entity().entity_type != &EntityType::BAMBOO_RAFT)
+    );
+
+    observer.enabled.store(false, Ordering::Relaxed);
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    assert!(boat.place_from_hand(&stack, &player, 0.0, 45.0, Hand::Right));
+    assert!(player.inventory().held_item().is_empty());
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::BAMBOO_RAFT.id)),
+        1
+    );
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_rejects_a_water_target_removed_during_spawn() -> TestResult {
+    check_boat_spawn_revalidation(false).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_placement_rejects_a_new_eye_obstruction_during_spawn() -> TestResult {
+    check_boat_spawn_revalidation(true).await
+}
+
+async fn check_boat_spawn_revalidation(obstructs_eye: bool) -> TestResult {
+    use crate::{
+        entity::player::Player, plugin::api::events::entity::entity_spawn::EntitySpawnEvent,
+    };
+    use pumpkin_data::{item::Item, item_stack::ItemStack, statistic::StatisticCategory};
+    use pumpkin_util::Hand;
+
+    const PLACER_POS: Vector3<f64> = Vector3::new(8.5, 66.0, 8.5);
+
+    enum SpawnChange {
+        DrainWater(Arc<ChunkData>),
+        ObstructEye(Arc<Player>),
+    }
+
+    struct ChangeBoatTarget {
+        change: SpawnChange,
+        ran: AtomicBool,
+    }
+    impl EventHandler<EntitySpawnEvent> for ChangeBoatTarget {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut EntitySpawnEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.entity_type != EntityType::OAK_BOAT.id.to_string()
+                    || self.ran.swap(true, Ordering::Relaxed)
+                {
+                    return;
+                }
+                match &self.change {
+                    SpawnChange::DrainWater(chunk) => {
+                        chunk.set_block_absolute_y(8, 64, 8, Block::AIR.default_state.id);
+                    }
+                    SpawnChange::ObstructEye(blocker) => blocker.get_entity().set_pos(PLACER_POS),
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+    world
+        .level
+        .loaded_chunks
+        .insert(Vector2::new(0, 0), chunk.clone());
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    player.get_entity().set_pos(PLACER_POS);
+    let blocker = if obstructs_eye {
+        Some(java_rider(&server, &world, "jeb_")?)
+    } else {
+        None
+    };
+    let parked = PLACER_POS.add_raw(7.0, 0.0, 0.0);
+    let change = if let Some((blocker, _)) = &blocker {
+        blocker.get_entity().set_pos(parked);
+        SpawnChange::ObstructEye(blocker.clone())
+    } else {
+        SpawnChange::DrainWater(chunk.clone())
+    };
+    let observer = Arc::new(ChangeBoatTarget {
+        change,
+        ran: AtomicBool::new(false),
+    });
+    server.plugin_manager.register::<EntitySpawnEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+
+    let boat = server
+        .item_registry
+        .boat_item(Item::OAK_BOAT.id)
+        .ok_or("Oak boat")?;
+    let stack = ItemStack::new(1, &Item::OAK_BOAT);
+    player.inventory().set_held_item(stack.clone());
+    let uses = || player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id));
+    assert!(!boat.place_from_hand(&stack, &player, 0.0, 90.0, Hand::Right));
+    assert!(observer.ran.load(Ordering::Relaxed));
+    assert!(boat_placement_actors(&world).is_empty());
+    assert_eq!(uses(), 0);
+    assert_eq!(player.inventory().held_item().uid, stack.uid);
+
+    if let Some((blocker, _)) = &blocker {
+        blocker.get_entity().set_pos(parked);
+    } else {
+        chunk.set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+    }
+    assert!(boat.place_from_hand(&stack, &player, 0.0, 90.0, Hand::Right));
+    assert_eq!(boat_placement_actors(&world).len(), 1);
+    assert_eq!(uses(), 1);
+    assert!(player.inventory().held_item().is_empty());
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn java_boat_air_swing_stays_in_the_placement_world() -> TestResult {
+    use crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent;
+    use pumpkin_data::{item::Item, item_stack::ItemStack, statistic::StatisticCategory};
+    use pumpkin_protocol::java::server::play::SUseItem;
+
+    struct DepartAfterPlacement(Arc<World>);
+    impl EventHandler<PlayerStatisticIncrementEvent> for DepartAfterPlacement {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerStatisticIncrementEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                event.player.get_entity().world.store(self.0.clone());
+            })
+        }
+    }
+
+    let origin_folder = tempfile::tempdir()?;
+    let destination_folder = tempfile::tempdir()?;
+    let (server, origin) = vehicle_world(&origin_folder).await?;
+    let (_destination_server, destination) = vehicle_world(&destination_folder).await?;
+    boat_placement_platform(&origin).set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+    let (placer, _peer) = java_rider(&server, &origin, "Notch")?;
+    placer.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    placer
+        .inventory()
+        .set_held_item(ItemStack::new(1, &Item::OAK_BOAT));
+    placer.last_attacked_ticks.store(20, Ordering::Relaxed);
+    server
+        .plugin_manager
+        .register::<PlayerStatisticIncrementEvent, _>(
+            Arc::new(DepartAfterPlacement(destination.clone())),
+            EventPriority::Normal,
+            true,
+        );
+    placer.client.java().ok_or("Java placer")?.handle_use_item(
+        &placer,
+        &SUseItem {
+            hand: 0.into(),
+            sequence: 1.into(),
+            yaw: 0.0,
+            pitch: 45.0,
+        },
+        &server,
+    );
+    assert!(Arc::ptr_eq(&placer.world(), &destination));
+    assert_eq!(boat_placement_actors(&origin).len(), 1);
+    assert!(boat_placement_actors(&destination).is_empty());
+    assert!(placer.inventory().held_item().is_empty());
+    assert_eq!(
+        placer.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
+        1
+    );
+    assert_eq!(placer.last_attacked_ticks.load(Ordering::Relaxed), 20);
+    destination.level.shutdown().await;
+    origin.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn boat_air_use_cannot_place_in_a_world_selected_by_the_interact_callback() -> TestResult {
+    use pumpkin_data::{item::Item, item_stack::ItemStack, statistic::StatisticCategory};
+    use pumpkin_protocol::java::server::play::SUseItem;
+
+    struct MoveBoatPlacer(Arc<World>);
+    impl EventHandler<PlayerInteractEvent> for MoveBoatPlacer {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerInteractEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                event.player.get_entity().world.store(self.0.clone());
+            })
+        }
+    }
+
+    let origin_folder = tempfile::tempdir()?;
+    let destination_folder = tempfile::tempdir()?;
+    let (origin_server, origin) = vehicle_world(&origin_folder).await?;
+    let (destination_server, destination) = vehicle_world(&destination_folder).await?;
+    boat_placement_platform(&origin).set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+    boat_placement_platform(&destination).set_block_absolute_y(
+        8,
+        64,
+        8,
+        Block::WATER.default_state.id,
+    );
+    origin_server
+        .plugin_manager
+        .register::<PlayerInteractEvent, _>(
+            Arc::new(MoveBoatPlacer(destination.clone())),
+            EventPriority::Normal,
+            true,
+        );
+    let (java, _peer) = java_rider(&origin_server, &origin, "Notch")?;
+    let (bedrock, _packets) = bedrock_rider(&origin_server, &origin, "jeb_").await?;
+
+    for player in [&java, &bedrock] {
+        player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+        player.get_entity().set_rotation(0.0, 45.0);
+        let stack = ItemStack::new(1, &Item::OAK_BOAT);
+        player.inventory().set_held_item(stack.clone());
+        let use_boat = |server: &Arc<Server>, sequence: i32| {
+            let Some(client) = player.client.java() else {
+                return bedrock_boat_click(player, 0, &stack);
+            };
+            client.handle_use_item(
+                player,
+                &SUseItem {
+                    hand: 0.into(),
+                    sequence: sequence.into(),
+                    yaw: 0.0,
+                    pitch: 45.0,
+                },
+                server,
+            );
+            Ok(())
+        };
+        let uses = || player.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id));
+        assert!(Arc::ptr_eq(&player.world(), &origin));
+        use_boat(&origin_server, 1)?;
+        assert!(Arc::ptr_eq(&player.world(), &destination));
+        assert!(boat_placement_actors(&origin).is_empty());
+        assert!(boat_placement_actors(&destination).is_empty());
+        assert_eq!(uses(), 0);
+        assert_eq!(player.inventory().held_item().uid, stack.uid);
+
+        use_boat(&destination_server, 2)?;
+        let boats = boat_placement_actors(&destination);
+        assert_eq!(boats.len(), 1);
+        assert_eq!(uses(), 1);
+        assert!(player.inventory().held_item().is_empty());
+        destination.remove_entity(boats.first().ok_or("Placed boat")?.as_ref());
+    }
+    if let Some(client) = bedrock.client.bedrock() {
+        client.clear_player();
+        client.close().await;
+    }
+    destination.level.shutdown().await;
+    origin.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "The two editions share the protected block interaction and spectator state fixture."
+)]
+async fn vehicle_spectator_block_use_observes_the_veto_and_current_mode() -> TestResult {
+    use crate::block::entities::{chest::ChestBlockEntity, decorated_pot::DecoratedPotBlockEntity};
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_protocol::{
+        bedrock::server::inventory_transaction::TransactionData, java::server::play::SUseItemOn,
+    };
+    use pumpkin_util::{GameMode, math::position::BlockPos};
+
+    struct SpectatorClick {
+        veto: AtomicBool,
+        pot: BlockPos,
+    }
+    impl EventHandler<PlayerInteractEvent> for SpectatorClick {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PlayerInteractEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.clicked_pos == Some(self.pot) {
+                    event.player.gamemode.store(GameMode::Spectator);
+                } else {
+                    event.cancelled = self.veto.load(Ordering::Relaxed);
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let chunk = boat_placement_platform(&world);
+    let pot_pos = BlockPos::new(8, 63, 8);
+    let chest_pos = BlockPos::new(9, 63, 8);
+    chunk.set_block_absolute_y(8, 63, 8, Block::DECORATED_POT.default_state.id);
+    chunk.set_block_absolute_y(9, 63, 8, Block::CHEST.default_state.id);
+    let pot = Arc::new(DecoratedPotBlockEntity::new(pot_pos));
+    world.add_block_entity(pot.clone());
+    world.add_block_entity(Arc::new(ChestBlockEntity::new(chest_pos)));
+    let (java, _peer) = java_rider(&server, &world, "Notch")?;
+    let (bedrock, mut packets) = bedrock_rider(&server, &world, "jeb_").await?;
+    let java_client = java.client.java().ok_or("Java player")?;
+    let bedrock_client = bedrock.client.bedrock().ok_or("Bedrock player")?;
+    for player in [&java, &bedrock] {
+        player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    }
+    let stack = ItemStack::new(1, &Item::OAK_BOAT);
+    java.inventory().set_held_item(stack.clone());
+    bedrock.inventory().set_held_item(stack.clone());
+    bedrock.gamemode.store(GameMode::Spectator);
+    let observer = Arc::new(SpectatorClick {
+        veto: AtomicBool::new(true),
+        pot: pot_pos,
+    });
+    server.plugin_manager.register::<PlayerInteractEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+
+    java_client.handle_use_item_on(
+        &java,
+        &SUseItemOn {
+            hand: 0.into(),
+            position: pot_pos,
+            face: 1.into(),
+            cursor_pos: Vector3::default(),
+            inside_block: false,
+            is_against_world_border: false,
+            sequence: 1.into(),
+        },
+        &server,
+    )?;
+    assert_eq!(java.gamemode.load(), GameMode::Spectator);
+    assert_eq!(java.inventory().held_item().uid, stack.uid);
+    assert!(pot.get_item().is_none_or(|item| item.is_empty()));
+
+    let click_chest = |id| {
+        let mut packet = bedrock_use_item_transaction(0, &stack, 0);
+        packet.legacy_request_id = pumpkin_protocol::codec::var_int::VarInt(id);
+        if let TransactionData::UseItem(data) = &mut packet.transaction_data {
+            data.block_position = chest_pos;
+        }
+        bedrock_client.handle_inventory_action(&bedrock, packet);
+    };
+    let window_type = || {
+        bedrock
+            .current_screen_handler
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .window_type()
+    };
+    let original_window = window_type();
+    click_chest(-7);
+    assert_eq!(window_type(), original_window);
+    assert_eq!(bedrock_boat_legacy_responses(&mut packets)?, [(-7, 1)]);
+    observer.veto.store(false, Ordering::Relaxed);
+    click_chest(-9);
+    assert_ne!(window_type(), original_window);
+    assert_eq!(bedrock_boat_legacy_responses(&mut packets)?, [(-9, 0)]);
+    assert_eq!(bedrock.inventory().held_item().uid, stack.uid);
+    bedrock_client.clear_player();
+    bedrock_client.close().await;
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "The same offhand stack is tested before and after its cooldown."
+)]
+async fn bedrock_boat_offhand_firework_commits_before_spawn_observers() -> TestResult {
+    use pumpkin_data::{
+        data_component_impl::{UseCooldownImpl, UseRemainderImpl},
+        item::Item,
+        item_stack::ItemStack,
+        statistic::StatisticCategory,
+    };
+    use pumpkin_inventory::player::player_inventory::PlayerInventory;
+    use pumpkin_protocol::{
+        bedrock::server::inventory_transaction::{HandSlot, TransactionData},
+        java::client::play::CSpawnEntity,
+    };
+
+    const GROUP: &str = "minecraft:vehicle_rocket_test";
+
+    struct MoveRocketSource {
+        rider: Arc<crate::entity::player::Player>,
+        saw_empty_source: AtomicBool,
+        saw_cooldown: AtomicBool,
+    }
+    impl EventHandler<PacketSentEvent> for MoveRocketSource {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.packet_id == CSpawnEntity::to_id(CURRENT_MC_VERSION)
+                    && let Ok(id) = event.payload.as_ref().get_var_int()
+                    && let Some(tracked) =
+                        self.rider.world().entity_tracker.get_tracked_entity(id.0)
+                    && tracked.entity.get_entity().entity_type == &EntityType::FIREWORK_ROCKET
+                {
+                    let inventory = self.rider.inventory();
+                    let offhand = inventory.get_slot(PlayerInventory::OFF_HAND_SLOT);
+                    self.saw_empty_source
+                        .store(offhand.is_empty(), Ordering::Relaxed);
+                    self.saw_cooldown
+                        .store(self.rider.is_on_cooldown(GROUP), Ordering::Relaxed);
+                    inventory.set_slot(2, offhand);
+                    inventory.set_slot(
+                        PlayerInventory::OFF_HAND_SLOT,
+                        ItemStack::new(1, &Item::STICK),
+                    );
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (watcher, _peer) = java_equipment_watcher(&server, &world)?;
+    watcher
+        .chunk_sender
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .mark_sent_out_of_band(Vector2::new(0, 0));
+    boat_placement_platform(&world);
+    let (player, _packets) = bedrock_rider(&server, &world, "jeb_").await?;
+    player.get_entity().set_pos(BOAT_PLACEMENT_OFFSET);
+    let boat = ItemStack::new(1, &Item::OAK_BOAT);
+    let mut rocket = ItemStack::new(1, &Item::FIREWORK_ROCKET);
+    rocket.set_data_component(UseCooldownImpl {
+        seconds: 2.0,
+        cooldown_group: Some(GROUP.to_owned()),
+    });
+    rocket.set_data_component(UseRemainderImpl {
+        remainder: Some(ItemStack::new(1, &Item::PAPER)),
+    });
+    player.inventory().set_held_item(boat.clone());
+    player
+        .inventory()
+        .set_slot(PlayerInventory::OFF_HAND_SLOT, rocket.clone());
+    let observer = Arc::new(MoveRocketSource {
+        rider: player.clone(),
+        saw_empty_source: AtomicBool::new(false),
+        saw_cooldown: AtomicBool::new(false),
+    });
+    server.plugin_manager.register::<PacketSentEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    let client = player.client.bedrock().ok_or("Bedrock rider")?;
+    let click = || -> TestResult {
+        let mut packet = bedrock_use_item_transaction(0, &rocket, 0);
+        let TransactionData::UseItem(data) = &mut packet.transaction_data else {
+            return Err("expected Bedrock block use".into());
+        };
+        data.hand = HandSlot::Offhand;
+        data.item_in_hand_network_id = Some(rocket.uid);
+        client.handle_inventory_action(&player, packet);
+        Ok(())
+    };
+    player.start_cooldown(GROUP.to_owned(), 20);
+    click()?;
+    assert_eq!(
+        player
+            .inventory()
+            .get_slot(PlayerInventory::OFF_HAND_SLOT)
+            .uid,
+        rocket.uid
+    );
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::FIREWORK_ROCKET.id)),
+        0
+    );
+    assert!(!observer.saw_empty_source.load(Ordering::Relaxed));
+    assert!(player.inventory().get_slot(1).is_empty());
+    player.tick_counter.store(20, Ordering::Relaxed);
+    click()?;
+    assert!(observer.saw_cooldown.load(Ordering::Relaxed));
+    assert!(observer.saw_empty_source.load(Ordering::Relaxed));
+    assert!(player.inventory().get_slot(2).is_empty());
+    assert_eq!(player.inventory().held_item().uid, boat.uid);
+    let remainder = player.inventory().get_slot(1);
+    assert_eq!(remainder.get_item(), &Item::PAPER);
+    assert_eq!(remainder.item_count, 1);
+    assert_eq!(
+        player
+            .inventory()
+            .get_slot(PlayerInventory::OFF_HAND_SLOT)
+            .get_item(),
+        &Item::STICK
+    );
+    assert_eq!(
+        player.get_stat(StatisticCategory::Used, i32::from(Item::FIREWORK_ROCKET.id)),
+        1
+    );
+    client.clear_player();
+    client.close().await;
     world.level.shutdown().await;
     Ok(())
 }

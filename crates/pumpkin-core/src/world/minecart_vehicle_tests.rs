@@ -29,7 +29,10 @@ use crate::{
     plugin::{
         BoxFuture, EventHandler, EventPriority,
         api::events::{
-            entity::{entity_dismount::EntityDismountEvent, entity_mount::EntityMountEvent},
+            entity::{
+                entity_dismount::EntityDismountEvent, entity_mount::EntityMountEvent,
+                entity_spawn::EntitySpawnEvent,
+            },
             world::generic_game::GenericGameEvent,
         },
         server::packet::PacketSentEvent,
@@ -43,6 +46,602 @@ use super::vehicle_tests::{
     CENTER, TestResult, assert_mounted, java_rider, mount_pig, vehicle_world,
     verify_mount_capacity_after_callbacks,
 };
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn classic_minecart_placement_does_not_reregister_removed_cart() -> TestResult {
+    assert_classic_minecart_placement_publication(CartPlacement::Java).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dispensed_classic_minecart_commits_source_and_remains_removed() -> TestResult {
+    assert_classic_minecart_placement_publication(CartPlacement::Dispenser).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bedrock_classic_minecart_placement_commits_the_addressed_source() -> TestResult {
+    assert_classic_minecart_placement_publication(CartPlacement::Bedrock).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn classic_minecart_placement_awards_only_an_allowed_committed_use() -> TestResult {
+    use pumpkin_data::{
+        data_component_impl::{CanPlaceOnImpl, UseRemainderImpl},
+        item::Item,
+        statistic::StatisticCategory,
+    };
+    use pumpkin_nbt::tag::NbtTag;
+
+    struct VetoCart(AtomicBool);
+    impl EventHandler<EntitySpawnEvent> for VetoCart {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut EntitySpawnEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                event.cancelled = self.0.load(Ordering::Relaxed);
+            })
+        }
+    }
+
+    struct ObserveCartPlacement(Mutex<Vec<Vector3<f64>>>);
+    impl EventHandler<GenericGameEvent> for ObserveCartPlacement {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            event: &'a mut GenericGameEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.event_key == GameEvent::EntityPlace.name() {
+                    self.0
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .push(event.position);
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    let client = player.client.java().ok_or("Java player")?;
+    player.get_entity().set_pos(Vector3::new(8.5, 65.0, 6.5));
+    player.gamemode.store(pumpkin_util::GameMode::Adventure);
+    player
+        .abilities
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .allow_modify_world = false;
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 64, 8, Block::STONE.default_state.id);
+    chunk.set_block_absolute_y(8, 65, 8, Block::RAIL.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let veto = Arc::new(VetoCart(AtomicBool::new(false)));
+    server.plugin_manager.register::<EntitySpawnEvent, _>(
+        veto.clone(),
+        EventPriority::Normal,
+        true,
+    );
+
+    let observer = Arc::new(ObserveCartPlacement(Mutex::new(Vec::new())));
+    server.plugin_manager.register::<GenericGameEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    let carts = || placed_classic_minecarts(&world);
+    let uses = || player.get_stat(StatisticCategory::Used, i32::from(Item::MINECART.id));
+    let place = |position, sequence| {
+        client.handle_use_item_on(&player, &cart_rail_click(position, sequence), &server)
+    };
+    let rail = BlockPos::new(8, 65, 8);
+    let mut stack = ItemStack::new(1, &Item::MINECART);
+    stack.set_data_component(UseRemainderImpl {
+        remainder: Some(ItemStack::new(1, &Item::STICK)),
+    });
+    player.inventory().set_held_item(stack.clone());
+    place(rail, 1)?;
+    assert_eq!((carts(), uses()), (0, 0));
+    assert_eq!(player.inventory().held_item().uid, stack.uid);
+
+    let mut rails = NbtCompound::new();
+    rails.put_string("blocks", "minecraft:rail".into());
+    stack.set_data_component(CanPlaceOnImpl {
+        predicate: NbtTag::Compound(rails),
+    });
+    player.inventory().set_held_item(stack.clone());
+    veto.0.store(true, Ordering::Relaxed);
+    place(rail, 2)?;
+    assert_eq!((carts(), uses()), (0, 0));
+    assert_eq!(player.inventory().held_item().uid, stack.uid);
+    veto.0.store(false, Ordering::Relaxed);
+    place(rail, 3)?;
+    assert_eq!((carts(), uses()), (1, 1));
+    assert_eq!(player.inventory().held_item().get_item(), &Item::STICK);
+    assert_eq!(player.inventory().held_item().item_count, 1);
+    assert_eq!(
+        *observer.0.lock().unwrap_or_else(PoisonError::into_inner),
+        [rail.to_centered_f64()]
+    );
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "The Creative-slot codec and the two rail states share one Adventure player."
+)]
+async fn classic_minecart_adventure_permission_uses_rail_state_and_build_ability() -> TestResult {
+    use pumpkin_data::{
+        data_component_impl::CanPlaceOnImpl, item::Item, statistic::StatisticCategory,
+    };
+    use pumpkin_nbt::tag::NbtTag;
+    use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    let client = player.client.java().ok_or("Java player")?;
+    player.get_entity().set_pos(Vector3::new(8.5, 65.0, 6.5));
+    player.gamemode.store(pumpkin_util::GameMode::Adventure);
+    let set_may_build = |may_build| {
+        player
+            .abilities
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .allow_modify_world = may_build;
+    };
+    set_may_build(false);
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 64, 8, Block::STONE.default_state.id);
+    let set_powered = |powered| {
+        let mut props = PoweredRailLikeProperties::default(&Block::POWERED_RAIL);
+        props.r#powered = powered;
+        chunk.set_block_absolute_y(8, 65, 8, props.to_state_id(&Block::POWERED_RAIL));
+    };
+    set_powered(false);
+    world
+        .level
+        .loaded_chunks
+        .insert(Vector2::new(0, 0), chunk.clone());
+
+    let restricted_cart = |power_predicate| {
+        let mut state = NbtCompound::new();
+        state.put("powered", power_predicate);
+        let mut predicate = NbtCompound::new();
+        predicate.put_string("blocks", "minecraft:powered_rail".into());
+        predicate.put("state", NbtTag::Compound(state));
+        let mut cart = ItemStack::new(1, &Item::MINECART);
+        cart.set_data_component(CanPlaceOnImpl {
+            predicate: NbtTag::Compound(predicate),
+        });
+        cart
+    };
+    let round_trip = |cart: ItemStack| -> Result<ItemStack, Box<dyn std::error::Error>> {
+        let mut bytes = Vec::new();
+        ItemStackSerializer::from(cart)
+            .write_length_prefixed_with_version(&mut bytes, &CURRENT_MC_VERSION)?;
+        let mut input = bytes.as_slice();
+        let decoded = ItemStackSerializer::read_length_prefixed_optional(&mut input)?.to_stack();
+        assert!(input.is_empty());
+        Ok(decoded)
+    };
+    // Official Java 26.3 slot data for a cart restricted to powered rails.
+    let mut encoded = b"\x01\xc6\x07\x02\x00\x0e\x01\x01\x02\x88\x01\x01\x01\x07powered\x01\x04true\x00\x00\x00\x29\x02\x09".as_slice();
+    let exact = ItemStackSerializer::read(&mut encoded)?.to_stack();
+    assert!(encoded.is_empty());
+    assert_eq!(exact.get_item(), &Item::MINECART);
+    assert_eq!(
+        exact
+            .get_data_component::<pumpkin_data::data_component_impl::InteractAnimationImpl>()
+            .map(|animation| animation.animation_type),
+        Some(pumpkin_data::data_component_impl::SwingAnimationType::Stab)
+    );
+    player.inventory().set_held_item(exact.clone());
+    let rail = BlockPos::new(8, 65, 8);
+    let place =
+        |sequence| client.handle_use_item_on(&player, &cart_rail_click(rail, sequence), &server);
+    let uses = || player.get_stat(StatisticCategory::Used, i32::from(Item::MINECART.id));
+
+    place(1)?;
+    assert_eq!((placed_classic_minecarts(&world), uses()), (0, 0));
+    assert_eq!(player.inventory().held_item().uid, exact.uid);
+    set_powered(true);
+    place(2)?;
+    assert_eq!((placed_classic_minecarts(&world), uses()), (1, 1));
+    assert!(player.inventory().held_item().is_empty());
+
+    set_powered(false);
+    let mut bounds = NbtCompound::new();
+    bounds.put_string("min", "true".into());
+    let ranged = round_trip(restricted_cart(NbtTag::Compound(bounds)))?;
+    player.inventory().set_held_item(ranged.clone());
+    place(3)?;
+    assert_eq!((placed_classic_minecarts(&world), uses()), (1, 1));
+    assert_eq!(player.inventory().held_item().uid, ranged.uid);
+    set_powered(true);
+    place(4)?;
+    assert_eq!((placed_classic_minecarts(&world), uses()), (2, 2));
+    assert!(player.inventory().held_item().is_empty());
+
+    set_may_build(true);
+    set_powered(false);
+    player
+        .inventory()
+        .set_held_item(ItemStack::new(1, &Item::MINECART));
+    place(5)?;
+    assert_eq!((placed_classic_minecarts(&world), uses()), (3, 3));
+    assert!(player.inventory().held_item().is_empty());
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "The public item fixture varies the rail and cooldown around one source stack."
+)]
+async fn public_classic_minecart_use_rechecks_rail_and_cooldown_at_commit() -> TestResult {
+    use crate::block::registry::BlockActionResult;
+    use pumpkin_data::{BlockDirection, item::Item, statistic::StatisticCategory};
+
+    const GROUP: &str = "minecraft:public_cart_test";
+
+    struct RemoveRail {
+        chunk: Arc<ChunkData>,
+        active: AtomicBool,
+        set_cooldown: AtomicBool,
+        player: Arc<crate::entity::player::Player>,
+    }
+    impl EventHandler<EntitySpawnEvent> for RemoveRail {
+        fn handle_blocking<'a>(
+            &'a self,
+            _: &'a Arc<Server>,
+            _: &'a mut EntitySpawnEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if self.active.load(Ordering::Relaxed) {
+                    self.chunk
+                        .set_block_absolute_y(8, 65, 8, Block::AIR.default_state.id);
+                }
+                if self.set_cooldown.load(Ordering::Relaxed) {
+                    self.player.start_cooldown(GROUP.to_owned(), 4);
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    player.get_entity().set_pos(Vector3::new(8.5, 65.0, 6.5));
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 64, 8, Block::STONE.default_state.id);
+    let restore_rail = || chunk.set_block_absolute_y(8, 65, 8, Block::RAIL.default_state.id);
+    restore_rail();
+    world
+        .level
+        .loaded_chunks
+        .insert(Vector2::new(0, 0), chunk.clone());
+    let remove = Arc::new(RemoveRail {
+        chunk: chunk.clone(),
+        active: AtomicBool::new(true),
+        set_cooldown: AtomicBool::new(false),
+        player: player.clone(),
+    });
+    server.plugin_manager.register::<EntitySpawnEvent, _>(
+        remove.clone(),
+        EventPriority::Normal,
+        true,
+    );
+    let mut supplied = timed_rail_placement_stack(GROUP);
+    let uid = supplied.uid;
+    let rail = BlockPos::new(8, 65, 8);
+    let place = |stack: &mut ItemStack| {
+        server.item_registry.use_on_block(
+            stack,
+            &player,
+            rail,
+            BlockDirection::Up,
+            Vector3::new(0.5, 0.5, 0.5),
+            &Block::RAIL,
+            &server,
+        )
+    };
+    let uses = || player.get_stat(StatisticCategory::Used, i32::from(Item::MINECART.id));
+    assert!(matches!(place(&mut supplied), BlockActionResult::Fail));
+    assert_eq!(world.get_block_state_id(&rail), Block::AIR.default_state.id);
+    assert_eq!(placed_classic_minecarts(&world), 0);
+    assert_eq!(supplied.uid, uid);
+    assert_eq!(supplied.item_count, 1);
+    assert_eq!(uses(), 0);
+    assert!(player.inventory().held_item().is_empty());
+
+    remove.active.store(false, Ordering::Relaxed);
+    restore_rail();
+    remove.set_cooldown.store(true, Ordering::Relaxed);
+    assert!(matches!(place(&mut supplied), BlockActionResult::Fail));
+    assert_eq!(placed_classic_minecarts(&world), 0);
+    assert_eq!(supplied.uid, uid);
+    assert_eq!(supplied.item_count, 1);
+    assert_eq!(uses(), 0);
+    assert!(player.is_on_cooldown(GROUP));
+    player.tick_counter.store(4, Ordering::Relaxed);
+    assert!(!player.is_on_cooldown(GROUP));
+
+    remove.set_cooldown.store(false, Ordering::Relaxed);
+    assert!(place(&mut supplied).consumes_action());
+    assert!(player.is_on_cooldown(GROUP));
+    assert_eq!(placed_classic_minecarts(&world), 1);
+    assert_eq!(uses(), 1);
+    assert_eq!(supplied.get_item(), &Item::STICK);
+    assert_eq!(supplied.item_count, 1);
+    assert!(player.inventory().held_item().is_empty());
+    world.level.shutdown().await;
+    Ok(())
+}
+
+fn timed_rail_placement_stack(group: &str) -> ItemStack {
+    use pumpkin_data::{
+        data_component_impl::{
+            ConsumableImpl, ConsumeAnimation, IdOr, UseCooldownImpl, UseRemainderImpl,
+        },
+        item::Item,
+        sound::Sound,
+    };
+
+    let mut stack = ItemStack::new(1, &Item::MINECART);
+    stack.set_data_component(ConsumableImpl::new(
+        1.0,
+        ConsumeAnimation::Eat,
+        IdOr::Id(Sound::EntityGenericEat),
+        false,
+        std::borrow::Cow::Borrowed(&[]),
+    ));
+    stack.set_data_component(UseCooldownImpl {
+        seconds: 2.0,
+        cooldown_group: Some(group.to_owned()),
+    });
+    stack.set_data_component(UseRemainderImpl {
+        remainder: Some(ItemStack::new(1, &Item::STICK)),
+    });
+    stack
+}
+
+fn placed_classic_minecarts(world: &World) -> usize {
+    world
+        .entities
+        .load()
+        .iter()
+        .filter(|entity| entity.get_entity().entity_type == &EntityType::MINECART)
+        .count()
+}
+
+pub(super) fn cart_rail_click(
+    rail: BlockPos,
+    sequence: i32,
+) -> pumpkin_protocol::java::server::play::SUseItemOn {
+    pumpkin_protocol::java::server::play::SUseItemOn {
+        hand: 0.into(),
+        position: rail,
+        face: 1.into(),
+        cursor_pos: Vector3::new(0.5, 0.5, 0.5),
+        inside_block: false,
+        is_against_world_border: false,
+        sequence: sequence.into(),
+    }
+}
+
+enum CartPlacement {
+    Java,
+    Bedrock,
+    Dispenser,
+}
+
+struct RemovePlacedCart {
+    player: Arc<crate::entity::player::Player>,
+    source: Option<Arc<crate::block::entities::dispenser::DispenserBlockEntity>>,
+    id: std::sync::atomic::AtomicI32,
+    spent_at_spawn: AtomicBool,
+}
+impl EventHandler<PacketSentEvent> for RemovePlacedCart {
+    fn handle_blocking<'a>(
+        &'a self,
+        _: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
+    ) -> BoxFuture<'a, ()> {
+        use pumpkin_data::item::Item;
+        use pumpkin_inventory::inventory::Inventory;
+        use pumpkin_protocol::java::client::play::CSpawnEntity;
+
+        Box::pin(async move {
+            if event.packet_id != CSpawnEntity::to_id(CURRENT_MC_VERSION) {
+                return;
+            }
+            let world = event.player.world();
+            if let Ok(id) = event.payload.as_ref().get_var_int()
+                && let Some(tracked) = world.entity_tracker.get_tracked_entity(id.0)
+                && tracked.entity.get_entity().entity_type == &EntityType::MINECART
+            {
+                self.id.store(id.0, Ordering::Relaxed);
+                if let Some(source) = &self.source {
+                    self.spent_at_spawn
+                        .store(source.get_stack(0).is_empty(), Ordering::Relaxed);
+                    source.set_stack(0, ItemStack::new(1, &Item::STICK));
+                } else {
+                    let inventory = self.player.inventory();
+                    self.spent_at_spawn
+                        .store(inventory.get_slot(0).is_empty(), Ordering::Relaxed);
+                    inventory.set_slot(0, ItemStack::new(1, &Item::STONE));
+                    inventory.set_selected_slot(1);
+                }
+                world.remove_entity(tracked.entity.as_ref());
+            }
+        })
+    }
+}
+
+struct SelectOtherSlotBeforeCartSpawn {
+    player: Arc<crate::entity::player::Player>,
+    active: AtomicBool,
+}
+
+impl EventHandler<EntitySpawnEvent> for SelectOtherSlotBeforeCartSpawn {
+    fn handle_blocking<'a>(
+        &'a self,
+        _: &'a Arc<Server>,
+        _: &'a mut EntitySpawnEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if self.active.load(Ordering::Relaxed) {
+                self.player.inventory().set_selected_slot(1);
+            }
+        })
+    }
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "All three placement entry points share the spawn observer."
+)]
+async fn assert_classic_minecart_placement_publication(placement: CartPlacement) -> TestResult {
+    use crate::block::{
+        OnScheduledTickArgs, blocks::redstone::dispenser::DispenserBlock,
+        entities::dispenser::DispenserBlockEntity,
+    };
+    use pumpkin_data::{
+        block_properties::{DispenserLikeProperties, Facing},
+        item::Item,
+        statistic::StatisticCategory,
+    };
+    use pumpkin_inventory::inventory::Inventory;
+    use pumpkin_protocol::bedrock::server::inventory_transaction::TransactionData;
+    use std::sync::atomic::AtomicI32;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&folder).await?;
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    let client = player.client.java().ok_or("Java player")?;
+    client.player.store(Arc::new(Some(player.clone())));
+    player.get_entity().set_pos(Vector3::new(8.5, 65.0, 6.5));
+    player.watched_section.store(Cylindrical::new(
+        Vector2::new(0, 0),
+        std::num::NonZeroU8::new(4).ok_or("view distance")?,
+    ));
+    player
+        .chunk_sender
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .mark_sent_out_of_band(Vector2::new(0, 0));
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 64, 8, Block::STONE.default_state.id);
+    chunk.set_block_absolute_y(8, 65, 8, Block::RAIL.default_state.id);
+    world
+        .level
+        .loaded_chunks
+        .insert(Vector2::new(0, 0), chunk.clone());
+    let rail = BlockPos::new(8, 65, 8);
+    let position = BlockPos::new(8, 65, 9);
+    let source = matches!(placement, CartPlacement::Dispenser)
+        .then(|| Arc::new(DispenserBlockEntity::new(position)));
+    let actor = if matches!(placement, CartPlacement::Bedrock) {
+        let (bedrock, _packets) =
+            super::vehicle_tests::bedrock_rider(&server, &world, "jeb_").await?;
+        bedrock.get_entity().set_pos(Vector3::new(8.5, 65.0, 7.5));
+        bedrock
+    } else {
+        player.clone()
+    };
+    let observer = Arc::new(RemovePlacedCart {
+        player: actor.clone(),
+        source: source.clone(),
+        id: AtomicI32::new(-1),
+        spent_at_spawn: AtomicBool::new(false),
+    });
+    server.plugin_manager.register::<PacketSentEvent, _>(
+        observer.clone(),
+        EventPriority::Normal,
+        true,
+    );
+
+    if let Some(source) = source {
+        let mut props = DispenserLikeProperties::default(&Block::DISPENSER);
+        props.facing = Facing::North;
+        chunk.set_block_absolute_y(8, 65, 9, props.to_state_id(&Block::DISPENSER));
+        world.add_block_entity(source.clone());
+        source.set_stack(0, ItemStack::new(1, &Item::MINECART));
+        DispenserBlock.on_scheduled_tick(OnScheduledTickArgs {
+            world: &world,
+            block: &Block::DISPENSER,
+            position: &position,
+        });
+        assert!(observer.spent_at_spawn.load(Ordering::Relaxed));
+        assert_eq!(source.get_stack(0).item, &Item::STICK);
+    } else {
+        const GROUP: &str = "minecraft:rail_packet_test";
+        let item = timed_rail_placement_stack(GROUP);
+        let paper = ItemStack::new(1, &Item::PAPER);
+        actor.inventory().set_slot(1, paper.clone());
+        actor.inventory().set_held_item(item.clone());
+        let place = |sequence| -> TestResult {
+            if let Some(bedrock) = actor.client.bedrock() {
+                let mut packet =
+                    super::boat_vehicle_tests::bedrock_use_item_transaction(0, &item, 0);
+                let TransactionData::UseItem(data) = &mut packet.transaction_data else {
+                    return Err("Expected a block-use transaction".into());
+                };
+                data.block_position = rail;
+                data.item_in_hand_network_id = Some(item.uid);
+                bedrock.handle_inventory_action(&actor, packet);
+            } else {
+                client.handle_use_item_on(&player, &cart_rail_click(rail, sequence), &server)?;
+            }
+            Ok(())
+        };
+        let select_other = Arc::new(SelectOtherSlotBeforeCartSpawn {
+            player: actor.clone(),
+            active: AtomicBool::new(true),
+        });
+        server.plugin_manager.register::<EntitySpawnEvent, _>(
+            select_other.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        place(1)?;
+        assert_eq!(actor.inventory().get_selected_slot(), 1);
+        assert_eq!(observer.id.load(Ordering::Relaxed), -1);
+        assert_eq!(placed_classic_minecarts(&world), 0);
+        let uses = || actor.get_stat(StatisticCategory::Used, i32::from(Item::MINECART.id));
+        assert_eq!(uses(), 0);
+        assert!(!actor.is_on_cooldown(GROUP));
+        assert_eq!(actor.inventory().get_slot(0).uid, item.uid);
+        assert_eq!(actor.inventory().get_slot(0).item_count, 1);
+
+        select_other.active.store(false, Ordering::Relaxed);
+        actor.inventory().set_selected_slot(0);
+        place(2)?;
+        if let Some(bedrock) = actor.client.bedrock() {
+            bedrock.clear_player();
+            bedrock.close().await;
+        }
+        assert!(observer.spent_at_spawn.load(Ordering::Relaxed));
+        assert_eq!(actor.inventory().get_slot(0).get_item(), &Item::STONE);
+        assert_eq!(actor.inventory().get_slot(1).uid, paper.uid);
+        let remainder = actor.inventory().get_slot(2);
+        assert_eq!(remainder.get_item(), &Item::STICK);
+        assert_eq!(remainder.item_count, 1);
+        assert!(actor.is_on_cooldown(GROUP));
+        assert_eq!(uses(), 1);
+    }
+    let id = observer.id.load(Ordering::Relaxed);
+    assert_ne!(id, -1);
+    assert!(world.get_entity_by_id(id).is_none());
+    assert!(!world.entity_tracker.has_entity_with_id(id));
+    world.level.shutdown().await;
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn classic_minecart_speed_and_steps_use_the_rail_state() -> TestResult {
@@ -1558,6 +2157,65 @@ async fn rideable_minecart_interaction_rechecks_sneaking_after_mount_listener() 
     player_entity.set_sneaking(false);
     assert!(cart.interact(&rider, &mut hand));
     assert_mounted(cart.get_entity(), player_entity);
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn java_classic_minecart_spawn_protection_uses_the_operator_list() -> TestResult {
+    use pumpkin_config::op::Op;
+    use pumpkin_data::item::Item;
+    use pumpkin_util::permission::PermissionLvl;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) =
+        super::vehicle_tests::vehicle_world_with_spawn_protection(&folder, 4).await?;
+    world.level_info.rcu(|current| {
+        let mut level_info = (**current).clone();
+        level_info.spawn_x = 8;
+        level_info.spawn_z = 8;
+        level_info
+    });
+    let (player, _peer) = java_rider(&server, &world, "Notch")?;
+    player.permission_lvl.store(PermissionLvl::Zero);
+    player.get_entity().set_pos(Vector3::new(8.5, 65.0, 6.5));
+    let client = player.client.java().ok_or("Java player")?;
+    let rail = BlockPos::new(8, 65, 8);
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 64, 8, Block::STONE.default_state.id);
+    chunk.set_block_absolute_y(8, 65, 8, Block::RAIL.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let click =
+        |sequence| client.handle_use_item_on(&player, &cart_rail_click(rail, sequence), &server);
+    assert!(world.is_in_spawn_protection(&player, &rail));
+    player
+        .inventory()
+        .set_held_item(ItemStack::new(1, &Item::MINECART));
+    click(1)?;
+    assert_eq!(placed_classic_minecarts(&world), 1);
+    assert!(player.inventory().held_item().is_empty());
+
+    let add_operator = |id, name: &str| {
+        server
+            .data
+            .operator_config
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .ops
+            .push(Op::new(id, name.to_owned(), PermissionLvl::Two, false));
+    };
+    add_operator(uuid::Uuid::new_v4(), "jeb_");
+    let next = ItemStack::new(1, &Item::MINECART);
+    player.inventory().set_held_item(next.clone());
+    click(2)?;
+    assert_eq!(placed_classic_minecarts(&world), 1);
+    assert_eq!(player.inventory().held_item().uid, next.uid);
+
+    add_operator(player.gameprofile.id, "Notch");
+    player.permission_lvl.store(PermissionLvl::Two);
+    click(3)?;
+    assert_eq!(placed_classic_minecarts(&world), 2);
+    assert!(player.inventory().held_item().is_empty());
     world.level.shutdown().await;
     Ok(())
 }

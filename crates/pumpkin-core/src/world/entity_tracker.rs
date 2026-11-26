@@ -11,6 +11,7 @@ use dashmap::DashMap;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::{data_component_impl::EquipmentSlot, entity::EntityType, item_stack::ItemStack};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_protocol::bedrock::client::move_actor_delta::{
     CMoveActorDelta, MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW, MOVE_ACTOR_DELTA_FLAG_HAS_PITCH,
     MOVE_ACTOR_DELTA_FLAG_HAS_X, MOVE_ACTOR_DELTA_FLAG_HAS_Y, MOVE_ACTOR_DELTA_FLAG_HAS_YAW,
@@ -110,7 +111,8 @@ pub struct TrackedEntity {
     pub tracking_range: u32,
     pub update_interval: u32,
     pub track_deltas: bool,
-    seen_by: RwLock<FxHashMap<Uuid, Arc<Player>>>,
+    seen_by: RwLock<FxHashMap<Uuid, TrackingViewer>>,
+    retired: AtomicBool,
     pairing_equipment: Mutex<EquipmentPairings>,
     next_equipment_pairing: AtomicU64,
     equipment_retry_pending: AtomicBool,
@@ -127,10 +129,69 @@ pub struct TrackedEntity {
     bedrock_rot: AtomicCell<[u8; 3]>,
 }
 
-#[derive(Clone, Copy)]
-struct EquipmentSession {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct EquipmentSession {
     viewer: Uuid,
     generation: u64,
+}
+
+#[derive(Clone)]
+struct TrackingViewer {
+    player: Arc<Player>,
+    generation: u64,
+}
+
+pub(crate) struct EquippedStacks<'a> {
+    gear: std::sync::MutexGuard<'a, EntityEquipment>,
+    player_main: Option<(
+        &'a PlayerInventory,
+        std::sync::RwLockReadGuard<'a, [ItemStack; PlayerInventory::MAIN_SIZE]>,
+    )>,
+}
+
+impl<'a> EquippedStacks<'a> {
+    pub(crate) fn lock(living: &'a LivingEntity, player: Option<&'a Player>) -> Self {
+        let player_main = player.map(|player| {
+            let inventory = player.inventory().as_ref();
+            (
+                inventory,
+                inventory
+                    .main_inventory
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            )
+        });
+        let gear = living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Self { gear, player_main }
+    }
+
+    pub(crate) fn get(&self, slot: &EquipmentSlot) -> Option<&ItemStack> {
+        if *slot == EquipmentSlot::MAIN_HAND
+            && let Some((inventory, main)) = &self.player_main
+        {
+            main.get(inventory.get_selected_slot() as usize)
+        } else {
+            self.gear.equipment.get(slot)
+        }
+    }
+
+    pub(crate) fn matches(
+        &self,
+        slot: &EquipmentSlot,
+        snapshot: Option<&ItemStack>,
+        bedrock: bool,
+    ) -> bool {
+        TrackedEntity::equipment_stacks_match(self.get(slot), snapshot, bedrock)
+    }
+}
+
+struct JavaEquipmentUpdate {
+    slots: Vec<EquipmentSlot>,
+    packet: CSetEquipment,
+    data: Bytes,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -146,8 +207,11 @@ struct EquipmentPairingState {
     viewer: Arc<Player>,
     generation: u64,
     java_items: FxHashMap<i8, ItemStack>,
+    java_spawn_overrides: FxHashSet<i8>,
     bedrock_items: FxHashMap<BedrockEquipmentGroup, Bytes>,
     pending: Vec<EquipmentSlot>,
+    needs_snapshot: bool,
+    spawned: bool,
 }
 
 struct EquipmentPairing<'a> {
@@ -162,6 +226,7 @@ impl Drop for EquipmentPairing<'_> {
             pairings.entry(self.session.viewer)
             && entry.get().generation == self.session.generation
             && entry.get().pending.is_empty()
+            && !entry.get().needs_snapshot
         {
             entry.remove();
         }
@@ -200,6 +265,7 @@ impl TrackedEntity {
             update_interval,
             track_deltas,
             seen_by: RwLock::default(),
+            retired: AtomicBool::new(false),
             pairing_equipment: Mutex::default(),
             next_equipment_pairing: AtomicU64::new(0),
             equipment_retry_pending: AtomicBool::new(false),
@@ -228,8 +294,8 @@ impl TrackedEntity {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .values()
-            .filter(|player| player.client.bedrock().is_some())
-            .cloned()
+            .filter(|viewer| viewer.player.client.bedrock().is_some())
+            .map(|viewer| viewer.player.clone())
             .collect()
     }
 
@@ -602,6 +668,9 @@ impl TrackedEntity {
         effective_range: u32,
         chunk_changed: bool,
     ) {
+        if self.entity.get_entity().is_removed() {
+            return;
+        }
         let dx = player_pos.x - entity_pos.x;
         let dz = player_pos.z - entity_pos.z;
         let dist_sq = dx.mul_add(dx, dz * dz);
@@ -635,17 +704,8 @@ impl TrackedEntity {
                 {
                     return;
                 }
-                let inserted = self
-                    .seen_by
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(player.gameprofile.id, player.clone())
-                    .is_none();
-                if inserted {
-                    if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
-                        self.bedrock_watchers.fetch_add(1, Relaxed);
-                    }
-                    self.add_pairing(player);
+                if let Some(session) = self.insert_viewer(player) {
+                    self.send_pairing(player, session);
                 }
                 return;
             }
@@ -731,9 +791,327 @@ impl TrackedEntity {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
     pub fn add_pairing(&self, player: &Arc<Player>) {
-        player.client.try_enqueue_spawn_packet(&self.entity);
+        if let Some(session) = self.insert_viewer(player) {
+            self.send_pairing(player, session);
+        }
+    }
+
+    fn insert_viewer(&self, player: &Arc<Player>) -> Option<EquipmentSession> {
+        use std::collections::hash_map::Entry;
+
+        let viewer = player.gameprofile.id;
+        // Insertion must be ordered with a despawn validated after its observers.
+        let _pairing = self.lock_pairing_transitions();
+        let mut viewers = self
+            .seen_by
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.retired.load(Relaxed) || self.entity.get_entity().is_removed() {
+            return None;
+        }
+        let Entry::Vacant(entry) = viewers.entry(viewer) else {
+            return None;
+        };
+        let generation = self.next_equipment_pairing.fetch_add(1, Relaxed);
+        entry.insert(TrackingViewer {
+            player: player.clone(),
+            generation,
+        });
+        if player.client.bedrock().is_some() {
+            self.bedrock_watchers.fetch_add(1, Relaxed);
+        }
+        if self.entity.get_living_entity().is_some() {
+            self.lock_equipment_pairings().insert(
+                viewer,
+                EquipmentPairingState {
+                    viewer: player.clone(),
+                    generation,
+                    java_items: FxHashMap::default(),
+                    java_spawn_overrides: FxHashSet::default(),
+                    bedrock_items: FxHashMap::default(),
+                    pending: Vec::new(),
+                    needs_snapshot: false,
+                    spawned: false,
+                },
+            );
+        }
+        Some(EquipmentSession { viewer, generation })
+    }
+
+    fn lock_pairing_session(&self, session: EquipmentSession) -> Option<impl Sized + '_> {
+        let viewers = self
+            .seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (!self.retired.load(Relaxed)
+            && !self.entity.get_entity().is_removed()
+            && viewers
+                .get(&session.viewer)
+                .is_some_and(|viewer| viewer.generation == session.generation))
+        .then_some(viewers)
+    }
+
+    pub(crate) fn java_pairing_actor(
+        mut payload: &[u8],
+        version: pumpkin_util::version::JavaMinecraftVersion,
+    ) -> Option<(i32, i32)> {
+        use pumpkin_protocol::java::client::play::{
+            CRemoveMobEffect, CSetEntityLink, CSpawnEntity, CUpdateMobEffect,
+        };
+        use pumpkin_util::version::JavaMinecraftVersion;
+
+        let id = payload.get_var_int().ok()?.0;
+        let actor = if id == CSetEntityLink::to_id(version)
+            || (version <= JavaMinecraftVersion::V_1_7_6
+                && [
+                    CSetEntityMetadata::to_id(version),
+                    CHeadRot::to_id(version),
+                    CEntityVelocity::to_id(version),
+                    CUpdateMobEffect::to_id(version),
+                    CRemoveMobEffect::to_id(version),
+                    CSetEquipment::to_id(version),
+                ]
+                .contains(&id))
+        {
+            payload.get_i32_be().ok()?
+        } else if [
+            CSpawnEntity::to_id(version),
+            CSetEntityMetadata::to_id(version),
+            CHeadRot::to_id(version),
+            CEntityVelocity::to_id(version),
+            CUpdateMobEffect::to_id(version),
+            CRemoveMobEffect::to_id(version),
+            CSetEquipment::to_id(version),
+        ]
+        .contains(&id)
+        {
+            payload.get_var_int().ok()?.0
+        } else {
+            return None;
+        };
+        Some((id, actor))
+    }
+
+    fn java_pairing_link(
+        payload: &[u8],
+        version: pumpkin_util::version::JavaMinecraftVersion,
+        actor: i32,
+    ) -> bool {
+        Entity::java_passenger_update_overlaps(payload, version, actor, &[VarInt(actor)])
+    }
+
+    fn java_relationship_is_current(
+        &self,
+        mut payload: &[u8],
+        protocol: pumpkin_util::version::JavaMinecraftVersion,
+    ) -> bool {
+        use pumpkin_protocol::java::client::play::CSetPassengers;
+
+        if !payload
+            .get_var_int()
+            .is_ok_and(|id| id.0 == CSetPassengers::to_id(protocol))
+        {
+            return true;
+        }
+        let Ok(carrier) = payload.get_var_int() else {
+            return false;
+        };
+        let Ok(count) = payload.get_var_int() else {
+            return false;
+        };
+        let ids: Vec<_> = (0..count.0)
+            .map_while(|_| payload.get_var_int().ok())
+            .collect();
+        let includes_actor =
+            carrier.0 == self.entity_id || ids.iter().any(|id| id.0 == self.entity_id);
+        let world = self.entity.get_entity().world.load();
+        let Some(entity) = world.get_entity_by_id(carrier.0) else {
+            return !includes_actor;
+        };
+        let Ok(current) = entity.get_entity().passengers.try_lock() else {
+            return true;
+        };
+        let carries_actor = current
+            .iter()
+            .any(|passenger| passenger.get_entity().entity_id == self.entity_id);
+        (!includes_actor && !carries_actor)
+            || current
+                .iter()
+                .map(|passenger| VarInt(passenger.get_entity().entity_id))
+                .eq(ids)
+    }
+
+    fn bedrock_relationship_is_current(&self, mut payload: &[u8]) -> bool {
+        use pumpkin_protocol::bedrock::client::CSetActorLink;
+
+        if !VarUInt::read(&mut payload).is_ok_and(|id| id.0 == CSetActorLink::PACKET_ID as u32) {
+            return true;
+        }
+        let Ok(carrier) = VarLong::read(&mut payload) else {
+            return false;
+        };
+        let Ok(rider) = VarLong::read(&mut payload) else {
+            return false;
+        };
+        let actor = i64::from(self.entity_id);
+        if carrier.0 != actor && rider.0 != actor {
+            return true;
+        }
+        let Ok(expected) = u8::read(&mut payload) else {
+            return false;
+        };
+        let world = self.entity.get_entity().world.load();
+        let Some(entity) = i32::try_from(carrier.0)
+            .ok()
+            .and_then(|id| world.get_entity_by_id(id))
+        else {
+            return expected == 0;
+        };
+        let Ok(current) = entity.get_entity().passengers.try_lock() else {
+            return true;
+        };
+        current
+            .iter()
+            .position(|passenger| i64::from(passenger.get_entity().entity_id) == rider.0)
+            .map_or(0, |index| if index == 0 { 1 } else { 2 })
+            == expected
+    }
+
+    fn send_java_pairing_packet<T>(
+        &self,
+        client: &JavaClient,
+        session: EquipmentSession,
+        data: Bytes,
+        lock_if_current: impl FnOnce() -> Option<T>,
+    ) {
+        use pumpkin_protocol::java::client::play::CSpawnEntity;
+        let version = client.version.load();
+        let session_current = Cell::new(false);
+        client.try_enqueue_packet_data_projecting(
+            data,
+            || {
+                let viewing = self.lock_pairing_session(session)?;
+                session_current.set(true);
+                Some((viewing, lock_if_current()?))
+            },
+            |data, primary, guard| {
+                if !primary
+                    && session_current.get()
+                    && !self.java_relationship_is_current(&data, version)
+                {
+                    return None;
+                }
+                if guard.is_some() {
+                    return Some(data);
+                }
+                if primary {
+                    return None;
+                }
+                let stale = !session_current.get()
+                    && Self::java_pairing_actor(&data, version)
+                        .is_some_and(|(_, actor)| actor == self.entity_id);
+                if stale
+                    || (!session_current.get()
+                        && Self::java_pairing_link(&data, version, self.entity_id))
+                {
+                    return None;
+                }
+                if session_current.get() {
+                    Some(data)
+                } else {
+                    Self::without_java_removal(data, version, self.entity_id)
+                }
+            },
+            |data, _, guard| {
+                if guard.is_none() {
+                    return;
+                }
+                let spawn = Self::java_pairing_actor(data, version)
+                    == Some((CSpawnEntity::to_id(version), self.entity_id));
+                let mut pairings = self.lock_equipment_pairings();
+                let Some(state) = Self::current_equipment_pairing(&mut pairings, session) else {
+                    return;
+                };
+                if spawn {
+                    state.spawned = true;
+                } else if state.spawned
+                    && let Some(packet) =
+                        Self::java_equipment_from_packet(data, version, self.entity_id)
+                {
+                    state
+                        .java_spawn_overrides
+                        .extend(packet.equipment.iter().map(|(id, _)| *id));
+                }
+            },
+        );
+    }
+
+    fn send_bedrock_pairing_packet<T>(
+        &self,
+        client: &BedrockClient,
+        session: EquipmentSession,
+        data: Bytes,
+        lock_if_current: impl FnOnce() -> Option<T>,
+    ) {
+        let session_current = Cell::new(false);
+        client.try_enqueue_packet_data_projecting(
+            data,
+            || {
+                let viewing = self.lock_pairing_session(session)?;
+                session_current.set(true);
+                Some((viewing, lock_if_current()?))
+            },
+            |data, primary, guard| {
+                if !primary && session_current.get() && !self.bedrock_relationship_is_current(&data)
+                {
+                    return None;
+                }
+                if guard.is_some() {
+                    return Some(data);
+                }
+                if primary {
+                    return None;
+                }
+                (!self.is_bedrock_pairing_actor(&data)).then_some(data)
+            },
+            |_, _, _| {},
+        );
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn send_pairing(&self, player: &Arc<Player>, session: EquipmentSession) {
+        let _pairing = EquipmentPairing {
+            tracker: self,
+            session,
+        };
+        let still_paired = || self.lock_pairing_session(session).is_some();
+        match player.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                self.entity.send_java_spawn_packets(client, &mut |data| {
+                    if still_paired() {
+                        self.send_java_pairing_packet(client, session, data, || Some(()));
+                    }
+                });
+            }
+            ClientPlatform::Bedrock(client) => {
+                self.entity
+                    .send_bedrock_spawn_packets(client, true, &mut |data| {
+                        if still_paired() {
+                            self.send_bedrock_pairing_packet(client, session, data, || Some(()));
+                        }
+                    });
+            }
+        }
+        if !still_paired() {
+            return;
+        }
+        if player.client.bedrock().is_some()
+            && let Some(state) =
+                Self::current_equipment_pairing(&mut self.lock_equipment_pairings(), session)
+        {
+            state.spawned = true;
+        }
         player.try_restore_vehicle(&self.entity);
 
         if let Some(target_player) = self.entity.get_player() {
@@ -761,7 +1139,7 @@ impl TrackedEntity {
                 if let Ok(packet_data) =
                     JavaClient::serialize_packet_for_version(&meta_packet, version)
                 {
-                    client.try_enqueue_packet(packet_data);
+                    self.send_java_pairing_packet(client, session, packet_data, || Some(()));
                 }
 
                 let head_yaw = target_entity.head_yaw.load();
@@ -771,7 +1149,7 @@ impl TrackedEntity {
                     (head_yaw * 256.0 / 360.0).rem_euclid(256.0) as u8,
                 );
                 if let Ok(data) = client.serialize_packet(&head_rot_packet) {
-                    client.try_enqueue_packet(data);
+                    self.send_java_pairing_packet(client, session, data, || Some(()));
                 }
             }
         } else if self.entity.get_living_entity().is_some()
@@ -784,17 +1162,20 @@ impl TrackedEntity {
                 (head_yaw * 256.0 / 360.0).rem_euclid(256.0) as u8,
             );
             if let Ok(data) = client.serialize_packet(&head_rot_packet) {
-                client.try_enqueue_packet(data);
+                self.send_java_pairing_packet(client, session, data, || Some(()));
             }
         }
 
+        if !still_paired() {
+            return;
+        }
         let vel = self.entity.get_entity().velocity.load();
         if vel.length_squared() > 1e-4 {
             match player.client.as_ref() {
                 ClientPlatform::Java(client) => {
                     let motion = CEntityVelocity::new(self.entity_id.into(), vel);
                     if let Ok(data) = client.serialize_packet(&motion) {
-                        client.try_enqueue_packet(data);
+                        self.send_java_pairing_packet(client, session, data, || Some(()));
                     }
                 }
                 ClientPlatform::Bedrock(client) => {
@@ -805,7 +1186,7 @@ impl TrackedEntity {
                             tick: 0u64.into(),
                         };
                     if let Ok(data) = client.serialize_packet(&motion) {
-                        client.try_enqueue_packet(data);
+                        self.send_bedrock_pairing_packet(client, session, data, || Some(()));
                     }
                 }
             }
@@ -822,16 +1203,20 @@ impl TrackedEntity {
                 let packet = CSetEntityMetadata::new(self.entity_id.into(), non_default);
                 if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
                 {
-                    client.try_enqueue_packet(packet_data);
+                    self.send_java_pairing_packet(client, session, packet_data, || Some(()));
                 }
             }
         }
 
         if let Some(living) = self.entity.get_living_entity() {
-            self.send_pairing_equipment(living, player);
+            self.send_pairing_equipment(living, player, session);
 
-            if let Ok(effects_guard) = living.active_effects.try_lock() {
-                for effect in effects_guard.values() {
+            if let Ok(effects) = living
+                .active_effects
+                .try_lock()
+                .map(|effects| effects.clone())
+            {
+                for effect in effects.values() {
                     match player.client.as_ref() {
                         ClientPlatform::Java(client) => {
                             let mut flags: i8 = 0;
@@ -852,7 +1237,7 @@ impl TrackedEntity {
                                 flags,
                             );
                             if let Ok(data) = client.serialize_packet(&pkt) {
-                                client.try_enqueue_packet(data);
+                                self.send_java_pairing_packet(client, session, data, || Some(()));
                             }
                         }
                         ClientPlatform::Bedrock(client) => {
@@ -867,7 +1252,12 @@ impl TrackedEntity {
                                 ambient: effect.ambient,
                             };
                             if let Ok(data) = client.serialize_packet(&pkt) {
-                                client.try_enqueue_packet(data);
+                                self.send_bedrock_pairing_packet(
+                                    client,
+                                    session,
+                                    data,
+                                    || Some(()),
+                                );
                             }
                         }
                     }
@@ -875,106 +1265,381 @@ impl TrackedEntity {
             }
         }
 
+        if !still_paired() {
+            return;
+        }
         let entity = self.entity.get_entity();
-        Self::send_pairing_passengers(entity, player, None);
+        self.send_pairing_passengers(entity, player, session, None);
         if let Some(vehicle) = entity.get_vehicle() {
-            Self::send_pairing_passengers(vehicle.get_entity(), player, Some(self.entity_id));
+            self.send_pairing_passengers(
+                vehicle.get_entity(),
+                player,
+                session,
+                Some(self.entity_id),
+            );
         }
     }
 
-    fn send_pairing_passengers(carrier: &Entity, player: &Player, paired_rider: Option<i32>) {
+    fn send_pairing_passengers(
+        &self,
+        carrier: &Entity,
+        player: &Player,
+        session: EquipmentSession,
+        paired_rider: Option<i32>,
+    ) {
+        let mut prior_viewers = None;
+        while let Some(viewers) = self.send_pairing_passenger_projection(
+            carrier,
+            player,
+            session,
+            paired_rider,
+            prior_viewers.as_deref(),
+        ) {
+            if self.lock_pairing_session(session).is_none() {
+                break;
+            }
+            prior_viewers = Some(viewers);
+        }
+    }
+
+    fn send_pairing_passenger_projection(
+        &self,
+        carrier: &Entity,
+        player: &Player,
+        session: EquipmentSession,
+        paired_rider: Option<i32>,
+        prior_viewers: Option<&[(Arc<Self>, EquipmentSession)]>,
+    ) -> Option<Vec<(Arc<Self>, EquipmentSession)>> {
         // Packet observers can change either link while pairing this carrier or its rider.
-        let ids: Vec<VarInt> = carrier
+        let passengers = carrier
             .passengers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let ids: Vec<VarInt> = passengers
             .iter()
             .map(|p| VarInt(p.get_entity().entity_id))
             .collect();
         if ids.is_empty() || paired_rider.is_some_and(|rider_id| !ids.contains(&VarInt(rider_id))) {
-            return;
+            return None;
         }
-        let links = if player.client.bedrock().is_some() {
-            ids.iter()
-                .enumerate()
-                .filter(|(_, id)| paired_rider.is_none_or(|rider_id| id.0 == rider_id))
-                .map(|(index, id)| {
-                    Some(carrier.bedrock_passenger_link(
-                        id.0,
-                        if index == 0 { 1 } else { 2 },
-                        false,
-                    ))
-                })
-                .collect()
-        } else {
-            Vec::new()
+        let world = carrier.world.load();
+        let mut counterpart_viewers = Vec::new();
+        let mut visible = |id| {
+            if id == self.entity_id || id == player.entity_id() {
+                return true;
+            }
+            let Some(tracked) = world.entity_tracker.get_tracked_entity(id) else {
+                return false;
+            };
+            let Some(session) = tracked.viewer_session(player) else {
+                return false;
+            };
+            counterpart_viewers.push((tracked, session));
+            true
         };
-        carrier.send_passenger_update_to(&carrier.world.load(), player, &ids, &links);
+        if !visible(carrier.entity_id) {
+            return None;
+        }
+        let mut unseen = Vec::new();
+        let mut visible_ids = Vec::new();
+        for (passenger, id) in passengers.iter().zip(&ids) {
+            if visible(id.0) {
+                visible_ids.push(*id);
+            } else {
+                unseen.push(passenger.get_entity());
+            }
+        }
+        unseen.sort_unstable_by_key(|entity| entity.entity_id);
+        unseen.dedup_by_key(|entity| entity.entity_id);
+        if visible_ids.is_empty() {
+            return None;
+        }
+
+        // Only retry a strictly smaller set of the original tracker generations.
+        // A newly paired rider already publishes a newer projection.
+        if prior_viewers
+            .is_some_and(|prior| !Self::passenger_viewers_shrank(prior, &counterpart_viewers))
+        {
+            return None;
+        }
+        let mut endpoints: Vec<_> = counterpart_viewers
+            .iter()
+            .map(|(tracked, session)| (tracked.as_ref(), *session))
+            .chain(std::iter::once((self, session)))
+            .collect();
+        // Pairing snapshots can share a carrier or riders on different tracking threads.
+        endpoints.sort_unstable_by_key(|(tracked, _)| tracked.entity_id);
+        endpoints.dedup_by_key(|(tracked, _)| tracked.entity_id);
+        let links =
+            Self::pairing_passenger_links(carrier, player, &ids, &visible_ids, paired_rider);
+        let visibility_shrank = Cell::new(false);
+        carrier.send_passenger_update_to_if(
+            &world,
+            player,
+            &ids,
+            &visible_ids,
+            &links,
+            |link_rider| {
+                let unseen = if link_rider.is_none() {
+                    Some(Self::lock_unseen_passengers(&world, player, &unseen)?)
+                } else {
+                    None
+                };
+                let viewers = self.lock_passenger_viewers(
+                    &world,
+                    player,
+                    carrier.entity_id,
+                    &endpoints,
+                    link_rider,
+                    &visibility_shrank,
+                )?;
+                Some((unseen, viewers))
+            },
+        );
+        // A despawn has no paired publication to repair the surviving Java riders.
+        visibility_shrank.get().then_some(counterpart_viewers)
+    }
+
+    fn passenger_viewers_shrank(
+        prior_viewers: &[(Arc<Self>, EquipmentSession)],
+        current_viewers: &[(Arc<Self>, EquipmentSession)],
+    ) -> bool {
+        current_viewers.len() < prior_viewers.len()
+            && current_viewers.iter().all(|(tracked, session)| {
+                prior_viewers
+                    .iter()
+                    .any(|(prior, generation)| Arc::ptr_eq(tracked, prior) && session == generation)
+            })
+    }
+
+    fn pairing_passenger_links(
+        carrier: &Entity,
+        player: &Player,
+        ids: &[VarInt],
+        visible_ids: &[VarInt],
+        paired_rider: Option<i32>,
+    ) -> Vec<Option<pumpkin_protocol::bedrock::client::CSetActorLink>> {
+        if player.client.bedrock().is_none() {
+            return Vec::new();
+        }
+        ids.iter()
+            .enumerate()
+            .filter(|(_, id)| {
+                visible_ids.contains(id) && paired_rider.is_none_or(|rider_id| id.0 == rider_id)
+            })
+            .map(|(index, id)| {
+                Some(carrier.bedrock_passenger_link(id.0, if index == 0 { 1 } else { 2 }, false))
+            })
+            .collect()
+    }
+
+    fn lock_passenger_viewers<'a>(
+        &self,
+        world: &World,
+        player: &Player,
+        carrier_id: i32,
+        endpoints: &[(&'a Self, EquipmentSession)],
+        link_rider: Option<i32>,
+        visibility_shrank: &Cell<bool>,
+    ) -> Option<Vec<impl Sized + 'a>> {
+        let mut shrank = false;
+        let mut viewers = Vec::with_capacity(endpoints.len());
+        for &(tracked, session) in endpoints {
+            let id = tracked.entity_id;
+            let required = id == self.entity_id || id == carrier_id;
+            if link_rider.is_some_and(|rider| id != rider && !required) {
+                continue;
+            }
+            if let Some(viewing) = tracked.lock_pairing_session(session) {
+                viewers.push(viewing);
+            } else if required
+                || link_rider.is_some()
+                || world
+                    .entity_tracker
+                    .get_tracked_entity(id)
+                    .is_some_and(|current| current.viewer_session(player).is_some())
+            {
+                return None;
+            } else {
+                shrank = true;
+            }
+        }
+        visibility_shrank.set(shrank);
+        (!shrank).then_some(viewers)
+    }
+
+    fn lock_unseen_passengers<'a>(
+        world: &World,
+        player: &Player,
+        unseen: &[&'a Entity],
+    ) -> Option<Vec<std::sync::MutexGuard<'a, ()>>> {
+        // Pin absence across enqueue as well as the generations already visible.
+        let transitions = unseen
+            .iter()
+            .map(|entity| {
+                entity
+                    .tracking_pairing_lock
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+            })
+            .collect();
+        unseen
+            .iter()
+            .all(|entity| {
+                world
+                    .entity_tracker
+                    .get_tracked_entity(entity.entity_id)
+                    .is_none_or(|tracked| tracked.viewer_session(player).is_none())
+            })
+            .then_some(transitions)
+    }
+
+    pub(crate) fn viewer_session(&self, player: &Player) -> Option<EquipmentSession> {
+        let viewer = player.gameprofile.id;
+        let viewers = self
+            .seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let tracked = viewers.get(&viewer)?;
+        (!self.retired.load(Relaxed)
+            && !self.entity.get_entity().is_removed()
+            && std::ptr::eq(tracked.player.as_ref(), player))
+        .then_some(EquipmentSession {
+            viewer,
+            generation: tracked.generation,
+        })
+    }
+
+    fn lock_pairing_transitions(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.entity
+            .get_entity()
+            .tracking_pairing_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     pub fn remove_pairing(&self, player: &Player) {
-        let entity_ids = [self.entity_id.into()];
+        if !self.remove_viewer(player) {
+            return;
+        }
+        let world = self.entity.get_entity().world.load_full();
+        self.send_removal(player, || self.lock_removal_if_unpaired(&world, player));
+    }
+
+    fn lock_removal_if_unpaired(
+        &self,
+        world: &World,
+        player: &Player,
+    ) -> Option<std::sync::MutexGuard<'_, ()>> {
+        let pairing = self.lock_pairing_transitions();
+        let seen = world
+            .entity_tracker
+            .get_tracked_entity(self.entity_id)
+            .is_some_and(|tracked| tracked.is_seen_by(&player.gameprofile.id));
+        (!seen && !self.is_seen_by(&player.gameprofile.id)).then_some(pairing)
+    }
+
+    fn send_removal<T>(&self, player: &Player, lock_if_current: impl FnOnce() -> Option<T>) {
         match player.client.as_ref() {
             ClientPlatform::Java(client) => {
-                let packet = CRemoveEntities::new(&entity_ids);
-                if let Ok(data) = client.serialize_packet(&packet) {
-                    client.try_enqueue_packet(data);
+                let ids = [self.entity_id.into()];
+                if let Ok(data) = client.serialize_packet(&CRemoveEntities::new(&ids)) {
+                    let version = client.version.load();
+                    client.try_enqueue_packet_data_filtering(data, lock_if_current, |data| {
+                        Self::without_java_removal(data, version, self.entity_id)
+                    });
                 }
             }
             ClientPlatform::Bedrock(client) => {
                 let packet = CRemoveActor::new(VarLong(i64::from(self.entity_id)));
                 if let Ok(data) = client.serialize_packet(&packet) {
-                    client.try_enqueue_packet(data);
+                    client.try_enqueue_packet_data_if(
+                        data,
+                        CRemoveActor::PACKET_ID,
+                        |mut payload| {
+                            VarLong::read(&mut payload)
+                                .is_ok_and(|id| id.0 == i64::from(self.entity_id))
+                        },
+                        lock_if_current,
+                    );
                 }
             }
         }
     }
 
-    pub fn broadcast_removed(&self, _world: &World) {
-        let had_bedrock = self.bedrock_watchers.swap(0, Relaxed) > 0;
-        let seen_by = {
+    fn without_java_removal(
+        data: Bytes,
+        version: pumpkin_util::version::JavaMinecraftVersion,
+        entity_id: i32,
+    ) -> Option<Bytes> {
+        use pumpkin_util::version::JavaMinecraftVersion;
+
+        let mut payload = data.as_ref();
+        if !payload
+            .get_var_int()
+            .is_ok_and(|id| id.0 == CRemoveEntities::to_id(version))
+        {
+            return Some(data);
+        }
+        if version == JavaMinecraftVersion::V_1_17 {
+            return payload
+                .get_var_int()
+                .is_ok_and(|id| id.0 != entity_id)
+                .then_some(data);
+        }
+        let legacy = version <= JavaMinecraftVersion::V_1_7_6;
+        let count = if legacy {
+            i32::from(payload.get_u8().ok()?)
+        } else {
+            payload.get_var_int().ok()?.0
+        };
+        let mut ids = Vec::new();
+        for _ in 0..count {
+            let id = if legacy {
+                VarInt(payload.get_i32_be().ok()?)
+            } else {
+                payload.get_var_int().ok()?
+            };
+            if id.0 != entity_id {
+                ids.push(id);
+            }
+        }
+        if ids.is_empty() {
+            None
+        } else if ids.len() == count as usize {
+            Some(data)
+        } else {
+            JavaClient::serialize_packet_for_version(&CRemoveEntities::new(&ids), version).ok()
+        }
+    }
+
+    pub fn broadcast_removed(&self, world: &World) {
+        let viewers = {
             let mut guard = self
                 .seen_by
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.retired.store(true, Relaxed);
             self.lock_equipment_pairings().clear();
+            self.bedrock_watchers.store(0, Relaxed);
             std::mem::take(&mut *guard)
         };
-        if seen_by.is_empty() {
-            return;
-        }
-        let entity_ids = [self.entity_id.into()];
-        let je_packet = CRemoveEntities::new(&entity_ids);
-        World::broadcast_java_players(&je_packet, seen_by.values());
-        if had_bedrock {
-            let be_packet = CRemoveActor::new(VarLong(i64::from(self.entity_id)));
-            World::broadcast_bedrock_grouped(
-                &be_packet,
-                seen_by.values().filter_map(|p| match p.client.as_ref() {
-                    ClientPlatform::Bedrock(be_client) => Some(be_client),
-                    ClientPlatform::Java(_) => None,
-                }),
-            );
+        for viewer in viewers.values() {
+            self.send_removal(&viewer.player, || {
+                self.lock_removal_if_unpaired(world, &viewer.player)
+            });
         }
     }
 
     /// Vanilla `TrackedEntity.removePlayer`: despawn on the client, only if it was paired.
     pub fn remove_player(&self, player: &Player) {
-        let removed = self.remove_viewer(player);
-        if removed {
-            if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
-                self.bedrock_watchers.fetch_sub(1, Relaxed);
-            }
-            self.remove_pairing(player);
-        }
+        self.remove_pairing(player);
     }
 
     /// Forgets the player as a viewer without a removal packet; the client already dropped it.
     pub fn forget_player(&self, player: &Player) {
-        let removed = self.remove_viewer(player);
-        if removed && matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
-            self.bedrock_watchers.fetch_sub(1, Relaxed);
-        }
+        self.remove_viewer(player);
     }
 
     fn remove_viewer(&self, player: &Player) -> bool {
@@ -982,21 +1647,24 @@ impl TrackedEntity {
             .seen_by
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if viewers.remove(&player.gameprofile.id).is_none() {
+        let Some(viewer) = viewers.remove(&player.gameprofile.id) else {
             return false;
+        };
+        if viewer.player.client.bedrock().is_some() {
+            self.bedrock_watchers.fetch_sub(1, Relaxed);
         }
         self.lock_equipment_pairings()
             .remove(&player.gameprofile.id);
         true
     }
 
-    fn viewers_snapshot(&self) -> Vec<Arc<Player>> {
+    pub(crate) fn viewers_snapshot(&self) -> Vec<Arc<Player>> {
         // A packet observer may remove this entity and take the write lock.
         self.seen_by
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .values()
-            .cloned()
+            .map(|viewer| viewer.player.clone())
             .collect()
     }
 
@@ -1013,7 +1681,7 @@ impl TrackedEntity {
         (std::ptr::eq(recipient.world().as_ref(), update.world)
             && viewers
                 .get(&recipient.gameprofile.id)
-                .is_some_and(|player| Arc::ptr_eq(player, recipient)))
+                .is_some_and(|viewer| Arc::ptr_eq(&viewer.player, recipient)))
         .then_some((motion_guard, viewers))
     }
 
@@ -1083,13 +1751,13 @@ impl TrackedEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    fn equipment_session(&self, viewer: Uuid) -> Option<EquipmentSession> {
-        self.lock_equipment_pairings()
-            .get(&viewer)
-            .map(|state| EquipmentSession {
-                viewer,
-                generation: state.generation,
-            })
+    fn equipment_viewers(&self) -> Vec<TrackingViewer> {
+        self.seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .cloned()
+            .collect()
     }
 
     fn current_equipment_pairing(
@@ -1101,41 +1769,55 @@ impl TrackedEntity {
             .filter(|state| state.generation == session.generation)
     }
 
-    fn send_pairing_equipment(&self, living: &LivingEntity, player: &Arc<Player>) {
-        let Some(snapshot) = living
-            .entity_equipment
-            .try_lock()
-            .ok()
-            .filter(|gear| !gear.is_empty())
-            .map(|gear| gear.clone())
-        else {
+    fn try_equipment_snapshot(&self, living: &LivingEntity) -> Option<EntityEquipment> {
+        let mut snapshot = match living.entity_equipment.try_lock() {
+            Ok(gear) => gear.clone(),
+            Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner().clone(),
+            Err(std::sync::TryLockError::WouldBlock) => return None,
+        };
+        if let Some(player) = self.entity.get_player() {
+            let inventory = player.inventory();
+            let main = match inventory.main_inventory.try_read() {
+                Ok(main) => main,
+                Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+                Err(std::sync::TryLockError::WouldBlock) => return None,
+            };
+            let hand = main
+                .get(inventory.get_selected_slot() as usize)
+                .cloned()
+                .unwrap_or_else(|| ItemStack::EMPTY.clone());
+            snapshot.put(&EquipmentSlot::MAIN_HAND, hand);
+        }
+        Some(snapshot)
+    }
+
+    fn send_pairing_equipment(
+        &self,
+        living: &LivingEntity,
+        player: &Arc<Player>,
+        session: EquipmentSession,
+    ) {
+        let Some(snapshot) = self.try_equipment_snapshot(living) else {
+            if let Some(state) =
+                Self::current_equipment_pairing(&mut self.lock_equipment_pairings(), session)
+            {
+                state.spawned = true;
+                state.needs_snapshot = true;
+                self.equipment_retry_pending.store(true, Relaxed);
+            }
             return;
         };
-        let session = EquipmentSession {
-            viewer: player.gameprofile.id,
-            generation: self.next_equipment_pairing.fetch_add(1, Relaxed),
-        };
-        {
-            let mut pairings = self.lock_equipment_pairings();
-            let std::collections::hash_map::Entry::Vacant(entry) = pairings.entry(session.viewer)
-            else {
-                return;
-            };
-            entry.insert(EquipmentPairingState {
-                viewer: player.clone(),
-                generation: session.generation,
-                java_items: FxHashMap::default(),
-                bedrock_items: FxHashMap::default(),
-                pending: Vec::new(),
-            })
-        };
-        let slots = snapshot
+        let slots = Self::occupied_slots(&snapshot);
+        self.send_equipment_pairing(living, player, session, snapshot, slots, 2);
+    }
+
+    fn occupied_slots(snapshot: &EntityEquipment) -> Vec<EquipmentSlot> {
+        snapshot
             .equipment
             .iter()
             .filter(|(_, stack)| !stack.is_empty())
             .map(|(slot, _)| slot.clone())
-            .collect();
-        self.send_equipment_pairing(living, player, session, snapshot, slots, 2);
+            .collect()
     }
 
     fn send_equipment_pairing(
@@ -1156,22 +1838,39 @@ impl TrackedEntity {
                 return;
             }
             if attempt != 0 {
-                snapshot = living
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
+                let Some(next) = self.try_equipment_snapshot(living) else {
+                    break;
+                };
+                snapshot = next;
+            }
+            if player.client.java().is_some() {
+                let mut pairings = self.lock_equipment_pairings();
+                let Some(state) = Self::current_equipment_pairing(&mut pairings, session) else {
+                    return;
+                };
+                slots.retain(|slot| {
+                    !state.java_spawn_overrides.contains(&slot.discriminant())
+                        && !state
+                            .java_items
+                            .get(&slot.discriminant())
+                            .is_some_and(|sent| {
+                                Self::equipment_stacks_match(
+                                    snapshot.equipment.get(slot),
+                                    Some(sent),
+                                    false,
+                                )
+                            })
+                });
             }
             slots = match player.client.as_ref() {
-                ClientPlatform::Java(client) => self.send_java_equipment(
-                    client,
-                    living,
-                    slots.into_iter().map(|slot| {
+                ClientPlatform::Java(client) => self
+                    .java_equipment_update(slots.into_iter().map(|slot| {
                         let stack = snapshot.get(&slot);
                         (slot, stack)
+                    }))
+                    .map_or_else(Vec::new, |update| {
+                        self.send_java_equipment(client, living, &update, session)
                     }),
-                    Some(session),
-                ),
                 ClientPlatform::Bedrock(client) => {
                     self.send_bedrock_pairing(client, living, &snapshot, &slots, session)
                 }
@@ -1195,10 +1894,14 @@ impl TrackedEntity {
         let Some(living) = self.entity.get_living_entity() else {
             return;
         };
+        let Some(snapshot) = self.try_equipment_snapshot(living) else {
+            self.equipment_retry_pending.store(true, Relaxed);
+            return;
+        };
         let pending = self
             .lock_equipment_pairings()
             .iter_mut()
-            .filter(|(_, state)| !state.pending.is_empty())
+            .filter(|(_, state)| state.needs_snapshot || !state.pending.is_empty())
             .map(|(&viewer, state)| {
                 (
                     state.viewer.clone(),
@@ -1206,17 +1909,16 @@ impl TrackedEntity {
                         viewer,
                         generation: state.generation,
                     },
-                    std::mem::take(&mut state.pending),
+                    if std::mem::take(&mut state.needs_snapshot) {
+                        Self::occupied_slots(&snapshot)
+                    } else {
+                        std::mem::take(&mut state.pending)
+                    },
                 )
             })
             .collect::<Vec<_>>();
         for (player, session, slots) in pending {
-            let snapshot = living
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            self.send_equipment_pairing(living, &player, session, snapshot, slots, 1);
+            self.send_equipment_pairing(living, &player, session, snapshot.clone(), slots, 1);
         }
     }
 
@@ -1239,13 +1941,7 @@ impl TrackedEntity {
         let mut stale = Vec::new();
         for slot in [EquipmentSlot::MAIN_HAND, EquipmentSlot::OFF_HAND] {
             if slots.contains(&slot)
-                && self.send_bedrock_hand(
-                    client,
-                    living,
-                    &slot,
-                    &snapshot.get(&slot),
-                    Some(session),
-                )
+                && self.send_bedrock_hand(client, living, &slot, &snapshot.get(&slot), session)
             {
                 stale.push(slot);
             }
@@ -1259,16 +1955,12 @@ impl TrackedEntity {
         stale
     }
 
-    fn equipment_slot_matches(
-        current: &EntityEquipment,
-        slot: &EquipmentSlot,
+    fn equipment_stacks_match(
+        current: Option<&ItemStack>,
         snapshot: Option<&ItemStack>,
         bedrock: bool,
     ) -> bool {
-        let current = current
-            .equipment
-            .get(slot)
-            .filter(|stack| !stack.is_empty());
+        let current = current.filter(|stack| !stack.is_empty());
         match (current, snapshot.filter(|stack| !stack.is_empty())) {
             (Some(current), Some(snapshot)) => {
                 current.are_equal(snapshot) && (!bedrock || current.uid == snapshot.uid)
@@ -1291,13 +1983,10 @@ impl TrackedEntity {
         (packet.entity_id.0 == entity_id).then_some(packet)
     }
 
-    fn send_java_equipment(
+    fn java_equipment_update(
         &self,
-        client: &JavaClient,
-        living: &LivingEntity,
         slots: impl IntoIterator<Item = (EquipmentSlot, ItemStack)>,
-        session: Option<EquipmentSession>,
-    ) -> Vec<EquipmentSlot> {
+    ) -> Option<JavaEquipmentUpdate> {
         let (slots, equipment): (Vec<_>, Vec<_>) = slots
             .into_iter()
             .map(|(slot, stack)| {
@@ -1305,52 +1994,57 @@ impl TrackedEntity {
                 (slot, (id, ItemStackSerializer::from(stack)))
             })
             .unzip();
-        if slots.is_empty() || living.entity.is_removed() {
-            return Vec::new();
+        if slots.is_empty() || self.entity.get_entity().is_removed() {
+            return None;
         }
         let packet = CSetEquipment::new(self.entity_id.into(), equipment);
-        let Ok(data) = client.serialize_packet(&packet) else {
-            return Vec::new();
-        };
+        let data = JavaClient::serialize_packet_for_version(&packet, CURRENT_MC_VERSION).ok()?;
+        Some(JavaEquipmentUpdate {
+            slots,
+            packet,
+            data,
+        })
+    }
+
+    fn send_java_equipment(
+        &self,
+        client: &JavaClient,
+        living: &LivingEntity,
+        update: &JavaEquipmentUpdate,
+        session: EquipmentSession,
+    ) -> Vec<EquipmentSlot> {
         let version = client.version.load();
         let changed = RefCell::new(Vec::new());
         let active = Cell::new(true);
         client.try_enqueue_packet_data_projecting(
-            data,
+            update.data.clone(),
             || {
-                let gear = living
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let mut pairings = session.map(|_| self.lock_equipment_pairings());
-                active.set(
-                    !living.entity.is_removed()
-                        && session.is_none_or(|session| {
-                            pairings
-                                .as_deref_mut()
-                                .and_then(|pairings| {
-                                    Self::current_equipment_pairing(pairings, session)
-                                })
-                                .is_some()
-                        }),
-                );
+                let gear = EquippedStacks::lock(living, self.entity.get_player());
+                let viewing = self.lock_pairing_session(session);
+                active.set(viewing.is_some());
                 if active.get() {
                     changed.borrow_mut().extend(
-                        slots
+                        update
+                            .slots
                             .iter()
-                            .zip(&packet.equipment)
-                            .filter(|(slot, (_, stack))| {
-                                !Self::equipment_slot_matches(&gear, slot, Some(&stack.0), false)
-                            })
+                            .zip(&update.packet.equipment)
+                            .filter(|(slot, (_, stack))| !gear.matches(slot, Some(&stack.0), false))
                             .map(|(slot, _)| slot.clone()),
                     );
                 }
-                (gear, pairings)
+                let pairings = active.get().then(|| self.lock_equipment_pairings());
+                (gear, viewing, pairings)
             },
             |data, primary, _| {
+                if !primary && active.get() && !self.java_relationship_is_current(&data, version) {
+                    return None;
+                }
                 let stale = changed.borrow();
                 if active.get() && stale.is_empty() {
                     return Some(data);
+                }
+                if !active.get() && Self::java_pairing_link(&data, version, self.entity_id) {
+                    return None;
                 }
                 Self::project_java_equipment(
                     data,
@@ -1360,28 +2054,29 @@ impl TrackedEntity {
                     version,
                     self.entity_id,
                 )
+                .and_then(|data| {
+                    if active.get() {
+                        Some(data)
+                    } else {
+                        Self::without_java_removal(data, version, self.entity_id)
+                    }
+                })
             },
-            |data, (_, pairings)| {
-                if let Some(state) = session.and_then(|session| {
-                    Self::current_equipment_pairing(pairings.as_deref_mut()?, session)
-                }) && let Some(packet) =
-                    Self::java_equipment_from_packet(data, version, self.entity_id)
+            |data, _, (_, _, pairings)| {
+                if let Some(state) = pairings
+                    .as_deref_mut()
+                    .and_then(|records| Self::current_equipment_pairing(records, session))
+                    .filter(|state| state.spawned)
+                    && let Some(represented) =
+                        Self::java_equipment_from_packet(data, version, self.entity_id)
                 {
-                    state.java_items.extend(
-                        packet
-                            .equipment
-                            .into_iter()
-                            .map(|(slot, item)| (slot, item.0.into_owned())),
-                    );
+                    Self::record_java_equipment(state, &update.packet, &represented);
                 }
             },
         );
         let mut changed = changed.into_inner();
-        if let Some(session) = session {
-            let gear = living
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !changed.is_empty() {
+            let gear = EquippedStacks::lock(living, self.entity.get_player());
             let mut pairings = self.lock_equipment_pairings();
             let Some(state) = Self::current_equipment_pairing(&mut pairings, session) else {
                 return Vec::new();
@@ -1390,12 +2085,27 @@ impl TrackedEntity {
                 !state
                     .java_items
                     .get(&slot.discriminant())
-                    .is_some_and(|sent| {
-                        Self::equipment_slot_matches(&gear, slot, Some(sent), false)
-                    })
+                    .is_some_and(|sent| gear.matches(slot, Some(sent), false))
             });
         }
         changed
+    }
+
+    fn record_java_equipment(
+        state: &mut EquipmentPairingState,
+        authoritative: &CSetEquipment,
+        represented: &CSetEquipment,
+    ) {
+        for (slot, item) in &authoritative.equipment {
+            if represented
+                .equipment
+                .iter()
+                .any(|(delivered_slot, _)| slot == delivered_slot)
+            {
+                state.java_spawn_overrides.remove(slot);
+                state.java_items.insert(*slot, item.0.as_ref().clone());
+            }
+        }
     }
 
     fn project_java_equipment(
@@ -1406,12 +2116,15 @@ impl TrackedEntity {
         version: pumpkin_util::version::JavaMinecraftVersion,
         entity_id: i32,
     ) -> Option<Bytes> {
+        if !active {
+            return (!primary
+                && Self::java_pairing_actor(&data, version)
+                    .is_none_or(|(_, actor)| actor != entity_id))
+            .then_some(data);
+        }
         let Some(mut packet) = Self::java_equipment_from_packet(&data, version, entity_id) else {
             return (!primary).then_some(data);
         };
-        if !active {
-            return None;
-        }
         let original = packet.equipment.len();
         packet
             .equipment
@@ -1429,22 +2142,28 @@ impl TrackedEntity {
         living: &LivingEntity,
         slot: &EquipmentSlot,
         stack: &ItemStack,
-        session: Option<EquipmentSession>,
+        session: EquipmentSession,
     ) -> bool {
         use pumpkin_protocol::bedrock::server::inventory_transaction::WINDOW_ID_OFF_HAND;
+        let container_id = if *slot == EquipmentSlot::OFF_HAND {
+            WINDOW_ID_OFF_HAND as u8
+        } else {
+            0
+        };
         let packet = CMobEquipment {
             target_runtime_id: (self.entity_id as u64).into(),
             item: stack.into(),
             slot: 0,
             selected_slot: 0,
-            container_id: if *slot == EquipmentSlot::OFF_HAND {
-                WINDOW_ID_OFF_HAND as u8
-            } else {
-                0
-            },
+            container_id,
         };
-        self.send_bedrock_equipment(client, living, &packet, session, |current| {
-            Self::equipment_slot_matches(current, slot, Some(stack), true)
+        let group = BedrockEquipmentGroup {
+            packet_id: CMobEquipment::PACKET_ID as u32,
+            entity_id: packet.target_runtime_id.0,
+            container: Some(container_id),
+        };
+        self.send_bedrock_equipment(client, living, &packet, group, session, |current| {
+            current.matches(slot, Some(stack), true)
         })
     }
 
@@ -1469,10 +2188,15 @@ impl TrackedEntity {
             feet: descriptor(&EquipmentSlot::FEET),
             body: descriptor(&EquipmentSlot::BODY),
         };
-        self.send_bedrock_equipment(client, living, &packet, Some(session), |current| {
-            Self::ARMOR_SLOTS.iter().all(|slot| {
-                Self::equipment_slot_matches(current, slot, snapshot.equipment.get(slot), true)
-            })
+        let group = BedrockEquipmentGroup {
+            packet_id: CMobArmorEquipment::PACKET_ID as u32,
+            entity_id: packet.target_runtime_id.0,
+            container: None,
+        };
+        self.send_bedrock_equipment(client, living, &packet, group, session, |current| {
+            Self::ARMOR_SLOTS
+                .iter()
+                .all(|slot| current.matches(slot, snapshot.equipment.get(slot), true))
         })
     }
 
@@ -1502,27 +2226,18 @@ impl TrackedEntity {
         client: &BedrockClient,
         living: &LivingEntity,
         packet: &P,
-        session: Option<EquipmentSession>,
-        matches: impl Fn(&EntityEquipment) -> bool,
+        group: BedrockEquipmentGroup,
+        session: EquipmentSession,
+        matches: impl Fn(&EquippedStacks<'_>) -> bool,
     ) -> bool {
         let Ok(data) = client.serialize_packet(packet) else {
             return false;
         };
-        let Some(group) = Self::bedrock_equipment_group(&data) else {
-            return false;
-        };
-        if let Some(session) = session {
-            let gear = living
-                .entity_equipment
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut pairings = self.lock_equipment_pairings();
-            let Some(state) = Self::current_equipment_pairing(&mut pairings, session) else {
-                return false;
-            };
-            if state.bedrock_items.get(&group) == Some(&data) {
-                return !matches(&gear);
-            }
+        let previously_delivered =
+            Self::current_equipment_pairing(&mut self.lock_equipment_pairings(), session)
+                .is_some_and(|state| state.bedrock_items.get(&group) == Some(&data));
+        if previously_delivered {
+            return !matches(&EquippedStacks::lock(living, self.entity.get_player()));
         }
         let canonical = data.clone();
         let stale = Cell::new(false);
@@ -1530,36 +2245,30 @@ impl TrackedEntity {
         client.try_enqueue_packet_data_projecting(
             data,
             || {
-                let gear = living
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let mut pairings = session.map(|_| self.lock_equipment_pairings());
-                active.set(
-                    !living.entity.is_removed()
-                        && session.is_none_or(|session| {
-                            pairings
-                                .as_deref_mut()
-                                .and_then(|pairings| {
-                                    Self::current_equipment_pairing(pairings, session)
-                                })
-                                .is_some()
-                        }),
-                );
+                let gear = EquippedStacks::lock(living, self.entity.get_player());
+                let viewing = self.lock_pairing_session(session);
+                active.set(viewing.is_some());
                 stale.set(active.get() && !matches(&gear));
-                (gear, pairings)
+                let pairings = active.get().then(|| self.lock_equipment_pairings());
+                (gear, viewing, pairings)
             },
             |data, primary, _| {
-                ((active.get() && !stale.get())
-                    || (!primary && Self::bedrock_equipment_group(&data) != Some(group)))
-                .then_some(data)
+                if !primary && active.get() && !self.bedrock_relationship_is_current(&data) {
+                    return None;
+                }
+                if !active.get() {
+                    return (!primary && !self.is_bedrock_pairing_actor(&data)).then_some(data);
+                }
+                (!stale.get() || (!primary && Self::bedrock_equipment_group(&data) != Some(group)))
+                    .then_some(data)
             },
-            |data, primary, (_, pairings)| {
+            |data, primary, (_, _, pairings)| {
                 // The primary retains its typed group even if the translator changes its encoding.
-                if (primary || Self::bedrock_equipment_group(data) == Some(group))
-                    && let Some(state) = session.and_then(|session| {
-                        Self::current_equipment_pairing(pairings.as_deref_mut()?, session)
-                    })
+                if let Some(state) = pairings
+                    .as_deref_mut()
+                    .and_then(|records| Self::current_equipment_pairing(records, session))
+                    .filter(|state| state.spawned)
+                    && (primary || Self::bedrock_equipment_group(data) == Some(group))
                 {
                     state.bedrock_items.insert(group, canonical.clone());
                 }
@@ -1568,110 +2277,94 @@ impl TrackedEntity {
         stale.get()
     }
 
+    fn is_bedrock_pairing_actor(&self, mut payload: &[u8]) -> bool {
+        use pumpkin_protocol::bedrock::client::{
+            CAddActor, CAddItemActor, CAddPlayer, CMobEffect, set_actor_data::CSetActorData,
+        };
+        let Ok(id) = VarUInt::read(&mut payload) else {
+            return false;
+        };
+        let id = id.0 as i32;
+        if id == pumpkin_protocol::bedrock::client::CSetActorLink::PACKET_ID {
+            let actor = i64::from(self.entity_id);
+            return (0..2).any(|_| VarLong::read(&mut payload).is_ok_and(|id| id.0 == actor));
+        }
+        if id == CRemoveActor::PACKET_ID {
+            return VarLong::read(&mut payload).is_ok_and(|id| id.0 == i64::from(self.entity_id));
+        }
+        if id == CAddPlayer::PACKET_ID {
+            return self.entity.get_player().is_some_and(|player| {
+                Uuid::read(&mut payload).is_ok_and(|uuid| uuid == player.gameprofile.id)
+            });
+        }
+        if id == CAddActor::PACKET_ID || id == CAddItemActor::PACKET_ID {
+            return VarLong::read(&mut payload).is_ok_and(|id| id.0 == i64::from(self.entity_id));
+        }
+        [
+            CSetActorMotion::PACKET_ID,
+            CSetActorData::PACKET_ID,
+            CMobEffect::PACKET_ID,
+            CMobEquipment::PACKET_ID,
+            CMobArmorEquipment::PACKET_ID,
+        ]
+        .contains(&id)
+            && VarULong::read(&mut payload).is_ok_and(|id| id.0 == self.entity_id as u64)
+    }
+
     pub(crate) fn send_cleared_hand_equipment(&self, living: &LivingEntity, slot: &EquipmentSlot) {
-        for viewer in self.viewers_snapshot() {
-            let session = self.equipment_session(viewer.gameprofile.id);
-            match viewer.client.as_ref() {
+        self.broadcast_equipment(living, &[(slot.clone(), ItemStack::EMPTY.clone())]);
+    }
+
+    pub(crate) fn broadcast_equipment(
+        &self,
+        living: &LivingEntity,
+        equipment: &[(EquipmentSlot, ItemStack)],
+    ) {
+        let viewers = self.equipment_viewers();
+        let java = viewers
+            .iter()
+            .any(|viewer| viewer.player.client.java().is_some())
+            .then(|| self.java_equipment_update(equipment.iter().cloned()))
+            .flatten();
+        let armor_changed = equipment
+            .iter()
+            .any(|(slot, _)| Self::ARMOR_SLOTS.contains(slot));
+        for viewer in viewers {
+            let session = EquipmentSession {
+                viewer: viewer.player.gameprofile.id,
+                generation: viewer.generation,
+            };
+            match viewer.player.client.as_ref() {
                 ClientPlatform::Java(client) => {
-                    self.send_java_equipment(
-                        client,
-                        living,
-                        [(slot.clone(), ItemStack::EMPTY.clone())],
-                        session,
-                    );
+                    if let Some(update) = &java {
+                        self.send_java_equipment(client, living, update, session);
+                    }
                 }
                 ClientPlatform::Bedrock(client) => {
-                    self.send_bedrock_hand(client, living, slot, ItemStack::EMPTY, session);
+                    for (slot, stack) in equipment {
+                        if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
+                            self.send_bedrock_hand(client, living, slot, stack, session);
+                        }
+                    }
+                    if armor_changed {
+                        let snapshot = living
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .clone();
+                        if equipment.iter().any(|(slot, stack)| {
+                            Self::ARMOR_SLOTS.contains(slot)
+                                && Self::equipment_stacks_match(
+                                    snapshot.equipment.get(slot),
+                                    Some(stack),
+                                    true,
+                                )
+                        }) {
+                            self.send_bedrock_armor(client, living, &snapshot, session);
+                        }
+                    }
                 }
             }
-        }
-    }
-
-    pub(crate) fn broadcast_java_equipment(&self, packet: &CSetEquipment) {
-        let viewers = self.viewers_snapshot();
-        if self.lock_equipment_pairings().is_empty() {
-            World::broadcast_java_players(packet, viewers.iter());
-            return;
-        }
-        let Ok(data) = JavaClient::serialize_packet_for_version(packet, CURRENT_MC_VERSION) else {
-            return;
-        };
-        for viewer in viewers {
-            let Some(client) = viewer.client.java() else {
-                continue;
-            };
-            let Some(session) = self.equipment_session(viewer.gameprofile.id) else {
-                client.try_enqueue_packet(data.clone());
-                continue;
-            };
-            let version = client.version.load();
-            client.try_enqueue_packet_data_projecting(
-                data.clone(),
-                || self.lock_equipment_pairings(),
-                |data, _, pairings| {
-                    pairings
-                        .get(&session.viewer)
-                        .is_some_and(|state| state.generation == session.generation)
-                        .then_some(data)
-                },
-                |data, pairings| {
-                    if let Some(state) = Self::current_equipment_pairing(pairings, session)
-                        && let Some(packet) =
-                            Self::java_equipment_from_packet(data, version, self.entity_id)
-                    {
-                        state.java_items.extend(
-                            packet
-                                .equipment
-                                .into_iter()
-                                .map(|(slot, item)| (slot, item.0.into_owned())),
-                        );
-                    }
-                },
-            );
-        }
-    }
-
-    pub(crate) fn broadcast_bedrock_equipment<P: BClientPacket + Sync>(
-        &self,
-        packet: &P,
-        world: &World,
-    ) {
-        if self.lock_equipment_pairings().is_empty() {
-            self.send_to_tracking_players_bedrock(packet, world);
-            return;
-        }
-        for viewer in self.bedrock_watchers_snapshot() {
-            let Some(client) = viewer.client.bedrock() else {
-                continue;
-            };
-            let Ok(data) = client.serialize_packet(packet) else {
-                continue;
-            };
-            let (Some(session), Some(group)) = (
-                self.equipment_session(viewer.gameprofile.id),
-                Self::bedrock_equipment_group(&data),
-            ) else {
-                client.try_enqueue_packet(data);
-                continue;
-            };
-            let canonical = data.clone();
-            client.try_enqueue_packet_data_projecting(
-                data,
-                || self.lock_equipment_pairings(),
-                |data, _, pairings| {
-                    pairings
-                        .get(&session.viewer)
-                        .is_some_and(|state| state.generation == session.generation)
-                        .then_some(data)
-                },
-                |data, primary, pairings| {
-                    if (primary || Self::bedrock_equipment_group(data) == Some(group))
-                        && let Some(state) = Self::current_equipment_pairing(pairings, session)
-                    {
-                        state.bedrock_items.insert(group, canonical.clone());
-                    }
-                },
-            );
         }
     }
 
@@ -1825,22 +2518,34 @@ impl EntityTracker {
         player: &Player,
         mut f: F,
     ) {
-        for entry in &self.entity_map {
-            if entry.value().is_seen_by(&player.gameprofile.id) {
-                f(&entry.value().entity);
-            }
+        for tracked in self.tracking_snapshot(|tracked| tracked.is_seen_by(&player.gameprofile.id))
+        {
+            f(&tracked.entity);
         }
     }
 
+    fn tracking_snapshot(
+        &self,
+        include: impl Fn(&TrackedEntity) -> bool,
+    ) -> Vec<Arc<TrackedEntity>> {
+        // Packet callbacks can remove entities. Release every map guard before dispatch.
+        self.entity_map
+            .iter()
+            .filter(|entry| include(entry.value()))
+            .map(|entry| entry.value().clone())
+            .collect()
+    }
+
     pub fn add_entity(&self, entity: &Arc<dyn EntityBase>, world: &World) {
-        let entity_type = entity.get_entity().entity_type;
+        let base = entity.get_entity();
+        let entity_type = base.entity_type;
         let range = entity_type.client_tracking_range;
         if range == 0 {
             return;
         }
         let update_interval = entity_type.update_interval;
         let track_deltas = entity_type.track_deltas;
-        let entity_id = entity.get_entity().entity_id;
+        let entity_id = base.entity_id;
 
         let tracked = Arc::new(TrackedEntity::new(
             entity.clone(),
@@ -1848,7 +2553,18 @@ impl EntityTracker {
             update_interval,
             track_deltas,
         ));
-        self.entity_map.insert(entity_id, tracked.clone());
+        match self.entity_map.entry(entity_id) {
+            dashmap::mapref::entry::Entry::Occupied(_) => return,
+            dashmap::mapref::entry::Entry::Vacant(entry) => {
+                // World removal marks the actor before removing this map entry.
+                // Check while holding the shard so a concurrent removal either
+                // precedes this check or removes the tracker we insert.
+                if base.is_removed() {
+                    return;
+                }
+                entry.insert(tracked.clone());
+            }
+        }
 
         let players = world.players.load();
         tracked.update_players(players.as_ref(), world);
@@ -1857,10 +2573,8 @@ impl EntityTracker {
     /// Must only be called after the player's own `CLogin` packet has been sent.
     pub fn pair_new_player_with_tracked_entities(&self, player_arc: &Arc<Player>, world: &World) {
         let entity_id = player_arc.get_entity().entity_id;
-        for entry in &self.entity_map {
-            if *entry.key() != entity_id {
-                entry.value().update_player(player_arc, world);
-            }
+        for tracked in self.tracking_snapshot(|tracked| tracked.entity_id != entity_id) {
+            tracked.update_player(player_arc, world);
         }
     }
 
@@ -1875,11 +2589,9 @@ impl EntityTracker {
     /// Vanilla `PlayerList.respawn` recreates the player -> forget and re-pair it as a viewer.
     pub fn repair_respawned_player(&self, player: &Arc<Player>, world: &World) {
         let entity_id = player.get_entity().entity_id;
-        for entry in &self.entity_map {
-            if *entry.key() != entity_id {
-                entry.value().forget_player(player);
-                entry.value().update_player(player, world);
-            }
+        for tracked in self.tracking_snapshot(|tracked| tracked.entity_id != entity_id) {
+            tracked.forget_player(player);
+            tracked.update_player(player, world);
         }
     }
 
@@ -1895,20 +2607,21 @@ impl EntityTracker {
         }
         let chunks: FxHashSet<_> = chunks.iter().copied().collect();
         let entity_id = player.get_entity().entity_id;
-        for entry in &self.entity_map {
-            if *entry.key() != entity_id
-                && chunks.contains(&entry.value().entity.get_entity().chunk_pos.load())
-            {
-                entry.value().update_player(player, world);
-            }
+        for tracked in self.tracking_snapshot(|tracked| {
+            tracked.entity_id != entity_id
+                && chunks.contains(&tracked.entity.get_entity().chunk_pos.load())
+        }) {
+            tracked.update_player(player, world);
         }
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase, world: &World) {
         let entity_id = entity.get_entity().entity_id;
         if let Some(player) = entity.get_player() {
-            for entry in &self.entity_map {
-                entry.value().remove_player(player);
+            for tracked in
+                self.tracking_snapshot(|tracked| tracked.is_seen_by(&player.gameprofile.id))
+            {
+                tracked.remove_player(player);
             }
         }
 
@@ -1925,7 +2638,7 @@ impl EntityTracker {
     }
 
     pub fn update_entity_position(&self, entity: &dyn EntityBase, world: &World) {
-        if let Some(tracked) = self.entity_map.get(&entity.get_entity().entity_id) {
+        if let Some(tracked) = self.get_tracked_entity(entity.get_entity().entity_id) {
             let new_pos = chunk_section_from_pos(&entity.get_entity().block_pos.load());
             tracked.last_section_pos.store(new_pos);
             let players = world.players.load();
@@ -2012,6 +2725,7 @@ impl EntityTracker {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicUsize;
     use std::time::Duration;
 
     use pumpkin_protocol::{
@@ -2068,6 +2782,311 @@ mod tests {
         })
         .await??;
         Ok(packets)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn retired_tracker_cannot_pair_a_snapshot_after_respawn() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (rider, _rider_peer) = java_rider(&server, &world, "Notch")?;
+        let (viewer, _viewer_peer) = java_rider(&server, &world, "jeb_")?;
+        let rider_id = rider.get_entity().entity_id;
+        let actor: Arc<dyn EntityBase> = rider;
+        world.entity_tracker.add_entity(&actor, &world);
+        let previous = world
+            .entity_tracker
+            .get_tracked_entity(rider_id)
+            .ok_or("Previous tracker")?;
+        world.entity_tracker.respawn_entity(&actor, &world);
+        let current = world
+            .entity_tracker
+            .get_tracked_entity(rider_id)
+            .ok_or("Current tracker")?;
+        assert!(!Arc::ptr_eq(&previous, &current));
+        previous.add_pairing(&viewer);
+        assert!(!previous.is_seen_by(&viewer.gameprofile.id));
+        current.add_pairing(&viewer);
+        assert!(current.is_seen_by(&viewer.gameprofile.id));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn removal_observer_replacement_keeps_the_new_spawn_visible() -> TestResult {
+        use pumpkin_protocol::java::client::play::CSpawnEntity;
+
+        struct RepairOnRemoval(Arc<TrackedEntity>, Arc<Player>, AtomicBool);
+        impl EventHandler<PacketSentEvent> for RepairOnRemoval {
+            fn handle_blocking<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CRemoveEntities::to_id(CURRENT_MC_VERSION)
+                        && !self.2.swap(true, Relaxed)
+                    {
+                        let world = self.0.entity.get_entity().world.load_full();
+                        world.entity_tracker.respawn_entity(&self.0.entity, &world);
+                        if let Some(replacement) =
+                            world.entity_tracker.get_tracked_entity(self.0.entity_id)
+                        {
+                            replacement.add_pairing(&self.1);
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let boat: Arc<dyn EntityBase> = Arc::new(BoatEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::OAK_BOAT,
+        )));
+        world.entity_tracker.add_entity(&boat, &world);
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(boat.get_entity().entity_id)
+            .ok_or("Boat tracker")?;
+        tracked.add_pairing(&viewer);
+        queued_packets(client, &mut decoder).await?;
+
+        let listener = Arc::new(RepairOnRemoval(
+            tracked.clone(),
+            viewer.clone(),
+            AtomicBool::new(false),
+        ));
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            listener.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        tracked.remove_pairing(&viewer);
+        let changes: Vec<_> = queued_packets(client, &mut decoder)
+            .await?
+            .into_iter()
+            .map(|packet| packet.id)
+            .filter(|id| {
+                [
+                    CSpawnEntity::to_id(CURRENT_MC_VERSION),
+                    CRemoveEntities::to_id(CURRENT_MC_VERSION),
+                ]
+                .contains(id)
+            })
+            .collect();
+        assert!(listener.2.load(Relaxed));
+        let replacement = world
+            .entity_tracker
+            .get_tracked_entity(tracked.entity_id)
+            .ok_or("replacement tracker")?;
+        assert!(!Arc::ptr_eq(&tracked, &replacement));
+        assert!(replacement.is_seen_by(&viewer.gameprofile.id));
+        assert_eq!(changes, [CSpawnEntity::to_id(CURRENT_MC_VERSION)]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    struct SelectStick {
+        rider: Arc<Player>,
+        called: AtomicBool,
+    }
+    impl EventHandler<PacketSentEvent> for SelectStick {
+        fn handle_blocking<'a>(
+            &'a self,
+            server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
+                    && event
+                        .payload
+                        .as_ref()
+                        .get_var_int()
+                        .is_ok_and(|id| id.0 == self.rider.get_entity().entity_id)
+                    && !self.called.swap(true, Relaxed)
+                    && let Some(client) = self.rider.client.java()
+                {
+                    client.handle_set_held_item(
+                        server,
+                        &self.rider,
+                        &pumpkin_protocol::java::server::play::SSetHeldItem { slot: 2 },
+                    );
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn player_keeps_equipment_selected_by_the_observer() -> TestResult {
+        use pumpkin_data::{attributes::Attributes, item::Item};
+        use pumpkin_protocol::java::server::play::SSetHeldItem;
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (rider, _rider_peer) = java_rider(&server, &world, "Notch")?;
+        let (viewer, peer) = java_rider(&server, &world, "jeb_")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let rider_actor: Arc<dyn EntityBase> = rider.clone();
+        world.entity_tracker.add_entity(&rider_actor, &world);
+        let rider_id = rider.get_entity().entity_id;
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(rider_id)
+            .ok_or("Rider tracker")?;
+        tracked.add_pairing(&viewer);
+        let _initial = queued_packets(client, &mut decoder).await?;
+        rider
+            .inventory()
+            .set_slot(1, ItemStack::new(1, &Item::DIAMOND_SWORD));
+        rider
+            .inventory()
+            .set_slot(2, ItemStack::new(1, &Item::STICK));
+        let listener = Arc::new(SelectStick {
+            rider: rider.clone(),
+            called: AtomicBool::new(false),
+        });
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            listener.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        rider
+            .client
+            .java()
+            .ok_or("Java rider")?
+            .handle_set_held_item(&server, &rider, &SSetHeldItem { slot: 1 });
+        assert!(listener.called.load(Relaxed));
+        assert_eq!(rider.inventory().held_item().item, &Item::STICK);
+        assert_eq!(
+            rider
+                .living_entity
+                .get_attribute_value(&Attributes::ATTACK_DAMAGE)
+                .to_bits(),
+            rider
+                .living_entity
+                .get_attribute_base(&Attributes::ATTACK_DAMAGE)
+                .to_bits()
+        );
+        let mut hand_items = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CSetEquipment::to_id(CURRENT_MC_VERSION) {
+                let packet =
+                    CSetEquipment::read(&mut packet.payload.as_ref(), &CURRENT_MC_VERSION)?;
+                if packet.entity_id.0 == rider_id {
+                    hand_items.extend(
+                        packet
+                            .equipment
+                            .into_iter()
+                            .filter(|(slot, _)| *slot == EquipmentSlot::MAIN_HAND.discriminant())
+                            .map(|(_, stack)| stack.0.item),
+                    );
+                }
+            }
+        }
+        assert_eq!(hand_items, [&Item::STICK]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_resends_equipment_after_initial_contention() -> TestResult {
+        use crate::entity::{mob::Mob, passive::pig::PigEntity};
+        use pumpkin_data::item::Item;
+
+        struct ChangeViewerHand(i32, AtomicBool);
+        impl EventHandler<PacketSentEvent> for ChangeViewerHand {
+            fn handle_blocking<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    use pumpkin_data::item::Item;
+                    if event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
+                        && let Ok(mut packet) =
+                            CSetEquipment::read(&mut event.payload.as_ref(), &CURRENT_MC_VERSION)
+                        && packet.entity_id.0 == self.0
+                        && !self.1.swap(true, Relaxed)
+                    {
+                        packet.equipment[0].1 =
+                            ItemStackSerializer::from(ItemStack::new(1, &Item::CARROT));
+                        let mut payload = Vec::new();
+                        assert!(
+                            packet
+                                .write_packet_data(&mut payload, &CURRENT_MC_VERSION)
+                                .is_ok()
+                        );
+                        event.cancelled = true;
+                        event.extra_packets.push((event.packet_id, payload.into()));
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Missing Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let mob = pig.get_mob_entity();
+        let id = pig.get_entity().entity_id;
+        mob.set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::STICK));
+        world.spawn_entity(pig.clone());
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(id)
+            .ok_or("Pig tracker")?;
+        let session = tracked.insert_viewer(&viewer).ok_or("New viewer")?;
+        let equipment = mob
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        tracked.send_pairing_equipment(&mob.living_entity, &viewer, session);
+        drop(equipment);
+        assert!(tracked.equipment_retry_pending.load(Relaxed));
+        assert!(
+            queued_packets(client, &mut decoder)
+                .await?
+                .iter()
+                .all(|packet| packet.id != CSetEquipment::to_id(CURRENT_MC_VERSION))
+        );
+
+        let observer = Arc::new(ChangeViewerHand(id, AtomicBool::new(false)));
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        mob.set_item_slot(
+            &EquipmentSlot::MAIN_HAND,
+            ItemStack::new(1, &Item::DIAMOND_SWORD),
+        );
+        assert!(observer.1.load(Relaxed));
+        world.entity_tracker.update_all(&world);
+        let packets = queued_packets(client, &mut decoder).await?;
+        let mut equipment = packets
+            .iter()
+            .filter(|packet| packet.id == CSetEquipment::to_id(CURRENT_MC_VERSION));
+        let update = equipment.next().ok_or("Viewer equipment packet")?;
+        let packet = CSetEquipment::read(&mut update.payload.as_ref(), &CURRENT_MC_VERSION)?;
+        assert_eq!(packet.entity_id.0, id);
+        assert!(packet.equipment.iter().any(|(slot, stack)| *slot
+            == EquipmentSlot::MAIN_HAND.discriminant()
+            && stack.0.item == &Item::CARROT));
+        assert!(equipment.next().is_none());
+        world.level.shutdown().await;
+        Ok(())
     }
 
     enum CartObserverAction {
@@ -2186,11 +3205,7 @@ mod tests {
             .entity_tracker
             .get_tracked_entity(entity.entity_id)
             .ok_or("Missing tracked cart")?;
-        tracked
-            .seen_by
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(viewer.gameprofile.id, viewer.clone());
+        assert!(tracked.insert_viewer(viewer).is_some());
         viewer.watched_section.store(Cylindrical::new(
             entity.chunk_pos.load(),
             std::num::NonZeroU8::new(4).ok_or("Zero view distance")?,
@@ -2373,7 +3388,12 @@ mod tests {
             true,
         );
 
-        for tracker in [cart_tracker, rider_tracker] {
+        for (tracker, counterpart) in [
+            (cart_tracker.clone(), &rider_tracker),
+            (rider_tracker.clone(), &cart_tracker),
+        ] {
+            tracker.remove_pairing(&viewer);
+            counterpart.add_pairing(&viewer);
             entity.add_passenger_silently(cart.clone(), rider.clone());
             assert!(entity.has_passenger(rider_id));
             listener.ran.store(false, Relaxed);
@@ -2407,6 +3427,441 @@ mod tests {
         Ok(())
     }
 
+    struct ObservePassengerExtra {
+        carrier_id: i32,
+        payload: Bytes,
+        unpair: Option<Arc<TrackedEntity>>,
+        called: AtomicBool,
+    }
+
+    impl EventHandler<PacketSentEvent> for ObservePassengerExtra {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.packet_id == CSetPassengers::to_id(CURRENT_MC_VERSION)
+                    && event
+                        .payload
+                        .as_ref()
+                        .get_var_int()
+                        .is_ok_and(|id| id.0 == self.carrier_id)
+                    && !self.called.swap(true, Relaxed)
+                {
+                    if let Some(counterpart) = &self.unpair {
+                        counterpart.remove_pairing(&event.player);
+                    }
+                    event
+                        .extra_packets
+                        .push((event.packet_id, self.payload.clone()));
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn current_passenger_update_keeps_plugin_extra() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let cart = MinecartEntity::new(Entity::new(world.clone(), CENTER, &EntityType::MINECART));
+        let carrier_id = cart.get_entity().entity_id;
+        let fake = VarInt(999_999);
+        let mut payload = Vec::new();
+        CSetPassengers::new(VarInt(carrier_id), &[fake])
+            .write_packet_data(&mut payload, &CURRENT_MC_VERSION)?;
+        let observer = Arc::new(ObservePassengerExtra {
+            carrier_id,
+            payload: payload.into(),
+            unpair: None,
+            called: AtomicBool::new(false),
+        });
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        cart.get_entity()
+            .send_passenger_update_to(&world, &viewer, &[], &[]);
+        let mut lists = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            let mut data = packet.payload.as_ref();
+            if packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION)
+                && data.get_var_int()?.0 == carrier_id
+            {
+                let count = data.get_var_int()?.0;
+                let ids = (0..count)
+                    .map(|_| data.get_var_int())
+                    .collect::<Result<Vec<_>, _>>()?;
+                lists.push(ids);
+            }
+        }
+        assert!(observer.called.load(Relaxed));
+        assert_eq!(lists, [vec![], vec![fake]]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_drops_passenger_update_when_other_endpoint_is_unpaired() -> TestResult {
+        use crate::entity::passive::pig::PigEntity;
+
+        for pair_rider in [false, true] {
+            let folder = tempfile::tempdir()?;
+            let (server, world) = vehicle_world(&folder).await?;
+            let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+            let client = viewer.client.java().ok_or("Java viewer")?;
+            client.player.store(Arc::new(Some(viewer.clone())));
+            let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+            let cart = Arc::new(MinecartEntity::new(Entity::new(
+                world.clone(),
+                CENTER,
+                &EntityType::MINECART,
+            )));
+            let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+            world.add_entity_silent(cart.clone());
+            world.add_entity_silent(pig.clone());
+            let (carrier_id, rider_id) = (cart.get_entity().entity_id, pig.get_entity().entity_id);
+            let cart_tracker = world
+                .entity_tracker
+                .get_tracked_entity(carrier_id)
+                .ok_or("Cart tracker")?;
+            let pig_tracker = world
+                .entity_tracker
+                .get_tracked_entity(rider_id)
+                .ok_or("Pig tracker")?;
+            let (next, counterpart) = if pair_rider {
+                (pig_tracker, cart_tracker)
+            } else {
+                (cart_tracker, pig_tracker)
+            };
+            counterpart.add_pairing(&viewer);
+            cart.get_entity().add_passenger_silently(cart.clone(), pig);
+            let fake_carrier = VarInt(999_999);
+            let mut payload = Vec::new();
+            CSetPassengers::new(fake_carrier, &[VarInt(rider_id)])
+                .write_packet_data(&mut payload, &CURRENT_MC_VERSION)?;
+            let observer = Arc::new(ObservePassengerExtra {
+                carrier_id,
+                payload: payload.into(),
+                unpair: Some(counterpart.clone()),
+                called: AtomicBool::new(false),
+            });
+            server.plugin_manager.register::<PacketSentEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                true,
+            );
+            next.add_pairing(&viewer);
+            let packets = queued_packets(client, &mut decoder).await?;
+            assert!(observer.called.load(Relaxed));
+            assert!(next.is_seen_by(&viewer.gameprofile.id));
+            assert!(!counterpart.is_seen_by(&viewer.gameprofile.id));
+            assert!(cart.get_entity().has_passenger(rider_id));
+            assert!(
+                packets
+                    .iter()
+                    .any(|packet| packet.id == CRemoveEntities::to_id(CURRENT_MC_VERSION))
+            );
+            assert!(
+                !packets
+                    .iter()
+                    .any(|packet| packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION))
+            );
+            world.level.shutdown().await;
+        }
+        Ok(())
+    }
+
+    struct AfterPassengerPublication<F> {
+        carrier_id: i32,
+        action: F,
+        remaining: AtomicUsize,
+    }
+
+    impl<F: Fn(&mut PacketSentEvent, usize) + Send + Sync> EventHandler<PacketSentEvent>
+        for AfterPassengerPublication<F>
+    {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.packet_id == CSetPassengers::to_id(CURRENT_MC_VERSION)
+                    && event
+                        .payload
+                        .as_ref()
+                        .get_var_int()
+                        .is_ok_and(|id| id.0 == self.carrier_id)
+                    && let Ok(remaining) =
+                        self.remaining
+                            .fetch_update(Relaxed, Relaxed, |remaining| remaining.checked_sub(1))
+                {
+                    (self.action)(event, remaining - 1);
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_keeps_newly_visible_rider_in_passenger_projection() -> TestResult {
+        assert_passenger_projection_after_visibility_change(PassengerVisibilityChange::Reveal, 2)
+            .await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_keeps_remaining_rider_in_passenger_projection() -> TestResult {
+        assert_passenger_projection_after_visibility_change(PassengerVisibilityChange::Hide, 2)
+            .await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_retries_after_two_successive_rider_departures() -> TestResult {
+        // Forced mounts can put a third rider in a classic cart.
+        assert_passenger_projection_after_visibility_change(PassengerVisibilityChange::Hide, 3)
+            .await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_does_not_retry_with_a_new_visible_rider() -> TestResult {
+        assert_passenger_projection_after_visibility_change(PassengerVisibilityChange::Replace, 3)
+            .await
+    }
+
+    enum PassengerVisibilityChange {
+        Reveal,
+        Hide,
+        Replace,
+    }
+
+    async fn assert_passenger_projection_after_visibility_change(
+        change: PassengerVisibilityChange,
+        rider_count: usize,
+    ) -> TestResult {
+        use crate::entity::passive::pig::PigEntity;
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let carrier: Arc<dyn EntityBase> = if rider_count > 2 {
+            Arc::new(MinecartEntity::new(Entity::new(
+                world.clone(),
+                CENTER,
+                &EntityType::MINECART,
+            )))
+        } else {
+            Arc::new(BoatEntity::new(Entity::new(
+                world.clone(),
+                CENTER,
+                &EntityType::OAK_BOAT,
+            )))
+        };
+        world.add_entity_silent(carrier.clone());
+        let carrier_id = carrier.get_entity().entity_id;
+        let tracker = &world.entity_tracker;
+        let tracked = |id| {
+            tracker
+                .get_tracked_entity(id)
+                .ok_or("Missing tracked entity")
+        };
+        let mut rider_ids = Vec::new();
+        let mut changing_riders = Vec::new();
+        let reveals_rider = matches!(change, PassengerVisibilityChange::Reveal);
+        for index in 0..rider_count {
+            let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+            let rider_id = pig.get_entity().entity_id;
+            world.add_entity_silent(pig.clone());
+            let tracker = tracked(rider_id)?;
+            let visible = index == 0 || !reveals_rider;
+            if visible {
+                tracker.add_pairing(&viewer);
+            }
+            assert_eq!(tracker.is_seen_by(&viewer.gameprofile.id), visible);
+            carrier
+                .get_entity()
+                .add_passenger_silently(carrier.clone(), pig);
+            rider_ids.push(rider_id);
+            if index != 0 {
+                changing_riders.push(tracker);
+            }
+        }
+        let replacement = matches!(change, PassengerVisibilityChange::Replace)
+            .then(|| pair_projection_replacement(&world, &viewer, carrier.get_entity()))
+            .transpose()?;
+        let replacement_id = replacement.as_ref().map(|pig| pig.get_entity().entity_id);
+        let replacement_carrier = carrier.clone();
+        let observer = Arc::new(AfterPassengerPublication {
+            carrier_id,
+            action: move |event: &mut PacketSentEvent, index: usize| {
+                if let Some(replacement) = &replacement {
+                    for tracker in &changing_riders {
+                        tracker.remove_pairing(&event.player);
+                    }
+                    replacement_carrier
+                        .get_entity()
+                        .add_passenger(replacement_carrier.clone(), replacement.clone());
+                } else if reveals_rider {
+                    changing_riders[index].add_pairing(&event.player);
+                } else {
+                    changing_riders[index].remove_pairing(&event.player);
+                }
+            },
+            remaining: AtomicUsize::new(if replacement_id.is_some() {
+                1
+            } else {
+                rider_count - 1
+            }),
+        });
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        tracked(carrier_id)?.add_pairing(&viewer);
+        assert_eq!(observer.remaining.load(Relaxed), 0);
+        assert_passenger_projection_packets(
+            queued_packets(client, &mut decoder).await?,
+            carrier_id,
+            rider_ids,
+            reveals_rider,
+            replacement_id,
+        )?;
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    fn pair_projection_replacement(
+        world: &Arc<World>,
+        viewer: &Arc<Player>,
+        carrier: &Entity,
+    ) -> Result<Arc<crate::entity::passive::pig::PigEntity>, Box<dyn std::error::Error>> {
+        use crate::entity::passive::pig::PigEntity;
+
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        world.add_entity_silent(pig.clone());
+        world
+            .entity_tracker
+            .get_tracked_entity(pig.get_entity().entity_id)
+            .ok_or("Missing replacement tracker")?
+            .add_pairing(viewer);
+        viewer.watched_section.store(Cylindrical::new(
+            carrier.chunk_pos.load(),
+            std::num::NonZeroU8::new(4).ok_or("Zero view distance")?,
+        ));
+        Ok(pig)
+    }
+
+    fn assert_passenger_projection_packets(
+        packets: Vec<RawPacket>,
+        carrier_id: i32,
+        mut rider_ids: Vec<i32>,
+        reveals_rider: bool,
+        replacement_id: Option<i32>,
+    ) -> TestResult {
+        let mut lists = Vec::new();
+        let mut removed = Vec::new();
+        for packet in packets {
+            let mut payload = packet.payload.as_ref();
+            if packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION)
+                && payload.get_var_int()?.0 == carrier_id
+            {
+                let count = payload.get_var_int()?.0;
+                lists.push(
+                    (0..count)
+                        .map(|_| payload.get_var_int().map(|id| id.0))
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+            } else if packet.id == CRemoveEntities::to_id(CURRENT_MC_VERSION) {
+                assert_eq!(payload.get_var_int()?.0, 1);
+                removed.push(payload.get_var_int()?.0);
+            }
+        }
+        if let Some(replacement_id) = replacement_id {
+            assert_eq!(removed, rider_ids[1..]);
+            // The forced mount broadcasts every attached rider, including the unpaired ones.
+            rider_ids.push(replacement_id);
+            assert_eq!(lists, [rider_ids]);
+        } else if reveals_rider {
+            assert!(removed.is_empty());
+            assert_eq!(lists, [rider_ids]);
+        } else {
+            rider_ids.reverse();
+            let (retained, departed) = rider_ids.split_last().ok_or("No initial riders")?;
+            assert_eq!(removed, departed);
+            assert_eq!(lists, [vec![*retained]]);
+        }
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn superseded_unlink_drops_extra_for_departed_rider() -> TestResult {
+        use crate::entity::passive::pig::PigEntity;
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let cart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::MINECART,
+        )));
+        world.add_entity_silent(cart.clone());
+        let departed = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let replacement = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        world.add_entity_silent(departed.clone());
+        world.add_entity_silent(replacement.clone());
+        let departed_id = departed.get_entity().entity_id;
+        let carrier_id = cart.get_entity().entity_id;
+        viewer.watched_section.store(Cylindrical::new(
+            cart.get_entity().chunk_pos.load(),
+            std::num::NonZeroU8::new(4).ok_or("Zero view distance")?,
+        ));
+        cart.get_entity()
+            .add_passenger_silently(cart.clone(), departed);
+        let mut extra = Vec::new();
+        CSetPassengers::new(VarInt(999_999), &[VarInt(departed_id)])
+            .write_packet_data(&mut extra, &CURRENT_MC_VERSION)?;
+        let extra: Bytes = extra.into();
+        let attached = cart.clone();
+        let observer = Arc::new(AfterPassengerPublication {
+            carrier_id,
+            action: move |event: &mut PacketSentEvent, _: usize| {
+                attached
+                    .get_entity()
+                    .add_passenger_silently(attached.clone(), replacement.clone());
+                event.extra_packets.push((event.packet_id, extra.clone()));
+            },
+            remaining: AtomicUsize::new(1),
+        });
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        cart.get_entity()
+            .remove_passenger_on_disconnect(departed_id);
+        let packets = queued_packets(client, &mut decoder).await?;
+        assert_eq!(observer.remaining.load(Relaxed), 0);
+        assert!(
+            !packets
+                .iter()
+                .any(|packet| packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION))
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn boat_position_sync_sends_impact_and_advances_tracking_interval() -> TestResult {
         let folder = tempfile::tempdir()?;
@@ -2427,11 +3882,7 @@ mod tests {
             boat_type.update_interval,
             boat_type.track_deltas,
         );
-        tracked
-            .seen_by
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(viewer.gameprofile.id, viewer.clone());
+        assert!(tracked.insert_viewer(&viewer).is_some());
         assert_eq!(tracked.update_interval, 3);
         assert!(
             !tracking_frames(&tracked, &world, client, &mut decoder)
@@ -2490,6 +3941,86 @@ mod tests {
                 .is_empty()
         );
         assert_eq!(tracked.tick_count.load(Relaxed), 13);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_refreshes_shield_worn_by_packet_observer() -> TestResult {
+        use crate::entity::{mob::Mob, passive::pig::PigEntity};
+        use pumpkin_data::item::Item;
+
+        struct WearShield(Arc<PigEntity>, AtomicBool);
+
+        impl EventHandler<PacketSentEvent> for WearShield {
+            fn handle_blocking<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
+                        && let Ok(packet) =
+                            CSetEquipment::read(&mut event.payload.as_ref(), &CURRENT_MC_VERSION)
+                        && packet.entity_id.0 == self.0.get_entity().entity_id
+                        && !self.1.swap(true, Relaxed)
+                    {
+                        let mob = self.0.get_mob_entity();
+                        let mut gear = mob
+                            .living_entity
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if let Some(shield) = gear.equipment.get_mut(&EquipmentSlot::MAIN_HAND) {
+                            shield.set_damage(7);
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Missing Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let mob = pig.get_mob_entity();
+        mob.set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::SHIELD));
+        mob.set_item_slot(&EquipmentSlot::OFF_HAND, ItemStack::new(1, &Item::APPLE));
+        world.spawn_entity(pig.clone());
+        let id = pig.get_entity().entity_id;
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(id)
+            .ok_or("Pig tracker")?;
+        let observer = Arc::new(WearShield(pig, AtomicBool::new(false)));
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        tracked.add_pairing(&viewer);
+        assert!(observer.1.load(Relaxed));
+
+        let mut hands = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CSetEquipment::to_id(CURRENT_MC_VERSION) {
+                let packet =
+                    CSetEquipment::read(&mut packet.payload.as_ref(), &CURRENT_MC_VERSION)?;
+                if packet.entity_id.0 == id {
+                    hands.extend(packet.equipment.into_iter().filter_map(|(slot, stack)| {
+                        (slot == EquipmentSlot::MAIN_HAND.discriminant()
+                            || slot == EquipmentSlot::OFF_HAND.discriminant())
+                        .then(|| (stack.0.item, stack.0.get_damage()))
+                    }));
+                }
+            }
+        }
+        assert_eq!(hands.len(), 2);
+        assert!(hands.contains(&(&Item::SHIELD, 7)));
+        assert!(hands.iter().any(|(item, _)| *item == &Item::APPLE));
         world.level.shutdown().await;
         Ok(())
     }

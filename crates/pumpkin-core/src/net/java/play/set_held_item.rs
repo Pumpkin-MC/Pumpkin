@@ -22,6 +22,7 @@ impl JavaClient {
         }
 
         let inv = player.inventory();
+        player.living_entity.stop_cart_use_for_selected_slot(slot);
         inv.set_selected_slot(slot);
         let stack = inv.held_item();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];

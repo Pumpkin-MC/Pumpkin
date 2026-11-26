@@ -12,10 +12,7 @@ use pumpkin_data::screen::WindowType;
 
 use crate::{
     player::player_inventory::PlayerInventory,
-    screen_handler::{
-        InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerListener,
-        ScreenProperty,
-    },
+    screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenProperty},
 };
 
 use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType, FurnaceOutputSlot};
@@ -68,20 +65,6 @@ impl FurnaceLikeScreenHandler {
         experience_container: Arc<dyn ExperienceContainer>,
         window_type: WindowType,
     ) -> Self {
-        struct FurnaceLikeScreenListener;
-        impl ScreenHandlerListener for FurnaceLikeScreenListener {
-            fn on_property_update(
-                &self,
-                screen_handler: &ScreenHandlerBehaviour,
-                property: u8,
-                value: i32,
-            ) {
-                if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
-                    sync_handler.update_property(screen_handler, i32::from(property), value);
-                }
-            }
-        }
-
         let mut handler = Self {
             inventory,
             property_delegate: property_delegate.clone(),
@@ -94,7 +77,6 @@ impl FurnaceLikeScreenHandler {
             handler.add_property(ScreenProperty::new(property_delegate.clone(), i));
         }
 
-        handler.add_listener(Arc::new(FurnaceLikeScreenListener));
         handler.add_inventory_slots();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);

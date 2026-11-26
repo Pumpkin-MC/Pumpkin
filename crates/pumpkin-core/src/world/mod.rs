@@ -26,6 +26,10 @@ mod boat_vehicle_tests;
 pub mod brightness;
 pub mod chunker;
 mod entity_index;
+#[cfg(test)]
+mod item_inventory_tests;
+#[cfg(test)]
+mod jukebox_vehicle_tests;
 pub(crate) use entity_index::EntityIndex;
 pub mod cat_spawner;
 pub mod entity_islands;
@@ -123,6 +127,7 @@ use pumpkin_protocol::{
                 CreativeItemEntryPayload,
             },
             level_sound_event::CLevelSoundEvent,
+            play_sound::CPlaySound,
             player_list::{CPlayerList, PlayerListEntry, Skin},
             remove_actor::CRemoveActor,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
@@ -242,6 +247,12 @@ pub(crate) struct VehicleRideStart<'a> {
     attachment: u64,
 }
 
+pub(crate) enum VehiclePlacementError {
+    SpawnVetoed,
+    UuidUnavailable,
+    CommitRejected,
+}
+
 #[repr(C)]
 pub struct World {
     /// Represents the World's Unique Identifier
@@ -257,6 +268,7 @@ pub struct World {
     pub(crate) entity_index: Arc<EntityIndex>,
     island_schedule: std::sync::Mutex<entity_islands::Schedule>,
     pub(crate) riding_link_commits: std::sync::Mutex<()>,
+    entity_registrations: std::sync::Mutex<FxHashSet<uuid::Uuid>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: std::sync::Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -427,6 +439,7 @@ impl World {
             entity_index: Arc::default(),
             island_schedule: std::sync::Mutex::default(),
             riding_link_commits: std::sync::Mutex::default(),
+            entity_registrations: std::sync::Mutex::default(),
             scoreboard: std::sync::Mutex::new(Scoreboard::default()),
             worldborder: std::sync::Mutex::new(Worldborder::new(
                 0.0,
@@ -1079,7 +1092,7 @@ impl World {
         );
     }
 
-    fn broadcast_bedrock_grouped<'a, P: BClientPacket>(
+    pub(crate) fn broadcast_bedrock_grouped<'a, P: BClientPacket>(
         packet: &P,
         recipients: impl Iterator<Item = &'a Arc<BedrockClient>>,
     ) {
@@ -1474,6 +1487,53 @@ impl World {
         self.broadcast_packet_except(&[player.gameprofile.id], &packet);
     }
 
+    pub(crate) fn play_cart_use_sound(
+        &self,
+        actor: &Player,
+        sound: &pumpkin_data::data_component_impl::IdOr<
+            pumpkin_data::data_component_impl::SoundEvent,
+        >,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        use pumpkin_data::data_component_impl::IdOr as DataSound;
+
+        let (name, fixed_range) = match sound {
+            DataSound::Id(id) => (id.to_name(), None),
+            DataSound::Value(sound) => (sound.sound_name.as_str(), sound.range),
+        };
+        let range = f64::from(fixed_range.unwrap_or_else(|| volume.max(1.0) * 16.0));
+        let players = self.players.load();
+        let recipients = players.iter().filter(|player| {
+            player.gameprofile.id != actor.gameprofile.id
+                && player.position().squared_distance_to_vec(position) < range * range
+        });
+        let java = CSoundEffect::new(
+            data_to_proto_sound(sound),
+            category,
+            position,
+            volume,
+            pitch,
+            rng().random::<i64>(),
+        );
+        Self::broadcast_java_players(&java, recipients.clone());
+
+        let name = match name.strip_prefix("minecraft:").unwrap_or(name) {
+            "entity.generic.eat" => "random.eat",
+            "entity.generic.drink" => "random.drink",
+            "item.honey_bottle.drink" => "random.drink_honey",
+            "item.spear_wood.use" => "item.wooden_spear.use",
+            name => name,
+        };
+        let bedrock = CPlaySound::once(name, position, volume, pitch);
+        Self::broadcast_bedrock_grouped(
+            &bedrock,
+            recipients.filter_map(|player| player.client.bedrock()),
+        );
+    }
+
     pub fn play_sound_fine(
         &self,
         sound: Sound,
@@ -1483,6 +1543,25 @@ impl World {
         pitch: f32,
     ) {
         self.play_sound_raw(sound as u16, category, position, volume, pitch);
+    }
+
+    pub(crate) fn play_bedrock_named_sound(
+        &self,
+        name: &str,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        let range = f64::from(volume.max(1.0)) * 16.0;
+        let players = self.players.load_full();
+        let recipients = players.iter().filter_map(|player| {
+            let client = player.client.bedrock()?;
+            (player.position().squared_distance_to_vec(position) < range * range).then_some(client)
+        });
+        Self::broadcast_bedrock_grouped(
+            &CPlaySound::once(name, position, volume, pitch),
+            recipients,
+        );
     }
 
     /// Plays a custom sound event by identifier for all players in range.
@@ -5555,19 +5634,8 @@ impl World {
         removed_player
     }
 
-    #[expect(clippy::needless_pass_by_value)]
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
-        let _base_entity = entity.get_entity();
-        self.entity_tracker.add_entity(&entity, self);
-        self.spawn_state.load().add_entity(self, entity.as_ref());
-
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.push(entity.clone());
-            new_entities
-        });
-        self.record_tick_spawn(entity.get_entity().entity_id);
-        self.add_pending_riders(&entity);
+        self.add_entity_silent(entity);
     }
 
     /// Records the sequential order of an entity spawned while an entity ticks.
@@ -5649,22 +5717,58 @@ impl World {
     ///
     /// [`EntitySpawnEvent`]: crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent
     pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) -> bool {
-        let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
-            entity.get_entity().entity_id,
-            entity.get_entity().entity_type.id.to_string(),
-            entity.get_entity().pos.load(),
-            self.clone(),
-        );
-        if let Some(server) = self.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
+        if self.entity_spawn_cancelled(entity.as_ref()) {
             return false;
         }
-
         entity.init_data_tracker();
         self.add_entity_silent(entity);
         true
+    }
+
+    /// Publishes a placed vehicle after its spawn veto and source commit.
+    ///
+    /// The commit must leave observers until after the vehicle is live.
+    pub(crate) fn spawn_placed_vehicle<T>(
+        self: &Arc<Self>,
+        entity: &Arc<dyn EntityBase>,
+        commit: impl FnOnce() -> Option<T>,
+    ) -> Result<T, VehiclePlacementError> {
+        if self.entity_spawn_cancelled(entity.as_ref()) {
+            return Err(VehiclePlacementError::SpawnVetoed);
+        }
+
+        let committed = {
+            let registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if registrations.contains(&entity.get_entity().entity_uuid)
+                || self.has_live_entity_uuid(entity.as_ref())
+            {
+                return Err(VehiclePlacementError::UuidUnavailable);
+            }
+            let committed = commit().ok_or(VehiclePlacementError::CommitRejected)?;
+            self.spawn_state.load().add_entity(self, entity.as_ref());
+            // The next placement must see this hull in its clearance check.
+            self.publish_live_entity(entity);
+            committed
+        };
+        // Initial metadata dispatch can reenter the world and remove the live entity.
+        entity.init_data_tracker();
+        self.entity_tracker.add_entity(entity, self);
+        Ok(committed)
+    }
+
+    fn entity_spawn_cancelled(self: &Arc<Self>, entity: &dyn EntityBase) -> bool {
+        self.cancelled_by_plugin(|| {
+            let entity = entity.get_entity();
+            crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
+                entity.entity_id,
+                entity.entity_type.id.to_string(),
+                entity.pos.load(),
+                self.clone(),
+            )
+        })
     }
 
     /// Fires [`CreatureSpawnEvent`], then spawns the entity; `false` if either event is cancelled.
@@ -5696,33 +5800,42 @@ impl World {
 
     #[expect(clippy::needless_pass_by_value)]
     pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-
-        // Guard against duplicate entities with the same UUID.
-        // This can happen when chunk entity data is loaded while the entity
-        // already exists in the world (e.g. another player is still tracking it).
-        let already_exists = self
-            .entities
-            .load()
-            .iter()
-            .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
-        if already_exists {
-            return;
+        let uuid = entity.get_entity().entity_uuid;
+        {
+            let mut registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if self.has_live_entity_uuid(entity.as_ref()) || !registrations.insert(uuid) {
+                return;
+            }
         }
 
-        // The entity stays live-only: it is written to its chunk's saved data on
-        // unload (see `save_entities_by_chunk`), never at spawn, so it can't be both live and
-        // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
+        self.publish_live_entity(&entity);
+        self.entity_registrations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&uuid);
+        self.add_pending_riders(&entity);
+    }
 
+    fn has_live_entity_uuid(&self, entity: &dyn EntityBase) -> bool {
+        let uuid = entity.get_entity().entity_uuid;
+        self.entities
+            .load()
+            .iter()
+            .any(|live| live.get_entity().entity_uuid == uuid)
+    }
+
+    fn publish_live_entity(&self, entity: &Arc<dyn EntityBase>) {
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.push(entity.clone());
             new_entities
         });
         self.record_tick_spawn(entity.get_entity().entity_id);
-        self.add_pending_riders(&entity);
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {

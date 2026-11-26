@@ -49,8 +49,8 @@ use pumpkin_protocol::{
         CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList, entity_data_flag,
         entity_data_key,
     },
-    codec::var_int::VarInt,
     codec::var_ulong::VarULong,
+    codec::{var_int::VarInt, var_uint::VarUInt},
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CPlayerPosition, CSetEntityMetadata, CSetPassengers,
         CSpawnEntity, Metadata, MetadataSerializer,
@@ -889,7 +889,18 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         )
     }
 
+    /// Direct spawn. Override `send_bedrock_spawn_packets` to customize tracked pairing.
     fn send_bedrock_spawn_packet(&self, client: &BedrockClient) {
+        self.send_bedrock_spawn_packets(client, false, &mut |data| client.try_enqueue_packet(data));
+    }
+
+    /// Emits Bedrock spawn packets. Tracked pairing sends the current passenger links separately.
+    fn send_bedrock_spawn_packets(
+        &self,
+        client: &BedrockClient,
+        tracked: bool,
+        send: &mut dyn FnMut(bytes::Bytes),
+    ) {
         let entity = self.get_entity();
         let runtime_id = entity.entity_id as u64;
         let identifier = self
@@ -922,25 +933,35 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 int_entries_list: std::collections::HashMap::new(),
                 float_entries_list: std::collections::HashMap::new(),
             },
-            actor_links: entity.bedrock_actor_links(),
+            actor_links: if tracked {
+                Vec::new()
+            } else {
+                entity.bedrock_actor_links()
+            },
             passenger_of_block: None,
         };
         if let Ok(data) = client.serialize_packet(&packet) {
-            client.try_enqueue_packet(data);
+            send(data);
         }
     }
 
+    /// Direct spawn. Override `send_java_spawn_packets` to customize tracked pairing.
     fn send_java_spawn_packet(&self, client: &JavaClient) {
+        self.send_java_spawn_packets(client, &mut |data| client.try_enqueue_packet(data));
+    }
+
+    /// Emits the Java spawn and follow-up packets through the caller's delivery guard.
+    fn send_java_spawn_packets(&self, client: &JavaClient, send: &mut dyn FnMut(bytes::Bytes)) {
         let entity = self.get_entity();
         let metadata = self.java_spawn_metadata(CURRENT_MC_VERSION);
         let spawn_packet = entity.create_spawn_packet();
         if let Ok(data) = client.serialize_packet(&spawn_packet) {
-            client.try_enqueue_packet(data);
+            send(data);
         }
         if let Some(meta) = metadata {
             let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
             if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                client.try_enqueue_packet(meta_data);
+                send(meta_data);
             }
         }
         let holder = entity
@@ -953,7 +974,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 true,
             );
             if let Ok(link_data) = client.serialize_packet(&link_packet) {
-                client.try_enqueue_packet(link_data);
+                send(link_data);
             }
         }
     }
@@ -1605,6 +1626,7 @@ pub struct Entity {
     pub removal_reason: AtomicCell<Option<RemovalReason>>,
     // The passengers that entity has
     pub passengers: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
+    pub(crate) tracking_pairing_lock: std::sync::Mutex<()>,
     /// The vehicle that entity is in
     pub vehicle: std::sync::Mutex<Option<Weak<dyn EntityBase>>>,
     // Advanced under the vehicle mutex for each new or ended attachment.
@@ -1913,6 +1935,7 @@ impl Entity {
             was_in_powder_snow: AtomicBool::new(false),
             removal_reason: AtomicCell::new(None),
             passengers: std::sync::Mutex::new(Vec::new()),
+            tracking_pairing_lock: std::sync::Mutex::new(()),
             vehicle: std::sync::Mutex::new(None),
             riding_revision: std::sync::atomic::AtomicU64::new(0),
             leashed_to: std::sync::Mutex::new(None),
@@ -6794,19 +6817,31 @@ impl Entity {
         ids: &[VarInt],
         links: &[Option<CSetActorLink>],
     ) {
+        self.send_passenger_update_to_if(world, recipient, ids, ids, links, |_| Some(()));
+    }
+
+    pub(crate) fn send_passenger_update_to_if<T>(
+        &self,
+        world: &World,
+        recipient: &Player,
+        ids: &[VarInt],
+        visible_ids: &[VarInt],
+        links: &[Option<CSetActorLink>],
+        lock_session: impl Fn(Option<i32>) -> Option<T>,
+    ) {
         let in_world = || {
             std::ptr::eq(recipient.world().as_ref(), world)
                 && std::ptr::eq(self.world.load().as_ref(), world)
         };
         if let Some(client) = recipient.client.java()
             && let Ok(data) =
-                client.serialize_packet(&CSetPassengers::new(VarInt(self.entity_id), ids))
+                client.serialize_packet(&CSetPassengers::new(VarInt(self.entity_id), visible_ids))
         {
-            client.try_enqueue_packet_data_if(
+            let protocol = client.version.load();
+            client.try_enqueue_packet_data_filtering(
                 data,
-                CSetPassengers::to_id(client.version.load()),
-                |mut payload| payload.get_var_int().is_ok_and(|id| id.0 == self.entity_id),
                 || {
+                    let session = lock_session(None)?;
                     let current = self
                         .passengers
                         .lock()
@@ -6816,7 +6851,23 @@ impl Entity {
                             .iter()
                             .map(|p| VarInt(p.get_entity().entity_id))
                             .eq(ids.iter().copied()))
-                    .then_some(current)
+                    .then_some((session, current))
+                },
+                |data| {
+                    let mut affected = ids.to_vec();
+                    affected.extend(links.iter().flatten().filter_map(|link| {
+                        (link.link.link_type == 0)
+                            .then(|| i32::try_from(link.link.rider_unique_id.0).ok())
+                            .flatten()
+                            .map(VarInt)
+                    }));
+                    (!Self::java_passenger_update_overlaps(
+                        &data,
+                        protocol,
+                        self.entity_id,
+                        &affected,
+                    ))
+                    .then_some(data)
                 },
             );
         } else if let Some(client) = recipient.client.bedrock() {
@@ -6824,31 +6875,70 @@ impl Entity {
                 let Ok(data) = client.serialize_packet(link) else {
                     continue;
                 };
-                client.try_enqueue_packet_data_if(
+                let rider = link.link.rider_unique_id.0;
+                client.try_enqueue_packet_data_filtering(
                     data,
-                    CSetActorLink::PACKET_ID,
-                    |mut payload| {
-                        VarLong::read(&mut payload)
-                            .is_ok_and(|id| id.0 == link.link.ridden_unique_id.0)
-                            && VarLong::read(&mut payload)
-                                .is_ok_and(|id| id.0 == link.link.rider_unique_id.0)
-                    },
                     || {
+                        let session = lock_session(i32::try_from(rider).ok())?;
                         let current = self
                             .passengers
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
                         let role = current
                             .iter()
-                            .position(|p| {
-                                i64::from(p.get_entity().entity_id) == link.link.rider_unique_id.0
+                            .position(|passenger| {
+                                i64::from(passenger.get_entity().entity_id) == rider
                             })
                             .map_or(0, |index| if index == 0 { 1 } else { 2 });
-                        (in_world() && role == link.link.link_type).then_some(current)
+                        (in_world() && role == link.link.link_type).then_some((session, current))
+                    },
+                    |data| {
+                        let mut payload = data.as_ref();
+                        let overlaps = VarUInt::read(&mut payload)
+                            .is_ok_and(|id| id.0 == CSetActorLink::PACKET_ID as u32)
+                            && VarLong::read(&mut payload).is_ok_and(|carrier| {
+                                carrier == link.link.ridden_unique_id
+                                    || VarLong::read(&mut payload)
+                                        .is_ok_and(|other| other.0 == rider)
+                            });
+                        (!overlaps).then_some(data)
                     },
                 );
             }
         }
+    }
+
+    pub(crate) fn java_passenger_update_overlaps(
+        mut payload: &[u8],
+        protocol: JavaMinecraftVersion,
+        carrier: i32,
+        riders: &[VarInt],
+    ) -> bool {
+        use pumpkin_protocol::{ServerPacket, java::client::play::CSetEntityLink};
+
+        let Ok(packet_id) = payload.get_var_int() else {
+            return false;
+        };
+        if protocol <= JavaMinecraftVersion::V_1_8 && packet_id.0 == CSetEntityLink::to_id(protocol)
+        {
+            // These versions share the attach packet between riding and leashing.
+            return CSetEntityLink::read(&mut payload, &protocol).is_ok_and(|link| {
+                !link.leash
+                    && (link.holding_entity_id == carrier
+                        || riders.contains(&VarInt(link.attached_entity_id)))
+            });
+        }
+        if packet_id.0 != CSetPassengers::to_id(protocol) {
+            return false;
+        }
+        if payload.get_var_int().is_ok_and(|id| id.0 == carrier) {
+            return true;
+        }
+        payload.get_var_int().is_ok_and(|count| {
+            (0..count.0)
+                .map_while(|_| payload.get_var_int().ok())
+                .any(|id| riders.contains(&id))
+        })
     }
 
     fn send_passenger_update(

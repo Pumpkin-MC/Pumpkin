@@ -1,4 +1,5 @@
 use std::io::{Error, ErrorKind, Read};
+use std::num::NonZero;
 
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
@@ -132,7 +133,7 @@ pub enum HandSlot {
     Offhand,
 }
 
-#[derive(Debug, PacketRead)]
+#[derive(Debug)]
 pub struct UseItemTransactionData {
     pub action_type: VarInt,
     pub trigger_type: u8,
@@ -141,11 +142,51 @@ pub struct UseItemTransactionData {
     pub hot_bar_slot: VarInt,
     pub hand: HandSlot,
     pub item_in_hand: NetworkItemDescriptor,
+    /// The optional server-assigned identity echoed for the source stack.
+    pub item_in_hand_network_id: Option<NonZero<i32>>,
     pub player_position: Vector3<f32>,
     pub click_position: Vector3<f32>,
     pub block_runtime_id: VarUInt,
     pub client_prediction: u8,
     pub client_cooldown_state: u8,
+}
+
+impl UseItemTransactionData {
+    /// Checks the original hotbar index and any echoed network stack identity.
+    #[must_use]
+    pub fn matches_source_slot(&self, slot: usize, uid: NonZero<i32>) -> bool {
+        (matches!(self.hand, HandSlot::Offhand)
+            || usize::try_from(self.hot_bar_slot.0).ok() == Some(slot))
+            && self.item_in_hand_network_id.is_none_or(|id| id == uid)
+    }
+}
+
+impl PacketRead for UseItemTransactionData {
+    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
+        let action_type = VarInt::read(buf)?;
+        let trigger_type = u8::read(buf)?;
+        let block_position = BlockPos::read(buf)?;
+        let block_face = u8::read(buf)?;
+        let hot_bar_slot = VarInt::read(buf)?;
+        let hand = HandSlot::read(buf)?;
+        let (item_in_hand, item_in_hand_network_id) =
+            NetworkItemDescriptor::read_with_network_id(buf)?;
+        Ok(Self {
+            action_type,
+            trigger_type,
+            block_position,
+            block_face,
+            hot_bar_slot,
+            hand,
+            item_in_hand,
+            item_in_hand_network_id,
+            player_position: Vector3::read(buf)?,
+            click_position: Vector3::read(buf)?,
+            block_runtime_id: VarUInt::read(buf)?,
+            client_prediction: u8::read(buf)?,
+            client_cooldown_state: u8::read(buf)?,
+        })
+    }
 }
 
 #[derive(Debug, PacketRead)]
@@ -239,6 +280,58 @@ mod tests {
     use super::*;
 
     #[test]
+    fn preserves_the_optional_network_identity_of_the_held_stack() -> Result<(), Error> {
+        use crate::{bedrock::network_item::ItemStackWrapper, serial::PacketWrite};
+        use pumpkin_data::{item::Item, item_stack::ItemStack};
+
+        let stack = ItemStack::new(1, &Item::OAK_BOAT);
+        let wrapped = ItemStackWrapper::from(&stack);
+        let clicked_block = BlockPos::new(-8, 64, 7);
+        let player_position = Vector3::new(-8.5f32, 65.5, 7.0);
+        let hit = Vector3::new(0.25f32, 1.0, 0.75);
+
+        let mut payload = Vec::new();
+        VarInt(0).write(&mut payload)?; // Legacy request ID
+        false.write(&mut payload)?; // No legacy slot updates
+        VarUInt(2).write(&mut payload)?; // UseItem transaction
+        VarUInt(0).write(&mut payload)?; // No inventory actions
+        VarInt(0).write(&mut payload)?; // Click block
+        1u8.write(&mut payload)?; // Player input
+        clicked_block.write(&mut payload)?;
+        1u8.write(&mut payload)?; // Top face
+        VarInt(2).write(&mut payload)?; // Hotbar slot
+        (HandSlot::Mainhand as u8).write(&mut payload)?;
+        wrapped.write(&mut payload)?;
+        player_position.write(&mut payload)?;
+        hit.write(&mut payload)?;
+        VarUInt(11_517).write(&mut payload)?;
+        1u8.write(&mut payload)?; // Client prediction
+        0u8.write(&mut payload)?; // Client cooldown state
+
+        let mut reader = payload.as_slice();
+        let packet = SInventoryTransaction::read(&mut reader)?;
+        let TransactionData::UseItem(data) = packet.transaction_data else {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "Expected use-item transaction",
+            ));
+        };
+        assert_ne!(data.item_in_hand.id.0, 0);
+        assert_eq!(data.item_in_hand.id.0, i32::from(wrapped.id));
+        assert_eq!(data.item_in_hand_network_id, Some(stack.uid));
+        assert!(data.matches_source_slot(2, stack.uid));
+        assert!(!data.matches_source_slot(3, stack.uid));
+        assert!(!data.matches_source_slot(2, ItemStack::new(1, &Item::OAK_BOAT).uid));
+        assert_eq!(data.block_position, clicked_block);
+        assert_eq!(data.hot_bar_slot.0, 2);
+        assert_eq!(data.player_position, player_position);
+        assert_eq!(data.click_position, hit);
+        assert_eq!(data.block_runtime_id.0, 11_517);
+        assert!(reader.is_empty());
+        Ok(())
+    }
+
+    #[test]
     fn decodes_use_item_transaction_with_empty_hand() {
         let payload = [
             0x00, 0x00, 0x02, 0x00, 0x00, 0x01, 0xec, 0x04, 0x80, 0x01, 0xcb, 0x06, 0x03, 0x00,
@@ -256,6 +349,7 @@ mod tests {
         assert_eq!(data.action_type.0, 0);
         assert_eq!(data.hand, HandSlot::Offhand);
         assert_eq!(data.item_in_hand.id.0, 0);
+        assert_eq!(data.item_in_hand_network_id, None);
         assert_eq!(data.block_face, 3);
         assert!(reader.is_empty());
     }

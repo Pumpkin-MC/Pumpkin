@@ -95,6 +95,55 @@ fn frame_packet(packet_id: i32, payload: &[u8]) -> Option<Bytes> {
     Some(framed.into())
 }
 
+fn inventory_update_scope(
+    mut data: &[u8],
+    version: JavaMinecraftVersion,
+) -> Option<super::InventoryUpdateScope> {
+    use super::InventoryUpdateScope::{Content, Cursor, PlayerSlot, Property, Slot};
+    use pumpkin_protocol::java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory,
+    };
+
+    let id = data.get_var_int().ok()?.0;
+    if id == CSetPlayerInventory::to_id(version) {
+        return Some(PlayerSlot(
+            usize::try_from(data.get_var_int().ok()?.0).ok()?,
+        ));
+    }
+    if id == CSetCursorItem::to_id(version) {
+        return Some(Cursor);
+    }
+    if id == CSetContainerContent::to_id(version) {
+        return Some(Content {
+            window: data.get_container_id(&version).ok()?.0,
+            includes_cursor: version >= JavaMinecraftVersion::V_1_17_1,
+        });
+    }
+    if id == CSetContainerSlot::to_id(version) {
+        let window = i32::from(data.get_container_id(&version).ok()?.0 as i8);
+        if version >= JavaMinecraftVersion::V_1_17_1 {
+            data.get_var_int().ok()?;
+        }
+        let slot = data.get_i16_be().ok()?;
+        return Some(match window {
+            -1 => Cursor,
+            -2 => PlayerSlot(usize::try_from(slot).ok()?),
+            _ => Slot {
+                window,
+                slot: i32::from(slot),
+            },
+        });
+    }
+    if id == CSetContainerProperty::to_id(version) {
+        return Some(Property {
+            window: data.get_container_id(&version).ok()?.0,
+            property: i32::from(data.get_i16_be().ok()?),
+        });
+    }
+    None
+}
+
 #[repr(C)]
 pub struct JavaClient {
     pub id: u64,
@@ -600,7 +649,7 @@ impl JavaClient {
                     filter_stale_extra(data)
                 }
             },
-            |_, _| {},
+            |_, _, _| {},
         );
     }
 
@@ -611,7 +660,7 @@ impl JavaClient {
         packet_data: Bytes,
         validate: impl FnOnce() -> T,
         mut project: impl FnMut(Bytes, bool, &T) -> Option<Bytes>,
-        mut delivered: impl FnMut(&Bytes, &mut T),
+        mut delivered: impl FnMut(&Bytes, bool, &mut T),
     ) {
         if self.close_token.is_cancelled() {
             return;
@@ -632,7 +681,7 @@ impl JavaClient {
             if !self.queue_outgoing(OutgoingPacket::normal(data.clone()), length) {
                 break;
             }
-            delivered(&data, &mut guard);
+            delivered(&data, is_primary, &mut guard);
         }
     }
 
@@ -833,6 +882,132 @@ impl JavaClient {
 
     pub fn serialize_packet<P: ClientPacket>(&self, packet: &P) -> Result<Bytes, WritingError> {
         Self::serialize_packet_for_version(packet, CURRENT_MC_VERSION)
+    }
+
+    pub(crate) fn try_enqueue_inventory_update<P: ClientPacket>(
+        &self,
+        packet: &P,
+        context: Option<pumpkin_inventory::sync_handler::ScreenUpdateContext<'_>>,
+    ) {
+        self.try_enqueue_inventory_update_validated(packet, context, || Some(()));
+    }
+
+    pub(crate) fn try_enqueue_inventory_update_validated<P: ClientPacket, T>(
+        &self,
+        packet: &P,
+        context: Option<pumpkin_inventory::sync_handler::ScreenUpdateContext<'_>>,
+        validate: impl FnOnce() -> Option<T>,
+    ) {
+        if context.is_some_and(|context| context.lock_if_current().is_none()) {
+            return;
+        }
+        let Ok(data) = self.serialize_packet(packet) else {
+            return;
+        };
+        let origin = inventory_update_scope(&data, CURRENT_MC_VERSION);
+        let version = self.version.load();
+        self.try_enqueue_packet_data_filtering(
+            data,
+            || match context {
+                Some(context) => context
+                    .lock_for_delivery(validate)
+                    .map(|(menu, state)| (Some(menu), state)),
+                None => validate().map(|state| (None, state)),
+            },
+            |data| {
+                let overlaps = origin
+                    .zip(inventory_update_scope(&data, version))
+                    .is_some_and(|(origin, extra)| {
+                        self.inventory_update_overlaps(origin, extra, context)
+                    });
+                (!overlaps).then_some(data)
+            },
+        );
+    }
+
+    fn inventory_update_overlaps(
+        &self,
+        origin: super::InventoryUpdateScope,
+        extra: super::InventoryUpdateScope,
+        context: Option<pumpkin_inventory::sync_handler::ScreenUpdateContext<'_>>,
+    ) -> bool {
+        use super::InventoryUpdateScope::{Content, PlayerSlot, Slot};
+        if origin.overlaps(extra) {
+            return true;
+        }
+        let physical = |scope| match scope {
+            PlayerSlot(index) => Some(index),
+            Slot { window: 0, slot } => {
+                pumpkin_inventory::screen_handler::player_screen_inventory_index(slot)
+            }
+            _ => None,
+        };
+        if let Some(index_in_origin) = physical(origin) {
+            return physical(extra).map_or_else(
+                || self.menu_overlaps_player_slot(extra, index_in_origin),
+                |index| index == index_in_origin,
+            );
+        }
+        let Some(index) = physical(extra) else {
+            return false;
+        };
+        let Some(context) = context else {
+            return false;
+        };
+        if !matches!(origin, Content { .. } | Slot { .. }) {
+            return false;
+        }
+        let player = self.player.load();
+        let Some(player) = player.as_ref() else {
+            return false;
+        };
+        let inventory: Arc<dyn pumpkin_inventory::inventory::Inventory> =
+            player.inventory().clone();
+        let screen = context
+            .screen
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        screen
+            .get_slot_index(&inventory, index)
+            .is_some_and(|index| {
+                matches!(origin, Content { .. })
+                    || matches!(origin, Slot { slot, .. } if slot == index as i32)
+            })
+    }
+
+    fn menu_overlaps_player_slot(&self, update: super::InventoryUpdateScope, index: usize) -> bool {
+        use super::InventoryUpdateScope::{Content, Slot};
+        let (Content { window, .. } | Slot { window, .. }) = update else {
+            return false;
+        };
+        if window == 0 {
+            return matches!(update, Content { .. })
+                && index
+                    <= pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT;
+        }
+        if window < 0 {
+            return false;
+        }
+        let player = self.player.load();
+        let Some(player) = player.as_ref() else {
+            return false;
+        };
+        let active = player
+            .current_screen_handler
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let screen = active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let inventory: Arc<dyn pumpkin_inventory::inventory::Inventory> =
+            player.inventory().clone();
+        i32::from(screen.sync_id()) == window
+            && screen
+                .get_slot_index(&inventory, index)
+                .is_some_and(|index| {
+                    matches!(update, Content { .. })
+                        || matches!(update, Slot { slot, .. } if slot == index as i32)
+                })
     }
 
     /// `false` when the packet was dropped instead (cancelled, closed, buffer full).

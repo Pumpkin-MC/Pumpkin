@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
 use crate::block::registry::BlockActionResult;
-use crate::entity::Entity;
 use crate::entity::player::Player;
 use crate::entity::vehicle::minecart::MinecartEntity;
+use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{
     BlockProperties, PoweredRailLikeProperties, RailLikeProperties,
 };
+use pumpkin_data::block_state::BlockStateId;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
@@ -18,6 +19,15 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+
+use crate::world::{World, game_event::GameEventContext};
+use pumpkin_data::{data_component_impl::CanPlaceOnImpl, statistic::StatisticCategory};
+use pumpkin_util::{GameMode, Hand};
+
+use super::vehicle_placement::{
+    block_use_cooldown, commit_item_use, commit_placement_item, finish_consumed_inventory,
+    publish_placement_cooldown, use_remainder,
+};
 
 pub struct MinecartItem;
 
@@ -35,6 +45,114 @@ impl MinecartItem {
                 &EntityType::MINECART
             }
         }
+    }
+
+    fn new_at_rail(
+        stack: &ItemStack,
+        player: &Player,
+        world: &Arc<World>,
+        location: BlockPos,
+        state_id: BlockStateId,
+    ) -> Arc<dyn EntityBase> {
+        let block = Block::from_state_id(state_id);
+        let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
+            PoweredRailLikeProperties::from_state_id(state_id)
+                .shape
+                .is_ascending()
+        } else {
+            RailLikeProperties::from_state_id(state_id)
+                .shape
+                .is_ascending()
+        };
+        let height = if is_ascending { 0.5 } else { 0.0 };
+        let entity_type = Self::item_to_entity(stack.get_item());
+        let pos = location.to_f64();
+        let entity = Entity::new(
+            world.clone(),
+            Vector3::new(pos.x + 0.5, pos.y + 0.0625 + height, pos.z + 0.5),
+            entity_type,
+        );
+        let minecart_entity: Arc<dyn EntityBase> = Arc::new(MinecartEntity::new(entity));
+        crate::item::items::spawn_egg::apply_entity_variant(
+            stack,
+            minecart_entity.as_ref(),
+            Some(player),
+        );
+        minecart_entity
+    }
+
+    fn placement_mode(
+        player: &Player,
+        stack: &ItemStack,
+        world: &Arc<World>,
+        location: BlockPos,
+        rail_state: BlockStateId,
+    ) -> Option<GameMode> {
+        let mode = player.gamemode.load();
+        (mode != GameMode::Spectator
+            && !stack.is_empty()
+            && Arc::ptr_eq(world, &player.world())
+            && Block::from_state_id(rail_state).has_tag(&tag::Block::MINECRAFT_RAILS)
+            && world.get_block_state_id(&location) == rail_state
+            && (player.may_build()
+                || stack
+                    .get_data_component::<CanPlaceOnImpl>()
+                    .is_some_and(|permission| {
+                        permission.matches_block_state_without_entity(rail_state)
+                    })))
+        .then_some(mode)
+    }
+
+    pub(crate) fn place_from_slot(
+        stack: &ItemStack,
+        player: &Player,
+        hand: Hand,
+        slot: usize,
+        world: &Arc<World>,
+        location: BlockPos,
+    ) -> BlockActionResult {
+        let (group, duration) = block_use_cooldown(stack);
+        let rail_state = world.get_block_state_id(&location);
+        if player.is_on_cooldown(group)
+            || Self::placement_mode(player, stack, world, location, rail_state).is_none()
+        {
+            return BlockActionResult::Fail;
+        }
+        let cart = Self::new_at_rail(stack, player, world, location, rail_state);
+        let Ok((consumed, mode, cooldown)) = world.spawn_placed_vehicle(&cart, || {
+            if player
+                .inventory()
+                .equipment_slot_index(&crate::entity::hand_equipment_slot(hand))
+                != Some(slot)
+                || !crate::net::vehicle_block_use_is_eligible(player, world, &location)
+            {
+                return None;
+            }
+            let mode = Self::placement_mode(player, stack, world, location, rail_state)?;
+            let (consumed, cooldown) =
+                commit_placement_item(player, slot, stack, mode, group, duration)?;
+            Some((consumed, mode, cooldown))
+        }) else {
+            return BlockActionResult::Fail;
+        };
+
+        Self::emit_placement(player, world, location);
+        player.increment_stat(StatisticCategory::Used, i32::from(stack.get_item().id), 1);
+        finish_consumed_inventory(player, slot, stack, &consumed, mode);
+        if let Some(cooldown) = cooldown {
+            publish_placement_cooldown(player, group, cooldown);
+        }
+        BlockActionResult::Success
+    }
+
+    fn emit_placement(player: &Player, world: &World, location: BlockPos) {
+        world.emit_game_event_with_context(
+            GameEvent::EntityPlace.name(),
+            location.to_centered_f64(),
+            &GameEventContext {
+                source_entity: Some(player),
+            },
+        );
     }
 }
 
@@ -60,41 +178,44 @@ impl ItemBehaviour for MinecartItem {
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &Block,
+        _block: &Block,
         _server: &Server,
     ) -> BlockActionResult {
+        let stack_before_use = item.clone();
+        let (group, duration) = block_use_cooldown(&stack_before_use);
+        if player.is_on_cooldown(group) {
+            return BlockActionResult::Pass;
+        }
         let world = player.world();
-
-        if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
+        let rail_state = world.get_block_state_id(&location);
+        if Self::placement_mode(player, item, &world, location, rail_state).is_none() {
             return BlockActionResult::Fail;
         }
-        let state_id = world.get_block_state_id(&location);
-        let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
-            PoweredRailLikeProperties::from_state_id(state_id)
-                .shape
-                .is_ascending()
-        } else {
-            RailLikeProperties::from_state_id(state_id)
-                .shape
-                .is_ascending()
+        let minecart = Self::new_at_rail(item, player, &world, location, rail_state);
+        let Ok((mode, cooldown)) = world.spawn_placed_vehicle(&minecart, || {
+            let mode = Self::placement_mode(player, item, &world, location, rail_state)?;
+            commit_item_use(player, group, duration, || {
+                item.decrement_unless_creative(mode, 1);
+                Some(mode)
+            })
+        }) else {
+            return BlockActionResult::Fail;
         };
-        let height = if is_ascending { 0.5 } else { 0.0 };
-        let entity_type = Self::item_to_entity(item.item);
-        let pos = location.to_f64();
-        let entity = Entity::new(
-            world.clone(),
-            Vector3::new(pos.x + 0.5, pos.y + 0.0625 + height, pos.z + 0.5),
-            entity_type,
+        Self::emit_placement(player, &world, location);
+        player.increment_stat(
+            StatisticCategory::Used,
+            i32::from(stack_before_use.get_item().id),
+            1,
         );
-        let minecart_entity = Arc::new(MinecartEntity::new(entity));
-        crate::item::items::spawn_egg::apply_entity_variant(
-            item,
-            minecart_entity.as_ref(),
-            Some(player),
-        );
-        world.spawn_entity(minecart_entity);
-        world.emit_game_event(GameEvent::EntityPlace.name(), pos);
-        item.decrement_unless_creative(player.gamemode.load(), 1);
+        let used_stack = std::mem::replace(item, ItemStack::EMPTY.clone());
+        let (remaining, extra) = use_remainder(&stack_before_use, used_stack, mode);
+        *item = remaining;
+        if let Some(extra) = extra {
+            player.inventory().offer(extra, false, player);
+        }
+        if let Some(cooldown) = cooldown {
+            publish_placement_cooldown(player, group, cooldown);
+        }
         BlockActionResult::Success
     }
 

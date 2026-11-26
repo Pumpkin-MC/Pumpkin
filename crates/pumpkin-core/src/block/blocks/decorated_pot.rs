@@ -63,6 +63,104 @@ impl DecoratedPotBlock {
         }
         state
     }
+
+    fn insert_from_hand(
+        args: &mut UseWithItemArgs<'_>,
+        source_slot: Option<usize>,
+    ) -> BlockActionResult {
+        let Some(block_entity) = args.world.get_block_entity(args.position) else {
+            return BlockActionResult::Pass;
+        };
+        let Ok(pot_entity) = Arc::downcast::<DecoratedPotBlockEntity>(block_entity) else {
+            return BlockActionResult::Pass;
+        };
+
+        DecoratedPotBlockEntity::unpack_loot_table(&pot_entity, args.world);
+
+        if args.item_stack.is_empty() {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
+
+        let pot_item = pot_entity.get_item();
+        let can_insert = match &pot_item {
+            None => true,
+            Some(existing) if existing.is_empty() => true,
+            Some(existing) => {
+                existing.are_items_and_components_equal(args.item_stack)
+                    && existing.item_count < existing.get_max_stack_size()
+            }
+        };
+        if !can_insert {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
+
+        let wobble = || {
+            args.world
+                .add_synced_block_event(*args.position, EVENT_POT_WOBBLES, WOBBLE_POSITIVE);
+        };
+        let used_item_id = i32::from(args.item_stack.item.id);
+        let gamemode = args.player.gamemode.load();
+        let inserted = if let Some(slot) = source_slot {
+            if gamemode == pumpkin_util::GameMode::Spectator {
+                return BlockActionResult::PassToDefaultBlockAction;
+            }
+            let mut remaining = args.item_stack.clone();
+            let mut awarded = remaining.split_unless_creative(gamemode, 1);
+            if remaining.is_empty() {
+                remaining.clear();
+            }
+            pot_entity.try_insert_item_from_slot(args.world, &mut awarded, 1, || {
+                let inventory = args.player.inventory();
+                args.player.gamemode.load() == gamemode
+                    && Arc::ptr_eq(args.world, &args.player.world())
+                    && inventory.equipment_slot_index(args.equipment_slot) == Some(slot)
+                    && inventory.replace_slot_if_same(slot, args.item_stack, remaining)
+            })
+        } else {
+            wobble();
+            let mut awarded = args.item_stack.split_unless_creative(gamemode, 1);
+            pot_entity.try_insert_item(&mut awarded, 1)
+        };
+        let Some((new_count, max_stack)) = inserted else {
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
+        if source_slot.is_some() {
+            wobble();
+        }
+        args.player
+            .increment_stat(StatisticCategory::Used, used_item_id, 1);
+
+        let pitch_bend = f32::from(new_count) / f32::from(max_stack.max(1));
+        args.world.play_sound_fine(
+            Sound::BlockDecoratedPotInsert,
+            SoundCategory::Blocks,
+            &args.position.to_centered_f64(),
+            1.0,
+            0.7 + 0.5 * pitch_bend,
+        );
+        args.world.spawn_particle(
+            Vector3::new(
+                f64::from(args.position.0.x) + 0.5,
+                f64::from(args.position.0.y) + 1.2,
+                f64::from(args.position.0.z) + 0.5,
+            ),
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            7,
+            Particle::DustPlume,
+        );
+        args.world
+            .update_neighbour_for_output_signal(args.position, args.block);
+        args.world.emit_game_event(
+            GameEvent::BlockChange.name(),
+            args.position.to_centered_f64(),
+        );
+        if let Some(slot) = source_slot {
+            let current = args.player.inventory().get_slot(slot);
+            args.player.sync_hand_slot(slot, current);
+        }
+        BlockActionResult::Success
+    }
 }
 
 impl BlockBehaviour for DecoratedPotBlock {
@@ -94,71 +192,20 @@ impl BlockBehaviour for DecoratedPotBlock {
         args.world.add_block_entity(Arc::new(entity));
     }
 
-    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let Some(block_entity) = args.world.get_block_entity(args.position) else {
-            return BlockActionResult::Pass;
-        };
-        let Ok(pot_entity) = Arc::downcast::<DecoratedPotBlockEntity>(block_entity) else {
-            return BlockActionResult::Pass;
-        };
+    fn use_with_item(&self, mut args: UseWithItemArgs<'_>) -> BlockActionResult {
+        Self::insert_from_hand(&mut args, None)
+    }
 
-        DecoratedPotBlockEntity::unpack_loot_table(&pot_entity, args.world);
+    fn requires_physical_item_source(&self) -> bool {
+        true
+    }
 
-        if args.item_stack.is_empty() {
-            return BlockActionResult::PassToDefaultBlockAction;
-        }
-
-        let pot_item = pot_entity.get_item();
-        let can_insert = match &pot_item {
-            None => true,
-            Some(existing) if existing.is_empty() => true,
-            Some(existing) => {
-                existing.are_items_and_components_equal(args.item_stack)
-                    && existing.item_count < existing.get_max_stack_size()
-            }
-        };
-        if !can_insert {
-            return BlockActionResult::PassToDefaultBlockAction;
-        }
-
-        args.world
-            .add_synced_block_event(*args.position, EVENT_POT_WOBBLES, WOBBLE_POSITIVE);
-        let used_item_id = i32::from(args.item_stack.item.id);
-        let mut awarded = args
-            .item_stack
-            .split_unless_creative(args.player.gamemode.load(), 1);
-        let Some((new_count, max_stack)) = pot_entity.try_insert_item(&mut awarded, 1) else {
-            return BlockActionResult::PassToDefaultBlockAction;
-        };
-        args.player
-            .increment_stat(StatisticCategory::Used, used_item_id, 1);
-
-        let pitch_bend = f32::from(new_count) / f32::from(max_stack.max(1));
-        args.world.play_sound_fine(
-            Sound::BlockDecoratedPotInsert,
-            SoundCategory::Blocks,
-            &args.position.to_centered_f64(),
-            1.0,
-            0.7 + 0.5 * pitch_bend,
-        );
-        args.world.spawn_particle(
-            Vector3::new(
-                f64::from(args.position.0.x) + 0.5,
-                f64::from(args.position.0.y) + 1.2,
-                f64::from(args.position.0.z) + 0.5,
-            ),
-            Vector3::new(0.0, 0.0, 0.0),
-            0.0,
-            7,
-            Particle::DustPlume,
-        );
-        args.world
-            .update_neighbour_for_output_signal(args.position, args.block);
-        args.world.emit_game_event(
-            GameEvent::BlockChange.name(),
-            args.position.to_centered_f64(),
-        );
-        BlockActionResult::Success
+    fn use_with_item_from_slot(
+        &self,
+        mut args: UseWithItemArgs<'_>,
+        source_slot: usize,
+    ) -> BlockActionResult {
+        Self::insert_from_hand(&mut args, Some(source_slot))
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {

@@ -1,7 +1,14 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::entity::player::advancement::predicate::CriterionConditions;
 use crate::item::registry::should_try_block_placement;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_protocol::ser::NetworkReadExt;
+use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::version::JavaMinecraftVersion;
+use std::cell::Cell;
+
+const BLOCK_HIT_DISTANCE_FROM_CENTER: f64 = 1.000_000_1;
 
 impl JavaClient {
     #[allow(clippy::too_many_lines)]
@@ -17,6 +24,7 @@ impl JavaClient {
         player.update_last_action_time();
         self.update_sequence(use_item_on.sequence.0);
 
+        let version = self.version.load();
         let position = use_item_on.position;
         let cursor_pos = use_item_on.cursor_pos;
 
@@ -35,54 +43,60 @@ impl JavaClient {
             return Err(BlockPlacingError::InvalidHand);
         };
 
-        if player.gamemode.load() == GameMode::Spectator {
-            let entity = &player.get_entity();
-            let world = entity.world.load_full();
-            let block = world.get_block(&position);
-
-            let event = PlayerInteractEvent::new(
-                player,
-                InteractAction::RightClickBlock,
-                block,
-                Some(position),
-            );
-
-            send_cancellable_blocking! {{
-                server;
-                event;
-                'cancelled: {
-                    let state_id = world.get_block_state_id(&position);
-                    player.try_send_client_packet(&CBlockUpdate::new(
-                        position,
-                        VarInt(i32::from(state_id.as_u16())),
-                    ));
-                    return Ok(());
-                }
-            }}
-
-            if let Some(factory) = server
-                .block_registry
-                .get_screen_handler_factory(block, player, &position, server, &world)
-            {
-                player.open_handled_screen(factory.as_ref(), Some(position));
-            }
-            return Ok(());
-        }
-
+        let was_spectator = player.gamemode.load() == GameMode::Spectator;
         let inventory = player.inventory();
         let held_item = inventory.held_item();
         let off_hand_item = inventory.off_hand_item();
         let held_item_empty = held_item.is_empty();
         let off_hand_item_empty = off_hand_item.is_empty();
 
-        let mut item = inventory.get_stack_in_hand(hand);
+        let equipment_slot = crate::entity::hand_equipment_slot(hand);
+        let original_slot = inventory.equipment_slot_index(&equipment_slot);
+        let mut item =
+            original_slot.map_or_else(|| ItemStack::EMPTY.clone(), |slot| inventory.get_slot(slot));
         let before = item.clone();
         let item_id = item.item.id;
-        player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+        let is_boat = server.item_registry.uses_boat_placement(item_id);
+        let minecart = server.item_registry.minecart_item(item_id);
+        let is_vehicle = is_boat || minecart.is_some();
+        if is_vehicle
+            && ![cursor_pos.x, cursor_pos.y, cursor_pos.z]
+                .into_iter()
+                .all(|offset| (f64::from(offset) - 0.5).abs() < BLOCK_HIT_DISTANCE_FROM_CENTER)
+        {
+            return Ok(());
+        }
+        if !is_vehicle && !was_spectator {
+            player.increment_stat(StatisticCategory::Used, i32::from(item_id), 1);
+        }
 
         let entity = &player.get_entity();
         let world = entity.world.load_full();
         let block = world.get_block(&position);
+        if is_vehicle && !world.is_in_height_limit(position.0.y) {
+            Self::send_vehicle_build_limit_feedback(
+                player,
+                &world,
+                position.0.y > world.get_top_y(),
+            );
+            return Ok(());
+        }
+        if is_vehicle && !crate::net::vehicle_block_use_is_eligible(player, &world, &position) {
+            if crate::net::vehicle_spawn_is_protected(player, &world, &position) {
+                player.send_system_message_raw(
+                    &TextComponent::translate(
+                        translation::java::BUILD_SPAWN_PROTECTION,
+                        [TextComponent::text(position.to_string())],
+                    )
+                    .color_named(NamedColor::Red),
+                    true,
+                );
+            } else {
+                Self::send_vehicle_build_limit_feedback(player, &world, true);
+            }
+            self.correct_block_use(player, &world, &position, face);
+            return Ok(());
+        }
 
         let event = PlayerInteractEvent::new(
             player,
@@ -95,20 +109,18 @@ impl JavaClient {
             server;
             event;
             'cancelled: {
-                let state_id = world.get_block_state_id(&position);
-                player.try_send_client_packet(&CBlockUpdate::new(
-                    position,
-                    VarInt(i32::from(state_id.as_u16())),
-                ));
+                if is_vehicle {
+                    self.correct_block_use(player, &world, &position, face);
+                } else {
+                    let state_id = world.get_block_state_id(&position);
+                    player.try_send_client_packet(&CBlockUpdate::new(
+                        position,
+                        VarInt(i32::from(state_id.as_u16())),
+                    ));
+                }
                 return Ok(());
             }
         }}
-
-        let equipment_slot = if matches!(hand, Hand::Right) {
-            EquipmentSlot::MAIN_HAND
-        } else {
-            EquipmentSlot::OFF_HAND
-        };
 
         let slot_index = if matches!(hand, Hand::Right) {
             inventory.get_selected_slot() as usize
@@ -116,26 +128,67 @@ impl JavaClient {
             PlayerInventory::OFF_HAND_SLOT
         };
 
+        if is_vehicle
+            && (!crate::net::vehicle_block_use_is_eligible(player, &world, &position)
+                || world.get_block(&position).id != block.id
+                || inventory.equipment_slot_index(&equipment_slot) != original_slot
+                || original_slot.is_none_or(|slot| {
+                    let live = inventory.get_slot(slot);
+                    live.uid != before.uid || !live.are_equal(&before)
+                }))
+        {
+            self.correct_block_use(player, &world, &position, face);
+            return Ok(());
+        }
+
+        let spectator = if is_vehicle {
+            player.gamemode.load() == GameMode::Spectator
+        } else {
+            was_spectator
+        };
+        if spectator {
+            if let Some(factory) = server
+                .block_registry
+                .get_screen_handler_factory(block, player, &position, server, &world)
+            {
+                player.open_handled_screen(factory.as_ref(), Some(position));
+            }
+            if is_vehicle {
+                self.correct_block_use(player, &world, &position, face);
+            }
+            return Ok(());
+        }
+
         let sneaking = player.get_entity().is_sneaking();
 
         // Code based on the java class ServerPlayerInteractionManager
         if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
-            let result = Self::call_use_item_on(
+            let (result, used_item) = Self::call_use_item_on(
                 player,
                 &position,
                 &cursor_pos,
                 face,
                 &mut item,
                 &equipment_slot,
+                original_slot,
                 &world,
                 block,
                 server,
             );
             if result.consumes_action() {
-                trigger_item_used_on_block_advancement(player, &world, &position, block, &before);
+                if used_item || !is_vehicle {
+                    trigger_item_used_on_block_advancement(
+                        player, &world, &position, block, &before, is_vehicle,
+                    );
+                }
                 sync_used_hand_item(player, hand, slot_index, &before, item);
 
-                if matches!(result, BlockActionResult::SuccessServer) {
+                if is_vehicle {
+                    Self::send_vehicle_block_use_feedback(
+                        version, player, &world, hand, &before, &result,
+                    );
+                    self.correct_block_use(player, &world, &position, face);
+                } else if matches!(result, BlockActionResult::SuccessServer) {
                     player.swing_hand(hand, true);
                 }
                 return Ok(());
@@ -145,6 +198,29 @@ impl JavaClient {
         if item.is_empty() {
             // TODO item cool down
             // If the hand is empty we stop here
+            if is_vehicle {
+                self.correct_block_use(player, &world, &position, face);
+            }
+            return Ok(());
+        }
+
+        if minecart.is_some() {
+            let Some(slot) = original_slot else {
+                self.correct_block_use(player, &world, &position, face);
+                return Ok(());
+            };
+            let result = crate::item::items::minecart::MinecartItem::place_from_slot(
+                &before, player, hand, slot, &world, position,
+            );
+            if result.consumes_action() {
+                trigger_item_used_on_block_advancement(
+                    player, &world, &position, block, &before, true,
+                );
+                Self::send_vehicle_block_use_feedback(
+                    version, player, &world, hand, &before, &result,
+                );
+            }
+            self.correct_block_use(player, &world, &position, face);
             return Ok(());
         }
 
@@ -170,7 +246,9 @@ impl JavaClient {
         }
 
         if item_result.consumes_action() || !item.are_equal(&before) {
-            trigger_item_used_on_block_advancement(player, &world, &position, block, &before);
+            trigger_item_used_on_block_advancement(
+                player, &world, &position, block, &before, is_vehicle,
+            );
         }
 
         if matches!(item_result, BlockActionResult::SuccessServer) {
@@ -178,8 +256,105 @@ impl JavaClient {
         }
 
         sync_used_hand_item(player, hand, slot_index, &before, item);
+        if is_vehicle {
+            self.correct_block_use(player, &world, &position, face);
+        }
 
         Ok(())
+    }
+
+    fn send_vehicle_build_limit_feedback(player: &Player, world: &World, too_high: bool) {
+        let (key, limit) = if too_high {
+            (translation::java::BUILD_TOOHIGH, world.get_top_y())
+        } else {
+            (translation::java::BUILD_TOOLOW, world.get_bottom_y())
+        };
+        player.send_system_message_raw(
+            &TextComponent::translate(key, [TextComponent::text(limit.to_string())])
+                .color_named(NamedColor::Red),
+            true,
+        );
+    }
+
+    fn send_vehicle_block_use_feedback(
+        version: JavaMinecraftVersion,
+        player: &Player,
+        world: &Arc<World>,
+        hand: Hand,
+        item: &ItemStack,
+        result: &BlockActionResult,
+    ) {
+        let include_placer = matches!(result, BlockActionResult::SuccessServer);
+        if version < JavaMinecraftVersion::V_26_3 {
+            if include_placer && Arc::ptr_eq(world, &player.world()) {
+                player.swing_hand(hand, true);
+            }
+            return;
+        }
+        if !matches!(
+            result,
+            BlockActionResult::Success | BlockActionResult::SuccessServer
+        ) {
+            return;
+        }
+
+        // Java 26.3 processes the accepted result in both block-feedback branches.
+        for _ in 0..2 {
+            if !Arc::ptr_eq(world, &player.world()) {
+                break;
+            }
+            player.swing_after_vehicle_interaction(hand, item, include_placer, world);
+        }
+    }
+
+    fn correct_block_use(
+        &self,
+        player: &Player,
+        world: &Arc<World>,
+        position: &BlockPos,
+        face: BlockDirection,
+    ) {
+        for target in [*position, position.offset(face.to_offset())] {
+            self.send_block_correction(player, world, target);
+        }
+    }
+
+    fn send_block_correction(&self, player: &Player, world: &Arc<World>, target: BlockPos) {
+        // Re-observe a fresh correction once so legacy translators can map the new state ID.
+        // A second observer mutation supersedes even that attempt.
+        for _ in 0..2 {
+            if !Arc::ptr_eq(world, &player.world()) {
+                return;
+            }
+            let state_id = world.get_block_state_id(&target);
+            let Ok(data) = self.serialize_packet(&CBlockUpdate::new(
+                target,
+                VarInt(i32::from(state_id.as_u16())),
+            )) else {
+                return;
+            };
+            let version = self.version.load();
+            let changed = Cell::new(false);
+            self.try_enqueue_packet_data_projecting(
+                data,
+                || {
+                    if !Arc::ptr_eq(world, &player.world()) {
+                        return false;
+                    }
+                    let same_state = world.get_block_state_id(&target) == state_id;
+                    changed.set(!same_state);
+                    same_state
+                },
+                |data, primary, current| {
+                    (*current || (!primary && !matches_block_update(&data, version, target)))
+                        .then_some(data)
+                },
+                |_, _, _| {},
+            );
+            if !changed.get() {
+                break;
+            }
+        }
     }
 
     #[expect(clippy::too_many_arguments)]
@@ -190,26 +365,30 @@ impl JavaClient {
         face: BlockDirection,
         held_item: &mut ItemStack,
         equipment_slot: &EquipmentSlot,
+        vehicle_slot: Option<usize>,
         world: &Arc<World>,
         block: &Block,
         server: &Arc<Server>,
-    ) -> BlockActionResult {
-        let result = server.block_registry.use_with_item(
-            block,
-            player,
-            position,
-            &BlockHitResult {
-                face: &face,
-                cursor_pos,
+    ) -> (BlockActionResult, bool) {
+        let result = server.block_registry.use_with_item_from_slot(
+            crate::block::UseWithItemArgs {
+                server,
+                world,
+                block,
+                position,
+                player,
+                hit: &BlockHitResult {
+                    face: &face,
+                    cursor_pos,
+                },
+                item_stack: held_item,
+                equipment_slot,
             },
-            held_item,
-            equipment_slot,
-            server,
-            world,
+            vehicle_slot,
         );
 
         if result.consumes_action() {
-            return result;
+            return (result, true);
         }
 
         if matches!(result, BlockActionResult::PassToDefaultBlockAction)
@@ -228,11 +407,11 @@ impl JavaClient {
             );
 
             if result.consumes_action() {
-                return result;
+                return (result, false);
             }
         }
 
-        BlockActionResult::Pass
+        (BlockActionResult::Pass, false)
     }
 
     fn run_is_block_place(
@@ -265,13 +444,76 @@ impl JavaClient {
     }
 }
 
+fn matches_block_update(
+    mut payload: &[u8],
+    version: JavaMinecraftVersion,
+    target: BlockPos,
+) -> bool {
+    // Historical Java play-state block_update registrations, at the observer's wire version.
+    let packet_id = match version.protocol_version() {
+        4 | 5 | 47 => 35,
+        107..=498 | 735..=754 => 11,
+        573..=578 | 755..=758 => 12,
+        759..=761 | 764..=769 => 9,
+        762 | 763 => 10,
+        770..=777 => 8,
+        _ => return false,
+    };
+    if !payload.get_var_int().is_ok_and(|id| id.0 == packet_id) {
+        return false;
+    }
+    if version < JavaMinecraftVersion::V_1_8 {
+        return payload.get_i32_be().is_ok_and(|x| x == target.0.x)
+            && payload.get_u8().is_ok_and(|y| i32::from(y) == target.0.y)
+            && payload.get_i32_be().is_ok_and(|z| z == target.0.z)
+            && payload.get_var_int().is_ok()
+            && payload.len() == 1;
+    }
+    payload
+        .get_block_pos(&version)
+        .is_ok_and(|pos| pos == target)
+        && payload.get_var_int().is_ok()
+        && payload.is_empty()
+}
+
 fn trigger_item_used_on_block_advancement(
     player: &Player,
     world: &World,
     position: &BlockPos,
     block: &Block,
     used_item: &ItemStack,
+    is_vehicle: bool,
 ) {
+    let is_smokey = crate::block::blocks::campfire::CampfireBlock::is_smokey_pos(world, position);
+    let biome = world.get_biome(position).registry_id;
+    if is_vehicle {
+        let (clicked_block, state_id) = world.get_block_and_state_id(position);
+        let block_id = format!("minecraft:{}", clicked_block.name);
+        player.trigger_criterion_event(
+            "minecraft:item_used_on_block",
+            |condition| match condition {
+                CriterionConditions::ItemUsedOnBlock(predicate) => {
+                    let state = predicate.state_key.as_deref().and_then(|key| {
+                        clicked_block
+                            .property_values(state_id)
+                            .find(|property| property.key().to_str() == key)
+                            .map(|property| (key, property.value_str()))
+                    });
+                    predicate.matches(
+                        &block_id,
+                        used_item.item.registry_key,
+                        state,
+                        Some(is_smokey),
+                        Some(biome),
+                    )
+                }
+                CriterionConditions::Custom { .. } => true,
+                _ => false,
+            },
+        );
+        return;
+    }
+
     let state = pumpkin_data::block_properties::CopperBulbLikeProperties::handles_block_id(
         block.id,
     )
@@ -281,16 +523,13 @@ fn trigger_item_used_on_block_advancement(
         );
         ("lit".to_string(), props.r#lit.to_string())
     });
-    let is_smokey = crate::block::blocks::campfire::CampfireBlock::is_smokey_pos(world, position);
-    let biome = Some(world.get_biome(position).registry_id.to_string());
-
     player.trigger_advancement(
         crate::entity::player::advancement::trigger::AdvancementTrigger::ItemUsedOnBlock {
             block_id: format!("minecraft:{}", block.name),
             item_id: used_item.item.registry_key.to_string(),
             state,
             smokey: Some(is_smokey),
-            biome,
+            biome: Some(biome.to_string()),
         },
     );
 }

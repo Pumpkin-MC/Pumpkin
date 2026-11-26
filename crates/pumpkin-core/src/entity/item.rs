@@ -967,7 +967,12 @@ impl EntityBase for ItemEntity {
         self
     }
 
-    fn send_bedrock_spawn_packet(&self, client: &crate::net::bedrock::BedrockClient) {
+    fn send_bedrock_spawn_packets(
+        &self,
+        client: &crate::net::bedrock::BedrockClient,
+        _tracked: bool,
+        send: &mut dyn FnMut(bytes::Bytes),
+    ) {
         let entity = &self.entity;
         let runtime_id = entity.entity_id as u64;
         let data = {
@@ -987,14 +992,18 @@ impl EntityBase for ItemEntity {
             client.serialize_packet(&packet).ok()
         };
         if let Some(data) = data {
-            client.try_enqueue_packet(data);
+            send(data);
         }
     }
 
-    fn send_java_spawn_packet(&self, client: &crate::net::java::JavaClient) {
+    fn send_java_spawn_packets(
+        &self,
+        client: &crate::net::java::JavaClient,
+        send: &mut dyn FnMut(bytes::Bytes),
+    ) {
         let spawn_packet = self.entity.create_spawn_packet();
         if let Ok(data) = client.serialize_packet(&spawn_packet) {
-            client.try_enqueue_packet(data);
+            send(data);
         }
 
         let metadata = Metadata::new(
@@ -1014,7 +1023,7 @@ impl EntityBase for ItemEntity {
             data.push(255);
             let meta_packet = CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
             if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                client.try_enqueue_packet(meta_data);
+                send(meta_data);
             }
         }
     }

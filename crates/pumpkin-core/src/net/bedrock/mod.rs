@@ -1,3 +1,4 @@
+use pumpkin_inventory::sync_handler::ScreenUpdateContext;
 pub mod nethernet;
 pub mod play;
 pub(crate) mod recipe;
@@ -179,6 +180,55 @@ fn bedrock_teleport_position(
         f32::read(&mut payload).ok()?;
     }
     (u8::read(&mut payload).ok()? == CMovePlayer::MODE_TELEPORT).then_some(position)
+}
+
+fn inventory_update_scope(data: &Bytes) -> Option<super::InventoryUpdateScope> {
+    use super::InventoryUpdateScope::{Content, Cursor, Property, Slot};
+    use pumpkin_protocol::{
+        bedrock::client::{
+            container_set_data::CContainerSetData, inventory_content::CInventoryContent,
+            inventory_slot::CInventorySlot,
+        },
+        bedrock::network_item::{ContainerName, FullContainerName, NetworkItemStackDescriptor},
+        serial::PacketRead,
+    };
+
+    let (id, payload) = split_raw_packet(data)?;
+    let id = i32::from(id);
+    let mut payload = payload.as_ref();
+    if id == CContainerSetData::PACKET_ID {
+        return Some(Property {
+            window: i32::from(u8::read(&mut payload).ok()?),
+            property: VarInt::read(&mut payload).ok()?.0,
+        });
+    }
+    if id == CInventoryContent::PACKET_ID || id == CInventorySlot::PACKET_ID {
+        let window = i32::try_from(VarUInt::read(&mut payload).ok()?.0).ok()?;
+        if id == CInventorySlot::PACKET_ID {
+            let slot = i32::try_from(VarUInt::read(&mut payload).ok()?.0).ok()?;
+            if window == 59
+                && Option::<FullContainerName>::read(&mut payload).is_ok_and(|name| {
+                    name.is_some_and(|name| name.container_name == ContainerName::Cursor)
+                })
+            {
+                return Some(Cursor);
+            }
+            return Some(Slot { window, slot });
+        }
+        if window == 59
+            && VarUInt::read(&mut payload).is_ok_and(|count| count.0 == 1)
+            && NetworkItemStackDescriptor::read(&mut payload).is_ok()
+            && FullContainerName::read(&mut payload)
+                .is_ok_and(|name| name.container_name == ContainerName::Cursor)
+        {
+            return Some(Cursor);
+        }
+        return Some(Content {
+            window,
+            includes_cursor: false,
+        });
+    }
+    None
 }
 
 pub struct BedrockClient {
@@ -1004,6 +1054,48 @@ impl BedrockClient {
             }))
             .then_some(data)
         });
+    }
+
+    pub(crate) fn try_enqueue_inventory_update<P: BClientPacket>(
+        &self,
+        packet: &P,
+        is_current: Option<ScreenUpdateContext<'_>>,
+    ) {
+        if is_current.is_some() {
+            self.try_enqueue_inventory_update_validated(packet, is_current, || Some(()));
+        } else {
+            self.try_enqueue_client_packet(packet);
+        }
+    }
+
+    pub(crate) fn try_enqueue_inventory_update_validated<P: BClientPacket, T>(
+        &self,
+        packet: &P,
+        context: Option<ScreenUpdateContext<'_>>,
+        validate: impl FnOnce() -> Option<T>,
+    ) {
+        if context.is_some_and(|context| context.lock_if_current().is_none()) {
+            return;
+        }
+        let Ok(data) = self.serialize_packet(packet) else {
+            return;
+        };
+        let origin = inventory_update_scope(&data);
+        self.try_enqueue_packet_data_filtering(
+            data,
+            || match context {
+                Some(context) => context
+                    .lock_for_delivery(validate)
+                    .map(|(menu, state)| (Some(menu), state)),
+                None => validate().map(|state| (None, state)),
+            },
+            |data| {
+                let overlaps = origin
+                    .zip(inventory_update_scope(&data))
+                    .is_some_and(|(origin, extra)| origin.overlaps(extra));
+                (!overlaps).then_some(data)
+            },
+        );
     }
 
     /// Filter extras belonging to an update invalidated by an observer.

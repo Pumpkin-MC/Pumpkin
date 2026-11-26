@@ -20,15 +20,21 @@ use crate::world::World;
 
 const EPSILON: f64 = 1.0e-7;
 const MAX_BLOCK_ITERATIONS_ALONG_TRAVEL_PER_TICK: usize = 16;
+// Both Java entity fire effects use the fizz sample.
+const BEDROCK_FIRE_SOUND: &str = "random.fizz";
 
 /// Applies Java's remaining lava damage after ignition has been handled.
 pub(super) fn hurt_vehicle_in_lava(carrier: &dyn EntityBase) {
     let entity = carrier.get_entity();
     if !entity.is_invulnerable_to(&DamageType::LAVA, None)
         && entity.damage(carrier, 4.0, DamageType::LAVA)
+        && !entity.is_silent()
     {
         let pitch = 2.0 + rand::rng().random::<f32>() * 0.4;
+        let world = entity.world.load_full();
+        let position = entity.pos.load();
         carrier.play_entity_sound(Sound::EntityGenericBurn, 0.4, pitch);
+        world.play_bedrock_named_sound(BEDROCK_FIRE_SOUND, &position, 0.4, pitch);
     }
 }
 
@@ -348,13 +354,16 @@ impl Entity {
         if (was_on_fire && !on_fire) || (was_freezing && self.get_frozen_ticks() == 0) {
             let mut rng = rand::rng();
             let pitch = 1.6 + (rng.random::<f32>() - rng.random::<f32>()) * 0.4;
-            self.world.load().play_sound_fine(
+            let world = self.world.load_full();
+            let position = self.pos.load();
+            world.play_sound_fine(
                 Sound::EntityGenericExtinguishFire,
                 carrier.sound_source(),
-                &self.pos.load(),
+                &position,
                 0.7,
                 pitch,
             );
+            world.play_bedrock_named_sound(BEDROCK_FIRE_SOUND, &position, 0.7, pitch);
         }
         if !is_current() {
             return false;

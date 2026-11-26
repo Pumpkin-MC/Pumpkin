@@ -101,6 +101,38 @@ impl ClientPacket for CSwingArm {
     }
 }
 
+/// Java interaction swing with the held item's configured animation.
+pub struct CInteractionSwing {
+    pub entity_id: VarInt,
+    pub off_hand: bool,
+    pub animation: pumpkin_data::data_component_impl::InteractAnimationImpl,
+}
+
+impl crate::packet::MultiVersionJavaPacket for CInteractionSwing {
+    fn to_id(version: JavaMinecraftVersion) -> i32 {
+        CSwingArm::to_id(version)
+    }
+}
+
+impl ClientPacket for CInteractionSwing {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        if *version < JavaMinecraftVersion::V_26_3 {
+            return CSwingArm::new(self.entity_id, self.off_hand).write_packet_data(write, version);
+        }
+        write.write_var_int(&self.entity_id)?;
+        write.write_var_int(&VarInt(i32::from(self.off_hand)))?;
+        crate::codec::data_component::write_swing_animation(
+            &mut write,
+            self.animation.animation_type,
+            self.animation.duration.max(0),
+        )
+    }
+}
+
 #[derive(Debug)]
 pub enum Animation {
     SwingMainArm,

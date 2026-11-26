@@ -243,7 +243,7 @@ pub fn send_attribute_updates_for_living(
     send_attribute_updates(living, attributes, false);
 }
 
-pub(crate) fn send_shield_attribute_updates(living: &LivingEntity, attributes: &[Attributes]) {
+pub(crate) fn send_guarded_attribute_updates(living: &LivingEntity, attributes: &[Attributes]) {
     for attribute in attributes {
         send_attribute_updates(living, vec![attribute.clone()], true);
     }

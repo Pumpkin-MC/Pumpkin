@@ -113,6 +113,16 @@ pub(crate) fn build() -> TokenStream {
     let serverbound_modules = generate_phase_modules(&versions, true);
     let clientbound_modules = generate_phase_modules(&versions, false);
 
+    let legacy_path = "../../assets/legacy-named-cooldown-packets.json";
+    let legacy_cooldowns: BTreeMap<i32, i32> = serde_json::from_str(
+        &fs::read_to_string(legacy_path)
+            .unwrap_or_else(|error| panic!("Failed to read {legacy_path}: {error}")),
+    )
+    .unwrap_or_else(|error| panic!("Failed to parse {legacy_path}: {error}"));
+    let legacy_cooldowns = legacy_cooldowns
+        .into_iter()
+        .map(|(protocol, id)| quote!(#protocol => Some(#id)));
+
     quote!(
         use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -120,6 +130,19 @@ pub(crate) fn build() -> TokenStream {
         pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = #LATEST_VERSION;
 
         #packet_id_struct
+
+        /// Identifies a cooldown packet on Java protocols whose payload names a group.
+        #[must_use]
+        pub const fn named_cooldown_packet_id(version: JavaMinecraftVersion) -> Option<i32> {
+            let protocol = version.protocol_version();
+            if protocol == CURRENT_MC_VERSION.protocol_version() {
+                return Some(clientbound::play::COOLDOWN.0);
+            }
+            match protocol {
+                #(#legacy_cooldowns,)*
+                _ => None,
+            }
+        }
 
         // We place the constants directly into these phase modules
         pub mod serverbound {
