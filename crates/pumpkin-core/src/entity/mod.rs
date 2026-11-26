@@ -4150,6 +4150,12 @@ impl Entity {
         self.sneaking.load(Ordering::Relaxed)
     }
 
+    /// Vanilla `Entity.isDescending` uses the Shift input flag.
+    #[must_use]
+    pub fn is_descending(&self) -> bool {
+        self.is_sneaking()
+    }
+
     #[must_use]
     pub fn is_swimming(&self) -> bool {
         self.swimming.load(Ordering::Relaxed)

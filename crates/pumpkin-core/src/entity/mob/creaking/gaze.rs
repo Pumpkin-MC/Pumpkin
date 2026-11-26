@@ -28,7 +28,7 @@ impl CreakingEntity {
         let position = entity.pos.load();
         let viewer_position = player_entity.pos.load();
         let eyes = viewer_position.add_raw(0.0, player_entity.get_eye_height(), 0.0);
-        let descending = player_entity.is_sneaking();
+        let descending = player_entity.is_descending();
         let pitch = player_entity.pitch.load().to_radians();
         let yaw = -player_entity.head_yaw.load().to_radians();
         let pitch_cos = cos(pitch);
