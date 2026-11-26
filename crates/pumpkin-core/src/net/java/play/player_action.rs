@@ -40,9 +40,9 @@ impl JavaClient {
                             block,
                             Some(position),
                         );
-                        server_arc
+                        interact_event = server_arc
                             .plugin_manager
-                            .fire_blocking(&server_arc, &mut interact_event);
+                            .fire_blocking(&server_arc, interact_event);
                         if interact_event.cancelled {
                             player.try_send_client_packet(&CBlockUpdate::new(
                                 position,
@@ -59,9 +59,7 @@ impl JavaClient {
                                 position,
                                 false,
                             );
-                        server_arc
-                            .plugin_manager
-                            .fire_blocking(&server_arc, &mut event);
+                        event = server_arc.plugin_manager.fire_blocking(&server_arc, event);
                         if event.cancelled {
                             self.update_sequence(player_action.sequence.0);
                             return;
@@ -175,7 +173,7 @@ impl JavaClient {
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
                     if let Some(server_arc) = world.server.upgrade() {
-                        let mut abort_event = crate::plugin::api::events::block::block_damage_abort::BlockDamageAbortEvent::new(
+                        let abort_event = crate::plugin::api::events::block::block_damage_abort::BlockDamageAbortEvent::new(
                             player.clone(),
                             player_action.position,
                             world.clone(),
@@ -183,7 +181,7 @@ impl JavaClient {
                         );
                         server_arc
                             .plugin_manager
-                            .fire_blocking(&server_arc, &mut abort_event);
+                            .fire_blocking(&server_arc, abort_event);
                     }
 
                     player.mining.store(false, Ordering::Relaxed);

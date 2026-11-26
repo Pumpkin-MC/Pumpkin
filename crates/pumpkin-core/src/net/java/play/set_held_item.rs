@@ -15,7 +15,7 @@ impl JavaClient {
             return;
         };
         let mut event = PlayerItemHeldEvent::new(player_arc, previous_slot, slot);
-        server.plugin_manager.fire_blocking(server, &mut event);
+        event = server.plugin_manager.fire_blocking(server, event);
         if event.cancelled {
             player.try_send_client_packet(&CSetSelectedSlot::new(previous_slot as i8));
             return;

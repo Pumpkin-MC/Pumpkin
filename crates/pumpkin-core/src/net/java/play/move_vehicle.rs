@@ -341,8 +341,8 @@ fn vehicle_move_destination(
     let epoch = vehicle.vehicle_motion_epoch();
     let revision = rider.riding_revision();
     let teleport_id = player.teleport_id_count.load(Ordering::Acquire);
-    let mut event = VehicleMoveEvent::new(vehicle.entity_id, from, to);
-    server.plugin_manager.fire_blocking(server, &mut event);
+    let event = VehicleMoveEvent::new(vehicle.entity_id, from, to);
+    let event = server.plugin_manager.fire_blocking(server, event);
     let valid = !event.cancelled
         && !player.is_movement_locked()
         && event.to.x.is_finite()

@@ -40,14 +40,12 @@ impl JavaClient {
         let vehicle_slot_type = crate::entity::hand_equipment_slot(hand);
         let vehicle_slot = inventory.equipment_slot_index(&vehicle_slot_type);
 
-        let mut consume_event =
+        let consume_event =
             crate::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent::new(
                 player.clone(),
                 item_in_hand.item.registry_key.to_string(),
             );
-        server
-            .plugin_manager
-            .fire_blocking(server, &mut consume_event);
+        let consume_event = server.plugin_manager.fire_blocking(server, consume_event);
         let world_is_current = || {
             vehicle_world
                 .as_ref()
@@ -225,7 +223,7 @@ impl JavaClient {
             hand,
             0,
         );
-        server.plugin_manager.fire_blocking(server, &mut fish_event);
+        fish_event = server.plugin_manager.fire_blocking(server, fish_event);
         !fish_event.cancelled
     }
 }

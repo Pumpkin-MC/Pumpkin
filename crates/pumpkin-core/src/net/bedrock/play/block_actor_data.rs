@@ -30,7 +30,7 @@ fn apply_sign_text(
         event_lines,
     );
     if let Some(server) = world.server.upgrade() {
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
     }
     if event.cancelled {
         return;

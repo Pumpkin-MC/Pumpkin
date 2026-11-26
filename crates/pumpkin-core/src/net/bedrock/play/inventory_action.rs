@@ -236,9 +236,9 @@ impl BedrockClient {
         if player.gamemode.load() == GameMode::Spectator {
             return false;
         }
-        let mut event =
+        let event =
             PlayerInteractEvent::new(player, InteractAction::RightClickAir, &Block::AIR, None);
-        server.plugin_manager.fire_blocking(server, &mut event);
+        let event = server.plugin_manager.fire_blocking(server, event);
         if event.cancelled
             || !Arc::ptr_eq(world, &player.world())
             || player.gamemode.load() == GameMode::Spectator
@@ -883,7 +883,7 @@ impl BedrockClient {
                     None,
                     player.get_entity().is_sneaking(),
                 );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     return;
                 }

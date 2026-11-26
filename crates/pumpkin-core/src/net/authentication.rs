@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use super::GameProfile;
 
+/// Decoded contents of a player's `textures` profile property.
 #[derive(Deserialize, Clone, Debug)]
 #[expect(dead_code)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +27,7 @@ pub struct ProfileTextures {
     textures: HashMap<String, Texture>,
 }
 
+/// One texture entry, such as `SKIN` or `CAPE`, inside a `textures` property.
 #[derive(Deserialize, Clone, Debug)]
 #[expect(dead_code)]
 pub struct Texture {
@@ -33,11 +35,14 @@ pub struct Texture {
     metadata: Option<HashMap<String, String>>,
 }
 
+/// A single public key as published by an authentication service.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct JsonPublicKey {
     pub public_key: String,
 }
+
+/// Response of an authentication service's public key endpoint.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MojangPublicKeys {
@@ -54,6 +59,7 @@ const MOJANG_PROFILE_BY_NAME_URL: &str =
 const MOJANG_PROFILE_BY_UUID_URL: &str =
     "https://sessionserver.mojang.com/session/minecraft/profile/{uuid}?unsigned=false";
 
+/// Creates an HTTP client using the configured authentication timeouts.
 fn create_client(auth_config: &AuthenticationConfig) -> reqwest::Client {
     pumpkin_auth::client_builder()
         .connect_timeout(std::time::Duration::from_millis(
@@ -66,6 +72,7 @@ fn create_client(auth_config: &AuthenticationConfig) -> reqwest::Client {
         .unwrap_or_default()
 }
 
+/// Fills the `{username}`, `{server_hash}` and `{ip}` placeholders of an auth URL template.
 fn format_auth_url(url_template: &str, username: &str, server_hash: &str, ip: &IpAddr) -> String {
     url_template
         .replace("{username}", username)
@@ -160,6 +167,7 @@ pub async fn authenticate(
     }
 }
 
+/// Checks that a `textures` property decodes and only points at allowed texture URLs.
 pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<(), TextureError> {
     let from64 = general_purpose::STANDARD
         .decode(property.value.as_bytes())
@@ -173,6 +181,35 @@ pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<
     Ok(())
 }
 
+/// Removes `textures` properties the config rejects, so an unusable texture costs the
+/// player their skin instead of their login.
+pub fn retain_valid_textures(profile: &mut GameProfile, config: &TextureConfig) {
+    // Only the `textures` property holds base64 encoded texture JSON. Auth servers may add
+    // other properties, e.g. authlib-injector's `uploadableTextures`, whose value is a comma
+    // separated list such as `skin,cape`.
+    let properties = profile.properties.load_full();
+    let valid_properties: Vec<Property> = properties
+        .iter()
+        .filter(|property| {
+            if property.name.as_ref() != "textures" {
+                return true;
+            }
+            match validate_textures(property, config) {
+                Ok(()) => true,
+                Err(error) => {
+                    tracing::warn!("Dropping textures of player '{}': {error}", profile.name);
+                    false
+                }
+            }
+        })
+        .cloned()
+        .collect();
+    if valid_properties.len() != properties.len() {
+        profile.properties.store(Arc::new(valid_properties));
+    }
+}
+
+/// Checks a texture URL against the configured schemes and domains.
 pub fn is_texture_url_valid(url: &Url, config: &TextureConfig) -> Result<(), TextureError> {
     let scheme = url.scheme();
     if !config
@@ -195,6 +232,7 @@ pub fn is_texture_url_valid(url: &Url, config: &TextureConfig) -> Result<(), Tex
     Ok(())
 }
 
+/// Fetches the player certificate keys a services endpoint publishes.
 pub async fn fetch_mojang_public_keys(
     auth_config: &AuthenticationConfig,
 ) -> Result<Vec<RsaPublicKey>, AuthError> {
@@ -241,6 +279,7 @@ struct MojangProfileByNameResponse {
     name: String,
 }
 
+/// Looks a player up by username and returns their UUID and current name.
 pub async fn lookup_profile_by_name(
     name: &str,
     auth_config: &AuthenticationConfig,
@@ -311,6 +350,7 @@ pub async fn lookup_profile_by_name(
     }
 }
 
+/// Runs `lookup_profile_by_name` from synchronous code.
 pub fn lookup_profile_by_name_blocking(
     name: &str,
     auth_config: &AuthenticationConfig,
@@ -328,6 +368,7 @@ pub fn lookup_profile_by_name_blocking(
     }
 }
 
+/// Fetches a full profile, including its properties, for a UUID.
 pub async fn fetch_profile_by_uuid(
     uuid: Uuid,
     auth_config: &AuthenticationConfig,
@@ -394,6 +435,7 @@ pub async fn fetch_profile_by_uuid(
     }
 }
 
+/// Reasons an online mode login can be rejected.
 #[derive(Error, Debug)]
 pub enum AuthError {
     #[error("Authentication servers are down")]
@@ -402,8 +444,6 @@ pub enum AuthError {
     UnverifiedUsername,
     #[error("You are banned from Authentication servers")]
     Banned,
-    #[error("Texture Error {0}")]
-    TextureError(TextureError),
     #[error("You have disallowed actions from Authentication servers")]
     DisallowedAction,
     #[error("Failed to parse JSON into Game Profile")]
@@ -412,6 +452,7 @@ pub enum AuthError {
     UnknownStatusCode(StatusCode),
 }
 
+/// Reasons a `textures` property is rejected.
 #[derive(Error, Debug)]
 pub enum TextureError {
     #[error("Invalid URL")]
@@ -428,7 +469,59 @@ pub enum TextureError {
 
 #[cfg(test)]
 mod tests {
-    use super::ProfileTextures;
+    use arc_swap::ArcSwap;
+    use std::sync::Arc;
+
+    use super::{
+        Engine, ProfileTextures, Property, TextureConfig, general_purpose, retain_valid_textures,
+    };
+    use crate::net::GameProfile;
+
+    const TEXTURES: &str = r#"{"timestamp":0,"profileId":"069a79f444e94726a5befca90e38aaf5","profileName":"Notch","textures":{"SKIN":{"url":"https://textures.minecraft.net/texture/abc"}}}"#;
+
+    fn profile_with(properties: Vec<Property>) -> GameProfile {
+        GameProfile {
+            id: uuid::Uuid::nil(),
+            name: "Notch".to_string(),
+            properties: ArcSwap::new(Arc::new(properties)),
+            profile_actions: None,
+        }
+    }
+
+    fn property(name: &str, value: &str) -> Property {
+        Property {
+            name: name.into(),
+            value: value.into(),
+            signature: None,
+        }
+    }
+
+    fn encoded_textures(textures: &str) -> Property {
+        property("textures", &general_purpose::STANDARD.encode(textures))
+    }
+
+    // authlib-injector servers add `uploadableTextures`, whose value is a comma separated
+    // list rather than base64 encoded JSON.
+    #[test]
+    fn keeps_properties_that_are_not_textures() {
+        let mut profile = profile_with(vec![
+            property("uploadableTextures", "skin,cape"),
+            encoded_textures(TEXTURES),
+        ]);
+        retain_valid_textures(&mut profile, &TextureConfig::default());
+        let properties = profile.properties.load();
+        let names: Vec<&str> = properties.iter().map(|p| &*p.name).collect();
+        assert_eq!(names, ["uploadableTextures", "textures"]);
+    }
+
+    #[test]
+    fn drops_textures_from_a_disallowed_domain() {
+        let mut profile = profile_with(vec![encoded_textures(
+            &TEXTURES.replace("textures.minecraft.net", "example.com"),
+        )]);
+        retain_valid_textures(&mut profile, &TextureConfig::default());
+        assert!(profile.properties.load().is_empty());
+    }
 
     // Third-party auth servers (drasl, Blessing Skin, littleskin.cn) don't send
     // `signatureRequired`. The profile must still parse. See issue #301.

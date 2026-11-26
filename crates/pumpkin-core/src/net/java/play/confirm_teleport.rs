@@ -5,7 +5,6 @@ impl JavaClient {
     pub fn handle_confirm_teleport(&self, player: &Player, confirm_teleport: &SConfirmTeleport) {
         enum TeleportResult {
             Success,
-            WrongId,
             NotTeleporting,
             InvalidLook,
         }
@@ -25,7 +24,7 @@ impl JavaClient {
                 },
                 |(id, _)| id.0,
             );
-            if confirm_teleport.teleport_id.0.wrapping_sub(latest) < 0 {
+            if confirm_teleport.teleport_id.0 != latest {
                 return;
             }
             if let Some((id, position)) = awaiting_teleport.as_ref() {
@@ -53,7 +52,7 @@ impl JavaClient {
                         TeleportResult::Success
                     }
                 } else {
-                    TeleportResult::WrongId
+                    return;
                 }
             } else {
                 TeleportResult::NotTeleporting
@@ -62,9 +61,6 @@ impl JavaClient {
 
         match result {
             TeleportResult::Success => {}
-            TeleportResult::WrongId => {
-                self.try_kick(&TextComponent::text("Wrong teleport id"));
-            }
             TeleportResult::NotTeleporting => {
                 self.try_kick(&TextComponent::text(
                     "Send Teleport confirm, but we did not teleport",

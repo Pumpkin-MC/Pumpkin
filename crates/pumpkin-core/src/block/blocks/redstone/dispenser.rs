@@ -310,7 +310,7 @@ impl DispenserBlock {
             item.item.registry_key.to_string(),
         );
         if let Some(server) = ctx.world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             ctx.world
@@ -1249,13 +1249,13 @@ impl DispenserBlock {
             }
 
             if let Some(server) = ctx.world.server.upgrade() {
-                let mut event = BlockShearEntityEvent::new(
+                let event = BlockShearEntityEvent::new(
                     *ctx.position,
                     ctx.world.clone(),
                     entity.clone(),
                     tool.clone(),
                 );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                let event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     continue;
                 }

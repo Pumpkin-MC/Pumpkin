@@ -195,13 +195,13 @@ impl ItemBehaviour for TridentItem {
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
             && let Some(server) = world.server.upgrade()
         {
-            let mut event =
+            let event =
                 crate::plugin::api::events::player::player_riptide::PlayerRiptideEvent {
                     player: player_arc,
                     item_name: "trident".to_string(),
                     cancelled: false,
                 };
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            let event = server.plugin_manager.fire_blocking(&server, event);
             let current = inventory.get_slot(slot_index);
             if event.cancelled || current.uid != expected.uid || !current.are_equal(expected) {
                 return;

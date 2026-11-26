@@ -217,8 +217,8 @@ impl BoatEntity {
             && let Some(server) = world.server.upgrade()
             && server.plugin_manager.has_handlers::<VehicleMoveEvent>()
         {
-            let mut event = VehicleMoveEvent::new(entity.entity_id, from, requested);
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            let event = VehicleMoveEvent::new(entity.entity_id, from, requested);
+            let event = server.plugin_manager.fire_blocking(&server, event);
             if entity.is_removed()
                 || entity.pos.load() != from
                 || entity.vehicle_motion_epoch() != epoch
