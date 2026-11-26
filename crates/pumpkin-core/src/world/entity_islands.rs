@@ -397,6 +397,13 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
     {
         links.push(leader.get_entity().entity_id);
     }
+    if let Some(bullet) = entity
+        .cast_any()
+        .downcast_ref::<crate::entity::projectile::shulker_bullet::ShulkerBulletEntity>(
+    ) && let Some(target) = bullet.target()
+    {
+        links.push(target.get_entity().entity_id);
+    }
     if let Some(mob) = entity.get_mob() {
         links.extend(mob.tick_links());
         if let Some(target) = mob.get_mob_entity().get_target() {

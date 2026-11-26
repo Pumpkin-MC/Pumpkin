@@ -1392,6 +1392,19 @@ impl LivingEntity {
         removal_time.fetch_sub(1, Relaxed) - 1 <= 0
     }
 
+    fn update_scale(&self) {
+        let scale = self.get_attribute_value(&Attributes::SCALE) as f32;
+        let scale = if self.entity.entity_type == &EntityType::SHULKER {
+            scale.min(super::mob::shulker::MAX_SCALE)
+        } else {
+            scale
+        };
+        if (self.entity.scale.load() - scale).abs() > f32::EPSILON {
+            self.entity.scale.store(scale);
+            self.entity.refresh_dimensions();
+        }
+    }
+
     /// Returns the computed value for `attribute` using the local instance, falling back
     /// to `attribute.default_value` if no local instance exists.
     pub fn get_attribute_value(&self, attribute: &Attributes) -> f64 {
@@ -4550,11 +4563,7 @@ impl EntityBase for LivingEntity {
         // post-friction motion together with the new position.
 
         // Vanilla `LivingEntity.onAttributeUpdated(SCALE)`: resize when the attribute moves.
-        let scale = self.get_attribute_value(&Attributes::SCALE) as f32;
-        if (self.entity.scale.load() - scale).abs() > f32::EPSILON {
-            self.entity.scale.store(scale);
-            self.entity.refresh_dimensions();
-        }
+        self.update_scale();
 
         let pre_tick_pos = self.entity.last_pos.load();
         self.entity.tick(caller, server);
@@ -5371,57 +5380,6 @@ mod consumable_effect_tests {
         assert_eq!(random_teleport_coordinate(10.0, 16.0, 1.0), 18.0);
     }
 }
-/// Returns `true` if `damage_type` is in `#minecraft:bypasses_armor` (1.21.11).
-/// These sources bypass armor entirely (fall, drown, freeze, etc.).
-pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
-    // Bitmask lookup: O(1) with two instructions (shift + AND), no array scan.
-    // DamageType IDs can exceed 31; use u64 for sufficient range.
-    // TODO: Make data-driven once the data pack system can handle it without performance regressions.
-    // Compile-time assertions: ensure all bypassing types fit in u64 bitmask.
-    const _: () = assert!(
-        DamageType::FALL.id < 64
-            && DamageType::FLY_INTO_WALL.id < 64
-            && DamageType::ON_FIRE.id < 64
-            && DamageType::IN_WALL.id < 64
-            && DamageType::CRAMMING.id < 64
-            && DamageType::DROWN.id < 64
-            && DamageType::GENERIC.id < 64
-            && DamageType::WITHER.id < 64
-            && DamageType::DRAGON_BREATH.id < 64
-            && DamageType::STARVE.id < 64
-            && DamageType::ENDER_PEARL.id < 64
-            && DamageType::FREEZE.id < 64
-            && DamageType::STALAGMITE.id < 64
-            && DamageType::MAGIC.id < 64
-            && DamageType::INDIRECT_MAGIC.id < 64
-            && DamageType::OUT_OF_WORLD.id < 64
-            && DamageType::GENERIC_KILL.id < 64
-            && DamageType::SONIC_BOOM.id < 64
-            && DamageType::OUTSIDE_BORDER.id < 64,
-        "One or more bypass DamageType IDs exceed u64 bitmask width (>= 64)"
-    );
-    const BYPASS_MASK: u64 = (1u64 << DamageType::FALL.id)
-        | (1u64 << DamageType::FLY_INTO_WALL.id)
-        | (1u64 << DamageType::ON_FIRE.id)
-        | (1u64 << DamageType::IN_WALL.id)
-        | (1u64 << DamageType::CRAMMING.id)
-        | (1u64 << DamageType::DROWN.id)
-        | (1u64 << DamageType::GENERIC.id)
-        | (1u64 << DamageType::WITHER.id)
-        | (1u64 << DamageType::DRAGON_BREATH.id)
-        | (1u64 << DamageType::STARVE.id)
-        | (1u64 << DamageType::ENDER_PEARL.id)
-        | (1u64 << DamageType::FREEZE.id)
-        | (1u64 << DamageType::STALAGMITE.id)
-        | (1u64 << DamageType::MAGIC.id)
-        | (1u64 << DamageType::INDIRECT_MAGIC.id)
-        | (1u64 << DamageType::OUT_OF_WORLD.id)
-        | (1u64 << DamageType::GENERIC_KILL.id)
-        | (1u64 << DamageType::SONIC_BOOM.id)
-        | (1u64 << DamageType::OUTSIDE_BORDER.id);
-    (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
-}
-
 pub(crate) fn prevents_armor_change(stack: &ItemStack) -> bool {
     stack
         .get_data_component::<EnchantmentsImpl>()
@@ -5445,69 +5403,55 @@ pub(crate) fn prevents_equipment_drop(stack: &ItemStack) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn mounted_shulker_scale_relocates_until_rider_position_is_restored()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::ai::test_support::world;
+        use crate::entity::mob::shulker::ShulkerEntity;
+        use crate::entity::passive::cow::CowEntity;
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let seat = Vector3::new(0.5, 64.25, 0.5);
+        let shulker = ShulkerEntity::new(Entity::new(world.clone(), seat, &EntityType::SHULKER));
+        world.spawn_entity(shulker.clone());
+        let vehicle = Arc::new(Entity::new(world.clone(), seat, &EntityType::COW));
+        world.spawn_entity(vehicle.clone());
+        vehicle.add_passenger_silently(vehicle.clone(), shulker.clone());
+        let living = shulker.get_living_entity().ok_or("missing living entity")?;
+        living.entity.set_pos(seat);
+        living.entity.first_tick.store(false, Relaxed);
+        living.update_attribute(&Attributes::SCALE, |attribute| {
+            attribute.base_value = 2.0;
+            attribute.mark_dirty();
+        });
+        living.update_scale();
+        assert!(living.entity.pos.load().y < seat.y);
+        crate::entity::position_rider(vehicle.as_ref(), shulker.as_ref());
+        let restored = living.entity.pos.load();
+        crate::entity::position_rider(vehicle.as_ref(), shulker.as_ref());
+        assert_eq!(living.entity.pos.load(), restored);
+        assert_eq!(living.entity.entity_dimension.load().width, 2.0);
+        assert_eq!(living.entity.bounding_box.load().max.y, restored.y + 2.0);
+
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(10.5, 64.0, 0.5),
+            &EntityType::COW,
+        ));
+        world.spawn_entity(cow.clone());
+        let living = cow.get_living_entity().ok_or("missing living entity")?;
+        living.entity.first_tick.store(false, Relaxed);
+        living.update_attribute(&Attributes::SCALE, |attribute| {
+            attribute.base_value = 2.0;
+            attribute.mark_dirty();
+        });
+        living.update_scale();
+        assert!(living.entity.pos.load().y < 64.0);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
     use super::*;
-
-    // ── bypasses_armor_durability ─────────────────────────────────────
-
-    /// Every member of `minecraft:bypasses_armor` (1.21.11) must return `true`.
-    #[test]
-    fn bypasses_armor_durability_returns_true_for_tag_members() {
-        // Exact contents of the minecraft:bypasses_armor tag in 1.21.11.
-        let bypassing: &[DamageType] = &[
-            DamageType::ON_FIRE,
-            DamageType::IN_WALL,
-            DamageType::CRAMMING,
-            DamageType::DROWN,
-            DamageType::FLY_INTO_WALL,
-            DamageType::GENERIC,
-            DamageType::WITHER,
-            DamageType::DRAGON_BREATH,
-            DamageType::STARVE,
-            DamageType::FALL,
-            DamageType::ENDER_PEARL,
-            DamageType::FREEZE,
-            DamageType::STALAGMITE,
-            DamageType::MAGIC,
-            DamageType::INDIRECT_MAGIC,
-            DamageType::OUT_OF_WORLD,
-            DamageType::GENERIC_KILL,
-            DamageType::SONIC_BOOM,
-            DamageType::OUTSIDE_BORDER,
-        ];
-        for dt in bypassing {
-            assert!(
-                bypasses_armor_durability(dt),
-                "{} should bypass armor durability",
-                dt.message_id
-            );
-        }
-    }
-
-    /// Physical/combat damage types must NOT bypass armor durability.
-    #[test]
-    fn bypasses_armor_durability_returns_false_for_physical_sources() {
-        let physical: &[DamageType] = &[
-            DamageType::MOB_ATTACK,
-            DamageType::PLAYER_ATTACK,
-            DamageType::ARROW,
-            DamageType::CACTUS,
-            DamageType::SWEET_BERRY_BUSH,
-            DamageType::LAVA,
-            DamageType::EXPLOSION,
-            DamageType::PLAYER_EXPLOSION,
-            DamageType::LIGHTNING_BOLT,
-            DamageType::FIREBALL,
-            DamageType::THORNS,
-            DamageType::TRIDENT,
-        ];
-        for dt in physical {
-            assert!(
-                !bypasses_armor_durability(dt),
-                "{} should NOT bypass armor durability",
-                dt.message_id
-            );
-        }
-    }
 
     #[test]
     fn hurt_sound_for_entity_uses_zombie_family_sounds() {
