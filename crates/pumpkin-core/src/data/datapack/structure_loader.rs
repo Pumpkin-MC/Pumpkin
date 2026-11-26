@@ -221,8 +221,8 @@ mod tests {
             );
         assert!(discovered.is_some());
         let pool = discovered.unwrap();
-        assert_eq!(pool.elements.len(), 1);
-        assert_eq!(pool.elements[0].weight, 10);
+        assert_eq!(pool.elements().len(), 1);
+        assert_eq!(pool.elements()[0].weight, 10);
 
         fs::write(
             template_pool_dir.join("test_pool.json"),
@@ -235,14 +235,14 @@ mod tests {
                 "test_ns:test_pool",
             )
             .unwrap();
-        assert_eq!(current.elements[0].weight, 10);
+        assert_eq!(current.elements()[0].weight, 10);
         prepared.apply(None);
         let replaced =
             pumpkin_world::generation::structure::structures::jigsaw::TemplatePool::discover(
                 "test_ns:test_pool",
             )
             .unwrap();
-        assert_eq!(replaced.elements[0].weight, 20);
+        assert_eq!(replaced.elements()[0].weight, 20);
 
         // Pool preparation must not retain a template from the preceding pack.
         let cache = pumpkin_world::generation::structure::template::global_cache();
@@ -287,7 +287,7 @@ mod tests {
                 "test_ns:deferred",
             )
             .unwrap();
-        assert_eq!(pool.elements[0].first_template().unwrap().size.x, 2);
+        assert_eq!(pool.elements()[0].first_template().unwrap().size.x, 2);
 
         clear_dynamic_worldgen_data();
     }
