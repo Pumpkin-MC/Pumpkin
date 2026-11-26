@@ -2,8 +2,8 @@
 #![cfg(target_family = "wasm")]
 
 use pumpkin_plugin_api_v0_2::{
-    Context, ItemStack, ItemStackExt, PersistentDataHolder, Plugin, PluginMetadata, Result,
-    TextComponent, enchantment::EnchantmentBuilder, recipe::ShapedRecipeBuilder, register_plugin,
+    Context, ItemStack, ItemStackExt, Plugin, PluginMetadata, Result, TextComponent,
+    enchantment::EnchantmentBuilder, recipe::ShapedRecipeBuilder, register_plugin,
 };
 
 struct Example;
@@ -25,9 +25,7 @@ impl Plugin for Example {
     }
 
     async fn on_load(&self, context: Context) -> Result<()> {
-        let output = ItemStack::of("diamond", 1);
-        output.set_string("sdk-helpers", "origin", "recipe").await;
-        ShapedRecipeBuilder::new("sdk_helpers:diamond", output)
+        ShapedRecipeBuilder::new("sdk_helpers:diamond", ItemStack::of("diamond", 1))
             .pattern(["CC", "CC"])
             .key('C', "minecraft:coal")
             .register_to_context(&context)
