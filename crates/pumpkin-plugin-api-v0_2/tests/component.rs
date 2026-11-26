@@ -513,6 +513,15 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
         .expect("enchantment manager");
     let mut player = interface!("player", "player" => PlayerResource);
     player
+        .func_wrap(
+            "[method]player.get-item-cooldown",
+            |_, (_player, item): (Resource<PlayerResource>, String)| {
+                assert_eq!(item, "minecraft:diamond");
+                Ok((Some(12i32),))
+            },
+        )
+        .expect("get item cooldown");
+    player
         .func_new_concurrent(
             "[method]player.set-ender-chest-item",
             |accessor, _, params, _| {

@@ -125,7 +125,7 @@ impl Plugin for Fixture {
 
     async fn on_load(&self, context: Context) -> Result<()> {
         use pumpkin_plugin_api_v0_2::{
-            ItemStack, ItemStackExt, PlayerEnderChestExt, TextComponent,
+            ItemStack, ItemStackExt, PlayerCooldownExt, PlayerEnderChestExt, TextComponent,
             enchantment::EnchantmentBuilder, recipe::ShapedRecipeBuilder,
         };
         context.register_event_handler::<PlayerChatEvent, _>(
@@ -140,6 +140,7 @@ impl Plugin for Fixture {
             .get_server()
             .get_player_by_name("fixture")
             .ok_or("missing fixture player")?;
+        assert_eq!(player.get_cooldown_ticks("diamond"), Some(12));
         player
             .set_all_ender_chest_items([Some(ItemStack::new("minecraft:diamond", 2))])
             .await;

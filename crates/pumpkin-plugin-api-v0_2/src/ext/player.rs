@@ -142,7 +142,7 @@ pub trait PlayerCooldownExt {
     fn set_cooldown(&self, item: impl crate::item::IntoItemKey, ticks: i32);
 
     /// Returns the remaining cooldown ticks for an item, if active.
-    fn get_cooldown(&self, item: impl crate::item::IntoItemKey) -> Option<i32>;
+    fn get_cooldown_ticks(&self, item: impl crate::item::IntoItemKey) -> Option<i32>;
 
     /// Checks if an item is currently on cooldown.
     fn has_cooldown(&self, item: impl crate::item::IntoItemKey) -> bool;
@@ -153,7 +153,7 @@ impl PlayerCooldownExt for Player {
         self.set_item_cooldown(&item.into_item_key(), ticks);
     }
 
-    fn get_cooldown(&self, item: impl crate::item::IntoItemKey) -> Option<i32> {
+    fn get_cooldown_ticks(&self, item: impl crate::item::IntoItemKey) -> Option<i32> {
         self.get_item_cooldown(&item.into_item_key())
     }
 
