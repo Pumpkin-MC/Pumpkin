@@ -22,6 +22,9 @@ use crate::entity::{
     player::Player,
 };
 
+const LEASH_SNAP_DISTANCE: f64 = 16.0;
+const LEASH_ELASTIC_DISTANCE: f64 = 10.0;
+
 /// Represents a Happy Ghast, a passive flying mob.
 ///
 /// Wiki: <https://minecraft.wiki/w/Happy_Ghast>
@@ -124,6 +127,14 @@ impl Animal for HappyGhastEntity {
 impl Mob for HappyGhastEntity {
     fn mob_support_quad_leash_as_holder(&self) -> bool {
         true
+    }
+
+    fn mob_leash_snap_distance(&self) -> f64 {
+        LEASH_SNAP_DISTANCE
+    }
+
+    fn mob_leash_elastic_distance(&self) -> f64 {
+        LEASH_ELASTIC_DISTANCE
     }
 
     fn can_dispenser_equip_into_slot(

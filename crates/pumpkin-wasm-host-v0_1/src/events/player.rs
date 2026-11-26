@@ -3,12 +3,12 @@ use tokio::sync::Mutex;
 
 use crate::{
     events::{
-        ToFromWasmEvent, cleanup_event, consume_player, consume_text_component, consume_world,
-        from_wasm_block_name, from_wasm_block_position, from_wasm_click_type,
-        from_wasm_entity_interaction_action, from_wasm_entity_type, from_wasm_game_mode,
-        from_wasm_hand, from_wasm_position, to_wasm_block_position, to_wasm_click_type,
-        to_wasm_entity_interaction_action, to_wasm_entity_type, to_wasm_game_mode, to_wasm_hand,
-        to_wasm_position,
+        BlockingEvent, NotifiedEvent, ToFromWasmEvent, WasmPluginEventHandler, cleanup_event,
+        consume_player, consume_text_component, consume_world, from_wasm_block_name,
+        from_wasm_block_position, from_wasm_click_type, from_wasm_entity_interaction_action,
+        from_wasm_entity_type, from_wasm_game_mode, from_wasm_hand, from_wasm_position,
+        to_wasm_block_position, to_wasm_click_type, to_wasm_entity_interaction_action,
+        to_wasm_entity_type, to_wasm_game_mode, to_wasm_hand, to_wasm_position,
     },
     gui::{from_wit_screen, to_wit_screen},
     pumpkin::plugin::{
@@ -69,7 +69,6 @@ use pumpkin_core::plugin::player::{
     player_channel::PlayerChannelEvent,
     player_chat::PlayerChatEvent,
     player_command_preprocess::PlayerCommandPreprocessEvent,
-    player_command_send::PlayerCommandSendEvent,
     player_custom_payload::PlayerCustomPayloadEvent,
     player_edit_book::PlayerEditBookEvent,
     player_elytra_boost::PlayerElytraBoostEvent,
@@ -338,28 +337,82 @@ impl ToFromWasmEvent for PlayerChatEvent {
     }
 }
 
-impl ToFromWasmEvent for PlayerCommandSendEvent {
+/// Bridges the frozen v0.1 `player-command-send-event` ABI, which carried `(player, command,
+/// cancelled)` for command execution before v0.2 split command sending from command execution.
+#[derive(Clone)]
+pub(crate) struct LegacyCommandSendEvent(pub PlayerCommandPreprocessEvent);
+
+impl ToFromWasmEvent for LegacyCommandSendEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add(self.player.clone())
+            .add(self.0.player.clone())
             .expect("failed to add player resource");
 
         Event::PlayerCommandSendEvent(PlayerCommandSendEventData {
             player,
-            command: self.command.clone(),
-            cancelled: self.cancelled,
+            command: self.0.command.clone(),
+            cancelled: self.0.cancelled,
         })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
+        if let Event::PlayerCommandSendEvent(data) = event {
+            self.0.command = data.command;
+            self.0.cancelled = data.cancelled;
+        }
     }
 
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
-            Event::PlayerCommandSendEvent(data) => Self {
+            Event::PlayerCommandSendEvent(data) => Self(PlayerCommandPreprocessEvent {
                 player: consume_player(state, &data.player),
                 command: data.command,
                 cancelled: data.cancelled,
-            },
+            }),
             _ => panic!("unexpected event type"),
         }
+    }
+}
+
+pub(crate) struct LegacyCommandSendHandler(pub Arc<WasmPluginEventHandler>);
+
+impl pumpkin_core::plugin::EventHandler<PlayerCommandPreprocessEvent> for LegacyCommandSendHandler {
+    fn handle<'a>(
+        &'a self,
+        server: &'a Arc<pumpkin_core::server::Server>,
+        event: &'a PlayerCommandPreprocessEvent,
+    ) -> pumpkin_core::plugin::BoxFuture<'a, ()> {
+        Box::pin(async {
+            let pending = Box::new(NotifiedEvent(LegacyCommandSendEvent(event.clone())));
+            if let Err(error) = self.0.dispatch(server.clone(), pending).await {
+                tracing::error!(handler_id = self.0.handler_id, %error, "Wasm event handler failed");
+            }
+        })
+    }
+
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<pumpkin_core::server::Server>,
+        event: &'a mut PlayerCommandPreprocessEvent,
+    ) -> pumpkin_core::plugin::BoxFuture<'a, ()> {
+        Box::pin(async {
+            let pending = Box::new(BlockingEvent(LegacyCommandSendEvent(event.clone())));
+            match self.0.dispatch(server.clone(), pending).await {
+                Ok(updated_event) => {
+                    if let Ok(updated_event) = updated_event.downcast::<LegacyCommandSendEvent>() {
+                        *event = updated_event.0;
+                    }
+                }
+                Err(error) => {
+                    tracing::error!(
+                        handler_id = self.0.handler_id,
+                        %error,
+                        "Blocking Wasm event handler failed"
+                    );
+                }
+            }
+        })
     }
 }
 

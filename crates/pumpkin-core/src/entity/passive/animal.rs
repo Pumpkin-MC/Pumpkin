@@ -141,7 +141,7 @@ pub trait Animal: Mob {
             }
         }
 
-        mob_entity.mob_interact(player, item_stack, self.can_be_leashed())
+        false
     }
 }
 
