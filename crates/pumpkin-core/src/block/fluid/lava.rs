@@ -130,7 +130,7 @@ impl FlowingLava {
                             *block_pos,
                             &Block::BASALT,
                         );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    event = server.plugin_manager.fire_blocking(&server, event);
                     if event.cancelled {
                         return false;
                     }

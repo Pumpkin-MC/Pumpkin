@@ -9,7 +9,7 @@ use pumpkin_core::{
     },
     net::ClientPlatform,
     plugin::{
-        BoxFuture, EventHandler,
+        BoxFuture, EventRwHandler,
         api::events::{
             EventPriority,
             block::entity_block_form::EntityBlockFormEvent,
@@ -39,8 +39,8 @@ struct ShearEvents {
     cancel_unleash: AtomicBool,
 }
 
-impl EventHandler<PlayerShearEntityEvent> for ShearEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerShearEntityEvent> for ShearEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerShearEntityEvent,
@@ -55,8 +55,8 @@ impl EventHandler<PlayerShearEntityEvent> for ShearEvents {
     }
 }
 
-impl EventHandler<EntityBlockFormEvent> for ShearEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityBlockFormEvent> for ShearEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityBlockFormEvent,
@@ -71,8 +71,8 @@ impl EventHandler<EntityBlockFormEvent> for ShearEvents {
     }
 }
 
-impl EventHandler<PlayerUnleashEntityEvent> for ShearEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerUnleashEntityEvent> for ShearEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerUnleashEntityEvent,
@@ -135,11 +135,9 @@ fn check_player_shearing(
         cancel: AtomicBool::new(true),
         cancel_unleash: AtomicBool::new(false),
     });
-    server.plugin_manager.register::<PlayerShearEntityEvent, _>(
-        hooks.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<PlayerShearEntityEvent, _>(hooks.clone(), EventPriority::Normal, None);
     let mut tool = ItemStack::new(1, &Item::SHEARS);
     let last_damage = tool.get_max_damage().ok_or("Shears have no durability")? - 1;
     tool.set_damage(last_damage);
@@ -217,7 +215,11 @@ fn check_leash_precedes_pumpkin(
     };
     server
         .plugin_manager
-        .register::<PlayerUnleashEntityEvent, _>(hooks.clone(), EventPriority::Normal, true);
+        .register_blocking::<PlayerUnleashEntityEvent, _>(
+            hooks.clone(),
+            EventPriority::Normal,
+            None,
+        );
     hooks.cancel.store(false, Ordering::Relaxed);
     hooks.cancel_unleash.store(true, Ordering::Relaxed);
     client.handle_interact(player, &interact, server);
@@ -334,11 +336,9 @@ fn check_snow_formation_events(
     use pumpkin_data::Block;
     use pumpkin_util::math::vector3::Vector3;
 
-    server.plugin_manager.register::<EntityBlockFormEvent, _>(
-        hooks.clone(),
-        EventPriority::Normal,
-        true,
-    );
+    server
+        .plugin_manager
+        .register_blocking::<EntityBlockFormEvent, _>(hooks.clone(), EventPriority::Normal, None);
     let entity = golem.get_entity();
     let world = entity.world.load();
     let original_pos = entity.pos.load();

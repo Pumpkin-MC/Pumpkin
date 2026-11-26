@@ -34,7 +34,7 @@ fn filter_sent_commands<'a>(
         return None;
     }
     let mut event = PlayerCommandSendEvent::new(player.clone(), names.map(str::to_owned).collect());
-    server.plugin_manager.fire_blocking(server, &mut event);
+    event = server.plugin_manager.fire_blocking(server, event);
     Some(event.commands.into_iter().collect())
 }
 
@@ -503,7 +503,7 @@ mod tests {
             java::{JavaClient, pending::PendingConnection},
         },
         plugin::{
-            BoxFuture, EventHandler, EventPriority,
+            BoxFuture, EventPriority, EventRwHandler,
             player::{
                 player_command_preprocess::PlayerCommandPreprocessEvent,
                 player_command_send::PlayerCommandSendEvent,
@@ -533,8 +533,8 @@ mod tests {
         seen: Arc<Mutex<Vec<String>>>,
     }
 
-    impl EventHandler<PlayerCommandSendEvent> for CommandFilterHandler {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerCommandSendEvent> for CommandFilterHandler {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PlayerCommandSendEvent,
@@ -553,8 +553,8 @@ mod tests {
 
     struct CommandPreprocessHandler;
 
-    impl EventHandler<PlayerCommandPreprocessEvent> for CommandPreprocessHandler {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PlayerCommandPreprocessEvent> for CommandPreprocessHandler {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PlayerCommandPreprocessEvent,
@@ -645,10 +645,10 @@ mod tests {
         );
 
         let seen = Arc::new(Mutex::new(Vec::new()));
-        server.plugin_manager.register(
+        server.plugin_manager.register_blocking(
             Arc::new(CommandFilterHandler { seen: seen.clone() }),
             EventPriority::Normal,
-            true,
+            None,
         );
 
         send_c_commands_packet(&player, &server, &dispatcher);
@@ -698,10 +698,10 @@ mod tests {
             Arc::new(next)
         });
 
-        server.plugin_manager.register(
+        server.plugin_manager.register_blocking(
             Arc::new(CommandPreprocessHandler),
             EventPriority::Normal,
-            true,
+            None,
         );
 
         let client = player.client.java().ok_or("No Java client")?;

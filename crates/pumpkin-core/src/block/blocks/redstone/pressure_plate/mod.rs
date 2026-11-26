@@ -67,7 +67,7 @@ pub(crate) trait PressurePlate {
                     i32::from(output),
                     i32::from(calc_output),
                 );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     return;
                 }

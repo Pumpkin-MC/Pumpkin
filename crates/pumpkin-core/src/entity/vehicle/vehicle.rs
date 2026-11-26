@@ -42,14 +42,12 @@ impl VehicleEntity {
             self.send_wobble_metadata();
         }
 
-        let mut update_event =
+        let update_event =
             crate::plugin::api::events::vehicle::vehicle_update::VehicleUpdateEvent::new(
                 self.entity.entity_id,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut update_event);
+            server.plugin_manager.fire_blocking(&server, update_event);
         }
 
         // Coalesce pushed velocity to once per tick (boats use the default push()).
@@ -59,12 +57,12 @@ impl VehicleEntity {
     }
 
     pub async fn create(&self) {
-        let mut create_event =
+        let create_event =
             crate::plugin::api::events::vehicle::vehicle_create::VehicleCreateEvent::new(
                 self.entity.entity_id,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut create_event).await;
+            server.plugin_manager.fire(&server, create_event).await;
         }
     }
 
@@ -73,50 +71,43 @@ impl VehicleEntity {
         from: pumpkin_util::math::vector3::Vector3<f64>,
         to: pumpkin_util::math::vector3::Vector3<f64>,
     ) {
-        let mut move_event =
-            crate::plugin::api::events::vehicle::vehicle_move::VehicleMoveEvent::new(
-                self.entity.entity_id,
-                from,
-                to,
-            );
+        let move_event = crate::plugin::api::events::vehicle::vehicle_move::VehicleMoveEvent::new(
+            self.entity.entity_id,
+            from,
+            to,
+        );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut move_event).await;
+            server.plugin_manager.fire(&server, move_event).await;
         }
     }
 
     pub async fn collide_entity(&self, collided_entity_id: i32) {
-        let mut base_event =
+        let base_event =
             crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
                 self.entity.entity_id,
             );
-        let mut collide_event = crate::plugin::api::events::vehicle::vehicle_entity_collision::VehicleEntityCollisionEvent::new(
+        let collide_event = crate::plugin::api::events::vehicle::vehicle_entity_collision::VehicleEntityCollisionEvent::new(
             self.entity.entity_id,
             collided_entity_id,
         );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut base_event).await;
-            server
-                .plugin_manager
-                .fire(&server, &mut collide_event)
-                .await;
+            server.plugin_manager.fire(&server, base_event).await;
+            server.plugin_manager.fire(&server, collide_event).await;
         }
     }
 
     pub async fn collide_block(&self, block_pos: pumpkin_util::math::position::BlockPos) {
-        let mut base_event =
+        let base_event =
             crate::plugin::api::events::vehicle::vehicle_collision::VehicleCollisionEvent::new(
                 self.entity.entity_id,
             );
-        let mut collide_event = crate::plugin::api::events::vehicle::vehicle_block_collision::VehicleBlockCollisionEvent::new(
+        let collide_event = crate::plugin::api::events::vehicle::vehicle_block_collision::VehicleBlockCollisionEvent::new(
             self.entity.entity_id,
             block_pos,
         );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut base_event).await;
-            server
-                .plugin_manager
-                .fire(&server, &mut collide_event)
-                .await;
+            server.plugin_manager.fire(&server, base_event).await;
+            server.plugin_manager.fire(&server, collide_event).await;
         }
     }
 
@@ -206,9 +197,7 @@ impl VehicleEntity {
                 attacker_id,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut damage_event);
+            damage_event = server.plugin_manager.fire_blocking(&server, damage_event);
         }
         if damage_event.cancelled {
             return false;
@@ -227,9 +216,7 @@ impl VehicleEntity {
                     attacker_id,
                 );
             if let Some(server) = self.entity.world.load().server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut destroy_event);
+                destroy_event = server.plugin_manager.fire_blocking(&server, destroy_event);
             }
             if destroy_event.cancelled {
                 return false;

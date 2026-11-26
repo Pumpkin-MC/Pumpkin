@@ -56,7 +56,7 @@ impl CommandExecutor for SetWorldSpawnExecutor {
         let previous_pitch = current_info.spawn_pitch;
         let new_yaw = yaw;
         let new_pitch = pitch;
-        let mut event = SpawnChangeEvent::new(
+        let event = SpawnChangeEvent::new(
             world.clone(),
             previous_position,
             previous_yaw,
@@ -66,9 +66,7 @@ impl CommandExecutor for SetWorldSpawnExecutor {
             new_pitch,
         );
         if let Some(server_arc) = world.server.upgrade() {
-            server_arc
-                .plugin_manager
-                .fire_blocking(&server_arc, &mut event);
+            server_arc.plugin_manager.fire_blocking(&server_arc, event);
         }
 
         let mut new_info = (**current_info).clone();

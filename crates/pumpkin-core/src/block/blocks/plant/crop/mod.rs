@@ -140,7 +140,7 @@ trait CropBlockBase: PlantBlockBase {
                             new_state_id,
                             *pos,
                         );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    event = server.plugin_manager.fire_blocking(&server, event);
                     if event.cancelled {
                         return;
                     }

@@ -169,7 +169,7 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
                 use std::borrow::Borrow;
                 (#server_stmt).borrow()
             };
-            server_ref.plugin_manager.fire(server_ref, &mut event).await;
+            event = server_ref.plugin_manager.fire(server_ref, event).await;
 
             let is_cancelled = {
                 use crate::plugin::Cancellable;
@@ -251,7 +251,7 @@ pub fn send_cancellable_blocking(input: TokenStream) -> TokenStream {
                 use std::borrow::Borrow;
                 (#server_stmt).borrow()
             };
-            server_ref.plugin_manager.fire_blocking(server_ref, &mut event);
+            event = server_ref.plugin_manager.fire_blocking(server_ref, event);
 
             let is_cancelled = {
                 use crate::plugin::Cancellable;
