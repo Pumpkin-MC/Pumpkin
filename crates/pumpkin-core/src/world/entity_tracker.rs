@@ -2187,7 +2187,9 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{BufReader, DuplexStream};
 
-    use crate::plugin::{BoxFuture, EventHandler, EventPriority, server::packet::PacketSentEvent};
+    use crate::plugin::{
+        BoxFuture, EventPriority, EventRwHandler, server::packet::PacketSentEvent,
+    };
     use crate::server::Server;
     use crate::world::item_inventory_tests::{
         CENTER, TestResult, inventory_world as vehicle_world, java_player as java_rider,
@@ -2216,8 +2218,8 @@ mod tests {
         rider: Arc<Player>,
         called: AtomicBool,
     }
-    impl EventHandler<PacketSentEvent> for SelectStick {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for SelectStick {
+        fn handle<'a>(
             &'a self,
             server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -2273,11 +2275,9 @@ mod tests {
             rider: rider.clone(),
             called: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(listener.clone(), EventPriority::Normal, None);
         rider
             .client
             .java()
@@ -2322,8 +2322,8 @@ mod tests {
         use pumpkin_data::item::Item;
 
         struct ChangeViewerHand(i32, AtomicBool);
-        impl EventHandler<PacketSentEvent> for ChangeViewerHand {
-            fn handle_blocking<'a>(
+        impl EventRwHandler<PacketSentEvent> for ChangeViewerHand {
+            fn handle<'a>(
                 &'a self,
                 _server: &'a Arc<Server>,
                 event: &'a mut PacketSentEvent,
@@ -2383,11 +2383,9 @@ mod tests {
         );
 
         let observer = Arc::new(ChangeViewerHand(id, AtomicBool::new(false)));
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         mob.set_item_slot(
             &EquipmentSlot::MAIN_HAND,
             ItemStack::new(1, &Item::DIAMOND_SWORD),
@@ -2416,8 +2414,8 @@ mod tests {
 
         struct WearShield(Arc<PigEntity>, AtomicBool);
 
-        impl EventHandler<PacketSentEvent> for WearShield {
-            fn handle_blocking<'a>(
+        impl EventRwHandler<PacketSentEvent> for WearShield {
+            fn handle<'a>(
                 &'a self,
                 _server: &'a Arc<Server>,
                 event: &'a mut PacketSentEvent,
@@ -2460,11 +2458,9 @@ mod tests {
             .get_tracked_entity(id)
             .ok_or("Pig tracker")?;
         let observer = Arc::new(WearShield(pig, AtomicBool::new(false)));
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
         tracked.add_pairing(&viewer);
         assert!(observer.1.load(Relaxed));
 
