@@ -85,14 +85,11 @@ impl ShootTongue {
         );
     }
 
-    fn eat_entity(mob: &dyn Mob, target: &Arc<dyn EntityBase>, sound: Sound) {
+    fn eat_entity(mob: &dyn Mob, target: &Arc<dyn EntityBase>, world: &Arc<World>) {
         let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>() else {
             return;
         };
-        let entity = frog.get_entity();
-        let world = entity.world.load_full();
-        world.play_sound_fine(sound, SoundCategory::Neutral, &entity.pos.load(), 2.0, 1.0);
-        if !tongue_target_is_current(frog, target, &world) {
+        if !tongue_target_is_current(frog, target, world) {
             return;
         }
         mob.do_hurt_target(target.as_ref());
@@ -234,8 +231,19 @@ impl Behavior for ShootTongue {
                 self.eat_animation_timer += 1;
                 if elapsed >= CATCH_ANIMATION_DURATION {
                     self.state = State::EatAnimation;
+                    let world = tick.world.clone();
+                    let sound_world = world.clone();
                     let sound = self.eat_sound;
-                    tick.defer(move |mob| Self::eat_entity(mob, &target, sound));
+                    tick.defer(move |mob| {
+                        sound_world.play_sound_fine(
+                            sound,
+                            SoundCategory::Neutral,
+                            &mob.get_entity().pos.load(),
+                            2.0,
+                            1.0,
+                        );
+                    });
+                    tick.defer(move |mob| Self::eat_entity(mob, &target, &world));
                 }
             }
             State::EatAnimation => {
@@ -264,7 +272,8 @@ impl Behavior for ShootTongue {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
     use pumpkin_data::dimension::Dimension;
     use pumpkin_data::entity::EntityType;
@@ -287,7 +296,8 @@ mod tests {
     struct TongueSoundListener {
         frog: Arc<FrogEntity>,
         replace_brain: AtomicBool,
-        calls: AtomicUsize,
+        prey: Arc<CowEntity>,
+        observations: Mutex<Vec<(EntityPose, f32)>>,
     }
 
     impl EventHandler<PacketSentEvent> for TongueSoundListener {
@@ -298,8 +308,18 @@ mod tests {
         ) -> BoxFuture<'a, ()> {
             Box::pin(async move {
                 if event.packet_id == SOUND.0 {
-                    self.calls.fetch_add(1, Relaxed);
-                    assert_eq!(self.frog.get_entity().pose.load(), EntityPose::Standing);
+                    let mut observations = self
+                        .observations
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if !observations.is_empty() {
+                        return;
+                    }
+                    observations.push((
+                        self.frog.get_entity().pose.load(),
+                        self.prey.mob_entity.living_entity.health.load(),
+                    ));
+                    drop(observations);
                     if self.replace_brain.load(Relaxed) {
                         self.frog.get_mob_entity().set_brain(Brain::default());
                     }
@@ -309,7 +329,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn tongue_sound_replacing_brain_skips_pose_and_pull()
+    async fn tongue_sounds_precede_and_guard_follow_up_effects()
     -> Result<(), Box<dyn std::error::Error>> {
         let folder = tempfile::tempdir()?;
         let server = server(&folder).await?;
@@ -327,16 +347,26 @@ mod tests {
         let listener = Arc::new(TongueSoundListener {
             frog: frog.clone(),
             replace_brain: AtomicBool::new(false),
-            calls: AtomicUsize::new(0),
+            prey: prey.clone(),
+            observations: Mutex::new(Vec::new()),
         });
         server
             .plugin_manager
             .register(listener.clone(), EventPriority::Normal, true);
         let body = frog.get_mob_entity();
-        for replace in [false, true] {
+        let health = &prey.mob_entity.living_entity.health;
+        let full_health = health.load();
+        for (state, replace, initial_health) in [
+            (State::MoveToTarget, false, full_health),
+            (State::MoveToTarget, true, full_health),
+            (State::CatchAnimation, true, full_health),
+            (State::CatchAnimation, false, 0.0),
+            (State::CatchAnimation, false, full_health),
+        ] {
             let mut tongue = ShootTongue::new(Sound::EntityFrogTongue, Sound::EntityFrogEat);
-            // Enter the catch tick directly so the fixture only depends on the range test.
-            tongue.state = State::MoveToTarget;
+            // Enter the relevant tick directly so this fixture need not pathfind.
+            tongue.state = state;
+            tongue.eat_animation_timer = CATCH_ANIMATION_DURATION;
             let mut brain = Brain::default();
             brain.add_activity(ActivityData::with_priority_start(
                 Activity::Core,
@@ -351,24 +381,43 @@ mod tests {
                 ))],
             ));
             brain.set(types::ATTACK_TARGET, prey.clone());
-            frog.get_entity().set_pose(EntityPose::Standing);
+            let initial_pose = if state == State::MoveToTarget {
+                EntityPose::Standing
+            } else {
+                EntityPose::UsingTongue
+            };
+            frog.get_entity().set_pose(initial_pose);
+            health.store(initial_health);
             prey.get_entity().velocity.store(Vector3::default());
             listener.replace_brain.store(replace, Relaxed);
             body.set_brain(brain);
             body.tick_brain(frog.as_ref());
 
-            let (pose, velocity) = if replace {
-                (EntityPose::Standing, Vector3::default())
-            } else {
+            let observations = std::mem::take(
+                &mut *listener
+                    .observations
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+            assert_eq!(observations, [(initial_pose, initial_health)]);
+
+            let pulled = state == State::MoveToTarget && !replace;
+            let (pose, velocity) = if pulled {
                 (
                     EntityPose::UsingTongue,
                     Vector3::new(-EATING_MOVEMENT_FACTOR, 0.0, 0.0),
                 )
+            } else {
+                (initial_pose, Vector3::default())
             };
             assert_eq!(frog.get_entity().pose.load(), pose);
-            assert_eq!(prey.get_entity().velocity.load(), velocity);
+            if state == State::CatchAnimation && !replace && initial_health > 0.0 {
+                assert!(health.load() < initial_health);
+            } else {
+                assert_eq!(prey.get_entity().velocity.load(), velocity);
+                assert_eq!(health.load().to_bits(), initial_health.to_bits());
+            }
         }
-        assert_eq!(listener.calls.load(Relaxed), 2);
         server.shutdown().await;
         Ok(())
     }
