@@ -1171,7 +1171,7 @@ impl TrialSpawner {
                 .set_synced_data(pumpkin_data::tracked_data::slime::ID_SIZE, i32::from(size));
         }
 
-        if !world.no_entity_collision(entity.as_ref(), spawn_box)
+        if !world.no_entity_collision(Some(entity.as_ref()), spawn_box)
             || entity
                 .get_mob()
                 .is_some_and(|mob| !mob.check_spawn_obstruction(world))

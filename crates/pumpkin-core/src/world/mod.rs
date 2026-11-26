@@ -2643,6 +2643,20 @@ impl World {
         true
     }
 
+    /// Vanilla `CollisionGetter.noBlockCollision` for `bounding_box`.
+    pub fn no_block_collision(&self, bounding_box: BoundingBox) -> bool {
+        // Vanilla scans one block past the box so shapes that overhang their block are found.
+        let min = bounding_box
+            .min_block_pos()
+            .offset(Vector3::new(-1, -1, -1));
+        let max = bounding_box.max_block_pos().offset(Vector3::new(1, 1, 1));
+        BlockPos::iterate(min, max).all(|position| {
+            self.get_block_state(&position)
+                .get_block_collision_shapes_at(&position)
+                .all(|shape| !shape.at_pos(position).intersects(&bounding_box))
+        })
+    }
+
     /// No other entity that blocks building overlaps `entity`, ignoring its own vehicle group.
     pub fn is_unobstructed(&self, entity: &Entity) -> bool {
         let bounds = entity.bounding_box.load();
@@ -2672,11 +2686,15 @@ impl World {
 
     pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
         self.is_space_empty(bounding_box)
-            && self.no_entity_collision(source, bounding_box)
+            && self.no_entity_collision(Some(source), bounding_box)
             && self.no_border_collision(source, bounding_box)
     }
 
-    pub fn no_entity_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+    pub fn no_entity_collision(
+        &self,
+        source: Option<&dyn EntityBase>,
+        bounding_box: BoundingBox,
+    ) -> bool {
         let average_size = ((bounding_box.max.x - bounding_box.min.x)
             + (bounding_box.max.y - bounding_box.min.y)
             + (bounding_box.max.z - bounding_box.min.z))
@@ -2692,7 +2710,8 @@ impl World {
                 && (other.entity_type == &EntityType::SHULKER
                     || other.entity_type == &EntityType::HAPPY_GHAST
                     || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
-                && !source.get_entity().is_passenger_of_same_vehicle(other)
+                && source
+                    .is_none_or(|source| !source.get_entity().is_passenger_of_same_vehicle(other))
         })
     }
 
