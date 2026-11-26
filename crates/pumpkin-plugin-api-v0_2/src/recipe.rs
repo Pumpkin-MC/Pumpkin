@@ -230,7 +230,7 @@ impl From<WitIngredient> for Ingredient {
 pub enum RecipeError {
     /// The recipe identifier is empty.
     EmptyId,
-    /// Pattern is empty.
+    /// The pattern contains no ingredients.
     EmptyPattern,
     /// Pattern dimensions exceed the crafting grid (maximum 3x3).
     PatternTooLarge {
@@ -258,7 +258,10 @@ impl std::fmt::Display for RecipeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::EmptyId => write!(f, "recipe identifier cannot be empty"),
-            Self::EmptyPattern => write!(f, "shaped recipe pattern cannot be empty"),
+            Self::EmptyPattern => write!(
+                f,
+                "shaped recipe pattern must contain at least one ingredient"
+            ),
             Self::PatternTooLarge { width, height } => {
                 write!(
                     f,
@@ -406,15 +409,23 @@ impl ShapedRecipeBuilder {
                 }
             }
         }
+        if self
+            .pattern
+            .iter()
+            .all(|row| row.trim_matches(' ').is_empty())
+        {
+            return Err(RecipeError::EmptyPattern);
+        }
         Ok(())
     }
 
-    /// Builds the shaped recipe structure after validating.
+    /// Builds the shaped recipe after validating and trimming empty outer rows and columns.
     ///
     /// # Errors
     /// Returns [`RecipeError`] if validation fails.
     pub fn build(self) -> Result<(String, ShapedRecipe), RecipeError> {
         self.validate()?;
+        let pattern = trim_shaped_pattern(&self.pattern)?;
         let key_list: Vec<(String, WitIngredient)> = self
             .keys
             .into_iter()
@@ -422,7 +433,7 @@ impl ShapedRecipeBuilder {
             .collect();
 
         let recipe = ShapedRecipe {
-            pattern: self.pattern,
+            pattern,
             key: key_list,
             output: self.output,
             group: self.group,
@@ -457,6 +468,26 @@ impl ShapedRecipeBuilder {
         let manager = context.get_recipe_manager();
         self.register(&manager).await
     }
+}
+
+fn trim_shaped_pattern(pattern: &[String]) -> Result<Vec<String>, RecipeError> {
+    let mut occupied_rows = pattern.iter().enumerate().filter_map(|(index, row)| {
+        let left = row.chars().position(|symbol| symbol != ' ')?;
+        let right = row.trim_end_matches(' ').chars().count();
+        Some((index, left, right))
+    });
+    let (top, mut left, mut right) = occupied_rows.next().ok_or(RecipeError::EmptyPattern)?;
+    let mut bottom = top;
+    for (index, row_left, row_right) in occupied_rows {
+        bottom = index;
+        left = left.min(row_left);
+        right = right.max(row_right);
+    }
+
+    Ok(pattern[top..=bottom]
+        .iter()
+        .map(|row| row.chars().skip(left).take(right - left).collect())
+        .collect())
 }
 
 /// Builder for constructing and registering shapeless crafting recipes.
@@ -964,5 +995,25 @@ impl RecipeManager {
         builder: CookingRecipeBuilder,
     ) -> Result<(), RecipeError> {
         self.register(builder).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::trim_shaped_pattern;
+
+    #[test]
+    fn trimming_preserves_empty_rows_and_columns_between_ingredients() {
+        let empty_row = [" DD", "   ", " DD"].map(String::from);
+        let empty_column = ["   ", "D D", "D D"].map(String::from);
+
+        assert_eq!(
+            trim_shaped_pattern(&empty_row).as_deref(),
+            Ok(&["DD".into(), "  ".into(), "DD".into()][..])
+        );
+        assert_eq!(
+            trim_shaped_pattern(&empty_column).as_deref(),
+            Ok(&["D D".into(), "D D".into()][..])
+        );
     }
 }

@@ -540,6 +540,19 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
             |accessor, _, params, _| {
                 Box::pin(async move {
                     assert_eq!(params[1], Val::String("fixture:diamond".into()));
+                    let Val::Record(fields) = &params[2] else {
+                        return Err(wasmtime::Error::msg("expected a shaped recipe"));
+                    };
+                    assert_eq!(
+                        fields
+                            .iter()
+                            .find(|(name, _)| name == "pattern")
+                            .map(|(_, value)| value),
+                        Some(&Val::List(vec![
+                            Val::String("D".into()),
+                            Val::String("D".into())
+                        ]))
+                    );
                     accessor.with(|mut store| {
                         store
                             .data_mut()

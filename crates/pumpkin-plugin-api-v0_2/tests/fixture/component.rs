@@ -148,7 +148,7 @@ impl Plugin for Fixture {
             .set_all_ender_chest_items(std::iter::repeat_with(|| None).take(30))
             .await;
         ShapedRecipeBuilder::new("fixture:diamond", ItemStack::of("diamond", 2))
-            .pattern(["DD"])
+            .pattern(["   ", " D ", " D "])
             .key('D', "diamond")
             .register_to_context(&context)
             .await
