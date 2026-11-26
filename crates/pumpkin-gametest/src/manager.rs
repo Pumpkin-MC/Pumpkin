@@ -629,6 +629,14 @@ impl GameTestRunner {
     }
 
     pub async fn tick(&mut self) {
+        self.tick_with_stop_check(|| false).await;
+    }
+
+    /// Advances the batch by one tick, leaving remaining tests for cancellation when asked to stop.
+    pub async fn tick_with_stop_check(&mut self, should_stop: impl Fn() -> bool) {
+        if should_stop() {
+            return;
+        }
         if self.active.is_empty() {
             if let Some((world, saved)) = self.environment.take() {
                 world.teardown_test_environment(saved);
@@ -668,6 +676,9 @@ impl GameTestRunner {
         // set of batches has completed. Treat all currently active executions as one
         // wave, then start copies in the order their original runs finished.
         for managed in &mut self.active {
+            if should_stop() {
+                return;
+            }
             if managed.done || managed.rerun_scheduled {
                 continue;
             }

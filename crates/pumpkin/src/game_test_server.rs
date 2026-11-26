@@ -10,12 +10,13 @@ use std::{
 use pumpkin::GameTestOptions;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_core::{
-    SHOULD_STOP,
+    STOP_INTERRUPT,
     data::VanillaData,
     server::{
         Server,
         server_test_manager::{
-            GameTestQueueEntry, game_test_grid_spacing, prepare_test_run_with_reporter,
+            GameTestQueueEntry, cancel_game_test_runner, game_test_grid_spacing,
+            prepare_test_run_with_reporter,
         },
     },
 };
@@ -256,7 +257,7 @@ async fn run_test_rotation(
             }
         };
 
-    for _ in 0..copies {
+    for _ in (0..copies).take_while(|_| !STOP_INTERRUPT.is_cancelled()) {
         let (test_x, test_z) = grid.place(column_spacing, row_spacing)?;
 
         let entry = GameTestQueueEntry::new(
@@ -292,14 +293,17 @@ async fn run_test_rotation(
 }
 
 async fn run_batch(server: &Arc<Server>, runner: &mut GameTestRunner) -> Result<(), String> {
-    while !runner.is_empty() {
-        if SHOULD_STOP.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err("GameTest server interrupted".to_string());
+    while !STOP_INTERRUPT.is_cancelled() {
+        if runner.is_empty() {
+            return Ok(());
         }
         server.tick();
-        runner.tick().await;
+        runner
+            .tick_with_stop_check(|| STOP_INTERRUPT.is_cancelled())
+            .await;
     }
-    Ok(())
+    cancel_game_test_runner(runner).await;
+    Err("GameTest server interrupted".to_string())
 }
 
 fn reset_universe(universe: &Path) -> Result<PathBuf, String> {

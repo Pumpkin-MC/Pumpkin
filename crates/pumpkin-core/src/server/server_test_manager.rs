@@ -108,7 +108,7 @@ pub(crate) struct GameTestDriver {
 impl GameTestDriver {
     pub(crate) async fn shutdown(&self) {
         let mut runner = self.runner.lock().await;
-        cancel_runner(&mut runner).await;
+        cancel_game_test_runner(&mut runner).await;
     }
 
     pub(crate) fn set_ticker_running(&self, running: bool) {
@@ -507,7 +507,8 @@ fn cancel_queued_requests(requests: &[GameTestQueueEntry]) {
     }
 }
 
-async fn cancel_runner(runner: &mut GameTestRunner) {
+/// Cancels pending tests and clears active test placements.
+pub async fn cancel_game_test_runner(runner: &mut GameTestRunner) {
     for error in runner.cancel_and_clear().await {
         warn!(target: "pumpkin::gametest", %error, "Unable to clear cancelled GameTest structure");
     }
@@ -605,7 +606,7 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
     };
 
     if stopped {
-        cancel_runner(runner).await;
+        cancel_game_test_runner(runner).await;
     }
 
     for clear in clears {
@@ -664,7 +665,7 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
                         }
                     }
                     stop_game_tests(server);
-                    cancel_runner(runner).await;
+                    cancel_game_test_runner(runner).await;
                     return;
                 }
             }
@@ -686,7 +687,7 @@ pub async fn drain_game_test_queue(server: &Arc<Server>, runner: &mut GameTestRu
         if clear_failed {
             cancel_queued_requests(&batch);
             stop_game_tests(server);
-            cancel_runner(runner).await;
+            cancel_game_test_runner(runner).await;
             return;
         }
         let Some(first) = batch.first() else {
