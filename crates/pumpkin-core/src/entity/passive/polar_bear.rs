@@ -297,28 +297,65 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn growls_again_only_after_the_warning_cooldown() -> TestResult {
+    async fn stands_up_only_within_ten_ticks_of_the_attack() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
         let (bear, target) = bear_and_target(&world, WARNING_RANGE);
         let mut goal = MeleeAttackGoal::new(1.25, true);
 
-        goal.set_ticks_until_next_attack(10);
+        goal.set_ticks_until_next_attack(STAND_UP_TICKS_BEFORE_ATTACK + 1);
         check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
-        for _ in 0..39 {
-            bear.mob_tick(bear.as_ref());
-        }
-        assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 1);
+        assert!(!bear.is_standing());
+        assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 0);
 
-        // Still on cooldown: another attack check must not growl or restart it.
-        goal.set_ticks_until_next_attack(10);
+        goal.set_ticks_until_next_attack(STAND_UP_TICKS_BEFORE_ATTACK);
         check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
-        assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 1);
+        assert!(bear.is_standing());
+        assert_eq!(
+            bear.warning_sound_ticks.load(Ordering::Relaxed),
+            WARNING_SOUND_COOLDOWN
+        );
 
-        bear.mob_tick(bear.as_ref());
-        goal.set_ticks_until_next_attack(10);
+        // Ready to attack but out of melee reach: drops down and waits a full cooldown.
+        goal.set_ticks_until_next_attack(0);
         check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
-        assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 40);
+        assert!(!bear.is_standing());
+        assert_eq!(goal.get_ticks_until_next_attack(), goal.get_max_cooldown());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resets_the_cooldown_outside_the_warning_band() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        // The band is the target's width plus 3 blocks.
+        let (bear, target) = bear_and_target(&world, WARNING_RANGE + 1.0);
+        let mut goal = MeleeAttackGoal::new(1.25, true);
+
+        bear.set_standing(true);
+        goal.set_ticks_until_next_attack(STAND_UP_TICKS_BEFORE_ATTACK);
+        check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
+        assert!(!bear.is_standing());
+        assert_eq!(goal.get_ticks_until_next_attack(), goal.get_max_cooldown());
+        assert_eq!(bear.warning_sound_ticks.load(Ordering::Relaxed), 0);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stands_down_after_an_attack() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let (bear, target) = bear_and_target(&world, 1.0);
+        let mut goal = MeleeAttackGoal::new(1.25, true);
+
+        bear.set_standing(true);
+        goal.set_ticks_until_next_attack(0);
+        assert!(goal.can_perform_attack(bear.as_ref(), target.as_ref()));
+        check_and_perform_attack(&mut goal, bear.as_ref(), target.as_ref());
+        assert!(!bear.is_standing());
+        assert_eq!(goal.get_ticks_until_next_attack(), goal.get_max_cooldown());
         world.level.shutdown().await;
         Ok(())
     }
