@@ -386,14 +386,14 @@ impl ShulkerEntity {
         let min = bounds.min_block_pos();
         let max = bounds.max_block_pos();
         (world.has_chunks_at(min.0.x, min.0.z, max.0.x, max.0.z)
-            && world.no_entity_collision_with_vehicle(self, bounds, true))
+            && world.no_entity_collision_with_vehicle(Some(self), bounds, true))
         .then_some(face)
     }
 
     fn no_collision(&self, bounds: BoundingBox) -> bool {
         let world = self.get_entity().world.load();
         world.get_block_collisions(bounds, self).0.is_empty()
-            && world.no_entity_collision(self, bounds)
+            && world.no_entity_collision(Some(self), bounds)
             && world.no_border_collision(self, bounds)
     }
 
@@ -1482,7 +1482,9 @@ mod tests {
         ));
         world.spawn_entity(vehicle.clone());
         vehicle.add_passenger_silently(vehicle.clone(), shulker.clone());
-        assert!(world.no_entity_collision(shulker.as_ref(), BoundingBox::from_block(&candidate)));
+        assert!(
+            world.no_entity_collision(Some(shulker.as_ref()), BoundingBox::from_block(&candidate))
+        );
         assert!(shulker.find_teleport_attachment(&candidate).is_none());
         assert!(shulker.get_entity().has_vehicle());
         assert!(shulker.find_teleport_attachment(&clear_candidate).is_some());

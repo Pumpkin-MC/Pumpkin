@@ -264,31 +264,8 @@ impl GenerationCache for Cache {
         self.chunks[mid].get_proto_chunk_mut()
     }
 
-    fn get_fluid_and_fluid_state(&self, pos: &Vector3<i32>) -> (Fluid, FluidState) {
-        let id = GenerationCache::get_block_state(self, pos);
-
-        let Some(fluid) = Fluid::from_state_id(id) else {
-            let fluid = if id.is_waterlogged()
-                || matches!(
-                    id.to_block_id(),
-                    pumpkin_data::BlockId::KELP
-                        | pumpkin_data::BlockId::KELP_PLANT
-                        | pumpkin_data::BlockId::SEAGRASS
-                        | pumpkin_data::BlockId::TALL_SEAGRASS
-                        | pumpkin_data::BlockId::BUBBLE_COLUMN
-                ) {
-                Fluid::WATER
-            } else {
-                Fluid::EMPTY
-            };
-
-            let state = fluid.states[0].clone();
-            return (fluid, state);
-        };
-
-        let state = fluid.states[0].clone();
-
-        (fluid.clone(), state)
+    fn get_fluid_and_fluid_state(&self, pos: &Vector3<i32>) -> (&'static Fluid, FluidState) {
+        Fluid::fluid_state_of(GenerationCache::get_block_state(self, pos))
     }
 
     fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId {

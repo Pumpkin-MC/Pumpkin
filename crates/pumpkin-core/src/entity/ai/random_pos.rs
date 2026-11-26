@@ -137,7 +137,7 @@ fn move_pos_up_out_of_solid(mob: &dyn Mob, pos: BlockPos) -> Option<BlockPos> {
     }
 
     let fluid = world.get_fluid(&pos);
-    let is_water = fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id;
+    let is_water = fluid.matches_type(&Fluid::WATER);
     (!is_water && !has_malus(mob, &pos)).then_some(pos)
 }
 

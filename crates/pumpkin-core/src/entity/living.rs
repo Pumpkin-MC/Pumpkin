@@ -5161,7 +5161,7 @@ impl LivingEntity {
         }
         let bounding_box = BoundingBox::new_from_pos(x, y, z, &entity.entity_dimension.load());
         if !world.is_space_empty(bounding_box)
-            || !world.no_entity_collision(caller, bounding_box)
+            || !world.no_entity_collision(Some(caller), bounding_box)
             || world.contains_any_liquid(bounding_box)
             || BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos())
                 .any(|pos| is_invalid(world.get_block(&pos)))

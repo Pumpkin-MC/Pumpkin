@@ -2645,8 +2645,7 @@ impl Player {
                 let block_pos = entity.block_pos.load();
                 let world = entity.world.load();
                 let (fluid, _) = world.get_fluid_and_fluid_state(&block_pos);
-                let is_water_block = fluid.id == pumpkin_data::fluid::Fluid::WATER.id
-                    || fluid.id == pumpkin_data::fluid::Fluid::FLOWING_WATER.id;
+                let is_water_block = fluid.matches_type(&pumpkin_data::fluid::Fluid::WATER);
 
                 entity.set_swimming(
                     is_sprinting && is_under_water && !is_passenger && is_water_block,
@@ -6514,14 +6513,6 @@ impl Player {
         self.experience_points.store(points, Ordering::Relaxed);
         self.last_sent_xp.store(-1, Ordering::Relaxed);
         self.tick_experience();
-
-        if self.has_client_loaded() {
-            self.try_send_client_packet(&CSetExperience::new(
-                progress.clamp(0.0, 1.0),
-                level.into(),
-                points.into(),
-            ));
-        }
     }
 
     /// Sets the player's experience level directly.

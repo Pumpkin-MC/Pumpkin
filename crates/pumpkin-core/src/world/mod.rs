@@ -2618,6 +2618,20 @@ impl World {
         true
     }
 
+    /// Vanilla `CollisionGetter.noBlockCollision` for `bounding_box`.
+    pub fn no_block_collision(&self, bounding_box: BoundingBox) -> bool {
+        // Vanilla scans one block past the box so shapes that overhang their block are found.
+        let min = bounding_box
+            .min_block_pos()
+            .offset(Vector3::new(-1, -1, -1));
+        let max = bounding_box.max_block_pos().offset(Vector3::new(1, 1, 1));
+        BlockPos::iterate(min, max).all(|position| {
+            self.get_block_state(&position)
+                .get_block_collision_shapes_at(&position)
+                .all(|shape| !shape.at_pos(position).intersects(&bounding_box))
+        })
+    }
+
     /// No other entity that blocks building overlaps `entity`, ignoring its own vehicle group.
     pub fn is_unobstructed(&self, entity: &Entity) -> bool {
         let bounds = entity.bounding_box.load();
@@ -2665,17 +2679,21 @@ impl World {
 
     pub fn no_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
         self.is_space_empty(bounding_box)
-            && self.no_entity_collision(source, bounding_box)
+            && self.no_entity_collision(Some(source), bounding_box)
             && self.no_border_collision(source, bounding_box)
     }
 
-    pub fn no_entity_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
+    pub fn no_entity_collision(
+        &self,
+        source: Option<&dyn EntityBase>,
+        bounding_box: BoundingBox,
+    ) -> bool {
         self.no_entity_collision_with_vehicle(source, bounding_box, false)
     }
 
     pub(crate) fn no_entity_collision_with_vehicle(
         &self,
-        source: &dyn EntityBase,
+        source: Option<&dyn EntityBase>,
         bounding_box: BoundingBox,
         include_vehicle: bool,
     ) -> bool {
@@ -2690,22 +2708,24 @@ impl World {
         let area = bounding_box.expand_all(1.0E-7);
         !self.get_all_at_box(&area).iter().any(|entity| {
             Self::entity_has_collision(entity.as_ref())
-                && entity.get_entity().entity_id != source.get_entity().entity_id
-                && if include_vehicle {
-                    // The source's own passengers stay linked when it dismounts.
-                    let mut vehicle = entity.get_entity().get_vehicle();
-                    while let Some(current) = vehicle {
-                        if current.get_entity().entity_id == source.get_entity().entity_id {
-                            return false;
+                && source.is_none_or(|source| {
+                    entity.get_entity().entity_id != source.get_entity().entity_id
+                        && if include_vehicle {
+                            // The source's own passengers stay linked when it dismounts.
+                            let mut vehicle = entity.get_entity().get_vehicle();
+                            while let Some(current) = vehicle {
+                                if current.get_entity().entity_id == source.get_entity().entity_id {
+                                    return false;
+                                }
+                                vehicle = current.get_entity().get_vehicle();
+                            }
+                            true
+                        } else {
+                            !source
+                                .get_entity()
+                                .is_passenger_of_same_vehicle(entity.get_entity())
                         }
-                        vehicle = current.get_entity().get_vehicle();
-                    }
-                    true
-                } else {
-                    !source
-                        .get_entity()
-                        .is_passenger_of_same_vehicle(entity.get_entity())
-                }
+                })
         })
     }
 
@@ -6058,11 +6078,10 @@ impl World {
             crate::block::drop_loot(self, broken_block, position, true, &params);
         }
 
-        let new_state_id = if *self.get_fluid(position) == Fluid::WATER {
-            Block::WATER.default_state.id
-        } else {
-            Block::AIR.default_state.id
-        };
+        // Level.destroyBlock: the fluid's legacy block, air when empty
+        let new_state_id = Fluid::fluid_state_of(self.get_block_state_id(position))
+            .1
+            .block_state_id;
 
         let block_entity = cause
             .filter(|player| player.gamemode.load() != pumpkin_util::GameMode::Creative)
@@ -6196,11 +6215,10 @@ impl World {
         }
 
         flags.insert(BlockFlags::SKIP_DROPS);
-        let new_state_id = if *self.get_fluid(position) == Fluid::WATER {
-            Block::WATER.default_state.id
-        } else {
-            Block::AIR.default_state.id
-        };
+        // Level.destroyBlock: the fluid's legacy block, air when empty
+        let new_state_id = Fluid::fluid_state_of(self.get_block_state_id(position))
+            .1
+            .block_state_id;
 
         let broken_state_id = self.set_block_state(position, new_state_id, flags);
         let broken_block = Block::from_state_id(broken_state_id);
@@ -6255,6 +6273,15 @@ impl World {
     pub fn monsters_burn(&self, pos: &BlockPos) -> bool {
         self.environment_attributes().get_value_bool(
             pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayMonstersBurn,
+            pos,
+        )
+    }
+
+    /// Checks if water evaporates here (`EnvironmentAttributes.WATER_EVAPORATES`).
+    #[must_use]
+    pub fn water_evaporates(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayWaterEvaporates,
             pos,
         )
     }
@@ -6439,7 +6466,7 @@ impl World {
 
     pub fn schedule_fluid_tick(
         &self,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         block_pos: BlockPos,
         delay: u8,
         priority: TickPriority,
@@ -6466,6 +6493,20 @@ impl World {
         }
     }
 
+    pub(crate) fn fire_item_spawn_event(&self, entity: &Entity, stack: &ItemStack) -> bool {
+        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
+            entity.entity_id,
+            entity.pos.load(),
+            stack.item.registry_key.to_string(),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut item_event);
+        }
+        !item_event.cancelled
+    }
+
     pub fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
         if stack.is_empty() {
             return;
@@ -6483,17 +6524,7 @@ impl World {
         };
 
         let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
-        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
-            entity.entity_id,
-            spawn_pos,
-            stack.item.registry_key.to_string(),
-        );
-        if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut item_event);
-        }
-        if item_event.cancelled {
+        if !self.fire_item_spawn_event(&entity, &stack) {
             return;
         }
 
@@ -6567,17 +6598,7 @@ impl World {
         };
 
         let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
-        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
-            entity.entity_id,
-            spawn_pos,
-            stack.item.registry_key.to_string(),
-        );
-        if let Some(server) = self.server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut item_event);
-        }
-        if item_event.cancelled {
+        if !self.fire_item_spawn_event(&entity, &stack) {
             return;
         }
 
@@ -6784,68 +6805,9 @@ impl World {
         players.choose(&mut rng()).cloned()
     }
 
-    pub(crate) fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
-        if let Some(fluid) = Fluid::from_state_id(id) {
-            return fluid.to_flowing();
-        }
-        // These blocks contain source water without a `waterlogged` property.
-        if matches!(
-            id.to_block_id(),
-            pumpkin_data::BlockId::KELP
-                | pumpkin_data::BlockId::KELP_PLANT
-                | pumpkin_data::BlockId::SEAGRASS
-                | pumpkin_data::BlockId::TALL_SEAGRASS
-                | pumpkin_data::BlockId::BUBBLE_COLUMN
-        ) || id.is_waterlogged()
-        {
-            &Fluid::FLOWING_WATER
-        } else {
-            &Fluid::EMPTY
-        }
-    }
-
-    fn fluid_state_from_block_state(id: BlockStateId) -> (&'static Fluid, FluidState) {
-        let fluid = Self::get_fluid_from_state_id(id);
-        let source = if fluid.matches_type(&Fluid::WATER) {
-            &Fluid::WATER
-        } else if fluid.matches_type(&Fluid::LAVA) {
-            &Fluid::LAVA
-        } else {
-            &Fluid::EMPTY
-        };
-        let mut state = source.states[source.default_state_index as usize].clone();
-
-        if matches!(
-            id.to_block_id(),
-            pumpkin_data::BlockId::WATER | pumpkin_data::BlockId::LAVA
-        ) {
-            // LiquidBlock#getFluidState: source, amounts 7..1, then falling amount 8.
-            // The fluid family's first state is not the state of the actual block.
-            let level =
-                pumpkin_data::block_properties::WaterLikeProperties::from_state_id(id).level;
-            let amount = if level == 0 || level >= 8 {
-                8
-            } else {
-                8 - level
-            };
-            state.height = f32::from(amount) / 9.0;
-            state.level = i16::from(amount);
-            state.is_source = level == 0;
-            state.is_still = state.is_source;
-            state.falling = level >= 8;
-            state.block_state_id = pumpkin_data::block_properties::WaterLikeProperties {
-                level: level.min(8),
-            }
-            .to_state_id(id.to_block());
-        }
-
-        // Keep the normalized family used by fluid callbacks, independently of source state.
-        (fluid, state)
-    }
-
     pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
         let id = self.get_block_state_id(position);
-        Self::get_fluid_from_state_id(id)
+        Fluid::of_block_state(id)
     }
 
     pub fn get_block_and_fluid(
@@ -6856,12 +6818,11 @@ impl World {
         &'static pumpkin_data::fluid::Fluid,
     ) {
         let id = self.get_block_state_id(position);
-        (id.to_block(), Self::get_fluid_from_state_id(id))
+        (id.to_block(), Fluid::of_block_state(id))
     }
 
     pub fn get_fluid_and_fluid_state(&self, position: &BlockPos) -> (&'static Fluid, FluidState) {
-        let id = self.get_block_state_id(position);
-        Self::fluid_state_from_block_state(id)
+        Fluid::fluid_state_of(self.get_block_state_id(position))
     }
 
     /// Whether the fluid at `position` is in `tag`, with a source counting as the still fluid.
@@ -8592,8 +8553,7 @@ fn block_entity_nbt(block_entity: &dyn BlockEntity) -> NbtCompound {
 mod tests {
     use pumpkin_data::{
         Block,
-        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing, WaterLikeProperties},
-        fluid::Fluid,
+        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing},
     };
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
@@ -8601,7 +8561,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        NaturalSpawnChunkCache, World, bedrock_block_breaking_rate, bedrock_chest_block_actor,
+        NaturalSpawnChunkCache, bedrock_block_breaking_rate, bedrock_chest_block_actor,
         merge_entity_records, natural_spawn_chunk_count, spawn_list_for_tick,
     };
 
@@ -8708,64 +8668,6 @@ mod tests {
         }
 
         assert_eq!(ids(&data), ["minecraft:piglin"]);
-    }
-
-    #[test]
-    fn liquid_block_states_preserve_source_flow_and_falling_depths() {
-        // Liquid block level and fluid amount are different: all falling levels
-        // resolve to amount 8, rather than wrapping through the fluid state array.
-        let amounts = [8, 7, 6, 5, 4, 3, 2, 1, 8, 8, 8, 8, 8, 8, 8, 8];
-        for (block, expected_fluid) in [
-            (&Block::WATER, &Fluid::FLOWING_WATER),
-            (&Block::LAVA, &Fluid::FLOWING_LAVA),
-        ] {
-            for (level, amount) in amounts.into_iter().enumerate() {
-                let id = WaterLikeProperties { level: level as u8 }.to_state_id(block);
-                let (fluid, state) = World::fluid_state_from_block_state(id);
-                assert_eq!(fluid.id, expected_fluid.id);
-                assert_eq!(state.level, amount);
-                assert!((state.height - f32::from(amount) / 9.0).abs() < f32::EPSILON);
-                assert_eq!(state.is_source, level == 0);
-                assert_eq!(state.is_still, level == 0);
-                assert_eq!(state.falling, level >= 8);
-                assert!(!state.is_empty);
-                assert_eq!(
-                    state.block_state_id,
-                    WaterLikeProperties {
-                        level: level.min(8) as u8
-                    }
-                    .to_state_id(block)
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn aquatic_and_waterlogged_blocks_contain_source_water() {
-        let wet_stairs = Block::OAK_STAIRS
-            .set_waterlogged(Block::OAK_STAIRS.default_state.id, true)
-            .unwrap();
-        for id in [
-            Block::KELP.default_state.id,
-            Block::KELP_PLANT.default_state.id,
-            Block::SEAGRASS.default_state.id,
-            Block::TALL_SEAGRASS.default_state.id,
-            Block::BUBBLE_COLUMN.default_state.id,
-            wet_stairs,
-        ] {
-            let (fluid, state) = World::fluid_state_from_block_state(id);
-            assert!(fluid.matches_type(&Fluid::WATER));
-            assert!(state.is_source && state.is_still && !state.is_empty && !state.falling);
-            assert_eq!(state.level, 8);
-            assert!((state.height - 8.0 / 9.0).abs() < f32::EPSILON);
-        }
-
-        for block in [&Block::AIR, &Block::OAK_STAIRS, &Block::WATER_CAULDRON] {
-            let (fluid, state) = World::fluid_state_from_block_state(block.default_state.id);
-            assert_eq!(fluid.id, Fluid::EMPTY.id);
-            assert!(state.is_empty);
-            assert_eq!(state.height, 0.0);
-        }
     }
 
     #[test]
