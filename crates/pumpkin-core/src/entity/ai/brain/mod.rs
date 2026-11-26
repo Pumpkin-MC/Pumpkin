@@ -47,7 +47,7 @@ impl BrainTick<'_> {
         }
     }
 
-    /// Includes pose changes requested earlier in this tick.
+    /// Includes pose changes requested within the current callback.
     #[must_use]
     pub fn pose(&self) -> EntityPose {
         self.pending_pose()
@@ -77,7 +77,7 @@ impl BrainTick<'_> {
         });
     }
 
-    /// Records a pose for later behaviors and defers the complete transition.
+    /// Records a pose for the current callback and defers the complete transition.
     pub(crate) fn defer_pose_change(
         &mut self,
         pose: EntityPose,
@@ -99,11 +99,34 @@ impl BrainTick<'_> {
         }));
     }
 
+    /// Queues an event and updates the originating Brain's target on approval.
+    pub(crate) fn defer_target_change(
+        &mut self,
+        target: Option<Arc<dyn crate::entity::EntityBase>>,
+        reason: crate::plugin::api::events::entity::entity_target::TargetReason,
+        apply: impl FnOnce(&mut BrainTick<'_>, Option<Arc<dyn crate::entity::EntityBase>>)
+        + Send
+        + 'static,
+    ) {
+        let previous_id = self
+            .state
+            .get(memory::types::ATTACK_TARGET)
+            .map(|target| target.get_entity().entity_id);
+        self.defer_with_update(
+            move |mob| crate::entity::mob::resolve_target_change(mob, previous_id, target, reason),
+            move |tick, decision| {
+                if let Ok(target) = decision {
+                    apply(tick, target);
+                }
+            },
+        );
+    }
+
     /// Applies the memory update after the action and before the next Brain callback.
     pub(crate) fn defer_with_update<T: Send + 'static>(
         &mut self,
         action: impl FnOnce(&dyn Mob) -> T + Send + 'static,
-        update: impl FnOnce(&mut BrainState, T) + Send + 'static,
+        update: impl FnOnce(&mut BrainTick<'_>, T) + Send + 'static,
     ) {
         self.state.effects.push(Box::new(move |mob| {
             let result = action(mob);
@@ -121,7 +144,7 @@ pub struct VisibilityContext<'a> {
 }
 
 type ActivityConditions = Box<[(MemoryModuleId, MemoryStatus)]>;
-pub(crate) type BrainEffectUpdate = Box<dyn FnOnce(&mut BrainState) + Send>;
+pub(crate) type BrainEffectUpdate = Box<dyn FnOnce(&mut BrainTick<'_>) + Send>;
 pub(crate) type BrainEffect = Box<dyn FnOnce(&dyn Mob) -> Option<BrainEffectUpdate> + Send>;
 
 #[derive(Clone, Copy)]
@@ -136,6 +159,7 @@ pub(crate) fn run_brain_effects(
     effects: Vec<BrainEffect>,
     mob: &dyn Mob,
     world: &Arc<World>,
+    is_current: impl Fn() -> bool,
 ) -> Option<Vec<BrainEffectUpdate>> {
     let still_present = || {
         let entity = mob.get_entity();
@@ -144,7 +168,7 @@ pub(crate) fn run_brain_effects(
 
     let mut updates = Vec::new();
     for effect in effects {
-        if !still_present() {
+        if !still_present() || !is_current() {
             return None;
         }
         updates.extend(effect(mob));
@@ -157,7 +181,7 @@ pub struct Brain {
     state: BrainState,
     sensors: Vec<SensorEntry>,
     behaviors: BTreeMap<i32, Vec<ActivityBehaviors>>,
-    next_callback: Option<BrainCursor>,
+    next_callback: Option<(BrainCursor, Arc<()>)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -446,7 +470,7 @@ impl Brain {
         mut effects: Vec<BrainEffect>,
     ) {
         while !effects.is_empty() {
-            let Some(updates) = run_brain_effects(effects, mob, world) else {
+            let Some(updates) = run_brain_effects(effects, mob, world, || true) else {
                 self.cancel_callbacks();
                 return;
             };
@@ -457,8 +481,13 @@ impl Brain {
         }
     }
 
-    pub(crate) const fn cancel_callbacks(&mut self) {
-        self.next_callback = None;
+    /// Identity of the suspended callback that owns the current effect batch.
+    pub(crate) fn effect_owner(&self) -> Option<&Arc<()>> {
+        self.next_callback.as_ref().map(|(_, owner)| owner)
+    }
+
+    pub(crate) fn cancel_callbacks(&mut self) -> bool {
+        self.next_callback.take().is_some()
     }
 
     pub(crate) fn begin_tick(
@@ -491,9 +520,14 @@ impl Brain {
         time: i64,
         updates: Vec<BrainEffectUpdate>,
     ) -> Option<Vec<BrainEffect>> {
-        let cursor = self.next_callback.take()?;
+        let (cursor, _) = self.next_callback.take()?;
         for update in updates {
-            update(&mut self.state);
+            update(&mut BrainTick {
+                state: &mut self.state,
+                world,
+                mob,
+                time,
+            });
         }
         Self::apply_pending_memory_clear(&mut self.state, mob);
         let effects = match cursor {
@@ -510,7 +544,7 @@ impl Brain {
     }
 
     fn take_effects_at(&mut self, cursor: BrainCursor) -> Vec<BrainEffect> {
-        self.next_callback = Some(cursor);
+        self.next_callback = Some((cursor, Arc::new(())));
         self.state.pending_pose = None;
         std::mem::take(&mut self.state.effects)
     }
@@ -548,7 +582,7 @@ impl Brain {
         for group in self.behaviors.values_mut().flatten() {
             let start = offset;
             offset += group.behaviors.len();
-            if !self.state.is_active(group.activity) {
+            if offset <= first || (first <= start && !self.state.is_active(group.activity)) {
                 continue;
             }
             let skip = first.saturating_sub(start);
@@ -768,7 +802,7 @@ mod tests {
                 move |_| {
                     stops.fetch_add(1, Ordering::Relaxed);
                 },
-                |brain, ()| brain.set(types::PACIFIED, true),
+                |tick, ()| tick.state.set(types::PACIFIED, true),
             );
         }
 
@@ -949,6 +983,7 @@ mod tests {
                             .push("switch");
                         tick.state.set(types::PACIFIED, true);
                         tick.state.set_active_activity_if_possible(Activity::Fight);
+                        tick.defer(|_| {});
                         true
                     })),
                 ),
@@ -1170,6 +1205,72 @@ mod tests {
         Ok(())
     }
 
+    struct ChangeWorldOnStop(Arc<World>);
+
+    impl Behavior for ChangeWorldOnStop {
+        fn entry_conditions(&self) -> &[(MemoryModuleId, MemoryStatus)] {
+            &[]
+        }
+
+        fn can_still_use(&mut self, _tick: &mut BrainTick<'_>) -> bool {
+            true
+        }
+
+        fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
+            let destination = self.0.clone();
+            tick.defer(move |mob| mob.get_entity().world.store(destination));
+        }
+
+        fn debug_name(&self) -> &'static str {
+            "ChangeWorldOnStop"
+        }
+    }
+
+    #[tokio::test]
+    async fn interrupted_brain_refresh_retries_after_a_world_change()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let origin_dir = tempfile::tempdir()?;
+        let destination_dir = tempfile::tempdir()?;
+        let origin = world(&origin_dir);
+        let destination = world(&destination_dir);
+        for direct in [false, true] {
+            let mob = ProviderMob(
+                MobEntity::new(Entity::new(
+                    origin.clone(),
+                    Vector3::new(0.0, 64.0, 0.0),
+                    &EntityType::PIGLIN,
+                )),
+                Arc::default(),
+            );
+            let rebuilt = || {
+                mob.0
+                    .with_brain(&mob, |brain| brain.get(types::HOME).is_some())
+            };
+            let mut brain = Brain::default();
+            brain.add_activity(ActivityData::with_priority_start(
+                Activity::Idle,
+                0,
+                vec![Box::new(Timed::new(ChangeWorldOnStop(destination.clone())))],
+            ));
+            mob.0.set_brain(brain);
+            mob.0.tick_brain(&mob);
+            assert!(!rebuilt());
+            if direct {
+                mob.0.refresh_brain(&mob);
+            } else {
+                mob.0.request_refresh_brain();
+                mob.0.tick_brain(&mob);
+            }
+            assert!(Arc::ptr_eq(&mob.get_entity().world.load(), &destination));
+            assert!(!rebuilt());
+            mob.0.tick_brain(&mob);
+            assert!(rebuilt(), "refresh should retry in the destination world");
+        }
+        origin.level.shutdown().await;
+        destination.level.shutdown().await;
+        Ok(())
+    }
+
     #[tokio::test]
     async fn effect_update_does_not_write_into_a_replacement_brain()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -1187,7 +1288,7 @@ mod tests {
                         replacement.set(types::PACIFIED, false);
                         mob.get_mob_entity().set_brain(replacement);
                     },
-                    |brain, ()| brain.set(types::PACIFIED, true),
+                    |tick, ()| tick.state.set(types::PACIFIED, true),
                 );
                 true
             }))],

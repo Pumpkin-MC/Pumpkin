@@ -16,6 +16,7 @@ pub fn create(
 }
 
 /// Starts an attack through the plugin event for mobs whose target is owned by the brain.
+/// The mob must opt into Brain-owned targets. This bypasses `Mob::apply_mob_target`.
 #[must_use]
 pub fn create_with_reason(
     can_attack: impl Fn(&BrainTick<'_>) -> bool + Send + Sync + 'static,
@@ -51,8 +52,14 @@ fn create_with(
             }
             if let Some(reason) = reason {
                 let reason = reason(target.as_ref());
-                tick.defer(move |mob| {
-                    mob.set_mob_target(Some(target), reason);
+                tick.defer_target_change(Some(target), reason, |tick, target| {
+                    if tick.state.has_memory_value(types::ATTACK_TARGET.id()) {
+                        return;
+                    }
+                    if target.is_some() {
+                        tick.state.erase(types::CANT_REACH_WALK_TARGET_SINCE.id());
+                    }
+                    tick.state.set_optional(types::ATTACK_TARGET, target);
                 });
             } else {
                 tick.state.set(types::ATTACK_TARGET, target);

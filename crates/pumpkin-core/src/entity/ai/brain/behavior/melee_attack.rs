@@ -14,15 +14,15 @@ fn perform(world: &Arc<World>, mob: &dyn Mob, target: &dyn EntityBase) {
             && Arc::ptr_eq(&attacker.world.load(), world)
             && Arc::ptr_eq(&victim.world.load(), world)
     };
-    if still_present() {
-        mob.get_mob_entity().living_entity.swing_hand();
-        if still_present()
-            && mob.do_hurt_target(target)
-            && !attacker.is_removed()
-            && Arc::ptr_eq(&attacker.world.load(), world)
-        {
-            mob.on_attack(target);
-        }
+    // Validation at effect entry is handled by the dispatcher. The swing packet
+    // can synchronously call plugins, so validate both participants after it.
+    mob.get_mob_entity().living_entity.swing_hand();
+    if still_present()
+        && mob.do_hurt_target(target)
+        && !attacker.is_removed()
+        && Arc::ptr_eq(&attacker.world.load(), world)
+    {
+        mob.on_attack(target);
     }
 }
 
@@ -63,8 +63,8 @@ pub fn create_with(
             let world = tick.world.clone();
             tick.defer_with_update(
                 move |mob| perform(&world, mob, target.as_ref()),
-                move |state, ()| {
-                    state.set_with_expiry(
+                move |tick, ()| {
+                    tick.state.set_with_expiry(
                         types::ATTACK_COOLING_DOWN,
                         true,
                         i64::from(cooldown_between_attacks),

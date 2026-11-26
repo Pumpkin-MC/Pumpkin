@@ -93,6 +93,7 @@ fn activities(_mob: &dyn Mob) -> Vec<ActivityData> {
                 Box::new(melee_attack::create_with(can_move, ATTACK_INTERVAL)),
                 Box::new(stop_attacking_if_target_invalid::create_with_target_events(
                     is_target_unreachable,
+                    |_, _| {},
                 )),
             ],
             vec![(types::ATTACK_TARGET.id(), MemoryStatus::ValuePresent)],
@@ -276,6 +277,7 @@ mod tests {
                         let forget = forget.clone();
                         move |_, _| forget.load(Relaxed)
                     },
+                    |_, _| {},
                 )),
             ],
         ));
@@ -311,7 +313,7 @@ mod tests {
         assert_eq!(unreachable_since(), Some(456));
         mob.tick_brain(creaking.as_ref());
         assert_eq!(visible_target(), Some(candidate_id));
-        assert_eq!(unreachable_since(), None);
+        assert_eq!(unreachable_since(), Some(456));
         server.shutdown().await;
 
         assert!(review.read_completed.load(Relaxed));
