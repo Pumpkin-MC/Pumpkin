@@ -4,6 +4,7 @@ use super::super::BrainTick;
 use super::super::memory::{MemoryStatus, types};
 use super::OneShot;
 use crate::entity::EntityBase;
+use crate::plugin::api::events::entity::entity_target::TargetReason;
 
 const TIMEOUT_TO_GET_WITHIN_ATTACK_RANGE: i64 = 200;
 
@@ -17,6 +18,25 @@ pub fn create() -> OneShot {
 #[must_use]
 pub fn create_with_callback(
     on_target_erased: impl Fn(&BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
+) -> OneShot {
+    create_with(|_, _| false, on_target_erased, false)
+}
+
+/// Proposes forgetting the target through the plugin event.
+#[must_use]
+pub fn create_with_target_events(
+    is_invalid_target: impl FnMut(&BrainTick<'_>, &Arc<dyn EntityBase>) -> bool + Send + Sync + 'static,
+) -> OneShot {
+    create_with(is_invalid_target, |_, _| {}, true)
+}
+
+fn create_with(
+    mut is_invalid_target: impl FnMut(&BrainTick<'_>, &Arc<dyn EntityBase>) -> bool
+    + Send
+    + Sync
+    + 'static,
+    on_target_erased: impl Fn(&BrainTick<'_>, &Arc<dyn EntityBase>) + Send + Sync + 'static,
+    fire_target_event: bool,
 ) -> OneShot {
     OneShot::new(
         "StopAttackingIfTargetInvalid",
@@ -40,10 +60,17 @@ pub fn create_with_callback(
                 && target
                     .get_living_entity()
                     .is_some_and(crate::entity::living::LivingEntity::is_alive)
-                && Arc::ptr_eq(&target.get_entity().world.load_full(), tick.world);
+                && Arc::ptr_eq(&target.get_entity().world.load_full(), tick.world)
+                && !is_invalid_target(tick, &target);
             if !still_valid {
-                on_target_erased(tick, &target);
-                tick.state.erase(types::ATTACK_TARGET.id());
+                if fire_target_event {
+                    tick.defer(|mob| {
+                        mob.set_mob_target(None, TargetReason::ForgotTarget);
+                    });
+                } else {
+                    on_target_erased(tick, &target);
+                    tick.state.erase(types::ATTACK_TARGET.id());
+                }
             }
             true
         },
