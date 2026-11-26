@@ -7,12 +7,14 @@ use pumpkin_data::{Block, item::Item, item_stack::ItemStack, statistic::Statisti
 use pumpkin_gametest::{GameTestContext, GameTestError, GameTestResult};
 use pumpkin_util::{GameMode, Hand, math::vector3::Vector3};
 
+use super::TestEventHandlers;
+
 use crate::{
     entity::{
         Entity, EntityBase, item::ItemEntity, passive::snow_golem::SnowGolemEntity, player::Player,
     },
     plugin::{
-        BoxFuture, EventHandler,
+        BoxFuture, EventRwHandler,
         api::events::{
             block::entity_block_form::EntityBlockFormEvent,
             player::{
@@ -34,8 +36,8 @@ struct SnowGolemEvents {
     cancel_unleash: AtomicBool,
 }
 
-impl EventHandler<PlayerShearEntityEvent> for SnowGolemEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerShearEntityEvent> for SnowGolemEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerShearEntityEvent,
@@ -50,8 +52,8 @@ impl EventHandler<PlayerShearEntityEvent> for SnowGolemEvents {
     }
 }
 
-impl EventHandler<PlayerUnleashEntityEvent> for SnowGolemEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerUnleashEntityEvent> for SnowGolemEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerUnleashEntityEvent,
@@ -64,8 +66,8 @@ impl EventHandler<PlayerUnleashEntityEvent> for SnowGolemEvents {
     }
 }
 
-impl EventHandler<EntityBlockFormEvent> for SnowGolemEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<EntityBlockFormEvent> for SnowGolemEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut EntityBlockFormEvent,
@@ -97,7 +99,7 @@ pub(super) async fn test_snow_golem_shearing_leash_and_snow_formation(
         .await?;
     golem.set_no_ai(true)?;
     let world = server_world(&test)?;
-    let _server = world
+    let server = world
         .server
         .upgrade()
         .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
@@ -119,20 +121,10 @@ pub(super) async fn test_snow_golem_shearing_leash_and_snow_formation(
         cancel_shear_or_form: AtomicBool::new(true),
         cancel_unleash: AtomicBool::new(false),
     });
-    // TODO: Update to event system https://github.com/Pumpkin-MC/Pumpkin/pull/4609
-    // let _shear = server
-    //     .plugin_manager
-    //     .register_scoped::<PlayerShearEntityEvent, _>(events.clone(), EventPriority::Normal, true);
-    // let _unleash = server
-    //     .plugin_manager
-    //     .register_scoped::<PlayerUnleashEntityEvent, _>(
-    //         events.clone(),
-    //         EventPriority::Normal,
-    //         true,
-    //     );
-    // let _form = server
-    //     .plugin_manager
-    //     .register_scoped::<EntityBlockFormEvent, _>(events.clone(), EventPriority::Normal, true);
+    let handlers = TestEventHandlers::new(&server.plugin_manager, golem.entity_id());
+    handlers.register::<PlayerShearEntityEvent>(events.clone());
+    handlers.register::<PlayerUnleashEntityEvent>(events.clone());
+    handlers.register::<EntityBlockFormEvent>(events.clone());
 
     check_shearing(&test, &player, &real_player, &golem, snow_golem, &events)?;
     check_leash(

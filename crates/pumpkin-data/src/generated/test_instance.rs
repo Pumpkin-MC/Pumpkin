@@ -315,6 +315,12 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:lava_source_turned_to_obsidian_by_water" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/lava_source_turned_to_obsidian_by_water.json"
         )),
+        "pumpkin:leashed_bucket_pickup_cancelled_unleash" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/leashed_bucket_pickup_cancelled_unleash.json"
+        )),
+        "pumpkin:leashed_bucket_pickup_respects_unleash" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/leashed_bucket_pickup_respects_unleash.json"
+        )),
         "pumpkin:lever_breaks_when_support_removed" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/lever_breaks_when_support_removed.json"
         )),
@@ -521,6 +527,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         )),
         "pumpkin:shearing_tool_loot_and_item_events" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/shearing_tool_loot_and_item_events.json"
+        )),
+        "pumpkin:shulker_box_open_blocked" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/shulker_box_open_blocked.json"
         )),
         "pumpkin:sign_authorization_click_commands_and_applicators" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/sign_authorization_click_commands_and_applicators.json"
@@ -773,6 +782,8 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:item_entities_stack_up_to_combined_count",
         "pumpkin:lantern_on_fence_gate_breaks_when_gate_opens",
         "pumpkin:lava_source_turned_to_obsidian_by_water",
+        "pumpkin:leashed_bucket_pickup_cancelled_unleash",
+        "pumpkin:leashed_bucket_pickup_respects_unleash",
         "pumpkin:lever_breaks_when_support_removed",
         "pumpkin:lever_strong_powers_supporting_block",
         "pumpkin:lever_toggles_power",
@@ -842,6 +853,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:referenced_environment",
         "pumpkin:scaffolding_distance_and_collapse",
         "pumpkin:shearing_tool_loot_and_item_events",
+        "pumpkin:shulker_box_open_blocked",
         "pumpkin:sign_authorization_click_commands_and_applicators",
         "pumpkin:simulated_player_actions",
         "pumpkin:simulated_player_is_ephemeral",

@@ -56,7 +56,7 @@ impl CommandExecutor for SetWorldSpawnExecutor {
         let previous_pitch = current_info.spawn_pitch;
         let new_yaw = yaw;
         let new_pitch = pitch;
-        let mut event = SpawnChangeEvent::new(
+        let event = SpawnChangeEvent::new(
             world.clone(),
             previous_position,
             previous_yaw,
@@ -66,9 +66,7 @@ impl CommandExecutor for SetWorldSpawnExecutor {
             new_pitch,
         );
         if let Some(server_arc) = world.server.upgrade() {
-            server_arc
-                .plugin_manager
-                .fire_blocking(&server_arc, &mut event);
+            server_arc.plugin_manager.fire_blocking(&server_arc, event);
         }
 
         let mut new_info = (**current_info).clone();
@@ -80,6 +78,12 @@ impl CommandExecutor for SetWorldSpawnExecutor {
         new_info.spawn_pitch = new_pitch;
 
         server.level_info.store(Arc::new(new_info));
+        // Without this the new spawn point only lives in memory - it looks like it "worked" (the
+        // in-session respawn/compass reads the same in-memory value) but silently reverts to the
+        // old one on the next restart, since nothing actually reached level.dat.
+        if let Err(err) = server.save_world_info() {
+            tracing::error!("Failed to save world info after /setworldspawn: {err}");
+        }
 
         context.source.send_feedback(
             TextComponent::translate_cross(

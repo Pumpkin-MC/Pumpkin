@@ -12,9 +12,11 @@ use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
 };
 
+use super::TestEventHandlers;
+
 use crate::{
     plugin::{
-        BoxFuture, EventHandler,
+        BoxFuture, EventRwHandler,
         api::events::player::{
             player_item_break::PlayerItemBreakEvent, player_item_damage::PlayerItemDamageEvent,
         },
@@ -51,8 +53,8 @@ struct ItemEvents {
     cancel: AtomicBool,
 }
 
-impl EventHandler<PlayerItemDamageEvent> for ItemEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerItemDamageEvent> for ItemEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerItemDamageEvent,
@@ -68,8 +70,8 @@ impl EventHandler<PlayerItemDamageEvent> for ItemEvents {
     }
 }
 
-impl EventHandler<PlayerItemBreakEvent> for ItemEvents {
-    fn handle_blocking<'a>(
+impl EventRwHandler<PlayerItemBreakEvent> for ItemEvents {
+    fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerItemBreakEvent,
@@ -102,6 +104,11 @@ pub(super) async fn test_shearing_tool_loot_and_item_events(
         .upgrade()
         .ok_or_else(|| GameTestError::World("Server stopped".to_string()))?;
 
+    let sheep = test
+        .spawn_entity("minecraft:sheep", Vector3::new(4.5, 1.0, 3.5))
+        .await?;
+    sheep.set_color(DyeColor::Red)?;
+
     let table = parse_loot_table(
         r#"{"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:diamond","conditions":[{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:shears"}}]}]}]}"#,
     )
@@ -124,18 +131,10 @@ pub(super) async fn test_shearing_tool_loot_and_item_events(
         broken: AtomicUsize::new(0),
         cancel: AtomicBool::new(false),
     });
-    // TODO: Update to event system https://github.com/Pumpkin-MC/Pumpkin/pull/4609
-    // let _damage_handler = server
-    //     .plugin_manager
-    //     .register_scoped::<PlayerItemDamageEvent, _>(hooks.clone(), EventPriority::Normal, true);
-    // let _break_handler = server
-    //     .plugin_manager
-    //     .register_scoped::<PlayerItemBreakEvent, _>(hooks.clone(), EventPriority::Normal, true);
+    let handlers = TestEventHandlers::new(&server.plugin_manager, player.entity_id());
+    handlers.register::<PlayerItemDamageEvent>(hooks.clone());
+    handlers.register::<PlayerItemBreakEvent>(hooks.clone());
 
-    let sheep = test
-        .spawn_entity("minecraft:sheep", Vector3::new(4.5, 1.0, 3.5))
-        .await?;
-    sheep.set_color(DyeColor::Red)?;
     let max_damage = ItemStack::new(1, &Item::SHEARS)
         .get_max_damage()
         .ok_or_else(|| GameTestError::World("Shears have no maximum durability".to_string()))?;

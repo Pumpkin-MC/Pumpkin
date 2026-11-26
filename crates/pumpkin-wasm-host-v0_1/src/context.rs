@@ -23,7 +23,11 @@ fn register_typed_event<E: pumpkin_core::plugin::Payload + ToFromWasmEvent + Clo
     priority: pumpkin_core::plugin::EventPriority,
     blocking: bool,
 ) {
-    ctx.register_event::<E, _>(Arc::clone(handler), priority, blocking);
+    if blocking {
+        ctx.register_event_blocking::<E, _>(Arc::clone(handler), priority);
+    } else {
+        ctx.register_event_nonblocking::<E, _>(Arc::clone(handler), priority);
+    }
 }
 
 #[expect(clippy::too_many_lines)]
@@ -67,16 +71,27 @@ fn register_player_event(
             register_typed_event::<PlayerChatEvent>(ctx, handler, priority, blocking);
         }
         EventType::PlayerCommandSendEvent => {
-            ctx.register_event::<
-                pumpkin_core::plugin::player::player_command_preprocess::PlayerCommandPreprocessEvent,
-                _,
-            >(
-                Arc::new(crate::events::player::LegacyCommandSendHandler(Arc::clone(
-                    handler,
-                ))),
-                priority,
-                blocking,
-            );
+            if blocking {
+                ctx.register_event_blocking::<
+                    pumpkin_core::plugin::player::player_command_preprocess::PlayerCommandPreprocessEvent,
+                    _,
+                >(
+                    Arc::new(crate::events::player::LegacyCommandSendHandler(Arc::clone(
+                        handler,
+                    ))),
+                    priority
+                );
+            } else {
+                ctx.register_event_nonblocking::<
+                    pumpkin_core::plugin::player::player_command_preprocess::PlayerCommandPreprocessEvent,
+                    _,
+                >(
+                    Arc::new(crate::events::player::LegacyCommandSendHandler(Arc::clone(
+                        handler,
+                    ))),
+                    priority
+                );
+            }
         }
         EventType::PlayerPermissionCheckEvent => {
             register_typed_event::<PlayerPermissionCheckEvent>(ctx, handler, priority, blocking);

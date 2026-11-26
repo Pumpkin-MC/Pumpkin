@@ -12,6 +12,7 @@
 
 # --- Plugins ---
 /crates/pumpkin-plugin-api/                                                 @yunuservices @Phoenixxo
+/crates/pumpkin-plugin-api-v0_2/                                                 @yunuservices @Phoenixxo
 /crates/pumpkin-api-macros/                                                 @yunuservices @Phoenixxo
 /crates/pumpkin-plugin-runtime/                                             @Phoenixxo
 /crates/pumpkin-plugin-wit/                                                 @yunuservices @Phoenixxo @QuantumSegfault

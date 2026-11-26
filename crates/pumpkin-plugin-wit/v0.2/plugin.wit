@@ -101,14 +101,19 @@ world plugin {
     /// This is a pure snapshot callback and must never call host imports.
     export metadata;
 
-    /// Dispatches an event to the plugin and returns the updated event.
+    /// Dispatches an event to the plugin.
     ///
-    /// The event is transferred by value
-    /// For blocking handlers, the host applies supported changes from the returned event
-    /// For nonblocking handlers, the host ignores returned changes
-    /// If the returned variant case differs from the dispatched case, the host
-    /// treats the result as a handler error and keeps the original event.
-    export handle-event: async func(event-id: u32, server: server-instance, event: event) -> event;
+    /// The event is passed by ref as a resource. This event cannot be held
+    /// past the end of the handler, but the result of `event.get-*` is owned
+    /// and can be.
+    ///
+    /// For blocking handlers, the event is mutable (`event.set-*` works).
+    /// For nonblocking handlers, the event is read-only and will reject
+    /// `set` attempts (with an error result).
+    /// 
+    /// Attempts to `get-*` or `set-*` the a different type than the handler was
+    /// registered with will return an error result.
+    export handle-event: async func(event-id: u32, server: server-instance, event: borrow<event>);
 
     /// Dispatches a command execution to the plugin.
     export handle-command: async func(command-id: u32, sender: command-sender, server: server-instance, args: consumed-args) -> result<s32, command-error>;

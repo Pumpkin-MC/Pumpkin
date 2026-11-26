@@ -19,6 +19,7 @@ mod fluids_and_sponge;
 mod furnace_smelting;
 mod golems;
 mod lamps_bulbs_and_noteblocks_extended;
+mod leashed_bucket;
 mod loot_tables;
 mod note_and_comparators;
 mod pistons;
@@ -42,9 +43,36 @@ mod tripwire;
 mod walls_stairs_and_shapes;
 mod world_interaction;
 
-use std::sync::Once;
+use std::sync::{Arc, Once};
 
 use pumpkin_gametest::register_test_function;
+
+use crate::plugin::{EventRwHandler, Payload, PluginManager, api::events::EventPriority};
+
+struct TestEventHandlers<'a> {
+    manager: &'a PluginManager,
+    source: String,
+}
+
+impl<'a> TestEventHandlers<'a> {
+    fn new(manager: &'a PluginManager, entity_id: i32) -> Self {
+        Self {
+            manager,
+            source: format!("pumpkin:gametest:{entity_id}"),
+        }
+    }
+
+    fn register<E: Payload + 'static>(&self, handler: Arc<impl EventRwHandler<E> + 'static>) {
+        self.manager
+            .register_blocking(handler, EventPriority::Normal, Some(self.source.clone()));
+    }
+}
+
+impl Drop for TestEventHandlers<'_> {
+    fn drop(&mut self) {
+        self.manager.unregister_handlers(&self.source);
+    }
+}
 
 static REGISTER_BUILTIN_TEST_FUNCTIONS: Once = Once::new();
 
@@ -67,6 +95,9 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:simulated_player_actions", simulated_player::test_simulated_player_actions);
         register_test_function("pumpkin:simulated_player_is_ephemeral", simulated_player::test_simulated_player_is_ephemeral);
         register_test_function("pumpkin:world_block_use_and_break", world_interaction::test_world_block_use_and_break);
+        register_test_function("pumpkin:shulker_box_open_blocked", world_interaction::test_shulker_box_open_blocked);
+        register_test_function("pumpkin:leashed_bucket_pickup_respects_unleash", leashed_bucket::test_leashed_bucket_pickup_respects_unleash);
+        register_test_function("pumpkin:leashed_bucket_pickup_cancelled_unleash", leashed_bucket::test_leashed_bucket_pickup_cancelled_unleash);
         register_test_function("pumpkin:redstone_torch_inverter", redstone_gates::test_redstone_torch_inverter);
         register_test_function("pumpkin:redstone_repeater_delay", redstone_gates::test_redstone_repeater_delay);
         register_test_function("pumpkin:redstone_comparator_modes", redstone_gates::test_redstone_comparator_modes);

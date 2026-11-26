@@ -119,12 +119,12 @@ impl SimulatedPlayer {
             .server
             .upgrade()
             .ok_or_else(|| "Server stopped".to_string())?;
-        let mut event = PlayerItemHeldEvent::new(
+        let event = PlayerItemHeldEvent::new(
             self.player.clone(),
             self.player.inventory.get_selected_slot(),
             slot,
         );
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        let event = server.plugin_manager.fire_blocking(&server, event);
         if event.cancelled {
             return Err("Held slot change was cancelled".to_string());
         }

@@ -5,21 +5,19 @@ use std::{
 };
 
 use crate::{
-    LoggerOption, command::client_suggestions, net::ClientPlatform, plugin::PluginMetadata,
+    LoggerOption,
+    command::client_suggestions,
+    entity::player::Player,
+    net::ClientPlatform,
+    plugin::{DynEventHandler, EventRoHandler, EventRwHandler, PluginManager, PluginMetadata},
     plugin_log,
+    server::Server,
 };
-use arc_swap::ArcSwap;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
 };
 use tracing::Level;
-
-use crate::{
-    entity::player::Player,
-    plugin::{EventHandler, HandlerMap, PluginManager, TypedEventHandler},
-    server::Server,
-};
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -36,7 +34,6 @@ use super::{EventPriority, Payload};
 pub struct Context {
     metadata: PluginMetadata,
     pub server: Arc<Server>,
-    pub handlers: Arc<ArcSwap<HandlerMap>>,
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<PermissionManager>,
     pub logger: Arc<OnceLock<LoggerOption>>,
@@ -55,7 +52,6 @@ impl Context {
     pub fn new(
         metadata: PluginMetadata,
         server: Arc<Server>,
-        handlers: Arc<ArcSwap<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         logger: Arc<OnceLock<LoggerOption>>,
     ) -> Self {
@@ -63,7 +59,6 @@ impl Context {
         Self {
             metadata,
             server,
-            handlers,
             plugin_manager,
             permission_manager,
             logger,
@@ -306,6 +301,10 @@ impl Context {
 
     /// Registers an event handler for a specific event type.
     ///
+    /// The handler may only read, not modify the event payload.
+    /// All nonblocking handlers are ran concurrently, after the
+    /// blocking ones are done.
+    ///
     /// # Type Parameters
     /// - `E`: The event type that the handler will respond to.
     /// - `H`: The type of the event handler.
@@ -313,34 +312,63 @@ impl Context {
     /// # Arguments
     /// - `handler`: A reference to the event handler.
     /// - `priority`: The priority of the event handler.
-    /// - `blocking`: A boolean indicating whether the handler is blocking.
     ///
     /// # Constraints
-    /// The handler must implement the `EventHandler<E>` trait.
-    pub fn register_event<E: Payload + 'static, H>(
+    /// The handler must implement the `EventRoHandler<E>` trait.
+    pub fn register_event_nonblocking<E: Payload + 'static, H>(
         &self,
         handler: Arc<H>,
         priority: EventPriority,
-        blocking: bool,
     ) where
-        H: EventHandler<E> + 'static,
+        H: EventRoHandler<E> + 'static,
     {
-        let typed_handler = Arc::new(TypedEventHandler {
+        self.plugin_manager.register_nonblocking(
             handler,
             priority,
-            blocking,
-            source: Some(self.metadata.name.clone()),
-            _phantom: std::marker::PhantomData,
-        });
+            Some(self.metadata.name.clone()),
+        );
+    }
 
-        self.handlers.rcu(|handlers| {
-            let mut new_handlers = (**handlers).clone();
-            new_handlers
-                .entry(E::get_name_static())
-                .or_default()
-                .push(typed_handler.clone());
-            Arc::new(new_handlers)
-        });
+    /// Registers an event handler for a specific event type.
+    ///
+    /// The handler is permitted to modify the event payload.
+    /// Blocking handlers are run sequentially, before any
+    /// non-blocking ones.
+    ///
+    /// # Type Parameters
+    /// - `E`: The event type that the handler will respond to.
+    /// - `H`: The type of the event handler.
+    ///
+    /// # Arguments
+    /// - `handler`: A reference to the event handler.
+    /// - `priority`: The priority of the event handler.
+    ///
+    /// # Constraints
+    /// The handler must implement the `EventRwHandler<E>` trait.
+    pub fn register_event_blocking<E: Payload + 'static, H>(
+        &self,
+        handler: Arc<H>,
+        priority: EventPriority,
+    ) where
+        H: EventRwHandler<E> + 'static,
+    {
+        self.plugin_manager
+            .register_blocking(handler, priority, Some(self.metadata.name.clone()));
+    }
+
+    /// Registers an event handler for a specific event type.
+    ///
+    /// # Type Parameters
+    /// - `H`: The type of the event handler.
+    ///
+    /// # Arguments
+    /// - `handler`: A reference to the event handler.
+    /// - `priority`: The priority of the event handler.
+    ///
+    /// # Constraints
+    /// The handler must implement the `DynEventHandler` trait.
+    pub fn register_event_dyn(&self, event_type: &'static str, handler: &Arc<dyn DynEventHandler>) {
+        self.plugin_manager.register_dyn(event_type, handler);
     }
 
     /// Registers a custom plugin loader that can load additional plugin types.

@@ -60,6 +60,7 @@ mod connection_cache;
 pub(crate) mod debug_profiler;
 pub mod enchantment;
 mod key_store;
+pub mod perf_profiler;
 pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
@@ -152,6 +153,8 @@ pub struct Server {
     pub tick_count: AtomicI32,
     /// Owns the server-wide tick profiling session used by `/debug`.
     pub(crate) debug_profiler: debug_profiler::DebugProfiler,
+    /// The metrics recording session driven by `/perf`
+    pub perf_profiler: perf_profiler::PerfProfiler,
     /// Random unique Server ID used by Bedrock Edition
     pub server_guid: u64,
     /// Player idle timeout in minutes (0 = disabled)
@@ -373,6 +376,7 @@ impl Server {
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             debug_profiler: debug_profiler::DebugProfiler::new(),
+            perf_profiler: perf_profiler::PerfProfiler::default(),
             tasks: TaskTracker::new(),
             stop_token: crate::STOP_INTERRUPT.child_token(),
             admission_closed: std::sync::RwLock::new(false),
@@ -483,17 +487,11 @@ impl Server {
         for world in &worlds_vec {
             let mut world_init_event =
                 crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
-            server
-                .plugin_manager
-                .fire(&server, &mut world_init_event)
-                .await;
+            world_init_event = server.plugin_manager.fire(&server, world_init_event).await;
 
             let mut world_load_event =
                 crate::plugin::api::events::world::world_load::WorldLoadEvent::new(world.clone());
-            server
-                .plugin_manager
-                .fire(&server, &mut world_load_event)
-                .await;
+            world_load_event = server.plugin_manager.fire(&server, world_load_event).await;
         }
 
         server.worlds.store(Arc::new(worlds_vec));
@@ -564,9 +562,9 @@ impl Server {
             new_worlds.push(world.clone());
             new_worlds
         });
-        let mut event =
+        let event =
             crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
-        self.plugin_manager.fire_blocking(self, &mut event);
+        self.plugin_manager.fire_blocking(self, event);
         world
     }
 
@@ -1099,7 +1097,7 @@ impl Server {
         target_name: Option<&TextComponent>,
     ) {
         let mut event = ServerBroadcastEvent::new(message.clone(), sender_name.clone());
-        self.plugin_manager.fire_blocking(self, &mut event);
+        event = self.plugin_manager.fire_blocking(self, event);
         if !event.cancelled {
             for world in self.worlds.load().iter() {
                 world.broadcast_message(&event.message, &event.sender, chat_type, target_name);
@@ -1591,40 +1589,40 @@ impl Server {
     }
 
     pub async fn register_service(self: &Arc<Self>, service_name: String) {
-        let mut service_event =
+        let service_event =
             crate::plugin::api::events::server::service_register::ServiceRegisterEvent::new(
                 service_name,
             );
-        self.plugin_manager.fire(self, &mut service_event).await;
+        self.plugin_manager.fire(self, service_event).await;
     }
 
     pub async fn unregister_service(self: &Arc<Self>, service_name: String) {
-        let mut service_event =
+        let service_event =
             crate::plugin::api::events::server::service_unregister::ServiceUnregisterEvent::new(
                 service_name,
             );
-        self.plugin_manager.fire(self, &mut service_event).await;
+        self.plugin_manager.fire(self, service_event).await;
     }
 
     pub async fn tab_complete(self: &Arc<Self>, buffer: String, completions: Vec<String>) {
-        let mut tab_event = crate::plugin::api::events::server::tab_complete::TabCompleteEvent::new(
+        let tab_event = crate::plugin::api::events::server::tab_complete::TabCompleteEvent::new(
             buffer,
             completions,
         );
-        self.plugin_manager.fire(self, &mut tab_event).await;
+        self.plugin_manager.fire(self, tab_event).await;
     }
 
     pub async fn enable_plugin(self: &Arc<Self>, plugin_name: String) {
-        let mut enable_event =
+        let enable_event =
             crate::plugin::api::events::server::plugin_enable::PluginEnableEvent::new(plugin_name);
-        self.plugin_manager.fire(self, &mut enable_event).await;
+        self.plugin_manager.fire(self, enable_event).await;
     }
 
     pub async fn disable_plugin(self: &Arc<Self>, plugin_name: String) {
-        let mut disable_event =
+        let disable_event =
             crate::plugin::api::events::server::plugin_disable::PluginDisableEvent::new(
                 plugin_name,
             );
-        self.plugin_manager.fire(self, &mut disable_event).await;
+        self.plugin_manager.fire(self, disable_event).await;
     }
 }

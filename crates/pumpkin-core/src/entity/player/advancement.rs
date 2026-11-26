@@ -611,12 +611,12 @@ impl PlayerAdvancement {
         }
 
         if let Some(server) = player.world().server.upgrade() {
-            let mut event =
+            let event =
                 crate::plugin::api::events::player::player_advancement_done::PlayerAdvancementDoneEvent::new(
                     player.clone(),
                     advancement.id.to_string(),
                 );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
         Self::grant_reward(player, advancement.reward);
         if let Some(display) = advancement.display

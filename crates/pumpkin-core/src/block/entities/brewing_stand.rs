@@ -183,9 +183,7 @@ impl BrewingStandBlockEntity {
                 self.position,
                 self.fuel.load(Ordering::Relaxed) as u8,
             );
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut brew_event);
+            brew_event = server.plugin_manager.fire_blocking(&server, brew_event);
             if brew_event.cancelled {
                 return;
             }
@@ -384,9 +382,7 @@ impl BrewingStandBlockEntity {
                 self.position,
                 initial_power,
             );
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut fuel_event);
+            fuel_event = server.plugin_manager.fire_blocking(&server, fuel_event);
 
             if fuel_event.cancelled {
                 return false;
@@ -806,9 +802,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                         world.clone(),
                         default_ticks,
                     );
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut start_event);
+                start_event = server.plugin_manager.fire_blocking(&server, start_event);
                 if start_event.cancelled {
                     return;
                 }

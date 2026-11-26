@@ -71,3 +71,42 @@ pub(super) async fn test_world_block_use_and_break(test: GameTestContext) -> Gam
     test.succeed();
     Ok(())
 }
+
+pub(super) async fn test_shulker_box_open_blocked(test: GameTestContext) -> GameTestResult<()> {
+    test.set_dimensions(5, 5, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
+    let shulker = BlockPos::new(3, 1, 2);
+    let above = shulker.up();
+    test.set_block_default(&shulker, &Block::SHULKER_BOX)
+        .await?;
+    test.set_block_default(&above, &Block::STONE).await?;
+
+    let player = test
+        .spawn_simulated_player(
+            "ShulkerTester",
+            Vector3::new(1.5, 1.0, 2.5),
+            GameMode::Survival,
+        )
+        .await?;
+    let world = server_world(&test)?;
+    let real_player = world.get_player_by_name(player.name()).ok_or_else(|| {
+        pumpkin_gametest::GameTestError::World("Simulated player was not spawned".to_string())
+    })?;
+    let absolute_shulker = test.absolute_pos(&shulker);
+
+    player.use_block(&absolute_shulker, Hand::Right)?;
+    test.assert_true(
+        real_player.open_container_pos.load() != Some(absolute_shulker),
+        "Player opened a shulker box with a solid block above it",
+    )?;
+
+    test.set_block_default(&above, &Block::AIR).await?;
+    player.use_block(&absolute_shulker, Hand::Right)?;
+    test.assert_true(
+        real_player.open_container_pos.load() == Some(absolute_shulker),
+        "Player could not open a shulker box with clear space above it",
+    )?;
+    real_player.close_handled_screen();
+    test.succeed();
+    Ok(())
+}

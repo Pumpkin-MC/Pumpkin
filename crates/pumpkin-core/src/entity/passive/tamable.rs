@@ -110,7 +110,7 @@ pub trait TamableAnimal: Animal {
         let entity = &self.get_mob_entity().living_entity.entity;
         if let Some(server) = entity.world.load().server.upgrade() {
             let mut event = EntityToggleSitEvent::new(entity.entity_id, sitting);
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return false;
             }
