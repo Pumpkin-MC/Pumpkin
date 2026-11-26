@@ -76,6 +76,12 @@ impl JavaClient {
         let off_hand_item_empty = off_hand_item.is_empty();
 
         let mut item = inventory.get_stack_in_hand(hand);
+        let slot_index = if matches!(hand, Hand::Right) {
+            inventory.get_selected_slot() as usize
+        } else {
+            PlayerInventory::OFF_HAND_SLOT
+        };
+
         let before = item.clone();
         let item_id = item.item.id;
         player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
@@ -110,12 +116,6 @@ impl JavaClient {
             EquipmentSlot::OFF_HAND
         };
 
-        let slot_index = if matches!(hand, Hand::Right) {
-            inventory.get_selected_slot() as usize
-        } else {
-            PlayerInventory::OFF_HAND_SLOT
-        };
-
         let sneaking = player.get_entity().is_sneaking();
 
         // Code based on the java class ServerPlayerInteractionManager
@@ -127,6 +127,7 @@ impl JavaClient {
                 face,
                 &mut item,
                 &equipment_slot,
+                slot_index,
                 &world,
                 block,
                 server,
@@ -190,22 +191,26 @@ impl JavaClient {
         face: BlockDirection,
         held_item: &mut ItemStack,
         equipment_slot: &EquipmentSlot,
+        slot_index: usize,
         world: &Arc<World>,
         block: &Block,
         server: &Arc<Server>,
     ) -> BlockActionResult {
-        let result = server.block_registry.use_with_item(
-            block,
-            player,
-            position,
-            &BlockHitResult {
-                face: &face,
-                cursor_pos,
+        let result = server.block_registry.use_with_item_from_slot(
+            crate::block::UseWithItemArgs {
+                block,
+                player,
+                position,
+                hit: &BlockHitResult {
+                    face: &face,
+                    cursor_pos,
+                },
+                item_stack: held_item,
+                equipment_slot,
+                server,
+                world,
             },
-            held_item,
-            equipment_slot,
-            server,
-            world,
+            Some(slot_index),
         );
 
         if result.consumes_action() {

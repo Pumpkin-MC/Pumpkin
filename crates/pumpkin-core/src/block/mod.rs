@@ -96,6 +96,19 @@ pub trait BlockBehaviour: Send + Sync {
         BlockActionResult::PassToDefaultBlockAction
     }
 
+    fn use_with_item_from_slot(
+        &self,
+        args: UseWithItemArgs<'_>,
+        _source_slot: usize,
+    ) -> BlockActionResult {
+        self.use_with_item(args)
+    }
+
+    /// Whether item use on this block commits through the player's physical slot.
+    fn requires_physical_item_source(&self) -> bool {
+        false
+    }
+
     fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}
 
     fn on_projectile_hit(&self, _args: OnProjectileHitArgs<'_>) {}

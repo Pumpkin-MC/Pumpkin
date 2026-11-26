@@ -919,12 +919,15 @@ impl JavaClient {
             }
             _ => None,
         };
+        if let Some(index_in_origin) = physical(origin) {
+            return physical(extra).map_or_else(
+                || self.menu_overlaps_player_slot(extra, index_in_origin),
+                |index| index == index_in_origin,
+            );
+        }
         let Some(index) = physical(extra) else {
             return false;
         };
-        if let Some(index_in_origin) = physical(origin) {
-            return index == index_in_origin;
-        }
         let Some(context) = context else {
             return false;
         };
@@ -947,6 +950,41 @@ impl JavaClient {
                 matches!(origin, Content { .. })
                     || matches!(origin, Slot { slot, .. } if slot == index as i32)
             })
+    }
+
+    fn menu_overlaps_player_slot(&self, update: super::InventoryUpdateScope, index: usize) -> bool {
+        use super::InventoryUpdateScope::{Content, Slot};
+        let (Content { window, .. } | Slot { window, .. }) = update else {
+            return false;
+        };
+        if window == 0 {
+            return matches!(update, Content { .. })
+                && index
+                    <= pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT;
+        }
+        if window < 0 {
+            return false;
+        }
+        let player = self.player.load();
+        let Some(player) = player.as_ref() else {
+            return false;
+        };
+        let active = player
+            .current_screen_handler
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let screen = active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let inventory: Arc<dyn pumpkin_inventory::inventory::Inventory> =
+            player.inventory().clone();
+        i32::from(screen.sync_id()) == window
+            && screen
+                .get_slot_index(&inventory, index)
+                .is_some_and(|index| {
+                    matches!(update, Content { .. })
+                        || matches!(update, Slot { slot, .. } if slot == index as i32)
+                })
     }
 
     /// `false` when the packet was dropped instead (cancelled, closed, buffer full).

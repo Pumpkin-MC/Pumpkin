@@ -171,6 +171,7 @@ impl BedrockClient {
                 if data.action_type.0 == 0 {
                     // Click block
                     let client_stack = descriptor_to_stack(&data.item_in_hand);
+                    let client_item_id = client_stack.item.id;
 
                     let mut held_item = player.inventory().held_item();
                     if !client_stack.is_empty()
@@ -180,19 +181,66 @@ impl BedrockClient {
                     }
 
                     let before_use = held_item.clone();
-                    let result = server.block_registry.use_with_item(
-                        block,
-                        player,
-                        &data.block_position,
-                        &BlockHitResult {
-                            face: &face,
-                            cursor_pos: &data.click_position,
-                        },
-                        &mut held_item,
-                        &EquipmentSlot::MAIN_HAND,
-                        &server,
-                        &world,
-                    );
+                    let mut physical_source = None;
+                    let hit = BlockHitResult {
+                        face: &face,
+                        cursor_pos: &data.click_position,
+                    };
+                    let result = if server
+                        .block_registry
+                        .get_pumpkin_block(block.id)
+                        .is_some_and(|behaviour| behaviour.requires_physical_item_source())
+                    {
+                        let equipment_slot = match data.hand {
+                            HandSlot::Mainhand => EquipmentSlot::MAIN_HAND,
+                            HandSlot::Offhand => EquipmentSlot::OFF_HAND,
+                        };
+                        let inventory = player.inventory();
+                        let Some(slot) = inventory.equipment_slot_index(&equipment_slot) else {
+                            return;
+                        };
+                        let mut source = inventory.get_slot(slot);
+                        if client_item_id != source.item.id
+                            || !data.matches_source_slot(slot, source.uid)
+                        {
+                            player.sync_hand_slot(slot, source);
+                            return;
+                        }
+                        physical_source = Some((
+                            slot,
+                            equipment_slot.clone(),
+                            source.clone(),
+                            player.gamemode.load(),
+                        ));
+                        let result = server.block_registry.use_with_item_from_slot(
+                            crate::block::UseWithItemArgs {
+                                block,
+                                player,
+                                position: &data.block_position,
+                                hit: &hit,
+                                item_stack: &mut source,
+                                equipment_slot: &equipment_slot,
+                                server: &server,
+                                world: &world,
+                            },
+                            Some(slot),
+                        );
+                        if result.consumes_action() {
+                            return;
+                        }
+                        result
+                    } else {
+                        server.block_registry.use_with_item(
+                            block,
+                            player,
+                            &data.block_position,
+                            &hit,
+                            &mut held_item,
+                            &EquipmentSlot::MAIN_HAND,
+                            &server,
+                            &world,
+                        )
+                    };
 
                     if result.consumes_action() {
                         if !held_item.are_equal(&before_use) {
@@ -217,7 +265,9 @@ impl BedrockClient {
                         return;
                     }
 
-                    if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+                    if matches!(result, BlockActionResult::PassToDefaultBlockAction)
+                        && (physical_source.is_none() || matches!(data.hand, HandSlot::Mainhand))
+                    {
                         let result = server.block_registry.on_use(
                             block,
                             player,
@@ -235,8 +285,24 @@ impl BedrockClient {
                         }
                     }
 
-                    let mut stack = held_item;
-                    if !stack.is_empty() {
+                    let source_is_current = || {
+                        physical_source.as_ref().is_none_or(
+                            |(slot, equipment_slot, before, mode)| {
+                                let inventory = player.inventory();
+                                let current = inventory.get_slot(*slot);
+                                player.gamemode.load() == *mode
+                                    && Arc::ptr_eq(&player.world(), &world)
+                                    && world.get_block(&data.block_position).id == block.id
+                                    && inventory.equipment_slot_index(equipment_slot) == Some(*slot)
+                                    && current.uid == before.uid
+                                    && current.are_equal(before)
+                            },
+                        )
+                    };
+                    let mut stack = physical_source
+                        .as_ref()
+                        .map_or(held_item, |(_, _, before, _)| before.clone());
+                    if !stack.is_empty() && source_is_current() {
                         let item_id = stack.item.id;
                         let before = stack.clone();
                         player.increment_stat(
@@ -244,6 +310,9 @@ impl BedrockClient {
                             item_id as i32,
                             1,
                         );
+                        if !source_is_current() {
+                            return;
+                        }
                         let item_result = server.item_registry.use_on_block(
                             &mut stack,
                             player,
@@ -254,12 +323,15 @@ impl BedrockClient {
                             &server,
                         );
 
-                        if should_try_block_placement(&item_result) {
+                        if should_try_block_placement(&item_result) && source_is_current() {
                             let item_id = stack.item.id;
                             if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
                                 let dummy_use_item_on =
                                     pumpkin_protocol::java::server::play::SUseItemOn {
-                                        hand: VarInt(0),
+                                        hand: VarInt(i32::from(
+                                            physical_source.is_some()
+                                                && matches!(data.hand, HandSlot::Offhand),
+                                        )),
                                         position: data.block_position,
                                         face: VarInt(i32::from(data.block_face)),
                                         cursor_pos: data.click_position,
@@ -281,6 +353,18 @@ impl BedrockClient {
                                 }
                             }
                         }
+                        if let Some((slot, _, source, _)) = &physical_source {
+                            if !source_is_current()
+                                || stack.are_equal(source)
+                                || !player.inventory().replace_slot_if_same(
+                                    *slot,
+                                    source,
+                                    stack.clone(),
+                                )
+                            {
+                                return;
+                            }
+                        }
                         if before.is_damageable() && stack.is_empty() {
                             player.increment_stat(
                                 pumpkin_data::statistic::StatisticCategory::Broken,
@@ -293,7 +377,11 @@ impl BedrockClient {
                                 ActorEventID::None,
                             );
                         }
-                        player.inventory().set_held_item(stack);
+                        if let Some((slot, _, _, _)) = physical_source {
+                            player.sync_hand_slot(slot, player.inventory().get_slot(slot));
+                        } else {
+                            player.inventory().set_held_item(stack);
+                        }
                     }
                 } else if data.action_type.0 == 1 {
                     // Click air / Use item

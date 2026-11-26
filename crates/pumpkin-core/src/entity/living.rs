@@ -1028,10 +1028,15 @@ impl LivingEntity {
     }
 
     fn emit_use_vibration(&self, event: pumpkin_data::game_event::GameEvent) {
-        self.entity
-            .world
-            .load()
-            .emit_game_event(event.name(), self.entity.pos.load());
+        let world = self.entity.world.load_full();
+        let actor = world.get_entity_by_id(self.entity.entity_id);
+        world.emit_game_event_with_context(
+            event.name(),
+            self.entity.pos.load(),
+            &crate::world::game_event::GameEventContext {
+                source_entity: Some(actor.as_deref().unwrap_or(self)),
+            },
+        );
     }
 
     pub fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
@@ -1118,6 +1123,10 @@ impl LivingEntity {
         );
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Keep the flag snapshot, guarded publication and one retry together"
+    )]
     fn send_living_bedrock_flags(&self) {
         use pumpkin_protocol::{
             bedrock::client::set_actor_data::{

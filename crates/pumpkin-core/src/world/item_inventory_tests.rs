@@ -3566,3 +3566,164 @@ async fn bedrock_player_inventory_legacy_drop_checks_armor_and_reentry() -> Test
     }
     Ok(())
 }
+
+struct ReplaceFallbackSource(AtomicBool);
+
+impl EventHandler<crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent> for ReplaceFallbackSource {
+    fn handle_blocking<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        event: &'a mut crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if !self.0.swap(true, Ordering::Relaxed) {
+                event
+                    .player
+                    .inventory()
+                    .set_slot(0, pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::STICK));
+            }
+        })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bedrock_block_insertions_reject_a_replaced_source_stack() -> TestResult {
+    use crate::block::entities::{
+        decorated_pot::DecoratedPotBlockEntity, jukebox::JukeboxBlockEntity,
+    };
+    use crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent;
+    use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::Inventory;
+    use pumpkin_protocol::bedrock::{
+        network_item::NetworkItemDescriptor,
+        server::inventory_transaction::{
+            HandSlot, SInventoryTransaction, TransactionData, UseItemTransactionData,
+        },
+    };
+    use pumpkin_protocol::{Packet, bedrock::client::inventory_slot::CInventorySlot};
+    use pumpkin_util::math::position::BlockPos;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = inventory_world(&folder).await?;
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 63, 8, Block::JUKEBOX.default_state.id);
+    chunk.set_block_absolute_y(9, 63, 8, Block::DECORATED_POT.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let jukebox_pos = BlockPos::new(8, 63, 8);
+    let pot_pos = BlockPos::new(9, 63, 8);
+    let jukebox = Arc::new(JukeboxBlockEntity::new(jukebox_pos));
+    let pot = Arc::new(DecoratedPotBlockEntity::new(pot_pos));
+    world.add_block_entity(jukebox.clone());
+    world.add_block_entity(pot.clone());
+    let (player, mut packets) = bedrock_player(&server, &world, "Notch").await?;
+    let client = player.client.bedrock().ok_or("Bedrock client")?;
+    let inventory = player.inventory();
+    inventory.set_selected_slot(0);
+
+    let click = |position, source: &ItemStack, hotbar: i32| SInventoryTransaction {
+        legacy_request_id: 0.into(),
+        legacy_set_item_slots: Vec::new(),
+        has_value: false,
+        actions: Vec::new(),
+        transaction_type: 2u32.into(),
+        transaction_data: TransactionData::UseItem(UseItemTransactionData {
+            action_type: 0.into(),
+            trigger_type: 0,
+            block_position: position,
+            block_face: 1,
+            hot_bar_slot: hotbar.into(),
+            hand: HandSlot::Mainhand,
+            item_in_hand: NetworkItemDescriptor::from(source),
+            item_in_hand_network_id: Some(source.uid),
+            player_position: CENTER.to_f32_lossy(),
+            click_position: Vector3::new(0.5, 1.0, 0.5),
+            block_runtime_id: 0u32.into(),
+            client_prediction: 0,
+            client_cooldown_state: 0,
+        }),
+    };
+
+    let listener = Arc::new(ReplaceFallbackSource(AtomicBool::new(false)));
+    server
+        .plugin_manager
+        .register::<PlayerStatisticIncrementEvent, _>(
+            listener.clone(),
+            EventPriority::Normal,
+            true,
+        );
+    let apple = ItemStack::new(1, &Item::APPLE);
+    inventory.set_slot(0, apple.clone());
+    client.handle_inventory_action(&player, click(jukebox_pos, &apple, 0));
+    assert!(listener.0.load(Ordering::Relaxed));
+    assert_eq!(inventory.get_slot(0).item, &Item::STICK);
+
+    for (position, item) in [
+        (jukebox_pos, &Item::MUSIC_DISC_CAT),
+        (pot_pos, &Item::STONE),
+    ] {
+        let stale = ItemStack::new(1, item);
+        let replacement = ItemStack::new(1, item);
+        assert_ne!(stale.uid, replacement.uid);
+        inventory.set_slot(0, replacement.clone());
+        while packets.try_recv().is_ok() {}
+        client.handle_inventory_action(&player, click(position, &stale, 0));
+        assert!(
+            std::iter::from_fn(|| packets.try_recv().ok()).any(|packet| {
+                crate::net::bedrock::split_raw_packet(&packet.data)
+                    .is_some_and(|(id, _)| i32::from(id) == CInventorySlot::PACKET_ID)
+            })
+        );
+        client.handle_inventory_action(&player, click(position, &replacement, 1));
+        assert_eq!(inventory.get_slot(0).uid, replacement.uid);
+        assert_eq!(inventory.get_slot(0).item_count, 1);
+        client.handle_inventory_action(&player, click(position, &replacement, 0));
+        assert!(inventory.get_slot(0).is_empty());
+    }
+    assert_eq!(jukebox.get_record().item, &Item::MUSIC_DISC_CAT);
+    assert_eq!(pot.get_stack(0).item, &Item::STONE);
+    client.clear_player();
+    client.close().await;
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn java_on_foot_inserts_a_record_from_the_physical_slot() -> TestResult {
+    use crate::block::entities::jukebox::JukeboxBlockEntity;
+    use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
+    use pumpkin_protocol::java::server::play::SUseItemOn;
+    use pumpkin_util::math::position::BlockPos;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = inventory_world(&folder).await?;
+    let position = BlockPos::new(8, 63, 8);
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 63, 8, Block::JUKEBOX.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let jukebox = Arc::new(JukeboxBlockEntity::new(position));
+    world.add_block_entity(jukebox.clone());
+    let (player, _peer) = java_player(&server, &world, "Notch")?;
+    player.get_entity().set_pos(Vector3::new(8.5, 64.0, 7.5));
+    let inventory = player.inventory();
+    inventory.set_selected_slot(0);
+    inventory.set_slot(0, ItemStack::new(1, &Item::MUSIC_DISC_CAT));
+    let other = ItemStack::new(1, &Item::STICK);
+    inventory.set_slot(1, other.clone());
+    let client = player.client.java().ok_or("Java client")?;
+    let click = SUseItemOn {
+        hand: 0.into(),
+        position,
+        face: 1.into(),
+        cursor_pos: Vector3::new(0.5, 1.0, 0.5),
+        inside_block: false,
+        is_against_world_border: false,
+        sequence: 1.into(),
+    };
+    client.handle_use_item_on(&player, &click, &server)?;
+    assert!(inventory.get_slot(0).is_empty());
+    assert_eq!(inventory.get_slot(1).uid, other.uid);
+    assert_eq!(jukebox.get_record().item, &Item::MUSIC_DISC_CAT);
+    assert!(jukebox.is_playing());
+    world.level.shutdown().await;
+    Ok(())
+}

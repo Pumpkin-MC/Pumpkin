@@ -2408,4 +2408,84 @@ mod tests {
         world.level.shutdown().await;
         Ok(())
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_refreshes_shield_worn_by_packet_observer() -> TestResult {
+        use crate::entity::{mob::Mob, passive::pig::PigEntity};
+        use pumpkin_data::item::Item;
+
+        struct WearShield(Arc<PigEntity>, AtomicBool);
+
+        impl EventHandler<PacketSentEvent> for WearShield {
+            fn handle_blocking<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
+                        && let Ok(packet) =
+                            CSetEquipment::read(&mut event.payload.as_ref(), &CURRENT_MC_VERSION)
+                        && packet.entity_id.0 == self.0.get_entity().entity_id
+                        && !self.1.swap(true, Relaxed)
+                    {
+                        let mob = self.0.get_mob_entity();
+                        let mut gear = mob
+                            .living_entity
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if let Some(shield) = gear.equipment.get_mut(&EquipmentSlot::MAIN_HAND) {
+                            shield.set_damage(7);
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Missing Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let mob = pig.get_mob_entity();
+        mob.set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::SHIELD));
+        mob.set_item_slot(&EquipmentSlot::OFF_HAND, ItemStack::new(1, &Item::APPLE));
+        world.spawn_entity(pig.clone());
+        let id = pig.get_entity().entity_id;
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(id)
+            .ok_or("Pig tracker")?;
+        let observer = Arc::new(WearShield(pig, AtomicBool::new(false)));
+        server.plugin_manager.register::<PacketSentEvent, _>(
+            observer.clone(),
+            EventPriority::Normal,
+            true,
+        );
+        tracked.add_pairing(&viewer);
+        assert!(observer.1.load(Relaxed));
+
+        let mut hands = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CSetEquipment::to_id(CURRENT_MC_VERSION) {
+                let packet =
+                    CSetEquipment::read(&mut packet.payload.as_ref(), &CURRENT_MC_VERSION)?;
+                if packet.entity_id.0 == id {
+                    hands.extend(packet.equipment.into_iter().filter_map(|(slot, stack)| {
+                        (slot == EquipmentSlot::MAIN_HAND.discriminant()
+                            || slot == EquipmentSlot::OFF_HAND.discriminant())
+                        .then(|| (stack.0.item, stack.0.get_damage()))
+                    }));
+                }
+            }
+        }
+        assert_eq!(hands.len(), 2);
+        assert!(hands.contains(&(&Item::SHIELD, 7)));
+        assert!(hands.iter().any(|(item, _)| *item == &Item::APPLE));
+        world.level.shutdown().await;
+        Ok(())
+    }
 }

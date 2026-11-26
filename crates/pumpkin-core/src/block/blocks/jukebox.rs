@@ -17,6 +17,7 @@ use pumpkin_data::jukebox_song::JukeboxSong;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockStateId, block_properties::JukeboxLikeProperties};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -77,6 +78,104 @@ impl JukeboxBlock {
     fn start_playing(position: &BlockPos, world: &Arc<World>, song_id: u32) {
         world.sync_world_event(WorldEvent::SoundPlayJukeboxSong, *position, song_id as i32);
     }
+
+    fn insert_from_hand(
+        args: &mut UseWithItemArgs<'_>,
+        source_slot: Option<usize>,
+    ) -> BlockActionResult {
+        let world = args.world;
+        let (block, state_id) = world.get_block_and_state_id(args.position);
+        if block != args.block {
+            return BlockActionResult::Pass;
+        }
+        if Self::has_record_state(block, state_id) {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
+        let Some(song_name) = args
+            .item_stack
+            .get_data_component::<JukeboxPlayableImpl>()
+            .and_then(|playable| playable.song.rsplit(':').next())
+        else {
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
+        let Some(song) = JukeboxSong::from_name(song_name) else {
+            error!("Jukebox playable song not registered: {song_name}");
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
+
+        let gamemode = args.player.gamemode.load();
+        let length_in_ticks = song.length_in_ticks() + JukeboxBlockEntity::SONG_END_PADDING_TICKS;
+        let entity = world.get_block_entity(args.position);
+        let jukebox = entity
+            .as_ref()
+            .and_then(|entity| entity.as_any().downcast_ref::<JukeboxBlockEntity>());
+        let committed_record = if let Some(slot) = source_slot {
+            let Some(jukebox) = jukebox else {
+                return BlockActionResult::Fail;
+            };
+            let mut remaining = args.item_stack.clone();
+            let record = remaining.split_unless_creative(gamemode, 1);
+            if remaining.is_empty() {
+                remaining.clear();
+            }
+            let uid = record.uid;
+            jukebox.set_world(Arc::downgrade(world));
+            let inventory = args.player.inventory();
+            if !jukebox.try_insert_record_from_slot(world, record, length_in_ticks, || {
+                gamemode != GameMode::Spectator
+                    && args.player.gamemode.load() == gamemode
+                    && Arc::ptr_eq(world, &args.player.world())
+                    && inventory.equipment_slot_index(args.equipment_slot) == Some(slot)
+                    && inventory.replace_slot_if_same(slot, args.item_stack, remaining)
+            }) {
+                return BlockActionResult::Fail;
+            }
+            Some((jukebox, uid))
+        } else {
+            let record = args.item_stack.split_unless_creative(gamemode, 1);
+            if let Some(jukebox) = jukebox {
+                jukebox.set_world(Arc::downgrade(world));
+                jukebox.set_record(record);
+                jukebox.start_playing(length_in_ticks);
+            }
+            None
+        };
+
+        let still_current =
+            || committed_record.is_none_or(|(jukebox, uid)| jukebox.has_live_record(world, uid));
+        let publish = if committed_record.is_some() {
+            let state = JukeboxLikeProperties { has_record: true }.to_state_id(block);
+            world
+                .set_block_state_if(args.position, state, BlockFlags::NOTIFY_ALL, |current| {
+                    current == state_id && still_current()
+                })
+                .is_some()
+        } else {
+            Self::set_record_state(true, block, args.position, world);
+            true
+        };
+        if publish && still_current() {
+            world.emit_game_event(
+                GameEvent::BlockChange.name(),
+                args.position.to_centered_f64(),
+            );
+            if still_current() {
+                Self::start_playing(args.position, world, song.get_id());
+                world.update_neighbors(args.position, None);
+            }
+        }
+
+        args.player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::PlayRecord as i32,
+            1,
+        );
+        if let Some(slot) = source_slot {
+            args.player
+                .sync_hand_slot(slot, args.player.inventory().get_slot(slot));
+        }
+        BlockActionResult::Success
+    }
 }
 
 impl BlockBehaviour for JukeboxBlock {
@@ -114,69 +213,21 @@ impl BlockBehaviour for JukeboxBlock {
     }
 
     /// Called when player right-clicks with an item
-    /// Vanilla: `JukeboxBlock.onUseWithItem()` -> `JukeboxPlayableComponent.tryPlayStack()`
-    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
-        let world = args.world;
-        let state_id = world.get_block_state(args.position).id;
+    /// Vanilla: `JukeboxBlock.useItemOn()` -> `JukeboxPlayable.tryInsertIntoJukebox()`
+    fn use_with_item(&self, mut args: UseWithItemArgs<'_>) -> BlockActionResult {
+        Self::insert_from_hand(&mut args, None)
+    }
 
-        // Vanilla: if (state.get(HAS_RECORD)) return PASS_TO_DEFAULT_BLOCK_ACTION
-        if Self::has_record_state(args.block, state_id) {
-            return BlockActionResult::PassToDefaultBlockAction;
-        }
+    fn requires_physical_item_source(&self) -> bool {
+        true
+    }
 
-        let item_stack = &mut *args.item_stack;
-
-        // Vanilla: JukeboxPlayableComponent lv = stack.get(DataComponentTypes.JUKEBOX_PLAYABLE)
-        let jukebox_playable = item_stack
-            .get_data_component::<JukeboxPlayableImpl>()
-            .map(|i| i.song);
-
-        // Vanilla: if (lv == null) return PASS_TO_DEFAULT_BLOCK_ACTION
-        let Some(jukebox_playable) = jukebox_playable else {
-            return BlockActionResult::PassToDefaultBlockAction;
-        };
-
-        let Some(song_name) = jukebox_playable.rsplit(':').next() else {
-            return BlockActionResult::PassToDefaultBlockAction;
-        };
-
-        let Some(jukebox_song) = JukeboxSong::from_name(song_name) else {
-            error!("Jukebox playable song not registered: {song_name}");
-            return BlockActionResult::PassToDefaultBlockAction;
-        };
-
-        // Vanilla: ItemStack lv3 = stack.splitUnlessCreative(1, player)
-        let record = item_stack.split_unless_creative(args.player.gamemode.load(), 1);
-
-        // Vanilla: lv4.setStack(lv3)
-        if let Some(block_entity) = world.get_block_entity(args.position)
-            && let Some(jukebox_entity) = block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
-        {
-            jukebox_entity.set_world(Arc::downgrade(world));
-            jukebox_entity.set_record(record);
-            jukebox_entity.start_playing(
-                jukebox_song.length_in_ticks() + JukeboxBlockEntity::SONG_END_PADDING_TICKS,
-            );
-        }
-
-        // Update block state to has_record = true
-        Self::set_record_state(true, args.block, args.position, world);
-        world.emit_game_event(
-            GameEvent::BlockChange.name(),
-            args.position.to_centered_f64(),
-        );
-
-        // Start playing the music (client-side audio) and notify redstone neighbors
-        Self::start_playing(args.position, world, jukebox_song.get_id());
-        world.update_neighbors(args.position, None);
-
-        args.player.increment_stat(
-            pumpkin_data::statistic::StatisticCategory::Custom,
-            pumpkin_data::statistic::CustomStatistic::PlayRecord as i32,
-            1,
-        );
-
-        BlockActionResult::Success
+    fn use_with_item_from_slot(
+        &self,
+        mut args: UseWithItemArgs<'_>,
+        source_slot: usize,
+    ) -> BlockActionResult {
+        Self::insert_from_hand(&mut args, Some(source_slot))
     }
 
     /// Vanilla: `JukeboxBlock.affectNeighborsAfterRemoval()` -> `Containers.updateNeighboursAfterDestroy()`

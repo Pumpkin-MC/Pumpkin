@@ -1114,9 +1114,8 @@ impl BlockRegistry {
         server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        let pumpkin_block = self.get_pumpkin_block(block.id);
-        if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block.use_with_item(UseWithItemArgs {
+        self.use_with_item_from_slot(
+            UseWithItemArgs {
                 server,
                 world,
                 block,
@@ -1125,9 +1124,24 @@ impl BlockRegistry {
                 hit,
                 item_stack,
                 equipment_slot,
-            });
+            },
+            None,
+        )
+    }
+
+    #[must_use]
+    pub(crate) fn use_with_item_from_slot(
+        &self,
+        args: UseWithItemArgs<'_>,
+        source_slot: Option<usize>,
+    ) -> BlockActionResult {
+        let Some(block) = self.get_pumpkin_block(args.block.id) else {
+            return BlockActionResult::Pass;
+        };
+        match source_slot {
+            Some(slot) => block.use_with_item_from_slot(args, slot),
+            None => block.use_with_item(args),
         }
-        BlockActionResult::Pass
     }
 
     pub fn use_with_item_fluid(
