@@ -4,6 +4,7 @@ use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::VanillaData;
 use crate::data::player_server::ServerPlayerData;
 use crate::entity::NBTStorage;
+use crate::entity::player::simulated_player::SimulatedPlayer;
 use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
@@ -34,6 +35,8 @@ use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
+use pumpkin_util::GameMode;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
@@ -52,7 +55,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
-pub mod builtin_game_tests;
+pub mod builtin_test_functions;
 mod connection_cache;
 pub(crate) mod debug_profiler;
 pub mod enchantment;
@@ -62,10 +65,14 @@ pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
 pub mod server_test_manager;
+pub mod structure_editor;
+mod test_environment;
 pub mod tick_rate_manager;
 pub mod ticker;
 
+pub use pumpkin_gametest::{GameTestOutcome, GameTestOutcomeStatus, GameTestReporter};
 pub use recipe::RecipeManager;
+pub use server_test_manager::{GameTestBatchReport, GameTestRetryOptions, GameTestRunRequest};
 
 use crate::data::advancement_data::AdvancementManager;
 
@@ -109,6 +116,8 @@ pub struct Server {
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
     pub datapack_manager: Arc<crate::data::datapack::DatapackManager>,
+    game_test_state: server_test_manager::GameTestServerState,
+    game_test_driver: server_test_manager::GameTestDriver,
     pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
@@ -338,6 +347,8 @@ impl Server {
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
             datapack_manager: Arc::new(crate::data::datapack::DatapackManager::new()),
+            game_test_state: server_test_manager::GameTestServerState::default(),
+            game_test_driver: server_test_manager::GameTestDriver::default(),
             enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
@@ -476,17 +487,11 @@ impl Server {
         for world in &worlds_vec {
             let mut world_init_event =
                 crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
-            server
-                .plugin_manager
-                .fire(&server, &mut world_init_event)
-                .await;
+            world_init_event = server.plugin_manager.fire(&server, world_init_event).await;
 
             let mut world_load_event =
                 crate::plugin::api::events::world::world_load::WorldLoadEvent::new(world.clone());
-            server
-                .plugin_manager
-                .fire(&server, &mut world_load_event)
-                .await;
+            world_load_event = server.plugin_manager.fire(&server, world_load_event).await;
         }
 
         server.worlds.store(Arc::new(worlds_vec));
@@ -557,9 +562,9 @@ impl Server {
             new_worlds.push(world.clone());
             new_worlds
         });
-        let mut event =
+        let event =
             crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
-        self.plugin_manager.fire_blocking(self, &mut event);
+        self.plugin_manager.fire_blocking(self, event);
         world
     }
 
@@ -777,6 +782,15 @@ impl Server {
             advancements.player = Arc::downgrade(&player);
         };
 
+        self.admit_new_player(player, world, config)
+    }
+
+    fn admit_new_player(
+        self: &Arc<Self>,
+        player: Arc<Player>,
+        world: Arc<World>,
+        config: Option<PlayerConfig>,
+    ) -> Option<(Arc<Player>, Arc<World>)> {
         send_cancellable_blocking! {{
             self;
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
@@ -788,14 +802,14 @@ impl Server {
                     return None;
                 }
                 Some({
-                    {
+                    if player.client.should_persist_player_data() {
                         let mut user_cache = self
                             .data
                             .user_cache
                             .write()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
                         user_cache.upsert(player.gameprofile.id, player.gameprofile.name.clone());
-                    };
+                    }
 
                     // TODO: Config if we want increase online
                     if let Some(config) = config {
@@ -813,7 +827,9 @@ impl Server {
                         Some(player.gameprofile.name.clone()),
                     );
                     self.management_hub.broadcast_player_joined(&player_dto);
-                    if self.telemetry_config.enabled {
+                    if self.telemetry_config.enabled
+                        && !matches!(player.client.as_ref(), ClientPlatform::SimulatedPlayer(_))
+                    {
                         self.telemetry_sessions.record_join(player.gameprofile.id);
                     }
 
@@ -827,6 +843,142 @@ impl Server {
                 None
             }
         }}
+    }
+
+    /// Admits a simulated player whose profile and state are discarded on disconnect.
+    pub async fn spawn_simulated_player(
+        self: &Arc<Self>,
+        world: &Arc<World>,
+        name: &str,
+        position: Vector3<f64>,
+        gamemode: GameMode,
+    ) -> Result<Arc<SimulatedPlayer>, String> {
+        self.spawn_simulated_player_with_persistence(world, name, position, gamemode, false)
+            .await
+    }
+
+    /// Admits a simulated player with optional persistence.
+    ///
+    /// Persistent players use a stable UUID based on their name and restore saved data, subject
+    /// to the server's save settings. The supplied world and position are used on each spawn.
+    pub async fn spawn_simulated_player_with_persistence(
+        self: &Arc<Self>,
+        world: &Arc<World>,
+        name: &str,
+        position: Vector3<f64>,
+        gamemode: GameMode,
+        persistent: bool,
+    ) -> Result<Arc<SimulatedPlayer>, String> {
+        if name.is_empty() || name.len() > 16 || name.chars().any(char::is_control) {
+            return Err("Invalid simulated player name".to_string());
+        }
+        if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
+            return Err("Invalid simulated player position".to_string());
+        }
+        if !self
+            .worlds
+            .load()
+            .iter()
+            .any(|candidate| Arc::ptr_eq(candidate, world))
+        {
+            return Err("Simulated player world is not loaded by this server".to_string());
+        }
+        let id = if persistent {
+            uuid::Uuid::new_v3(
+                &uuid::Uuid::NAMESPACE_OID,
+                format!("pumpkin:simulated_player:{}", name.to_ascii_lowercase()).as_bytes(),
+            )
+        } else {
+            uuid::Uuid::new_v4()
+        };
+        let profile = GameProfile {
+            id,
+            name: name.to_string(),
+            properties: ArcSwap::new(Arc::new(Vec::new())),
+            profile_actions: None,
+        };
+        let config = PlayerConfig {
+            server_listing: false,
+            ..PlayerConfig::default()
+        };
+        let mut player = Player::new(
+            Arc::new(ClientPlatform::simulated_player(persistent)),
+            profile,
+            config.clone(),
+            world,
+            gamemode,
+        );
+        if persistent {
+            let server = self.clone();
+            player = self
+                .runtime
+                .spawn_blocking(move || {
+                    if let Ok(Some(mut data)) = server.player_data_storage.load_data(&id) {
+                        player.read_nbt(&mut data);
+                    }
+                    let mut advancements = player
+                        .advancements
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if let Err(error) = advancements.load() {
+                        warn!("Error loading player {id}: {error}");
+                    }
+                    drop(advancements);
+                    player
+                })
+                .await
+                .map_err(|error| format!("Failed to load simulated player: {error}"))?;
+        }
+        if self.get_player_by_name(name).is_some() {
+            return Err(format!("Player '{name}' is already online"));
+        }
+        let player = Arc::new(player);
+        player.tab_list_listed.store(false, Ordering::Relaxed);
+        player.living_entity.entity.set_pos(position);
+        player.has_played_before.store(true, Ordering::Relaxed);
+        player.on_screen_handler_opened(&player.player_screen_handler);
+        player
+            .advancements
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .player = Arc::downgrade(&player);
+
+        let Some((player, world)) = self.admit_new_player(player, world.clone(), Some(config))
+        else {
+            return Err("Simulated player login was cancelled".to_string());
+        };
+        world.announce_player_join(&player, self).await;
+        Ok(Arc::new(SimulatedPlayer::new(player, Arc::downgrade(self))))
+    }
+
+    pub(crate) async fn disconnect_simulated_player(
+        self: &Arc<Self>,
+        player: &Arc<Player>,
+    ) -> Result<(), String> {
+        if !player
+            .world()
+            .get_player_by_uuid(player.gameprofile.id)
+            .is_some_and(|current| Arc::ptr_eq(&current, player))
+        {
+            return Ok(());
+        }
+        player.remove().await;
+        self.remove_player(player);
+        if !player.client.should_persist_player_data() {
+            return Ok(());
+        }
+
+        let save_player = player.clone();
+        let server = self.clone();
+        self.runtime
+            .spawn_blocking(move || server.player_data_storage.handle_player_leave(&save_player))
+            .await
+            .map_err(|error| format!("Failed to save simulated player: {error}"))?
+            .map_err(|error| format!("Failed to save simulated player data: {error}"))?;
+        self.advancement_manager
+            .save_player(player)
+            .await
+            .map_err(|error| format!("Failed to save simulated player advancements: {error}"))
     }
 
     pub fn remove_player(&self, player: &Player) {
@@ -876,6 +1028,9 @@ impl Server {
 
     pub async fn shutdown(&self) {
         self.management_hub.broadcast_server_stopping();
+
+        server_test_manager::stop_game_tests(self);
+        self.game_test_driver.shutdown().await;
 
         self.tasks.close();
         debug!("Awaiting tasks for server");
@@ -942,7 +1097,7 @@ impl Server {
         target_name: Option<&TextComponent>,
     ) {
         let mut event = ServerBroadcastEvent::new(message.clone(), sender_name.clone());
-        self.plugin_manager.fire_blocking(self, &mut event);
+        event = self.plugin_manager.fire_blocking(self, event);
         if !event.cancelled {
             for world in self.worlds.load().iter() {
                 world.broadcast_message(&event.message, &event.sender, chat_type, target_name);
@@ -1064,7 +1219,7 @@ impl Server {
 
         for world in self.worlds.load().iter() {
             for player in world.players.load().iter() {
-                if player.client.address().ip() == ip {
+                if player.client.remote_ip() == Some(ip) {
                     players.push(player.clone());
                 }
             }
@@ -1125,17 +1280,24 @@ impl Server {
         None
     }
 
-    /// Counts the total number of players across all worlds.
+    /// Counts connected players across all worlds, excluding simulated players.
     ///
-    /// This function iterates through each world and sums up the number of players currently connected to that world.
+    /// This function iterates through each world and counts connected network players.
     ///
     /// # Returns
     ///
-    /// The total number of players connected to the server.
+    /// The number of connected network players.
     pub fn get_player_count(&self) -> usize {
         let mut count = 0;
         for world in self.worlds.load().iter() {
-            count += world.players.load().len();
+            count += world
+                .players
+                .load()
+                .iter()
+                .filter(|player| {
+                    !matches!(player.client.as_ref(), ClientPlatform::SimulatedPlayer(_))
+                })
+                .count();
         }
         count
     }
@@ -1144,7 +1306,14 @@ impl Server {
     pub fn has_n_players(&self, n: usize) -> bool {
         let mut count = 0;
         for world in self.worlds.load().iter() {
-            count += world.players.load().len();
+            count += world
+                .players
+                .load()
+                .iter()
+                .filter(|player| {
+                    !matches!(player.client.as_ref(), ClientPlatform::SimulatedPlayer(_))
+                })
+                .count();
             if count >= n {
                 return true;
             }
@@ -1267,7 +1436,7 @@ impl Server {
         self.simulation_pool.install(|| {
             // Do not flush mid-tick; `Flush` is `flushChannel`.
             let suspended = self.suspend_player_flushes();
-            if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
+            if self.tick_rate_manager.runs_game_elements() {
                 self.tick_worlds();
                 // Always run player and network ticking, even when game is frozen
             } else {
@@ -1420,40 +1589,40 @@ impl Server {
     }
 
     pub async fn register_service(self: &Arc<Self>, service_name: String) {
-        let mut service_event =
+        let service_event =
             crate::plugin::api::events::server::service_register::ServiceRegisterEvent::new(
                 service_name,
             );
-        self.plugin_manager.fire(self, &mut service_event).await;
+        self.plugin_manager.fire(self, service_event).await;
     }
 
     pub async fn unregister_service(self: &Arc<Self>, service_name: String) {
-        let mut service_event =
+        let service_event =
             crate::plugin::api::events::server::service_unregister::ServiceUnregisterEvent::new(
                 service_name,
             );
-        self.plugin_manager.fire(self, &mut service_event).await;
+        self.plugin_manager.fire(self, service_event).await;
     }
 
     pub async fn tab_complete(self: &Arc<Self>, buffer: String, completions: Vec<String>) {
-        let mut tab_event = crate::plugin::api::events::server::tab_complete::TabCompleteEvent::new(
+        let tab_event = crate::plugin::api::events::server::tab_complete::TabCompleteEvent::new(
             buffer,
             completions,
         );
-        self.plugin_manager.fire(self, &mut tab_event).await;
+        self.plugin_manager.fire(self, tab_event).await;
     }
 
     pub async fn enable_plugin(self: &Arc<Self>, plugin_name: String) {
-        let mut enable_event =
+        let enable_event =
             crate::plugin::api::events::server::plugin_enable::PluginEnableEvent::new(plugin_name);
-        self.plugin_manager.fire(self, &mut enable_event).await;
+        self.plugin_manager.fire(self, enable_event).await;
     }
 
     pub async fn disable_plugin(self: &Arc<Self>, plugin_name: String) {
-        let mut disable_event =
+        let disable_event =
             crate::plugin::api::events::server::plugin_disable::PluginDisableEvent::new(
                 plugin_name,
             );
-        self.plugin_manager.fire(self, &mut disable_event).await;
+        self.plugin_manager.fire(self, disable_event).await;
     }
 }

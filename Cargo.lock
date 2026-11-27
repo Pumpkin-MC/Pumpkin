@@ -2950,18 +2950,22 @@ dependencies = [
 name = "pumpkin"
 version = "0.2.2+26.3-26.63"
 dependencies = [
+ "clap",
  "console-subscriber",
  "libc",
  "pumpkin-config",
  "pumpkin-core",
  "pumpkin-data",
+ "pumpkin-gametest",
  "pumpkin-util",
  "pumpkin-wasm-host",
  "pumpkin-world",
  "rayon",
  "rustls",
+ "tempfile",
  "tokio",
  "tracing",
+ "zip",
 ]
 
 [[package]]
@@ -3160,6 +3164,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-headless-client-bot"
+version = "0.2.2+26.3-26.63"
+dependencies = [
+ "bytes",
+ "pumpkin-config",
+ "pumpkin-core",
+ "pumpkin-data",
+ "pumpkin-protocol",
+ "pumpkin-util",
+ "rayon",
+ "rustls",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "pumpkin-inventory"
 version = "0.2.2+26.3-26.63"
 dependencies = [
@@ -3206,6 +3229,19 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-serde-structured",
+ "wit-bindgen 0.63.0",
+]
+
+[[package]]
+name = "pumpkin-plugin-api-v0_2"
+version = "0.2.2+26.3-26.63"
+dependencies = [
+ "postcard",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-serde-structured",
+ "wasmtime",
  "wit-bindgen 0.63.0",
 ]
 
@@ -3268,26 +3304,6 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "pumpkin-tester"
-version = "0.2.2+26.3-26.63"
-dependencies = [
- "bytes",
- "pumpkin-config",
- "pumpkin-core",
- "pumpkin-data",
- "pumpkin-gametest",
- "pumpkin-protocol",
- "pumpkin-util",
- "rayon",
- "rustls",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "uuid",
 ]
 
 [[package]]

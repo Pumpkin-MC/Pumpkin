@@ -15,6 +15,7 @@ members = [
     "crates/pumpkin-macros",
     "crates/pumpkin-nbt",
     "crates/pumpkin-plugin-api",
+    "crates/pumpkin-plugin-api-v0_2",
     "crates/pumpkin-plugin-runtime",
     "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
@@ -26,7 +27,7 @@ members = [
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
     "tools/pumpkin-fuzzer",
-    "tools/pumpkin-tester",
+    "tools/pumpkin-headless-client-bot",
 ]
 
 # [workspace.lints.rust]
@@ -190,6 +191,7 @@ aes = { version = "0.9", default-features = false }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 cfb8 = { version = "0.9", default-features = false }
+clap = { version = "4.6.7", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }
 colored = { version = "3.1", default-features = false }
 console-subscriber = { version = "0.5.0", default-features = false }
 crc32c = { version = "0.6.9", default-features = false }

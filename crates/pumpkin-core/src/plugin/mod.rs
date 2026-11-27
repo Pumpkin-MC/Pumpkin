@@ -6,14 +6,14 @@ use std::{
     any::Any,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    pin::Pin,
+    pin::{Pin, pin},
     sync::{Arc, RwLock as SyncRwLock, atomic::AtomicBool},
     thread::ThreadId,
     time::Duration,
 };
 use thiserror::Error;
 use tokio::{
-    sync::{Notify, RwLock},
+    sync::{Notify, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock},
     task::JoinHandle,
 };
 use tracing::{debug, error, info, warn};
@@ -38,9 +38,57 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Bump this whenever the public plugin API or any event layout changes in a way
 /// that makes old binary plugins incompatible.
-pub const PLUGIN_API_VERSION: u32 = 7;
+pub const PLUGIN_API_VERSION: u32 = 8;
 
 const PLUGIN_DIR: &str = "./plugins";
+
+/// Access to an event whose handler can continue running after its caller stops waiting.
+pub struct QueuedEvent(QueuedEventInner);
+
+enum QueuedEventInner {
+    ReadOnly(OwnedRwLockReadGuard<dyn EventSlot>),
+    ReadWrite(OwnedRwLockWriteGuard<dyn EventSlot>),
+}
+
+impl QueuedEvent {
+    /// Borrows a live event of the requested type for one synchronous host accessor.
+    ///
+    /// Returns `None` if the type differs or dispatch has reclaimed the payload.
+    #[must_use]
+    pub fn read<E: Payload + 'static>(&self) -> Option<&E> {
+        match &self.0 {
+            QueuedEventInner::ReadOnly(guard) => guard.payload()?.downcast_ref(),
+            QueuedEventInner::ReadWrite(guard) => guard.payload()?.downcast_ref(),
+        }
+    }
+
+    /// Borrows a live event for an edit by a blocking handler.
+    ///
+    /// Returns `None` for notifications, a type mismatch, or a reclaimed payload.
+    #[must_use]
+    pub fn write<E: Payload + 'static>(&mut self) -> Option<&mut E> {
+        match &mut self.0 {
+            QueuedEventInner::ReadOnly(_) => None,
+            QueuedEventInner::ReadWrite(guard) => guard.payload_mut()?.downcast_mut(),
+        }
+    }
+}
+
+// The erased lock and typed lock both refer to the same allocation.
+trait EventSlot: Send + Sync {
+    fn payload(&self) -> Option<&dyn Payload>;
+    fn payload_mut(&mut self) -> Option<&mut dyn Payload>;
+}
+
+impl<E: Payload + 'static> EventSlot for Option<E> {
+    fn payload(&self) -> Option<&dyn Payload> {
+        self.as_ref().map(|event| event as &dyn Payload)
+    }
+
+    fn payload_mut(&mut self) -> Option<&mut dyn Payload> {
+        self.as_mut().map(|event| event as &mut dyn Payload)
+    }
+}
 
 /// A trait for handling events dynamically.
 ///
@@ -50,21 +98,7 @@ pub trait DynEventHandler: Send + Sync {
     ///
     /// # Arguments
     /// - `event`: A reference to the event to handle.
-    fn handle_dyn<'a>(
-        &'a self,
-        _server: &'a Arc<Server>,
-        event: &'a (dyn Payload + Send + Sync),
-    ) -> BoxFuture<'a, ()>;
-
-    /// Asynchronously handles a blocking dynamic event.
-    ///
-    /// # Arguments
-    /// - `event`: A mutable reference to the event to handle.
-    fn handle_blocking_dyn<'a>(
-        &'a self,
-        _server: &'a Arc<Server>,
-        _event: &'a mut (dyn Payload + Send + Sync),
-    ) -> BoxFuture<'a, ()>;
+    fn handle_dyn<'a>(&'a self, server: &'a Arc<Server>, event: QueuedEvent) -> BoxFuture<'a, ()>;
 
     /// Checks if the event handler is blocking.
     ///
@@ -86,80 +120,118 @@ pub trait DynEventHandler: Send + Sync {
 
 /// A trait for handling specific events.
 ///
-/// This trait allows for handling events of a specific type that implements the `Event` trait.
-pub trait EventHandler<E: Payload>: Send + Sync {
+/// These handlers are the non-blocking variant (ran concurrently), and
+/// are given read-only access to the event (conforming to the `Event` trait).
+pub trait EventRoHandler<E: Payload>: Send + Sync {
     /// Asynchronously handles an event of type `E`.
     ///
     /// # Arguments
     /// - `event`: A reference to the event to handle.
-    fn handle<'a>(&'a self, _server: &'a Arc<Server>, _event: &'a E) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
+    fn handle<'a>(&'a self, _server: &'a Arc<Server>, _event: &'a E) -> BoxFuture<'a, ()>;
+}
 
+/// A trait for handling specific events.
+///
+/// These handlers are the blocking variant (ran sequentially), and are allowed
+/// to both read AND write the event (conforming to the `Event` trait).
+pub trait EventRwHandler<E: Payload>: Send + Sync {
     /// Asynchronously handles a blocking event of type `E`.
     ///
     /// # Arguments
     /// - `event`: A mutable reference to the event to handle.
-    fn handle_blocking<'a>(
-        &'a self,
-        _server: &'a Arc<Server>,
-        _event: &'a mut E,
-    ) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
+    fn handle<'a>(&'a self, _server: &'a Arc<Server>, _event: &'a mut E) -> BoxFuture<'a, ()>;
 }
 
-/// A struct representing a typed event handler.
+/// A struct representing a typed read-only/non-blocking event handler.
 ///
-/// This struct holds a reference to an event handler, its priority, and whether it is blocking.
-pub struct TypedEventHandler<E, H>
+/// This struct holds a reference to an event handler, and its priority.
+pub struct TypedEventRoHandler<E, H>
 where
-    E: Payload + Send + Sync + 'static,
-    H: EventHandler<E> + Send + Sync,
+    E: Payload + 'static,
+    H: EventRoHandler<E>,
 {
     pub handler: Arc<H>,
     pub priority: EventPriority,
-    pub blocking: bool,
     pub source: Option<String>,
     pub _phantom: std::marker::PhantomData<E>,
 }
 
-impl<E, H> DynEventHandler for TypedEventHandler<E, H>
+impl<E, H> DynEventHandler for TypedEventRoHandler<E, H>
 where
-    E: Payload + Send + Sync + 'static,
-    H: EventHandler<E> + Send + Sync,
+    E: Payload + 'static,
+    H: EventRoHandler<E>,
 {
-    /// Asynchronously handles a blocking dynamic event.
-    fn handle_blocking_dyn<'a>(
-        &'a self,
-        server: &'a Arc<Server>,
-        event: &'a mut (dyn Payload + Send + Sync),
-    ) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(typed_event) = <dyn Payload>::downcast_mut(event) {
-                // The handler.handle_blocking call now returns a Future, which we await.
-                self.handler.handle_blocking(server, typed_event).await;
-            }
-        })
-    }
-
     /// Asynchronously handles a dynamic event.
-    fn handle_dyn<'a>(
-        &'a self,
-        server: &'a Arc<Server>,
-        event: &'a (dyn Payload + Send + Sync),
-    ) -> BoxFuture<'a, ()> {
+    fn handle_dyn<'a>(&'a self, server: &'a Arc<Server>, event: QueuedEvent) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            if let Some(typed_event) = <dyn Payload>::downcast_ref(event) {
-                // The handler.handle call now returns a Future, which we await.
-                self.handler.handle(server, typed_event).await;
-            }
+            let Some(payload) = event.read::<E>() else {
+                tracing::error!(
+                    "A handler for `{}` failed. Unable to read access to event. Skipped.",
+                    E::get_name_static()
+                );
+                return;
+            };
+
+            self.handler.handle(server, payload).await;
         })
     }
 
     /// Checks if the handler is blocking.
     fn is_blocking(&self) -> bool {
-        self.blocking
+        false
+    }
+
+    /// Retrieves the priority of the handler.
+    fn get_priority(&self) -> &EventPriority {
+        &self.priority
+    }
+
+    fn source(&self) -> Option<&str> {
+        self.source.as_deref()
+    }
+}
+
+/// A struct representing a typed read-write/blocking event handler.
+///
+/// This struct holds a reference to an event handler, and its priority.
+pub struct TypedEventRwHandler<E, H>
+where
+    E: Payload + 'static,
+    H: EventRwHandler<E>,
+{
+    pub handler: Arc<H>,
+    pub priority: EventPriority,
+    pub source: Option<String>,
+    pub _phantom: std::marker::PhantomData<E>,
+}
+
+impl<E, H> DynEventHandler for TypedEventRwHandler<E, H>
+where
+    E: Payload + 'static,
+    H: EventRwHandler<E>,
+{
+    /// Asynchronously handles a dynamic event.
+    fn handle_dyn<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        mut event: QueuedEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let Some(payload) = event.write::<E>() else {
+                tracing::error!(
+                    "A handler for `{}` failed. Unable to get write access to event. Skipped.",
+                    E::get_name_static()
+                );
+                return;
+            };
+
+            self.handler.handle(server, payload).await;
+        })
+    }
+
+    /// Checks if the handler is blocking.
+    fn is_blocking(&self) -> bool {
+        true
     }
 
     /// Retrieves the priority of the handler.
@@ -578,7 +650,6 @@ impl PluginManager {
         let context = Arc::new(Context::new(
             metadata.clone(),
             server.clone(),
-            Arc::clone(&self.handlers),
             Arc::clone(self),
             Arc::clone(&LOGGER_IMPL),
         ));
@@ -1145,7 +1216,7 @@ impl PluginManager {
         Ok(())
     }
 
-    fn unregister_handlers(&self, source: &str) {
+    pub(crate) fn unregister_handlers(&self, source: &str) {
         self.handlers.rcu(|handlers| {
             let mut new_handlers = (**handlers).clone();
             new_handlers.retain(|_, handlers| {
@@ -1196,26 +1267,57 @@ impl PluginManager {
         }
     }
 
-    /// Register an event handler
-    pub fn register<E, H>(&self, handler: Arc<H>, priority: EventPriority, blocking: bool)
-    where
+    /// Register a non-blocking/concurrently-ran event handler that may
+    /// only read, but not modify, the event.
+    pub fn register_nonblocking<E, H>(
+        &self,
+        handler: Arc<H>,
+        priority: EventPriority,
+        source: Option<String>,
+    ) where
         E: Payload + Send + Sync + 'static,
-        H: EventHandler<E> + 'static,
+        H: EventRoHandler<E> + 'static,
     {
-        let typed_handler = Arc::new(TypedEventHandler {
+        let typed_handler: Arc<dyn DynEventHandler> = Arc::new(TypedEventRoHandler {
             handler,
             priority,
-            blocking,
-            source: None,
+            source,
             _phantom: std::marker::PhantomData,
         });
 
+        self.register_dyn(E::get_name_static(), &typed_handler);
+    }
+
+    /// Register a blocking/sequentially-ran event handler that may
+    /// both read and write events.
+    pub fn register_blocking<E, H>(
+        &self,
+        handler: Arc<H>,
+        priority: EventPriority,
+        source: Option<String>,
+    ) where
+        E: Payload + Send + Sync + 'static,
+        H: EventRwHandler<E> + 'static,
+    {
+        let typed_handler: Arc<dyn DynEventHandler> = Arc::new(TypedEventRwHandler {
+            handler,
+            priority,
+            source,
+            _phantom: std::marker::PhantomData,
+        });
+
+        self.register_dyn(E::get_name_static(), &typed_handler);
+    }
+
+    /// Register a dynamic event handler, that may be either blocking or
+    /// unblocking, and that consumes a raw `QueuedEvent` handle.
+    pub fn register_dyn(&self, event_type: &'static str, handler: &Arc<dyn DynEventHandler>) {
         self.handlers.rcu(|handlers| {
             let mut new_handlers = (**handlers).clone();
             new_handlers
-                .entry(E::get_name_static())
+                .entry(event_type)
                 .or_default()
-                .push(typed_handler.clone());
+                .push(handler.clone());
             Arc::new(new_handlers)
         });
     }
@@ -1228,92 +1330,93 @@ impl PluginManager {
             .is_some_and(|handlers| !handlers.is_empty())
     }
 
-    /// Fire an event to all registered handlers
-    pub async fn fire<E: Payload + Send + Sync + 'static>(
-        &self,
+    #[expect(
+        clippy::expect_used,
+        reason = "Only the typed dispatch wrapper takes the payload, after handlers finish."
+    )]
+    async fn dispatch_event<E: Payload + 'static>(
         server: &Arc<Server>,
-        event: &mut E,
-    ) {
-        self.fire_dyn(server, E::get_name_static(), event).await;
-    }
+        event: E,
+        handlers: &[Arc<dyn DynEventHandler>],
+    ) -> E {
+        let slot = Arc::new(RwLock::new(Some(event)));
 
-    async fn fire_dyn(
-        &self,
-        server: &Arc<Server>,
-        event_name: &'static str,
-        event: &mut (dyn Payload + Send + Sync),
-    ) {
-        let handlers_map = self.handlers.load();
-        if handlers_map.is_empty() {
-            return;
+        for handler in handlers.iter().filter(|handler| handler.is_blocking()) {
+            let slot_clone: Arc<RwLock<dyn EventSlot>> = slot.clone();
+
+            handler
+                .handle_dyn(
+                    server,
+                    QueuedEvent(QueuedEventInner::ReadWrite(slot_clone.write_owned().await)),
+                )
+                .await;
         }
 
-        let Some(handlers) = handlers_map.get(event_name) else {
-            return;
+        join_all(
+            handlers
+                .iter()
+                .filter(|handler| !handler.is_blocking())
+                .map(|handler| {
+                    let slot_clone: Arc<RwLock<dyn EventSlot>> = slot.clone();
+                    async {
+                        handler
+                            .handle_dyn(
+                                server,
+                                QueuedEvent(QueuedEventInner::ReadOnly(
+                                    slot_clone.read_owned().await,
+                                )),
+                            )
+                            .await;
+                    }
+                }),
+        )
+        .await;
+
+        slot.write().await.take().expect("dispatch owns the event")
+    }
+
+    /// Returns the event after blocking handlers and notifications have finished.
+    pub async fn fire<E: Payload + 'static>(&self, server: &Arc<Server>, event: E) -> E {
+        let snapshot = self.handlers.load();
+        let Some(handlers) = snapshot
+            .get(E::get_name_static())
+            .filter(|handlers| !handlers.is_empty())
+        else {
+            return event;
+        };
+        Self::dispatch_event(server, event, handlers).await
+    }
+
+    /// Runs handlers synchronously, returning immediately when none are registered.
+    #[expect(
+        clippy::expect_used,
+        reason = "The pinned future stores the event before returning."
+    )]
+    pub fn fire_blocking<E: Payload + 'static>(&self, server: &Arc<Server>, event: E) -> E {
+        let snapshot = self.handlers.load();
+        let Some(handlers) = snapshot
+            .get(E::get_name_static())
+            .filter(|handlers| !handlers.is_empty())
+        else {
+            return event;
         };
 
-        if handlers.is_empty() {
-            return;
-        }
-
-        // Process blocking handlers first
-        for handler in handlers {
-            if handler.is_blocking() {
-                handler.handle_blocking_dyn(server, event).await;
-            }
-        }
-
-        // Run non-blocking handlers concurrently
-        let non_blocking: Vec<_> = handlers
-            .iter()
-            .filter(|h| !h.is_blocking())
-            .map(|h| h.handle_dyn(server, event))
-            .collect();
-
-        if !non_blocking.is_empty() {
-            futures::future::join_all(non_blocking).await;
-        }
+        let mut result = None;
+        Self::block_on_dispatch(
+            server,
+            pin!(async {
+                result = Some(Self::dispatch_event(server, event, handlers).await);
+            }),
+        );
+        result.expect("blocking dispatch returned the event")
     }
 
-    /// Fire an event to all registered handlers synchronously (blocking if handlers exist).
-    /// If no handlers are registered for this event, returns immediately without runtime overhead.
-    pub fn fire_blocking<E: Payload + Send + Sync + 'static>(
-        &self,
-        server: &Arc<Server>,
-        event: &mut E,
-    ) {
-        self.fire_blocking_dyn(server, E::get_name_static(), event);
-    }
-
-    fn fire_blocking_dyn(
-        &self,
-        server: &Arc<Server>,
-        event_name: &'static str,
-        event: &mut (dyn Payload + Send + Sync),
-    ) {
-        let handlers_map = self.handlers.load();
-        if handlers_map.is_empty() {
-            return;
-        }
-
-        let Some(handlers) = handlers_map.get(event_name) else {
-            return;
-        };
-
-        if handlers.is_empty() {
-            return;
-        }
-
+    fn block_on_dispatch(server: &Arc<Server>, dispatch: Pin<&mut dyn Future<Output = ()>>) {
+        let dispatch = || server.runtime.block_on(dispatch);
         if tokio::runtime::Handle::try_current().is_ok() {
-            tokio::task::block_in_place(|| {
-                server
-                    .runtime
-                    .block_on(self.fire_dyn(server, event_name, event));
-            });
+            tokio::task::block_in_place(dispatch);
         } else {
-            server
-                .runtime
-                .block_on(self.fire_dyn(server, event_name, event));
+            dispatch();
         }
     }
 
@@ -1350,6 +1453,110 @@ impl PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::plugin::events::server::ServerTickStartEvent;
+
+    #[tokio::test]
+    async fn queued_event_survives_caller_cancellation() {
+        let (submitted, queued) = tokio::sync::oneshot::channel();
+        let caller = tokio::spawn(async move {
+            let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(3))));
+            let slot_clone: Arc<RwLock<dyn EventSlot>> = slot.clone();
+            let handle = QueuedEvent(QueuedEventInner::ReadWrite(
+                slot_clone.try_write_owned().unwrap(),
+            ));
+            assert!(submitted.send(handle).is_ok());
+            std::future::pending::<()>().await;
+            drop(slot);
+        });
+
+        let mut handle = queued.await.unwrap();
+        caller.abort();
+        assert!(caller.await.unwrap_err().is_cancelled());
+        handle.write::<ServerTickStartEvent>().unwrap().tick = 4;
+        assert_eq!(handle.read::<ServerTickStartEvent>().unwrap().tick, 4);
+    }
+
+    #[tokio::test]
+    async fn queued_event_shares_edits_and_expires_after_dispatch() {
+        let slot = Arc::new(RwLock::new(Some(ServerTickStartEvent::new(1))));
+
+        {
+            let mut blocking = QueuedEvent(QueuedEventInner::ReadWrite(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .write_owned()
+                    .await,
+            ));
+
+            blocking.write::<ServerTickStartEvent>().unwrap().tick = 2;
+        };
+
+        {
+            let mut notification = QueuedEvent(QueuedEventInner::ReadOnly(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .read_owned()
+                    .await,
+            ));
+
+            assert!(notification.write::<ServerTickStartEvent>().is_none());
+            assert_eq!(notification.read::<ServerTickStartEvent>().unwrap().tick, 2);
+        };
+
+        {
+            let mut guard = slot.write().await;
+            let event = guard.payload_mut().unwrap();
+            event
+                .as_any_mut()
+                .downcast_mut::<ServerTickStartEvent>()
+                .unwrap()
+                .tick = 3;
+        };
+
+        {
+            let guard = slot.read().await;
+            let event = guard.payload().unwrap();
+            assert_eq!(
+                event
+                    .as_any()
+                    .downcast_ref::<ServerTickStartEvent>()
+                    .unwrap()
+                    .tick,
+                3
+            );
+        };
+
+        {
+            let notification = QueuedEvent(QueuedEventInner::ReadOnly(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .read_owned()
+                    .await,
+            ));
+
+            assert_eq!(notification.read::<ServerTickStartEvent>().unwrap().tick, 3);
+        };
+
+        assert_eq!(slot.write().await.take().unwrap().tick, 3);
+
+        {
+            let notification = QueuedEvent(QueuedEventInner::ReadOnly(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .read_owned()
+                    .await,
+            ));
+            assert!(notification.read::<ServerTickStartEvent>().is_none());
+        };
+
+        {
+            let mut blocking = QueuedEvent(QueuedEventInner::ReadWrite(
+                (slot.clone() as Arc<RwLock<dyn EventSlot>>)
+                    .write_owned()
+                    .await,
+            ));
+
+            assert!(blocking.write::<ServerTickStartEvent>().is_none());
+        };
+        assert!(slot.read().await.payload().is_none());
+    }
 
     #[tokio::test]
     async fn topological_sort() {

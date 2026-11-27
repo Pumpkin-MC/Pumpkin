@@ -65,17 +65,17 @@ impl JavaClient {
             }
 
             if main_hand_changed {
-                let mut event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
-                server.plugin_manager.fire_blocking(server, &mut event);
+                let event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
+                server.plugin_manager.fire_blocking(server, event);
             }
 
             if locale_changed {
-                let mut event = crate::plugin::api::events::player::player_locale_change::PlayerLocaleChangeEvent {
+                let event = crate::plugin::api::events::player::player_locale_change::PlayerLocaleChangeEvent {
                     player: player.clone(),
                     new_locale: client_information.locale.to_string(),
                     cancelled: false,
                 };
-                server.plugin_manager.fire_blocking(server, &mut event);
+                server.plugin_manager.fire_blocking(server, event);
             }
 
             if update_settings {

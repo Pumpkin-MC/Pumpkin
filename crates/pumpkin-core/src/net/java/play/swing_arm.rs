@@ -21,7 +21,7 @@ impl JavaClient {
                 Hand::Right => crate::plugin::api::events::player::player_animation::PlayerAnimationType::ArmSwingMain,
             },
         );
-        server.plugin_manager.fire_blocking(server, &mut anim_event);
+        anim_event = server.plugin_manager.fire_blocking(server, anim_event);
         if anim_event.cancelled {
             return;
         }

@@ -213,7 +213,7 @@ pub(crate) fn tick_spawner<F: FnOnce()>(
             position,
         );
         if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             cancelled_any = true;

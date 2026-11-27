@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:standing_lantern_breaks_when_floor_removed",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

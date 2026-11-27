@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:tripwire_entity_collision",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

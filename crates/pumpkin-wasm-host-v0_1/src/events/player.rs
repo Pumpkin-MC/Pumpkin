@@ -377,7 +377,9 @@ impl ToFromWasmEvent for LegacyCommandSendEvent {
 
 pub(crate) struct LegacyCommandSendHandler(pub Arc<WasmPluginEventHandler>);
 
-impl pumpkin_core::plugin::EventHandler<PlayerCommandPreprocessEvent> for LegacyCommandSendHandler {
+impl pumpkin_core::plugin::EventRoHandler<PlayerCommandPreprocessEvent>
+    for LegacyCommandSendHandler
+{
     fn handle<'a>(
         &'a self,
         server: &'a Arc<pumpkin_core::server::Server>,
@@ -390,8 +392,12 @@ impl pumpkin_core::plugin::EventHandler<PlayerCommandPreprocessEvent> for Legacy
             }
         })
     }
+}
 
-    fn handle_blocking<'a>(
+impl pumpkin_core::plugin::EventRwHandler<PlayerCommandPreprocessEvent>
+    for LegacyCommandSendHandler
+{
+    fn handle<'a>(
         &'a self,
         server: &'a Arc<pumpkin_core::server::Server>,
         event: &'a mut PlayerCommandPreprocessEvent,

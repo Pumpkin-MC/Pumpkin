@@ -233,7 +233,7 @@ pub enum ArgumentType {
     ResourceOrTagKey { identifier: Identifier },
     Resource { identifier: Identifier },
     ResourceKey { identifier: Identifier },
-    ResourceSelector,
+    ResourceSelector { identifier: Identifier },
     TemplateMirror,
     TemplateRotation,
     Heightmap,
@@ -411,6 +411,9 @@ impl ArgumentType {
                 }
                 Self::Resource { identifier } => Self::write_with_identifier(identifier, write),
                 Self::ResourceKey { identifier } => Self::write_with_identifier(identifier, write),
+                Self::ResourceSelector { identifier } => {
+                    Self::write_with_identifier(identifier, write)
+                }
                 _ => Ok(()),
             }
         } else {
@@ -542,6 +545,7 @@ impl SuggestionProviders {
 #[cfg(test)]
 mod argument_type_id_tests {
     use super::ArgumentType;
+    use pumpkin_util::identifier::Identifier;
     use pumpkin_util::version::JavaMinecraftVersion;
 
     /// Ids of `ArgumentTypeInfos` in 26.3.
@@ -556,5 +560,21 @@ mod argument_type_id_tests {
         assert_eq!(ArgumentType::Feature.to_id(&v), 59);
         assert_eq!(ArgumentType::SwingAnimation.to_id(&v), 60);
         assert_eq!(ArgumentType::Uuid.to_id(&v), 61);
+    }
+
+    #[test]
+    fn resource_selector_writes_registry_key() {
+        let mut bytes = Vec::new();
+        let parser = ArgumentType::ResourceSelector {
+            identifier: Identifier::parse_static("minecraft:test_instance"),
+        };
+        assert!(
+            parser
+                .write_to_buffer(&mut bytes, &JavaMinecraftVersion::V_26_3)
+                .is_ok()
+        );
+        let mut expected = vec![48, 23];
+        expected.extend_from_slice(b"minecraft:test_instance");
+        assert_eq!(bytes, expected);
     }
 }
