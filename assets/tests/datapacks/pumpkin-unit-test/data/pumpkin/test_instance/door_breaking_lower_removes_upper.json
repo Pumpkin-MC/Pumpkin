@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:door_breaking_lower_removes_upper",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

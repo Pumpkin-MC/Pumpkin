@@ -111,7 +111,7 @@ mod tests {
     use crate::entity::ai::test_support::{server, world};
     use crate::entity::passive::cow::CowEntity;
     use crate::plugin::{
-        BoxFuture, EventHandler,
+        BoxFuture, EventRwHandler,
         api::events::{EventPriority, entity::entity_target::EntityTargetEvent},
     };
     use crate::server::Server;
@@ -204,8 +204,8 @@ mod tests {
         replacement: Arc<dyn EntityBase>,
     }
 
-    impl EventHandler<EntityTargetEvent> for ReplaceTarget {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityTargetEvent> for ReplaceTarget {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityTargetEvent,
@@ -235,13 +235,13 @@ mod tests {
         prey.get_entity()
             .invulnerable
             .store(true, Ordering::Relaxed);
-        server.plugin_manager.register(
+        server.plugin_manager.register_blocking(
             Arc::new(ReplaceTarget {
                 body: body.clone(),
                 replacement: replacement.clone(),
             }),
             EventPriority::Normal,
-            true,
+            None,
         );
 
         body.mob_entity.tick_brain(body.as_ref());

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "pumpkin:environment_with_function",
+  "structure": "minecraft:empty",
+  "function": "minecraft:always_pass",
+  "setup_ticks": 2,
+  "max_ticks": 10
+}

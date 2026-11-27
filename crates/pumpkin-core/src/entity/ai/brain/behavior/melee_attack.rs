@@ -103,7 +103,7 @@ mod tests {
     use crate::entity::mob::{Mob, MobEntity, creaking::CreakingEntity};
     use crate::entity::passive::cow::CowEntity;
     use crate::plugin::{
-        BoxFuture, EventHandler,
+        BoxFuture, EventRwHandler,
         api::events::{EventPriority, entity::entity_damage_by_entity::EntityDamageByEntityEvent},
     };
     use crate::server::Server;
@@ -211,8 +211,8 @@ mod tests {
     #[derive(Default)]
     struct ReadAttackerNbt(AtomicBool);
 
-    impl EventHandler<EntityDamageByEntityEvent> for ReadAttackerNbt {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityDamageByEntityEvent> for ReadAttackerNbt {
+        fn handle<'a>(
             &'a self,
             server: &'a Arc<Server>,
             event: &'a mut EntityDamageByEntityEvent,
@@ -261,7 +261,11 @@ mod tests {
         let handler = Arc::new(ReadAttackerNbt::default());
         server
             .plugin_manager
-            .register::<EntityDamageByEntityEvent, _>(handler.clone(), EventPriority::Normal, true);
+            .register_blocking::<EntityDamageByEntityEvent, _>(
+                handler.clone(),
+                EventPriority::Normal,
+                None,
+            );
         let after_attack = Arc::new(AtomicBool::new(false));
         let mut brain = brain_for(&prey, true);
         brain.add_activity(ActivityData::with_priority_start(

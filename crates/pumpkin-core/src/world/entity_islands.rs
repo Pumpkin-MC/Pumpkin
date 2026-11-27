@@ -1165,18 +1165,26 @@ mod tests {
 
     #[test]
     fn block_physics_listener_requires_serial_passive_writes() {
-        use crate::plugin::{EventHandler, api::events::EventPriority};
+        use crate::plugin::{BoxFuture, EventRwHandler, api::events::EventPriority};
         use std::sync::Arc;
 
         struct PhysicsHandler;
-        impl EventHandler<BlockPhysicsEvent> for PhysicsHandler {}
+        impl EventRwHandler<BlockPhysicsEvent> for PhysicsHandler {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<crate::server::Server>,
+                _event: &'a mut BlockPhysicsEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(std::future::ready(()))
+            }
+        }
 
         let plugins = PluginManager::new(Vec::new());
         assert!(!plugins_observe_passive_block_writes(&plugins));
-        plugins.register::<BlockPhysicsEvent, _>(
+        plugins.register_blocking::<BlockPhysicsEvent, _>(
             Arc::new(PhysicsHandler),
             EventPriority::Normal,
-            true,
+            None,
         );
         assert!(plugins_observe_passive_block_writes(&plugins));
     }

@@ -52,13 +52,13 @@ fn shear_with_player(
     let entity = &shearable.get_mob_entity().living_entity.entity;
     let world = entity.world.load();
     if let Some(server) = world.server.upgrade() {
-        let mut event = PlayerShearEntityEvent {
+        let event = PlayerShearEntityEvent {
             player: player.clone(),
             entity_id: entity.entity_id,
             hand: hand.map_or(0, Hand::packet_id),
             cancelled: false,
         };
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        let event = server.plugin_manager.fire_blocking(&server, event);
         if event.cancelled {
             return false;
         }

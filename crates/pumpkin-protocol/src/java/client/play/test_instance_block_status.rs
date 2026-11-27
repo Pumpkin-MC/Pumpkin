@@ -7,15 +7,14 @@ use pumpkin_macros::java_packet;
 use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 
 #[java_packet(TEST_INSTANCE_BLOCK_STATUS)]
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CTestInstanceBlockStatus {
     pub status: TextComponent,
-    pub size: Option<[VarInt; 3]>,
+    pub size: Option<[i32; 3]>,
 }
 
 impl CTestInstanceBlockStatus {
     #[must_use]
-    pub const fn new(status: TextComponent, size: Option<[VarInt; 3]>) -> Self {
+    pub const fn new(status: TextComponent, size: Option<[i32; 3]>) -> Self {
         Self { status, size }
     }
 }
@@ -27,22 +26,29 @@ impl ClientPacket for CTestInstanceBlockStatus {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_component(&self.status, version)?;
-        write.write_option(&self.size, |w, s| {
-            w.write_var_int(&s[0])?;
-            w.write_var_int(&s[1])?;
-            w.write_var_int(&s[2])
-        })?;
+        write.write_bool(self.size.is_some())?;
+        if let Some([x, y, z]) = self.size {
+            write.write_var_int(&VarInt(x))?;
+            write.write_var_int(&VarInt(y))?;
+            write.write_var_int(&VarInt(z))?;
+        }
         Ok(())
     }
 }
 
-impl ServerPacket<'_> for CTestInstanceBlockStatus {
-    fn read(bytebuf: &mut &[u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        Ok(Self {
-            status: bytebuf.get_component_borrowed(version)?,
-            size: bytebuf
-                .get_option(|b| Ok([b.get_var_int()?, b.get_var_int()?, b.get_var_int()?]))?,
-        })
+impl<'a> ServerPacket<'a> for CTestInstanceBlockStatus {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let status = bytebuf.get_component(version)?;
+        let size = if bytebuf.get_bool()? {
+            Some([
+                bytebuf.get_var_int()?.0,
+                bytebuf.get_var_int()?.0,
+                bytebuf.get_var_int()?.0,
+            ])
+        } else {
+            None
+        };
+        Ok(Self { status, size })
     }
 }
 
@@ -51,20 +57,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn roundtrip_test_instance_block_status() {
-        let packet = CTestInstanceBlockStatus::new(
-            TextComponent::text("minecraft:always_pass"),
-            Some([VarInt(5), VarInt(6), VarInt(7)]),
-        );
-        let mut buf = Vec::new();
-        packet
-            .write_packet_data(&mut buf, &JavaMinecraftVersion::V_26_3)
-            .unwrap();
+    fn status_packet_uses_component_then_optional_varint_size()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let packet = CTestInstanceBlockStatus::new(TextComponent::text("ready"), Some([1, 2, 3]));
+        let version = JavaMinecraftVersion::V_26_3;
+        let mut bytes = Vec::new();
+        packet.write_packet_data(&mut bytes, &version)?;
+        assert!(bytes.ends_with(&[1, 1, 2, 3]));
 
-        let mut slice = buf.as_slice();
-        let decoded =
-            CTestInstanceBlockStatus::read(&mut slice, &JavaMinecraftVersion::V_26_3).unwrap();
-        assert!(slice.is_empty());
-        assert_eq!(decoded, packet);
+        let decoded = CTestInstanceBlockStatus::read(&mut bytes.as_slice(), &version)?;
+        assert_eq!(decoded.status, packet.status);
+        assert_eq!(decoded.size, packet.size);
+        Ok(())
     }
 }

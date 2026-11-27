@@ -526,7 +526,7 @@ impl JavaClient {
         };
         let payload = packet_data.slice(packet_data.len() - reader.len()..);
         let mut event = PacketSentEvent::new_raw(player.clone(), packet_id.0, payload);
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
 
         let extras = event
             .extra_packets
@@ -860,7 +860,7 @@ impl JavaClient {
                 packet.id,
                 packet.payload.clone(),
             );
-            server.plugin_manager.fire_blocking(server, &mut event);
+            event = server.plugin_manager.fire_blocking(server, event);
             if event.cancelled {
                 return Ok(());
             }
@@ -1192,12 +1192,12 @@ impl JavaClient {
             id if id == SCustomPayload::to_id(version) => {
                 let payload = SCustomPayload::read(&mut payload, &version)?;
                 let channel_str = payload.channel.to_string();
-                let mut event = PlayerCustomPayloadEvent::new(
+                let event = PlayerCustomPayloadEvent::new(
                     player.clone(),
                     channel_str.clone(),
                     Bytes::copy_from_slice(payload.data),
                 );
-                server.plugin_manager.fire_blocking(server, &mut event);
+                server.plugin_manager.fire_blocking(server, event);
 
                 if channel_str == "minecraft:register" {
                     if let Ok(channels_data) = std::str::from_utf8(payload.data) {
@@ -1207,13 +1207,13 @@ impl JavaClient {
                                     player.clone(),
                                     ch.to_string(),
                                 );
-                                server.plugin_manager.fire_blocking(server, &mut reg_event);
-                                let mut ch_event = crate::plugin::api::events::player::player_channel::PlayerChannelEvent {
+                                reg_event = server.plugin_manager.fire_blocking(server, reg_event);
+                                let ch_event = crate::plugin::api::events::player::player_channel::PlayerChannelEvent {
                                     player: player.clone(),
                                     channel: ch.to_string(),
                                     cancelled: false,
                                 };
-                                server.plugin_manager.fire_blocking(server, &mut ch_event);
+                                server.plugin_manager.fire_blocking(server, ch_event);
                             }
                         }
                     }
@@ -1226,9 +1226,7 @@ impl JavaClient {
                                 player.clone(),
                                 ch.to_string(),
                             );
-                            server
-                                .plugin_manager
-                                .fire_blocking(server, &mut unreg_event);
+                            unreg_event = server.plugin_manager.fire_blocking(server, unreg_event);
                         }
                     }
                 } else if channel_str == "minecraft:brand" {
@@ -1267,12 +1265,12 @@ impl JavaClient {
                     &mut payload,
                     &version,
                 )?;
-                let mut event = crate::plugin::api::events::dialog::dialog_click_action::DialogClickActionEvent::new(
+                let event = crate::plugin::api::events::dialog::dialog_click_action::DialogClickActionEvent::new(
                     player.clone(),
                     packet.action_id.to_string(),
                     packet.payload.map(Bytes::copy_from_slice),
                 );
-                server.plugin_manager.fire_blocking(server, &mut event);
+                server.plugin_manager.fire_blocking(server, event);
             }
             id if id == SSelectTrade::to_id(version) => {
                 self.handle_select_trade(player, &SSelectTrade::read(&mut payload, &version)?);

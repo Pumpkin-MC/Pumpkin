@@ -182,7 +182,7 @@ mod tests {
     use crate::{
         entity::{Entity, ai::test_support::server, passive::cow::CowEntity},
         plugin::{
-            BoxFuture, EventHandler,
+            BoxFuture, EventRwHandler,
             api::events::{EventPriority, entity::entity_target::EntityTargetEvent},
         },
         server::Server,
@@ -195,8 +195,8 @@ mod tests {
         read_completed: AtomicBool,
     }
 
-    impl EventHandler<EntityTargetEvent> for ReviewTarget {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityTargetEvent> for ReviewTarget {
+        fn handle<'a>(
             &'a self,
             server: &'a Arc<Server>,
             event: &'a mut EntityTargetEvent,
@@ -255,11 +255,9 @@ mod tests {
             calls: Mutex::new(Vec::new()),
             read_completed: AtomicBool::new(false),
         });
-        server.plugin_manager.register::<EntityTargetEvent, _>(
-            review.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityTargetEvent, _>(review.clone(), EventPriority::Normal, None);
 
         let forget = Arc::new(AtomicBool::new(false));
         let mut brain = Brain::default();

@@ -772,7 +772,7 @@ mod tests {
     use crate::{
         entity::ai::test_support::{server, world},
         plugin::{
-            BoxFuture, EventHandler,
+            BoxFuture, EventRwHandler,
             api::events::{EventPriority, world::generic_game::GenericGameEvent},
         },
         server::Server,
@@ -785,8 +785,8 @@ mod tests {
         calls: Arc<AtomicUsize>,
     }
 
-    impl EventHandler<GenericGameEvent> for RemoveProtector {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<GenericGameEvent> for RemoveProtector {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut GenericGameEvent,
@@ -846,16 +846,18 @@ mod tests {
         let interrupted = create();
         let make_listener = |event_key, protector: &CreakingEntity| {
             let calls = Arc::new(AtomicUsize::new(0));
-            server.plugin_manager.register::<GenericGameEvent, _>(
-                Arc::new(RemoveProtector {
-                    world: world.clone(),
-                    entity_id: protector.get_entity().entity_id,
-                    event_key,
-                    calls: calls.clone(),
-                }),
-                EventPriority::Normal,
-                true,
-            );
+            server
+                .plugin_manager
+                .register_blocking::<GenericGameEvent, _>(
+                    Arc::new(RemoveProtector {
+                        world: world.clone(),
+                        entity_id: protector.get_entity().entity_id,
+                        event_key,
+                        calls: calls.clone(),
+                    }),
+                    EventPriority::Normal,
+                    None,
+                );
             calls
         };
         let spawn_calls = make_listener("entity_place", &interrupted);

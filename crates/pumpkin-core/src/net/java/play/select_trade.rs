@@ -8,7 +8,7 @@ impl JavaClient {
             packet.selected_slot.0 as u8,
         );
         if let Some(server) = player.world().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return;

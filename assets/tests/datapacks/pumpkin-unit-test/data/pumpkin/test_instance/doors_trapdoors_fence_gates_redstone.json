@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:doors_trapdoors_fence_gates_redstone",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

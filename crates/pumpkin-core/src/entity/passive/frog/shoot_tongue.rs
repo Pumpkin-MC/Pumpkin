@@ -289,7 +289,7 @@ mod tests {
         passive::cow::CowEntity,
     };
     use crate::plugin::{
-        BoxFuture, EventHandler, api::events::EventPriority, server::packet::PacketSentEvent,
+        BoxFuture, EventRwHandler, api::events::EventPriority, server::packet::PacketSentEvent,
     };
     use crate::server::Server;
 
@@ -300,8 +300,8 @@ mod tests {
         observations: Mutex<Vec<(EntityPose, f32)>>,
     }
 
-    impl EventHandler<PacketSentEvent> for TongueSoundListener {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for TongueSoundListener {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -352,7 +352,7 @@ mod tests {
         });
         server
             .plugin_manager
-            .register(listener.clone(), EventPriority::Normal, true);
+            .register_blocking(listener.clone(), EventPriority::Normal, None);
         let body = frog.get_mob_entity();
         let health = &prey.mob_entity.living_entity.health;
         let full_health = health.load();

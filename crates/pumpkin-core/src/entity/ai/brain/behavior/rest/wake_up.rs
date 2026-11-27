@@ -61,15 +61,15 @@ mod tests {
     use crate::entity::ai::test_support::server;
     use crate::entity::{Entity, EntityBase};
     use crate::plugin::{
-        BoxFuture, EventHandler,
+        BoxFuture, EventRwHandler,
         api::events::{EventPriority, entity::entity_pose_change::EntityPoseChangeEvent},
     };
     use crate::server::Server;
 
     struct VetoSleepingPose;
 
-    impl EventHandler<EntityPoseChangeEvent> for VetoSleepingPose {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityPoseChangeEvent> for VetoSleepingPose {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityPoseChangeEvent,
@@ -105,9 +105,11 @@ mod tests {
             bed.to_f64(),
             &EntityType::VILLAGER,
         ));
-        server
-            .plugin_manager
-            .register(Arc::new(VetoSleepingPose), EventPriority::Normal, true);
+        server.plugin_manager.register_blocking(
+            Arc::new(VetoSleepingPose),
+            EventPriority::Normal,
+            None,
+        );
         assert!(villager.start_sleeping(bed));
         assert_eq!(villager.get_entity().pose.load(), EntityPose::Standing);
         assert!(WhiteBedLikeProperties::from_state_id(world.get_block_state(&bed).id).occupied);
