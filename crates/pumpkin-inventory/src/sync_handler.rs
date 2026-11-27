@@ -92,21 +92,33 @@ impl<'a> ScreenUpdateContext<'a> {
         &self,
         validate: impl FnOnce() -> Option<T>,
     ) -> Option<(ScreenUpdateGuard<'a>, T)> {
-        let active = self.active.map(|active| {
-            active
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-        });
-        if active
-            .as_ref()
-            .is_some_and(|active| !Arc::ptr_eq(self.screen, active))
-        {
-            return None;
-        }
-        let mut screen = self
-            .screen
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (active, mut screen) = loop {
+            let active = self.active.map(|active| {
+                active
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+            });
+            if active
+                .as_ref()
+                .is_some_and(|active| !Arc::ptr_eq(self.screen, active))
+            {
+                return None;
+            }
+            match self.screen.try_lock() {
+                Ok(screen) => break (active, screen),
+                Err(std::sync::TryLockError::Poisoned(error)) => {
+                    break (active, error.into_inner());
+                }
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    drop(active);
+                    drop(
+                        self.screen
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    );
+                }
+            }
+        };
         if screen.get_behaviour().sync_epoch() != self.epoch {
             // Capturing packets also updates the expected client state. Reconcile
             // the whole menu next time it is synchronized if any packet is superseded.

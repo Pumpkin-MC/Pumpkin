@@ -3,7 +3,7 @@ use std::sync::atomic::{
     AtomicBool, AtomicU32, AtomicU64,
     Ordering::{self, Relaxed},
 };
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, Weak};
 
 use bytes::{BufMut, Bytes};
 use crossbeam::atomic::AtomicCell;
@@ -116,6 +116,10 @@ pub struct TrackedEntity {
     pairing_equipment: Mutex<EquipmentPairings>,
     next_equipment_pairing: AtomicU64,
     equipment_retry_pending: AtomicBool,
+    passenger_retries: Mutex<FxHashMap<(Uuid, bool), PassengerPairingRetry>>,
+    passenger_retry_pending: AtomicBool,
+    effect_retries: Mutex<EffectPairingRetries>,
+    effect_retry_pending: AtomicBool,
     /// Bedrock players in `seen_by`.
     bedrock_watchers: AtomicU32,
     pub last_section_pos: AtomicCell<Vector3<i32>>,
@@ -133,6 +137,25 @@ pub struct TrackedEntity {
 pub(crate) struct EquipmentSession {
     viewer: Uuid,
     generation: u64,
+}
+
+type EffectPairingRetries = FxHashMap<
+    (Uuid, &'static pumpkin_data::effect::StatusEffect),
+    (Weak<Player>, EquipmentSession),
+>;
+
+struct PassengerPairingRetry {
+    viewer: Weak<Player>,
+    carrier: Weak<dyn EntityBase>,
+    session: EquipmentSession,
+    paired_rider: Option<i32>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PassengerSnapshot {
+    Finished,
+    Changed,
+    Busy,
 }
 
 #[derive(Clone)]
@@ -211,6 +234,7 @@ struct EquipmentPairingState {
     bedrock_items: FxHashMap<BedrockEquipmentGroup, Bytes>,
     pending: Vec<EquipmentSlot>,
     needs_snapshot: bool,
+    retry_in_flight: bool,
     spawned: bool,
 }
 
@@ -227,6 +251,7 @@ impl Drop for EquipmentPairing<'_> {
             && entry.get().generation == self.session.generation
             && entry.get().pending.is_empty()
             && !entry.get().needs_snapshot
+            && !entry.get().retry_in_flight
         {
             entry.remove();
         }
@@ -269,6 +294,10 @@ impl TrackedEntity {
             pairing_equipment: Mutex::default(),
             next_equipment_pairing: AtomicU64::new(0),
             equipment_retry_pending: AtomicBool::new(false),
+            passenger_retries: Mutex::default(),
+            passenger_retry_pending: AtomicBool::new(false),
+            effect_retries: Mutex::default(),
+            effect_retry_pending: AtomicBool::new(false),
             bedrock_watchers: AtomicU32::new(0),
             last_section_pos: AtomicCell::new(last_section_pos),
             pos_dirty: AtomicBool::new(false),
@@ -832,6 +861,7 @@ impl TrackedEntity {
                     bedrock_items: FxHashMap::default(),
                     pending: Vec::new(),
                     needs_snapshot: false,
+                    retry_in_flight: false,
                     spawned: false,
                 },
             );
@@ -1102,6 +1132,7 @@ impl TrackedEntity {
                         }
                     });
             }
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
         if !still_paired() {
             return;
@@ -1189,6 +1220,7 @@ impl TrackedEntity {
                         self.send_bedrock_pairing_packet(client, session, data, || Some(()));
                     }
                 }
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
         }
 
@@ -1211,56 +1243,13 @@ impl TrackedEntity {
         if let Some(living) = self.entity.get_living_entity() {
             self.send_pairing_equipment(living, player, session);
 
-            if let Ok(effects) = living
+            if let Ok(effect_types) = living
                 .active_effects
                 .try_lock()
-                .map(|effects| effects.clone())
+                .map(|effects| effects.keys().copied().collect::<Vec<_>>())
             {
-                for effect in effects.values() {
-                    match player.client.as_ref() {
-                        ClientPlatform::Java(client) => {
-                            let mut flags: i8 = 0;
-                            if effect.ambient {
-                                flags |= 0x01;
-                            }
-                            if effect.show_particles {
-                                flags |= 0x02;
-                            }
-                            if effect.show_icon {
-                                flags |= 0x04;
-                            }
-                            let pkt = pumpkin_protocol::java::client::play::CUpdateMobEffect::new(
-                                self.entity_id.into(),
-                                i32::from(effect.effect_type.id).into(),
-                                i32::from(effect.amplifier).into(),
-                                effect.duration.into(),
-                                flags,
-                            );
-                            if let Ok(data) = client.serialize_packet(&pkt) {
-                                self.send_java_pairing_packet(client, session, data, || Some(()));
-                            }
-                        }
-                        ClientPlatform::Bedrock(client) => {
-                            let pkt = pumpkin_protocol::bedrock::client::CMobEffect {
-                                target_runtime_id: (self.entity_id as u64).into(),
-                                event_id: pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
-                                effect_id: effect.effect_type.to_bedrock_id().into(),
-                                effect_amplifier: i32::from(effect.amplifier).into(),
-                                show_particles: effect.show_particles,
-                                effect_duration_ticks: effect.duration.into(),
-                                tick: 0u64.into(),
-                                ambient: effect.ambient,
-                            };
-                            if let Ok(data) = client.serialize_packet(&pkt) {
-                                self.send_bedrock_pairing_packet(
-                                    client,
-                                    session,
-                                    data,
-                                    || Some(()),
-                                );
-                            }
-                        }
-                    }
+                for effect_type in effect_types {
+                    self.send_pairing_effect(living, player, session, effect_type);
                 }
             }
         }
@@ -1268,37 +1257,206 @@ impl TrackedEntity {
         if !still_paired() {
             return;
         }
-        let entity = self.entity.get_entity();
-        self.send_pairing_passengers(entity, player, session, None);
-        if let Some(vehicle) = entity.get_vehicle() {
-            self.send_pairing_passengers(
-                vehicle.get_entity(),
-                player,
-                session,
-                Some(self.entity_id),
-            );
+        self.send_pairing_passengers(&self.entity, player, session, None);
+        let vehicle = self
+            .entity
+            .get_entity()
+            .vehicle
+            .try_lock()
+            .ok()
+            .and_then(|vehicle| vehicle.as_ref().and_then(Weak::upgrade));
+        if let Some(vehicle) = vehicle {
+            self.send_pairing_passengers(&vehicle, player, session, Some(self.entity_id));
+        }
+    }
+
+    fn filter_invalid_java_pairing_extra(&self, client: &JavaClient, data: Bytes) -> Option<Bytes> {
+        let version = client.version.load();
+        (Self::java_pairing_actor(&data, version).is_none_or(|(_, actor)| actor != self.entity_id)
+            && !Self::java_pairing_link(&data, version, self.entity_id))
+        .then_some(data)
+        .and_then(|data| Self::without_java_removal(data, version, self.entity_id))
+    }
+
+    fn send_pairing_effect(
+        &self,
+        living: &LivingEntity,
+        player: &Arc<Player>,
+        session: EquipmentSession,
+        effect_type: &'static pumpkin_data::effect::StatusEffect,
+    ) {
+        for _ in 0..2 {
+            let Some(effect) = living
+                .active_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(effect_type)
+                .filter(|effect| effect.duration != 0)
+                .cloned()
+            else {
+                return;
+            };
+            let retry = std::cell::Cell::new(false);
+            let validate = || {
+                let pairing = self.lock_pairing_session(session)?;
+                let effects = living
+                    .active_effects
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let current = effects.get(effect_type)?;
+                let matches = current.duration == effect.duration
+                    && current.amplifier == effect.amplifier
+                    && current.ambient == effect.ambient
+                    && current.show_particles == effect.show_particles
+                    && current.show_icon == effect.show_icon;
+                retry.set(!matches && current.duration != 0);
+                matches.then_some((pairing, effects))
+            };
+            match player.client.as_ref() {
+                ClientPlatform::Java(client) => {
+                    let mut flags: i8 = 0;
+                    if effect.ambient {
+                        flags |= 0x01;
+                    }
+                    if effect.show_particles {
+                        flags |= 0x02;
+                    }
+                    if effect.show_icon {
+                        flags |= 0x04;
+                    }
+                    let pkt = pumpkin_protocol::java::client::play::CUpdateMobEffect::new(
+                        self.entity_id.into(),
+                        i32::from(effect.effect_type.id).into(),
+                        i32::from(effect.amplifier).into(),
+                        effect.duration.into(),
+                        flags,
+                    );
+                    if let Ok(data) = client.serialize_packet(&pkt) {
+                        client.try_enqueue_packet_data_filtering(data, validate, |data| {
+                            self.filter_invalid_java_pairing_extra(client, data)
+                        });
+                    }
+                }
+                ClientPlatform::Bedrock(client) => {
+                    let pkt = pumpkin_protocol::bedrock::client::CMobEffect {
+                        target_runtime_id: (self.entity_id as u64).into(),
+                        event_id: pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+                        effect_id: effect.effect_type.to_bedrock_id().into(),
+                        effect_amplifier: i32::from(effect.amplifier).into(),
+                        show_particles: effect.show_particles,
+                        effect_duration_ticks: effect.duration.into(),
+                        tick: 0u64.into(),
+                        ambient: effect.ambient,
+                    };
+                    if let Ok(data) = client.serialize_packet(&pkt) {
+                        client.try_enqueue_packet_data_filtering(data, validate, |data| {
+                            (!self.is_bedrock_pairing_actor(&data)).then_some(data)
+                        });
+                    }
+                }
+                ClientPlatform::SimulatedPlayer(_) => {}
+            }
+            if !retry.get() {
+                return;
+            }
+        }
+        if let Some(_pairing) = self.lock_pairing_session(session) {
+            self.effect_retries
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(
+                    (session.viewer, effect_type),
+                    (Arc::downgrade(player), session),
+                );
+            self.effect_retry_pending.store(true, Relaxed);
+        }
+    }
+
+    fn flush_pairing_effects(&self) {
+        if !self.effect_retry_pending.swap(false, Relaxed) {
+            return;
+        }
+        let pending = std::mem::take(
+            &mut *self
+                .effect_retries
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        if let Some(living) = self.entity.get_living_entity() {
+            for ((_, effect_type), (viewer, session)) in pending {
+                if let Some(viewer) = viewer.upgrade()
+                    && self.lock_pairing_session(session).is_some()
+                {
+                    self.send_pairing_effect(living, &viewer, session, effect_type);
+                }
+            }
         }
     }
 
     fn send_pairing_passengers(
         &self,
-        carrier: &Entity,
-        player: &Player,
+        carrier: &Arc<dyn EntityBase>,
+        player: &Arc<Player>,
         session: EquipmentSession,
         paired_rider: Option<i32>,
     ) {
+        let bedrock = player.client.bedrock().is_some();
         let mut prior_viewers = None;
-        while let Some(viewers) = self.send_pairing_passenger_projection(
-            carrier,
-            player,
-            session,
-            paired_rider,
-            prior_viewers.as_deref(),
-        ) {
-            if self.lock_pairing_session(session).is_none() {
-                break;
+        let mut retried_change = false;
+        loop {
+            let outcome = Cell::new(PassengerSnapshot::Finished);
+            let viewers = self.send_pairing_passenger_projection(
+                carrier.get_entity(),
+                player,
+                session,
+                paired_rider,
+                prior_viewers.as_deref(),
+                &outcome,
+            );
+            match outcome.get() {
+                PassengerSnapshot::Busy => break,
+                PassengerSnapshot::Changed if bedrock && !retried_change => {
+                    retried_change = true;
+                }
+                PassengerSnapshot::Changed if bedrock => break,
+                PassengerSnapshot::Finished | PassengerSnapshot::Changed => {
+                    let Some(viewers) = viewers else { return };
+                    prior_viewers = Some(viewers);
+                }
             }
-            prior_viewers = Some(viewers);
+        }
+        if let Some(_pairing) = self.lock_pairing_session(session) {
+            self.passenger_retries
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(
+                    (session.viewer, paired_rider.is_some()),
+                    PassengerPairingRetry {
+                        viewer: Arc::downgrade(player),
+                        carrier: Arc::downgrade(carrier),
+                        session,
+                        paired_rider,
+                    },
+                );
+            self.passenger_retry_pending.store(true, Relaxed);
+        }
+    }
+
+    fn flush_pairing_passengers(&self) {
+        if !self.passenger_retry_pending.swap(false, Relaxed) {
+            return;
+        }
+        let pending = std::mem::take(
+            &mut *self
+                .passenger_retries
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for retry in pending.into_values() {
+            if let (Some(carrier), Some(viewer)) = (retry.carrier.upgrade(), retry.viewer.upgrade())
+            {
+                self.send_pairing_passengers(&carrier, &viewer, retry.session, retry.paired_rider);
+            }
         }
     }
 
@@ -1309,13 +1467,13 @@ impl TrackedEntity {
         session: EquipmentSession,
         paired_rider: Option<i32>,
         prior_viewers: Option<&[(Arc<Self>, EquipmentSession)]>,
+        outcome: &Cell<PassengerSnapshot>,
     ) -> Option<Vec<(Arc<Self>, EquipmentSession)>> {
+        if carrier.is_removed() || self.lock_pairing_session(session).is_none() {
+            return None;
+        }
         // Packet observers can change either link while pairing this carrier or its rider.
-        let passengers = carrier
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let passengers = Self::try_lock_passenger_snapshot(carrier, outcome)?.clone();
         let ids: Vec<VarInt> = passengers
             .iter()
             .map(|p| VarInt(p.get_entity().entity_id))
@@ -1394,11 +1552,57 @@ impl TrackedEntity {
                     link_rider,
                     &visibility_shrank,
                 )?;
-                Some((unseen, viewers))
+                if carrier.is_removed() {
+                    return None;
+                }
+                let current = Self::try_lock_passenger_snapshot(carrier, outcome)?;
+                if link_rider.is_some()
+                    && !current
+                        .iter()
+                        .map(|rider| VarInt(rider.get_entity().entity_id))
+                        .eq(ids.iter().copied())
+                {
+                    outcome.set(PassengerSnapshot::Changed);
+                    return None;
+                }
+                Some(((unseen, viewers), current))
             },
+            |data| self.keep_stale_passenger_extra(player, session, data),
         );
         // A despawn has no paired publication to repair the surviving Java riders.
         visibility_shrank.get().then_some(counterpart_viewers)
+    }
+
+    fn try_lock_passenger_snapshot<'a>(
+        carrier: &'a Entity,
+        outcome: &Cell<PassengerSnapshot>,
+    ) -> Option<MutexGuard<'a, Vec<Arc<dyn EntityBase>>>> {
+        match carrier.passengers.try_lock() {
+            Ok(passengers) => Some(passengers),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                outcome.set(PassengerSnapshot::Busy);
+                None
+            }
+            Err(std::sync::TryLockError::Poisoned(_)) => None,
+        }
+    }
+
+    fn keep_stale_passenger_extra(
+        &self,
+        player: &Player,
+        session: EquipmentSession,
+        data: &[u8],
+    ) -> bool {
+        self.lock_pairing_session(session).is_some()
+            || player.client.java().map_or_else(
+                || !self.is_bedrock_pairing_actor(data),
+                |client| {
+                    let version = client.version.load();
+                    !Self::java_pairing_link(data, version, self.entity_id)
+                        && Self::java_pairing_actor(data, version)
+                            .is_none_or(|(_, actor)| actor != self.entity_id)
+                },
+            )
     }
 
     fn passenger_viewers_shrank(
@@ -1565,6 +1769,7 @@ impl TrackedEntity {
                     );
                 }
             }
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -1833,15 +2038,10 @@ impl TrackedEntity {
             tracker: self,
             session,
         };
-        for attempt in 0..attempts {
+        let mut needs_snapshot = false;
+        for _ in 0..attempts {
             if slots.is_empty() || living.entity.is_removed() {
                 return;
-            }
-            if attempt != 0 {
-                let Some(next) = self.try_equipment_snapshot(living) else {
-                    break;
-                };
-                snapshot = next;
             }
             if player.client.java().is_some() {
                 let mut pairings = self.lock_equipment_pairings();
@@ -1874,13 +2074,41 @@ impl TrackedEntity {
                 ClientPlatform::Bedrock(client) => {
                     self.send_bedrock_pairing(client, living, &snapshot, &slots, session)
                 }
+                ClientPlatform::SimulatedPlayer(_) => Vec::new(),
             };
+            let Some(next) = self.try_equipment_snapshot(living) else {
+                // A previously sent slot may have been cleared while the snapshot was busy.
+                for slot in snapshot.equipment.keys() {
+                    if !slots.contains(slot) {
+                        slots.push(slot.clone());
+                    }
+                }
+                needs_snapshot = true;
+                break;
+            };
+            let bedrock = player.client.bedrock().is_some();
+            for slot in snapshot.equipment.keys().chain(next.equipment.keys()) {
+                if !Self::equipment_stacks_match(
+                    snapshot.equipment.get(slot),
+                    next.equipment.get(slot),
+                    bedrock,
+                ) && !slots.contains(slot)
+                {
+                    slots.push(slot.clone());
+                }
+            }
+            snapshot = next;
         }
-        if !slots.is_empty()
+        if (needs_snapshot || !slots.is_empty())
             && let Some(state) =
                 Self::current_equipment_pairing(&mut self.lock_equipment_pairings(), session)
         {
-            state.pending = slots;
+            for slot in slots {
+                if !state.pending.contains(&slot) {
+                    state.pending.push(slot);
+                }
+            }
+            state.needs_snapshot |= needs_snapshot;
             self.equipment_retry_pending.store(true, Relaxed);
         }
     }
@@ -1901,24 +2129,43 @@ impl TrackedEntity {
         let pending = self
             .lock_equipment_pairings()
             .iter_mut()
-            .filter(|(_, state)| state.needs_snapshot || !state.pending.is_empty())
+            .filter(|(_, state)| {
+                !state.retry_in_flight && (state.needs_snapshot || !state.pending.is_empty())
+            })
             .map(|(&viewer, state)| {
+                state.retry_in_flight = true;
+                let mut slots = std::mem::take(&mut state.pending);
+                if std::mem::take(&mut state.needs_snapshot) {
+                    for slot in Self::occupied_slots(&snapshot) {
+                        if !slots.contains(&slot) {
+                            slots.push(slot);
+                        }
+                    }
+                }
                 (
                     state.viewer.clone(),
                     EquipmentSession {
                         viewer,
                         generation: state.generation,
                     },
-                    if std::mem::take(&mut state.needs_snapshot) {
-                        Self::occupied_slots(&snapshot)
-                    } else {
-                        std::mem::take(&mut state.pending)
-                    },
+                    slots,
                 )
             })
             .collect::<Vec<_>>();
         for (player, session, slots) in pending {
             self.send_equipment_pairing(living, &player, session, snapshot.clone(), slots, 1);
+            let _pairing = EquipmentPairing {
+                tracker: self,
+                session,
+            };
+            if let Some(state) =
+                Self::current_equipment_pairing(&mut self.lock_equipment_pairings(), session)
+            {
+                state.retry_in_flight = false;
+                if state.needs_snapshot || !state.pending.is_empty() {
+                    self.equipment_retry_pending.store(true, Relaxed);
+                }
+            }
         }
     }
 
@@ -2364,6 +2611,7 @@ impl TrackedEntity {
                         }
                     }
                 }
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
         }
     }
@@ -2404,7 +2652,7 @@ impl TrackedEntity {
                 be_packet,
                 seen_by.iter().filter_map(|p| match p.client.as_ref() {
                     ClientPlatform::Bedrock(be_client) => Some(be_client),
-                    ClientPlatform::Java(_) => None,
+                    ClientPlatform::Java(_) | ClientPlatform::SimulatedPlayer(_) => None,
                 }),
             );
         }
@@ -2471,6 +2719,7 @@ impl TrackedEntity {
             match p.client.as_ref() {
                 ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
         }
         World::broadcast_java_clients(je_packet, java_recipients.into_iter());
@@ -2675,6 +2924,8 @@ impl EntityTracker {
             .filter_map(|(tracked, moved_slot)| {
                 // A pairing created below waits for this entity's next tracking tick.
                 tracked.flush_pairing_equipment();
+                tracked.flush_pairing_passengers();
+                tracked.flush_pairing_effects();
                 let new_pos = chunk_section_from_pos(&tracked.entity.get_entity().block_pos.load());
                 let old_pos = tracked.last_section_pos.load();
                 let section_changed = old_pos != new_pos;
@@ -2787,6 +3038,403 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn java_cooldown_observer_can_publish_a_newer_duration() -> TestResult {
+        use pumpkin_protocol::java::client::play::CItemCooldown;
+
+        const GROUP: &str = "minecraft:test_cooldown";
+        const OTHER_GROUP: &str = "minecraft:other_cooldown";
+        struct ReplaceCooldown(Arc<Player>, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for ReplaceCooldown {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CItemCooldown::to_id(CURRENT_MC_VERSION)
+                        && !self.1.swap(true, Relaxed)
+                    {
+                        self.0.start_cooldown(GROUP.to_owned(), 80);
+                        event
+                            .extra_packets
+                            .push((event.packet_id, event.payload.clone()));
+                        let mut payload = Vec::new();
+                        assert!(
+                            CItemCooldown::new(OTHER_GROUP.to_owned(), VarInt(40))
+                                .write_packet_data(&mut payload, &CURRENT_MC_VERSION)
+                                .is_ok()
+                        );
+                        event.extra_packets.push((event.packet_id, payload.into()));
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (player, peer) = java_rider(&server, &world, "Notch")?;
+        let client = player.client.java().ok_or("Java player")?;
+        client.player.store(Arc::new(Some(player.clone())));
+        let observer = Arc::new(ReplaceCooldown(player.clone(), AtomicBool::new(false)));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        player.start_cooldown(GROUP.to_owned(), 20);
+        assert!(observer.1.load(Relaxed));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let mut durations = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CItemCooldown::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                let group = payload.get_str()?;
+                durations.push((group, payload.get_var_int()?.0));
+            }
+        }
+        assert_eq!(durations, [(GROUP.into(), 80), (OTHER_GROUP.into(), 40)]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn legacy_java_cooldown_filters_only_the_superseded_item() -> TestResult {
+        use pumpkin_protocol::{java::client::play::CItemCooldown, ser::NetworkWriteExt};
+        use pumpkin_util::version::JavaMinecraftVersion;
+
+        const VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_21;
+        const GROUP: &str = "minecraft:test_cooldown";
+        const ITEM: VarInt = VarInt(8);
+        const UNRELATED: VarInt = VarInt(9);
+        struct TranslateCooldown(Arc<Player>, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for TranslateCooldown {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id != CItemCooldown::to_id(CURRENT_MC_VERSION) {
+                        return;
+                    }
+                    let mut source = event.payload.as_ref();
+                    assert!(source.get_str().is_ok_and(|group| group.as_ref() == GROUP));
+                    let Ok(duration) = source.get_var_int() else {
+                        return;
+                    };
+                    let encode = |item: VarInt, duration: VarInt| {
+                        let mut payload = Vec::new();
+                        assert!(payload.write_var_int(&item).is_ok());
+                        assert!(payload.write_var_int(&duration).is_ok());
+                        Bytes::from(payload)
+                    };
+                    event.packet_id = CItemCooldown::to_id(VERSION);
+                    event.payload = encode(ITEM, duration);
+                    if !self.1.swap(true, Relaxed) {
+                        self.0.start_cooldown(GROUP.to_owned(), 80);
+                        event
+                            .extra_packets
+                            .push((event.packet_id, event.payload.clone()));
+                        event
+                            .extra_packets
+                            .push((event.packet_id, encode(UNRELATED, VarInt(40))));
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (player, peer) = java_rider(&server, &world, "Notch")?;
+        let client = player.client.java().ok_or("Java player")?;
+        client.player.store(Arc::new(Some(player.clone())));
+        client.version.store(VERSION);
+        let observer = Arc::new(TranslateCooldown(player.clone(), AtomicBool::new(false)));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        player.start_cooldown(GROUP.to_owned(), 20);
+        assert!(observer.1.load(Relaxed));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let mut durations = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CItemCooldown::to_id(VERSION) {
+                let mut payload = packet.payload.as_ref();
+                durations.push((payload.get_var_int()?, payload.get_var_int()?.0));
+            }
+        }
+        assert_eq!(durations, [(ITEM, 80), (UNRELATED, 40)]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_does_not_send_effects_removed_by_a_packet_observer() -> TestResult {
+        use crate::entity::passive::pig::PigEntity;
+        use pumpkin_data::potion::Potion;
+        use pumpkin_protocol::java::client::play::CUpdateMobEffect;
+
+        struct ClearEffects(Arc<PigEntity>, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for ClearEffects {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CUpdateMobEffect::to_id(CURRENT_MC_VERSION)
+                        && event.payload.as_ref().get_var_int().ok()
+                            == Some(VarInt(self.0.get_entity().entity_id))
+                        && !self.1.swap(true, Relaxed)
+                        && let Some(living) = self.0.get_living_entity()
+                    {
+                        for effect in Potion::FIRE_RESISTANCE
+                            .effects
+                            .iter()
+                            .chain(Potion::WATER_BREATHING.effects)
+                        {
+                            assert!(living.remove_effect(effect.effect_type));
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let living = pig.get_living_entity().ok_or("Living pig")?;
+        for effect in Potion::FIRE_RESISTANCE
+            .effects
+            .iter()
+            .chain(Potion::WATER_BREATHING.effects)
+        {
+            living.add_effect(effect.clone());
+        }
+        assert!(world.spawn_entity(pig.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(pig.get_entity().entity_id)
+            .ok_or("Pig tracker")?;
+        let observer = Arc::new(ClearEffects(pig.clone(), AtomicBool::new(false)));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        tracker.add_pairing(&viewer);
+        assert!(observer.1.load(Relaxed));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        assert!(
+            queued_packets(client, &mut decoder)
+                .await?
+                .iter()
+                .all(|packet| packet.id != CUpdateMobEffect::to_id(CURRENT_MC_VERSION))
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_keeps_the_shorter_reapplied_effect() -> TestResult {
+        use crate::entity::passive::pig::PigEntity;
+        use pumpkin_data::potion::Potion;
+        use pumpkin_protocol::java::client::play::CUpdateMobEffect;
+
+        struct ReapplyEffect(Arc<PigEntity>, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for ReapplyEffect {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    let mut payload = event.payload.as_ref();
+                    if event.packet_id == CUpdateMobEffect::to_id(CURRENT_MC_VERSION)
+                        && payload.get_var_int().ok() == Some(VarInt(self.0.get_entity().entity_id))
+                        && let Ok(effect_id) = payload.get_var_int()
+                        && !self.1.swap(true, Relaxed)
+                        && let Some(living) = self.0.get_living_entity()
+                    {
+                        for effect in Potion::FIRE_RESISTANCE
+                            .effects
+                            .iter()
+                            .chain(Potion::WATER_BREATHING.effects)
+                        {
+                            assert!(living.remove_effect(effect.effect_type));
+                            if i32::from(effect.effect_type.id) == effect_id.0 {
+                                let mut replacement = effect.clone();
+                                replacement.duration = 20;
+                                living.add_effect(replacement);
+                            }
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let living = pig.get_living_entity().ok_or("Living pig")?;
+        for effect in Potion::FIRE_RESISTANCE
+            .effects
+            .iter()
+            .chain(Potion::WATER_BREATHING.effects)
+        {
+            living.add_effect(effect.clone());
+        }
+        assert!(world.spawn_entity(pig.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(pig.get_entity().entity_id)
+            .ok_or("Pig tracker")?;
+        viewer
+            .watched_section
+            .store(pumpkin_world::cylindrical_chunk_iterator::Cylindrical::new(
+                Vector2::new(0, 0),
+                std::num::NonZeroU8::new(4).ok_or("Zero view distance")?,
+            ));
+        let observer = Arc::new(ReapplyEffect(pig.clone(), AtomicBool::new(false)));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        tracker.add_pairing(&viewer);
+        assert!(observer.1.load(Relaxed));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let mut durations = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CUpdateMobEffect::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                let _entity = payload.get_var_int()?;
+                let _effect = payload.get_var_int()?;
+                let _amplifier = payload.get_var_int()?;
+                durations.push(payload.get_var_int()?.0);
+            }
+        }
+        assert!(!durations.is_empty());
+        assert!(
+            durations.iter().all(|duration| *duration == 20),
+            "{durations:?}"
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_retries_an_effect_after_both_immediate_attempts_change() -> TestResult {
+        use crate::entity::passive::pig::PigEntity;
+        use pumpkin_data::potion::Potion;
+        use pumpkin_protocol::java::client::play::CUpdateMobEffect;
+
+        struct TickEffect(Arc<PigEntity>, AtomicU32);
+        impl EventRwHandler<PacketSentEvent> for TickEffect {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CUpdateMobEffect::to_id(CURRENT_MC_VERSION)
+                        && event.payload.as_ref().get_var_int().ok()
+                            == Some(VarInt(self.0.get_entity().entity_id))
+                        && self.1.fetch_add(1, Relaxed) < 2
+                        && let Some(living) = self.0.get_living_entity()
+                    {
+                        let mut effects = living
+                            .active_effects
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        for effect in effects.values_mut() {
+                            effect.duration -= 1;
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let living = pig.get_living_entity().ok_or("Living pig")?;
+        let mut effect = Potion::FIRE_RESISTANCE
+            .effects
+            .first()
+            .ok_or("Fire resistance")?
+            .clone();
+        effect.duration = 60;
+        living.add_effect(effect);
+        assert!(world.spawn_entity(pig.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(pig.get_entity().entity_id)
+            .ok_or("Pig tracker")?;
+        let observer = Arc::new(TickEffect(pig.clone(), AtomicU32::new(0)));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+
+        tracker.add_pairing(&viewer);
+        assert_eq!(observer.1.load(Relaxed), 2);
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        assert!(
+            queued_packets(client, &mut decoder)
+                .await?
+                .iter()
+                .all(|packet| packet.id != CUpdateMobEffect::to_id(CURRENT_MC_VERSION))
+        );
+        world.entity_tracker.update_all(&world);
+        let mut durations = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CUpdateMobEffect::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                assert_eq!(payload.get_var_int()?.0, pig.get_entity().entity_id);
+                let _effect = payload.get_var_int()?;
+                let _amplifier = payload.get_var_int()?;
+                durations.push(payload.get_var_int()?.0);
+            }
+        }
+        assert_eq!(durations, [58]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    struct SelectStick {
+        rider: Arc<Player>,
+        called: AtomicBool,
+    }
+    impl EventRwHandler<PacketSentEvent> for SelectStick {
+        fn handle<'a>(
+            &'a self,
+            server: &'a Arc<Server>,
+            event: &'a mut PacketSentEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
+                    && event
+                        .payload
+                        .as_ref()
+                        .get_var_int()
+                        .is_ok_and(|id| id.0 == self.rider.get_entity().entity_id)
+                    && !self.called.swap(true, Relaxed)
+                    && let Some(client) = self.rider.client.java()
+                {
+                    client.handle_set_held_item(
+                        server,
+                        &self.rider,
+                        &pumpkin_protocol::java::server::play::SSetHeldItem { slot: 2 },
+                    );
+                }
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn retired_tracker_cannot_pair_a_snapshot_after_respawn() -> TestResult {
         let folder = tempfile::tempdir()?;
         let (server, world) = vehicle_world(&folder).await?;
@@ -2892,34 +3540,587 @@ mod tests {
         Ok(())
     }
 
-    struct SelectStick {
-        rider: Arc<Player>,
-        called: AtomicBool,
-    }
-    impl EventRwHandler<PacketSentEvent> for SelectStick {
-        fn handle<'a>(
-            &'a self,
-            server: &'a Arc<Server>,
-            event: &'a mut PacketSentEvent,
-        ) -> BoxFuture<'a, ()> {
-            Box::pin(async move {
-                if event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
-                    && event
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_does_not_spawn_a_mob_removed_by_its_spawn_observer() -> TestResult {
+        use crate::entity::passive::pig::PigEntity;
+        use pumpkin_protocol::java::client::play::CSpawnEntity;
+
+        const UNRELATED_CARRIER: VarInt = VarInt(98765);
+
+        struct RemoveOnSpawn(Arc<PigEntity>, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for RemoveOnSpawn {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CSpawnEntity::to_id(CURRENT_MC_VERSION)
+                        && event
+                            .payload
+                            .as_ref()
+                            .get_var_int()
+                            .is_ok_and(|id| id.0 == self.0.get_entity().entity_id)
+                        && !self.1.swap(true, Relaxed)
+                    {
+                        let actor = VarInt(self.0.get_entity().entity_id);
+                        self.0.get_entity().remove();
+                        let mut removal = Vec::new();
+                        assert!(
+                            CRemoveEntities::new(&[actor, UNRELATED_CARRIER])
+                                .write_packet_data(&mut removal, &CURRENT_MC_VERSION)
+                                .is_ok()
+                        );
+                        event
+                            .extra_packets
+                            .push((CRemoveEntities::to_id(CURRENT_MC_VERSION), removal.into()));
+                        for (carrier, riders) in [
+                            (actor, &[][..]),
+                            (UNRELATED_CARRIER, &[actor][..]),
+                            (UNRELATED_CARRIER, &[][..]),
+                        ] {
+                            let mut payload = Vec::new();
+                            assert!(
+                                CSetPassengers::new(carrier, riders)
+                                    .write_packet_data(&mut payload, &CURRENT_MC_VERSION)
+                                    .is_ok()
+                            );
+                            event
+                                .extra_packets
+                                .push((CSetPassengers::to_id(CURRENT_MC_VERSION), payload.into()));
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let mob = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let id = mob.get_entity().entity_id;
+        let actor: Arc<dyn EntityBase> = mob.clone();
+        assert!(world.spawn_entity(actor));
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(id)
+            .ok_or("Pig tracker")?;
+        let observer = Arc::new(RemoveOnSpawn(mob.clone(), AtomicBool::new(false)));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        tracked.add_pairing(&viewer);
+        assert!(observer.1.load(Relaxed));
+        assert!(mob.get_entity().is_removed());
+        let mut passenger_updates = Vec::new();
+        let mut unrelated_removals = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CRemoveEntities::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                let count = payload.get_var_int()?.0;
+                let ids = (0..count)
+                    .map(|_| payload.get_var_int())
+                    .collect::<Result<Vec<_>, _>>()?;
+                if ids.contains(&UNRELATED_CARRIER) {
+                    unrelated_removals.push(ids);
+                }
+            }
+            if packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                passenger_updates.push((payload.get_var_int()?, payload.get_var_int()?.0));
+            }
+            assert!(
+                packet.id != CSpawnEntity::to_id(CURRENT_MC_VERSION)
+                    || !packet
                         .payload
                         .as_ref()
                         .get_var_int()
-                        .is_ok_and(|id| id.0 == self.rider.get_entity().entity_id)
-                    && !self.called.swap(true, Relaxed)
-                    && let Some(client) = self.rider.client.java()
-                {
-                    client.handle_set_held_item(
-                        server,
-                        &self.rider,
-                        &pumpkin_protocol::java::server::play::SSetHeldItem { slot: 2 },
-                    );
-                }
-            })
+                        .is_ok_and(|actor| actor.0 == id)
+            );
         }
+        assert_eq!(passenger_updates, [(UNRELATED_CARRIER, 0)]);
+        assert_eq!(unrelated_removals, [vec![UNRELATED_CARRIER]]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_does_not_queue_a_passenger_removed_by_its_observer() -> TestResult {
+        use crate::entity::vehicle::minecart::MinecartEntity;
+
+        struct DismountOnLink(Arc<MinecartEntity>, i32, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for DismountOnLink {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    let mut payload = event.payload.as_ref();
+                    let cart = self.0.get_entity();
+                    if event.packet_id == CSetPassengers::to_id(CURRENT_MC_VERSION)
+                        && payload.get_var_int().is_ok_and(|id| id.0 == cart.entity_id)
+                        && payload.get_var_int().is_ok_and(|count| count.0 == 1)
+                        && payload.get_var_int().is_ok_and(|rider| rider.0 == self.1)
+                        && !self.2.swap(true, Relaxed)
+                    {
+                        cart.remove_passenger_sync(self.1);
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let (rider, _rider_peer) = java_rider(&server, &world, "jeb_")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let cart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::MINECART,
+        )));
+        let entity = cart.get_entity();
+        assert!(world.spawn_entity(cart.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(entity.entity_id)
+            .ok_or("Minecart tracker")?;
+        let rider_id = rider.entity_id();
+        world
+            .entity_tracker
+            .add_entity(&(rider.clone() as Arc<dyn EntityBase>), &world);
+        world
+            .entity_tracker
+            .get_tracked_entity(rider.entity_id())
+            .ok_or("Rider tracker")?
+            .add_pairing(&viewer);
+        entity.add_passenger_silently(cart.clone(), rider);
+        let observer = Arc::new(DismountOnLink(
+            cart.clone(),
+            rider_id,
+            AtomicBool::new(false),
+        ));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+
+        tracker.add_pairing(&viewer);
+        assert!(observer.2.load(Relaxed));
+        assert!(!entity.has_passenger(rider_id));
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                if payload.get_var_int()?.0 == entity.entity_id {
+                    assert_eq!(payload.get_var_int()?.0, 0);
+                }
+            }
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn passenger_pairing_filters_extras_for_the_removed_rider() -> TestResult {
+        use crate::entity::{passive::pig::PigEntity, vehicle::minecart::MinecartEntity};
+
+        const UNRELATED: VarInt = VarInt(98_765);
+        struct RemoveRider(Arc<PigEntity>, i32, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for RemoveRider {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    let mut payload = event.payload.as_ref();
+                    let rider = self.0.get_entity();
+                    if event.packet_id == CSetPassengers::to_id(CURRENT_MC_VERSION)
+                        && payload.get_var_int().is_ok_and(|id| id.0 == self.1)
+                        && payload.get_var_int().is_ok_and(|count| count.0 == 1)
+                        && payload
+                            .get_var_int()
+                            .is_ok_and(|id| id.0 == rider.entity_id)
+                        && !self.2.swap(true, Relaxed)
+                    {
+                        rider.remove();
+                        for carrier in [VarInt(rider.entity_id), UNRELATED] {
+                            let mut payload = Vec::new();
+                            assert!(
+                                CSetPassengers::new(carrier, &[VarInt(98_766)])
+                                    .write_packet_data(&mut payload, &CURRENT_MC_VERSION)
+                                    .is_ok()
+                            );
+                            event
+                                .extra_packets
+                                .push((CSetPassengers::to_id(CURRENT_MC_VERSION), payload.into()));
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let rider = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let cart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::MINECART,
+        )));
+        assert!(world.spawn_entity(rider.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(rider.get_entity().entity_id)
+            .ok_or("Pig tracker")?;
+        assert!(world.spawn_entity(cart.clone()));
+        let carrier = cart.get_entity();
+        world
+            .entity_tracker
+            .get_tracked_entity(carrier.entity_id)
+            .ok_or("Minecart tracker")?
+            .add_pairing(&viewer);
+        carrier.add_passenger_silently(cart.clone(), rider.clone());
+        let observer = Arc::new(RemoveRider(
+            rider.clone(),
+            carrier.entity_id,
+            AtomicBool::new(false),
+        ));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+
+        tracker.add_pairing(&viewer);
+        assert!(observer.2.load(Relaxed));
+        assert!(rider.get_entity().is_removed());
+        let mut extras = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                let vehicle = payload.get_var_int()?;
+                if payload.get_var_int()?.0 > 0 {
+                    extras.push(vehicle);
+                }
+            }
+        }
+        assert_eq!(extras, [UNRELATED]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn java_pairing_retries_a_contended_passenger_snapshot() -> TestResult {
+        use crate::entity::vehicle::minecart::MinecartEntity;
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let (rider, _rider_peer) = java_rider(&server, &world, "jeb_")?;
+        let cart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::MINECART,
+        )));
+        let entity = cart.get_entity();
+        assert!(world.spawn_entity(cart.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(entity.entity_id)
+            .ok_or("Minecart tracker")?;
+        world
+            .entity_tracker
+            .add_entity(&(rider.clone() as Arc<dyn EntityBase>), &world);
+        world
+            .entity_tracker
+            .get_tracked_entity(rider.entity_id())
+            .ok_or("Rider tracker")?
+            .add_pairing(&viewer);
+        entity.add_passenger_silently(cart.clone(), rider);
+        let retry_pending = {
+            let _passengers = entity
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            tracker.add_pairing(&viewer);
+            tracker.passenger_retry_pending.load(Relaxed)
+        };
+        assert!(retry_pending);
+        tracker.flush_pairing_passengers();
+
+        assert!(
+            queued_packets(client, &mut decoder)
+                .await?
+                .iter()
+                .any(|packet| packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION))
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn bedrock_pairing_clears_a_hand_changed_during_the_next_packet() -> TestResult {
+        use crate::entity::mob::Mob;
+        use crate::entity::passive::pig::PigEntity;
+        use crate::world::item_inventory_tests::bedrock_player;
+        use pumpkin_data::item::Item;
+        use pumpkin_protocol::bedrock::server::inventory_transaction::WINDOW_ID_OFF_HAND;
+
+        struct ClearMainHand(Arc<PigEntity>, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for ClearMainHand {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    let mut payload = event.payload.as_ref();
+                    if event.packet_id == CMobEquipment::PACKET_ID
+                        && VarULong::read(&mut payload)
+                            .is_ok_and(|id| id.0 == self.0.get_entity().entity_id as u64)
+                        && NetworkItemStackDescriptor::read(&mut payload).is_ok()
+                        && u8::read(&mut payload).is_ok()
+                        && u8::read(&mut payload).is_ok()
+                        && u8::read(&mut payload).is_ok_and(|id| id == WINDOW_ID_OFF_HAND as u8)
+                        && !self.1.swap(true, Relaxed)
+                    {
+                        self.0
+                            .get_mob_entity()
+                            .living_entity
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .equipment
+                            .remove(&EquipmentSlot::MAIN_HAND);
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, mut packets) = bedrock_player(&server, &world, "Notch").await?;
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let mob = pig.get_mob_entity();
+        mob.set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::SHIELD));
+        mob.set_item_slot(&EquipmentSlot::OFF_HAND, ItemStack::new(1, &Item::STICK));
+        assert!(world.spawn_entity(pig.clone()));
+        let id = pig.get_entity().entity_id;
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(id)
+            .ok_or("Pig tracker")?;
+        let observer = Arc::new(ClearMainHand(pig, AtomicBool::new(false)));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        while packets.try_recv().is_ok() {}
+        tracker.add_pairing(&viewer);
+        assert!(observer.1.load(Relaxed));
+        let mut main_hand = Vec::new();
+        while let Ok(packet) = packets.try_recv() {
+            if let Some((packet_id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data)
+                && i32::from(packet_id) == CMobEquipment::PACKET_ID
+            {
+                let mut payload = payload.as_ref();
+                if VarULong::read(&mut payload)?.0 != id as u64 {
+                    continue;
+                }
+                let item = NetworkItemStackDescriptor::read(&mut payload)?;
+                let _slot = u8::read(&mut payload)?;
+                let _selected = u8::read(&mut payload)?;
+                if u8::read(&mut payload)? == 0 {
+                    main_hand.push(item.id == 0);
+                }
+            }
+        }
+        assert_eq!(main_hand, [false, true]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn bedrock_pairing_resends_the_surviving_rider_in_the_front_seat() -> TestResult {
+        use crate::entity::vehicle::minecart::MinecartEntity;
+        use crate::world::item_inventory_tests::bedrock_player;
+        use pumpkin_protocol::bedrock::client::CSetActorLink;
+
+        struct DismountFront(Arc<MinecartEntity>, i32, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for DismountFront {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    let mut payload = event.payload.as_ref();
+                    if event.packet_id == CSetActorLink::PACKET_ID
+                        && VarLong::read(&mut payload)
+                            .is_ok_and(|id| id.0 == i64::from(self.0.get_entity().entity_id))
+                        && VarLong::read(&mut payload).is_ok_and(|id| id.0 == i64::from(self.1))
+                        && u8::read(&mut payload).is_ok_and(|kind| kind == 1)
+                        && !self.2.swap(true, Relaxed)
+                    {
+                        self.0.get_entity().remove_passenger_sync(self.1);
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, mut packets) = bedrock_player(&server, &world, "Notch").await?;
+        viewer.watched_section.store(Cylindrical::new(
+            Vector2::new(32, 32),
+            std::num::NonZeroU8::MIN,
+        ));
+        let (front, _front_peer) = java_rider(&server, &world, "jeb_")?;
+        let (back, _back_peer) = java_rider(&server, &world, "deadmau5")?;
+        let cart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::MINECART,
+        )));
+        let entity = cart.get_entity();
+        assert!(world.spawn_entity(cart.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(entity.entity_id)
+            .ok_or("Minecart tracker")?;
+        let front_id = front.entity_id();
+        let back_id = back.entity_id();
+        for rider in [&front, &back] {
+            world
+                .entity_tracker
+                .add_entity(&(rider.clone() as Arc<dyn EntityBase>), &world);
+            world
+                .entity_tracker
+                .get_tracked_entity(rider.entity_id())
+                .ok_or("Rider tracker")?
+                .add_pairing(&viewer);
+        }
+        entity.add_passenger_silently(cart.clone(), front);
+        entity.add_passenger_silently(cart.clone(), back);
+        let observer = Arc::new(DismountFront(
+            cart.clone(),
+            front_id,
+            AtomicBool::new(false),
+        ));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        while packets.try_recv().is_ok() {}
+
+        let passengers = entity
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        tracker.add_pairing(&viewer);
+        assert!(!observer.2.load(Relaxed));
+        drop(passengers);
+        tracker.flush_pairing_passengers();
+        assert!(observer.2.load(Relaxed));
+        assert!(!entity.has_passenger(front_id));
+        let mut links = Vec::new();
+        while let Ok(packet) = packets.try_recv() {
+            if let Some((id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data)
+                && i32::from(id) == CSetActorLink::PACKET_ID
+            {
+                let mut payload = payload.as_ref();
+                let carrier = VarLong::read(&mut payload)?.0;
+                let rider = VarLong::read(&mut payload)?.0;
+                let kind = u8::read(&mut payload)?;
+                if carrier == i64::from(entity.entity_id) && kind != 0 {
+                    links.push((rider, kind));
+                }
+            }
+        }
+        assert_eq!(links, [(i64::from(back_id), 1)]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn bedrock_player_pairing_drops_embedded_links_before_player_list_observation()
+    -> TestResult {
+        use crate::world::item_inventory_tests::bedrock_player;
+        use pumpkin_protocol::bedrock::client::{CAddPlayer, CPlayerList};
+
+        struct DismountOnList(Arc<Player>, i32, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for DismountOnList {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CPlayerList::PACKET_ID && !self.2.swap(true, Relaxed) {
+                        self.0.get_entity().remove_passenger_sync(self.1);
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, mut packets) = bedrock_player(&server, &world, "Notch").await?;
+        let (carrier, _peer) = java_rider(&server, &world, "jeb_")?;
+        let (rider, _rider_peer) = java_rider(&server, &world, "deadmau5")?;
+        let client = viewer.client.bedrock().ok_or("Bedrock viewer")?;
+        let actor: Arc<dyn EntityBase> = carrier.clone();
+        world.entity_tracker.add_entity(&actor, &world);
+        let entity = carrier.get_entity();
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(entity.entity_id)
+            .ok_or("Carrier tracker")?;
+        let rider_id = rider.entity_id();
+        entity.add_passenger_silently(actor, rider);
+        let (_, mut add_player) = carrier.bedrock_spawn_packets();
+        assert_eq!(add_player.actor_links.len(), 1);
+        let linked_size = client.serialize_packet(&add_player)?.len();
+        add_player.actor_links.clear();
+        let unlinked_size = client.serialize_packet(&add_player)?.len();
+        assert!(unlinked_size < linked_size);
+        while packets.try_recv().is_ok() {}
+        let observer = Arc::new(DismountOnList(
+            carrier.clone(),
+            rider_id,
+            AtomicBool::new(false),
+        ));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+
+        tracker.add_pairing(&viewer);
+        assert!(observer.2.load(Relaxed));
+        assert!(!entity.has_passenger(rider_id));
+        let mut spawns = Vec::new();
+        while let Ok(packet) = packets.try_recv() {
+            if crate::net::bedrock::split_raw_packet(&packet.data)
+                .is_some_and(|(id, _)| i32::from(id) == CAddPlayer::PACKET_ID)
+            {
+                spawns.push(packet.data.len());
+            }
+        }
+        // Metadata fields can be serialized in different orders. The embedded
+        // link is the only field removed between the two reference packets.
+        assert_eq!(spawns, [unlinked_size]);
+        client.clear_player();
+        client.close().await;
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -3934,6 +5135,92 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn equipment_retry_survives_original_pairing_cleanup() -> TestResult {
+        use crate::entity::{mob::Mob, passive::pig::PigEntity};
+        use pumpkin_data::item::Item;
+
+        struct FinishPairing(Arc<TrackedEntity>, EquipmentSession, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for FinishPairing {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CSetEquipment::to_id(CURRENT_MC_VERSION)
+                        && !self.2.swap(true, Relaxed)
+                    {
+                        drop(EquipmentPairing {
+                            tracker: &self.0,
+                            session: self.1,
+                        });
+                        self.2.store(
+                            self.0
+                                .lock_equipment_pairings()
+                                .contains_key(&self.1.viewer),
+                            Relaxed,
+                        );
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Missing Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let mob = pig.get_mob_entity();
+        mob.set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::STICK));
+        world.spawn_entity(pig.clone());
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(pig.get_entity().entity_id)
+            .ok_or("Pig tracker")?;
+        let session = tracked.insert_viewer(&viewer).ok_or("New viewer")?;
+        let equipment = mob
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        tracked.send_pairing_equipment(&mob.living_entity, &viewer, session);
+        drop(equipment);
+        assert!(tracked.equipment_retry_pending.load(Relaxed));
+
+        let observer = Arc::new(FinishPairing(
+            tracked.clone(),
+            session,
+            AtomicBool::new(false),
+        ));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        tracked.flush_pairing_equipment();
+        assert!(observer.2.load(Relaxed));
+        assert!(
+            !tracked
+                .lock_equipment_pairings()
+                .contains_key(&session.viewer)
+        );
+
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let packets = queued_packets(client, &mut decoder).await?;
+        let mut equipment = packets
+            .iter()
+            .filter(|packet| packet.id == CSetEquipment::to_id(CURRENT_MC_VERSION));
+        let update = equipment.next().ok_or("Retry lost the equipment packet")?;
+        let packet = CSetEquipment::read(&mut update.payload.as_ref(), &CURRENT_MC_VERSION)?;
+        assert_eq!(packet.entity_id.0, pig.get_entity().entity_id);
+        assert!(packet.equipment.iter().any(|(slot, stack)| *slot
+            == EquipmentSlot::MAIN_HAND.discriminant()
+            && stack.0.item == &Item::STICK));
+        assert!(equipment.next().is_none());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn pairing_refreshes_shield_worn_by_packet_observer() -> TestResult {
         use crate::entity::{mob::Mob, passive::pig::PigEntity};
         use pumpkin_data::item::Item;
@@ -3962,6 +5249,7 @@ mod tests {
                         if let Some(shield) = gear.equipment.get_mut(&EquipmentSlot::MAIN_HAND) {
                             shield.set_damage(7);
                         }
+                        gear.put(&EquipmentSlot::OFF_HAND, ItemStack::new(1, &Item::APPLE));
                     }
                 })
             }
@@ -3976,7 +5264,14 @@ mod tests {
         let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
         let mob = pig.get_mob_entity();
         mob.set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::SHIELD));
-        mob.set_item_slot(&EquipmentSlot::OFF_HAND, ItemStack::new(1, &Item::APPLE));
+        assert!(
+            mob.living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&EquipmentSlot::OFF_HAND)
+                .is_empty()
+        );
         world.spawn_entity(pig.clone());
         let id = pig.get_entity().entity_id;
         let tracked = world

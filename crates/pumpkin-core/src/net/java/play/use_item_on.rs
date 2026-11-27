@@ -28,8 +28,6 @@ impl JavaClient {
         let position = use_item_on.position;
         let cursor_pos = use_item_on.cursor_pos;
 
-        let mut should_try_decrement = false;
-
         if !player.can_interact_with_block_at(&position, 1.0) {
             // TODO: maybe log?
             return Err(BlockPlacingError::BlockOutOfReach);
@@ -43,7 +41,8 @@ impl JavaClient {
             return Err(BlockPlacingError::InvalidHand);
         };
 
-        let was_spectator = player.gamemode.load() == GameMode::Spectator;
+        let mode = player.gamemode.load();
+        let was_spectator = mode == GameMode::Spectator;
         let inventory = player.inventory();
         let held_item = inventory.held_item();
         let off_hand_item = inventory.off_hand_item();
@@ -52,8 +51,10 @@ impl JavaClient {
 
         let equipment_slot = crate::entity::hand_equipment_slot(hand);
         let original_slot = inventory.equipment_slot_index(&equipment_slot);
-        let mut item =
-            original_slot.map_or_else(|| ItemStack::EMPTY.clone(), |slot| inventory.get_slot(slot));
+        let Some(slot_index) = original_slot else {
+            return Ok(());
+        };
+        let mut item = inventory.get_slot(slot_index);
         let before = item.clone();
         let item_id = item.item.id;
         let is_boat = server.item_registry.uses_boat_placement(item_id);
@@ -66,10 +67,6 @@ impl JavaClient {
         {
             return Ok(());
         }
-        if !is_vehicle && !was_spectator {
-            player.increment_stat(StatisticCategory::Used, i32::from(item_id), 1);
-        }
-
         let entity = &player.get_entity();
         let world = entity.world.load_full();
         let block = world.get_block(&position);
@@ -98,6 +95,21 @@ impl JavaClient {
             return Ok(());
         }
 
+        let source_is_current = || {
+            let current = inventory.get_slot(slot_index);
+            Arc::ptr_eq(&world, &player.world())
+                && player.gamemode.load() == mode
+                && inventory.equipment_slot_index(&equipment_slot) == original_slot
+                && current.uid == before.uid
+                && current.are_equal(&before)
+        };
+        if !is_vehicle && !was_spectator {
+            player.increment_stat(StatisticCategory::Used, i32::from(item_id), 1);
+            if !source_is_current() || world.get_block(&position) != block {
+                return Ok(());
+            }
+        }
+
         let event = PlayerInteractEvent::new(
             player,
             InteractAction::RightClickBlock,
@@ -122,31 +134,19 @@ impl JavaClient {
             }
         }}
 
-        let slot_index = if matches!(hand, Hand::Right) {
-            inventory.get_selected_slot() as usize
-        } else {
-            PlayerInventory::OFF_HAND_SLOT
-        };
+        if !source_is_current() || world.get_block(&position) != block {
+            if is_vehicle {
+                self.correct_block_use(player, &world, &position, face);
+            }
+            return Ok(());
+        }
 
-        if is_vehicle
-            && (!crate::net::vehicle_block_use_is_eligible(player, &world, &position)
-                || world.get_block(&position).id != block.id
-                || inventory.equipment_slot_index(&equipment_slot) != original_slot
-                || original_slot.is_none_or(|slot| {
-                    let live = inventory.get_slot(slot);
-                    live.uid != before.uid || !live.are_equal(&before)
-                }))
-        {
+        if is_vehicle && !crate::net::vehicle_block_use_is_eligible(player, &world, &position) {
             self.correct_block_use(player, &world, &position, face);
             return Ok(());
         }
 
-        let spectator = if is_vehicle {
-            player.gamemode.load() == GameMode::Spectator
-        } else {
-            was_spectator
-        };
-        if spectator {
+        if was_spectator {
             if let Some(factory) = server
                 .block_registry
                 .get_screen_handler_factory(block, player, &position, server, &world)
@@ -181,7 +181,7 @@ impl JavaClient {
                         player, &world, &position, block, &before, is_vehicle,
                     );
                 }
-                sync_used_hand_item(player, hand, slot_index, &before, item);
+                sync_used_hand_item(player, hand, slot_index, &before, &item);
 
                 if is_vehicle {
                     Self::send_vehicle_block_use_feedback(
@@ -195,7 +195,7 @@ impl JavaClient {
             }
         }
 
-        if item.is_empty() {
+        if item.is_empty() || !source_is_current() || world.get_block(&position) != block {
             // TODO item cool down
             // If the hand is empty we stop here
             if is_vehicle {
@@ -205,12 +205,8 @@ impl JavaClient {
         }
 
         if minecart.is_some() {
-            let Some(slot) = original_slot else {
-                self.correct_block_use(player, &world, &position, face);
-                return Ok(());
-            };
             let result = crate::item::items::minecart::MinecartItem::place_from_slot(
-                &before, player, hand, slot, &world, position,
+                &before, player, hand, slot_index, &world, position,
             );
             if result.consumes_action() {
                 trigger_item_used_on_block_advancement(
@@ -228,20 +224,39 @@ impl JavaClient {
             .item_registry
             .use_on_block(&mut item, player, position, face, cursor_pos, block, server);
 
-        if should_try_block_placement(&item_result) {
-            // Check if the item is a block, because not every item can be placed :D
-            let item_id = item.item.id;
-            if let Some(block) = Block::from_item_id(item_id) {
-                should_try_decrement =
-                    Self::run_is_block_place(player, block, server, use_item_on, position, face)?;
+        if should_try_block_placement(&item_result)
+            && source_is_current()
+            && let Some(placed_block) = Block::from_item_id(item.item.id)
+        {
+            let mut remainder = item.clone();
+            if mode != GameMode::Creative {
+                remainder.decrement(1);
             }
-        }
-
-        if should_try_decrement {
-            // TODO: Config
-            // Decrease block count
-            if player.gamemode.load() != GameMode::Creative {
-                item.decrement(1);
+            let changed = !remainder.are_equal(&before);
+            if Self::run_is_block_place(
+                player,
+                placed_block,
+                server,
+                use_item_on,
+                position,
+                face,
+                || {
+                    source_is_current()
+                        && (!changed
+                            || inventory.replace_slot_if_same(
+                                slot_index,
+                                &before,
+                                remainder.clone(),
+                            ))
+                },
+            )? {
+                if changed {
+                    trigger_item_used_on_block_advancement(
+                        player, &world, &position, block, &before, is_vehicle,
+                    );
+                    publish_used_hand_item(player, hand, slot_index, &before, &remainder);
+                }
+                return Ok(());
             }
         }
 
@@ -255,7 +270,7 @@ impl JavaClient {
             player.swing_hand(hand, true);
         }
 
-        sync_used_hand_item(player, hand, slot_index, &before, item);
+        sync_used_hand_item(player, hand, slot_index, &before, &item);
         if is_vehicle {
             self.correct_block_use(player, &world, &position, face);
         }
@@ -421,11 +436,17 @@ impl JavaClient {
         use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
+        commit_item: impl Fn() -> bool,
     ) -> Result<bool, BlockPlacingError> {
-        match server
-            .block_registry
-            .place_block(player, block, server, use_item_on, location, face)
-        {
+        match server.block_registry.place_block_with_commit(
+            player,
+            block,
+            server,
+            use_item_on,
+            location,
+            face,
+            commit_item,
+        ) {
             Ok(Some((final_block_pos, new_state))) => {
                 player.try_send_client_packet(&CBlockUpdate::new(
                     final_block_pos,
@@ -539,16 +560,30 @@ fn sync_used_hand_item(
     hand: Hand,
     slot_index: usize,
     before: &ItemStack,
-    after: ItemStack,
+    after: &ItemStack,
 ) {
-    if after.are_equal(before) {
+    if after.are_equal(before)
+        || !player
+            .inventory()
+            .replace_slot_if_same(slot_index, before, after.clone())
+    {
         return;
     }
 
+    publish_used_hand_item(player, hand, slot_index, before, after);
+}
+
+fn publish_used_hand_item(
+    player: &Player,
+    hand: Hand,
+    slot_index: usize,
+    before: &ItemStack,
+    after: &ItemStack,
+) {
     // Broadcast the break entity status before the slot sync; the client
     // needs the old item texture in the slot for break particles.
     if before.is_damageable() && after.is_empty() {
-        let slot = if slot_index == player.inventory.get_selected_slot() as usize {
+        let slot = if matches!(hand, Hand::Right) {
             &EquipmentSlot::MAIN_HAND
         } else {
             &EquipmentSlot::OFF_HAND
@@ -561,6 +596,5 @@ fn sync_used_hand_item(
         );
     }
 
-    player.inventory().set_stack_in_hand(hand, after.clone());
-    player.sync_hand_slot(slot_index, after);
+    player.sync_hand_slot(slot_index, player.inventory().get_slot(slot_index));
 }

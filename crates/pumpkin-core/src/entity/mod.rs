@@ -4747,7 +4747,7 @@ impl Entity {
                 .get_player()
                 .and_then(|p| match p.client.as_ref() {
                     ClientPlatform::Bedrock(client) => Some(client),
-                    ClientPlatform::Java(_) => None,
+                    ClientPlatform::Java(_) | ClientPlatform::SimulatedPlayer(_) => None,
                 });
             if !tracked.has_bedrock_watchers() && self_bedrock.is_none() {
                 return;
@@ -6943,17 +6943,40 @@ impl Entity {
         ids: &[VarInt],
         links: &[Option<CSetActorLink>],
     ) {
-        self.send_passenger_update_to_if(world, recipient, ids, ids, links, |_| Some(()));
+        self.send_passenger_update_to_if(
+            world,
+            recipient,
+            ids,
+            ids,
+            links,
+            |_| {
+                Some((
+                    (),
+                    self.passengers
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                ))
+            },
+            |_| true,
+        );
     }
 
-    pub(crate) fn send_passenger_update_to_if<T>(
-        &self,
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Both editions share the pairing snapshot and observer guards."
+    )]
+    pub(crate) fn send_passenger_update_to_if<'a, T>(
+        &'a self,
         world: &World,
         recipient: &Player,
         ids: &[VarInt],
         visible_ids: &[VarInt],
         links: &[Option<CSetActorLink>],
-        lock_session: impl Fn(Option<i32>) -> Option<T>,
+        lock_current: impl Fn(
+            Option<i32>,
+        )
+            -> Option<(T, std::sync::MutexGuard<'a, Vec<Arc<dyn EntityBase>>>)>,
+        keep_stale_extra: impl Fn(&[u8]) -> bool,
     ) {
         let in_world = || {
             std::ptr::eq(recipient.world().as_ref(), world)
@@ -6967,11 +6990,7 @@ impl Entity {
             client.try_enqueue_packet_data_filtering(
                 data,
                 || {
-                    let session = lock_session(None)?;
-                    let current = self
-                        .passengers
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let (session, current) = lock_current(None)?;
                     (in_world()
                         && current
                             .iter()
@@ -6987,12 +7006,13 @@ impl Entity {
                             .flatten()
                             .map(VarInt)
                     }));
-                    (!Self::java_passenger_update_overlaps(
-                        &data,
-                        protocol,
-                        self.entity_id,
-                        &affected,
-                    ))
+                    (keep_stale_extra(&data)
+                        && !Self::java_passenger_update_overlaps(
+                            &data,
+                            protocol,
+                            self.entity_id,
+                            &affected,
+                        ))
                     .then_some(data)
                 },
             );
@@ -7005,11 +7025,7 @@ impl Entity {
                 client.try_enqueue_packet_data_filtering(
                     data,
                     || {
-                        let session = lock_session(i32::try_from(rider).ok())?;
-                        let current = self
-                            .passengers
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let (session, current) = lock_current(i32::try_from(rider).ok())?;
                         let role = current
                             .iter()
                             .position(|passenger| {
@@ -7027,7 +7043,7 @@ impl Entity {
                                     || VarLong::read(&mut payload)
                                         .is_ok_and(|other| other.0 == rider)
                             });
-                        (!overlaps).then_some(data)
+                        (!overlaps && keep_stale_extra(&data)).then_some(data)
                     },
                 );
             }
@@ -7500,6 +7516,7 @@ impl Entity {
                             ClientPlatform::Bedrock(client) => {
                                 client.try_send_dismount_position(player, id.into(), still_current)
                             }
+                            ClientPlatform::SimulatedPlayer(_) => false,
                         };
                         if !queued {
                             let mut awaiting = player

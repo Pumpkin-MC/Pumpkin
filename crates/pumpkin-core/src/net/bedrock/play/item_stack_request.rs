@@ -1,3 +1,5 @@
+use crate::entity::player::ScreenOwner;
+
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::block::entities::beacon::BeaconBlockEntity;
@@ -14,18 +16,24 @@ use pumpkin_protocol::bedrock::client::item_stack_response::{
     CItemStackResponse, ItemStackResponseContainerInfo, ItemStackResponseInfo,
     ItemStackResponseSlotInfo,
 };
-use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo;
+use pumpkin_protocol::bedrock::server::item_stack_request::{
+    ItemStackRequestSlotInfo, SItemStackRequest,
+};
 
 impl BedrockClient {
+    pub fn handle_item_stack_request(&self, player: &Arc<Player>, packet: SItemStackRequest) {
+        self.handle_item_stack_request_for_owner(player, packet, &player.screen_owner());
+    }
+
     #[allow(clippy::too_many_lines)]
-    pub fn handle_item_stack_request(
+    pub(crate) fn handle_item_stack_request_for_owner(
         &self,
         player: &Arc<Player>,
-        packet: pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest,
+        packet: SItemStackRequest,
+        owner: &ScreenOwner,
     ) {
         use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction;
 
-        let equipment_before = player.screen_equipment();
         let (
             responses,
             inventory_updated,
@@ -34,23 +42,41 @@ impl BedrockClient {
             epoch,
             effects,
             affected_slots,
+            equipment_before,
             equipment_committed,
         ) = {
-            let active = player
-                .current_screen_handler
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let current_screen_handler = active.clone();
-            let mut screen_handler = current_screen_handler
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
+            let Some((active, mut screen_handler)) = player.lock_screen_action(owner) else {
+                self.try_enqueue_client_packet(&CItemStackResponse {
+                    responses: packet
+                        .requests
+                        .into_iter()
+                        .map(|request| ItemStackResponseInfo {
+                            result: 1,
+                            client_request_id: request.request_id,
+                            containers: Vec::new(),
+                        })
+                        .collect(),
+                });
+                resync_stack_request_screens(player);
+                return;
+            };
+            let current_screen_handler = owner.handler.clone();
             drop(active);
+            let inventory = player.inventory();
+            let physical_inventory: Arc<dyn pumpkin_inventory::inventory::Inventory> =
+                inventory.clone();
+            let equipment_slots =
+                Player::SCREEN_EQUIPMENT.map(|slot| inventory.equipment_slot_index(&slot));
+            let equipment_before = player.screen_equipment();
+            let mut equipment_committed = equipment_before.clone();
             let previous_sync = screen_handler.get_behaviour_mut().defer_updates();
             let mut responses = Vec::with_capacity(packet.requests.len());
             let mut pending_slots = Vec::with_capacity(packet.requests.len());
 
+            let mut recover_partial_request = false;
+            let mut beacon_payment_changed = false;
             for mut request in packet.requests {
+                let request_epoch = screen_handler.get_behaviour().sync_epoch();
                 let mut created_item: Option<ItemStack> = None;
                 let mut crafting_inputs_consumed = false;
                 let mut updates = Vec::new();
@@ -657,7 +683,7 @@ impl BedrockClient {
                                 beacon_entity.remove_stack_specific(0, 1);
                                 beacon_entity.mark_dirty();
                                 let payment_stack = beacon_entity.get_stack(0);
-                                beacon_handler.sync_state();
+                                beacon_payment_changed = true;
                                 record_update(
                                     &mut updates,
                                     FullContainerName {
@@ -687,7 +713,7 @@ impl BedrockClient {
                                 let current_stack = screen_handler.get_behaviour().slots
                                     [screen_slot]
                                     .get_cloned_stack();
-                                record_update(
+                                record_physical_read(
                                     &mut updates,
                                     FullContainerName {
                                         container_name: ContainerName::HotBar,
@@ -787,26 +813,60 @@ impl BedrockClient {
                     );
                 }
 
+                let mut equipment_writes = [None; Player::SCREEN_EQUIPMENT.len()];
+                for update in &updates {
+                    let Some((order, written)) = &update.committed else {
+                        continue;
+                    };
+                    if update.container_name.container_name == ContainerName::Cursor {
+                        continue;
+                    }
+                    let Some(slot) = map_bedrock_container_slot(
+                        &*screen_handler,
+                        update.container_name.container_name,
+                        update.slot_id,
+                    )
+                    .and_then(|index| screen_handler.get_behaviour().slots.get(index)) else {
+                        continue;
+                    };
+                    if Arc::ptr_eq(&slot.get_inventory(), &physical_inventory)
+                        && let Some(index) = equipment_slots
+                            .iter()
+                            .position(|physical| *physical == Some(slot.get_index()))
+                        && equipment_writes[index].is_none_or(|previous| previous < *order)
+                    {
+                        equipment_writes[index] = Some(*order);
+                        equipment_committed[index] = written.clone();
+                    }
+                }
+
                 let mut container_infos = Vec::new();
                 let mut physical = Vec::new();
-                if result == 0 {
-                    for update in updates {
-                        let name = update.container_name.container_name;
-                        if update.physical
-                            && (name == ContainerName::Cursor
-                                || map_bedrock_container_slot(
-                                    &*screen_handler,
-                                    name,
-                                    update.slot_id,
-                                )
+                for update in updates {
+                    let name = update.container_name.container_name;
+                    let recorded = if result == 0 {
+                        update
+                            .physical
+                            .then_some((update.write_order, update.expected))
+                    } else {
+                        update.committed
+                    };
+                    if let Some((order, expected)) = recorded
+                        && (name == ContainerName::Cursor
+                            || map_bedrock_container_slot(&*screen_handler, name, update.slot_id)
                                 .is_some())
-                        {
-                            physical.push(ItemStackRequestSlotInfo {
+                    {
+                        physical.push((
+                            order,
+                            ItemStackRequestSlotInfo {
                                 container_name: update.container_name.clone(),
                                 slot_id: update.slot_id,
                                 stack_id: update.stack_id.0,
-                            });
-                        }
+                            },
+                            expected,
+                        ));
+                    }
+                    if result == 0 {
                         let container_info = container_infos.iter_mut().find(
                             |info: &&mut ItemStackResponseContainerInfo| {
                                 info.full_container_name == update.container_name
@@ -834,7 +894,18 @@ impl BedrockClient {
                     }
                 }
 
-                pending_slots.push(physical);
+                // A failed acknowledgement cannot describe writes already made by
+                // its earlier actions. Reconcile the client from the live menu.
+                // Slot and cursor writes must advance the sync epoch for this check.
+                recover_partial_request |=
+                    result != 0 && screen_handler.get_behaviour().sync_epoch() != request_epoch;
+                physical.sort_unstable_by_key(|(order, _, _)| *order);
+                pending_slots.push(
+                    physical
+                        .into_iter()
+                        .map(|(_, slot, expected)| (slot, expected))
+                        .collect(),
+                );
                 responses.push(ItemStackResponseInfo {
                     result,
                     client_request_id: request.request_id,
@@ -842,11 +913,14 @@ impl BedrockClient {
                 });
             }
 
-            // Send updates to Java client
-            screen_handler.send_content_updates();
+            if recover_partial_request || beacon_payment_changed {
+                screen_handler.sync_state();
+            } else {
+                screen_handler.send_content_updates();
+            }
 
             // Collect inventory updates if we modified player inventory
-            let mut inventory_updated = false;
+            let mut inventory_updated = recover_partial_request;
             for response in &responses {
                 if response.result == 0 {
                     for info in &response.containers {
@@ -866,8 +940,11 @@ impl BedrockClient {
                 .finish_deferred_updates(previous_sync);
             let epoch = screen_handler.get_behaviour().sync_epoch();
             let effects = screen_handler.get_behaviour_mut().take_deferred_effects();
-            let affected_slots = response_slots(&*screen_handler, pending_slots);
-            let equipment_committed = player.screen_equipment();
+            let affected_slots =
+                final_acknowledged_slots(&*screen_handler, pending_slots, &mut responses);
+            if equipment_slots[0] != inventory.equipment_slot_index(&EquipmentSlot::MAIN_HAND) {
+                equipment_committed[0] = equipment_before[0].clone();
+            }
             drop(screen_handler);
             (
                 responses,
@@ -877,22 +954,23 @@ impl BedrockClient {
                 epoch,
                 effects,
                 affected_slots,
+                equipment_before,
                 equipment_committed,
             )
         };
 
         let response = CItemStackResponse { responses };
-        let current =
-            self.enqueue_stack_request_response(player, &screen, &affected_slots, &response, true);
+        let current = self.enqueue_stack_request_response(
+            player,
+            &screen,
+            &affected_slots,
+            &response,
+            Some(owner),
+        );
         if current {
             player.flush_screen_updates(&screen, epoch, sync, true);
         } else {
-            let personal: pumpkin_inventory::screen_handler::SharedScreenHandler =
-                player.player_screen_handler.clone();
-            if !player.is_active_screen(&personal) {
-                player.resync_player_inventory_screen();
-            }
-            player.resync_active_inventory_screen();
+            resync_stack_request_screens(player);
         }
         for effect in effects {
             effect.publish(player.as_ref());
@@ -909,7 +987,7 @@ impl BedrockClient {
         screen: &Arc<std::sync::Mutex<dyn ScreenHandler>>,
         slots: &[AcknowledgedSlots],
         response: &CItemStackResponse,
-        require_active: bool,
+        owner: Option<&ScreenOwner>,
     ) -> bool {
         use pumpkin_protocol::{Packet, serial::PacketRead};
 
@@ -920,22 +998,20 @@ impl BedrockClient {
         self.try_enqueue_packet_data_projecting(
             data,
             || {
-                let active = require_active.then(|| {
-                    player
-                        .current_screen_handler
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                });
-                if active
-                    .as_ref()
-                    .is_some_and(|active| !Arc::ptr_eq(active, screen))
-                {
-                    invalid.replace(Some(vec![true; slots.len()]));
-                    return None;
-                }
-                let handler = screen
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let (active, handler) = if let Some(owner) = owner {
+                    let Some((active, handler)) = player.lock_screen_action(owner) else {
+                        invalid.replace(Some(vec![true; slots.len()]));
+                        return None;
+                    };
+                    (Some(active), handler)
+                } else {
+                    (
+                        None,
+                        screen
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    )
+                };
                 let superseded: Vec<_> = slots
                     .iter()
                     .map(|request| {
@@ -984,24 +1060,46 @@ impl BedrockClient {
     }
 }
 
+fn resync_stack_request_screens(player: &Player) {
+    let personal: pumpkin_inventory::screen_handler::SharedScreenHandler =
+        player.player_screen_handler.clone();
+    if !player.is_active_screen(&personal) {
+        player.resync_player_inventory_screen();
+    }
+    player.resync_active_inventory_screen();
+}
+
 pub(super) type AcknowledgedSlots = Vec<(ItemStackRequestSlotInfo, ItemStack)>;
 
-fn response_slots(
+fn final_acknowledged_slots(
     screen: &dyn ScreenHandler,
-    requests: Vec<Vec<ItemStackRequestSlotInfo>>,
+    mut requests: Vec<AcknowledgedSlots>,
+    responses: &mut [ItemStackResponseInfo],
 ) -> Vec<AcknowledgedSlots> {
+    let mut final_stacks = std::collections::HashMap::new();
+    // Several wire slot names can refer to the same physical slot. Validate
+    // every acknowledgement against the final committed or reported stack.
+    for (request, response) in requests.iter_mut().zip(responses).rev() {
+        let failed = response.result != 0;
+        for (slot, expected) in request.iter_mut().rev() {
+            let name = slot.container_name.container_name;
+            let index = map_bedrock_container_slot(screen, name, slot.slot_id);
+            if index.is_some() || name == ContainerName::Cursor {
+                let (final_stack, from_failed_request) = final_stacks
+                    .entry(index)
+                    .or_insert_with(|| (expected.clone(), failed));
+                if *from_failed_request && !failed {
+                    response.containers.clear();
+                }
+                *expected = final_stack.clone();
+            }
+        }
+        if failed {
+            // Failed requests contribute writes for coalescing, but acknowledge no slots.
+            request.clear();
+        }
+    }
     requests
-        .into_iter()
-        .map(|slots| {
-            slots
-                .into_iter()
-                .map(|info| {
-                    let expected = get_slot_stack(screen, &info, None);
-                    (info, expected)
-                })
-                .collect()
-        })
-        .collect()
 }
 
 /// Whether `action` touches an armor or offhand slot that doesn't resolve on the open screen.
@@ -1320,6 +1418,16 @@ pub(crate) struct SlotUpdate {
     pub(crate) count: u8,
     pub(crate) stack_id: VarInt,
     physical: bool,
+    expected: ItemStack,
+    write_order: usize,
+    committed: Option<(usize, ItemStack)>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SlotRecord {
+    Write,
+    Read,
+    Virtual,
 }
 
 pub(crate) fn record_update(
@@ -1328,7 +1436,16 @@ pub(crate) fn record_update(
     slot_id: u8,
     stack: &ItemStack,
 ) {
-    record_slot_update(updates, container_name, slot_id, stack, true);
+    record_slot_update(updates, container_name, slot_id, stack, SlotRecord::Write);
+}
+
+fn record_physical_read(
+    updates: &mut Vec<SlotUpdate>,
+    container_name: FullContainerName,
+    slot_id: u8,
+    stack: &ItemStack,
+) {
+    record_slot_update(updates, container_name, slot_id, stack, SlotRecord::Read);
 }
 
 fn record_slot_update(
@@ -1336,8 +1453,15 @@ fn record_slot_update(
     container_name: FullContainerName,
     slot_id: u8,
     stack: &ItemStack,
-    physical: bool,
+    record: SlotRecord,
 ) {
+    let physical = record != SlotRecord::Virtual;
+    let write_order = updates
+        .iter()
+        .map(|update| update.write_order)
+        .max()
+        .map_or(0, |order| order + 1);
+    let committed = (record == SlotRecord::Write).then(|| (write_order, stack.clone()));
     let count = stack.item_count;
     let stack_id = if stack.is_empty() {
         VarInt(0)
@@ -1350,7 +1474,12 @@ fn record_slot_update(
     {
         existing.count = count;
         existing.stack_id = stack_id;
-        existing.physical |= physical;
+        existing.physical = physical;
+        existing.expected = stack.clone();
+        existing.write_order = write_order;
+        if committed.is_some() {
+            existing.committed = committed;
+        }
     } else {
         updates.push(SlotUpdate {
             container_name,
@@ -1358,6 +1487,9 @@ fn record_slot_update(
             count,
             stack_id,
             physical,
+            expected: stack.clone(),
+            write_order,
+            committed,
         });
     }
 }
@@ -1385,7 +1517,11 @@ fn record_consumed_source(
         source.container_name.clone(),
         source.slot_id,
         stack,
-        physical,
+        if physical {
+            SlotRecord::Write
+        } else {
+            SlotRecord::Virtual
+        },
     );
 }
 
@@ -1836,6 +1972,78 @@ mod tests {
             map_bedrock_container_slot(&handler, ContainerName::CraftingInput, 40),
             Some(9)
         );
+    }
+
+    #[test]
+    fn physical_read_does_not_replace_the_committed_write() {
+        let container = FullContainerName {
+            container_name: ContainerName::HotBar,
+            dynamic_id: None,
+        };
+        let first = ItemStack::new(1, &Item::STICK);
+        let later = ItemStack::new(2, &Item::STICK);
+        let mut updates = Vec::new();
+        record_physical_read(&mut updates, container.clone(), 0, &first);
+        assert!(updates[0].committed.is_none());
+
+        record_update(&mut updates, container.clone(), 0, &first);
+        record_physical_read(&mut updates, container, 0, &later);
+        assert_eq!(updates[0].expected.uid, later.uid);
+        assert_eq!(
+            updates[0]
+                .committed
+                .as_ref()
+                .map(|(order, stack)| (*order, stack.uid)),
+            Some((1, first.uid))
+        );
+    }
+
+    #[test]
+    fn acknowledgements_keep_the_last_write_across_slot_aliases() {
+        let inventory = Arc::new(PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(build_equipment_slots()),
+        ));
+        let handler = CraftingTableScreenHandler::new(1, &inventory, None);
+        let first = ItemStack::new(2, &Item::STICK);
+        let last = ItemStack::new(3, &Item::STICK);
+        let replacement = ItemStack::new(3, &Item::STICK);
+        let ack = |container_name, stack: &ItemStack| {
+            let container = FullContainerName {
+                container_name,
+                dynamic_id: None,
+            };
+            let mut updates = Vec::new();
+            record_update(&mut updates, container.clone(), 0, stack);
+            let update = updates.remove(0);
+            vec![(
+                ItemStackRequestSlotInfo {
+                    container_name: container,
+                    slot_id: update.slot_id,
+                    stack_id: update.stack_id.0,
+                },
+                update.expected,
+            )]
+        };
+        let requests = vec![
+            ack(ContainerName::HotBar, &first),
+            ack(ContainerName::Inventory, &last),
+        ];
+        inventory.set_slot(0, replacement.clone());
+
+        let mut responses = std::array::from_fn::<_, 2, _>(|id| ItemStackResponseInfo {
+            result: 0,
+            client_request_id: (id as i32).into(),
+            containers: Vec::new(),
+        });
+        let requests = final_acknowledged_slots(&handler, requests, &mut responses);
+        assert_eq!(requests[0][0].0.stack_id, first.uid.get());
+        assert_eq!(requests[1][0].0.stack_id, last.uid.get());
+        for request in requests {
+            let (slot, expected) = &request[0];
+            assert_eq!(expected.uid, last.uid);
+            assert_eq!(get_slot_stack(&handler, slot, None).uid, replacement.uid);
+        }
     }
 
     #[test]

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:comparator_chest_nonstackable_items_signal",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

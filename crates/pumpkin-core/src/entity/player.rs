@@ -2,6 +2,7 @@ pub mod advancement;
 pub mod client_move;
 pub mod client_push;
 mod shoulders;
+pub mod simulated_player;
 pub mod statistics;
 
 pub use client_move::{ClientMove, ClientMoveOutcome};
@@ -592,8 +593,8 @@ pub enum SpamType {
 /// Center chunk and levels of the view and simulation tickets a player holds.
 pub type HeldChunkTickets = (Vector2<i32>, Option<i8>, Option<i8>);
 
-struct ScreenOwner {
-    handler: SharedScreenHandler,
+pub(crate) struct ScreenOwner {
+    pub(crate) handler: SharedScreenHandler,
     generation: u64,
 }
 
@@ -967,6 +968,7 @@ impl Player {
         let supports_player_loaded = match client.as_ref() {
             ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
             ClientPlatform::Bedrock(_) => true,
+            ClientPlatform::SimulatedPlayer(_) => false,
         };
         let initially_loaded = !supports_player_loaded;
 
@@ -1102,6 +1104,26 @@ impl Player {
         }
     }
 
+    pub fn look_at_entity(&self, entity_id: i32) -> Result<(), &'static str> {
+        let target = self
+            .world()
+            .get_entity_by_id(entity_id)
+            .ok_or("Entity not found")?;
+        let entity = self.get_entity();
+        let delta = target.get_eye_pos() - entity.get_eye_pos();
+        let yaw = (delta.z.atan2(delta.x) - std::f64::consts::FRAC_PI_2).to_degrees() as f32;
+        let pitch = -delta.y.atan2(delta.x.hypot(delta.z)).to_degrees() as f32;
+        self.apply_and_broadcast_look(ClientMove {
+            position: None,
+            yaw: Some(yaw),
+            pitch: Some(pitch),
+            head_yaw: Some(yaw),
+            on_ground: entity.on_ground.load(Ordering::Relaxed),
+            horizontal_collision: false,
+        });
+        Ok(())
+    }
+
     #[must_use]
     pub fn get_post_effects(&self) -> Vec<String> {
         self.post_effects
@@ -1204,19 +1226,80 @@ impl Player {
     }
 
     pub fn start_cooldown(&self, group: String, duration: i32) {
-        let mut cooldowns = self
-            .item_cooldowns
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        cooldowns.insert(
-            Self::cooldown_group_key(&group).to_owned(),
-            ItemCooldown {
-                start_tick: self.tick_counter.load(Ordering::Relaxed),
-                duration,
-            },
-        );
-        drop(cooldowns);
-        self.try_send_client_packet(&CItemCooldown::new(group, VarInt(duration)));
+        use pumpkin_protocol::{packet::MultiVersionJavaPacket, ser::NetworkReadExt};
+
+        let start_tick = {
+            let mut cooldowns = self
+                .item_cooldowns
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let start_tick = self.tick_counter.load(Ordering::Relaxed);
+            cooldowns.insert(
+                Self::cooldown_group_key(&group).to_owned(),
+                ItemCooldown {
+                    start_tick,
+                    duration,
+                },
+            );
+            start_tick
+        };
+        let packet = CItemCooldown::new(group, VarInt(duration));
+        if let Some(client) = self.client.java()
+            && let Ok(data) = client.serialize_packet(&packet)
+        {
+            let version = client.version.load();
+            let wire_id = CItemCooldown::to_id(version);
+            let legacy_item = |mut payload: &[u8]| {
+                if version >= pumpkin_util::version::JavaMinecraftVersion::V_1_21_2
+                    || payload.get_var_int().ok()?.0 != wire_id
+                {
+                    return None;
+                }
+                let item = payload.get_var_int().ok()?;
+                let _duration = payload.get_var_int().ok()?;
+                payload.is_empty().then_some(item)
+            };
+            // The translated primary identifies the item for pre-group protocols.
+            let mut translated_item = None;
+            client.try_enqueue_packet_data_projecting(
+                data,
+                || {
+                    let cooldowns = self
+                        .item_cooldowns
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    cooldowns
+                        .get(Self::cooldown_group_key(&packet.group))
+                        .is_some_and(|current| {
+                            current.start_tick == start_tick && current.duration == duration
+                        })
+                        .then_some(cooldowns)
+                },
+                |data, primary, current| {
+                    if current.is_some() {
+                        return Some(data);
+                    }
+                    if primary {
+                        translated_item = legacy_item(&data);
+                        return None;
+                    }
+
+                    let mut payload = data.as_ref();
+                    let same_group = payload.get_var_int().is_ok_and(|id| {
+                        id.0 == CItemCooldown::to_id(pumpkin_data::packet::CURRENT_MC_VERSION)
+                            || id.0 == wire_id
+                    }) && payload.get_str().is_ok_and(|group| {
+                        Self::cooldown_group_key(group.as_ref())
+                            == Self::cooldown_group_key(&packet.group)
+                    }) && payload.get_var_int().is_ok()
+                        && payload.is_empty();
+                    let same_legacy_item =
+                        translated_item.is_some_and(|item| legacy_item(&data) == Some(item));
+                    (!same_group && !same_legacy_item).then_some(data)
+                },
+                |_, _, _| {},
+            );
+        }
     }
 
     pub fn get_cooldown(&self, group: &str) -> f32 {
@@ -1324,19 +1407,32 @@ impl Player {
                 actions: &[PlayerAction::UpdateListed(listed)],
             }],
         ));
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
+            world.broadcast_simulated_player_tab_list_visibility(self);
+        }
     }
 
-    /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
-    /// when the client. This means tasks should complete in a reasonable amount of time or select
-    /// on `Self::await_close_interrupt` to cancel the task when the client is closed
-    ///
-    /// Returns an `Option<JoinHandle<F::Output>>`. If the client is closed, this returns `None`.
+    /// Spawns a player task on the client runtime, or on the server runtime for a simulated player.
+    /// Client tasks are tracked until disconnect. Simulated player tasks are tracked until server
+    /// shutdown, so they must finish on their own. Returns `None` if the client is closed or the
+    /// simulated player's server is unavailable.
     pub fn spawn_task<F>(&self, task: F) -> Option<JoinHandle<F::Output>>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.client.spawn_task(task)
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
+            let Some(server) = self.world().server.upgrade() else {
+                warn!(
+                    "Cannot spawn a task for simulated player {} without a server",
+                    self.gameprofile.name
+                );
+                return None;
+            };
+            Some(server.spawn_task(task))
+        } else {
+            self.client.spawn_task(task)
+        }
     }
 
     /// Pairs tracked entities in chunks that were just queued for a player.
@@ -1374,6 +1470,16 @@ impl Player {
                 player_color: [0; 4],
             }],
         }
+    }
+
+    /// Returns a Bedrock player-list update matching this player's tab visibility.
+    #[must_use]
+    pub fn bedrock_tab_list_update(&self) -> CPlayerList {
+        let mut packet = self.bedrock_player_list();
+        if !self.tab_list_listed.load(Ordering::Relaxed) {
+            packet.action = CPlayerList::ACTION_REMOVE;
+        }
+        packet
     }
 
     /// Bedrock remote-player spawn -> the `PlayerList` entry must precede `AddPlayer`.
@@ -1488,6 +1594,10 @@ impl Player {
             .increment_custom(statistics::CustomStatistic::LeaveGame, 1);
         let world = self.world();
         world.remove_player(self, true).await;
+
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
+            return;
+        }
 
         let cylindrical = self.watched_section.load();
         self.clean_up_chunk_tickets(&world.level);
@@ -2086,10 +2196,12 @@ impl Player {
                     );
                 }
             }
+
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
-    const SCREEN_EQUIPMENT: [EquipmentSlot; 8] = [
+    pub(crate) const SCREEN_EQUIPMENT: [EquipmentSlot; 8] = [
         EquipmentSlot::MAIN_HAND,
         EquipmentSlot::OFF_HAND,
         EquipmentSlot::HEAD,
@@ -2404,11 +2516,13 @@ impl Player {
                     &self.living_entity.entity.pos.load(),
                 );
             }
-            self.world().send_entity_status(
-                &self.living_entity.entity,
-                super::equipment_break_status(slot),
-                ActorEventID::None,
-            );
+            if self.inventory.equipment_slot_index(slot) == Some(slot_index) {
+                self.world().send_entity_status(
+                    &self.living_entity.entity,
+                    super::equipment_break_status(slot),
+                    ActorEventID::None,
+                );
+            }
         }
 
         let stored = self.inventory.get_slot(slot_index);
@@ -3233,6 +3347,62 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
+    /// Applies a client sign edit after checking the editor, reach, and wax state.
+    pub(crate) fn update_sign_text(
+        &self,
+        location: BlockPos,
+        is_front_text: bool,
+        lines: [&str; 4],
+    ) {
+        let world = self.world();
+        // Vanilla checks the chunk before looking up the block entity. The reusable
+        // `may_update_text` gate repeats this for the Bedrock path, which has no pre-check.
+        if !world.level.is_chunk_loaded(&location.chunk_position()) {
+            return;
+        }
+
+        let Some(block_entity) = world.get_block_entity(&location) else {
+            return;
+        };
+        let Some(sign_entity) =
+            crate::block::entities::sign::SignEntityRef::from_block_entity(&*block_entity)
+        else {
+            return;
+        };
+        if !sign_entity.may_update_text(&world, self) {
+            warn!(
+                "Player {} just tried to change non-editable sign",
+                self.gameprofile.name
+            );
+            return;
+        }
+
+        if let Some(player_arc) = world.get_player_by_uuid(self.gameprofile.id) {
+            let event = crate::plugin::api::events::block::sign_change::SignChangeEvent::new(
+                player_arc,
+                location,
+                lines.map(str::to_owned).into(),
+            );
+            let event = if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire_blocking(&server, event)
+            } else {
+                event
+            };
+            if event.cancelled {
+                return;
+            }
+        }
+
+        sign_entity
+            .get_text(is_front_text)
+            .set_client_messages(&lines.map(Box::<str>::from));
+        *sign_entity
+            .currently_editing_player()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        world.update_block_entity(&block_entity);
+    }
+
     pub fn open_sign_editor(&self, location: BlockPos, is_front_text: bool) {
         if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
             && let Some(server) = self.world().server.upgrade()
@@ -3405,6 +3575,9 @@ impl Player {
             return;
         }
 
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
+            return;
+        }
         let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
             return;
         };
@@ -3468,6 +3641,8 @@ impl Player {
                         tracing::error!("Failed to handle Bedrock play packet: {err}");
                     }
                 }
+
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
 
             count += 1;
@@ -3577,12 +3752,17 @@ impl Player {
         let version = match self.client.as_ref() {
             ClientPlatform::Java(java_client) => java_client.version.load(),
             ClientPlatform::Bedrock(_) => JavaMinecraftVersion::V_1_20_2,
+            ClientPlatform::SimulatedPlayer(_) => JavaMinecraftVersion::Unknown,
         };
 
         let view_distance = self.watched_section.load().view_distance;
-        let prepared_batch = self.chunk_sender.try_lock().ok().and_then(|mut sender| {
-            sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
-        });
+        let prepared_batch = if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
+            None
+        } else {
+            self.chunk_sender.try_lock().ok().and_then(|mut sender| {
+                sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
+            })
+        };
 
         if let Some(batch) = prepared_batch {
             match self.client.as_ref() {
@@ -3646,6 +3826,7 @@ impl Player {
                         });
                     }
                 }
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
         }
 
@@ -4122,6 +4303,7 @@ impl Player {
         match self.client.as_ref() {
             ClientPlatform::Java(client) => client.version.load() >= JavaMinecraftVersion::V_1_21_4,
             ClientPlatform::Bedrock(_) => true,
+            ClientPlatform::SimulatedPlayer(_) => false,
         }
     }
 
@@ -4393,6 +4575,8 @@ impl Player {
                     bedrock.try_enqueue_packet(data);
                 }
             }
+
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -5215,6 +5399,8 @@ impl Player {
                         }
                         self.bedrock_spawned.store(false, Ordering::Relaxed);
                     }
+
+                    ClientPlatform::SimulatedPlayer(_) => {}
                 }
 
                 self.send_permission_lvl_update();
@@ -5309,6 +5495,12 @@ impl Player {
             }
             ClientPlatform::Bedrock(client) => {
                 self.send_bedrock_teleport(client);
+            }
+            ClientPlatform::SimulatedPlayer(_) => {
+                *self
+                    .awaiting_teleport
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
             }
         }
     }
@@ -5482,11 +5674,21 @@ impl Player {
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
         {
             let mut event = crate::plugin::api::events::player::player_kick::PlayerKickEvent::new(
-                player_arc,
+                player_arc.clone(),
                 message.clone().to_pretty_console(),
             );
             event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
+                return;
+            }
+            if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_)) {
+                let server_clone = server.clone();
+                server.spawn_task(async move {
+                    if let Err(error) = server_clone.disconnect_simulated_player(&player_arc).await
+                    {
+                        warn!("{error}");
+                    }
+                });
                 return;
             }
         }
@@ -5980,12 +6182,18 @@ impl Player {
         kick_matching_players: bool,
         log_to_console: bool,
     ) {
+        let Some(target_ip) = self.client.remote_ip() else {
+            warn!(
+                "Simulated player {} has no IP address to ban",
+                self.gameprofile.name
+            );
+            return;
+        };
         let string_reason = reason.clone().map_or_else(
             || "Banned by an operator.".to_string(),
             pumpkin_util::text::TextComponent::get_text,
         );
         let source_str = source.unwrap_or_else(|| "Plugin".to_string());
-        let target_ip = self.client.address().ip();
 
         if log_to_console {
             tracing::info!(
@@ -6446,7 +6654,8 @@ impl Player {
     }
 
     pub fn drop_held_item(&self, drop_stack: bool) {
-        let mut item_stack = self.inventory().held_item();
+        let selected_slot = usize::from(self.inventory().get_selected_slot());
+        let mut item_stack = self.inventory().get_slot(selected_slot);
 
         if item_stack.is_empty() {
             return;
@@ -6454,6 +6663,7 @@ impl Player {
 
         let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
         let dropped_stack = item_stack.copy_with_count(drop_amount);
+        let original_owner = self.screen_owner();
 
         if let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
@@ -6470,25 +6680,47 @@ impl Player {
             }
         }
 
+        let before = item_stack.clone();
         item_stack.decrement(drop_amount);
-        let updated_stack = item_stack.clone();
-        self.inventory().set_held_item(updated_stack.clone());
+        if !self
+            .inventory()
+            .replace_slot_if_same(selected_slot, &before, item_stack.clone())
+        {
+            if self.client.java().is_some() {
+                self.resync_active_inventory_screen();
+            } else {
+                let current = self.inventory().get_slot(selected_slot);
+                self.try_send_slot_set_packet(&CSetPlayerInventory::new(
+                    (selected_slot as i32).into(),
+                    &ItemStackSerializer::from(current),
+                ));
+            }
+            return;
+        }
+        let updated_stack = item_stack;
 
         self.drop_item(dropped_stack);
 
         let inv: Arc<dyn Inventory> = self.inventory.clone();
-        let screen_binding = self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut screen_handler = screen_binding
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let selected_slot = self.inventory.get_selected_slot();
-        if let Some(slot_index) = screen_handler.get_slot_index(&inv, selected_slot as usize) {
-            screen_handler.set_received_stack(slot_index, updated_stack);
-            screen_handler.send_content_updates();
-        }
+        let owner = self.screen_owner();
+        let Some((active, mut handler)) = self.lock_screen_action(&owner) else {
+            return;
+        };
+        let (sync, epoch) = Self::capture_screen_updates(&mut *handler, |handler| {
+            let current = self.inventory().get_slot(selected_slot);
+            if owner.generation == original_owner.generation
+                && Arc::ptr_eq(&owner.handler, &original_owner.handler)
+                && current.are_equal(&updated_stack)
+                && (current.is_empty() || current.uid == updated_stack.uid)
+                && let Some(slot_index) = handler.get_slot_index(&inv, selected_slot)
+            {
+                handler.set_received_stack(slot_index, updated_stack);
+            }
+            handler.send_content_updates();
+        });
+        drop(handler);
+        drop(active);
+        self.flush_screen_updates(&owner.handler, epoch, sync, true);
     }
 
     pub fn swap_item(&self) {
@@ -6659,10 +6891,7 @@ impl Player {
         }
 
         if any_changed {
-            self.player_screen_handler
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .send_content_updates();
+            self.send_player_screen_updates();
         }
     }
 
@@ -7099,7 +7328,7 @@ impl Player {
         self.close_screen_if_current(owner)
     }
 
-    fn screen_owner(&self) -> ScreenOwner {
+    pub(crate) fn screen_owner(&self) -> ScreenOwner {
         let active = self
             .current_screen_handler
             .lock()
@@ -7124,7 +7353,7 @@ impl Player {
     }
 
     /// A click owns its menu mutex until its state changes have committed.
-    fn lock_screen_action<'a, 'b>(
+    pub(crate) fn lock_screen_action<'a, 'b>(
         &'a self,
         owner: &'b ScreenOwner,
     ) -> Option<(
@@ -7257,6 +7486,7 @@ impl Player {
                     );
                 }
             }
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -7613,11 +7843,8 @@ impl Player {
     pub fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Arc<Server>) {
         self.update_last_action_time();
 
-        let screen_handler_arc = self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let owner = self.screen_owner();
+        let screen_handler_arc = &owner.handler;
         let (
             sync_id,
             can_use,
@@ -7724,14 +7951,11 @@ impl Player {
         }
 
         let resync_screen = |update: fn(&mut dyn ScreenHandler)| {
-            if self.is_active_screen(&screen_handler_arc) {
-                let (sync, epoch) = {
-                    let mut handler = screen_handler_arc
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    Self::capture_screen_updates(&mut *handler, update)
-                };
-                self.flush_screen_updates(&screen_handler_arc, epoch, sync, true);
+            if let Some((active, mut handler)) = self.lock_screen_action(&owner) {
+                let (sync, epoch) = Self::capture_screen_updates(&mut *handler, update);
+                drop(handler);
+                drop(active);
+                self.flush_screen_updates(screen_handler_arc, epoch, sync, true);
             }
         };
         if self.gamemode.load() == GameMode::Spectator {
@@ -7897,16 +8121,9 @@ impl Player {
             }
         }
 
-        let active = self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !Arc::ptr_eq(&active, &screen_handler_arc) {
+        let Some((active, mut screen_handler)) = self.lock_screen_action(&owner) else {
             return;
-        }
-        let mut screen_handler = screen_handler_arc
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        };
         drop(active);
         if self.gamemode.load() == GameMode::Spectator || !screen_handler.can_use(self.as_ref()) {
             drop(screen_handler);
@@ -7950,7 +8167,7 @@ impl Player {
         let effects = screen_handler.get_behaviour_mut().take_deferred_effects();
         let committed_equipment = self.screen_equipment();
         drop(screen_handler);
-        self.flush_screen_updates(&screen_handler_arc, epoch, sync, true);
+        self.flush_screen_updates(screen_handler_arc, epoch, sync, true);
         for effect in effects {
             effect.publish(self.as_ref());
         }
@@ -8748,6 +8965,12 @@ impl EntityBase for Player {
         ]
         .into_iter()
         .flatten()
+        {
+            send(data);
+        }
+        if matches!(self.client.as_ref(), ClientPlatform::SimulatedPlayer(_))
+            && !self.tab_list_listed.load(Ordering::Relaxed)
+            && let Ok(data) = client.serialize_packet(&self.bedrock_tab_list_update())
         {
             send(data);
         }
@@ -9632,6 +9855,8 @@ impl Player {
                     );
                 }
             }
+
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -9862,6 +10087,8 @@ impl Player {
                     }
                 }
             }
+
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -9930,6 +10157,8 @@ impl Player {
                 });
                 bedrock.try_enqueue_inventory_update(&bedrock_packet, active);
             }
+
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -9994,6 +10223,8 @@ impl Player {
                     _ => {}
                 }
             }
+
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 }
