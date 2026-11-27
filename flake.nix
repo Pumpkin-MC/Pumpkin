@@ -47,7 +47,12 @@
 
             src = lib.cleanSource ./.;
 
-            cargoLock.lockFile = ./Cargo.lock;
+            cargoLock = {
+              lockFile = ./Cargo.lock;
+              outputHashes = {
+                "wit-bindgen-0.63.0" = "sha256-zCZNA6HuoIYgBJU7FWnGYP23W1b4eSGsuKymQVvqRxU=";
+              };
+            };
 
             nativeBuildInputs = [
               pkgs.rustfmt

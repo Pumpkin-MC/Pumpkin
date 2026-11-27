@@ -1,0 +1,23 @@
+[package]
+name = "pumpkin-native-wit"
+version.workspace = true
+description = "Native cdylib host runtime for WIT plugins in Pumpkin."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+libloading.workspace = true
+object.workspace = true
+pumpkin-native-wit-macro.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time"] }
+tracing.workspace = true
+wasmtime.workspace = true
+wit-component.workspace = true
+wit-parser.workspace = true
+
+[lints]
+workspace = true
