@@ -900,6 +900,7 @@ impl TrackedEntity {
                         enqueue_bedrock(client, data);
                     });
             }
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
         if !still_paired() {
             return;
@@ -986,6 +987,7 @@ impl TrackedEntity {
                         enqueue_bedrock(client, data);
                     }
                 }
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
         }
 
@@ -1052,6 +1054,7 @@ impl TrackedEntity {
                                 enqueue_bedrock(client, data);
                             }
                         }
+                        ClientPlatform::SimulatedPlayer(_) => {}
                     }
                 }
             }
@@ -1166,6 +1169,7 @@ impl TrackedEntity {
                     }
                 }
             }
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -1223,6 +1227,7 @@ impl TrackedEntity {
                     );
                 }
             }
+            ClientPlatform::SimulatedPlayer(_) => {}
         }
     }
 
@@ -1454,6 +1459,7 @@ impl TrackedEntity {
                 ClientPlatform::Bedrock(client) => {
                     self.send_bedrock_pairing(client, living, &snapshot, &slots, session)
                 }
+                ClientPlatform::SimulatedPlayer(_) => Vec::new(),
             };
         }
         if !slots.is_empty()
@@ -1934,6 +1940,7 @@ impl TrackedEntity {
                         }
                     }
                 }
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
         }
     }
@@ -1974,7 +1981,7 @@ impl TrackedEntity {
                 be_packet,
                 seen_by.iter().filter_map(|p| match p.client.as_ref() {
                     ClientPlatform::Bedrock(be_client) => Some(be_client),
-                    ClientPlatform::Java(_) => None,
+                    ClientPlatform::Java(_) | ClientPlatform::SimulatedPlayer(_) => None,
                 }),
             );
         }
@@ -2041,6 +2048,7 @@ impl TrackedEntity {
             match p.client.as_ref() {
                 ClientPlatform::Java(java_client) => java_recipients.push(java_client),
                 ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
+                ClientPlatform::SimulatedPlayer(_) => {}
             }
         }
         World::broadcast_java_clients(je_packet, java_recipients.into_iter());

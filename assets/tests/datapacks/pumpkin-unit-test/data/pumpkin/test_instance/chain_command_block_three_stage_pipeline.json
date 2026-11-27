@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:chain_command_block_three_stage_pipeline",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}
