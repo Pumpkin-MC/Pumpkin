@@ -6,10 +6,11 @@ use std::sync::{
 use pumpkin_data::BlockState;
 use pumpkin_data::{
     effect::StatusEffect,
-    entity::{EntityPose, EntityType},
+    entity::{EntityPose, EntityStatus, EntityType},
     potion::Effect,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_protocol::bedrock::server::ActorEventID;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::{GameMode, math::vector3::Vector3};
 
@@ -150,6 +151,21 @@ impl WardenEntity {
 }
 
 impl Mob for WardenEntity {
+    fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {
+        let entity = self.get_entity();
+        entity.world.load().send_entity_status(
+            entity,
+            EntityStatus::StartAttacking,
+            ActorEventID::StartAttacking,
+        );
+        self.play_entity_sound(
+            Sound::EntityWardenAttackImpact,
+            10.0,
+            self.mob_entity.living_entity.get_pitch(),
+        );
+        self.mob_entity.try_attack(entity, target)
+    }
+
     fn mob_is_pushable(&self) -> bool {
         let pose = self.mob_entity.living_entity.entity.pose.load();
         pose != EntityPose::Digging
