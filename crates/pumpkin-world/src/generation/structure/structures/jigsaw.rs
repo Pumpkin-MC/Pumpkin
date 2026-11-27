@@ -120,26 +120,35 @@ struct RawWeightedPoolElement {
 #[derive(Deserialize)]
 #[serde(tag = "element_type")]
 enum RawPoolElement {
-    #[serde(rename = "minecraft:empty_pool_element")]
+    #[serde(rename = "minecraft:empty_pool_element", alias = "empty_pool_element")]
     Empty,
-    #[serde(rename = "minecraft:single_pool_element")]
+    #[serde(
+        rename = "minecraft:single_pool_element",
+        alias = "single_pool_element"
+    )]
     Single {
         location: String,
         processors: RawProcessorList,
         projection: RawProjection,
     },
-    #[serde(rename = "minecraft:legacy_single_pool_element")]
+    #[serde(
+        rename = "minecraft:legacy_single_pool_element",
+        alias = "legacy_single_pool_element"
+    )]
     LegacySingle {
         location: String,
         processors: RawProcessorList,
         projection: RawProjection,
     },
-    #[serde(rename = "minecraft:list_pool_element")]
+    #[serde(rename = "minecraft:list_pool_element", alias = "list_pool_element")]
     List {
         elements: Vec<Self>,
         projection: RawProjection,
     },
-    #[serde(rename = "minecraft:feature_pool_element")]
+    #[serde(
+        rename = "minecraft:feature_pool_element",
+        alias = "feature_pool_element"
+    )]
     Feature {
         feature: String,
         projection: RawProjection,
@@ -1092,6 +1101,35 @@ impl StructureGenerator for JigsawGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pool_element_type_defaults_to_minecraft() {
+        for name in [
+            "empty_pool_element",
+            "single_pool_element",
+            "legacy_single_pool_element",
+            "list_pool_element",
+            "feature_pool_element",
+        ] {
+            let parse = |id: &str| {
+                serde_json::from_value::<RawPoolElement>(serde_json::json!({
+                    "element_type": id,
+                    "location": "test:house",
+                    "processors": "minecraft:empty",
+                    "elements": [],
+                    "feature": "minecraft:oak",
+                    "projection": "rigid"
+                }))
+            };
+            let qualified = parse(&format!("minecraft:{name}")).unwrap();
+            let short = parse(name).unwrap();
+            assert_eq!(
+                std::mem::discriminant(&short),
+                std::mem::discriminant(&qualified)
+            );
+            assert!(parse(&format!("other:{name}")).is_err());
+        }
+    }
 
     #[test]
     fn ancient_city_pools_match_vanilla_weights() {
