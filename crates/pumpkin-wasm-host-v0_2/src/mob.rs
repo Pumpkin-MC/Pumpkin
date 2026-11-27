@@ -222,14 +222,7 @@ impl CustomWasmGoal {
         let plugin = self.plugin.clone();
         let goal_id = self.goal_id;
         let run = async move {
-            let function = {
-                let instance = plugin.instance::<crate::Plugin>();
-                match call {
-                    GoalCall::Start => instance.func_handle_ai_goal_start(),
-                    GoalCall::Tick => instance.func_handle_ai_goal_tick(),
-                    GoalCall::Stop => instance.func_handle_ai_goal_stop(),
-                }
-            };
+            let plugin_for_call = Arc::clone(&plugin);
             if let Err(error) = plugin
                 .store
                 .call_guest(move |mut guest| {
@@ -251,9 +244,39 @@ impl CustomWasmGoal {
                             };
                             Ok::<_, wasmtime::Error>((server_resource, entity_resource))
                         })?;
-                        guest
-                            .call(function, (goal_id, server_resource, entity_resource))
-                            .await
+                        let instance = plugin_for_call.instance::<crate::Plugin>();
+                        match call {
+                            GoalCall::Start => {
+                                instance
+                                    .call_handle_ai_goal_start(
+                                        &mut guest,
+                                        goal_id,
+                                        server_resource,
+                                        entity_resource,
+                                    )
+                                    .await
+                            }
+                            GoalCall::Tick => {
+                                instance
+                                    .call_handle_ai_goal_tick(
+                                        &mut guest,
+                                        goal_id,
+                                        server_resource,
+                                        entity_resource,
+                                    )
+                                    .await
+                            }
+                            GoalCall::Stop => {
+                                instance
+                                    .call_handle_ai_goal_stop(
+                                        &mut guest,
+                                        goal_id,
+                                        server_resource,
+                                        entity_resource,
+                                    )
+                                    .await
+                            }
+                        }
                     })
                 })
                 .await

@@ -2,9 +2,27 @@
 
 use wasmtime::component::bindgen;
 
-bindgen!({
-    path: "../pumpkin-plugin-wit/v0.1",
-    world: "plugin",
+macro_rules! define_v0_1_bindings {
+    (imports: { $($imports:tt)* }) => {
+        bindgen!({
+            path: "../pumpkin-plugin-wit/v0.1",
+            world: "plugin",
+            imports: { $($imports)* },
+            exports: { default: async | trappable },
+        });
+
+        pub mod native {
+            pumpkin_native_wit::bindgen!({
+                path: "../pumpkin-plugin-wit/v0.1",
+                world: "plugin",
+                store_data: pumpkin_wasm_host_common::state::PluginHostState,
+                imports: { $($imports)* },
+            });
+        }
+    };
+}
+
+define_v0_1_bindings!(
     imports: {
         "pumpkin:plugin/command@0.1.0.[method]command-sender.has-permission": async | store | trappable,
         "pumpkin:plugin/datapack@0.1.0.[method]datapack-manager.disable-pack": async | store | trappable,
@@ -162,6 +180,5 @@ bindgen!({
         "pumpkin:plugin/server@0.1.0.[method]server.get-enchantment": async | trappable,
         "pumpkin:plugin/world@0.1.0.[method]living-entity.set-equipment": async | trappable,
         default: trappable,
-    },
-    exports: { default: async | trappable },
-});
+    }
+);

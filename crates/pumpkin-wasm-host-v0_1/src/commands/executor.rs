@@ -5,9 +5,7 @@ use pumpkin_util::text::{
     color::{Color, NamedColor},
 };
 
-use crate::pumpkin::plugin::command::{
-    CommandError as CommandErrorWit, CommandSender, CommandSuggestions, SuggestionRequest,
-};
+use crate::pumpkin::plugin::command::{CommandError as CommandErrorWit, SuggestionRequest};
 use pumpkin_core::{
     command::{
         context::command_context::CommandContext,
@@ -23,7 +21,6 @@ use pumpkin_core::{
 use pumpkin_wasm_host_common::{
     args::build_consumed_args_from_context, plugin::WasmPlugin, state::PluginHostState,
 };
-use wasmtime::component::Resource;
 
 fn map_command_result(
     state: &mut PluginHostState,
@@ -60,10 +57,7 @@ impl CommandExecutor for WasmCommandExecutor {
         let server = self.server.clone();
         let consumed_args = build_consumed_args_from_context(context);
         let handler_id = self.handler_id;
-        let function = {
-            let plugin = self.plugin.instance::<crate::Plugin>();
-            plugin.func_handle_command()
-        };
+        let plugin = self.plugin.clone();
 
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -96,15 +90,19 @@ impl CommandExecutor for WasmCommandExecutor {
                                     ))
                                 })?;
 
-                            let result = guest
-                                .call(
-                                    function,
-                                    (handler_id, sender_resource, server_resource, args_resource),
+                            let result = plugin
+                                .instance::<crate::Plugin>()
+                                .call_handle_command(
+                                    &mut guest,
+                                    handler_id,
+                                    sender_resource,
+                                    server_resource,
+                                    args_resource,
                                 )
                                 .await;
 
                             guest.with(|mut store| {
-                                result.map(|(result,)| map_command_result(store.data_mut(), result))
+                                result.map(|result| map_command_result(store.data_mut(), result))
                             })
                         })
                     })
@@ -140,10 +138,7 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
             remaining: builder.remaining().to_string(),
         };
         let handler_id = self.handler_id;
-        let function = {
-            let plugin = self.plugin.instance::<crate::Plugin>();
-            *plugin.func_handle_command_suggestion().func()
-        };
+        let plugin = self.plugin.clone();
 
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -163,18 +158,16 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
                                 };
                                 Ok::<_, wasmtime::Error>((sender_resource, server_resource))
                             })?;
-                            let response = guest
-                                .call_func::<(
-                                    u32,
-                                    Resource<CommandSender>,
-                                    Resource<crate::pumpkin::plugin::server::Server>,
-                                    SuggestionRequest,
-                                ), (CommandSuggestions,)>(
-                                    function,
-                                    (handler_id, sender_resource, server_resource, request),
+                            let response = plugin
+                                .instance::<crate::Plugin>()
+                                .call_handle_command_suggestion(
+                                    &mut guest,
+                                    handler_id,
+                                    sender_resource,
+                                    server_resource,
+                                    request,
                                 )
-                                .await
-                                .map(|(response,)| response);
+                                .await;
                             guest.with(|mut store| {
                                 response.map(|response| {
                                     let mut builder = builder;

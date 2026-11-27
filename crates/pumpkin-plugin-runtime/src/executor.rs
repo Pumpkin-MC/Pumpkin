@@ -1,14 +1,15 @@
 use std::{
     any::Any,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     future::{Future, poll_fn},
     ops::Deref,
     panic::{AssertUnwindSafe, catch_unwind},
     pin::Pin,
     sync::{
-        Arc, Mutex as StdMutex, OnceLock,
+        Arc, Condvar, Mutex as StdMutex, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
+    time::{Duration, Instant},
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
@@ -27,6 +28,103 @@ use crate::{
 
 const STORE_QUEUE_CAPACITY: usize = 64;
 const REENTRY_QUEUE_CAPACITY: usize = 64;
+const NATIVE_EXPORT_IDLE_TIMEOUT: Duration = Duration::from_secs(10);
+
+type NativeExportJob = Box<dyn FnOnce() + Send + 'static>;
+
+#[derive(Default)]
+struct NativeExportPoolState {
+    queue: VecDeque<NativeExportJob>,
+    idle: usize,
+}
+
+/// Dedicated on-demand thread pool for concurrent native WIT exports.
+///
+/// Keeping native exports off Tokio's bounded blocking pool prevents starvation deadlocks when
+/// exports block waiting on host imports that themselves dispatch onto Tokio's blocking pool
+/// (`spawn_blocking`). Idle workers stay alive briefly to avoid per-call thread creation overhead.
+struct NativeExportPool {
+    state: StdMutex<NativeExportPoolState>,
+    available: Condvar,
+}
+
+impl NativeExportPool {
+    fn global() -> &'static Self {
+        static POOL: OnceLock<NativeExportPool> = OnceLock::new();
+        POOL.get_or_init(|| Self {
+            state: StdMutex::new(NativeExportPoolState::default()),
+            available: Condvar::new(),
+        })
+    }
+
+    fn submit(&'static self, job: NativeExportJob) -> std::io::Result<()> {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.idle > state.queue.len() {
+            state.queue.push_back(job);
+            self.available.notify_one();
+            return Ok(());
+        }
+        drop(state);
+        std::thread::Builder::new()
+            .name("native-wit-export".to_owned())
+            .spawn(move || {
+                job();
+                self.worker_loop();
+            })?;
+        Ok(())
+    }
+
+    fn worker_loop(&'static self) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        loop {
+            if let Some(job) = state.queue.pop_front() {
+                drop(state);
+                job();
+                state = self
+                    .state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                continue;
+            }
+            let deadline = Instant::now() + NATIVE_EXPORT_IDLE_TIMEOUT;
+            state.idle += 1;
+            let timed_out = loop {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    break true;
+                }
+                let (next_state, wait_result) = self
+                    .available
+                    .wait_timeout(state, remaining)
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                state = next_state;
+                if !state.queue.is_empty() {
+                    break false;
+                }
+                if wait_result.timed_out() {
+                    break true;
+                }
+            };
+            state.idle -= 1;
+            if let Some(job) = state.queue.pop_front() {
+                drop(state);
+                job();
+                state = self
+                    .state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+            } else if timed_out {
+                return;
+            }
+        }
+    }
+}
 
 /// How a Store's guest calls are driven.
 ///
@@ -58,6 +156,52 @@ trait GuestStoreJob<T>: Send {
         store: StoreContextMut<'_, T>,
         reentrant: bool,
     ) -> StoreFuture<'_, ()>;
+}
+
+trait AccessorJob<T>: Send {
+    fn run(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()>;
+}
+
+struct AccessorCall<F, R> {
+    call: F,
+    result: oneshot::Sender<wasmtime::Result<R>>,
+}
+
+impl<T, F, R> AccessorJob<T> for AccessorCall<F, R>
+where
+    T: Send + 'static,
+    F: for<'a> FnOnce(&'a Accessor<T>) -> StoreFuture<'a, R> + Send + 'static,
+    R: Send + 'static,
+{
+    fn run(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()> {
+        let Self { call, result } = *self;
+        Box::pin(async move {
+            let output = call(accessor).await;
+            let _ = result.send(output);
+            Ok(())
+        })
+    }
+}
+
+struct BlockingAccessorCall<F, R> {
+    call: F,
+    result: std::sync::mpsc::SyncSender<wasmtime::Result<R>>,
+}
+
+impl<T, F, R> AccessorJob<T> for BlockingAccessorCall<F, R>
+where
+    T: Send + 'static,
+    F: for<'a> FnOnce(&'a Accessor<T>) -> StoreFuture<'a, R> + Send + 'static,
+    R: Send + 'static,
+{
+    fn run(self: Box<Self>, accessor: &Accessor<T>) -> StoreFuture<'_, ()> {
+        let Self { call, result } = *self;
+        Box::pin(async move {
+            let output = call(accessor).await;
+            let _ = result.send(output);
+            Ok(())
+        })
+    }
 }
 
 struct StoreCall<F, R> {
@@ -362,6 +506,76 @@ where
         };
         self.call(function, params).await
     }
+
+    /// Invokes a synchronous native WIT export on a sequential store, enforcing the same
+    /// failure latch as [`Self::call`].
+    pub fn call_native<R>(
+        &mut self,
+        call: impl FnOnce(StoreContextMut<'_, T>) -> wasmtime::Result<R>,
+    ) -> wasmtime::Result<R> {
+        if let Some(message) = self.guest_call_failure.message() {
+            return Err(wasmtime::Error::msg(message));
+        }
+        let result = match &mut self.access {
+            LegacyGuestAccess::Sequential { store, .. } => call(store.as_context_mut()),
+            LegacyGuestAccess::Concurrent(_) => Err(wasmtime::Error::msg(
+                "Native WIT exports are only supported on sequential stores",
+            )),
+        };
+        if let Err(error) = &result {
+            self.guest_call_failure.record(error);
+        }
+        result
+    }
+
+    /// Invokes a synchronous native WIT export on a concurrent store using a dedicated export
+    /// worker pool so the concurrent `Accessor` loop and Tokio's blocking pool remain free to
+    /// service host imports and reentrant guest callbacks.
+    pub async fn call_native_concurrent<R>(
+        &mut self,
+        call: impl FnOnce() -> wasmtime::Result<R> + Send + 'static,
+    ) -> wasmtime::Result<R>
+    where
+        R: Send + 'static,
+    {
+        if let Some(message) = self.guest_call_failure.message() {
+            return Err(wasmtime::Error::msg(message));
+        }
+        let result = match &self.access {
+            LegacyGuestAccess::Concurrent(_) => {
+                let context = ReentryContext::current();
+                let (tx, rx) = oneshot::channel();
+                let job: NativeExportJob = Box::new(move || {
+                    let outcome = catch_unwind(AssertUnwindSafe(move || match context {
+                        Some(ctx) => sync_scope(ctx, call),
+                        None => call(),
+                    }))
+                    .unwrap_or_else(|payload| {
+                        Err(wasmtime::Error::msg(format!(
+                            "Native WIT guest export panicked: {}",
+                            panic_message(&*payload)
+                        )))
+                    });
+                    let _ = tx.send(outcome);
+                });
+                match NativeExportPool::global().submit(job) {
+                    Ok(()) => rx.await.map_err(|error| {
+                        wasmtime::Error::msg(format!("Native WIT guest export failed: {error}"))
+                    })?,
+                    Err(error) => Err(wasmtime::Error::msg(format!(
+                        "Failed to schedule native WIT guest export: {error}"
+                    ))),
+                }
+            }
+            LegacyGuestAccess::Sequential { .. } => Err(wasmtime::Error::msg(
+                "Concurrent native WIT exports require a concurrent store",
+            )),
+        };
+        if let Err(error) = &result {
+            self.guest_call_failure.record(error);
+        }
+        result
+    }
 }
 
 pub struct StoreDataMut<'a, T> {
@@ -556,6 +770,7 @@ impl<T> Drop for ReentryRegistration<T> {
 
 struct StoreShared<T, P> {
     sender: mpsc::Sender<StoreMessage<T>>,
+    accessor_sender: mpsc::UnboundedSender<Box<dyn AccessorJob<T>>>,
     accepting: Arc<AtomicBool>,
     guest_call_failure: Arc<GuestCallFailure>,
     send_gate: Mutex<()>,
@@ -619,6 +834,53 @@ where
 
         self.receive_result(receiver, "Wasm plugin store call did not complete")
             .await
+    }
+
+    /// Runs an async host operation directly on a concurrent Store's [`Accessor`] event loop.
+    ///
+    /// Uses a dedicated unbounded channel so native WIT host imports called from inside an active
+    /// guest export or from a plugin background thread never deadlock behind queued guest calls or
+    /// shutdown draining.
+    pub async fn run_with_accessor<R, F>(&self, call: F) -> wasmtime::Result<R>
+    where
+        F: for<'a> FnOnce(&'a Accessor<T>) -> StoreFuture<'a, R> + Send + 'static,
+        R: Send + 'static,
+    {
+        if self.shared.mode != StoreMode::Concurrent {
+            return Err(wasmtime::Error::msg(
+                "run_with_accessor is only supported on concurrent Wasm plugin stores",
+            ));
+        }
+        let (result, receiver) = oneshot::channel();
+        self.shared
+            .accessor_sender
+            .send(Box::new(AccessorCall { call, result }))
+            .map_err(|_| self.terminal_error("Wasm plugin store driver is not running"))?;
+        self.receive_result(receiver, "Wasm plugin accessor operation did not complete")
+            .await
+    }
+
+    /// Synchronous counterpart to [`Self::run_with_accessor`] safe to call from any thread
+    /// (including Tokio blocking threads, foreign Tokio runtimes, Rayon workers, and JVM threads)
+    /// without calling `Handle::block_on`.
+    pub fn run_with_accessor_blocking<R, F>(&self, call: F) -> wasmtime::Result<R>
+    where
+        F: for<'a> FnOnce(&'a Accessor<T>) -> StoreFuture<'a, R> + Send + 'static,
+        R: Send + 'static,
+    {
+        if self.shared.mode != StoreMode::Concurrent {
+            return Err(wasmtime::Error::msg(
+                "run_with_accessor_blocking is only supported on concurrent Wasm plugin stores",
+            ));
+        }
+        let (result, receiver) = std::sync::mpsc::sync_channel(1);
+        self.shared
+            .accessor_sender
+            .send(Box::new(BlockingAccessorCall { call, result }))
+            .map_err(|_| self.terminal_error("Wasm plugin store driver is not running"))?;
+        receiver.recv().unwrap_or_else(|_| {
+            Err(self.terminal_error("Wasm plugin accessor operation did not complete"))
+        })
     }
 
     fn ensure_accepting(&self, message: &'static str) -> wasmtime::Result<()> {
@@ -918,12 +1180,14 @@ where
         mode: StoreMode,
     ) -> wasmtime::Result<Self> {
         let (sender, receiver) = mpsc::channel(STORE_QUEUE_CAPACITY);
+        let (accessor_sender, accessor_receiver) = mpsc::unbounded_channel();
         let (control, control_receiver) = mpsc::unbounded_channel();
         let lifecycle = Lifecycle::new();
         let accepting = Arc::new(AtomicBool::new(true));
         let guest_call_failure = Arc::new(GuestCallFailure::default());
         let shared = Arc::new(StoreShared {
             sender,
+            accessor_sender,
             accepting: Arc::clone(&accepting),
             guest_call_failure,
             send_gate: Mutex::new(()),
@@ -948,6 +1212,7 @@ where
                 run_driver(
                     store,
                     receiver,
+                    accessor_receiver,
                     control_receiver,
                     Arc::clone(&task_guard.lifecycle),
                     ready_sender,
@@ -1139,9 +1404,14 @@ fn control_result(message: Option<&ControlMessage>) -> wasmtime::Result<()> {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "internal driver entrypoint forwards store channels and lifecycle handles"
+)]
 async fn run_driver<T>(
     store: Store<T>,
     receiver: mpsc::Receiver<StoreMessage<T>>,
+    accessor_receiver: mpsc::UnboundedReceiver<Box<dyn AccessorJob<T>>>,
     control: mpsc::UnboundedReceiver<ControlMessage>,
     lifecycle: Arc<Lifecycle>,
     ready: oneshot::Sender<()>,
@@ -1152,9 +1422,19 @@ async fn run_driver<T>(
 {
     match mode {
         StoreMode::Concurrent => {
-            run_concurrent_driver(store, receiver, control, lifecycle, ready, policy_name).await;
+            run_concurrent_driver(
+                store,
+                receiver,
+                accessor_receiver,
+                control,
+                lifecycle,
+                ready,
+                policy_name,
+            )
+            .await;
         }
         StoreMode::Sequential => {
+            drop(accessor_receiver);
             run_sequential_driver(store, receiver, control, lifecycle, ready, policy_name).await;
         }
     }
@@ -1266,10 +1546,53 @@ where
     }
 }
 
+async fn drain_active_calls_with_accessor<T: Send + 'static>(
+    accessor: &Accessor<T>,
+    active_calls: &mut FuturesUnordered<wasmtime::component::JoinHandle>,
+    accessor_receiver: &mut mpsc::UnboundedReceiver<Box<dyn AccessorJob<T>>>,
+) -> wasmtime::Result<()> {
+    while !active_calls.is_empty() {
+        tokio::select! {
+            biased;
+            Some(()) = active_calls.next() => {}
+            Some(accessor_job) = accessor_receiver.recv() => {
+                active_calls.push(
+                    accessor.spawn(async move |accessor| accessor_job.run(accessor).await)?,
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn run_shutdown_with_accessor<T: Send + 'static>(
+    accessor: &Accessor<T>,
+    active_calls: &mut FuturesUnordered<wasmtime::component::JoinHandle>,
+    accessor_receiver: &mut mpsc::UnboundedReceiver<Box<dyn AccessorJob<T>>>,
+    job: Box<dyn StoreJob<T>>,
+) -> wasmtime::Result<()> {
+    let shutdown_fut = job.run_concurrent(accessor);
+    tokio::pin!(shutdown_fut);
+    let result = loop {
+        tokio::select! {
+            res = &mut shutdown_fut => break res,
+            Some(()) = active_calls.next(), if !active_calls.is_empty() => {}
+            Some(accessor_job) = accessor_receiver.recv() => {
+                active_calls.push(
+                    accessor.spawn(async move |accessor| accessor_job.run(accessor).await)?,
+                );
+            }
+        }
+    };
+    drain_active_calls_with_accessor(accessor, active_calls, accessor_receiver).await?;
+    result
+}
+
 #[allow(clippy::too_many_lines)]
 async fn run_concurrent_driver<T>(
     mut store: Store<T>,
     mut receiver: mpsc::Receiver<StoreMessage<T>>,
+    mut accessor_receiver: mpsc::UnboundedReceiver<Box<dyn AccessorJob<T>>>,
     mut control: mpsc::UnboundedReceiver<ControlMessage>,
     lifecycle: Arc<Lifecycle>,
     ready: oneshot::Sender<()>,
@@ -1286,7 +1609,6 @@ async fn run_concurrent_driver<T>(
 
             loop {
                 let message = tokio::select! {
-                    biased;
                     Some(()) = active_calls.next(), if !active_calls.is_empty() => {
                         continue;
                     }
@@ -1296,6 +1618,12 @@ async fn run_concurrent_driver<T>(
                         loop {
                             let message = tokio::select! {
                                 Some(()) = active_calls.next(), if !active_calls.is_empty() => {
+                                    continue;
+                                }
+                                Some(accessor_job) = accessor_receiver.recv() => {
+                                    active_calls.push(
+                                        accessor.spawn(async move |accessor| accessor_job.run(accessor).await)?,
+                                    );
                                     continue;
                                 }
                                 message = receiver.recv() => message,
@@ -1314,25 +1642,31 @@ async fn run_concurrent_driver<T>(
                                     job,
                                     root_admission,
                                 } => {
-                                    while active_calls.next().await.is_some() {}
+                                    drain_active_calls_with_accessor(accessor, &mut active_calls, &mut accessor_receiver).await?;
                                     loop_lifecycle.transition(DriverState::Stopping);
-                                    let result = job.run_concurrent(accessor).await;
+                                    let result = run_shutdown_with_accessor(accessor, &mut active_calls, &mut accessor_receiver, job).await;
                                     poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
                                     drop(root_admission);
                                     return result;
                                 }
                             }
                         }
-                        while active_calls.next().await.is_some() {}
+                        drain_active_calls_with_accessor(accessor, &mut active_calls, &mut accessor_receiver).await?;
                         loop_lifecycle.transition(DriverState::Stopping);
                         poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
                         return control_result(Some(&control_message));
+                    }
+                    Some(accessor_job) = accessor_receiver.recv() => {
+                        active_calls.push(
+                            accessor.spawn(async move |accessor| accessor_job.run(accessor).await)?,
+                        );
+                        continue;
                     }
                     message = receiver.recv() => message,
                 };
                 let Some(message) = message else {
                     loop_lifecycle.transition(DriverState::Draining);
-                    while active_calls.next().await.is_some() {}
+                    drain_active_calls_with_accessor(accessor, &mut active_calls, &mut accessor_receiver).await?;
                     // The owner may have closed the submission channel while its control signal is still pending
                     let control_message = control.recv().await;
                     loop_lifecycle.transition(DriverState::Stopping);
@@ -1353,9 +1687,9 @@ async fn run_concurrent_driver<T>(
                     } => {
                         loop_lifecycle.transition(DriverState::Draining);
                         receiver.close();
-                        while active_calls.next().await.is_some() {}
+                        drain_active_calls_with_accessor(accessor, &mut active_calls, &mut accessor_receiver).await?;
                         loop_lifecycle.transition(DriverState::Stopping);
-                        let result = job.run_concurrent(accessor).await;
+                        let result = run_shutdown_with_accessor(accessor, &mut active_calls, &mut accessor_receiver, job).await;
                         poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
                         drop(root_admission);
                         return result;
@@ -1455,12 +1789,14 @@ mod tests {
         let engine = Engine::new(&config).expect("test engine");
         let store = Store::new(&engine, ());
         let (sender, receiver) = mpsc::channel(1);
+        let (_accessor_sender, accessor_receiver) = mpsc::unbounded_channel();
         let (control_sender, control_receiver) = mpsc::unbounded_channel();
         let lifecycle = Lifecycle::new();
         let (ready_sender, ready) = oneshot::channel();
         let driver = tokio::spawn(run_driver(
             store,
             receiver,
+            accessor_receiver,
             control_receiver,
             Arc::clone(&lifecycle),
             ready_sender,
@@ -1486,5 +1822,79 @@ mod tests {
             .await
             .expect_err("owner drop should fail the driver");
         assert!(error.to_string().contains("control was dropped"));
+    }
+
+    #[test]
+    fn native_concurrent_export_does_not_deadlock_single_blocking_thread() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .max_blocking_threads(1)
+            .enable_all()
+            .build()
+            .expect("single-blocking-thread test runtime");
+
+        runtime.block_on(async {
+            struct HandleSpawner(tokio::runtime::Handle);
+            impl crate::RuntimeSpawner for HandleSpawner {
+                fn spawn(&self, task: crate::SpawnFuture) -> Result<(), crate::SpawnError> {
+                    drop(self.0.spawn(task));
+                    Ok(())
+                }
+
+                fn spawn_blocking(
+                    &self,
+                    task: Box<dyn FnOnce() + Send + 'static>,
+                ) -> Result<(), crate::SpawnError> {
+                    drop(self.0.spawn_blocking(task));
+                    Ok(())
+                }
+            }
+
+            let mut config = Config::new();
+            config.wasm_component_model(true);
+            config.wasm_component_model_async(true);
+            config.concurrency_support(true);
+            let engine = Engine::new(&config).expect("test engine");
+            let store = Store::new(&engine, ());
+            let spawner = Arc::new(HandleSpawner(tokio::runtime::Handle::current()));
+            let executor = crate::StoreExecutor::start(
+                store,
+                crate::LegacySyncReentry::new(),
+                spawner,
+                StoreMode::Concurrent,
+            )
+            .await
+            .expect("start concurrent store");
+            let handle = executor.handle();
+
+            // Simulate a concurrent native export that blocks waiting on a host import which
+            // itself requires Tokio's single blocking worker.
+            let result = timeout(
+                Duration::from_secs(5),
+                executor.call_guest(move |mut guest| {
+                    Box::pin(async move {
+                        guest
+                            .call_native_concurrent(move || {
+                                handle.run_with_accessor_blocking(|_| {
+                                    Box::pin(async {
+                                        tokio::task::spawn_blocking(|| 42u32)
+                                            .await
+                                            .map_err(wasmtime::Error::msg)
+                                    })
+                                })
+                            })
+                            .await
+                    })
+                }),
+            )
+            .await
+            .expect("native export must not deadlock when max_blocking_threads == 1")
+            .expect("native export should succeed");
+            assert_eq!(result, 42);
+            executor
+                .shutdown(|_| Box::pin(async { Ok(()) }))
+                .await
+                .expect("shutdown store");
+        });
     }
 }
