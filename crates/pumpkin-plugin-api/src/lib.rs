@@ -499,10 +499,56 @@ fn plugin() -> &'static dyn Plugin {
 /// The singleton plugin instance, initialised by [`register_plugin`].
 static PLUGIN: OnceLock<Box<dyn Plugin>> = OnceLock::new();
 
+/// Runtime glue used by [`register_plugin!`] on native (`cdylib`) targets to bridge
+/// `wit-bindgen`'s Rust-level `register_import_resolver` and `cabi_realloc` to the host loader.
+#[cfg(not(target_family = "wasm"))]
+#[doc(hidden)]
+pub mod native_wit_rt {
+    use core::ptr::NonNull;
+
+    struct SendPtr(*mut ());
+
+    // SAFETY: The host passes a thread-safe context pointer (or null) alongside a `'static`
+    // resolver function pointer whose lifetime spans the loaded dynamic library.
+    unsafe impl Send for SendPtr {}
+    // SAFETY: Same as `Send`; the host resolver is required to be safe to invoke concurrently.
+    unsafe impl Sync for SendPtr {}
+
+    pub unsafe fn cabi_realloc(
+        old_ptr: *mut u8,
+        old_len: usize,
+        align: usize,
+        new_len: usize,
+    ) -> *mut u8 {
+        unsafe { wit_bindgen::rt::cabi_realloc(old_ptr, old_len, align, new_len) }
+    }
+
+    pub unsafe fn set_import_resolver(
+        resolver: unsafe extern "C" fn(*mut (), *const u8, usize, *const u8, usize) -> *mut (),
+        ctx: *mut (),
+    ) {
+        let ctx = SendPtr(ctx);
+        unsafe {
+            wit_bindgen::rt::register_import_resolver(move |module, name| {
+                let ctx = &ctx;
+                let ptr = resolver(
+                    ctx.0,
+                    module.as_ptr(),
+                    module.len(),
+                    name.as_ptr(),
+                    name.len(),
+                );
+                NonNull::new(ptr)
+            });
+        }
+    }
+}
+
 /// Registers the provided type as a Pumpkin plugin.
 ///
-/// This macro generates the WebAssembly export entry point that the server uses to
-/// instantiate the plugin. The type must implement the [`Plugin`] trait.
+/// This macro generates the WIT export entry point that the server uses to
+/// instantiate the plugin (for both WebAssembly components and native `cdylib`
+/// plugins). The type must implement the [`Plugin`] trait.
 ///
 /// # Example
 /// ```rust,ignore
@@ -511,9 +557,36 @@ static PLUGIN: OnceLock<Box<dyn Plugin>> = OnceLock::new();
 #[macro_export]
 macro_rules! register_plugin {
     ($plugin_type:ty) => {
+        #[cfg(target_family = "wasm")]
         #[unsafe(export_name = "init-plugin")]
         pub extern "C" fn __init_plugin() {
             $crate::register_plugin(|| Box::new(<$plugin_type as $crate::Plugin>::new()));
+        }
+
+        #[cfg(not(target_family = "wasm"))]
+        #[unsafe(export_name = "init_plugin")]
+        pub extern "C" fn __init_plugin() {
+            $crate::register_plugin(|| Box::new(<$plugin_type as $crate::Plugin>::new()));
+        }
+
+        #[cfg(not(target_family = "wasm"))]
+        #[unsafe(export_name = "__pumpkin_native_wit_cabi_realloc")]
+        pub unsafe extern "C" fn __pumpkin_native_wit_cabi_realloc(
+            old_ptr: *mut u8,
+            old_len: usize,
+            align: usize,
+            new_len: usize,
+        ) -> *mut u8 {
+            unsafe { $crate::native_wit_rt::cabi_realloc(old_ptr, old_len, align, new_len) }
+        }
+
+        #[cfg(not(target_family = "wasm"))]
+        #[unsafe(export_name = "__pumpkin_native_wit_set_import_resolver")]
+        pub unsafe extern "C" fn __pumpkin_native_wit_set_import_resolver(
+            resolver: unsafe extern "C" fn(*mut (), *const u8, usize, *const u8, usize) -> *mut (),
+            ctx: *mut (),
+        ) {
+            unsafe { $crate::native_wit_rt::set_import_resolver(resolver, ctx) };
         }
     };
 }
