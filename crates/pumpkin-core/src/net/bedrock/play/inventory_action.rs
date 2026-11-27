@@ -400,6 +400,11 @@ impl BedrockClient {
                             }
                         }
                         if before.is_damageable() && stack.is_empty() {
+                            let equipment_slot = physical_source
+                                .as_ref()
+                                .map_or(&EquipmentSlot::MAIN_HAND, |(_, equipment_slot, _, _)| {
+                                    equipment_slot
+                                });
                             player.increment_stat(
                                 pumpkin_data::statistic::StatisticCategory::Broken,
                                 item_id as i32,
@@ -407,7 +412,7 @@ impl BedrockClient {
                             );
                             player.world().send_entity_status(
                                 player.get_entity(),
-                                crate::entity::equipment_break_status(&EquipmentSlot::MAIN_HAND),
+                                crate::entity::equipment_break_status(equipment_slot),
                                 ActorEventID::None,
                             );
                         }

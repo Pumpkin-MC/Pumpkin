@@ -1213,19 +1213,80 @@ impl Player {
     }
 
     pub fn start_cooldown(&self, group: String, duration: i32) {
-        let mut cooldowns = self
-            .item_cooldowns
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        cooldowns.insert(
-            group.clone(),
-            ItemCooldown {
-                start_tick: self.tick_counter.load(Ordering::Relaxed),
-                duration,
-            },
-        );
-        drop(cooldowns);
-        self.try_send_client_packet(&CItemCooldown::new(group, VarInt(duration)));
+        use pumpkin_protocol::{packet::MultiVersionJavaPacket, ser::NetworkReadExt};
+
+        let start_tick = {
+            let mut cooldowns = self
+                .item_cooldowns
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let start_tick = self.tick_counter.load(Ordering::Relaxed);
+            cooldowns.insert(
+                group.clone(),
+                ItemCooldown {
+                    start_tick,
+                    duration,
+                },
+            );
+            start_tick
+        };
+        let packet = CItemCooldown::new(group, VarInt(duration));
+        if let Some(client) = self.client.java()
+            && let Ok(data) = client.serialize_packet(&packet)
+        {
+            let version = client.version.load();
+            let wire_id = CItemCooldown::to_id(version);
+            let legacy_item = |mut payload: &[u8]| {
+                if version >= pumpkin_util::version::JavaMinecraftVersion::V_1_21_2
+                    || payload.get_var_int().ok()?.0 != wire_id
+                {
+                    return None;
+                }
+                let item = payload.get_var_int().ok()?;
+                let _duration = payload.get_var_int().ok()?;
+                payload.is_empty().then_some(item)
+            };
+            // The translated primary identifies the item for pre-group protocols.
+            let mut translated_item = None;
+            client.try_enqueue_packet_data_projecting(
+                data,
+                || {
+                    let cooldowns = self
+                        .item_cooldowns
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    cooldowns
+                        .get(&packet.group)
+                        .is_some_and(|current| {
+                            current.start_tick == start_tick && current.duration == duration
+                        })
+                        .then_some(cooldowns)
+                },
+                |data, primary, current| {
+                    if current.is_some() {
+                        return Some(data);
+                    }
+                    if primary {
+                        translated_item = legacy_item(&data);
+                        return None;
+                    }
+
+                    let mut payload = data.as_ref();
+                    let same_group = payload.get_var_int().is_ok_and(|id| {
+                        id.0 == CItemCooldown::to_id(pumpkin_data::packet::CURRENT_MC_VERSION)
+                            || id.0 == wire_id
+                    }) && payload
+                        .get_str()
+                        .is_ok_and(|group| group.as_ref() == packet.group)
+                        && payload.get_var_int().is_ok()
+                        && payload.is_empty();
+                    let same_legacy_item =
+                        translated_item.is_some_and(|item| legacy_item(&data) == Some(item));
+                    (!same_group && !same_legacy_item).then_some(data)
+                },
+                |_, _, _| {},
+            );
+        }
     }
 
     pub fn get_cooldown(&self, group: &str) -> f32 {
@@ -2114,7 +2175,7 @@ impl Player {
         }
     }
 
-    const SCREEN_EQUIPMENT: [EquipmentSlot; 8] = [
+    pub(crate) const SCREEN_EQUIPMENT: [EquipmentSlot; 8] = [
         EquipmentSlot::MAIN_HAND,
         EquipmentSlot::OFF_HAND,
         EquipmentSlot::HEAD,
@@ -6574,6 +6635,7 @@ impl Player {
 
         let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
         let dropped_stack = item_stack.copy_with_count(drop_amount);
+        let original_owner = self.screen_owner();
 
         if let Some(server) = self.world().server.upgrade()
             && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
@@ -6596,11 +6658,15 @@ impl Player {
             .inventory()
             .replace_slot_if_same(selected_slot, &before, item_stack.clone())
         {
-            let current = self.inventory().get_slot(selected_slot);
-            self.try_send_slot_set_packet(&CSetPlayerInventory::new(
-                (selected_slot as i32).into(),
-                &ItemStackSerializer::from(current),
-            ));
+            if self.client.java().is_some() {
+                self.resync_active_inventory_screen();
+            } else {
+                let current = self.inventory().get_slot(selected_slot);
+                self.try_send_slot_set_packet(&CSetPlayerInventory::new(
+                    (selected_slot as i32).into(),
+                    &ItemStackSerializer::from(current),
+                ));
+            }
             return;
         }
         let updated_stack = item_stack;
@@ -6614,7 +6680,9 @@ impl Player {
         };
         let (sync, epoch) = Self::capture_screen_updates(&mut *handler, |handler| {
             let current = self.inventory().get_slot(selected_slot);
-            if current.are_equal(&updated_stack)
+            if owner.generation == original_owner.generation
+                && Arc::ptr_eq(&owner.handler, &original_owner.handler)
+                && current.are_equal(&updated_stack)
                 && (current.is_empty() || current.uid == updated_stack.uid)
                 && let Some(slot_index) = handler.get_slot_index(&inv, selected_slot)
             {
