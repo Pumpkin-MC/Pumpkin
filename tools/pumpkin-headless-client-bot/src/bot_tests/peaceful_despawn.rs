@@ -1,7 +1,13 @@
-use std::sync::{Arc, atomic::Ordering::Relaxed};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering::Relaxed},
+};
 
 use pumpkin_core::{
-    entity::{EntityBase, RemovalReason, r#type::from_type, vehicle::minecart::MinecartEntity},
+    entity::{
+        Entity, EntityBase, RemovalReason, boss::wither::WitherEntity, living::LivingEntity,
+        r#type::from_type, vehicle::minecart::MinecartEntity,
+    },
     server::Server,
     world::{BlockFlags, World},
 };
@@ -65,13 +71,11 @@ pub fn run_peaceful_despawn_test(
             let entity = mob.get_entity();
             let alive = world.get_entity_by_id(entity.entity_id).is_some();
             let discarded = entity.removal_reason.load() == Some(RemovalReason::Discarded);
+            let ticks = entity.tick_count.load(Relaxed);
             let should_discard = peaceful_tick && !survives;
-            if alive == should_discard
-                || discarded != should_discard
-                || (alive && entity.tick_count.load(Relaxed) != expected_ticks)
-            {
+            if alive == should_discard || discarded != should_discard || ticks != expected_ticks {
                 return Err(format!(
-                    "Unexpected mob state after {expected_ticks} tick(s): type {}, persistent {persistent}, alive {alive}, discarded {discarded}",
+                    "Unexpected mob state after {expected_ticks} tick(s): type {}, persistent {persistent}, alive {alive}, discarded {discarded}, ticks {ticks}",
                     entity.entity_type.resource_name
                 ));
             }
@@ -240,7 +244,7 @@ fn check_mid_tick_transitions(
         let discarded = entity.removal_reason.load() == Some(RemovalReason::Discarded);
         if alive != (after == Difficulty::Normal)
             || discarded != (after == Difficulty::Peaceful)
-            || (alive && entity.tick_count.load(Relaxed) != 1)
+            || entity.tick_count.load(Relaxed) != 1
         {
             failures.push(format!(
                 "{before:?} to {after:?}: zombie alive {alive}, discarded {discarded}, ticks {}",
@@ -255,4 +259,108 @@ fn check_mid_tick_transitions(
     } else {
         Err(failures.join("\n"))
     }
+}
+
+enum TickMarkerAction {
+    SwitchDifficulty,
+    ObserveWither { id: i32, present: Arc<AtomicBool> },
+}
+
+struct TickMarker(Entity, TickMarkerAction);
+
+impl EntityBase for TickMarker {
+    fn get_entity(&self) -> &Entity {
+        &self.0
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
+        let world = self.0.world.load();
+        match &self.1 {
+            // Publish the world-level update where a concurrent difficulty change would reach it.
+            TickMarkerAction::SwitchDifficulty => world.set_difficulty(Difficulty::Peaceful),
+            TickMarkerAction::ObserveWither { id, present } => {
+                present.store(world.get_entity_by_id(*id).is_some(), Relaxed);
+            }
+        }
+    }
+}
+
+pub fn run_late_peaceful_wither_test(
+    server: &Arc<Server>,
+    bot: &HeadlessBot,
+    summary_lines: &mut Vec<String>,
+) -> Result<(), String> {
+    let player = server
+        .get_player_by_name(&bot.name)
+        .ok_or("Missing Wither test player")?;
+    let world = player.world();
+    let position = player.position().add_raw(0.0, 8.0, 0.0);
+    let mut fixtures: Vec<Arc<dyn EntityBase>> = Vec::new();
+    let original_difficulty = world.level_info.load().difficulty;
+    let result = (|| {
+        world.set_difficulty(Difficulty::Normal);
+        for height in [-112.0, 112.0] {
+            for _ in 0..8 {
+                let marker = from_type(
+                    &EntityType::MARKER,
+                    position.add_raw(0.0, height, 0.0),
+                    &world,
+                    Uuid::new_v4(),
+                );
+                fixtures.push(marker);
+            }
+        }
+        // These three fixtures overlap in one island and tick in insertion order.
+        fixtures.push(Arc::new(TickMarker(
+            Entity::new(world.clone(), position, &EntityType::MARKER),
+            TickMarkerAction::SwitchDifficulty,
+        )));
+        let wither = WitherEntity::new(Entity::new(world.clone(), position, &EntityType::WITHER));
+        wither.set_invulnerable_ticks(1);
+        fixtures.push(wither.clone());
+        let present_during_tick = Arc::new(AtomicBool::new(false));
+        fixtures.push(Arc::new(TickMarker(
+            Entity::new(world.clone(), position, &EntityType::MARKER),
+            TickMarkerAction::ObserveWither {
+                id: wither.get_entity().entity_id,
+                present: present_during_tick.clone(),
+            },
+        )));
+        for entity in &fixtures {
+            if !world.spawn_entity(entity.clone()) {
+                return Err("Could not spawn late Peaceful fixtures");
+            }
+        }
+
+        server.tick_rate_manager.tick();
+        server.tick();
+        if !present_during_tick.load(Relaxed) {
+            return Err("The observer did not see the Wither during the planned island tick");
+        }
+        let entity = wither.get_entity();
+        if world.level_info.load().difficulty != Difficulty::Peaceful
+            || wither.get_invulnerable_ticks() != 1
+            || entity.tick_count.load(Relaxed) != 1
+            || entity.removal_reason.load() != Some(RemovalReason::Discarded)
+            || world.get_entity_by_id(entity.entity_id).is_some()
+        {
+            return Err("Wither was not discarded before its final invulnerability tick");
+        }
+        Ok(())
+    })();
+    world.set_difficulty(original_difficulty);
+    for entity in fixtures {
+        world.remove_entity(entity.as_ref());
+    }
+    result?;
+    summary_lines.push("[PASS] bot:late_peaceful_despawns_wither_before_explosion".into());
+    Ok(())
 }

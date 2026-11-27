@@ -1894,27 +1894,28 @@ impl World {
         };
         let first_order = self.level.reserve_entity_tick_orders(tickable.len());
 
-        // An asynchronous difficulty change cannot make an existing island plan safe for discards.
-        let can_discard = islands.is_none();
+        let discard_peaceful_mob = |index: usize| {
+            // Use the mob's original turn order for spawns and scheduled block or fluid ticks.
+            let (entity, _) = &tickable[index];
+            order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
+            if self.discard_entity(entity.as_ref()) {
+                let base = entity.get_entity();
+                // Java advances the tick count and handles the leash after discarding the mob.
+                base.tick_count.fetch_add(1, Relaxed);
+                base.tick_leash(entity.as_ref());
+                // Release the holder even when a plugin vetoes the lead drop.
+                base.remove_leash();
+            }
+        };
+        let should_discard = |index: usize| {
+            despawns_in_peaceful(tickable[index].0.as_ref())
+                && self.level_info.load().difficulty == Difficulty::Peaceful
+        };
         let server_ref = server.as_ref();
         let tick_entity = |index: usize| {
             let (entity, _) = &tickable[index];
             order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
-
             let base = entity.get_entity();
-            if can_discard
-                && despawns_in_peaceful(entity.as_ref())
-                && self.level_info.load().difficulty == Difficulty::Peaceful
-            {
-                if self.discard_entity(entity.as_ref()) {
-                    // Java advances the tick count and handles the leash after discarding the mob.
-                    base.tick_count.fetch_add(1, Relaxed);
-                    base.tick_leash(entity.as_ref());
-                    // Release the holder even when a plugin vetoes the lead drop.
-                    base.remove_leash();
-                }
-                return;
-            }
             base.tick_count.fetch_add(1, Relaxed);
             // Vanilla `rideTick`: a rider starts its tick without motion
             if base.has_vehicle() {
@@ -1923,26 +1924,47 @@ impl World {
             entity.tick(entity.as_ref(), server_ref);
         };
         if let Some(islands) = islands {
-            islands
+            // A late switch to Peaceful can require removals with unbounded effects.
+            // Skip the mob's turn. Other entities can still find, damage, or kill it
+            // before the serial discard runs.
+            let mut deferred: Vec<_> = islands
                 .islands
                 .par_iter()
                 .with_max_len(1)
-                .for_each(|island| {
+                .flat_map_iter(|island| {
+                    let mut deferred = Vec::new();
                     for &index in island {
-                        #[cfg(debug_assertions)]
-                        entity_islands::enter(&islands, tickable[index].0.get_entity().entity_id);
-                        tick_entity(index);
+                        if should_discard(index) {
+                            deferred.push(index);
+                        } else {
+                            #[cfg(debug_assertions)]
+                            entity_islands::enter(
+                                &islands,
+                                tickable[index].0.get_entity().entity_id,
+                            );
+                            tick_entity(index);
+                        }
                     }
                     order::set_entity_order(None);
                     #[cfg(debug_assertions)]
                     entity_islands::leave();
-                });
+                    deferred
+                })
+                .collect();
+            deferred.sort_unstable();
+            for index in deferred {
+                discard_peaceful_mob(index);
+            }
         } else {
             for index in 0..tickable.len() {
-                tick_entity(index);
+                if should_discard(index) {
+                    discard_peaceful_mob(index);
+                } else {
+                    tick_entity(index);
+                }
             }
-            order::set_entity_order(None);
         }
+        order::set_entity_order(None);
         // Vanilla `rideTick`: riders follow their vehicle's seat once it has moved
         tickable.par_iter().for_each(|(entity, _)| {
             if !entity.is_passenger() && entity.get_entity().has_passengers() {
