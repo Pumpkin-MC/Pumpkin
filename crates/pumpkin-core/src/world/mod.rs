@@ -432,6 +432,10 @@ impl World {
         Self {
             uuid: Uuid::new_v4(),
             level,
+            level_time: std::sync::Mutex::new(LevelTime {
+                time_of_day: level_info.load().day_time,
+                ..LevelTime::new()
+            }),
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
@@ -446,7 +450,6 @@ impl World {
                 5,
                 300,
             )),
-            level_time: std::sync::Mutex::new(LevelTime::new()),
             dimension,
             weather: std::sync::Mutex::new(Weather::new()),
             block_registry,
