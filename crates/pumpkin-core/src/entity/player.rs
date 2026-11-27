@@ -2490,11 +2490,13 @@ impl Player {
                     &self.living_entity.entity.pos.load(),
                 );
             }
-            self.world().send_entity_status(
-                &self.living_entity.entity,
-                super::equipment_break_status(slot),
-                ActorEventID::None,
-            );
+            if self.inventory.equipment_slot_index(slot) == Some(slot_index) {
+                self.world().send_entity_status(
+                    &self.living_entity.entity,
+                    super::equipment_break_status(slot),
+                    ActorEventID::None,
+                );
+            }
         }
 
         let stored = self.inventory.get_slot(slot_index);

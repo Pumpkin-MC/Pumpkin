@@ -1191,14 +1191,11 @@ impl TrackedEntity {
         paired_rider: Option<i32>,
     ) {
         let entity = carrier.get_entity();
-        if !matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
-            self.send_pairing_passenger_snapshot(entity, player, session, paired_rider);
-            return;
-        }
-        for _ in 0..2 {
+        let bedrock = matches!(player.client.as_ref(), ClientPlatform::Bedrock(_));
+        for _ in 0..if bedrock { 2 } else { 1 } {
             match self.send_pairing_passenger_snapshot(entity, player, session, paired_rider) {
-                PassengerSnapshot::Finished => return,
-                PassengerSnapshot::Changed => {}
+                PassengerSnapshot::Changed if bedrock => {}
+                PassengerSnapshot::Finished | PassengerSnapshot::Changed => return,
                 PassengerSnapshot::Busy => break,
             }
         }
@@ -1638,12 +1635,24 @@ impl TrackedEntity {
                 ClientPlatform::SimulatedPlayer(_) => Vec::new(),
             };
             let Some(next) = self.try_equipment_snapshot(living) else {
+                // A previously sent slot may have been cleared while the snapshot was busy.
+                for slot in snapshot.equipment.keys() {
+                    if !slots.contains(slot) {
+                        slots.push(slot.clone());
+                    }
+                }
                 needs_snapshot = true;
                 break;
             };
-            for slot in Self::occupied_slots(&next) {
-                if snapshot.get(&slot).is_empty() && !slots.contains(&slot) {
-                    slots.push(slot);
+            let bedrock = player.client.bedrock().is_some();
+            for slot in snapshot.equipment.keys().chain(next.equipment.keys()) {
+                if !Self::equipment_stacks_match(
+                    snapshot.equipment.get(slot),
+                    next.equipment.get(slot),
+                    bedrock,
+                ) && !slots.contains(slot)
+                {
+                    slots.push(slot.clone());
                 }
             }
             snapshot = next;
@@ -3195,6 +3204,131 @@ mod tests {
             }
         }
         assert_eq!(extras, [UNRELATED]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn java_pairing_retries_a_contended_passenger_snapshot() -> TestResult {
+        use crate::entity::vehicle::minecart::MinecartEntity;
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let (rider, _rider_peer) = java_rider(&server, &world, "jeb_")?;
+        let cart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::MINECART,
+        )));
+        let entity = cart.get_entity();
+        assert!(world.spawn_entity(cart.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(entity.entity_id)
+            .ok_or("Minecart tracker")?;
+        entity.add_passenger_silently(cart.clone(), rider);
+        let retry_pending = {
+            let _passengers = entity
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            tracker.add_pairing(&viewer);
+            tracker.passenger_retry_pending.load(Relaxed)
+        };
+        assert!(retry_pending);
+        tracker.flush_pairing_passengers();
+
+        assert!(
+            queued_packets(client, &mut decoder)
+                .await?
+                .iter()
+                .any(|packet| packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION))
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn bedrock_pairing_clears_a_hand_changed_during_the_next_packet() -> TestResult {
+        use crate::entity::mob::Mob;
+        use crate::entity::passive::pig::PigEntity;
+        use crate::world::item_inventory_tests::bedrock_player;
+        use pumpkin_data::item::Item;
+        use pumpkin_protocol::bedrock::server::inventory_transaction::WINDOW_ID_OFF_HAND;
+
+        struct ClearMainHand(Arc<PigEntity>, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for ClearMainHand {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    let mut payload = event.payload.as_ref();
+                    if event.packet_id == CMobEquipment::PACKET_ID
+                        && VarULong::read(&mut payload)
+                            .is_ok_and(|id| id.0 == self.0.get_entity().entity_id as u64)
+                        && NetworkItemStackDescriptor::read(&mut payload).is_ok()
+                        && u8::read(&mut payload).is_ok()
+                        && u8::read(&mut payload).is_ok()
+                        && u8::read(&mut payload).is_ok_and(|id| id == WINDOW_ID_OFF_HAND as u8)
+                        && !self.1.swap(true, Relaxed)
+                    {
+                        self.0
+                            .get_mob_entity()
+                            .living_entity
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .equipment
+                            .remove(&EquipmentSlot::MAIN_HAND);
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, mut packets) = bedrock_player(&server, &world, "Notch").await?;
+        let pig = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let mob = pig.get_mob_entity();
+        mob.set_item_slot(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, &Item::SHIELD));
+        mob.set_item_slot(&EquipmentSlot::OFF_HAND, ItemStack::new(1, &Item::STICK));
+        assert!(world.spawn_entity(pig.clone()));
+        let id = pig.get_entity().entity_id;
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(id)
+            .ok_or("Pig tracker")?;
+        let observer = Arc::new(ClearMainHand(pig, AtomicBool::new(false)));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        while packets.try_recv().is_ok() {}
+        tracker.add_pairing(&viewer);
+        assert!(observer.1.load(Relaxed));
+        let mut main_hand = Vec::new();
+        while let Ok(packet) = packets.try_recv() {
+            if let Some((packet_id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data)
+                && i32::from(packet_id) == CMobEquipment::PACKET_ID
+            {
+                let mut payload = payload.as_ref();
+                if VarULong::read(&mut payload)?.0 != id as u64 {
+                    continue;
+                }
+                let item = NetworkItemStackDescriptor::read(&mut payload)?;
+                let _slot = u8::read(&mut payload)?;
+                let _selected = u8::read(&mut payload)?;
+                if u8::read(&mut payload)? == 0 {
+                    main_hand.push(item.id == 0);
+                }
+            }
+        }
+        assert_eq!(main_hand, [false, true]);
         world.level.shutdown().await;
         Ok(())
     }
