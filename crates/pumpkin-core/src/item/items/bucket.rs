@@ -6,7 +6,7 @@ use crate::{
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockDirection, BlockId, BlockState,
     data_component_impl::{
         BucketEntityDataImpl, CustomNameImpl, EquipmentSlot, SulfurCubeContentImpl,
     },
@@ -376,6 +376,14 @@ fn try_place_powder_snow(
     Some(target_pos)
 }
 
+// These plants implement LiquidBlockContainer but already contain source water.
+const fn is_water_plant(block: &Block) -> bool {
+    matches!(
+        block.id,
+        BlockId::SEAGRASS | BlockId::TALL_SEAGRASS | BlockId::KELP | BlockId::KELP_PLANT
+    )
+}
+
 fn try_place_liquid(
     world: &Arc<World>,
     item: &Item,
@@ -395,7 +403,7 @@ fn try_place_liquid(
     let can_waterlog_clicked =
         is_water && !is_sneaking && block.is_waterloggable() && !block.is_waterlogged(state.id);
 
-    let place_pos = if can_waterlog_clicked {
+    let place_pos = if can_waterlog_clicked || (is_water && is_water_plant(block)) {
         pos
     } else {
         pos.offset(direction.to_offset())
@@ -418,6 +426,9 @@ fn try_place_liquid(
         return Some(place_pos);
     }
 
+    if is_water && is_water_plant(target_block) {
+        return Some(place_pos);
+    }
     if can_waterlog_target {
         let state_id = if target_block.has_tag(&tag::Block::MINECRAFT_CAMPFIRES) {
             let mut props = pumpkin_data::block_properties::CampfireLikeProperties::from_state_id(
@@ -740,5 +751,38 @@ impl ItemBehaviour for MilkBucketItem {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn water_and_fish_buckets_keep_aquatic_plants_and_use_their_position() {
+        let folder = tempfile::tempdir().unwrap();
+        let world = crate::entity::ai::test_support::world(&folder);
+        let pos = BlockPos::new(0, 100, 0);
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+        for plant in [
+            &Block::SEAGRASS,
+            &Block::TALL_SEAGRASS,
+            &Block::KELP,
+            &Block::KELP_PLANT,
+        ] {
+            world.set_block_state(&pos, plant.default_state.id, BlockFlags::FORCE_STATE);
+            for bucket in [&Item::WATER_BUCKET, &Item::COD_BUCKET] {
+                assert_eq!(
+                    try_place_liquid(&world, bucket, pos, BlockDirection::Up, false),
+                    Some(pos)
+                );
+                assert_eq!(world.get_block(&pos), plant);
+                assert!(world.get_block_state(&pos.up()).is_air());
+            }
+        }
+        world.level.shutdown().await;
     }
 }
