@@ -172,23 +172,10 @@ impl SlimeEntity {
             return MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason);
         }
 
-        // Swamp/Surface Spawning
-        // TODO: fix
-        // let biome = world.get_biome(pos);
-        // if biome.has_tag(&pumpkin_data::tag::WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
-        //     && pos.0.y > 50
-        //     && pos.0.y < 70
-        // {
-        //     let time = world.level_time.lock().await.time_of_day;
-        //     let moon_phase = (time / 24000) % 8;
-        //     let surface_slime_spawn_chance = Self::get_spawn_chance(moon_phase);
-        //     let mut rng = rand::rng();
-        //     if rng.random::<f32>() < surface_slime_spawn_chance
-        //         && world.get_max_local_raw_brightness(pos) <= rng.random_range(0..8)
-        //     {
-        //         return true;
-        //     }
-        // }
+        let mut rng = rand::rng();
+        if Self::can_spawn_on_surface(world, pos, &mut rng) {
+            return MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason);
+        }
 
         // Slime Chunk Spawning
         let chunk_pos = pos.chunk_position();
@@ -201,7 +188,6 @@ impl SlimeEntity {
         );
         let mut slime_rand = pumpkin_util::random::legacy_rand::LegacyRand::from_seed(slime_seed);
 
-        let mut rng = rand::rng();
         if rng.random_range(0..10) == 0 && slime_rand.next_bounded_i32(10) == 0 && pos.0.y < 40 {
             return MobEntity::check_mob_spawn_rules(entity_type, world, pos, reason);
         }
@@ -209,15 +195,15 @@ impl SlimeEntity {
         false
     }
 
-    // const fn get_spawn_chance(moon_phase: i64) -> f32 {
-    //     match moon_phase {
-    //         0 => 1.0,
-    //         1 | 7 => 0.75,
-    //         2 | 6 => 0.5,
-    //         3 | 5 => 0.25,
-    //         _ => 0.0,
-    //     }
-    // }
+    fn can_spawn_on_surface(world: &World, pos: &BlockPos, rng: &mut impl rand::Rng) -> bool {
+        use pumpkin_data::tag::{Taggable, WorldgenBiome};
+        (51..70).contains(&pos.0.y)
+            && world
+                .get_biome(pos)
+                .has_tag(&WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
+            && rng.random::<f32>() < world.surface_slime_spawn_chance(pos)
+            && world.get_max_local_raw_brightness(pos) <= rng.random_range(0..8)
+    }
 }
 
 impl CubeMob for SlimeEntity {
@@ -432,6 +418,42 @@ impl Goal for SlimeAttackGoal {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn surface_slime_spawning_uses_swamp_height_light_and_moon_phase() {
+        use pumpkin_data::biome::Biome;
+        use pumpkin_world::chunk::ChunkData;
+        use rand::{SeedableRng, rngs::StdRng};
+        let folder = tempfile::tempdir().unwrap();
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk = ChunkData::empty_sync(0, 0);
+        world.level.loaded_chunks.insert(
+            pumpkin_util::math::vector2::Vector2::new(0, 0),
+            chunk.clone(),
+        );
+
+        let permits = |biome: &Biome, y, block_light| {
+            let pos = pumpkin_util::math::position::BlockPos::new(8, y, 8);
+            chunk.section.set_relative_biome(
+                2,
+                ((y - chunk.section.min_y) >> 2) as usize,
+                2,
+                biome.id,
+            );
+            world.set_sky_light_level(&pos, 0);
+            world.set_block_light_level(&pos, block_light);
+            let mut rng = StdRng::seed_from_u64(7);
+            (0..128).any(|_| super::SlimeEntity::can_spawn_on_surface(&world, &pos, &mut rng))
+        };
+        world.set_time_of_day(18_000);
+        assert!(permits(&Biome::SWAMP, 51, 0));
+        assert!(permits(&Biome::MANGROVE_SWAMP, 69, 0));
+        assert!(!permits(&Biome::SWAMP, 50, 0));
+        assert!(!permits(&Biome::SWAMP, 70, 0));
+        assert!(!permits(&Biome::PLAINS, 60, 0));
+        assert!(!permits(&Biome::SWAMP, 60, 8));
+        world.set_time_of_day(4 * 24_000 + 18_000);
+        assert!(!permits(&Biome::SWAMP, 60, 0));
+    }
     use super::*;
     use crate::entity::ai::test_support::world;
 
