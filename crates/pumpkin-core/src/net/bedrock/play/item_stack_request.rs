@@ -1,3 +1,5 @@
+use crate::entity::player::ScreenOwner;
+
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::block::entities::beacon::BeaconBlockEntity;
@@ -14,14 +16,21 @@ use pumpkin_protocol::bedrock::client::item_stack_response::{
     CItemStackResponse, ItemStackResponseContainerInfo, ItemStackResponseInfo,
     ItemStackResponseSlotInfo,
 };
-use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo;
+use pumpkin_protocol::bedrock::server::item_stack_request::{
+    ItemStackRequestSlotInfo, SItemStackRequest,
+};
 
 impl BedrockClient {
+    pub fn handle_item_stack_request(&self, player: &Arc<Player>, packet: SItemStackRequest) {
+        self.handle_item_stack_request_for_owner(player, packet, &player.screen_owner());
+    }
+
     #[allow(clippy::too_many_lines)]
-    pub fn handle_item_stack_request(
+    pub(crate) fn handle_item_stack_request_for_owner(
         &self,
         player: &Arc<Player>,
-        packet: pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest,
+        packet: SItemStackRequest,
+        owner: &ScreenOwner,
     ) {
         use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction;
 
@@ -36,21 +45,29 @@ impl BedrockClient {
             affected_slots,
             equipment_committed,
         ) = {
-            let active = player
-                .current_screen_handler
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let current_screen_handler = active.clone();
-            let mut screen_handler = current_screen_handler
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
+            let Some((active, mut screen_handler)) = player.lock_screen_action(owner) else {
+                self.try_enqueue_client_packet(&CItemStackResponse {
+                    responses: packet
+                        .requests
+                        .into_iter()
+                        .map(|request| ItemStackResponseInfo {
+                            result: 1,
+                            client_request_id: request.request_id,
+                            containers: Vec::new(),
+                        })
+                        .collect(),
+                });
+                resync_stack_request_screens(player);
+                return;
+            };
+            let current_screen_handler = owner.handler.clone();
             drop(active);
             let previous_sync = screen_handler.get_behaviour_mut().defer_updates();
             let mut responses = Vec::with_capacity(packet.requests.len());
             let mut pending_slots = Vec::with_capacity(packet.requests.len());
 
             let mut recover_partial_request = false;
+            let mut beacon_payment_changed = false;
             for mut request in packet.requests {
                 let request_epoch = screen_handler.get_behaviour().sync_epoch();
                 let mut created_item: Option<ItemStack> = None;
@@ -659,7 +676,7 @@ impl BedrockClient {
                                 beacon_entity.remove_stack_specific(0, 1);
                                 beacon_entity.mark_dirty();
                                 let payment_stack = beacon_entity.get_stack(0);
-                                beacon_handler.sync_state();
+                                beacon_payment_changed = true;
                                 record_update(
                                     &mut updates,
                                     FullContainerName {
@@ -849,7 +866,7 @@ impl BedrockClient {
                 });
             }
 
-            if recover_partial_request {
+            if recover_partial_request || beacon_payment_changed {
                 screen_handler.sync_state();
             } else {
                 screen_handler.send_content_updates();
@@ -892,17 +909,17 @@ impl BedrockClient {
         };
 
         let response = CItemStackResponse { responses };
-        let current =
-            self.enqueue_stack_request_response(player, &screen, &affected_slots, &response, true);
+        let current = self.enqueue_stack_request_response(
+            player,
+            &screen,
+            &affected_slots,
+            &response,
+            Some(owner),
+        );
         if current {
             player.flush_screen_updates(&screen, epoch, sync, true);
         } else {
-            let personal: pumpkin_inventory::screen_handler::SharedScreenHandler =
-                player.player_screen_handler.clone();
-            if !player.is_active_screen(&personal) {
-                player.resync_player_inventory_screen();
-            }
-            player.resync_active_inventory_screen();
+            resync_stack_request_screens(player);
         }
         for effect in effects {
             effect.publish(player.as_ref());
@@ -919,7 +936,7 @@ impl BedrockClient {
         screen: &Arc<std::sync::Mutex<dyn ScreenHandler>>,
         slots: &[AcknowledgedSlots],
         response: &CItemStackResponse,
-        require_active: bool,
+        owner: Option<&ScreenOwner>,
     ) -> bool {
         use pumpkin_protocol::{Packet, serial::PacketRead};
 
@@ -930,22 +947,20 @@ impl BedrockClient {
         self.try_enqueue_packet_data_projecting(
             data,
             || {
-                let active = require_active.then(|| {
-                    player
-                        .current_screen_handler
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                });
-                if active
-                    .as_ref()
-                    .is_some_and(|active| !Arc::ptr_eq(active, screen))
-                {
-                    invalid.replace(Some(vec![true; slots.len()]));
-                    return None;
-                }
-                let handler = screen
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let (active, handler) = if let Some(owner) = owner {
+                    let Some((active, handler)) = player.lock_screen_action(owner) else {
+                        invalid.replace(Some(vec![true; slots.len()]));
+                        return None;
+                    };
+                    (Some(active), handler)
+                } else {
+                    (
+                        None,
+                        screen
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    )
+                };
                 let superseded: Vec<_> = slots
                     .iter()
                     .map(|request| {
@@ -992,6 +1007,15 @@ impl BedrockClient {
         });
         false
     }
+}
+
+fn resync_stack_request_screens(player: &Player) {
+    let personal: pumpkin_inventory::screen_handler::SharedScreenHandler =
+        player.player_screen_handler.clone();
+    if !player.is_active_screen(&personal) {
+        player.resync_player_inventory_screen();
+    }
+    player.resync_active_inventory_screen();
 }
 
 pub(super) type AcknowledgedSlots = Vec<(ItemStackRequestSlotInfo, ItemStack)>;

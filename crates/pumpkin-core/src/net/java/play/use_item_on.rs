@@ -96,7 +96,7 @@ impl JavaClient {
                 && current.are_equal(&before)
         };
         player.increment_stat(StatisticCategory::Used, i32::from(before.item.id), 1);
-        if !source_is_current() {
+        if !source_is_current() || world.get_block(&position) != block {
             return Ok(());
         }
 
@@ -120,7 +120,7 @@ impl JavaClient {
             }
         }}
 
-        if !source_is_current() {
+        if !source_is_current() || world.get_block(&position) != block {
             return Ok(());
         }
 
@@ -157,7 +157,7 @@ impl JavaClient {
             }
         }
 
-        if item.is_empty() || !source_is_current() {
+        if item.is_empty() || !source_is_current() || world.get_block(&position) != block {
             // TODO item cool down
             // If the hand is empty we stop here
             return Ok(());

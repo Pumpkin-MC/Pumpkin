@@ -593,8 +593,8 @@ pub enum SpamType {
 /// Center chunk and levels of the view and simulation tickets a player holds.
 pub type HeldChunkTickets = (Vector2<i32>, Option<i8>, Option<i8>);
 
-struct ScreenOwner {
-    handler: SharedScreenHandler,
+pub(crate) struct ScreenOwner {
+    pub(crate) handler: SharedScreenHandler,
     generation: u64,
 }
 
@@ -6596,6 +6596,11 @@ impl Player {
             .inventory()
             .replace_slot_if_same(selected_slot, &before, item_stack.clone())
         {
+            let current = self.inventory().get_slot(selected_slot);
+            self.try_send_slot_set_packet(&CSetPlayerInventory::new(
+                (selected_slot as i32).into(),
+                &ItemStackSerializer::from(current),
+            ));
             return;
         }
         let updated_stack = item_stack;
@@ -7227,7 +7232,7 @@ impl Player {
         self.close_screen_if_current(owner)
     }
 
-    fn screen_owner(&self) -> ScreenOwner {
+    pub(crate) fn screen_owner(&self) -> ScreenOwner {
         let active = self
             .current_screen_handler
             .lock()
@@ -7252,7 +7257,7 @@ impl Player {
     }
 
     /// A click owns its menu mutex until its state changes have committed.
-    fn lock_screen_action<'a, 'b>(
+    pub(crate) fn lock_screen_action<'a, 'b>(
         &'a self,
         owner: &'b ScreenOwner,
     ) -> Option<(

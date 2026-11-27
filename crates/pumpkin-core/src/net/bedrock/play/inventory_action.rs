@@ -687,13 +687,8 @@ impl BedrockClient {
             };
             let personal: pumpkin_inventory::screen_handler::SharedScreenHandler =
                 player.player_screen_handler.clone();
-            if !self.enqueue_stack_request_response(
-                player,
-                &personal,
-                &[affected],
-                &response,
-                false,
-            ) {
+            if !self.enqueue_stack_request_response(player, &personal, &[affected], &response, None)
+            {
                 player.resync_player_inventory_screen();
             }
         }
