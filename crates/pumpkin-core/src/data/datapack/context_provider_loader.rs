@@ -117,7 +117,7 @@ fn load_context_providers_recursive(
             let stem_path = stem_path.replace('\\', "/");
             let provider_id = format!("{namespace}:{stem_path}");
 
-            match fs::read_to_string(&path) {
+            match super::read_json_file(&path) {
                 Ok(content) => match serde_json::from_str::<Value>(&content) {
                     Ok(val) => {
                         let tag = json_value_to_nbt(&val);

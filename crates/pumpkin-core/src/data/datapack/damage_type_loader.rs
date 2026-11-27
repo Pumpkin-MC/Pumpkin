@@ -222,7 +222,7 @@ fn load_damage_types_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let damage_type_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
+            if let Ok(content) = super::read_json_file(&path)
                 && let Ok(definition) = serde_json::from_str::<DamageTypeDefinition>(&content)
             {
                 registry.insert(damage_type_id, definition);

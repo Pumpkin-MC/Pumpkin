@@ -48,7 +48,7 @@ fn load_loot_tables_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let loot_table_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
+            if let Ok(content) = super::read_json_file(&path)
                 && let Some(table) = parse_loot_table_with_predicates(&content, &|name| {
                     let id = pumpkin_util::identifier::Identifier::parse(name).ok()?;
                     let (namespace, path) = (id.namespace(), id.path());
@@ -64,7 +64,7 @@ fn load_loot_tables_recursive<S: std::hash::BuildHasher>(
                         .join(namespace)
                         .join("predicate")
                         .join(format!("{path}.json"));
-                    fs::read_to_string(file)
+                    super::read_json_file(file)
                         .ok()
                         .and_then(|json| serde_json::from_str(&json).ok())
                         .or_else(|| {
