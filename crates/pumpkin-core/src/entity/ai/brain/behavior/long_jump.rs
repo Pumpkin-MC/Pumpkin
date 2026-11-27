@@ -519,7 +519,7 @@ mod tests {
         ai::brain::{Brain, activity::ActivityData, behavior::Timed},
     };
     use crate::plugin::{
-        BoxFuture, EventHandler, api::events::EventPriority, server::packet::PacketSentEvent,
+        BoxFuture, EventRwHandler, api::events::EventPriority, server::packet::PacketSentEvent,
     };
     use crate::server::Server;
 
@@ -528,8 +528,8 @@ mod tests {
         observations: Mutex<Vec<(i32, bool, bool, EntityPose)>>,
     }
 
-    impl EventHandler<PacketSentEvent> for LandingPackets {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for LandingPackets {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -616,7 +616,7 @@ mod tests {
         });
         server
             .plugin_manager
-            .register(listener.clone(), EventPriority::Normal, true);
+            .register_blocking(listener.clone(), EventPriority::Normal, None);
         entity.velocity.store(Vector3::new(1.0, 0.0, 0.0));
         entity.on_ground.store(true, Relaxed);
         mob.mob_entity.tick_brain(mob.as_ref());

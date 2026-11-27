@@ -251,6 +251,10 @@ impl DatapackManager {
         let mut loaded_packs_vec = Vec::new();
         let mut all_recipes: Vec<DynamicRecipe> = Vec::new();
         let mut all_functions: HashMap<String, Vec<String>> = HashMap::new();
+        let function_count = function_loader::load_test_functions(&mut all_functions);
+        if function_count > 0 {
+            info!("Loaded {function_count} function(s)");
+        }
         let mut all_function_tags: HashMap<String, Vec<String>> = HashMap::new();
         let mut all_test_instances: TestInstanceRegistry = HashMap::new();
         let mut all_context_int_providers: ContextProviderRegistry = HashMap::new();
@@ -276,6 +280,14 @@ impl DatapackManager {
         }
         let mut all_dynamic_registries: HashMap<String, HashMap<String, RegistryEntryData>> =
             HashMap::new();
+        let environment_count = test_loader::load_test_environments(
+            all_dynamic_registries
+                .entry("minecraft:test_environment".to_string())
+                .or_default(),
+        );
+        if environment_count > 0 {
+            info!("Loaded {environment_count} environment(s)");
+        }
         let mut all_trade_registry = TradeRegistry::new();
         let mut all_advancements: HashMap<
             String,
@@ -653,6 +665,13 @@ impl DatapackManager {
             .insert(key, table);
     }
 
+    pub fn remove_loot_table(&self, key: &str) {
+        self.loot_tables
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(key);
+    }
+
     #[must_use]
     pub fn get_damage_type(&self, id: &str) -> Option<DamageType> {
         let guard = self
@@ -830,7 +849,14 @@ impl DatapackManager {
 
     #[must_use]
     pub fn get_all_synced_registries(&self) -> Vec<pumpkin_data::registry::Registry> {
-        self.dynamic_registry_manager.get_synced_registries()
+        let mut registries = self.dynamic_registry_manager.get_synced_registries();
+        if let Some(test_instances) = registries
+            .iter_mut()
+            .find(|registry| registry.registry_id == "minecraft:test_instance")
+        {
+            test_instances.registry_entries = self.get_test_instance_registry_entries();
+        }
+        registries
     }
 
     #[must_use]
@@ -1040,69 +1066,113 @@ impl DatapackManager {
         self.get_enabled_features(server).contains(&feature)
     }
 
-    /// Loads a Java Edition structure NBT from the currently enabled datapacks.
+    /// Loads a Java Edition structure NBT from generated data or enabled datapacks.
     ///
     /// Structure identifiers are resource locations such as
     /// `minecraft:village/plains/houses/plains_small_house_1`. Both the current
     /// `structure` directory and the legacy `structures` directory are checked.
-    pub async fn load_structure(&self, resource_location: &str) -> Result<NbtCompound, String> {
+    pub async fn load_structure(
+        &self,
+        world_path: &Path,
+        resource_location: &str,
+    ) -> Result<NbtCompound, String> {
         let (namespace, path) = parse_structure_resource_location(resource_location)?;
-
-        let nbt_path = {
+        let generated_root = world_path.join("generated");
+        let pack_roots = {
             let loaded_packs = self
                 .loaded_packs
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            loaded_packs
+                .iter()
+                .rev()
+                .map(|pack| pack.root_path.clone())
+                .collect::<Vec<_>>()
+        };
+        let namespace = namespace.to_string();
+        let path = path.to_string();
+        let resource_location = resource_location.to_string();
 
-            let mut nbt_path = None;
-
+        tokio::task::spawn_blocking(move || {
+            let candidate = generated_root
+                .join(&namespace)
+                .join("structure")
+                .join(format!("{path}.nbt"));
+            if candidate.is_file() {
+                let display_path = candidate.display();
+                let file = fs::File::open(&candidate).map_err(|error| {
+                    format!("Failed to open structure '{display_path}': {error}")
+                })?;
+                return read_gzip_compound_tag(file).map_err(|error| {
+                    format!("Failed to parse structure '{display_path}': {error}")
+                });
+            }
             // Runtime datapacks override embedded resources.
-            'packs: for pack in loaded_packs.iter().rev() {
+            for root in pack_roots {
                 for structure_dir in ["structure", "structures"] {
-                    let candidate = pack
-                        .root_path
+                    let candidate = root
                         .join("data")
-                        .join(namespace)
+                        .join(&namespace)
                         .join(structure_dir)
                         .join(format!("{path}.nbt"));
 
                     if candidate.is_file() {
-                        nbt_path = Some(candidate);
-                        break 'packs;
+                        let display_path = candidate.display();
+                        let file = fs::File::open(&candidate).map_err(|error| {
+                            format!("Failed to open structure '{display_path}': {error}")
+                        })?;
+
+                        return read_gzip_compound_tag(file).map_err(|error| {
+                            format!("Failed to parse structure '{display_path}': {error}")
+                        });
                     }
                 }
             }
 
-            nbt_path
-        };
+            // Fall back to compile-time embedded structures.
+            let structure_id = format!("{namespace}:{path}");
+            if let Some(template) =
+                pumpkin_world::generation::structure::template::get_template(&structure_id)
+            {
+                return Ok(template.save());
+            }
 
-        if let Some(nbt_path) = nbt_path {
-            let display_path = nbt_path.display().to_string();
+            Err(format!(
+                "Structure '{resource_location}' was not found in any enabled datapack or embedded resources"
+            ))
+        })
+        .await
+        .map_err(|error| format!("Structure loader task failed: {error}"))?
+    }
 
-            return tokio::task::spawn_blocking(move || {
-                let file = fs::File::open(&nbt_path).map_err(|error| {
-                    format!("Failed to open structure '{display_path}': {error}")
-                })?;
-
-                read_gzip_compound_tag(file)
-                    .map_err(|error| format!("Failed to parse structure '{display_path}': {error}"))
-            })
-            .await
-            .map_err(|error| format!("Structure loader task failed: {error}"))?;
-        }
-
-        // Fall back to compile-time embedded structures.
-        let structure_id = format!("{namespace}:{path}");
-
-        if let Some(template) =
-            pumpkin_world::generation::structure::template::get_template(&structure_id)
-        {
-            return Ok(template.save());
-        }
-
-        Err(format!(
-            "Structure '{resource_location}' was not found in any enabled datapack or embedded resources"
-        ))
+    /// Saves a structure NBT under the world's generated data directory.
+    pub async fn save_generated_structure(
+        &self,
+        world_path: &Path,
+        resource_location: &str,
+        structure: NbtCompound,
+    ) -> Result<PathBuf, String> {
+        let (namespace, path) = parse_structure_resource_location(resource_location)?;
+        let file_path = world_path
+            .join("generated")
+            .join(namespace)
+            .join("structure")
+            .join(format!("{path}.nbt"));
+        tokio::task::spawn_blocking(move || {
+            let parent = file_path
+                .parent()
+                .ok_or_else(|| "Structure has no parent directory".to_string())?;
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+            let file = fs::File::create(&file_path).map_err(|error| error.to_string())?;
+            pumpkin_nbt::nbt_compress::write_gzip_compound_tag(
+                structure,
+                std::io::BufWriter::new(file),
+            )
+            .map_err(|error| error.to_string())?;
+            Ok(file_path)
+        })
+        .await
+        .map_err(|error| error.to_string())?
     }
 
     pub fn get_function_names(&self) -> Vec<String> {
@@ -1564,6 +1634,7 @@ fn parse_structure_resource_location(resource_location: &str) -> Result<(&str, &
         .unwrap_or(("minecraft", resource_location));
 
     if namespace.is_empty()
+        || namespace.bytes().all(|byte| byte == b'.')
         || !namespace.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-' | b'.')
         })
@@ -1577,7 +1648,7 @@ fn parse_structure_resource_location(resource_location: &str) -> Result<(&str, &
     if path.is_empty()
         || path
             .split('/')
-            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+            .any(|segment| segment.is_empty() || segment.bytes().all(|byte| byte == b'.'))
         || !path.bytes().all(|byte| {
             byte.is_ascii_lowercase()
                 || byte.is_ascii_digit()
@@ -2319,6 +2390,27 @@ mod tests {
             assert_eq!(error, FunctionRunError::CommandChainLimitExceeded);
             assert_eq!(visited, MAX_FUNCTION_CHAIN_COMMANDS);
         };
+    }
+
+    #[test]
+    fn structure_resource_locations_reject_dot_only_components() {
+        for name in [
+            "..:foo",
+            ".:foo",
+            "...:foo",
+            "minecraft:../foo",
+            "minecraft:foo/../bar",
+            "minecraft:foo/.../bar",
+        ] {
+            assert!(
+                super::parse_structure_resource_location(name).is_err(),
+                "accepted {name}"
+            );
+        }
+        assert_eq!(
+            super::parse_structure_resource_location("namespace.with.dots:foo.bar/baz"),
+            Ok(("namespace.with.dots", "foo.bar/baz"))
+        );
     }
 
     #[test]

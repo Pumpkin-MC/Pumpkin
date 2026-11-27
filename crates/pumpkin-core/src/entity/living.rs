@@ -1230,7 +1230,7 @@ impl LivingEntity {
                 additional_health,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return;
             }
@@ -1561,9 +1561,7 @@ impl LivingEntity {
                 effect.amplifier,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut effect_event);
+            effect_event = server.plugin_manager.fire_blocking(&server, effect_event);
         }
         if effect_event.cancelled {
             return;
@@ -3047,7 +3045,7 @@ impl LivingEntity {
                             final_death_message.clone(),
                             0,
                         );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    event = server.plugin_manager.fire_blocking(&server, event);
                     if event.cancelled {
                         return;
                     }
@@ -3246,9 +3244,9 @@ impl LivingEntity {
                     self.entity.entity_id,
                 );
             if let Some(server) = self.entity.world.load().server.upgrade() {
-                server
+                resurrect_event = server
                     .plugin_manager
-                    .fire_blocking(&server, &mut resurrect_event);
+                    .fire_blocking(&server, resurrect_event);
             }
             if resurrect_event.cancelled {
                 return false;
@@ -4086,9 +4084,7 @@ impl LivingEntity {
                 amount,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut damage_event);
+            damage_event = server.plugin_manager.fire_blocking(&server, damage_event);
         }
         if damage_event.cancelled {
             return false;
@@ -4105,9 +4101,9 @@ impl LivingEntity {
                     cancelled: false,
                 };
             if let Some(server) = self.entity.world.load().server.upgrade() {
-                server
+                by_entity_event = server
                     .plugin_manager
-                    .fire_blocking(&server, &mut by_entity_event);
+                    .fire_blocking(&server, by_entity_event);
             }
             if by_entity_event.cancelled {
                 return false;
@@ -4139,9 +4135,7 @@ impl LivingEntity {
                     cancelled: false,
                 };
             if let Some(server) = self.entity.world.load().server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut by_block_event);
+                by_block_event = server.plugin_manager.fire_blocking(&server, by_block_event);
             }
             if by_block_event.cancelled {
                 return false;
@@ -4332,15 +4326,13 @@ impl LivingEntity {
             } else {
                 self.set_health(0.0);
             }
-            let mut death_event =
+            let death_event =
                 crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
                     self.entity.entity_id,
                     0,
                 );
             if let Some(server) = world.server.upgrade() {
-                server
-                    .plugin_manager
-                    .fire_blocking(&server, &mut death_event);
+                server.plugin_manager.fire_blocking(&server, death_event);
             }
             self.on_death(damage_type, source, cause);
         }
@@ -5174,7 +5166,7 @@ impl LivingEntity {
                     entity.pos.load(),
                     new_pos,
                 );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return false;
             }
