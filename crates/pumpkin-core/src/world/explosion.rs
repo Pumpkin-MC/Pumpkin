@@ -633,6 +633,10 @@ impl<'a> Explosion<'a> {
         was_hurt_marked: bool,
     ) {
         let entity = entity_base.get_entity();
+        let player = entity_base.get_player();
+        let own_motion_revision = player
+            .as_ref()
+            .map_or(0, |player| player.own_motion_revision());
         // A living entity goes through `EntityKnockbackEvent`.
         let knockback = if entity_base.get_living_entity().is_some() {
             entity.fire_knockback_events(knockback_power, knockback, None)
@@ -642,10 +646,14 @@ impl<'a> Explosion<'a> {
         let Some(knockback) = knockback else {
             return;
         };
-        let Some(player) = entity_base.get_player() else {
+        let Some(player) = player else {
             entity.add_velocity(knockback);
             return;
         };
+        if player.as_java().is_some() && own_motion_revision != player.own_motion_revision() {
+            // Absolute self-motion from the knockback listener supersedes the explosion impulse.
+            return;
+        }
 
         let knockback = if player.as_java().is_some() {
             if !was_hurt_marked {
@@ -660,6 +668,7 @@ impl<'a> Explosion<'a> {
                 knockback
             } else {
                 let previous_velocity = entity.velocity.load();
+                let velocity_event_revision = player.own_motion_revision();
                 let Some(velocity) = player.fire_velocity_event(previous_velocity + knockback)
                 else {
                     entity.velocity.store(entity.known_movement());
@@ -669,13 +678,15 @@ impl<'a> Explosion<'a> {
                 // The Java client adds this vector to its predicted motion when it
                 // receives `ClientboundExplodePacket`.
                 let knockback = velocity - previous_velocity;
-                if entity.velocity.load() == previous_velocity {
+                if entity.velocity.load() == previous_velocity
+                    && velocity_event_revision == player.own_motion_revision()
+                {
                     entity.push_by(knockback);
                     knockback
                 } else {
-                    // A listener set another live velocity. Send the accepted absolute
-                    // value instead of adding the event delta to that intermediate value.
-                    // The early return leaves CExplosion without additive knockback.
+                    // A listener changed live velocity or sent absolute motion. Send the
+                    // accepted value instead of adding the event delta to an intermediate
+                    // value. The early return leaves CExplosion without additive knockback.
                     entity.velocity.store(velocity);
                     entity.send_velocity_to_watchers();
                     player.send_own_velocity(velocity);
@@ -693,7 +704,7 @@ impl<'a> Explosion<'a> {
                 entity.entity_id,
                 RecordedKnockback {
                     impulse: knockback,
-                    own_motion_revision: player.own_motion_revision(),
+                    own_motion_revision,
                 },
             );
     }

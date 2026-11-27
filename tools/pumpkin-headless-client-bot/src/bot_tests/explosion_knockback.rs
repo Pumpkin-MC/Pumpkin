@@ -1,4 +1,7 @@
-use std::sync::{Arc, atomic::AtomicUsize};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicUsize},
+};
 
 use bytes::Buf;
 use pumpkin_core::{
@@ -6,7 +9,11 @@ use pumpkin_core::{
     entity::{Entity, EntityBase, decoration::end_crystal::EndCrystalEntity, player::Player},
     plugin::{
         BoxFuture, EventPriority, EventRwHandler,
-        api::events::block::block_explode::BlockExplodeEvent,
+        api::events::{
+            block::block_explode::BlockExplodeEvent,
+            entity::entity_knockback::EntityKnockbackEvent,
+            player::player_velocity::PlayerVelocityEvent,
+        },
     },
     server::Server,
     world::{BlockFlags, ExplosionInteraction, World},
@@ -21,9 +28,41 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::bot::HeadlessBot;
 
-#[derive(Default)]
+const STANDING_KNOCKBACK: Vector3<f64> =
+    Vector3::new(-0.48149676911700806, 0.7800247682655086, 0.0);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AbsoluteMotionTiming {
+    EntityKnockback,
+    BlockExplode,
+    PlayerVelocity,
+}
+
 struct ZeroVelocityOnBlockExplode {
-    calls: AtomicUsize,
+    calls: Arc<AtomicUsize>,
+    enabled: Arc<AtomicBool>,
+}
+
+struct ZeroVelocityOnEntityKnockback {
+    calls: Arc<AtomicUsize>,
+    enabled: Arc<AtomicBool>,
+    player_id: i32,
+}
+
+struct ZeroVelocityOnPlayerVelocity {
+    calls: Arc<AtomicUsize>,
+    enabled: Arc<AtomicBool>,
+    player_id: i32,
+}
+
+fn zero_velocity(server: &Arc<Server>, calls: &AtomicUsize, enabled: &AtomicBool) {
+    if !enabled.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    if let Some(player) = server.get_player_by_name("TestBot2") {
+        player.set_velocity(Vector3::default());
+    }
 }
 
 impl EventRwHandler<BlockExplodeEvent> for ZeroVelocityOnBlockExplode {
@@ -32,10 +71,36 @@ impl EventRwHandler<BlockExplodeEvent> for ZeroVelocityOnBlockExplode {
         server: &'a Arc<Server>,
         _event: &'a mut BlockExplodeEvent,
     ) -> BoxFuture<'a, ()> {
+        Box::pin(async move { zero_velocity(server, &self.calls, &self.enabled) })
+    }
+}
+
+impl EventRwHandler<EntityKnockbackEvent> for ZeroVelocityOnEntityKnockback {
+    fn handle<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut EntityKnockbackEvent,
+    ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if let Some(player) = server.get_player_by_name("TestBot2") {
-                player.set_velocity(Vector3::default());
+            if event.entity_id == self.player_id {
+                zero_velocity(server, &self.calls, &self.enabled);
+            }
+        })
+    }
+}
+
+impl EventRwHandler<PlayerVelocityEvent> for ZeroVelocityOnPlayerVelocity {
+    fn handle<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        event: &'a mut PlayerVelocityEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if event.player.entity_id() == self.player_id
+                && self.enabled.load(std::sync::atomic::Ordering::SeqCst)
+                && self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0
+            {
+                event.player.set_velocity(Vector3::default());
             }
         })
     }
@@ -99,15 +164,7 @@ pub async fn run_explosion_knockback_test(
         bot1.move_to(standing, true).await?;
         server.tick();
         // Expected from vanilla geometry: one block horizontally away and eye height 1.62.
-        detonate_crystal(
-            server,
-            bot1,
-            &player,
-            &world,
-            center,
-            Vector3::new(-0.48149676911700806, 0.7800247682655086, 0.0),
-        )
-        .await?;
+        detonate_crystal(server, bot1, &player, &world, center, STANDING_KNOCKBACK).await?;
 
         let jumping = center.add_raw(-1.0, 0.25, 0.0);
         bot1.move_to(jumping, false).await?;
@@ -198,7 +255,15 @@ async fn check_distant_explosion_knockback(
         return Err("Distant player also received CExplosion after its motion".into());
     }
 
-    check_absolute_motion_supersedes_knockback(server, bot, world, center).await?;
+    for timing in [
+        AbsoluteMotionTiming::BlockExplode,
+        AbsoluteMotionTiming::EntityKnockback,
+        AbsoluteMotionTiming::PlayerVelocity,
+    ] {
+        check_absolute_motion_supersedes_knockback(server, bot, world, center, timing)
+            .await
+            .map_err(|error| format!("{timing:?} scenario: {error}"))?;
+    }
 
     bot.move_to(original_position, true).await?;
     server.tick();
@@ -210,6 +275,7 @@ async fn check_absolute_motion_supersedes_knockback(
     bot: &mut HeadlessBot,
     world: &Arc<World>,
     center: Vector3<f64>,
+    timing: AbsoluteMotionTiming,
 ) -> Result<(), String> {
     bot.move_to(center.add_raw(-1.0, 0.0, 0.0), true).await?;
     server.tick();
@@ -233,33 +299,104 @@ async fn check_absolute_motion_supersedes_knockback(
         .sync_velocity
         .store(false, std::sync::atomic::Ordering::SeqCst);
 
-    let handler = Arc::new(ZeroVelocityOnBlockExplode::default());
-    server
-        .plugin_manager
-        .register_blocking(handler.clone(), EventPriority::Normal, None);
-    world.explode(center, 6.0, ExplosionInteraction::Block);
+    let (calls, enabled, interaction) = register_zero_velocity_handler(server, &player, timing);
+    world.explode(center, 6.0, interaction);
+    enabled.store(false, std::sync::atomic::Ordering::SeqCst);
 
     let motion = next_own_motion(bot, player.entity_id()).await?;
     if motion != Vector3::default() {
         return Err(format!(
-            "BlockExplodeEvent sent an unexpected absolute motion: {motion:?}"
+            "The listener sent an unexpected absolute motion: {motion:?}"
         ));
+    }
+    if timing == AbsoluteMotionTiming::PlayerVelocity {
+        let accepted = next_own_motion(bot, player.entity_id()).await?;
+        let tolerance = 1.0 / 16383.0;
+        if (accepted.x - STANDING_KNOCKBACK.x).abs() > tolerance
+            || (accepted.y - STANDING_KNOCKBACK.y).abs() > tolerance
+            || (accepted.z - STANDING_KNOCKBACK.z).abs() > tolerance
+        {
+            return Err(format!(
+                "The accepted velocity was not sent after the nested zero: {accepted:?}"
+            ));
+        }
     }
     let (packet_center, radius, knockback) = next_explosion_packet(bot).await?;
     if packet_center != center || radius != 6.0 {
-        return Err("Missing the destructive explosion after absolute zero motion".into());
+        return Err("Missing the explosion after absolute zero motion".into());
     }
     if knockback.is_some() {
         return Err(format!(
             "Absolute zero motion did not invalidate the recorded knockback: {knockback:?}"
         ));
     }
-    if entity.velocity.load() != Vector3::default()
-        || handler.calls.load(std::sync::atomic::Ordering::SeqCst) != 1
+    let expected_velocity = if timing == AbsoluteMotionTiming::PlayerVelocity {
+        STANDING_KNOCKBACK
+    } else {
+        Vector3::default()
+    };
+    let expected_calls = if timing == AbsoluteMotionTiming::PlayerVelocity {
+        2
+    } else {
+        1
+    };
+    if entity.velocity.load() != expected_velocity
+        || calls.load(std::sync::atomic::Ordering::SeqCst) != expected_calls
     {
-        return Err("BlockExplodeEvent did not leave the server velocity at zero".into());
+        return Err(format!(
+            "Unexpected final velocity or event count: expected {expected_velocity:?}/{expected_calls}, got {:?}/{}",
+            entity.velocity.load(),
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+        ));
     }
     Ok(())
+}
+
+fn register_zero_velocity_handler(
+    server: &Arc<Server>,
+    player: &Player,
+    timing: AbsoluteMotionTiming,
+) -> (Arc<AtomicUsize>, Arc<AtomicBool>, ExplosionInteraction) {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let enabled = Arc::new(AtomicBool::new(true));
+    let interaction = match timing {
+        AbsoluteMotionTiming::BlockExplode => {
+            server.plugin_manager.register_blocking(
+                Arc::new(ZeroVelocityOnBlockExplode {
+                    calls: calls.clone(),
+                    enabled: enabled.clone(),
+                }),
+                EventPriority::Normal,
+                None,
+            );
+            ExplosionInteraction::Block
+        }
+        AbsoluteMotionTiming::EntityKnockback => {
+            server.plugin_manager.register_blocking(
+                Arc::new(ZeroVelocityOnEntityKnockback {
+                    calls: calls.clone(),
+                    enabled: enabled.clone(),
+                    player_id: player.entity_id(),
+                }),
+                EventPriority::Normal,
+                None,
+            );
+            ExplosionInteraction::None
+        }
+        AbsoluteMotionTiming::PlayerVelocity => {
+            server.plugin_manager.register_blocking(
+                Arc::new(ZeroVelocityOnPlayerVelocity {
+                    calls: calls.clone(),
+                    enabled: enabled.clone(),
+                    player_id: player.entity_id(),
+                }),
+                EventPriority::Normal,
+                None,
+            );
+            ExplosionInteraction::None
+        }
+    };
+    (calls, enabled, interaction)
 }
 
 async fn detonate_crystal(
