@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:end_portal_frame_and_respawn_anchor_comparators",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

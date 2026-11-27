@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:redstone_wire_attenuation_9_to_12",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

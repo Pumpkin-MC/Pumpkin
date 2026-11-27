@@ -1,14 +1,19 @@
 use crate::{
-    events::{ToFromWasmEvent, cleanup_event, consume_text_component},
+    events::{CleanupEvent, ToFromWasmEvent, consume_text_component},
     generated_packets,
     pumpkin::plugin::event::{
-        BedrockConnectionPacketReceivedEventData, BedrockConnectionPacketSentEventData,
-        ClientboundPacket, Event, JavaConnectionPacketReceivedEventData,
-        JavaConnectionPacketSentEventData, JavaConnectionState, MapInitializeEventData,
-        PacketReceivedEventData, PacketSentEventData, RawPacket, ServerBroadcastEventData,
-        ServerCommandEventData, ServerListPingAddress, ServerListPingEventData,
-        ServerLoadEventData, ServerLoadType, ServerTickEndEventData, ServerTickStartEventData,
-        ServerboundPacket,
+        BedrockConnectionPacketReceivedEvent as BedrockConnectionPacketReceivedEventData,
+        BedrockConnectionPacketSentEvent as BedrockConnectionPacketSentEventData,
+        ClientboundPacket,
+        JavaConnectionPacketReceivedEvent as JavaConnectionPacketReceivedEventData,
+        JavaConnectionPacketSentEvent as JavaConnectionPacketSentEventData, JavaConnectionState,
+        MapInitializeEvent as MapInitializeEventData,
+        PacketReceivedEvent as PacketReceivedEventData, PacketSentEvent as PacketSentEventData,
+        RawPacket, ServerBroadcastEvent as ServerBroadcastEventData,
+        ServerCommandEvent as ServerCommandEventData, ServerListPingAddress,
+        ServerListPingEvent as ServerListPingEventData, ServerLoadEvent as ServerLoadEventData,
+        ServerLoadType, ServerTickEndEvent as ServerTickEndEventData,
+        ServerTickStartEvent as ServerTickStartEventData, ServerboundPacket,
     },
 };
 use pumpkin_core::net::ClientPlatform;
@@ -30,7 +35,9 @@ use pumpkin_protocol::ConnectionState as ProtoConnectionState;
 use pumpkin_wasm_host_common::state::PluginHostState;
 
 impl ToFromWasmEvent for PacketReceivedEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = PacketReceivedEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player_res = state
             .add(self.player.clone())
             .expect("failed to add player resource");
@@ -52,41 +59,34 @@ impl ToFromWasmEvent for PacketReceivedEvent {
                 )
                 .map_or(ServerboundPacket::Unknown, ServerboundPacket::Bedrock)
             }
+            ClientPlatform::SimulatedPlayer(_) => ServerboundPacket::Unknown,
         };
 
-        Event::PacketReceivedEvent(PacketReceivedEventData {
+        Self::Wit {
             player: player_res,
             packet,
             packet_id: self.packet_id,
             raw_payload: self.payload.to_vec(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::PacketReceivedEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.cancelled = data.cancelled;
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.cancelled = data.cancelled;
     }
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::PacketReceivedEvent(_) => {
-                // TODO: Implement converting from WIT variant back to raw if needed.
-                // For now, we only support cancellation.
-                panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
-                );
-            }
-            _ => panic!("unexpected event type"),
-        }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Modifying packets from WASM is not yet supported in this simple implementation.");
     }
 }
 
 impl ToFromWasmEvent for PacketSentEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = PacketSentEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let player_res = state
             .add(self.player.clone())
             .expect("failed to add player resource");
@@ -100,9 +100,10 @@ impl ToFromWasmEvent for PacketSentEvent {
                 generated_packets::clientbound_bedrock_any_to_wit(self.packet.as_ref())
                     .map_or(ClientboundPacket::Unknown, ClientboundPacket::Bedrock)
             }
+            ClientPlatform::SimulatedPlayer(_) => ClientboundPacket::Unknown,
         };
 
-        Event::PacketSentEvent(PacketSentEventData {
+        Self::Wit {
             player: player_res,
             packet,
             packet_id: self.packet_id,
@@ -116,29 +117,23 @@ impl ToFromWasmEvent for PacketSentEvent {
                 })
                 .collect(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::PacketSentEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.extra_packets = data
-                .extra_packets
-                .into_iter()
-                .map(|p| (p.packet_id, p.payload.into()))
-                .collect();
-            self.cancelled = data.cancelled;
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.extra_packets = data
+            .extra_packets
+            .into_iter()
+            .map(|p| (p.packet_id, p.payload.into()))
+            .collect();
+        self.cancelled = data.cancelled;
     }
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::PacketSentEvent(_) => {
-                panic!("Modifying packets from WASM is not yet supported.");
-            }
-            _ => panic!("unexpected event type"),
-        }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Modifying packets from WASM is not yet supported.");
     }
 }
 
@@ -153,41 +148,37 @@ const fn to_wasm_java_connection_state(state: ProtoConnectionState) -> JavaConne
 }
 
 impl ToFromWasmEvent for JavaConnectionPacketReceivedEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::JavaConnectionPacketReceivedEvent(JavaConnectionPacketReceivedEventData {
+    type Wit = JavaConnectionPacketReceivedEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             connection_id: self.connection_id,
             version: crate::player::to_wasm_java_version(self.version),
             state: to_wasm_java_connection_state(self.state),
             packet_id: self.packet_id,
             raw_payload: self.payload.to_vec(),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::JavaConnectionPacketReceivedEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::JavaConnectionPacketReceivedEvent(_) => {
-                panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
-                );
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Modifying packets from WASM is not yet supported.");
     }
 }
 
 impl ToFromWasmEvent for JavaConnectionPacketSentEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::JavaConnectionPacketSentEvent(JavaConnectionPacketSentEventData {
+    type Wit = JavaConnectionPacketSentEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             connection_id: self.connection_id,
             version: crate::player::to_wasm_java_version(self.version),
             state: to_wasm_java_connection_state(self.state),
@@ -202,71 +193,59 @@ impl ToFromWasmEvent for JavaConnectionPacketSentEvent {
                 })
                 .collect(),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::JavaConnectionPacketSentEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.extra_packets = data
-                .extra_packets
-                .into_iter()
-                .map(|p| (p.packet_id, p.payload.into()))
-                .collect();
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::JavaConnectionPacketSentEvent(_) => {
-                panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
-                );
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.extra_packets = data
+            .extra_packets
+            .into_iter()
+            .map(|p| (p.packet_id, p.payload.into()))
+            .collect();
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Modifying packets from WASM is not yet supported in this simple implementation.");
     }
 }
 
 impl ToFromWasmEvent for BedrockConnectionPacketReceivedEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BedrockConnectionPacketReceivedEvent(BedrockConnectionPacketReceivedEventData {
+    type Wit = BedrockConnectionPacketReceivedEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             connection_id: self.connection_id,
             protocol_version: self.protocol_version,
             version: crate::player::to_wasm_bedrock_version(self.version),
             packet_id: self.packet_id,
             raw_payload: self.payload.to_vec(),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BedrockConnectionPacketReceivedEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BedrockConnectionPacketReceivedEvent(_) => {
-                panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
-                );
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Modifying packets from WASM is not yet supported in this simple implementation.");
     }
 }
 
 impl ToFromWasmEvent for BedrockConnectionPacketSentEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::BedrockConnectionPacketSentEvent(BedrockConnectionPacketSentEventData {
+    type Wit = BedrockConnectionPacketSentEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             connection_id: self.connection_id,
             protocol_version: self.protocol_version,
             version: crate::player::to_wasm_bedrock_version(self.version),
@@ -281,56 +260,49 @@ impl ToFromWasmEvent for BedrockConnectionPacketSentEvent {
                 })
                 .collect(),
             cancelled: self.cancelled,
-        })
-    }
-
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::BedrockConnectionPacketSentEvent(data) = event {
-            self.packet_id = data.packet_id;
-            self.payload = data.raw_payload.into();
-            self.extra_packets = data
-                .extra_packets
-                .into_iter()
-                .map(|p| (p.packet_id, p.payload.into()))
-                .collect();
-            self.cancelled = data.cancelled;
         }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::BedrockConnectionPacketSentEvent(_) => {
-                panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
-                );
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        data.cleanup_event(state);
+
+        self.packet_id = data.packet_id;
+        self.payload = data.raw_payload.into();
+        self.extra_packets = data
+            .extra_packets
+            .into_iter()
+            .map(|p| (p.packet_id, p.payload.into()))
+            .collect();
+        self.cancelled = data.cancelled;
+    }
+
+    fn from_wasm_event(_data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        panic!("Modifying packets from WASM is not yet supported in this simple implementation.");
     }
 }
 
 impl ToFromWasmEvent for ServerCommandEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerCommandEvent(ServerCommandEventData {
+    type Wit = ServerCommandEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             command: self.command.clone(),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerCommandEvent(data) => Self {
-                command: data.command,
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            command: data.command,
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for ServerBroadcastEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = ServerBroadcastEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let message = state
             .add(self.message.clone())
             .expect("failed to add text-component resource");
@@ -338,32 +310,31 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
             .add(self.sender.clone())
             .expect("failed to add text-component resource");
 
-        Event::ServerBroadcastEvent(ServerBroadcastEventData {
+        Self::Wit {
             message,
             sender,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerBroadcastEvent(data) => Self {
-                message: consume_text_component(state, &data.message),
-                sender: consume_text_component(state, &data.sender),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            message: consume_text_component(state, &data.message),
+            sender: consume_text_component(state, &data.sender),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for ServerListPingEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = ServerListPingEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let motd = state
             .add(self.motd.clone())
             .expect("failed to add text-component resource");
 
-        Event::ServerListPingEvent(ServerListPingEventData {
+        Self::Wit {
             hostname: self.hostname().to_string(),
             address: ServerListPingAddress {
                 host: self.address().host().to_string(),
@@ -373,34 +344,26 @@ impl ToFromWasmEvent for ServerListPingEvent {
             max_players: self.max_players,
             num_players: self.num_players,
             favicon: self.favicon.clone(),
-        })
-    }
-
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerListPingEvent(data) => Self {
-                hostname: data.hostname,
-                address:
-                    pumpkin_core::plugin::api::events::server::list_ping::ServerListPingAddress::new(
-                        data.address.host,
-                        data.address.port,
-                    ),
-                motd: consume_text_component(state, &data.motd),
-                max_players: data.max_players,
-                num_players: data.num_players,
-                favicon: data.favicon,
-            },
-            _ => panic!("unexpected event type"),
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        if !matches!(&event, Event::ServerListPingEvent(_)) {
-            cleanup_event(&event, state);
-            panic!("unexpected event type");
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            hostname: data.hostname,
+            address:
+                pumpkin_core::plugin::api::events::server::list_ping::ServerListPingAddress::new(
+                    data.address.host,
+                    data.address.port,
+                ),
+            motd: consume_text_component(state, &data.motd),
+            max_players: data.max_players,
+            num_players: data.num_players,
+            favicon: data.favicon,
         }
+    }
 
-        let returned = Self::from_wasm_event(event, state);
+    fn apply_wasm_event(&mut self, data: Self::Wit, state: &mut PluginHostState) {
+        let returned = Self::from_wasm_event(data, state);
         self.motd = returned.motd;
         self.max_players = returned.max_players;
         self.num_players = returned.num_players;
@@ -409,73 +372,69 @@ impl ToFromWasmEvent for ServerListPingEvent {
 }
 
 impl ToFromWasmEvent for ServerLoadEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerLoadEvent(ServerLoadEventData {
+    type Wit = ServerLoadEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             load_type: match self.load_type {
                 LoadType::Startup => ServerLoadType::Startup,
                 LoadType::Reload => ServerLoadType::Reload,
             },
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerLoadEvent(data) => Self {
-                load_type: match data.load_type {
-                    ServerLoadType::Startup => LoadType::Startup,
-                    ServerLoadType::Reload => LoadType::Reload,
-                },
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            load_type: match data.load_type {
+                ServerLoadType::Startup => LoadType::Startup,
+                ServerLoadType::Reload => LoadType::Reload,
             },
-            _ => panic!("unexpected event type"),
         }
     }
 }
 
 impl ToFromWasmEvent for ServerTickEndEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerTickEndEvent(ServerTickEndEventData {
+    type Wit = ServerTickEndEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             tick: self.tick,
             duration_nanos: self.duration_nanos,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerTickEndEvent(data) => Self {
-                tick: data.tick,
-                duration_nanos: data.duration_nanos,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            tick: data.tick,
+            duration_nanos: data.duration_nanos,
         }
     }
 }
 
 impl ToFromWasmEvent for ServerTickStartEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::ServerTickStartEvent(ServerTickStartEventData { tick: self.tick })
+    type Wit = ServerTickStartEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit { tick: self.tick }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::ServerTickStartEvent(data) => Self { tick: data.tick },
-            _ => panic!("unexpected event type"),
-        }
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self { tick: data.tick }
     }
 }
 
 impl ToFromWasmEvent for MapInitializeEvent {
-    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
-        Event::MapInitializeEvent(MapInitializeEventData {
+    type Wit = MapInitializeEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             map_id: self.map_id,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::MapInitializeEvent(data) => Self {
-                map_id: data.map_id,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            map_id: data.map_id,
         }
     }
 }
@@ -506,7 +465,7 @@ mod tests {
             .add(returned_motd.clone())
             .expect("text component resource should be inserted");
         let motd_rep = motd.rep();
-        let returned = Event::ServerListPingEvent(ServerListPingEventData {
+        let returned = ServerListPingEventData {
             hostname: "replacement.example".to_string(),
             address: ServerListPingAddress {
                 host: "192.0.2.1".to_string(),
@@ -516,7 +475,7 @@ mod tests {
             max_players: 40,
             num_players: 2,
             favicon: Some("data:image/png;base64,test".to_string()),
-        });
+        };
 
         event.apply_wasm_event(returned, &mut state);
 
@@ -595,30 +554,26 @@ mod tests {
             payload,
         );
 
-        let wasm_event = event.to_wasm_event(&mut state);
-        if let Event::JavaConnectionPacketReceivedEvent(ref data) = wasm_event {
-            assert_eq!(data.connection_id, 42);
-            assert_eq!(
-                data.version,
-                crate::pumpkin::plugin::player::JavaMinecraftVersion::V1202
-            );
-            assert_eq!(data.state, JavaConnectionState::Login);
-            assert_eq!(data.packet_id, 0x00);
-            assert_eq!(data.raw_payload, vec![1, 2, 3, 4]);
-            assert!(!data.cancelled);
-        } else {
-            panic!("Expected JavaConnectionPacketReceivedEvent");
-        }
+        let data = event.to_wasm_event(&mut state);
 
-        let modified_event =
-            Event::JavaConnectionPacketReceivedEvent(JavaConnectionPacketReceivedEventData {
-                connection_id: 42,
-                version: crate::pumpkin::plugin::player::JavaMinecraftVersion::V1202,
-                state: JavaConnectionState::Login,
-                packet_id: 0x05,
-                raw_payload: vec![9, 8, 7],
-                cancelled: true,
-            });
+        assert_eq!(data.connection_id, 42);
+        assert_eq!(
+            data.version,
+            crate::pumpkin::plugin::player::JavaMinecraftVersion::V1202
+        );
+        assert_eq!(data.state, JavaConnectionState::Login);
+        assert_eq!(data.packet_id, 0x00);
+        assert_eq!(data.raw_payload, vec![1, 2, 3, 4]);
+        assert!(!data.cancelled);
+
+        let modified_event = JavaConnectionPacketReceivedEventData {
+            connection_id: 42,
+            version: crate::pumpkin::plugin::player::JavaMinecraftVersion::V1202,
+            state: JavaConnectionState::Login,
+            packet_id: 0x05,
+            raw_payload: vec![9, 8, 7],
+            cancelled: true,
+        };
 
         event.apply_wasm_event(modified_event, &mut state);
         assert_eq!(event.packet_id, 0x05);
@@ -638,35 +593,31 @@ mod tests {
             payload,
         );
 
-        let wasm_event = event.to_wasm_event(&mut state);
-        if let Event::JavaConnectionPacketSentEvent(ref data) = wasm_event {
-            assert_eq!(data.connection_id, 99);
-            assert_eq!(
-                data.version,
-                crate::pumpkin::plugin::player::JavaMinecraftVersion::V1164
-            );
-            assert_eq!(data.state, JavaConnectionState::Handshake);
-            assert_eq!(data.packet_id, 0x01);
-            assert_eq!(data.raw_payload, vec![10, 20]);
-            assert!(data.extra_packets.is_empty());
-            assert!(!data.cancelled);
-        } else {
-            panic!("Expected JavaConnectionPacketSentEvent");
-        }
+        let data = event.to_wasm_event(&mut state);
 
-        let modified_event =
-            Event::JavaConnectionPacketSentEvent(JavaConnectionPacketSentEventData {
-                connection_id: 99,
-                version: crate::pumpkin::plugin::player::JavaMinecraftVersion::V1164,
-                state: JavaConnectionState::Handshake,
-                packet_id: 0x02,
-                raw_payload: vec![30, 40, 50],
-                extra_packets: vec![RawPacket {
-                    packet_id: 0x03,
-                    payload: vec![60],
-                }],
-                cancelled: true,
-            });
+        assert_eq!(data.connection_id, 99);
+        assert_eq!(
+            data.version,
+            crate::pumpkin::plugin::player::JavaMinecraftVersion::V1164
+        );
+        assert_eq!(data.state, JavaConnectionState::Handshake);
+        assert_eq!(data.packet_id, 0x01);
+        assert_eq!(data.raw_payload, vec![10, 20]);
+        assert!(data.extra_packets.is_empty());
+        assert!(!data.cancelled);
+
+        let modified_event = JavaConnectionPacketSentEventData {
+            connection_id: 99,
+            version: crate::pumpkin::plugin::player::JavaMinecraftVersion::V1164,
+            state: JavaConnectionState::Handshake,
+            packet_id: 0x02,
+            raw_payload: vec![30, 40, 50],
+            extra_packets: vec![RawPacket {
+                packet_id: 0x03,
+                payload: vec![60],
+            }],
+            cancelled: true,
+        };
 
         event.apply_wasm_event(modified_event, &mut state);
         assert_eq!(event.packet_id, 0x02);
@@ -754,30 +705,26 @@ mod tests {
             payload,
         );
 
-        let wasm_event = event.to_wasm_event(&mut state);
-        if let Event::BedrockConnectionPacketReceivedEvent(ref data) = wasm_event {
-            assert_eq!(data.connection_id, 77);
-            assert_eq!(data.protocol_version, 671);
-            assert_eq!(
-                data.version,
-                crate::pumpkin::plugin::player::BedrockMinecraftVersion::V121
-            );
-            assert_eq!(data.packet_id, 1);
-            assert_eq!(data.raw_payload, vec![0xAA, 0xBB]);
-            assert!(!data.cancelled);
-        } else {
-            panic!("Expected BedrockConnectionPacketReceivedEvent");
-        }
+        let data = event.to_wasm_event(&mut state);
 
-        let modified =
-            Event::BedrockConnectionPacketReceivedEvent(BedrockConnectionPacketReceivedEventData {
-                connection_id: 77,
-                protocol_version: 671,
-                version: crate::pumpkin::plugin::player::BedrockMinecraftVersion::V121,
-                packet_id: 1,
-                raw_payload: vec![0xCC, 0xDD, 0xEE],
-                cancelled: false,
-            });
+        assert_eq!(data.connection_id, 77);
+        assert_eq!(data.protocol_version, 671);
+        assert_eq!(
+            data.version,
+            crate::pumpkin::plugin::player::BedrockMinecraftVersion::V121
+        );
+        assert_eq!(data.packet_id, 1);
+        assert_eq!(data.raw_payload, vec![0xAA, 0xBB]);
+        assert!(!data.cancelled);
+
+        let modified = BedrockConnectionPacketReceivedEventData {
+            connection_id: 77,
+            protocol_version: 671,
+            version: crate::pumpkin::plugin::player::BedrockMinecraftVersion::V121,
+            packet_id: 1,
+            raw_payload: vec![0xCC, 0xDD, 0xEE],
+            cancelled: false,
+        };
         event.apply_wasm_event(modified, &mut state);
         assert_eq!(&event.payload[..], &[0xCC, 0xDD, 0xEE]);
         assert!(!event.cancelled);
@@ -795,33 +742,28 @@ mod tests {
             payload,
         );
 
-        let wasm_event = event.to_wasm_event(&mut state);
-        if let Event::BedrockConnectionPacketSentEvent(ref data) = wasm_event {
-            assert_eq!(data.connection_id, 88);
-            assert_eq!(data.protocol_version, 2193);
-            assert_eq!(
-                data.version,
-                crate::pumpkin::plugin::player::BedrockMinecraftVersion::V12651
-            );
-            assert_eq!(data.packet_id, 143);
-            assert!(data.extra_packets.is_empty());
-        } else {
-            panic!("Expected BedrockConnectionPacketSentEvent");
-        }
+        let data = event.to_wasm_event(&mut state);
+        assert_eq!(data.connection_id, 88);
+        assert_eq!(data.protocol_version, 2193);
+        assert_eq!(
+            data.version,
+            crate::pumpkin::plugin::player::BedrockMinecraftVersion::V12651
+        );
+        assert_eq!(data.packet_id, 143);
+        assert!(data.extra_packets.is_empty());
 
-        let modified =
-            Event::BedrockConnectionPacketSentEvent(BedrockConnectionPacketSentEventData {
-                connection_id: 88,
-                protocol_version: 2193,
-                version: crate::pumpkin::plugin::player::BedrockMinecraftVersion::V12651,
-                packet_id: 143,
-                raw_payload: vec![2, 0],
-                extra_packets: vec![RawPacket {
-                    packet_id: 2,
-                    payload: vec![0, 0, 0, 0],
-                }],
-                cancelled: true,
-            });
+        let modified = BedrockConnectionPacketSentEventData {
+            connection_id: 88,
+            protocol_version: 2193,
+            version: crate::pumpkin::plugin::player::BedrockMinecraftVersion::V12651,
+            packet_id: 143,
+            raw_payload: vec![2, 0],
+            extra_packets: vec![RawPacket {
+                packet_id: 2,
+                payload: vec![0, 0, 0, 0],
+            }],
+            cancelled: true,
+        };
         event.apply_wasm_event(modified, &mut state);
         assert_eq!(event.packet_id, 143);
         assert_eq!(&event.payload[..], &[2, 0]);

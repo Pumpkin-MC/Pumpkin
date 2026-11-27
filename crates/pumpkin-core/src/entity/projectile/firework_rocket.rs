@@ -126,7 +126,7 @@ impl FireworkRocketEntity {
                     entity_id: entity.entity_id,
                     cancelled: false,
                 };
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return;
             }
@@ -263,7 +263,7 @@ impl EntityBase for FireworkRocketEntity {
                             firework_id: entity.entity_id,
                             cancelled: false,
                         };
-                        server.plugin_manager.fire_blocking(&server, &mut event);
+                        event = server.plugin_manager.fire_blocking(&server, event);
                         if event.cancelled {
                             boost_cancelled = true;
                         }

@@ -3,6 +3,27 @@ use std::path::Path;
 
 use super::file_loader::{collect_files, load_files_parallel};
 
+pub fn load_test_functions<S: std::hash::BuildHasher>(
+    functions: &mut HashMap<String, Vec<String>, S>,
+) -> usize {
+    let before = functions.len();
+    for &id in pumpkin_data::test_function::all_test_function_names() {
+        if let Some(content) = pumpkin_data::test_function::get_test_function_source(id) {
+            functions.insert(id.to_owned(), parse_function_content(content));
+        }
+    }
+    functions.len() - before
+}
+
+fn parse_function_content(content: &str) -> Vec<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| line.strip_prefix('/').unwrap_or(line).to_string())
+        .collect()
+}
+
 pub fn load_functions_from_dir<S: std::hash::BuildHasher>(
     namespace: &str,
     function_dir: &Path,
@@ -17,15 +38,7 @@ pub fn load_functions_from_dir<S: std::hash::BuildHasher>(
         function_dir,
         &files,
         "mcfunction",
-        |_id, _path, content| {
-            let lines: Vec<String> = content
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty() && !line.starts_with('#'))
-                .map(|line| line.strip_prefix('/').unwrap_or(line).to_string())
-                .collect();
-            Some(lines)
-        },
+        |_id, _path, content| Some(parse_function_content(content)),
     );
 
     for (entry_id, _rel, lines) in loaded {
@@ -64,12 +77,7 @@ mod tests {
     #[test]
     fn parse_mcfunction_content() {
         let content = "# This is a comment\nsay Hello world\n/give @p diamond 1\n\n# Another comment\ngive @p stick 5\n";
-        let lines: Vec<String> = content
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty() && !line.starts_with('#'))
-            .map(|line| line.strip_prefix('/').unwrap_or(line).to_string())
-            .collect();
+        let lines = super::parse_function_content(content);
 
         assert_eq!(
             lines,

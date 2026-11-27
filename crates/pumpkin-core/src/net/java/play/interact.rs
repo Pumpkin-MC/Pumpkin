@@ -96,7 +96,7 @@ impl JavaClient {
                                     pos.z,
                                     u8::from(interact.hand.map_or(0, |h| h.0) != 0),
                                 );
-                                server.plugin_manager.fire_blocking(server, &mut at_event);
+                                at_event = server.plugin_manager.fire_blocking(server, at_event);
                                 if at_event.cancelled {
                                     return;
                                 }

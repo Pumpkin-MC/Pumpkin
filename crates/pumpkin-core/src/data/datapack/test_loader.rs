@@ -12,6 +12,34 @@ use tracing::warn;
 
 pub type TestInstanceRegistry = HashMap<String, TestInstance>;
 
+/// Loads test environments into the dynamic registry before on-disk packs.
+pub fn load_test_environments<S: std::hash::BuildHasher>(
+    registry: &mut HashMap<String, RegistryEntryData, S>,
+) -> usize {
+    let before = registry.len();
+    for &id in pumpkin_data::test_environment::all_test_environment_names() {
+        let Some(content) = pumpkin_data::test_environment::get_test_environment_json(id) else {
+            warn!("Test environment '{id}' has no JSON payload");
+            continue;
+        };
+        match serde_json::from_str::<Value>(content) {
+            Ok(value) => {
+                registry.insert(
+                    id.to_owned(),
+                    RegistryEntryData {
+                        entry_id: id.to_owned(),
+                        data: Some(super::dynamic_registry_loader::json_to_registry_nbt_bytes(
+                            &value,
+                        )),
+                    },
+                );
+            }
+            Err(error) => warn!("Failed to parse test environment '{id}': {error}"),
+        }
+    }
+    registry.len() - before
+}
+
 /// Loads all test instances embedded in the binary at compile time.
 ///
 /// Ids are fully qualified, so entries here can be overridden by later
@@ -19,13 +47,7 @@ pub type TestInstanceRegistry = HashMap<String, TestInstance>;
 pub fn load_embedded_test_instances(registry: &mut TestInstanceRegistry) -> usize {
     let before = registry.len();
 
-    crate::server::builtin_game_tests::ensure_builtin_game_tests_registered();
-    for (id, instance) in pumpkin_gametest::registered_test_definitions() {
-        if instance.is_valid() {
-            registry.insert(id, instance);
-        }
-    }
-
+    crate::server::builtin_test_functions::ensure_builtin_test_functions_registered();
     for &id in pumpkin_world::test_instance::all_names() {
         let Some(content) = pumpkin_world::test_instance::json(id) else {
             warn!("Embedded test instance '{id}' has no JSON payload");
@@ -60,9 +82,19 @@ pub fn load_test_instances_from_dir(
         test_instance_dir,
         &files,
         "json",
-        |_id, _path, content| {
-            let instance = serde_json::from_str::<TestInstance>(content).ok()?;
-            instance.is_valid().then_some(instance)
+        |_id, path, content| match serde_json::from_str::<TestInstance>(content) {
+            Ok(instance) if instance.is_valid() => Some(instance),
+            Ok(_) => {
+                warn!("Test instance '{}' failed validation", path.display());
+                None
+            }
+            Err(error) => {
+                warn!(
+                    "Failed to parse test instance '{}': {error}",
+                    path.display()
+                );
+                None
+            }
         },
     );
 
@@ -81,6 +113,7 @@ pub fn to_registry_entry(entry_id: String, instance: &TestInstance) -> RegistryE
     let mut nbt = NbtCompound::new();
     nbt.put_string("type", instance.instance_type.serialized_name().to_string());
     nbt.put("environment", json_value_to_nbt(&instance.environment));
+    nbt.put_string("dimension", instance.dimension.clone());
     if let Some(function) = &instance.function {
         nbt.put_string("function", function.clone());
     }
@@ -97,7 +130,7 @@ pub fn to_registry_entry(entry_id: String, instance: &TestInstance) -> RegistryE
 
     RegistryEntryData {
         entry_id,
-        data: Some(Nbt::from(nbt).write().to_vec().into_boxed_slice()),
+        data: Some(Nbt::from(nbt).write_unnamed().to_vec().into_boxed_slice()),
     }
 }
 
@@ -173,6 +206,7 @@ mod tests {
             instance.environment,
             Value::String("minecraft:default".into())
         );
+        assert_eq!(instance.dimension, "minecraft:overworld");
         assert_eq!(instance.structure, "pumpkin:some_ai_test");
         assert_eq!(instance.max_ticks, 200);
         assert_eq!(instance.setup_ticks, 0);
@@ -194,6 +228,7 @@ mod tests {
             r#"{
                 "type": "minecraft:function",
                 "environment": "minecraft:default",
+                "dimension": "minecraft:the_nether",
                 "function": "minecraft:always_pass",
                 "max_ticks": 1,
                 "required": false,
@@ -217,6 +252,7 @@ mod tests {
             instance.environment,
             Value::String("minecraft:default".into())
         );
+        assert_eq!(instance.dimension, "minecraft:the_nether");
         assert_eq!(instance.function.as_deref(), Some("minecraft:always_pass"));
         assert_eq!(instance.structure, "minecraft:empty");
         assert_eq!(instance.max_ticks, 1);

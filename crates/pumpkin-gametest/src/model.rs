@@ -34,6 +34,13 @@ pub enum GameTestRotation {
 }
 
 impl GameTestRotation {
+    pub const ALL: [Self; 4] = [
+        Self::None,
+        Self::Clockwise90,
+        Self::Clockwise180,
+        Self::Counterclockwise90,
+    ];
+
     #[must_use]
     pub const fn serialized_name(self) -> &'static str {
         match self {
@@ -75,6 +82,16 @@ impl GameTestRotation {
             _ => Self::Counterclockwise90,
         }
     }
+
+    #[must_use]
+    pub const fn steps(self) -> i32 {
+        match self {
+            Self::None => 0,
+            Self::Clockwise90 => 1,
+            Self::Clockwise180 => 2,
+            Self::Counterclockwise90 => 3,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -82,6 +99,8 @@ pub struct GameTestDefinition {
     #[serde(rename = "type")]
     pub instance_type: TestType,
     pub environment: Value,
+    #[serde(default = "default_dimension")]
+    pub dimension: String,
     pub structure: String,
     #[serde(default)]
     pub function: Option<String>,
@@ -104,6 +123,10 @@ pub struct GameTestDefinition {
     pub padding: i32,
 }
 
+fn default_dimension() -> String {
+    "minecraft:overworld".to_string()
+}
+
 impl GameTestDefinition {
     #[must_use]
     pub fn is_valid(&self) -> bool {
@@ -113,6 +136,7 @@ impl GameTestDefinition {
         };
 
         function_valid
+            && !self.structure.is_empty()
             && self.max_ticks > 0
             && self.setup_ticks >= 0
             && self.max_attempts > 0

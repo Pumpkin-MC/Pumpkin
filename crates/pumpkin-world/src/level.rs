@@ -342,7 +342,8 @@ impl Level {
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
         self.loaded_entity_chunks
-            .insert(pos, Self::empty_entity_chunk(pos));
+            .entry(pos)
+            .or_insert_with(|| Self::empty_entity_chunk(pos));
     }
 
     fn empty_entity_chunk(pos: Vector2<i32>) -> SyncEntityChunk {
@@ -525,7 +526,22 @@ impl Level {
         !self.mark_chunks_as_not_watched([chunk]).is_empty()
     }
 
-    // In Level::clean_entity_chunks()
+    /// A player watcher or direct loading ticket keeps this chunk's entities in memory.
+    pub fn is_chunk_retained(&self, chunk: &Vector2<i32>) -> bool {
+        self.chunk_watchers
+            .get(chunk)
+            .is_some_and(|count| *count != 0)
+            || self.has_loading_ticket(*chunk)
+    }
+
+    fn has_loading_ticket(&self, chunk: Vector2<i32>) -> bool {
+        self.chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .ticket
+            .contains_key(&chunk)
+    }
+
     pub fn clean_entity_chunks(
         self: &Arc<Self>,
         chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
@@ -534,18 +550,22 @@ impl Level {
             .into_iter()
             .filter_map(|pos_borrow| {
                 let pos = pos_borrow.borrow();
-                // Only include chunks with no watchers
-                let has_watchers = self
-                    .chunk_watchers
-                    .get(pos)
-                    .is_some_and(|count| *count != 0);
-
-                if has_watchers {
+                let watchers = self.chunk_watchers.entry(*pos);
+                if matches!(&watchers, Entry::Occupied(entry) if *entry.get() != 0) {
                     return None;
                 }
 
-                // Remove immediately to prevent race conditions
-                self.loaded_entity_chunks.remove(pos)
+                let loading = self
+                    .chunk_loading
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if loading.ticket.contains_key(pos) {
+                    return None;
+                }
+
+                self.loaded_entity_chunks
+                    .get(pos)
+                    .map(|chunk| (*pos, chunk.clone()))
             })
             .collect();
 
@@ -556,7 +576,31 @@ impl Level {
         let level = self.clone();
         self.spawn_task(async move {
             debug!("Writing {} entity chunks to disk", chunks_to_process.len());
-            level.write_entity_chunks(chunks_to_process).await;
+            level.write_entity_chunks(chunks_to_process.clone()).await;
+
+            for (pos, saved_chunk) in chunks_to_process {
+                let watchers = level.chunk_watchers.entry(pos);
+                if matches!(&watchers, Entry::Occupied(entry) if *entry.get() != 0) {
+                    continue;
+                }
+
+                let loading = level
+                    .chunk_loading
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if loading.ticket.contains_key(&pos)
+                    || saved_chunk.live.load(Ordering::Acquire)
+                    || saved_chunk.is_dirty()
+                {
+                    continue;
+                }
+
+                if let Entry::Occupied(entry) = level.loaded_entity_chunks.entry(pos)
+                    && Arc::ptr_eq(entry.get(), &saved_chunk)
+                {
+                    entry.remove();
+                }
+            }
         });
     }
 
@@ -660,13 +704,23 @@ impl Level {
 
     pub fn clean_memory(self: &Arc<Self>) -> Vec<Vector2<i32>> {
         self.chunk_watchers.retain(|_, watcher| *watcher != 0);
+        let ticketed: FxHashSet<_> = self
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .ticket
+            .keys()
+            .copied()
+            .collect();
 
-        let entity_chunks_to_remove: Vec<_> = self
+        // The eviction task locks watchers before entity chunks.
+        let mut entity_chunks_to_remove: Vec<_> = self
             .loaded_entity_chunks
             .iter()
-            .filter(|entry| !self.chunk_watchers.contains_key(entry.key()))
             .map(|entry| *entry.key())
             .collect();
+        entity_chunks_to_remove
+            .retain(|pos| !self.chunk_watchers.contains_key(pos) && !ticketed.contains(pos));
 
         // We do not clean them here because we want the caller to save any active entities in them first.
 
@@ -1053,7 +1107,61 @@ impl Level {
 mod tests {
     use super::*;
     use pumpkin_config::world::LevelConfig;
+    use pumpkin_nbt::compound::NbtCompound;
     use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn cleaning_entity_chunk_keeps_it_cached_until_saved() {
+        let folder = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let pos = Vector2::new(0, 0);
+        level.spawn_entity_generation(pos);
+        let chunk = level.get_entity_chunk(pos).await.unwrap();
+        chunk.data.lock().unwrap().push(NbtCompound::new());
+        chunk.mark_dirty(true);
+
+        level.clean_entity_chunks([pos]);
+        let cached = level.get_entity_chunk_sync(&pos).unwrap();
+        assert!(Arc::ptr_eq(&chunk, &cached));
+
+        level.shutdown().await;
+        let reopened = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let saved = reopened.get_entity_chunk(pos).await.unwrap();
+        assert_eq!(saved.data.lock().unwrap().len(), 1);
+        reopened.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn generating_entity_chunk_twice_keeps_existing_records() {
+        let folder = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            folder.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let pos = Vector2::new(0, 0);
+
+        level.spawn_entity_generation(pos);
+        let first = level.get_entity_chunk(pos).await.unwrap();
+        first.data.lock().unwrap().push(NbtCompound::new());
+        first.mark_dirty(true);
+
+        level.spawn_entity_generation(pos);
+        let cached = level.get_entity_chunk(pos).await.unwrap();
+        assert!(Arc::ptr_eq(&first, &cached));
+        assert_eq!(cached.data.lock().unwrap().len(), 1);
+    }
 
     #[tokio::test]
     async fn failed_entity_reads_do_not_reserve_cache_entries() {
