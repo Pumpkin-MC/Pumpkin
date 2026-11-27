@@ -144,7 +144,7 @@ impl ItemBehaviour for BrushItem {
                 player_arc,
                 item.clone(),
             );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return BlockActionResult::Fail;
             }

@@ -758,13 +758,13 @@ fn fire_custom_click_action(
     payload: Option<&ClickPayload>,
 ) {
     let payload = payload.map(click_payload_bytes);
-    let mut event =
+    let event =
         crate::plugin::api::events::dialog::dialog_click_action::DialogClickActionEvent::new(
             player.clone(),
             id.to_string(),
             payload,
         );
-    server.plugin_manager.fire_blocking(server, &mut event);
+    server.plugin_manager.fire_blocking(server, event);
 }
 
 /// Executes any click events defined in the sign's text messages.

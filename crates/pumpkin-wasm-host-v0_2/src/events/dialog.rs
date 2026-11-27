@@ -10,7 +10,11 @@ use crate::{
     events::{ToFromWasmEvent, consume_player},
     player::text_component_from_resource,
     pumpkin::plugin::{
-        event::{DialogClearEventData, DialogClickActionEventData, DialogShowEventData, Event},
+        event::{
+            DialogClearEvent as DialogClearEventData,
+            DialogClickActionEvent as DialogClickActionEventData,
+            DialogShowEvent as DialogShowEventData,
+        },
         java_dialogs::{
             Action, ActionButton, AfterAction, CustomClickAction, Dialog, DialogBody, DialogInput,
             DialogInputBool, DialogInputNumberRange, DialogInputSingleOption, DialogInputText,
@@ -347,74 +351,69 @@ pub(crate) fn protocol_dialog_to_wasm(
 }
 
 impl ToFromWasmEvent for DialogClickActionEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        Event::DialogClickActionEvent(DialogClickActionEventData {
+    type Wit = DialogClickActionEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             player: state
                 .add(self.player.clone())
                 .expect("failed to add player resource"),
             id: self.id.clone(),
             payload: self.payload.as_ref().map(|p| p.to_vec()),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::DialogClickActionEvent(data) => Self {
-                player: consume_player(state, &data.player),
-                id: data.id,
-                payload: data.payload.map(Bytes::from),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            player: consume_player(state, &data.player),
+            id: data.id,
+            payload: data.payload.map(Bytes::from),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for DialogClearEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        Event::DialogClearEvent(DialogClearEventData {
+    type Wit = DialogClearEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
             player: state
                 .add(self.player.clone())
                 .expect("failed to add player resource"),
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::DialogClearEvent(data) => Self {
-                player: consume_player(state, &data.player),
-                cancelled: data.cancelled,
-            },
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        Self {
+            player: consume_player(state, &data.player),
+            cancelled: data.cancelled,
         }
     }
 }
 
 impl ToFromWasmEvent for DialogShowEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+    type Wit = DialogShowEventData;
+
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Self::Wit {
         let dialog = protocol_dialog_to_wasm(state, &self.dialog);
-        Event::DialogShowEvent(DialogShowEventData {
+        Self::Wit {
             player: state
                 .add(self.player.clone())
                 .expect("failed to add player resource"),
             dialog,
             cancelled: self.cancelled,
-        })
+        }
     }
 
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::DialogShowEvent(data) => {
-                let dialog = protocol_dialog_from_wasm(state, &data.dialog);
-                Self {
-                    player: consume_player(state, &data.player),
-                    dialog,
-                    cancelled: data.cancelled,
-                }
-            }
-            _ => panic!("unexpected event type"),
+    fn from_wasm_event(data: Self::Wit, state: &mut PluginHostState) -> Self {
+        let dialog = protocol_dialog_from_wasm(state, &data.dialog);
+        Self {
+            player: consume_player(state, &data.player),
+            dialog,
+            cancelled: data.cancelled,
         }
     }
 }
