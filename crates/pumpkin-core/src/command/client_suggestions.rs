@@ -466,7 +466,7 @@ const fn bedrock_param_type(arg: &ArgumentType) -> u32 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::{
         sync::{
             Arc, Mutex,
@@ -569,7 +569,7 @@ mod tests {
         }
     }
 
-    async fn test_server_and_player() -> Result<
+    pub(crate) async fn test_server_and_player() -> Result<
         (
             tempfile::TempDir,
             Arc<Server>,
