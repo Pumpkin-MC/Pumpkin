@@ -421,11 +421,16 @@ mod tests {
     #[tokio::test]
     async fn surface_slime_spawning_uses_swamp_height_light_and_moon_phase() {
         use pumpkin_data::biome::Biome;
-        use pumpkin_world::chunk::ChunkData;
+        use pumpkin_world::chunk::{ChunkData, ChunkLight, format::LightContainer};
         use rand::{SeedableRng, rngs::StdRng};
         let folder = tempfile::tempdir().unwrap();
         let world = crate::entity::ai::test_support::world(&folder);
         let chunk = ChunkData::empty_sync(0, 0);
+        let dark = vec![LightContainer::Empty(0); chunk.section.count].into_boxed_slice();
+        *chunk.light_engine.lock().unwrap() = ChunkLight {
+            sky_light: dark.clone(),
+            block_light: dark,
+        };
         world.level.loaded_chunks.insert(
             pumpkin_util::math::vector2::Vector2::new(0, 0),
             chunk.clone(),
