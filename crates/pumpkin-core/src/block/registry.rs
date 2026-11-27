@@ -573,7 +573,7 @@ impl BlockRegistry {
                         None,
                         vec![],
                     );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     return false;
                 }
@@ -845,9 +845,7 @@ impl BlockRegistry {
             block: clicked_block,
             cancelled: false,
         };
-        server
-            .plugin_manager
-            .fire_blocking(server, &mut can_build_event);
+        can_build_event = server.plugin_manager.fire_blocking(server, can_build_event);
         if can_build_event.cancelled || !can_build_event.buildable {
             return Ok(None);
         }
@@ -859,7 +857,7 @@ impl BlockRegistry {
             final_block_pos,
             true,
         );
-        server.plugin_manager.fire_blocking(server, &mut event);
+        event = server.plugin_manager.fire_blocking(server, event);
         if event.cancelled {
             return Ok(None);
         }
@@ -1033,7 +1031,7 @@ impl BlockRegistry {
         }
     }
 
-    pub fn on_entity_collision_fluid(&self, fluid: &Fluid, entity: &dyn EntityBase) {
+    pub fn on_entity_collision_fluid(&self, fluid: &'static Fluid, entity: &dyn EntityBase) {
         let pumpkin_fluid = self.get_pumpkin_fluid(fluid.id);
         if let Some(pumpkin_fluid) = pumpkin_fluid {
             pumpkin_fluid.on_entity_collision(entity);
@@ -1132,7 +1130,7 @@ impl BlockRegistry {
 
     pub fn use_with_item_fluid(
         &self,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         player: &Arc<Player>,
         position: BlockPos,
         item: &Item,
@@ -1286,7 +1284,7 @@ impl BlockRegistry {
     pub fn on_placed_fluid(
         &self,
         world: &Arc<World>,
-        fluid: &Fluid,
+        fluid: &'static Fluid,
         state_id: BlockStateId,
         position: &BlockPos,
         old_state_id: BlockStateId,
@@ -1511,13 +1509,12 @@ impl BlockRegistry {
 
     #[must_use]
     pub fn get_pumpkin_fluid(&self, fluid_id: u16) -> Option<&Arc<dyn FluidBehaviour>> {
+        // still fluids share their flowing behaviour
         self.fluids.get(&fluid_id).or_else(|| {
-            // Still fluids share behavior with their flowing counterpart
-            match fluid_id {
-                2 => self.fluids.get(&1),
-                4 => self.fluids.get(&3),
-                _ => None,
-            }
+            let family = Fluid::family_id(fluid_id);
+            (family != fluid_id)
+                .then(|| self.fluids.get(&family))
+                .flatten()
         })
     }
 
@@ -1635,9 +1632,8 @@ impl BlockRegistry {
     ) -> bool {
         self.get_pumpkin_block(block.id).map_or_else(
             || match computation_type {
-                PathComputationType::Water => {
-                    World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
-                }
+                PathComputationType::Water => pumpkin_data::fluid::Fluid::of_block_state(state.id)
+                    .has_tag(&tag::Fluid::MINECRAFT_WATER),
                 PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
             },
             |pumpkin_block| pumpkin_block.is_pathfindable(state, computation_type),

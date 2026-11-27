@@ -423,19 +423,7 @@ impl<'a> Explosion<'a> {
 
                         let (block, state) = BlockState::from_id_with_block(state_id);
 
-                        let (_fluid, fluid_state) = Fluid::from_state_id(state_id).map_or_else(
-                            || {
-                                if block.is_waterlogged(state_id) {
-                                    (&Fluid::FLOWING_WATER, &Fluid::FLOWING_WATER.states[0])
-                                } else {
-                                    (&Fluid::EMPTY, &Fluid::EMPTY.states[0])
-                                }
-                            },
-                            |raw_fluid| {
-                                let f = raw_fluid.to_flowing();
-                                (f, &f.states[0])
-                            },
-                        );
+                        let (_fluid, fluid_state) = Fluid::fluid_state_of(state_id);
 
                         if !state.is_air() || !fluid_state.is_empty {
                             let protects_rail = self.protects_rail(world, &block_pos, block);
@@ -447,7 +435,7 @@ impl<'a> Explosion<'a> {
                                     world,
                                     &block_pos,
                                     block,
-                                    fluid_state,
+                                    &fluid_state,
                                 )
                             };
 

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:dispenser_tnt_spawns_primed_tnt",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

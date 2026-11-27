@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:sign_authorization_click_commands_and_applicators",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

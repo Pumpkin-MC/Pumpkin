@@ -74,7 +74,7 @@ impl MangrovePropaguleBlock {
             use crate::plugin::api::events::world::structure_grow::{StructureGrowEvent, TreeType};
             let mut event = StructureGrowEvent::new(*pos, TreeType::Mangrove, bone_meal);
             if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     return;
                 }
@@ -119,7 +119,7 @@ impl BlockBehaviour for MangrovePropaguleBlock {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,
                 *args.position,
-                Fluid::WATER.flow_speed as u8,
+                pumpkin_data::fluid::Fluid::WATER.flow.tick_delay,
                 TickPriority::Normal,
             );
         }

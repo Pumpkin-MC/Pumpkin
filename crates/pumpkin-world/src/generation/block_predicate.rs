@@ -429,7 +429,7 @@ impl OffsetBlocksBlockPredicate {
         &self,
         chunk: &T,
         pos: &BlockPos,
-    ) -> (Fluid, FluidState) {
+    ) -> (&'static Fluid, FluidState) {
         let pos = self.get(pos);
         GenerationCache::get_fluid_and_fluid_state(chunk, &pos.0)
     }

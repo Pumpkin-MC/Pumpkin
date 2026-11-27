@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:lever_strong_powers_supporting_block",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

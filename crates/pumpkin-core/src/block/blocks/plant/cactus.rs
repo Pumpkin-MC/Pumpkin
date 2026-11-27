@@ -12,7 +12,6 @@ use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
     OnScheduledTickArgs, PathComputationType, RandomTickArgs,
 };
-use crate::world::World;
 
 #[pumpkin_block("minecraft:cactus")]
 pub struct CactusBlock;
@@ -104,7 +103,8 @@ fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     for direction in BlockDirection::horizontal() {
         let state = world.get_block_state(&block_pos.offset(direction.to_offset()));
         if state.is_solid()
-            || World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_LAVA)
+            || pumpkin_data::fluid::Fluid::of_block_state(state.id)
+                .has_tag(&tag::Fluid::MINECRAFT_LAVA)
         {
             return false;
         }

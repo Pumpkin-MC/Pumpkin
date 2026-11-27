@@ -70,7 +70,7 @@ impl BlockBehaviour for LeavesBlock {
             args.world.schedule_fluid_tick(
                 &pumpkin_data::fluid::Fluid::WATER,
                 *args.position,
-                pumpkin_data::fluid::Fluid::WATER.flow_speed as u8,
+                pumpkin_data::fluid::Fluid::WATER.flow.tick_delay,
                 TickPriority::Normal,
             );
         }
@@ -108,7 +108,7 @@ impl BlockBehaviour for LeavesBlock {
                         *args.position,
                         args.world.clone(),
                     );
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     return;
                 }

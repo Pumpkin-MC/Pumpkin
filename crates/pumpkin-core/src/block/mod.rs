@@ -213,9 +213,8 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
         match computation_type {
-            PathComputationType::Water => {
-                World::get_fluid_from_state_id(state.id).has_tag(&tag::Fluid::MINECRAFT_WATER)
-            }
+            PathComputationType::Water => pumpkin_data::fluid::Fluid::of_block_state(state.id)
+                .has_tag(&tag::Fluid::MINECRAFT_WATER),
             PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
         }
     }
@@ -540,7 +539,7 @@ pub fn collect_loot(
         cancelled: false,
     };
     if let Some(server) = world.server.upgrade() {
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
     }
     if event.cancelled {
         return Vec::new();
@@ -587,7 +586,7 @@ pub fn drop_loot(
                 exp: amount,
             };
             if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
             }
             if event.exp > 0 {
                 ExperienceOrbEntity::spawn(world, pos.to_f64(), event.exp as u32);
