@@ -65,28 +65,6 @@ fn preserved_root_tags(root_tag: &NbtCompound) -> NbtCompound {
     preserved
 }
 
-/// Reads a length-prefixed unnamed NBT compound from a pump chunk payload.
-fn read_pump_compound(buf: &mut &[u8], what: &str) -> Result<NbtCompound, ChunkParsingError> {
-    if buf.remaining() < 4 {
-        return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
-            "Unexpected EOF reading {what} length"
-        )));
-    }
-    let len = buf.get_u32() as usize;
-    if buf.remaining() < len {
-        return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
-            "Unexpected EOF reading {what} payload"
-        )));
-    }
-    let mut cursor = std::io::Cursor::new(&buf[..len]);
-    let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
-    let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
-        .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?
-        .root_tag;
-    buf.advance(len);
-    Ok(nbt)
-}
-
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
@@ -811,12 +789,6 @@ impl ChunkData {
             .as_deref()
             .filter(|a| a.len() == ChunkHeightmaps::LONGS);
         let has_custom = !custom_data.is_empty();
-        let preserved_tags = self
-            .preserved_tags
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // Root tags this server does not model; bit 5 so older payloads still decode.
-        let has_preserved = !preserved_tags.is_empty();
 
         let mut flags = u8::from(is_light_correct);
         if ws.is_some() {
@@ -830,9 +802,6 @@ impl ChunkData {
         }
         if has_custom {
             flags |= 1 << 4;
-        }
-        if has_preserved {
-            flags |= 1 << 5;
         }
 
         let status_u8 = match self.status {
@@ -929,13 +898,6 @@ impl ChunkData {
 
         if has_custom {
             let bytes = pumpkin_nbt::Nbt::new(String::new(), custom_data.clone()).write_unnamed();
-            out.put_u32(bytes.len() as u32);
-            out.extend_from_slice(&bytes);
-        }
-
-        if has_preserved {
-            let bytes =
-                pumpkin_nbt::Nbt::new(String::new(), preserved_tags.clone()).write_unnamed();
             out.put_u32(bytes.len() as u32);
             out.extend_from_slice(&bytes);
         }
@@ -1190,13 +1152,24 @@ impl ChunkData {
         }
 
         let custom_data = if (flags & (1 << 4)) != 0 {
-            read_pump_compound(&mut buf, "custom data")?
-        } else {
-            NbtCompound::default()
-        };
-        // Absent from payloads written before preserved tags were stored.
-        let preserved_tags = if (flags & (1 << 5)) != 0 {
-            read_pump_compound(&mut buf, "preserved tags")?
+            if buf.remaining() < 4 {
+                return Err(ChunkParsingError::ErrorDeserializingChunk(
+                    "Unexpected EOF reading custom data length".into(),
+                ));
+            }
+            let len = buf.get_u32() as usize;
+            if buf.remaining() < len {
+                return Err(ChunkParsingError::ErrorDeserializingChunk(
+                    "Unexpected EOF reading custom data payload".into(),
+                ));
+            }
+            let mut cursor = std::io::Cursor::new(&buf[..len]);
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+            let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader)
+                .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?
+                .root_tag;
+            buf.advance(len);
+            nbt
         } else {
             NbtCompound::default()
         };
@@ -1827,58 +1800,6 @@ mod tests {
         assert_eq!(
             reloaded.root_tag.get_int("DataVersion"),
             Some(WORLD_DATA_VERSION)
-        );
-    }
-
-    /// Root tags this server does not model survive an Anvil -> Pump -> Anvil round trip,
-    /// and a pump payload from before they were stored still decodes, with an empty bag.
-    #[test]
-    fn preserved_tags_survive_the_pump_format() {
-        use crate::chunk::ChunkData;
-        use pumpkin_util::math::vector2::Vector2;
-        /// Offset of the flags byte: magic, version, data version, x, z, min y, status.
-        const FLAGS: usize = 4 + 1 + 4 + 4 + 4 + 4 + 1;
-
-        let mut nbt = test_chunk(vec![test_section(-4, "minecraft:stone", true)]);
-        let mut structures = NbtCompound::new();
-        structures.put("starts", NbtTag::Compound(NbtCompound::new()));
-        structures.put("References", NbtTag::Compound(NbtCompound::new()));
-        nbt.root_tag.put("structures", NbtTag::Compound(structures));
-        nbt.root_tag.put(
-            "carving_mask",
-            NbtTag::ByteArray(vec![1i8, 2, 3].into_boxed_slice()),
-        );
-        nbt.root_tag.put_long("LastUpdate", 1_287_805);
-        let written = nbt.root_tag.clone();
-        let position = Vector2::new(0, 0);
-
-        let chunk = ChunkData::from_bytes(&nbt.write(), position).expect("chunk parses");
-        let pump = chunk.internal_to_pump_bytes();
-        let from_pump = ChunkData::internal_from_pump_bytes(&pump, position).expect("pump parses");
-        let saved = from_pump.to_bytes().expect("chunk serializes");
-        let mut cursor = std::io::Cursor::new(saved.as_ref());
-        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
-        let reloaded = pumpkin_nbt::Nbt::read(&mut reader).expect("saved chunk parses");
-        for key in ["structures", "carving_mask", "LastUpdate"] {
-            assert_eq!(
-                reloaded.root_tag.get(key),
-                written.get(key),
-                "{key} did not survive the pump format"
-            );
-        }
-
-        // What the writer produced before: the same bytes, without the flag and the bag.
-        *chunk.preserved_tags.lock().unwrap() = NbtCompound::new();
-        let legacy = chunk.internal_to_pump_bytes();
-        assert_eq!(legacy[FLAGS] & (1 << 5), 0);
-        assert_eq!(pump[FLAGS], legacy[FLAGS] | (1 << 5));
-        assert_eq!(pump[FLAGS + 1..legacy.len()], legacy[FLAGS + 1..]);
-        let from_legacy =
-            ChunkData::internal_from_pump_bytes(&legacy, position).expect("legacy pump parses");
-        assert!(from_legacy.preserved_tags.lock().unwrap().is_empty());
-        assert_eq!(
-            from_legacy.section.get_block_absolute_y(0, -64, 0),
-            from_pump.section.get_block_absolute_y(0, -64, 0)
         );
     }
 }
