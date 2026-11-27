@@ -78,7 +78,10 @@ impl Weather {
     }
 
     pub fn tick_weather(&mut self, world: &World) {
-        if !self.weather_cycle_enabled {
+        if !world.can_have_weather() {
+            return;
+        }
+        if self.should_advance_cycle(world) {
             self.advance_weather_cycle();
         }
 
@@ -112,6 +115,10 @@ impl Weather {
                 self.thunder_level,
             ));
         }
+    }
+
+    pub(super) fn should_advance_cycle(&self, world: &World) -> bool {
+        self.weather_cycle_enabled && world.level_info.load().game_rules.advance_weather
     }
 
     fn advance_weather_cycle(&mut self) {
@@ -169,5 +176,35 @@ impl Clone for Weather {
             old_thunder_level: self.old_thunder_level,
             weather_cycle_enabled: self.weather_cycle_enabled,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::game_rules::{GameRule, GameRuleValue};
+
+    use super::Weather;
+    use crate::entity::ai::test_support::world;
+
+    #[tokio::test]
+    async fn countdowns_follow_advance_weather_rule() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let mut weather = Weather::new();
+        weather.set_weather_parameters(&world, 0, 2, true, true);
+
+        world.set_game_rule(&GameRule::AdvanceWeather, GameRuleValue::Bool(false));
+        weather.tick_weather(&world);
+        assert_eq!((weather.rain_time, weather.thunder_time), (2, 2));
+        assert!(weather.rain_level > 0.0 && weather.thunder_level > 0.0);
+
+        world.set_game_rule(&GameRule::AdvanceWeather, GameRuleValue::Bool(true));
+        weather.tick_weather(&world);
+        assert_eq!((weather.rain_time, weather.thunder_time), (1, 1));
+        weather.tick_weather(&world);
+        assert!(!weather.raining && !weather.thundering);
+
+        world.level.shutdown().await;
+        Ok(())
     }
 }

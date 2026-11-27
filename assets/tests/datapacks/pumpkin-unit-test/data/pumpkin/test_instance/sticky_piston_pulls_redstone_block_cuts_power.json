@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:sticky_piston_pulls_redstone_block_cuts_power",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

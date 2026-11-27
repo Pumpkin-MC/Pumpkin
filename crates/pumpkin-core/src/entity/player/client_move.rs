@@ -175,6 +175,12 @@ impl Player {
             ClientPlatform::Bedrock(client) => {
                 self.send_bedrock_teleport(client);
             }
+            ClientPlatform::SimulatedPlayer(_) => {
+                *self
+                    .awaiting_teleport
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+            }
         }
     }
 
@@ -351,7 +357,7 @@ impl Player {
     }
 
     /// Look without position: teleport pending, movement locked or riding.
-    fn apply_and_broadcast_look(&self, requested: ClientMove) {
+    pub(super) fn apply_and_broadcast_look(&self, requested: ClientMove) {
         let rot_changed = self.look_changed(requested);
         self.apply_look(requested);
         if rot_changed {
