@@ -602,7 +602,15 @@ impl Server {
     }
 
     pub fn save_world_info(&self) -> Result<(), WorldInfoError> {
-        let level_data = self.level_info.load();
+        let mut level_data = (**self.level_info.load()).clone();
+        if let Some(overworld) = self
+            .worlds
+            .load()
+            .iter()
+            .find(|world| world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name)
+        {
+            level_data.day_time = overworld.get_time_of_day();
+        }
         self.world_info_writer
             .write_world_info(&level_data, &self.basic_config.get_world_path())
     }
@@ -1041,13 +1049,7 @@ impl Server {
         for world in self.worlds.load().iter() {
             world.shutdown().await;
         }
-        let level_data = self.level_info.load();
-        // then lets save the world info
-
-        if let Err(err) = self
-            .world_info_writer
-            .write_world_info(&level_data, &self.basic_config.get_world_path())
-        {
+        if let Err(err) = self.save_world_info() {
             error!("Failed to save level.dat: {err}");
         }
         info!("Completed worlds");
@@ -1624,5 +1626,57 @@ impl Server {
                 plugin_name,
             );
         self.plugin_manager.fire(self, disable_event).await;
+    }
+}
+
+#[cfg(test)]
+mod clock_persistence_tests {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn saves_and_restores_the_overworld_day_after_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let open = || {
+            let basic = BasicConfiguration {
+                default_level_name: dir.path().to_string_lossy().into_owned(),
+                allow_nether: false,
+                allow_end: false,
+                ..Default::default()
+            };
+            let mut advanced = AdvancedConfiguration::default();
+            advanced.networking.bedrock.online_mode = false;
+            advanced.networking.bedrock.authentication.enabled = false;
+            Server::new(
+                basic,
+                advanced,
+                TelemetryConfig {
+                    enabled: false,
+                    ..Default::default()
+                },
+                VanillaData::default(),
+                vec![],
+            )
+        };
+        let server = open().await.unwrap();
+        server
+            .get_world_from_dimension(&Dimension::OVERWORLD)
+            .set_time_of_day(51_234);
+        server.save_world_info().unwrap();
+        assert_eq!(
+            AnvilLevelInfo.read_world_info(dir.path()).unwrap().day_time,
+            51_234
+        );
+        server
+            .get_world_from_dimension(&Dimension::OVERWORLD)
+            .set_time_of_day(52_300);
+        server.shutdown().await;
+        drop(server);
+        let reopened = open().await.unwrap();
+        assert_eq!(
+            reopened
+                .get_world_from_dimension(&Dimension::OVERWORLD)
+                .get_time_of_day(),
+            52_300
+        );
     }
 }
