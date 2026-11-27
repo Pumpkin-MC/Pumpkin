@@ -6420,7 +6420,8 @@ impl Player {
     }
 
     pub fn drop_held_item(&self, drop_stack: bool) {
-        let mut item_stack = self.inventory().held_item();
+        let selected_slot = usize::from(self.inventory().get_selected_slot());
+        let mut item_stack = self.inventory().get_slot(selected_slot);
 
         if item_stack.is_empty() {
             return;
@@ -6444,25 +6445,36 @@ impl Player {
             }
         }
 
+        let before = item_stack.clone();
         item_stack.decrement(drop_amount);
-        let updated_stack = item_stack.clone();
-        self.inventory().set_held_item(updated_stack.clone());
+        if !self
+            .inventory()
+            .replace_slot_if_same(selected_slot, &before, item_stack.clone())
+        {
+            return;
+        }
+        let updated_stack = item_stack;
 
         self.drop_item(dropped_stack);
 
         let inv: Arc<dyn Inventory> = self.inventory.clone();
-        let screen_binding = self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut screen_handler = screen_binding
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let selected_slot = self.inventory.get_selected_slot();
-        if let Some(slot_index) = screen_handler.get_slot_index(&inv, selected_slot as usize) {
-            screen_handler.set_received_stack(slot_index, updated_stack);
-            screen_handler.send_content_updates();
-        }
+        let owner = self.screen_owner();
+        let Some((active, mut handler)) = self.lock_screen_action(&owner) else {
+            return;
+        };
+        let (sync, epoch) = Self::capture_screen_updates(&mut *handler, |handler| {
+            let current = self.inventory().get_slot(selected_slot);
+            if current.are_equal(&updated_stack)
+                && (current.is_empty() || current.uid == updated_stack.uid)
+                && let Some(slot_index) = handler.get_slot_index(&inv, selected_slot)
+            {
+                handler.set_received_stack(slot_index, updated_stack);
+            }
+            handler.send_content_updates();
+        });
+        drop(handler);
+        drop(active);
+        self.flush_screen_updates(&owner.handler, epoch, sync, true);
     }
 
     pub fn swap_item(&self) {
@@ -6633,10 +6645,7 @@ impl Player {
         }
 
         if any_changed {
-            self.player_screen_handler
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .send_content_updates();
+            self.send_player_screen_updates();
         }
     }
 
@@ -7587,11 +7596,8 @@ impl Player {
     pub fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Arc<Server>) {
         self.update_last_action_time();
 
-        let screen_handler_arc = self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+        let owner = self.screen_owner();
+        let screen_handler_arc = &owner.handler;
         let (
             sync_id,
             can_use,
@@ -7698,14 +7704,11 @@ impl Player {
         }
 
         let resync_screen = |update: fn(&mut dyn ScreenHandler)| {
-            if self.is_active_screen(&screen_handler_arc) {
-                let (sync, epoch) = {
-                    let mut handler = screen_handler_arc
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    Self::capture_screen_updates(&mut *handler, update)
-                };
-                self.flush_screen_updates(&screen_handler_arc, epoch, sync, true);
+            if let Some((active, mut handler)) = self.lock_screen_action(&owner) {
+                let (sync, epoch) = Self::capture_screen_updates(&mut *handler, update);
+                drop(handler);
+                drop(active);
+                self.flush_screen_updates(screen_handler_arc, epoch, sync, true);
             }
         };
         if self.gamemode.load() == GameMode::Spectator {
@@ -7871,16 +7874,9 @@ impl Player {
             }
         }
 
-        let active = self
-            .current_screen_handler
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !Arc::ptr_eq(&active, &screen_handler_arc) {
+        let Some((active, mut screen_handler)) = self.lock_screen_action(&owner) else {
             return;
-        }
-        let mut screen_handler = screen_handler_arc
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        };
         drop(active);
         if self.gamemode.load() == GameMode::Spectator || !screen_handler.can_use(self.as_ref()) {
             drop(screen_handler);
@@ -7924,7 +7920,7 @@ impl Player {
         let effects = screen_handler.get_behaviour_mut().take_deferred_effects();
         let committed_equipment = self.screen_equipment();
         drop(screen_handler);
-        self.flush_screen_updates(&screen_handler_arc, epoch, sync, true);
+        self.flush_screen_updates(screen_handler_arc, epoch, sync, true);
         for effect in effects {
             effect.publish(self.as_ref());
         }
@@ -8598,8 +8594,16 @@ impl EntityBase for Player {
         f64::from(self.living_entity.entity.entity_type.eye_height)
     }
 
-    fn send_bedrock_spawn_packet(&self, client: &crate::net::bedrock::BedrockClient) {
-        let (player_list, add_player) = self.bedrock_spawn_packets();
+    fn send_bedrock_spawn_packets(
+        &self,
+        client: &crate::net::bedrock::BedrockClient,
+        tracked: bool,
+        send: &mut dyn FnMut(bytes::Bytes),
+    ) {
+        let (player_list, mut add_player) = self.bedrock_spawn_packets();
+        if tracked {
+            add_player.actor_links.clear();
+        }
         let main_hand = pumpkin_protocol::bedrock::client::CMobEquipment {
             target_runtime_id: (self.entity_id() as u64).into(),
             item: (&self.inventory.held_item()).into(),
@@ -8625,7 +8629,7 @@ impl EntityBase for Player {
         .into_iter()
         .flatten()
         {
-            client.try_enqueue_packet(data);
+            send(data);
         }
     }
 

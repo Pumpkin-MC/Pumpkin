@@ -340,16 +340,50 @@ impl BedrockClient {
                                         sequence: VarInt(0),
                                     };
 
-                                if let Ok(Some(_)) = server.block_registry.place_block(
+                                let placement = server.block_registry.place_block_with_commit(
                                     player,
                                     placed_block,
                                     &server,
                                     &dummy_use_item_on,
                                     data.block_position,
                                     face,
-                                ) && player.gamemode.load() != GameMode::Creative
-                                {
-                                    stack.decrement(1);
+                                    || {
+                                        physical_source.as_ref().is_none_or(
+                                            |(slot, equipment_slot, source, mode)| {
+                                                let inventory = player.inventory();
+                                                let current = inventory.get_slot(*slot);
+                                                if player.gamemode.load() != *mode
+                                                    || inventory
+                                                        .equipment_slot_index(equipment_slot)
+                                                        != Some(*slot)
+                                                    || current.uid != source.uid
+                                                    || !current.are_equal(source)
+                                                {
+                                                    return false;
+                                                }
+                                                let mut remainder = stack.clone();
+                                                if *mode != GameMode::Creative {
+                                                    remainder.decrement(1);
+                                                }
+                                                remainder.are_equal(source)
+                                                    || inventory.replace_slot_if_same(
+                                                        *slot, source, remainder,
+                                                    )
+                                            },
+                                        )
+                                    },
+                                );
+                                if let Ok(Some(_)) = placement {
+                                    if let Some((slot, _, _, _)) = physical_source {
+                                        player.sync_hand_slot(
+                                            slot,
+                                            player.inventory().get_slot(slot),
+                                        );
+                                        return;
+                                    }
+                                    if player.gamemode.load() != GameMode::Creative {
+                                        stack.decrement(1);
+                                    }
                                 }
                             }
                         }

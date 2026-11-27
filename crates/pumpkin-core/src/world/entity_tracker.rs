@@ -823,6 +823,40 @@ impl TrackedEntity {
         Some((id, actor))
     }
 
+    fn java_passenger_update_overlaps(
+        mut payload: &[u8],
+        protocol: pumpkin_util::version::JavaMinecraftVersion,
+        carrier: i32,
+        riders: &[VarInt],
+    ) -> bool {
+        use pumpkin_protocol::{ServerPacket, java::client::play::CSetEntityLink};
+        use pumpkin_util::version::JavaMinecraftVersion;
+
+        let Ok(packet_id) = payload.get_var_int() else {
+            return false;
+        };
+        if protocol <= JavaMinecraftVersion::V_1_8 && packet_id.0 == CSetEntityLink::to_id(protocol)
+        {
+            // These versions share the attach packet between riding and leashing.
+            return CSetEntityLink::read(&mut payload, &protocol).is_ok_and(|link| {
+                !link.leash
+                    && (link.holding_entity_id == carrier
+                        || riders.contains(&VarInt(link.attached_entity_id)))
+            });
+        }
+        if packet_id.0 != CSetPassengers::to_id(protocol) {
+            return false;
+        }
+        if payload.get_var_int().is_ok_and(|id| id.0 == carrier) {
+            return true;
+        }
+        payload.get_var_int().is_ok_and(|count| {
+            (0..count.0)
+                .map_while(|_| payload.get_var_int().ok())
+                .any(|id| riders.contains(&id))
+        })
+    }
+
     #[allow(clippy::too_many_lines)]
     fn send_pairing(&self, player: &Arc<Player>, session: EquipmentSession) {
         let _pairing = EquipmentPairing {
@@ -830,7 +864,43 @@ impl TrackedEntity {
             session,
         };
         let still_paired = || self.lock_pairing_session(session).is_some();
-        player.client.try_enqueue_spawn_packet(&self.entity);
+        let enqueue_java = |client: &JavaClient, data| {
+            client.try_enqueue_packet_data_filtering(
+                data,
+                || self.lock_pairing_session(session),
+                |data| {
+                    let version = client.version.load();
+                    (Self::java_pairing_actor(&data, version)
+                        .is_none_or(|(_, actor)| actor != self.entity_id)
+                        && !Self::java_passenger_update_overlaps(
+                            &data,
+                            version,
+                            self.entity_id,
+                            &[VarInt(self.entity_id)],
+                        ))
+                    .then_some(data)
+                },
+            );
+        };
+        let enqueue_bedrock = |client: &BedrockClient, data| {
+            client.try_enqueue_packet_data_filtering(
+                data,
+                || self.lock_pairing_session(session),
+                |data| (!self.is_bedrock_pairing_actor(&data)).then_some(data),
+            );
+        };
+        match player.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                self.entity
+                    .send_java_spawn_packets(client, &mut |data| enqueue_java(client, data));
+            }
+            ClientPlatform::Bedrock(client) => {
+                self.entity
+                    .send_bedrock_spawn_packets(client, true, &mut |data| {
+                        enqueue_bedrock(client, data);
+                    });
+            }
+        }
         if !still_paired() {
             return;
         }
@@ -866,7 +936,7 @@ impl TrackedEntity {
                 if let Ok(packet_data) =
                     JavaClient::serialize_packet_for_version(&meta_packet, version)
                 {
-                    client.try_enqueue_packet(packet_data);
+                    enqueue_java(client, packet_data);
                 }
 
                 let head_yaw = target_entity.head_yaw.load();
@@ -876,7 +946,7 @@ impl TrackedEntity {
                     (head_yaw * 256.0 / 360.0).rem_euclid(256.0) as u8,
                 );
                 if let Ok(data) = client.serialize_packet(&head_rot_packet) {
-                    client.try_enqueue_packet(data);
+                    enqueue_java(client, data);
                 }
             }
         } else if self.entity.get_living_entity().is_some()
@@ -889,7 +959,7 @@ impl TrackedEntity {
                 (head_yaw * 256.0 / 360.0).rem_euclid(256.0) as u8,
             );
             if let Ok(data) = client.serialize_packet(&head_rot_packet) {
-                client.try_enqueue_packet(data);
+                enqueue_java(client, data);
             }
         }
 
@@ -902,7 +972,7 @@ impl TrackedEntity {
                 ClientPlatform::Java(client) => {
                     let motion = CEntityVelocity::new(self.entity_id.into(), vel);
                     if let Ok(data) = client.serialize_packet(&motion) {
-                        client.try_enqueue_packet(data);
+                        enqueue_java(client, data);
                     }
                 }
                 ClientPlatform::Bedrock(client) => {
@@ -913,7 +983,7 @@ impl TrackedEntity {
                             tick: 0u64.into(),
                         };
                     if let Ok(data) = client.serialize_packet(&motion) {
-                        client.try_enqueue_packet(data);
+                        enqueue_bedrock(client, data);
                     }
                 }
             }
@@ -930,7 +1000,7 @@ impl TrackedEntity {
                 let packet = CSetEntityMetadata::new(self.entity_id.into(), non_default);
                 if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
                 {
-                    client.try_enqueue_packet(packet_data);
+                    enqueue_java(client, packet_data);
                 }
             }
         }
@@ -964,7 +1034,7 @@ impl TrackedEntity {
                                 flags,
                             );
                             if let Ok(data) = client.serialize_packet(&pkt) {
-                                client.try_enqueue_packet(data);
+                                enqueue_java(client, data);
                             }
                         }
                         ClientPlatform::Bedrock(client) => {
@@ -979,7 +1049,7 @@ impl TrackedEntity {
                                 ambient: effect.ambient,
                             };
                             if let Ok(data) = client.serialize_packet(&pkt) {
-                                client.try_enqueue_packet(data);
+                                enqueue_bedrock(client, data);
                             }
                         }
                     }
@@ -990,74 +1060,109 @@ impl TrackedEntity {
         if !still_paired() {
             return;
         }
-        if let Ok(passengers) = self.entity.get_entity().passengers.try_lock()
-            && !passengers.is_empty()
-        {
-            match player.client.as_ref() {
-                ClientPlatform::Java(client) => {
-                    let passenger_ids: Vec<VarInt> = passengers
-                        .iter()
-                        .map(|p| VarInt(p.get_entity().entity_id))
-                        .collect();
-                    let packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
-                    if let Ok(data) = client.serialize_packet(&packet) {
-                        client.try_enqueue_packet(data);
-                    }
-                }
-                ClientPlatform::Bedrock(client) => {
-                    for (idx, p) in passengers.iter().enumerate() {
-                        let link = pumpkin_protocol::bedrock::client::CSetActorLink {
-                            link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                                ridden_unique_id: i64::from(self.entity_id).into(),
-                                rider_unique_id: i64::from(p.get_entity().entity_id).into(),
-                                link_type: if idx == 0 { 1 } else { 2 },
-                                immediate: true,
-                                rider_initiated: false,
-                                vehicle_angular_velocity: 0.0,
-                            },
-                        };
-                        if let Ok(data) = client.serialize_packet(&link) {
-                            client.try_enqueue_packet(data);
-                        }
-                    }
+        let entity = self.entity.get_entity();
+        self.send_pairing_passengers(entity, player, session, None);
+        let vehicle = entity
+            .vehicle
+            .try_lock()
+            .ok()
+            .and_then(|vehicle| vehicle.as_ref().and_then(std::sync::Weak::upgrade));
+        if let Some(vehicle) = vehicle {
+            self.send_pairing_passengers(
+                vehicle.get_entity(),
+                player,
+                session,
+                Some(self.entity_id),
+            );
+        }
+    }
+
+    fn send_pairing_passengers(
+        &self,
+        carrier: &Entity,
+        player: &Player,
+        session: EquipmentSession,
+        paired_rider: Option<i32>,
+    ) {
+        let Ok(ids) = carrier.passengers.try_lock().map(|passengers| {
+            passengers
+                .iter()
+                .map(|rider| VarInt(rider.get_entity().entity_id))
+                .collect::<Vec<_>>()
+        }) else {
+            return;
+        };
+        if ids.is_empty() || paired_rider.is_some_and(|id| !ids.contains(&VarInt(id))) {
+            return;
+        }
+        let session_invalid = std::cell::Cell::new(false);
+        let lock_current = || {
+            let pairing = self.lock_pairing_session(session);
+            session_invalid.set(pairing.is_none());
+            let pairing = pairing?;
+            let passengers = carrier.passengers.try_lock().ok()?;
+            (!carrier.is_removed()
+                && passengers
+                    .iter()
+                    .map(|rider| VarInt(rider.get_entity().entity_id))
+                    .eq(ids.iter().copied()))
+            .then_some((pairing, passengers))
+        };
+        match player.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                let packet = CSetPassengers::new(VarInt(carrier.entity_id), &ids);
+                if let Ok(data) = client.serialize_packet(&packet) {
+                    client.try_enqueue_packet_data_filtering(data, lock_current, |data| {
+                        let version = client.version.load();
+                        let actor_removed = session_invalid.get()
+                            && (Self::java_passenger_update_overlaps(
+                                &data,
+                                version,
+                                self.entity_id,
+                                &[VarInt(self.entity_id)],
+                            ) || Self::java_pairing_actor(&data, version)
+                                .is_some_and(|(_, actor)| actor == self.entity_id));
+                        (!actor_removed
+                            && !Self::java_passenger_update_overlaps(
+                                &data,
+                                version,
+                                carrier.entity_id,
+                                &ids,
+                            ))
+                        .then_some(data)
+                    });
                 }
             }
-        }
-
-        if let Ok(vehicle_guard) = self.entity.get_entity().vehicle.try_lock()
-            && let Some(vehicle) = vehicle_guard.as_ref().and_then(std::sync::Weak::upgrade)
-            && let Ok(vehicle_passengers) = vehicle.get_entity().passengers.try_lock()
-        {
-            match player.client.as_ref() {
-                ClientPlatform::Java(client) => {
-                    let passenger_ids: Vec<VarInt> = vehicle_passengers
-                        .iter()
-                        .map(|p| VarInt(p.get_entity().entity_id))
-                        .collect();
-                    let packet =
-                        CSetPassengers::new(VarInt(vehicle.get_entity().entity_id), &passenger_ids);
-                    if let Ok(data) = client.serialize_packet(&packet) {
-                        client.try_enqueue_packet(data);
+            ClientPlatform::Bedrock(client) => {
+                use pumpkin_protocol::bedrock::client::{CSetActorLink, common::ActorLink};
+                for (index, rider) in ids.iter().enumerate() {
+                    if paired_rider.is_some_and(|id| id != rider.0) {
+                        continue;
                     }
-                }
-                ClientPlatform::Bedrock(client) => {
-                    let vehicle_id = vehicle.get_entity().entity_id;
-                    for (idx, p) in vehicle_passengers.iter().enumerate() {
-                        if p.get_entity().entity_id == self.entity_id {
-                            let link = pumpkin_protocol::bedrock::client::CSetActorLink {
-                                link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                                    ridden_unique_id: i64::from(vehicle_id).into(),
-                                    rider_unique_id: i64::from(self.entity_id).into(),
-                                    link_type: if idx == 0 { 1 } else { 2 },
-                                    immediate: true,
-                                    rider_initiated: false,
-                                    vehicle_angular_velocity: 0.0,
-                                },
-                            };
-                            if let Ok(data) = client.serialize_packet(&link) {
-                                client.try_enqueue_packet(data);
-                            }
-                        }
+                    let packet = CSetActorLink {
+                        link: ActorLink {
+                            ridden_unique_id: i64::from(carrier.entity_id).into(),
+                            rider_unique_id: i64::from(rider.0).into(),
+                            link_type: if index == 0 { 1 } else { 2 },
+                            immediate: true,
+                            rider_initiated: false,
+                            vehicle_angular_velocity: 0.0,
+                        },
+                    };
+                    if let Ok(data) = client.serialize_packet(&packet) {
+                        client.try_enqueue_packet_data_filtering(data, lock_current, |data| {
+                            let mut payload = data.as_ref();
+                            let related = VarUInt::read(&mut payload)
+                                .is_ok_and(|id| id.0 == CSetActorLink::PACKET_ID as u32)
+                                && (VarLong::read(&mut payload)
+                                    .is_ok_and(|id| id.0 == i64::from(carrier.entity_id))
+                                    || VarLong::read(&mut payload).is_ok_and(|id| {
+                                        ids.iter().any(|rider| i64::from(rider.0) == id.0)
+                                    }));
+                            let actor_removed =
+                                session_invalid.get() && self.is_bedrock_pairing_actor(&data);
+                            (!related && !actor_removed).then_some(data)
+                        });
                     }
                 }
             }
@@ -2242,6 +2347,320 @@ mod tests {
                 }
             })
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_does_not_spawn_a_mob_removed_by_its_spawn_observer() -> TestResult {
+        use crate::entity::passive::pig::PigEntity;
+        use pumpkin_protocol::java::client::play::CSpawnEntity;
+
+        const UNRELATED_CARRIER: VarInt = VarInt(98765);
+
+        struct RemoveOnSpawn(Arc<PigEntity>, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for RemoveOnSpawn {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CSpawnEntity::to_id(CURRENT_MC_VERSION)
+                        && event
+                            .payload
+                            .as_ref()
+                            .get_var_int()
+                            .is_ok_and(|id| id.0 == self.0.get_entity().entity_id)
+                        && !self.1.swap(true, Relaxed)
+                    {
+                        let actor = VarInt(self.0.get_entity().entity_id);
+                        self.0.get_entity().remove();
+                        for (carrier, riders) in [
+                            (actor, &[][..]),
+                            (UNRELATED_CARRIER, &[actor][..]),
+                            (UNRELATED_CARRIER, &[][..]),
+                        ] {
+                            let mut payload = Vec::new();
+                            assert!(
+                                CSetPassengers::new(carrier, riders)
+                                    .write_packet_data(&mut payload, &CURRENT_MC_VERSION)
+                                    .is_ok()
+                            );
+                            event
+                                .extra_packets
+                                .push((CSetPassengers::to_id(CURRENT_MC_VERSION), payload.into()));
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let mob = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let id = mob.get_entity().entity_id;
+        let actor: Arc<dyn EntityBase> = mob.clone();
+        assert!(world.spawn_entity(actor));
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(id)
+            .ok_or("Pig tracker")?;
+        let observer = Arc::new(RemoveOnSpawn(mob.clone(), AtomicBool::new(false)));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+        tracked.add_pairing(&viewer);
+        assert!(observer.1.load(Relaxed));
+        assert!(mob.get_entity().is_removed());
+        let mut passenger_updates = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                passenger_updates.push((payload.get_var_int()?, payload.get_var_int()?.0));
+            }
+            assert!(
+                packet.id != CSpawnEntity::to_id(CURRENT_MC_VERSION)
+                    || !packet
+                        .payload
+                        .as_ref()
+                        .get_var_int()
+                        .is_ok_and(|actor| actor.0 == id)
+            );
+        }
+        assert_eq!(passenger_updates, [(UNRELATED_CARRIER, 0)]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pairing_does_not_queue_a_passenger_removed_by_its_observer() -> TestResult {
+        use crate::entity::vehicle::minecart::MinecartEntity;
+
+        struct DismountOnLink(Arc<MinecartEntity>, i32, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for DismountOnLink {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    let mut payload = event.payload.as_ref();
+                    let cart = self.0.get_entity();
+                    if event.packet_id == CSetPassengers::to_id(CURRENT_MC_VERSION)
+                        && payload.get_var_int().is_ok_and(|id| id.0 == cart.entity_id)
+                        && payload.get_var_int().is_ok_and(|count| count.0 == 1)
+                        && payload.get_var_int().is_ok_and(|rider| rider.0 == self.1)
+                        && !self.2.swap(true, Relaxed)
+                    {
+                        cart.remove_passenger_sync(self.1);
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let (rider, _rider_peer) = java_rider(&server, &world, "jeb_")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let cart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::MINECART,
+        )));
+        let entity = cart.get_entity();
+        assert!(world.spawn_entity(cart.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(entity.entity_id)
+            .ok_or("Minecart tracker")?;
+        let rider_id = rider.entity_id();
+        entity.add_passenger_silently(cart.clone(), rider);
+        let observer = Arc::new(DismountOnLink(
+            cart.clone(),
+            rider_id,
+            AtomicBool::new(false),
+        ));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+
+        tracker.add_pairing(&viewer);
+        assert!(observer.2.load(Relaxed));
+        assert!(!entity.has_passenger(rider_id));
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                if payload.get_var_int()?.0 == entity.entity_id {
+                    assert_eq!(payload.get_var_int()?.0, 0);
+                }
+            }
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn passenger_pairing_filters_extras_for_the_removed_rider() -> TestResult {
+        use crate::entity::{passive::pig::PigEntity, vehicle::minecart::MinecartEntity};
+
+        const UNRELATED: VarInt = VarInt(98_765);
+        struct RemoveRider(Arc<PigEntity>, i32, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for RemoveRider {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    let mut payload = event.payload.as_ref();
+                    let rider = self.0.get_entity();
+                    if event.packet_id == CSetPassengers::to_id(CURRENT_MC_VERSION)
+                        && payload.get_var_int().is_ok_and(|id| id.0 == self.1)
+                        && payload.get_var_int().is_ok_and(|count| count.0 == 1)
+                        && payload
+                            .get_var_int()
+                            .is_ok_and(|id| id.0 == rider.entity_id)
+                        && !self.2.swap(true, Relaxed)
+                    {
+                        rider.remove();
+                        for carrier in [VarInt(rider.entity_id), UNRELATED] {
+                            let mut payload = Vec::new();
+                            assert!(
+                                CSetPassengers::new(carrier, &[VarInt(98_766)])
+                                    .write_packet_data(&mut payload, &CURRENT_MC_VERSION)
+                                    .is_ok()
+                            );
+                            event
+                                .extra_packets
+                                .push((CSetPassengers::to_id(CURRENT_MC_VERSION), payload.into()));
+                        }
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, peer) = java_rider(&server, &world, "Notch")?;
+        let client = viewer.client.java().ok_or("Java viewer")?;
+        client.player.store(Arc::new(Some(viewer.clone())));
+        let mut decoder = TCPNetworkDecoder::new(BufReader::new(peer));
+        let rider = PigEntity::new(Entity::new(world.clone(), CENTER, &EntityType::PIG));
+        let cart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::MINECART,
+        )));
+        assert!(world.spawn_entity(rider.clone()));
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(rider.get_entity().entity_id)
+            .ok_or("Pig tracker")?;
+        let carrier = cart.get_entity();
+        carrier.add_passenger_silently(cart.clone(), rider.clone());
+        let observer = Arc::new(RemoveRider(
+            rider.clone(),
+            carrier.entity_id,
+            AtomicBool::new(false),
+        ));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+
+        tracker.add_pairing(&viewer);
+        assert!(observer.2.load(Relaxed));
+        assert!(rider.get_entity().is_removed());
+        let mut extras = Vec::new();
+        for packet in queued_packets(client, &mut decoder).await? {
+            if packet.id == CSetPassengers::to_id(CURRENT_MC_VERSION) {
+                let mut payload = packet.payload.as_ref();
+                let vehicle = payload.get_var_int()?;
+                if payload.get_var_int()?.0 > 0 {
+                    extras.push(vehicle);
+                }
+            }
+        }
+        assert_eq!(extras, [UNRELATED]);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn bedrock_player_pairing_drops_embedded_links_before_player_list_observation()
+    -> TestResult {
+        use crate::world::item_inventory_tests::bedrock_player;
+        use pumpkin_protocol::bedrock::client::{CAddPlayer, CPlayerList};
+
+        struct DismountOnList(Arc<Player>, i32, AtomicBool);
+        impl EventRwHandler<PacketSentEvent> for DismountOnList {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut PacketSentEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.packet_id == CPlayerList::PACKET_ID && !self.2.swap(true, Relaxed) {
+                        self.0.get_entity().remove_passenger_sync(self.1);
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let (server, world) = vehicle_world(&folder).await?;
+        let (viewer, mut packets) = bedrock_player(&server, &world, "Notch").await?;
+        let (carrier, _peer) = java_rider(&server, &world, "jeb_")?;
+        let (rider, _rider_peer) = java_rider(&server, &world, "deadmau5")?;
+        let client = viewer.client.bedrock().ok_or("Bedrock viewer")?;
+        let actor: Arc<dyn EntityBase> = carrier.clone();
+        world.entity_tracker.add_entity(&actor, &world);
+        let entity = carrier.get_entity();
+        let tracker = world
+            .entity_tracker
+            .get_tracked_entity(entity.entity_id)
+            .ok_or("Carrier tracker")?;
+        let rider_id = rider.entity_id();
+        entity.add_passenger_silently(actor, rider);
+        let (_, mut add_player) = carrier.bedrock_spawn_packets();
+        assert_eq!(add_player.actor_links.len(), 1);
+        let linked_size = client.serialize_packet(&add_player)?.len();
+        add_player.actor_links.clear();
+        let unlinked_size = client.serialize_packet(&add_player)?.len();
+        assert!(unlinked_size < linked_size);
+        while packets.try_recv().is_ok() {}
+        let observer = Arc::new(DismountOnList(
+            carrier.clone(),
+            rider_id,
+            AtomicBool::new(false),
+        ));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(observer.clone(), EventPriority::Normal, None);
+
+        tracker.add_pairing(&viewer);
+        assert!(observer.2.load(Relaxed));
+        assert!(!entity.has_passenger(rider_id));
+        let mut spawns = Vec::new();
+        while let Ok(packet) = packets.try_recv() {
+            if crate::net::bedrock::split_raw_packet(&packet.data)
+                .is_some_and(|(id, _)| i32::from(id) == CAddPlayer::PACKET_ID)
+            {
+                spawns.push(packet.data.len());
+            }
+        }
+        // Metadata fields can be serialized in different orders. The embedded
+        // link is the only field removed between the two reference packets.
+        assert_eq!(spawns, [unlinked_size]);
+        client.clear_player();
+        client.close().await;
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

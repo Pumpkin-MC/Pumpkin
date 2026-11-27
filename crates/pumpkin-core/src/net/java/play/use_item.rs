@@ -135,6 +135,10 @@ impl JavaClient {
         }
 
         player.increment_stat(StatisticCategory::Used, i32::from(held.item.id), 1);
+        let current = player.inventory().get_stack_in_hand(hand);
+        if current.uid != held.uid || !current.are_equal(held) {
+            return;
+        }
         let kinetic = !native_use
             && held
                 .get_data_component::<pumpkin_data::data_component_impl::KineticWeaponImpl>()

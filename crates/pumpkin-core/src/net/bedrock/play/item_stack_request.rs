@@ -50,7 +50,9 @@ impl BedrockClient {
             let mut responses = Vec::with_capacity(packet.requests.len());
             let mut pending_slots = Vec::with_capacity(packet.requests.len());
 
+            let mut recover_partial_request = false;
             for mut request in packet.requests {
+                let request_epoch = screen_handler.get_behaviour().sync_epoch();
                 let mut created_item: Option<ItemStack> = None;
                 let mut crafting_inputs_consumed = false;
                 let mut updates = Vec::new();
@@ -834,6 +836,11 @@ impl BedrockClient {
                     }
                 }
 
+                // A failed acknowledgement cannot describe writes already made by
+                // its earlier actions. Reconcile the client from the live menu.
+                // Slot and cursor writes must advance the sync epoch for this check.
+                recover_partial_request |=
+                    result != 0 && screen_handler.get_behaviour().sync_epoch() != request_epoch;
                 pending_slots.push(physical);
                 responses.push(ItemStackResponseInfo {
                     result,
@@ -842,11 +849,14 @@ impl BedrockClient {
                 });
             }
 
-            // Send updates to Java client
-            screen_handler.send_content_updates();
+            if recover_partial_request {
+                screen_handler.sync_state();
+            } else {
+                screen_handler.send_content_updates();
+            }
 
             // Collect inventory updates if we modified player inventory
-            let mut inventory_updated = false;
+            let mut inventory_updated = recover_partial_request;
             for response in &responses {
                 if response.result == 0 {
                     for info in &response.containers {

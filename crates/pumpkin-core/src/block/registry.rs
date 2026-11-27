@@ -700,7 +700,6 @@ impl BlockRegistry {
         replace_previous_block.map(|replacing| (block_pos, face.opposite(), replacing))
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn place_block(
         &self,
         player: &Arc<Player>,
@@ -709,6 +708,28 @@ impl BlockRegistry {
         use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
+    ) -> Result<Option<(BlockPos, BlockStateId)>, BlockPlacingError> {
+        self.place_block_with_commit(
+            player,
+            placed_block,
+            server,
+            use_item_on,
+            location,
+            face,
+            || true,
+        )
+    }
+
+    #[expect(clippy::too_many_lines, clippy::too_many_arguments)]
+    pub(crate) fn place_block_with_commit(
+        &self,
+        player: &Arc<Player>,
+        placed_block: &'static Block,
+        server: &Arc<Server>,
+        use_item_on: &SUseItemOn,
+        location: BlockPos,
+        face: BlockDirection,
+        commit_item: impl Fn() -> bool,
     ) -> Result<Option<(BlockPos, BlockStateId)>, BlockPlacingError> {
         let entity = &player.get_entity();
         let held_stack = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0)
@@ -761,6 +782,7 @@ impl BlockRegistry {
             return Ok(None);
         };
 
+        let target_state = world.get_block_state_id(&final_block_pos);
         if world.is_in_spawn_protection(player, &final_block_pos) {
             player.send_system_message(&pumpkin_util::text::TextComponent::translate_cross(
                 pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
@@ -858,12 +880,21 @@ impl BlockRegistry {
             true,
         );
         event = server.plugin_manager.fire_blocking(server, event);
-        if event.cancelled {
+        // The commit runs during the conditional chunk write, without plugin callbacks.
+        // A missing chunk or a changed target leaves the source slot untouched.
+        if event.cancelled
+            || !Arc::ptr_eq(&world, &player.world())
+            || world
+                .set_block_state_if(
+                    &final_block_pos,
+                    new_state,
+                    BlockFlags::NOTIFY_ALL,
+                    |current| current == target_state && commit_item(),
+                )
+                .is_none()
+        {
             return Ok(None);
         }
-
-        let _replaced_id =
-            world.set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL);
 
         world.play_bedrock_level_sound(
             "place",

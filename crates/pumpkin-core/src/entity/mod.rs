@@ -888,6 +888,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn send_bedrock_spawn_packet(&self, client: &BedrockClient) {
+        self.send_bedrock_spawn_packets(client, false, &mut |data| client.try_enqueue_packet(data));
+    }
+
+    fn send_bedrock_spawn_packets(
+        &self,
+        client: &BedrockClient,
+        tracked: bool,
+        send: &mut dyn FnMut(bytes::Bytes),
+    ) {
         let entity = self.get_entity();
         let runtime_id = entity.entity_id as u64;
         let identifier = self
@@ -920,25 +929,33 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 int_entries_list: std::collections::HashMap::new(),
                 float_entries_list: std::collections::HashMap::new(),
             },
-            actor_links: entity.bedrock_actor_links(),
+            actor_links: if tracked {
+                Vec::new()
+            } else {
+                entity.bedrock_actor_links()
+            },
             passenger_of_block: None,
         };
         if let Ok(data) = client.serialize_packet(&packet) {
-            client.try_enqueue_packet(data);
+            send(data);
         }
     }
 
     fn send_java_spawn_packet(&self, client: &JavaClient) {
+        self.send_java_spawn_packets(client, &mut |data| client.try_enqueue_packet(data));
+    }
+
+    fn send_java_spawn_packets(&self, client: &JavaClient, send: &mut dyn FnMut(bytes::Bytes)) {
         let entity = self.get_entity();
         let metadata = self.java_spawn_metadata(CURRENT_MC_VERSION);
         let spawn_packet = entity.create_spawn_packet();
         if let Ok(data) = client.serialize_packet(&spawn_packet) {
-            client.try_enqueue_packet(data);
+            send(data);
         }
         if let Some(meta) = metadata {
             let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
             if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                client.try_enqueue_packet(meta_data);
+                send(meta_data);
             }
         }
         let holder = entity
@@ -951,7 +968,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 true,
             );
             if let Ok(link_data) = client.serialize_packet(&link_packet) {
-                client.try_enqueue_packet(link_data);
+                send(link_data);
             }
         }
     }

@@ -88,7 +88,13 @@ impl EntityBase for MarkerEntity {
         false
     }
 
-    fn send_java_spawn_packet(&self, _client: &JavaClient) {}
+    fn send_java_spawn_packets(&self, _client: &JavaClient, _send: &mut dyn FnMut(bytes::Bytes)) {}
 
-    fn send_bedrock_spawn_packet(&self, _client: &BedrockClient) {}
+    fn send_bedrock_spawn_packets(
+        &self,
+        _client: &BedrockClient,
+        _tracked: bool,
+        _send: &mut dyn FnMut(bytes::Bytes),
+    ) {
+    }
 }

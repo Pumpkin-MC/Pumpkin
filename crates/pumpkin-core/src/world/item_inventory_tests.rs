@@ -94,7 +94,7 @@ pub(super) fn java_player(
 
 type BedrockQueue = tokio::sync::mpsc::UnboundedReceiver<crate::net::bedrock::OutgoingPacket>;
 
-async fn bedrock_player(
+pub(super) async fn bedrock_player(
     server: &Arc<Server>,
     world: &Arc<World>,
     name: &str,
@@ -3576,41 +3576,18 @@ impl EventRwHandler<crate::plugin::api::events::player::player_statistic_increme
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bedrock_block_insertions_reject_a_replaced_source_stack() -> TestResult {
-    use crate::block::entities::{
-        decorated_pot::DecoratedPotBlockEntity, jukebox::JukeboxBlockEntity,
-    };
-    use crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent;
-    use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
-    use pumpkin_inventory::Inventory;
+fn bedrock_click_block(
+    position: pumpkin_util::math::position::BlockPos,
+    source: &pumpkin_data::item_stack::ItemStack,
+    hotbar: i32,
+) -> pumpkin_protocol::bedrock::server::inventory_transaction::SInventoryTransaction {
     use pumpkin_protocol::bedrock::{
         network_item::NetworkItemDescriptor,
         server::inventory_transaction::{
             HandSlot, SInventoryTransaction, TransactionData, UseItemTransactionData,
         },
     };
-    use pumpkin_protocol::{Packet, bedrock::client::inventory_slot::CInventorySlot};
-    use pumpkin_util::math::position::BlockPos;
-
-    let folder = tempfile::tempdir()?;
-    let (server, world) = inventory_world(&folder).await?;
-    let chunk = ChunkData::empty_sync(0, 0);
-    chunk.set_block_absolute_y(8, 63, 8, Block::JUKEBOX.default_state.id);
-    chunk.set_block_absolute_y(9, 63, 8, Block::DECORATED_POT.default_state.id);
-    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
-    let jukebox_pos = BlockPos::new(8, 63, 8);
-    let pot_pos = BlockPos::new(9, 63, 8);
-    let jukebox = Arc::new(JukeboxBlockEntity::new(jukebox_pos));
-    let pot = Arc::new(DecoratedPotBlockEntity::new(pot_pos));
-    world.add_block_entity(jukebox.clone());
-    world.add_block_entity(pot.clone());
-    let (player, mut packets) = bedrock_player(&server, &world, "Notch").await?;
-    let client = player.client.bedrock().ok_or("Bedrock client")?;
-    let inventory = player.inventory();
-    inventory.set_selected_slot(0);
-
-    let click = |position, source: &ItemStack, hotbar: i32| SInventoryTransaction {
+    SInventoryTransaction {
         legacy_request_id: 0.into(),
         legacy_set_item_slots: Vec::new(),
         has_value: false,
@@ -3631,7 +3608,36 @@ async fn bedrock_block_insertions_reject_a_replaced_source_stack() -> TestResult
             client_prediction: 0,
             client_cooldown_state: 0,
         }),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bedrock_block_insertions_reject_a_replaced_source_stack() -> TestResult {
+    use crate::block::entities::{
+        decorated_pot::DecoratedPotBlockEntity, jukebox::JukeboxBlockEntity,
     };
+    use crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent;
+    use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::Inventory;
+    use pumpkin_protocol::{Packet, bedrock::client::inventory_slot::CInventorySlot};
+    use pumpkin_util::math::position::BlockPos;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = inventory_world(&folder).await?;
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(8, 63, 8, Block::JUKEBOX.default_state.id);
+    chunk.set_block_absolute_y(9, 63, 8, Block::DECORATED_POT.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let jukebox_pos = BlockPos::new(8, 63, 8);
+    let pot_pos = BlockPos::new(9, 63, 8);
+    let jukebox = Arc::new(JukeboxBlockEntity::new(jukebox_pos));
+    let pot = Arc::new(DecoratedPotBlockEntity::new(pot_pos));
+    world.add_block_entity(jukebox.clone());
+    world.add_block_entity(pot.clone());
+    let (player, mut packets) = bedrock_player(&server, &world, "Notch").await?;
+    let client = player.client.bedrock().ok_or("Bedrock client")?;
+    let inventory = player.inventory();
+    inventory.set_selected_slot(0);
 
     let listener = Arc::new(ReplaceFallbackSource(AtomicBool::new(false)));
     server
@@ -3643,7 +3649,7 @@ async fn bedrock_block_insertions_reject_a_replaced_source_stack() -> TestResult
         );
     let apple = ItemStack::new(1, &Item::APPLE);
     inventory.set_slot(0, apple.clone());
-    client.handle_inventory_action(&player, click(jukebox_pos, &apple, 0));
+    client.handle_inventory_action(&player, bedrock_click_block(jukebox_pos, &apple, 0));
     assert!(listener.0.load(Ordering::Relaxed));
     assert_eq!(inventory.get_slot(0).item, &Item::STICK);
 
@@ -3656,17 +3662,17 @@ async fn bedrock_block_insertions_reject_a_replaced_source_stack() -> TestResult
         assert_ne!(stale.uid, replacement.uid);
         inventory.set_slot(0, replacement.clone());
         while packets.try_recv().is_ok() {}
-        client.handle_inventory_action(&player, click(position, &stale, 0));
+        client.handle_inventory_action(&player, bedrock_click_block(position, &stale, 0));
         assert!(
             std::iter::from_fn(|| packets.try_recv().ok()).any(|packet| {
                 crate::net::bedrock::split_raw_packet(&packet.data)
                     .is_some_and(|(id, _)| i32::from(id) == CInventorySlot::PACKET_ID)
             })
         );
-        client.handle_inventory_action(&player, click(position, &replacement, 1));
+        client.handle_inventory_action(&player, bedrock_click_block(position, &replacement, 1));
         assert_eq!(inventory.get_slot(0).uid, replacement.uid);
         assert_eq!(inventory.get_slot(0).item_count, 1);
-        client.handle_inventory_action(&player, click(position, &replacement, 0));
+        client.handle_inventory_action(&player, bedrock_click_block(position, &replacement, 0));
         assert!(inventory.get_slot(0).is_empty());
     }
     assert_eq!(jukebox.get_record().item, &Item::MUSIC_DISC_CAT);
@@ -3678,20 +3684,88 @@ async fn bedrock_block_insertions_reject_a_replaced_source_stack() -> TestResult
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn java_on_foot_inserts_a_record_from_the_physical_slot() -> TestResult {
-    use crate::block::entities::jukebox::JukeboxBlockEntity;
+async fn bedrock_placement_debits_when_a_callback_changes_the_clicked_block() -> TestResult {
+    use crate::plugin::api::events::block::block_place::BlockPlaceEvent;
+    use crate::world::BlockFlags;
     use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
+    use pumpkin_util::math::position::BlockPos;
+
+    struct ReplaceSupport(BlockPos, AtomicBool);
+
+    impl EventRwHandler<BlockPlaceEvent> for ReplaceSupport {
+        fn handle<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut BlockPlaceEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                self.1.store(true, Ordering::Relaxed);
+                event.player.world().set_block_state(
+                    &self.0,
+                    Block::STONE.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = inventory_world(&folder).await?;
+    let support = BlockPos::new(10, 63, 8);
+    let target = BlockPos::new(10, 64, 8);
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(10, 63, 8, Block::JUKEBOX.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let (player, _packets) = bedrock_player(&server, &world, "Notch").await?;
+    let client = player.client.bedrock().ok_or("Bedrock client")?;
+    let inventory = player.inventory();
+    inventory.set_selected_slot(0);
+    assert_eq!(world.get_block(&target), &Block::AIR);
+    let listener = Arc::new(ReplaceSupport(support, AtomicBool::new(false)));
+    server
+        .plugin_manager
+        .register_blocking::<BlockPlaceEvent, _>(listener.clone(), EventPriority::Normal, None);
+    // The generated spawn can overlap these coordinates on some seeds.
+    player
+        .permission_lvl
+        .store(pumpkin_util::permission::PermissionLvl::Four);
+    let dirt = ItemStack::new(2, &Item::DIRT);
+    inventory.set_slot(0, dirt.clone());
+    client.handle_inventory_action(&player, bedrock_click_block(support, &dirt, 0));
+    assert!(listener.1.load(Ordering::Relaxed));
+    assert_eq!(world.get_block(&support), &Block::STONE);
+    assert_eq!(world.get_block(&target), &Block::DIRT);
+    assert_eq!(inventory.get_slot(0).item_count, 1);
+    assert_eq!(inventory.get_slot(0).uid, dirt.uid);
+
+    client.clear_player();
+    client.close().await;
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn java_on_foot_inserts_block_items_from_the_physical_slot() -> TestResult {
+    use crate::block::entities::{
+        decorated_pot::DecoratedPotBlockEntity, jukebox::JukeboxBlockEntity,
+    };
+    use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::Inventory;
     use pumpkin_protocol::java::server::play::SUseItemOn;
     use pumpkin_util::math::position::BlockPos;
 
     let folder = tempfile::tempdir()?;
     let (server, world) = inventory_world(&folder).await?;
     let position = BlockPos::new(8, 63, 8);
+    let pot_position = BlockPos::new(9, 63, 8);
     let chunk = ChunkData::empty_sync(0, 0);
     chunk.set_block_absolute_y(8, 63, 8, Block::JUKEBOX.default_state.id);
+    chunk.set_block_absolute_y(9, 63, 8, Block::DECORATED_POT.default_state.id);
     world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
     let jukebox = Arc::new(JukeboxBlockEntity::new(position));
     world.add_block_entity(jukebox.clone());
+    let pot = Arc::new(DecoratedPotBlockEntity::new(pot_position));
+    world.add_block_entity(pot.clone());
     let (player, _peer) = java_player(&server, &world, "Notch")?;
     player.get_entity().set_pos(Vector3::new(8.5, 64.0, 7.5));
     let inventory = player.inventory();
@@ -3714,6 +3788,369 @@ async fn java_on_foot_inserts_a_record_from_the_physical_slot() -> TestResult {
     assert_eq!(inventory.get_slot(1).uid, other.uid);
     assert_eq!(jukebox.get_record().item, &Item::MUSIC_DISC_CAT);
     assert!(jukebox.is_playing());
+
+    let stone = ItemStack::new(2, &Item::STONE);
+    inventory.set_slot(0, stone.clone());
+    let pot_click = SUseItemOn {
+        position: pot_position,
+        sequence: 2.into(),
+        ..click
+    };
+    client.handle_use_item_on(&player, &pot_click, &server)?;
+    let remainder = inventory.get_slot(0);
+    assert_eq!(remainder.uid, stone.uid);
+    assert_eq!(remainder.item, &Item::STONE);
+    assert_eq!(remainder.item_count, 1);
+    assert_eq!(pot.get_stack(0).item, &Item::STONE);
+    assert_eq!(pot.get_stack(0).item_count, 1);
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn java_air_use_rechecks_the_stack_after_the_statistic_listener() -> TestResult {
+    use crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent;
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_protocol::java::server::play::SUseItem;
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = inventory_world(&folder).await?;
+    let (player, _peer) = java_equipment_watcher(&server, &world)?;
+    player.inventory().set_selected_slot(0);
+    player
+        .inventory()
+        .set_slot(0, ItemStack::new(1, &Item::APPLE));
+    player.hunger_manager.level.store(10);
+    let listener = Arc::new(ReplaceFallbackSource(AtomicBool::new(false)));
+    server
+        .plugin_manager
+        .register_blocking::<PlayerStatisticIncrementEvent, _>(
+            listener.clone(),
+            EventPriority::Normal,
+            None,
+        );
+    player.client.java().ok_or("Java client")?.handle_use_item(
+        &player,
+        &SUseItem {
+            hand: 0.into(),
+            sequence: 1.into(),
+            yaw: 0.0,
+            pitch: 0.0,
+        },
+        &server,
+    );
+    assert!(listener.0.load(Ordering::Relaxed));
+    assert_eq!(player.inventory().get_slot(0).item, &Item::STICK);
+    assert!(
+        player
+            .living_entity
+            .item_in_use
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_none()
+    );
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn java_click_cannot_commit_to_a_reopened_personal_screen() -> TestResult {
+    use crate::plugin::player::inventory_interact::InventoryClickEvent;
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::{
+        generic_container_screen_handler::create_generic_9x3, inventory::SimpleInventory,
+    };
+    use pumpkin_protocol::java::server::play::SlotActionType;
+    use pumpkin_util::text::TextComponent;
+
+    struct OpenAndClose(Arc<crate::entity::player::Player>, AtomicBool);
+
+    impl EventRwHandler<InventoryClickEvent> for OpenAndClose {
+        fn handle<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            _event: &'a mut InventoryClickEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if !self.1.swap(true, Ordering::Relaxed) {
+                    self.0.open_handled_screen_direct(
+                        Arc::new(Mutex::new(create_generic_9x3(
+                            1,
+                            self.0.inventory(),
+                            Arc::new(SimpleInventory::new(27)),
+                            self.0.as_ref(),
+                        ))),
+                        &TextComponent::text("Chest"),
+                    );
+                    self.0.close_handled_screen();
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = inventory_world(&folder).await?;
+    let (player, _peer) = java_equipment_watcher(&server, &world)?;
+    player
+        .inventory()
+        .set_held_item(ItemStack::new(1, &Item::DIRT));
+    let observer = Arc::new(OpenAndClose(player.clone(), AtomicBool::new(false)));
+    server
+        .plugin_manager
+        .register_blocking::<InventoryClickEvent, _>(observer.clone(), EventPriority::Normal, None);
+
+    player.on_slot_click(player_inventory_click(36, SlotActionType::Pickup), &server);
+    assert!(observer.1.load(Ordering::Relaxed));
+    assert_eq!(player.inventory().held_item().item_count, 1);
+    assert_eq!(player.inventory().held_item().item, &Item::DIRT);
+
+    player.on_slot_click(player_inventory_click(36, SlotActionType::Pickup), &server);
+    assert!(player.inventory().held_item().is_empty());
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bedrock_failed_stack_request_resends_its_partial_writes() -> TestResult {
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::screen_handler::ScreenHandler;
+    use pumpkin_protocol::{
+        Packet,
+        bedrock::{
+            client::{
+                inventory_content::CInventoryContent,
+                item_stack_response::{CItemStackResponse, ItemStackResponseInfo},
+            },
+            network_item::NetworkItemStackDescriptor,
+            server::inventory_transaction::WINDOW_ID_ARMOUR,
+        },
+        codec::{var_int::VarInt, var_uint::VarUInt},
+        serial::{PacketRead, PacketWrite},
+    };
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = inventory_world(&folder).await?;
+    let (player, mut packets) = bedrock_player(&server, &world, "jeb_").await?;
+    let stick = ItemStack::new(1, &Item::STICK);
+    let chestplate = ItemStack::new(1, &Item::DIAMOND_CHESTPLATE);
+    player.inventory().set_held_item(stick.clone());
+    let sync = player.screen_handler_sync_handler.clone();
+    sync.store_player(player.clone());
+    player
+        .player_screen_handler
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get_slot(6)
+        .set_stack(chestplate.clone());
+    player
+        .player_screen_handler
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get_behaviour_mut()
+        .sync_handler = Some(sync);
+    player.resync_active_inventory_screen();
+    while packets.try_recv().is_ok() {}
+
+    let mut batch = drop_and_armor_requests(&stick, &chestplate);
+    let mut duplicate = drop_and_armor_requests(&stick, &chestplate);
+    let duplicate_destroy = duplicate.requests[1].actions.remove(0);
+    batch.requests[1].actions.push(duplicate_destroy);
+    player
+        .client
+        .bedrock()
+        .ok_or("Bedrock player")?
+        .handle_item_stack_request(&player, batch);
+
+    assert!(player.inventory().held_item().is_empty());
+    assert!(
+        player
+            .player_screen_handler
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get_slot(6)
+            .get_stack()
+            .is_empty()
+    );
+    let mut acknowledged_failure = false;
+    let mut resynced_armor = false;
+    while let Ok(packet) = packets.try_recv() {
+        let Some((id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data) else {
+            continue;
+        };
+        let mut payload = payload.as_ref();
+        if i32::from(id) == CItemStackResponse::PACKET_ID {
+            assert_eq!(VarUInt::read(&mut payload)?.0, 2);
+            // The successful drop carries container data; the failed request ends
+            // the response with its ID and a false has-containers flag.
+            let mut failed_response = Vec::new();
+            ItemStackResponseInfo {
+                result: 1,
+                client_request_id: VarInt(-1),
+                containers: Vec::new(),
+            }
+            .write(&mut failed_response)?;
+            assert!(
+                payload.ends_with(&failed_response),
+                "missing failed acknowledgement"
+            );
+            acknowledged_failure = true;
+        } else if i32::from(id) == CInventoryContent::PACKET_ID
+            && VarUInt::read(&mut payload)?.0 == WINDOW_ID_ARMOUR as u32
+        {
+            assert!(acknowledged_failure);
+            assert_eq!(VarUInt::read(&mut payload)?.0, 4);
+            NetworkItemStackDescriptor::read(&mut payload)?;
+            assert_eq!(NetworkItemStackDescriptor::read(&mut payload)?.id, 0);
+            resynced_armor = true;
+        }
+    }
+    assert!(resynced_armor);
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bedrock_drop_resends_a_superseded_cursor() -> TestResult {
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::{
+        screen_handler::SharedScreenHandler, sync_handler::ScreenUpdateContext,
+    };
+    use pumpkin_protocol::{
+        Packet,
+        bedrock::{
+            client::inventory_content::CInventoryContent, network_item::NetworkItemStackDescriptor,
+        },
+        codec::var_uint::VarUInt,
+        serial::PacketRead,
+    };
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = inventory_world(&folder).await?;
+    let (player, mut packets) = bedrock_player(&server, &world, "jeb_").await?;
+    player
+        .inventory()
+        .set_held_item(ItemStack::new(2, &Item::STICK));
+    let sync = player.screen_handler_sync_handler.clone();
+    sync.store_player(player.clone());
+    let screen: SharedScreenHandler = player.player_screen_handler.clone();
+    screen
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get_behaviour_mut()
+        .sync_handler = Some(sync);
+    player.resync_active_inventory_screen();
+    while packets.try_recv().is_ok() {}
+
+    let cursor = ItemStack::new(1, &Item::DIAMOND);
+    let expected = NetworkItemStackDescriptor::from(&cursor).id;
+    let epoch = {
+        let mut handler = screen.lock().unwrap_or_else(PoisonError::into_inner);
+        let behaviour = handler.get_behaviour_mut();
+        *behaviour
+            .cursor_stack
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = cursor;
+        behaviour.sync_epoch()
+    };
+    assert!(
+        ScreenUpdateContext {
+            screen: &screen,
+            active: None,
+            epoch: epoch.wrapping_add(1)
+        }
+        .lock_if_current()
+        .is_none()
+    );
+
+    player.drop_held_item(false);
+    assert_eq!(player.inventory().held_item().item_count, 1);
+    let mut cursors = Vec::new();
+    while let Ok(packet) = packets.try_recv() {
+        if let Some((id, payload)) = crate::net::bedrock::split_raw_packet(&packet.data)
+            && i32::from(id) == CInventoryContent::PACKET_ID
+        {
+            let mut payload = payload.as_ref();
+            if VarUInt::read(&mut payload)?.0 == 59 {
+                assert_eq!(VarUInt::read(&mut payload)?.0, 1);
+                cursors.push(NetworkItemStackDescriptor::read(&mut payload)?.id);
+            }
+        }
+    }
+    assert_eq!(cursors, [expected]);
+    world.level.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn java_block_fallback_rejects_a_hotbar_change_in_the_interact_callback() -> TestResult {
+    use crate::plugin::player::player_interact_event::PlayerInteractEvent;
+    use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
+    use pumpkin_protocol::java::server::play::SUseItemOn;
+    use pumpkin_util::math::position::BlockPos;
+
+    struct SelectOtherSlot(AtomicBool);
+    impl EventRwHandler<PlayerInteractEvent> for SelectOtherSlot {
+        fn handle<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PlayerInteractEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                if !self.0.swap(true, Ordering::Relaxed) {
+                    event.player.inventory().set_selected_slot(1);
+                }
+            })
+        }
+    }
+
+    let folder = tempfile::tempdir()?;
+    let (server, world) = inventory_world(&folder).await?;
+    let support = BlockPos::new(9, 63, 8);
+    let target = BlockPos::new(9, 64, 8);
+    let chunk = ChunkData::empty_sync(0, 0);
+    chunk.set_block_absolute_y(9, 63, 8, Block::STONE.default_state.id);
+    world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    let (player, _peer) = java_player(&server, &world, "Notch")?;
+    player.get_entity().set_pos(Vector3::new(8.5, 64.0, 7.5));
+    let inventory = player.inventory();
+    inventory.set_selected_slot(0);
+    // The generated spawn can overlap these coordinates on some seeds.
+    player
+        .permission_lvl
+        .store(pumpkin_util::permission::PermissionLvl::Four);
+    let dirt = ItemStack::new(2, &Item::DIRT);
+    let stick = ItemStack::new(1, &Item::STICK);
+    inventory.set_slot(0, dirt.clone());
+    inventory.set_slot(1, stick.clone());
+    let listener = Arc::new(SelectOtherSlot(AtomicBool::new(false)));
+    server
+        .plugin_manager
+        .register_blocking::<PlayerInteractEvent, _>(listener.clone(), EventPriority::Normal, None);
+
+    let client = player.client.java().ok_or("Java client")?;
+    let mut click = SUseItemOn {
+        hand: 0.into(),
+        position: support,
+        face: 1.into(),
+        cursor_pos: Vector3::new(0.5, 1.0, 0.5),
+        inside_block: false,
+        is_against_world_border: false,
+        sequence: 1.into(),
+    };
+    client.handle_use_item_on(&player, &click, &server)?;
+    assert!(listener.0.load(Ordering::Relaxed));
+    assert_eq!(inventory.get_selected_slot(), 1);
+    assert_eq!(inventory.get_slot(0).uid, dirt.uid);
+    assert_eq!(inventory.get_slot(0).item_count, 2);
+    assert_eq!(inventory.get_slot(1).uid, stick.uid);
+    assert_eq!(world.get_block(&target), &Block::AIR);
+
+    inventory.set_selected_slot(0);
+    click.sequence = 2.into();
+    client.handle_use_item_on(&player, &click, &server)?;
+    assert_eq!(inventory.get_slot(0).item_count, 1);
+    assert_eq!(inventory.get_slot(1).uid, stick.uid);
+    assert_eq!(world.get_block(&target), &Block::DIRT);
     world.level.shutdown().await;
     Ok(())
 }
