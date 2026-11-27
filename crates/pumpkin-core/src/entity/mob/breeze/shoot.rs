@@ -241,7 +241,7 @@ mod tests {
     use crate::plugin::api::events::entity::{
         entity_pose_change::EntityPoseChangeEvent, entity_spawn::EntitySpawnEvent,
     };
-    use crate::plugin::{EventHandler, EventPriority, server::packet::PacketSentEvent};
+    use crate::plugin::{EventPriority, EventRwHandler, server::packet::PacketSentEvent};
     use crate::server::Server;
 
     struct ShotSounds {
@@ -251,8 +251,8 @@ mod tests {
         shots: AtomicUsize,
     }
 
-    impl EventHandler<PacketSentEvent> for ShotSounds {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<PacketSentEvent> for ShotSounds {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut PacketSentEvent,
@@ -286,8 +286,8 @@ mod tests {
         attempts: AtomicUsize,
     }
 
-    impl EventHandler<EntitySpawnEvent> for RetargetOnChargeSpawn {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntitySpawnEvent> for RetargetOnChargeSpawn {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntitySpawnEvent,
@@ -323,11 +323,9 @@ mod tests {
             inhales: AtomicUsize::new(0),
             shots: AtomicUsize::new(0),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            sounds.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(sounds.clone(), EventPriority::Normal, None);
         let target: Arc<dyn EntityBase> = IronGolemEntity::new(Entity::new(
             world.clone(),
             target_position,
@@ -342,11 +340,13 @@ mod tests {
             )),
             attempts: AtomicUsize::new(0),
         });
-        server.plugin_manager.register::<EntitySpawnEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntitySpawnEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
         let body = &breeze.mob_entity;
         for attempts in 1..=2 {
             let mut brain = Brain::default();
@@ -393,8 +393,8 @@ mod tests {
         Ok(())
     }
 
-    impl EventHandler<EntityPoseChangeEvent> for ShotSounds {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityPoseChangeEvent> for ShotSounds {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityPoseChangeEvent,
@@ -431,21 +431,21 @@ mod tests {
             inhales: AtomicUsize::new(0),
             shots: AtomicUsize::new(0),
         });
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            sounds.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(sounds.clone(), EventPriority::Normal, None);
         let target = IronGolemEntity::new(Entity::new(
             world.clone(),
             player.get_entity().pos.load().add_raw(8.0, 0.0, 0.0),
             &EntityType::IRON_GOLEM,
         ));
-        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
-            sounds.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityPoseChangeEvent, _>(
+                sounds.clone(),
+                EventPriority::Normal,
+                None,
+            );
         breeze.get_entity().touching_water.store(true, Relaxed);
         let mut brain = Brain::default();
         brain.add_activity(ActivityData::with_pairs(

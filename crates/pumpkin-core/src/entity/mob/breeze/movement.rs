@@ -510,7 +510,7 @@ mod tests {
     };
     use crate::entity::{EntityBase, mob::Mob, r#type::from_type};
     use crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent;
-    use crate::plugin::{EventHandler, EventPriority};
+    use crate::plugin::{EventPriority, EventRwHandler};
     use crate::server::Server;
 
     struct VetoPose {
@@ -519,8 +519,8 @@ mod tests {
         attempts: AtomicUsize,
     }
 
-    impl EventHandler<EntityPoseChangeEvent> for VetoPose {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityPoseChangeEvent> for VetoPose {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityPoseChangeEvent,
@@ -600,11 +600,13 @@ mod tests {
             pose: EntityPose::Standing,
             attempts: AtomicUsize::new(0),
         });
-        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityPoseChangeEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
         breeze.get_entity().set_pose(EntityPose::Sliding);
         body.tick_brain(breeze.as_ref());
         assert_eq!(observer.attempts.load(Relaxed), 1);
@@ -633,11 +635,13 @@ mod tests {
             pose: EntityPose::Standing,
             attempts: AtomicUsize::new(0),
         });
-        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityPoseChangeEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
         let body = breeze.get_mob_entity();
         let living = &breeze.mob_entity.living_entity;
         living.entity.set_pose(EntityPose::LongJumping);
@@ -692,11 +696,13 @@ mod tests {
             pose: EntityPose::Inhaling,
             attempts: AtomicUsize::new(0),
         });
-        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityPoseChangeEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
         let mut brain = Brain::default();
         brain.add_activity(ActivityData::with_priority_start(
             Activity::Idle,
@@ -739,11 +745,13 @@ mod tests {
             pose: EntityPose::LongJumping,
             attempts: AtomicUsize::new(0),
         });
-        server.plugin_manager.register::<EntityPoseChangeEvent, _>(
-            observer.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityPoseChangeEvent, _>(
+                observer.clone(),
+                EventPriority::Normal,
+                None,
+            );
         let mut brain = Brain::default();
         let mut jump = Timed::new(LongJump::default());
         jump.start_at(world.get_world_age(), jump.inner().max_duration());

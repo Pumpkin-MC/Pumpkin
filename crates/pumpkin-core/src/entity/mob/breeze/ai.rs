@@ -125,7 +125,7 @@ mod tests {
     use super::*;
     use crate::entity::{Entity, ai::test_support, r#type::from_type};
     use crate::plugin::api::events::entity::entity_target::EntityTargetEvent;
-    use crate::plugin::{EventHandler, EventPriority};
+    use crate::plugin::{EventPriority, EventRwHandler};
     use crate::server::Server;
 
     struct TargetListener {
@@ -135,8 +135,8 @@ mod tests {
         clears: AtomicUsize,
     }
 
-    impl EventHandler<EntityTargetEvent> for TargetListener {
-        fn handle_blocking<'a>(
+    impl EventRwHandler<EntityTargetEvent> for TargetListener {
+        fn handle<'a>(
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityTargetEvent,
@@ -207,11 +207,13 @@ mod tests {
             acquisitions: AtomicUsize::new(0),
             clears: AtomicUsize::new(0),
         });
-        server.plugin_manager.register::<EntityTargetEvent, _>(
-            listener.clone(),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<EntityTargetEvent, _>(
+                listener.clone(),
+                EventPriority::Normal,
+                None,
+            );
 
         // Install the production behaviors with a fixed sensor result.
         let body = &breeze.mob_entity;

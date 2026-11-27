@@ -832,11 +832,11 @@ impl BedrockClient {
         if let Some((server, mut event, current_version)) =
             self.prepare_play_sent_event(&packet_data, observe)
         {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             return Self::finish_play_sent_event(packet_data, &event, current_version);
         }
         if let Some((server, mut event)) = self.prepare_connection_sent_event(&packet_data) {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             return Self::finish_connection_sent_event(&event);
         }
         (Some(packet_data), Vec::new())
@@ -850,11 +850,11 @@ impl BedrockClient {
         if let Some((server, mut event, current_version)) =
             self.prepare_play_sent_event(&packet_data, observe)
         {
-            server.plugin_manager.fire(&server, &mut event).await;
+            event = server.plugin_manager.fire(&server, event).await;
             return Self::finish_play_sent_event(packet_data, &event, current_version);
         }
         if let Some((server, mut event)) = self.prepare_connection_sent_event(&packet_data) {
-            server.plugin_manager.fire(&server, &mut event).await;
+            event = server.plugin_manager.fire(&server, event).await;
             return Self::finish_connection_sent_event(&event);
         }
         (Some(packet_data), Vec::new())
@@ -1510,7 +1510,7 @@ impl BedrockClient {
             packet.id,
             packet.payload,
         );
-        server.plugin_manager.fire(server, &mut event).await;
+        event = server.plugin_manager.fire(server, event).await;
         (!event.cancelled).then_some(RawPacket {
             id: event.packet_id,
             payload: event.payload,

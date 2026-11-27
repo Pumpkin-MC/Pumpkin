@@ -63,7 +63,7 @@ impl MushroomPlantBlock {
 
         let mut event = StructureGrowEvent::new(*pos, species, true);
         if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
         }
         if event.cancelled {
             return false;

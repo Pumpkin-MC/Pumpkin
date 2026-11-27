@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:hopper_chain_three_hoppers_to_chest",
+  "max_ticks": 60,
+  "setup_ticks": 0
+}

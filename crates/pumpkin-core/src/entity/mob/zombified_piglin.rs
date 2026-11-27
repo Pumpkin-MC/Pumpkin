@@ -145,7 +145,7 @@ impl NeutralMob for ZombifiedPiglinEntity {
         };
         let mut event =
             PigZombieAngerEvent::new(entity.entity_id, Some(target.get_entity().entity_id), ticks);
-        server.plugin_manager.fire_blocking(&server, &mut event);
+        event = server.plugin_manager.fire_blocking(&server, event);
         (!event.cancelled).then_some(event.new_anger)
     }
 

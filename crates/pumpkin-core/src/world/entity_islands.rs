@@ -1095,7 +1095,7 @@ mod tests {
     use super::*;
     use crate::{
         entity::{Entity, ai::test_support, r#type::from_type},
-        plugin::{EventHandler, EventPriority, api::events::Payload, player::PlayerChatEvent},
+        plugin::{EventPriority, EventRwHandler, api::events::Payload, player::PlayerChatEvent},
         world::BlockFlags,
     };
     use pumpkin_data::dimension::Dimension;
@@ -1103,7 +1103,15 @@ mod tests {
     use std::thread::{self, ThreadId};
 
     struct IgnoreEvent;
-    impl<E: Payload> EventHandler<E> for IgnoreEvent {}
+    impl<E: Payload> EventRwHandler<E> for IgnoreEvent {
+        fn handle<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            _event: &'a mut E,
+        ) -> crate::plugin::BoxFuture<'a, ()> {
+            Box::pin(async {})
+        }
+    }
 
     fn force_separated_chunk(world: &World, index: usize) -> Vector2<i32> {
         let chunk = Vector2::new(index as i32 * 32, 0);
@@ -1153,10 +1161,10 @@ mod tests {
             let server = test_support::server(&folder).await?;
             let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
             let plugins = &server.plugin_manager;
-            plugins.register::<PlayerChatEvent, _>(
+            plugins.register_blocking::<PlayerChatEvent, _>(
                 Arc::new(IgnoreEvent),
                 EventPriority::Normal,
-                true,
+                None,
             );
             assert!(!plugins_observe_entity_ticks(&server));
 
@@ -1246,11 +1254,13 @@ mod tests {
         let folder = tempfile::tempdir()?;
         let server = test_support::server(&folder).await?;
         assert!(!plugins_observe_entity_ticks(&server));
-        server.plugin_manager.register::<PacketSentEvent, _>(
-            Arc::new(IgnoreEvent),
-            EventPriority::Normal,
-            true,
-        );
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(
+                Arc::new(IgnoreEvent),
+                EventPriority::Normal,
+                None,
+            );
         assert!(plugins_observe_entity_ticks(&server));
         server.stop();
         server.shutdown().await;

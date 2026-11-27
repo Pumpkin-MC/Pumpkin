@@ -84,6 +84,7 @@ WIT_ROOT = Path("crates/pumpkin-plugin-wit")
 # Crates that generate Rust bindings from the WIT files; their dependents follow from the closure.
 WIT_CONSUMER_PACKAGES = {
     "pumpkin-plugin-api",
+    "pumpkin-plugin-api-v0_2",
     "pumpkin-wasm-host-v0_1",
     "pumpkin-wasm-host-v0_2",
 }

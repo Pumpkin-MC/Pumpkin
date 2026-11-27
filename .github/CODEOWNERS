@@ -12,6 +12,7 @@
 
 # --- Plugins ---
 /crates/pumpkin-plugin-api/                                                 @yunuservices @Phoenixxo
+/crates/pumpkin-plugin-api-v0_2/                                                 @yunuservices @Phoenixxo
 /crates/pumpkin-api-macros/                                                 @yunuservices @Phoenixxo
 /crates/pumpkin-plugin-runtime/                                             @Phoenixxo
 /crates/pumpkin-plugin-wit/                                                 @yunuservices @Phoenixxo @QuantumSegfault
@@ -58,6 +59,7 @@
 
 # --- Data and codegen ---
 /crates/pumpkin-data/                                                       @Snowiiii @KairuDeibisu @QuantumSegfault
+/crates/pumpkin-core/src/data/datapack/                                     @KairuDeibisu
 /tools/pumpkin-codegen/                                                     @Snowiiii @KairuDeibisu @QuantumSegfault
 
 # --- Scheduler ---
@@ -65,9 +67,12 @@
 
 # --- Testing ---
 /crates/pumpkin-gametest/                                                   @KairuDeibisu
-/tools/pumpkin-tester/                                                      @KairuDeibisu
-/crates/pumpkin-core/src/server/builtin_game_tests/                         @KairuDeibisu
+/tools/pumpkin-headless-client-bot/                                         @KairuDeibisu
+/crates/pumpkin-core/src/server/builtin_test_functions/                      @KairuDeibisu
 /crates/pumpkin-core/src/server/server_test_manager.rs                      @KairuDeibisu
+/crates/pumpkin-core/src/server/structure_editor.rs                         @KairuDeibisu
+/crates/pumpkin-core/src/server/test_environment.rs                         @KairuDeibisu
+/crates/pumpkin/src/game_test_server.rs                                     @KairuDeibisu
 /crates/*/tests/                                                            @KairuDeibisu
 /assets/tests/                                                              @KairuDeibisu
 

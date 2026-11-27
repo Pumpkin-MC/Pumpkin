@@ -1179,15 +1179,12 @@ impl TrialSpawner {
             return None;
         }
 
-        let mut event =
+        if world.cancelled_by_plugin(|| {
             crate::plugin::api::events::entity::trial_spawner_spawn::TrialSpawnerSpawnEvent::new(
                 entity.get_entity().entity_id,
                 spawner_pos,
-            );
-        if let Some(server) = world.server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
+            )
+        }) {
             return None;
         }
 
