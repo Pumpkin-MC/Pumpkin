@@ -1,14 +1,103 @@
+use std::any::Any;
+
 use async_trait::async_trait;
-use pumpkin_data::BlockStateId;
+use pumpkin_data::{BlockStateId, item::Item, item_stack::ItemStack};
 use pumpkin_nbt::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::{GameMode, Hand, PermissionLvl};
 use pumpkin_world::world::BlockFlags;
+use serde_json::Value;
 
+use crate::entity::GameTestEntity;
 use crate::error::{GameTestError, GameTestResult};
 use crate::model::GameTestRotation;
 
+/// Controls a simulated player admitted to the server for a `GameTest`.
+#[async_trait]
+pub trait SimulatedPlayer: Send + Sync {
+    fn entity_id(&self) -> i32;
+
+    /// Controls whether `/list` includes this player.
+    fn set_visible_in_list(&self, visible: bool);
+
+    /// Controls whether this player appears in client player lists.
+    fn set_visible_in_tab_list(&self, visible: bool);
+
+    fn name(&self) -> &str;
+
+    fn position(&self) -> Vector3<f64>;
+
+    fn gamemode(&self) -> GameMode;
+
+    fn set_gamemode(&self, mode: GameMode) -> GameTestResult<()>;
+
+    fn set_permission_level(&self, level: PermissionLvl) -> GameTestResult<()>;
+
+    fn run_command(&self, command: &str) -> GameTestResult<()>;
+
+    fn selected_hotbar_slot(&self) -> u8;
+
+    fn set_selected_hotbar_slot(&self, slot: u8) -> GameTestResult<()>;
+
+    fn held_item(&self, hand: Hand) -> ItemStack;
+
+    fn set_held_item(&self, hand: Hand, stack: ItemStack) -> GameTestResult<()>;
+
+    fn first_empty_inventory_slot(&self) -> Option<usize>;
+
+    fn inventory_item(&self, slot: usize) -> GameTestResult<ItemStack>;
+
+    fn inventory_count(&self, item: &Item) -> u32;
+
+    fn interact_with(
+        &self,
+        entity: &std::sync::Arc<dyn GameTestEntity>,
+        hand: Hand,
+    ) -> GameTestResult<()>;
+
+    fn use_block(&self, position: &BlockPos, hand: Hand) -> GameTestResult<()>;
+
+    fn break_block(&self, position: &BlockPos) -> GameTestResult<bool>;
+
+    fn set_sprinting(&self, sprinting: bool) -> GameTestResult<()>;
+
+    fn is_sprinting(&self) -> bool;
+
+    fn teleport_to(&self, position: Vector3<f64>) -> GameTestResult<()>;
+
+    async fn move_to(&self, position: Vector3<f64>) -> GameTestResult<()>;
+
+    async fn disconnect(&self) -> GameTestResult<()>;
+
+    async fn look_at_entity(
+        &self,
+        entity: &std::sync::Arc<dyn GameTestEntity>,
+    ) -> GameTestResult<()>;
+}
+
 #[async_trait]
 pub trait GameTestWorld: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+
+    fn environment_world_key(&self) -> usize {
+        std::ptr::from_ref(self).cast::<()>() as usize
+    }
+
+    fn activate_test_environment(
+        &self,
+        environment: &Value,
+    ) -> GameTestResult<Box<dyn Any + Send>> {
+        if environment.as_str() == Some("minecraft:default") {
+            Ok(Box::new(()))
+        } else {
+            Err(GameTestError::World(
+                "Test environments are not supported by this GameTestWorld".to_string(),
+            ))
+        }
+    }
+
+    fn teardown_test_environment(&self, _saved: Box<dyn Any + Send>) {}
+
     async fn block_state_id(&self, position: &BlockPos) -> BlockStateId;
 
     async fn set_block_state(
@@ -29,6 +118,12 @@ pub trait GameTestWorld: Send + Sync {
         position: &BlockPos,
         nbt: &NbtCompound,
     ) -> GameTestResult<()>;
+
+    async fn spawn_structure_entity(&self, _nbt: &NbtCompound) -> GameTestResult<()> {
+        Err(GameTestError::World(
+            "structure entity spawning is not supported by this GameTestWorld".to_string(),
+        ))
+    }
 
     async fn block_entity_nbt(&self, _position: &BlockPos) -> GameTestResult<Option<NbtCompound>> {
         Ok(None)
@@ -64,6 +159,14 @@ pub trait GameTestWorld: Send + Sync {
 
     async fn set_test_instance_running(&self, position: &BlockPos) -> GameTestResult<()>;
 
+    async fn set_test_instance_size(
+        &self,
+        _position: &BlockPos,
+        _size: [i32; 3],
+    ) -> GameTestResult<()> {
+        Ok(())
+    }
+
     async fn set_test_instance_success(&self, position: &BlockPos) -> GameTestResult<()>;
 
     async fn set_test_instance_failure(
@@ -87,10 +190,29 @@ pub trait GameTestWorld: Send + Sync {
         &self,
         _entity_name: &str,
         _position: Vector3<f64>,
-    ) -> GameTestResult<()> {
+    ) -> GameTestResult<std::sync::Arc<dyn GameTestEntity>> {
         Err(GameTestError::World(
             "entity spawning is not supported by this GameTestWorld".to_string(),
         ))
+    }
+
+    async fn spawn_simulated_player(
+        &self,
+        _name: &str,
+        _position: Vector3<f64>,
+        _gamemode: GameMode,
+    ) -> GameTestResult<std::sync::Arc<dyn SimulatedPlayer>> {
+        Err(GameTestError::World(
+            "Simulated players are not supported by this GameTestWorld".to_string(),
+        ))
+    }
+
+    async fn disconnect_simulated_players(&self) -> GameTestResult<()> {
+        Ok(())
+    }
+
+    async fn simulated_player_position(&self, _name: &str) -> Option<Vector3<f64>> {
+        None
     }
 
     async fn spawn_item(
