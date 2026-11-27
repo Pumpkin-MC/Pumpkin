@@ -569,7 +569,7 @@ pub(crate) mod tests {
         }
     }
 
-    pub(crate) async fn test_server_and_player() -> Result<
+    pub async fn test_server_and_player() -> Result<
         (
             tempfile::TempDir,
             Arc<Server>,
