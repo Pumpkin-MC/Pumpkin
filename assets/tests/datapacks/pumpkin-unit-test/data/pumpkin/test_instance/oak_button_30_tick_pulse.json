@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:oak_button_30_tick_pulse",
+  "max_ticks": 45,
+  "setup_ticks": 0
+}
