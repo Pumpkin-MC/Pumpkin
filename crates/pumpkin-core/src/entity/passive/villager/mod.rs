@@ -1459,6 +1459,10 @@ impl Mob for VillagerEntity {
         false
     }
 
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        false
+    }
+
     fn finalize_spawn_in_biome(&self, biome: &'static pumpkin_data::chunk::Biome) {
         self.finalize_villager_type_in_biome(biome);
     }

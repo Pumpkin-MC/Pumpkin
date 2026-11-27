@@ -627,6 +627,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:tripwire_entity_collision" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/tripwire_entity_collision.json"
         )),
+        "pumpkin:villager_stays_when_player_is_far" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/villager_stays_when_player_is_far.json"
+        )),
         "pumpkin:wall_connects_to_fence_gate" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/wall_connects_to_fence_gate.json"
         )),
@@ -886,6 +889,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:torch_and_soul_torch_break_without_support",
         "pumpkin:trapdoor_wooden_variants_redstone",
         "pumpkin:tripwire_entity_collision",
+        "pumpkin:villager_stays_when_player_is_far",
         "pumpkin:wall_connects_to_fence_gate",
         "pumpkin:wall_connects_to_iron_bars_and_glass_pane",
         "pumpkin:wall_corner_raises_center_post",
