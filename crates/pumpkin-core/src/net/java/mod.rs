@@ -147,6 +147,9 @@ pub struct JavaClient {
     pub pending_keep_alives: std::sync::Mutex<Vec<(i64, Instant)>>,
 
     pub packet_sequence: AtomicI32,
+    /// Block entities whose data must be re-sent right after the next block-change ACK.
+    /// Sending it earlier is dropped by the client while the position is still predicted.
+    pub pending_block_entity_resync: std::sync::Mutex<Vec<pumpkin_util::math::position::BlockPos>>,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
     /// Vanilla `suspendFlushingOnServerThread`.
@@ -187,6 +190,7 @@ impl JavaClient {
             last_packet_time: AtomicCell::new(Instant::now()),
             pending_keep_alives: std::sync::Mutex::new(Vec::new()),
             packet_sequence: AtomicI32::new(-1),
+            pending_block_entity_resync: std::sync::Mutex::new(Vec::new()),
             packet_limiter: pending.packet_limiter,
             suspend_flushing: Arc::new(AtomicBool::new(false)),
         }

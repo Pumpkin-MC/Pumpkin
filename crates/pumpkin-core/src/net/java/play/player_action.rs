@@ -44,10 +44,7 @@ impl JavaClient {
                             .plugin_manager
                             .fire_blocking(&server_arc, interact_event);
                         if interact_event.cancelled {
-                            player.try_send_client_packet(&CBlockUpdate::new(
-                                position,
-                                VarInt(i32::from(state.id.as_u16())),
-                            ));
+                            self.sync_block_state_to_client(&world, position);
                             self.update_sequence(player_action.sequence.0);
                             return;
                         }
@@ -69,10 +66,7 @@ impl JavaClient {
                     let gamemode = player.gamemode.load();
                     let cannot_mine = player.cannot_mine_block(Some(server), block, gamemode);
                     if cannot_mine {
-                        player.try_send_client_packet(&CBlockUpdate::new(
-                            position,
-                            VarInt(i32::from(state.id.as_u16())),
-                        ));
+                        self.sync_block_state_to_client(&world, position);
                         self.update_sequence(player_action.sequence.0);
                         return;
                     }
@@ -312,5 +306,14 @@ impl JavaClient {
             position,
             VarInt(i32::from(synced_state_id.as_u16())),
         ));
+        // A predicted break removed the client's block entity; the block update alone recreates
+        // it empty (sign text, banner patterns, skull profile... vanish). Re-send its data after
+        // the block-change ACK so the client applies it to the restored block.
+        if world.get_block_entity(&position).is_some() {
+            self.pending_block_entity_resync
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(position);
+        }
     }
 }

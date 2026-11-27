@@ -279,16 +279,16 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
-    Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CBlockUpdate, CChangeDifficulty,
-    CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage, CEntityAnimation,
-    CEntityPositionSync, CEntityVelocity, CGameEvent, CHurtAnimation, CItemCooldown, CMapItemData,
-    COpenBook, COpenMountScreen, COpenScreen, COpenSignEditor, CParticle, CPlayServerLinks,
-    CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition, CPlayerSpawnPosition, CRespawn,
-    CSetCamera, CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
-    CSetExperience, CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound,
-    CSubtitle, CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk,
-    CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags,
-    PlayerSpawnData, PreviousMessage, Statistic,
+    Animation, CAcknowledgeBlockChange, CActionBar, CAwardStats, CBlockEntityData, CBlockUpdate,
+    CChangeDifficulty, CCloseContainer, CCombatDeath, CCustomPayload, CDisguisedChatMessage,
+    CEntityAnimation, CEntityPositionSync, CEntityVelocity, CGameEvent, CHurtAnimation,
+    CItemCooldown, CMapItemData, COpenBook, COpenMountScreen, COpenScreen, COpenSignEditor,
+    CParticle, CPlayServerLinks, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CPlayerSpawnPosition, CRespawn, CSetCamera, CSetContainerContent, CSetContainerProperty,
+    CSetContainerSlot, CSetCursorItem, CSetExperience, CSetHealth, CSetPlayerInventory,
+    CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTabList,
+    CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, MapIcon,
+    MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -3228,6 +3228,38 @@ impl Player {
         self.try_send_client_packet(&packet);
     }
 
+    /// Sends the pending block-change ACK, then re-sends block entity data queued by a rejected
+    /// break. The data must follow the ACK: before it the client still predicts the position as
+    /// air and drops the block entity packet.
+    fn send_block_change_ack(&self, client: &crate::net::java::JavaClient) {
+        let seq = client.packet_sequence.swap(-1, Ordering::Relaxed);
+        if seq != -1 {
+            client.try_send_packet(&CAcknowledgeBlockChange::new(seq.into()));
+        }
+        let resync = std::mem::take(
+            &mut *client
+                .pending_block_entity_resync
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        if resync.is_empty() {
+            return;
+        }
+        let world = self.world();
+        for pos in resync {
+            if let Some(block_entity) = world.get_block_entity(&pos)
+                && let Some(nbt) = block_entity.chunk_data_nbt()
+            {
+                let bytes = pumpkin_nbt::Nbt::from(nbt).write_unnamed();
+                client.try_send_packet(&CBlockEntityData::new(
+                    pos,
+                    VarInt(block_entity.get_id() as i32),
+                    bytes.as_ref().into(),
+                ));
+            }
+        }
+    }
+
     pub fn process_inbound_packets(&self) {
         const MAX_PACKETS_PER_TICK: usize = 64;
 
@@ -3236,10 +3268,7 @@ impl Player {
         // those predictions. Sending the ACK from the packet loop would make doors and other
         // predicted blocks briefly revert because their updates are not flushed until the next tick.
         if let ClientPlatform::Java(client) = self.client.as_ref() {
-            let seq = client.packet_sequence.swap(-1, Ordering::Relaxed);
-            if seq != -1 {
-                client.try_send_packet(&CAcknowledgeBlockChange::new(seq.into()));
-            }
+            self.send_block_change_ack(client);
         }
 
         if self.inbound_packets.is_empty() {
