@@ -27,9 +27,7 @@ impl JavaClient {
             format!("display_{}", packet.recipe_display_id.0),
             use_max,
         );
-        server
-            .plugin_manager
-            .fire_blocking(server, &mut click_event);
+        click_event = server.plugin_manager.fire_blocking(server, click_event);
         if click_event.cancelled {
             return;
         }

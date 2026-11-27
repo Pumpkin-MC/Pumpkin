@@ -591,7 +591,7 @@ impl ItemBehaviour for EmptyBucketItem {
                     block_pos,
                     filled_item.registry_key.to_string(),
                 );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 return;
             }
@@ -675,13 +675,13 @@ impl ItemBehaviour for FilledBucketItem {
         if let Some(server) = world.server.upgrade()
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
         {
-            let mut event =
+            let event =
                 crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent::new(
                     player_arc,
                     pos,
                     item.registry_key.to_string(),
                 );
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            server.plugin_manager.fire_blocking(&server, event);
         }
 
         let bucket_stack = player.inventory.get_stack_in_hand(hand);

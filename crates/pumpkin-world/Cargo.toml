@@ -39,7 +39,7 @@ dashmap.workspace = true
 # Compression
 flate2.workspace = true
 lz4-java-wrc.workspace = true
-ruzstd.workspace = true
+zrip.workspace = true
 xxhash-rust.workspace = true
 
 rayon.workspace = true

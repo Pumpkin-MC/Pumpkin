@@ -140,7 +140,7 @@ impl FireBlock {
                     block_pos: *pos,
                     cancelled: false,
                 };
-                server.plugin_manager.fire_blocking(&server, &mut event);
+                event = server.plugin_manager.fire_blocking(&server, event);
                 if event.cancelled {
                     return;
                 }
@@ -431,7 +431,7 @@ impl BlockBehaviour for FireBlock {
                                         world.clone(),
                                         new_state_id,
                                     );
-                                    server.plugin_manager.fire_blocking(&server, &mut event);
+                                    event = server.plugin_manager.fire_blocking(&server, event);
                                     if event.cancelled {
                                         continue;
                                     }

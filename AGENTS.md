@@ -193,7 +193,11 @@ Don't write tests that:
 - Mock so much that nothing real is left to test.
 - Duplicate an existing test with slightly different numbers.
 
-Size new tests like the ones next to them: usually one focused test per behaviour, in the same place the module already keeps its tests. Scratch checks you wrote while working are for you. Delete them, unless one turns out to be a real regression test that fits the list above. When a change can't be tested meaningfully in code, say so and describe the boot, bot or in-game check you did instead. Behaviour that needs a real world belongs in `pumpkin-gametest`.
+Add or update a GameTest when a gameplay change can be meaningfully verified in a running test world. Use a simulated player when the test needs player actions. See [INTEGRATION_TESTING.md](INTEGRATION_TESTING.md) for how to write and run block based and function GameTests.
+
+Every new or modified GameTest must pass with `--verify`, which repeats the test at each rotation. The only exception is a test whose behaviour depends on orientation, such as some rail tests. For these tests, document why the orientation matters and verify the test in its intended orientation.
+
+Size new tests like the ones next to them: usually one focused test per behaviour, in the same place the module already keeps its tests. Scratch checks you wrote while working are for you. Delete them, unless one turns out to be a real regression test that fits the list above. When a change can't be tested meaningfully in code, say so and describe the boot, bot or in-game check you did instead.
 
 ### Performance
 

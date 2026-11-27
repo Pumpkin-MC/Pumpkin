@@ -58,13 +58,19 @@ impl AdvancementManager {
             return Ok(());
         }
         let mut to_write = Vec::with_capacity(players.len());
-        for player in players {
+        for player in players
+            .iter()
+            .filter(|player| player.client.should_persist_player_data())
+        {
             let guard = player
                 .advancements
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let json = serde_json::to_string_pretty(&*guard).map_err(AdvancementDataError::Json)?;
             to_write.push((guard.path.clone(), json));
+        }
+        if to_write.is_empty() {
+            return Ok(());
         }
 
         if let Err(e) = tokio::fs::create_dir_all(&self.advancement_path).await {

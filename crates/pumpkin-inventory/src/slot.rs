@@ -331,12 +331,13 @@ impl Slot for ArmorSlot {
     /// Restricts inserts to appropriate armor types via the `equippable` component (`ArmorSlot.mayPlace`).
     fn can_insert(&self, stack: &ItemStack) -> bool {
         match self.equipment_slot {
+            EquipmentSlot::Saddle(_) | EquipmentSlot::Body(_) => {
+                self.inventory.is_valid_slot_for(self.index, stack)
+            }
             EquipmentSlot::Head(_)
             | EquipmentSlot::Chest(_)
             | EquipmentSlot::Legs(_)
-            | EquipmentSlot::Feet(_)
-            | EquipmentSlot::Saddle(_)
-            | EquipmentSlot::Body(_) => {
+            | EquipmentSlot::Feet(_) => {
                 stack
                     .get_data_component::<pumpkin_data::data_component_impl::EquippableImpl>()
                     .is_some_and(|equippable| {

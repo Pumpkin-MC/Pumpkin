@@ -260,10 +260,7 @@ impl BedrockClient {
                 kick_message: TextComponent::text("Disconnected"),
                 cancelled: false,
             };
-        server
-            .plugin_manager
-            .fire(server, &mut pre_login_event)
-            .await;
+        pre_login_event = server.plugin_manager.fire(server, pre_login_event).await;
         if pre_login_event.cancelled {
             self.kick(
                 DisconnectReason::Kicked,

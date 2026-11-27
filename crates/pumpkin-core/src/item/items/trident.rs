@@ -226,7 +226,7 @@ impl ItemBehaviour for TridentItem {
                     item_name: "trident".to_string(),
                     cancelled: false,
                 };
-            server.plugin_manager.fire_blocking(&server, &mut event);
+            event = server.plugin_manager.fire_blocking(&server, event);
             if event.cancelled {
                 player.living_entity.clear_active_hand();
                 return;

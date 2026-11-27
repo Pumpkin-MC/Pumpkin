@@ -147,6 +147,7 @@ pub use player_teleport::*;
 pub use player_toggle_flight_event::*;
 pub use player_toggle_sneak_event::*;
 pub use player_toggle_sprint_event::*;
+pub use player_transfer::*;
 pub use player_unleash_entity::*;
 pub use player_unregister_channel::*;
 pub use player_velocity::*;
