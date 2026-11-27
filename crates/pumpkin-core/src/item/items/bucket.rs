@@ -763,9 +763,10 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let world = crate::entity::ai::test_support::world(&folder);
         let pos = BlockPos::new(0, 100, 0);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
         world.level.loaded_chunks.insert(
             pumpkin_util::math::vector2::Vector2::new(0, 0),
-            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+            chunk.clone(),
         );
         for plant in [
             &Block::SEAGRASS,
@@ -773,7 +774,8 @@ mod tests {
             &Block::KELP,
             &Block::KELP_PLANT,
         ] {
-            world.set_block_state(&pos, plant.default_state.id, BlockFlags::FORCE_STATE);
+            chunk.set_block_absolute_y(0, pos.0.y, 0, plant.default_state.id);
+            assert_eq!(world.get_block(&pos), plant);
             for bucket in [&Item::WATER_BUCKET, &Item::COD_BUCKET] {
                 assert_eq!(
                     try_place_liquid(&world, bucket, pos, BlockDirection::Up, false),
