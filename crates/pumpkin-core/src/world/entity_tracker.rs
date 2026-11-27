@@ -1356,3 +1356,46 @@ impl EntityTracker {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::command::client_suggestions::tests::test_server_and_player;
+    use crate::entity::mob::{Mob, warden::WardenEntity};
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_protocol::java::{client::play::CEntityStatus, packet_decoder::TCPNetworkDecoder};
+    use pumpkin_protocol::packet::MultiVersionJavaPacket;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn tracking_client_receives_warden_melee_animation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, _server, player, peer) = test_server_and_player().await?;
+        let world = player.world();
+        let warden = WardenEntity::new(Entity::new(
+            world.clone(),
+            player.position(),
+            &EntityType::WARDEN,
+        ));
+        world.spawn_entity(warden.clone());
+        let id = warden.get_entity().entity_id;
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(id)
+            .ok_or("Warden was not tracked")?;
+        tracked
+            .seen_by
+            .write()
+            .unwrap()
+            .insert(player.gameprofile.id, player.clone());
+        warden.do_hurt_target(player.as_ref());
+        let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
+        let packet =
+            tokio::time::timeout(std::time::Duration::from_secs(5), decoder.get_raw_packet())
+                .await??;
+        assert_eq!(packet.id, CEntityStatus::to_id(CURRENT_MC_VERSION));
+        let mut payload = id.to_be_bytes().to_vec();
+        payload.push(4);
+        assert_eq!(packet.payload.as_ref(), payload);
+        Ok(())
+    }
+}
