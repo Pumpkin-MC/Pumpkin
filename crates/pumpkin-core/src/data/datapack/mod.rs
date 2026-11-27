@@ -2209,9 +2209,17 @@ pub fn merge_damage_type_entries<S: std::hash::BuildHasher>(
     merged
 }
 
+fn read_json_file(path: impl AsRef<Path>) -> std::io::Result<String> {
+    let mut json = fs::read_to_string(path)?;
+    if json.starts_with('\u{feff}') {
+        json.remove(0);
+    }
+    Ok(json)
+}
+
 fn read_pack_mcmeta(pack_path: &Path) -> (String, u32, Vec<KnownPackData>) {
     let mcmeta_path = pack_path.join("pack.mcmeta");
-    if let Ok(content) = fs::read_to_string(mcmeta_path)
+    if let Ok(content) = read_json_file(mcmeta_path)
         && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
     {
         let pack = val.get("pack");
@@ -2302,7 +2310,7 @@ fn load_recipes_recursive(
                 .to_string_lossy()
                 .replace('\\', "/");
 
-            if let Ok(content) = fs::read_to_string(&path)
+            if let Ok(content) = read_json_file(&path)
                 && let Some(recipe) = recipe_loader::parse_recipe(namespace, &recipe_name, &content)
             {
                 all_recipes.push(recipe);

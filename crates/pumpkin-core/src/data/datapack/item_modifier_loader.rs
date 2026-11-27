@@ -40,7 +40,7 @@ fn load_item_modifiers_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let modifier_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
+            if let Ok(content) = super::read_json_file(&path)
                 && let Ok(val) = serde_json::from_str::<Value>(&content)
             {
                 modifiers.insert(modifier_id, val);

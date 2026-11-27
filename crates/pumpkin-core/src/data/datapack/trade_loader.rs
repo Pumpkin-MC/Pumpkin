@@ -498,7 +498,7 @@ fn load_trades_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let full_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(content) = super::read_json_file(&path) {
                 match serde_json::from_str::<VillagerTradeDefinition>(&content) {
                     Ok(def) => {
                         registry.insert(full_id, def.clone());
@@ -548,7 +548,7 @@ fn load_trade_sets_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let full_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(content) = super::read_json_file(&path) {
                 match serde_json::from_str::<TradeSetDefinition>(&content) {
                     Ok(def) => {
                         registry.insert(full_id, def.clone());
@@ -598,7 +598,7 @@ fn load_trade_tags_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let full_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
+            if let Ok(content) = super::read_json_file(&path)
                 && let Ok(tag_file) = serde_json::from_str::<TradeTagDefinition>(&content)
             {
                 let values = tag_file

@@ -296,7 +296,7 @@ fn load_registry_dir_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let entry_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
+            if let Ok(content) = super::read_json_file(&path)
                 && let Ok(val) = serde_json::from_str::<Value>(&content)
             {
                 let nbt_bytes = json_to_registry_nbt_bytes(&val);

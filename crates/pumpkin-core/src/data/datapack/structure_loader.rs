@@ -115,7 +115,7 @@ fn visit_template_pool_dir(dir: &Path, namespace: &str, prefix: &str, count: &mu
         };
 
         let resource_id = format!("{namespace}:{pool_name}");
-        match fs::read_to_string(&path) {
+        match super::read_json_file(&path) {
             Ok(json_content) => {
                 match pumpkin_world::generation::structure::structures::jigsaw::register_dynamic_template_pool_json(
                     &resource_id,
@@ -186,7 +186,7 @@ fn visit_processor_list_dir(dir: &Path, namespace: &str, prefix: &str, count: &m
         };
 
         let resource_id = format!("{namespace}:{list_name}");
-        match fs::read_to_string(&path) {
+        match super::read_json_file(&path) {
             Ok(json_content) => {
                 match pumpkin_world::generation::structure::template::processor::register_dynamic_processor_list(
                     &resource_id,
@@ -241,9 +241,14 @@ mod tests {
             ]
         }"#;
         fs::write(template_pool_dir.join("test_pool.json"), pool_json).unwrap();
+        fs::write(
+            template_pool_dir.join("bom_pool.json"),
+            format!("\u{feff}{pool_json}"),
+        )
+        .unwrap();
 
         let pools_loaded = load_template_pools_from_dir("test_ns", &template_pool_dir);
-        assert_eq!(pools_loaded, 1);
+        assert_eq!(pools_loaded, 2);
 
         let discovered =
             pumpkin_world::generation::structure::structures::jigsaw::TemplatePool::discover(

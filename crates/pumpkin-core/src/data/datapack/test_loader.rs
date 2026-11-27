@@ -108,7 +108,7 @@ fn load_test_instances_recursive(
             let stem_path = stem_path.replace('\\', "/");
             let test_instance_id = format!("{namespace}:{stem_path}");
 
-            match fs::read_to_string(&path) {
+            match super::read_json_file(&path) {
                 Ok(content) => match serde_json::from_str::<TestInstance>(&content) {
                     Ok(instance) if instance.is_valid() => {
                         registry.insert(test_instance_id, instance);

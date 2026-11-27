@@ -104,7 +104,7 @@ fn load_tags_recursive<S: std::hash::BuildHasher>(
             }
             let stem_path = stem_path.replace('\\', "/");
             let tag_id = format!("{namespace}:{stem_path}");
-            if let Ok(content) = fs::read_to_string(&path)
+            if let Ok(content) = super::read_json_file(&path)
                 && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
                 && let Some(values_arr) = val.get("values").and_then(serde_json::Value::as_array)
             {

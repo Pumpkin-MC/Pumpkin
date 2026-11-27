@@ -40,7 +40,7 @@ fn load_slot_sources_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let slot_source_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
+            if let Ok(content) = super::read_json_file(&path)
                 && let Ok(val) = serde_json::from_str::<Value>(&content)
             {
                 slot_sources.insert(slot_source_id, val);

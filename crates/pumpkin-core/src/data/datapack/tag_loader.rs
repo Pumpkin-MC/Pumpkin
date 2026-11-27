@@ -94,7 +94,7 @@ fn load_tag_category_recursive<S: std::hash::BuildHasher>(
             let stem_path = stem_path.replace('\\', "/");
             let tag_id = format!("{namespace}:{stem_path}");
 
-            if let Ok(content) = fs::read_to_string(&path)
+            if let Ok(content) = super::read_json_file(&path)
                 && let Ok(raw) = serde_json::from_str::<RawTagFile>(&content)
             {
                 let mut string_values = Vec::with_capacity(raw.values.len());
